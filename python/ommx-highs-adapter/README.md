@@ -62,7 +62,8 @@ The Adapter already evaluates the solver state against that `Instance`, which
 retains the dependency, removed-constraint, provenance, and auxiliary-variable
 data produced by its transformations.
 
-Preparation is not globally transactional. Existing in-place operations run
-directly and retain their own failure semantics. The consuming penalty operation
-is the only exception: it works on a clone of the current `Instance` and commits
-that value only after penalty conversion and parameter materialization succeed.
+Preparation is not globally transactional: a later owner operation can fail
+after earlier operations succeeded. Each operation retains its owner API's
+failure semantics. The fixed-weight penalty owner API validates first, then
+clones internally and commits only after penalty conversion and parameter
+materialization succeed.

@@ -178,18 +178,21 @@ OMMXOpenJijSAAdapter.require_applicable(instance)
 }
 ```
 
-Preparation is not globally transactional. Existing in-place operations run
-directly on `instance` and retain their own failure semantics. The consuming
-penalty operation is the only exception: it runs on a clone of the current
-`Instance` and commits that value only after penalty conversion and parameter
+Preparation is not globally transactional: a later owner operation can fail
+after earlier operations succeeded. Each operation retains its owner API's
+failure semantics. The fixed-weight penalty owner API validates first, then
+clones internally and commits only after penalty conversion and parameter
 materialization succeed.
 
-Discrete integer slack approximation requires passing
-`allow_approximate_integer_slack=True` when obtaining the Policy; setting only
-`inequality_integer_slack_max_range` does not opt into approximation.
+Discrete integer slack approximation requires setting a positive finite
+`inequality_integer_slack_max_error` when obtaining the Policy; setting only
+`inequality_integer_slack_max_range` permits exact conversion but not
+approximation. Preparation fails if the configured range cannot realize that
+maximum residual in the original constraint's units.
 `uniform_penalty_weight` and `penalty_weights` explicitly select a finite
-penalty operation. Per-constraint weights address regular constraint IDs; when
-special-constraint lowering adds regular constraints, use a uniform weight.
+penalty operation. Per-constraint weights address regular constraint IDs and
+must also cover any fresh IDs created by special-constraint lowering. Use a
+uniform weight when those generated IDs are not configured explicitly.
 
 If variable bounds prove an inequality infeasible, `Instance.prepare()` raises
 the core-owned {py:class}`~ommx.InfeasibleDetected`; the

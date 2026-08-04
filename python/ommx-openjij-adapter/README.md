@@ -63,14 +63,21 @@ constructor never prepare or mutate their input implicitly.
 `INPUT_CLASS` as its `input_class`. The default permits special-constraint
 lowering, bounded Integer log encoding, minimization-sense normalization, and
 exact integer slack. Discrete slack approximation remains disabled unless
-`allow_approximate_integer_slack=True` is passed. Finite penalties remain
-disabled unless `uniform_penalty_weight` or `penalty_weights` is supplied.
+`inequality_integer_slack_max_error` is set to a positive finite residual
+bound. `inequality_integer_slack_max_range` limits the Integer slack range; if
+that range cannot meet the error bound, preparation fails. Finite penalties
+remain disabled unless `uniform_penalty_weight` or `penalty_weights` is
+supplied.
+The optional `atol` argument is captured in the returned Policy and used by
+result-affecting preparation operations; later changes to the SDK default do
+not alter that Policy.
 
-Per-constraint penalty weights use source regular-constraint IDs. Those IDs
-remain unchanged through integer-slack conversion, and a configured source ID
-may remain after its constraint was removed as trivial. Special-constraint
-lowering instead adds fresh regular rows outside that source map's domain, so
-use a uniform penalty weight when such rows remain active.
+Per-constraint penalty weights use regular-constraint IDs, which remain
+unchanged through integer-slack conversion. Every active row must have a
+weight; an entry for a regular constraint already moved to
+`removed_constraints` is ignored. Special-constraint lowering adds fresh
+regular IDs, which a per-constraint map must also cover. Use a uniform penalty
+weight when those generated IDs are not configured explicitly.
 
 `Instance.prepare(policy)` mutates the caller's `Instance` until it belongs to
 the Policy's `input_class`, copied from OpenJij `INPUT_CLASS`. It does not run
@@ -87,10 +94,11 @@ and auxiliary variables created by its transformations, so its ordinary
 evaluation path is sufficient. The reported objective is the prepared
 objective, including any finite penalty.
 
-Preparation is not globally transactional. Existing in-place operations run
-directly and retain their own failure semantics. The consuming penalty operation
-is the only exception: it works on a clone of the current `Instance` and commits
-that value only after penalty conversion and parameter materialization succeed.
+Preparation is not globally transactional: a later owner operation can fail
+after earlier operations succeeded. Each operation retains its owner API's
+failure semantics. The fixed-weight penalty owner API validates first, then
+clones internally and commits only after penalty conversion and parameter
+materialization succeed.
 
 The maximum of 53 auxiliary bits for each Integer variable belongs to OMMX's
 Integer-to-Binary log-encoding operation. It is neither a property of the

@@ -100,11 +100,10 @@ impl Instance {
     /// Preparation is an OMMX-owned Instance operation. It does not receive or
     /// retain a Solver Adapter. On success this same Instance belongs to
     /// ``policy.input_class`` and owns the effects of every
-    /// applied operation. Evaluate solver states and samples against it.
-    /// Existing in-place operations are applied directly. After read-only
-    /// validation, the current Instance is cloned only when a consuming penalty
-    /// operation is required, and is replaced only after that operation
-    /// succeeds.
+    /// applied operation. Evaluate solver states and samples against it. Every
+    /// operation is invoked through its owning Instance API. The fixed-weight
+    /// penalty APIs validate first, then clone internally and commit only after
+    /// penalty conversion and parameter materialization succeed.
     pub fn prepare(&mut self, py: Python<'_>, policy: &PreparationPolicy) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         self.inner.prepare(policy.as_core())?;
@@ -1884,23 +1883,12 @@ impl Instance {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
-            // Auto-detect: find all used integer decision variables
-            let usage = self.inner.decision_variable_usage();
-            let integer_ids: BTreeSet<u64> = usage
-                .used_integer()
-                .into_keys()
-                .map(|id| id.into_inner())
-                .collect();
-            if integer_ids.is_empty() {
-                return Ok(());
-            }
-            integer_ids
+        if decision_variable_ids.is_empty() {
+            self.inner.log_encode_used_integers(atol)?;
         } else {
-            decision_variable_ids
-        };
-        self.inner
-            .log_encode(ids.iter().map(|id| (*id).into()), atol)?;
+            self.inner
+                .log_encode(decision_variable_ids.iter().map(|id| (*id).into()), atol)?;
+        }
         Ok(())
     }
 
@@ -2103,7 +2091,10 @@ impl Instance {
     ///
     /// - This should be used when {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.
     ///
-    /// - The bound of $s$ will be $[0, \text{slack\_upper\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.
+    /// - The bound of $s$ will be $[0, \text{slack\_upper\_bound}]$, where
+    ///   ``slack_upper_bound`` must be in ``[1, 2**53]`` so it is represented
+    ///   exactly. The coefficient $b$ is the smallest representable ``float``
+    ///   no smaller than $-\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
     ///
     /// - Since the slack variable is integer, the yielded inequality has residual error $\min_s f(x) + b s$ at most $b$.
     ///   And thus $b$ is returned to use scaling the penalty weight or other things.

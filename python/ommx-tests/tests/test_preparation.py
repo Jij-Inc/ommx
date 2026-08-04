@@ -21,6 +21,8 @@ from ommx import (
     Sense,
     SpecialConstraintKind,
     State,
+    get_default_atol,
+    set_default_atol,
 )
 
 
@@ -66,8 +68,9 @@ def test_policy_snapshots_preparation_options() -> None:
         allow_integer_log_encoding=True,
         allow_sense_normalization=True,
         inequality_integer_slack_max_range=31,
-        allow_approximate_integer_slack=True,
+        inequality_integer_slack_max_error=0.25,
         penalty_weights=penalty_weights,
+        atol=1e-4,
     )
     mutable_weights[7] = 9.0
 
@@ -78,7 +81,8 @@ def test_policy_snapshots_preparation_options() -> None:
     assert policy.allow_integer_log_encoding
     assert policy.allow_sense_normalization
     assert policy.inequality_integer_slack_max_range == 31
-    assert policy.allow_approximate_integer_slack
+    assert policy.inequality_integer_slack_max_error == 0.25
+    assert policy.atol == 1e-4
     assert policy.uniform_penalty_weight is None
     assert policy.penalty_weights == {7: 2.0}
 
@@ -86,6 +90,18 @@ def test_policy_snapshots_preparation_options() -> None:
     assert returned_weights is not None
     returned_weights[7] = 4.0
     assert policy.penalty_weights == {7: 2.0}
+
+
+def test_policy_snapshots_default_atol_at_construction() -> None:
+    original_atol = get_default_atol()
+    try:
+        set_default_atol(1e-4)
+        policy = PreparationPolicy(input_class=binary_linear_class())
+        set_default_atol(2e-4)
+
+        assert policy.atol == 1e-4
+    finally:
+        set_default_atol(original_atol)
 
 
 def test_policy_rejects_inconsistent_flat_options() -> None:
@@ -101,7 +117,7 @@ def test_policy_rejects_inconsistent_flat_options() -> None:
     with pytest.raises(ValueError, match="requires inequality_integer_slack_max_range"):
         PreparationPolicy(
             input_class=input_class,
-            allow_approximate_integer_slack=True,
+            inequality_integer_slack_max_error=0.25,
         )
 
     with pytest.raises(ValueError, match="integer in"):
@@ -109,6 +125,9 @@ def test_policy_rejects_inconsistent_flat_options() -> None:
             input_class=input_class,
             inequality_integer_slack_max_range=0,
         )
+
+    with pytest.raises(ValueError, match="ATol must be positive"):
+        PreparationPolicy(input_class=input_class, atol=0.0)
 
 
 @pytest.mark.parametrize("weight", [0.0, -1.0, float("inf"), float("nan")])
@@ -179,6 +198,19 @@ def test_policy_rejects_invalid_integer_slack_max_range(max_range: object) -> No
         PreparationPolicy(
             input_class=binary_linear_class(),
             inequality_integer_slack_max_range=cast(int, max_range),
+        )
+
+
+@pytest.mark.parametrize(
+    "max_error",
+    [True, False, 0.0, -1.0, float("inf"), float("nan"), "0.25"],
+)
+def test_policy_rejects_invalid_integer_slack_max_error(max_error: object) -> None:
+    with pytest.raises(ValueError, match="positive finite"):
+        PreparationPolicy(
+            input_class=binary_linear_class(),
+            inequality_integer_slack_max_range=32,
+            inequality_integer_slack_max_error=cast(float, max_error),
         )
 
 

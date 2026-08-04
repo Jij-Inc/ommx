@@ -350,7 +350,7 @@ def test_solver_adapter_recommends_identity_policy_for_declared_input_class() ->
     assert not policy.allow_integer_log_encoding
     assert not policy.allow_sense_normalization
     assert policy.inequality_integer_slack_max_range is None
-    assert not policy.allow_approximate_integer_slack
+    assert policy.inequality_integer_slack_max_error is None
     assert policy.uniform_penalty_weight is None
     assert policy.penalty_weights is None
 

@@ -18,6 +18,8 @@ interprets that Policy in a fixed order, mutates that `Instance`, and returns
 `None`. A `SolverAdapter` may recommend a Policy through
 `recommended_preparation_policy()`, but the Adapter neither executes
 preparation nor weakens its direct `INPUT_CLASS` check.
+Result-affecting operations use the absolute tolerance captured by the Policy;
+`Instance.prepare()` does not read the mutable SDK default.
 
 ```python
 policy = OMMXHighsAdapter.recommended_preparation_policy()
@@ -28,7 +30,8 @@ solution = OMMXHighsAdapter.solve(instance)
 The HiGHS recommendation permits automatic Indicator, OneHot, and SOS1
 lowering during `Instance.prepare()`. OpenJij's previous Adapter-owned
 preparation API is replaced by the same workflow, with finite penalty and
-approximate integer-slack choices remaining explicit Policy options.
+the maximum residual permitted for approximate integer slack remaining
+explicit Policy options.
 
 Transformation effects are owned by the same `Instance` through its
 decision-variable dependencies, removed constraints, provenance, and auxiliary
@@ -36,17 +39,20 @@ variables. Adapters already evaluate their returned {class}`~ommx.Solution` or
 {class}`~ommx.SampleSet` against that exact value. Existing regular-constraint
 IDs remain stable through regular transformations. Lowering a special
 constraint creates fresh regular rows, so per-constraint penalty weights use
-the regular-constraint IDs present when preparation starts, and a uniform
-weight is required when generated rows remain active. The existing penalty
-operation remains the owner of its generated parameter IDs and
-removed-constraint records.
+regular-constraint IDs. Every active row must have a weight; an entry for a
+regular constraint already moved to `removed_constraints` is ignored. A
+special-constraint lowering creates fresh regular IDs, which a per-constraint
+map must also cover. Use a uniform weight when those generated IDs are not
+configured explicitly. The penalty
+operation itself owns constraint-to-parameter mapping, materialization,
+generated parameter IDs, and removed-constraint records.
 Positive finite weights require a minimization candidate, so a maximization
 source must permit sense normalization.
 
-Preparation is not globally transactional. Existing in-place operations mutate
-the `Instance` directly and retain their own failure semantics. The consuming
-penalty operation is the only exception: it runs on a clone of the current
-`Instance` and commits that value only after penalty conversion and parameter
+Preparation is not globally transactional: a later owner operation can fail
+after earlier operations succeeded. Each operation retains its owner API's
+failure semantics. The fixed-weight penalty owner API validates first, then
+clones internally and commits only after penalty conversion and parameter
 materialization succeed. Failure to reach the input class after all
 permitted operations is an ordinary error.
 
@@ -124,7 +130,8 @@ instance.prepare(policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
-Finite penalties and approximate integer slack now require explicit opt-in.
+Finite penalties require explicit opt-in. Approximate integer slack requires a
+positive finite maximum residual; a bare boolean permission is not accepted.
 Preparation changes the supplied {class}`~ommx.Instance`, so applicability must
 be checked again on that value. See
 [Adapter input classes](../user_guide/capability_model.md) and the

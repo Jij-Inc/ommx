@@ -248,9 +248,11 @@ v3では、これらを `OMMXOpenJijSAAdapter.recommended_preparation_policy()` 
 使います。v2はどちらのpenalty設定もない場合に一律weight `1.0` を選びましたが、v3では
 制約が残る場合、有限penaltyを明示的に選択する必要があります。
 
-v2はexact integer slackへの変換に失敗すると、離散的なslack近似を自動的に試しました。
-このfallbackを維持するには、新しいfield
-`allow_approximate_integer_slack=True` を明示します。v3の既定値は `False` です。
+v2はexact integer slackへの変換に失敗すると、許容誤差を指定せずに離散的なslack近似を
+自動的に試しました。v3で近似を使うには、元の制約式の単位で許容する最大残差を、正の
+有限値 `inequality_integer_slack_max_error` として明示します。この誤差を
+`inequality_integer_slack_max_range` の範囲内で実現できなければpreparationは失敗します。
+errorを `None` のままにするとexact slack変換だけを許可します。
 
 ```python
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
@@ -258,7 +260,7 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
     inequality_integer_slack_max_range=32,
-    allow_approximate_integer_slack=True,  # v2の近似fallbackを維持
+    inequality_integer_slack_max_error=0.25,
 )
 instance.prepare(policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
@@ -269,9 +271,9 @@ sample_set = OMMXOpenJijSAAdapter.sample(instance)
 その値自身が所有し、Adapterの結果もその値に対して評価されます。結果のobjectiveとsenseは
 変換後のmodelのものであり、有限penaltyは実行可能なsampleを保証しません。
 
-Preparation全体はtransactionではありません。既存のin-place操作は直接実行され、
-それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作だけで、
-現在の `Instance` のclone上で実行し、penalty変換とparameter materializationが成功した
+Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
+操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-weight penaltyの
+owner APIはread-only検証後に内部でcloneし、penalty変換とparameter materializationが成功した
 場合にだけcommitします。
 
 ## 8. DataFrame accessor

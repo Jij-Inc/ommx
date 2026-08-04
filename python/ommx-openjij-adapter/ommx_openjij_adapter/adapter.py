@@ -200,15 +200,18 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         uniform_penalty_weight: float | None = None,
         penalty_weights: Mapping[int, float] | None = None,
         inequality_integer_slack_max_range: int = 32,
-        allow_approximate_integer_slack: bool = False,
+        inequality_integer_slack_max_error: float | None = None,
+        atol: float | None = None,
     ) -> PreparationPolicy:
         """Return the common OMMX Policy recommended for OpenJij input.
 
         The default permits the OMMX operations needed for bounded Integer
         encoding and minimization-sense normalization. Finite penalties and
-        approximate integer slack remain explicit caller choices through this
-        method's keyword arguments. The returned Policy is executed only by
-        :meth:`ommx.Instance.prepare`; this Adapter's direct APIs stay strict.
+        the maximum residual introduced by approximate integer slack, and an
+        optional absolute tolerance remain explicit caller choices through
+        this method's keyword arguments. The returned Policy is executed only
+        by :meth:`ommx.Instance.prepare`; this Adapter's direct APIs stay
+        strict.
         """
         input_class = cls.INPUT_CLASS
         if input_class is None:  # pragma: no cover - class declaration invariant
@@ -225,9 +228,10 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             allow_integer_log_encoding=True,
             allow_sense_normalization=True,
             inequality_integer_slack_max_range=inequality_integer_slack_max_range,
-            allow_approximate_integer_slack=allow_approximate_integer_slack,
+            inequality_integer_slack_max_error=inequality_integer_slack_max_error,
             uniform_penalty_weight=uniform_penalty_weight,
             penalty_weights=None if penalty_weights is None else dict(penalty_weights),
+            atol=atol,
         )
 
     @classmethod

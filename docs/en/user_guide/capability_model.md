@@ -67,11 +67,16 @@ transformations. Solver states and samples are evaluated by that same
 `Instance`. Adapter-owned preconditions remain outside Policy execution and are
 checked at the direct boundary.
 
-Preparation is not globally transactional. Existing in-place operations run
-directly on `instance` and retain their own failure semantics. The consuming
-penalty operation is the only exception: it runs on a clone of the current
-`Instance` and replaces `instance` only after penalty conversion and parameter
-materialization both succeed.
+The Policy captures the absolute tolerance used by result-affecting
+preparation operations. When `atol` is omitted, the current SDK default is
+resolved while constructing the Policy; changing that ambient default later
+does not change how `Instance.prepare(policy)` interprets it.
+
+Preparation is not globally transactional: a later owner operation can fail
+after earlier operations succeeded. Each operation retains its owner API's
+failure semantics. The fixed-weight penalty owner API validates first, then
+clones internally and replaces `instance` only after penalty conversion and
+parameter materialization both succeed.
 
 Finite penalty weights are positive and therefore apply to a minimization candidate. A Policy that prepares a maximization source with a finite penalty must also permit sense normalization.
 

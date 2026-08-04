@@ -415,8 +415,12 @@ supplied; v3 requires finite penalties to be selected explicitly when
 constraints remain.
 
 When exact integer slack conversion failed, v2 automatically attempted a
-discrete slack approximation. To retain that fallback, explicitly set the new
-`allow_approximate_integer_slack=True` option. Its v3 default is `False`.
+discrete slack approximation without an explicit error bound. In v3,
+approximation requires a positive finite
+`inequality_integer_slack_max_error`, expressed as the maximum residual in the
+original constraint's units. If that error cannot be achieved within
+`inequality_integer_slack_max_range`, preparation fails. Leaving the error as
+`None` permits only exact slack conversion.
 
 ```python
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
@@ -424,7 +428,7 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
     inequality_integer_slack_max_range=32,
-    allow_approximate_integer_slack=True,  # Retain v2's approximation fallback.
+    inequality_integer_slack_max_error=0.25,
 )
 instance.prepare(policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
@@ -436,10 +440,11 @@ auxiliary variables produced by preparation, and Adapter results are evaluated
 against it. Their objective and sense therefore belong to the prepared model,
 and a finite penalty does not guarantee feasible samples.
 
-Preparation is not globally transactional. Existing in-place operations run
-directly and retain their own failure semantics. The consuming penalty operation
-is the only exception: it runs on a clone of the current `Instance` and commits
-that value only after penalty conversion and parameter materialization succeed.
+Preparation is not globally transactional: a later owner operation can fail
+after earlier operations succeeded. Each operation retains its owner API's
+failure semantics. The fixed-weight penalty owner API validates first, then
+clones internally and commits only after penalty conversion and parameter
+materialization succeed.
 
 ```python
 # v2.5.1

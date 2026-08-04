@@ -3117,11 +3117,10 @@ class Instance:
         Preparation is an OMMX-owned Instance operation. It does not receive or
         retain a Solver Adapter. On success this same Instance belongs to
         ``policy.input_class`` and owns the effects of every
-        applied operation. Evaluate solver states and samples against it.
-        Existing in-place operations are applied directly. After read-only
-        validation, the current Instance is cloned only when a consuming penalty
-        operation is required, and is replaced only after that operation
-        succeeds.
+        applied operation. Evaluate solver states and samples against it. Every
+        operation is invoked through its owning Instance API. The fixed-weight
+        penalty APIs validate first, then clone internally and commit only after
+        penalty conversion and parameter materialization succeed.
         """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Instance: ...
@@ -4322,7 +4321,10 @@ class Instance:
 
         - This should be used when {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.
 
-        - The bound of $s$ will be $[0, \text{slack\_upper\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.
+        - The bound of $s$ will be $[0, \text{slack\_upper\_bound}]$, where
+          ``slack_upper_bound`` must be in ``[1, 2**53]`` so it is represented
+          exactly. The coefficient $b$ is the smallest representable ``float``
+          no smaller than $-\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
 
         - Since the slack variable is integer, the yielded inequality has residual error $\min_s f(x) + b s$ at most $b$.
           And thus $b$ is returned to use scaling the penalty weight or other things.
@@ -6107,6 +6109,8 @@ class PreparationPolicy:
     policy neither retains an Adapter nor calls Adapter-owned Python code.
     Positive finite penalty weights require a minimization candidate; permit
     sense normalization when preparing a maximization source.
+    The absolute tolerance is resolved while constructing this immutable Policy,
+    so later changes to the SDK default do not affect its interpretation.
     """
     @property
     def input_class(self) -> InstanceClass:
@@ -6136,9 +6140,16 @@ class PreparationPolicy:
         Configured positive slack range, or ``None`` when integer slack is forbidden.
         """
     @property
-    def allow_approximate_integer_slack(self) -> builtins.bool:
+    def inequality_integer_slack_max_error(self) -> typing.Optional[builtins.float]:
         r"""
-        Whether approximate integer slack may be used after exact slack is unavailable.
+        Maximum residual introduced by approximate integer slack, or ``None``
+        when only exact integer slack is permitted.
+        """
+    @property
+    def atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance captured by this Policy for result-affecting
+        preparation operations.
         """
     @property
     def uniform_penalty_weight(self) -> typing.Optional[builtins.float]:
@@ -6153,12 +6164,12 @@ class PreparationPolicy:
         r"""
         Per-constraint finite penalty weights.
 
-        Keys identify source regular constraints by their stable IDs. The map
-        must cover every source regular constraint still active at the penalty
-        step, while an entry for one removed as trivial is allowed.
-        Special-constraint lowering adds new regular rows outside this
-        source-map domain, so a uniform penalty is required when such rows
-        remain active.
+        Keys identify regular constraints by their stable IDs. The map must
+        cover every regular constraint active at the penalty step; entries for
+        regular constraints already moved to ``removed_constraints`` are
+        ignored. Special-constraint lowering adds fresh regular IDs; a
+        per-constraint map must cover those IDs too. Use a uniform penalty when
+        their weights are not configured explicitly.
         """
     def __new__(
         cls,
@@ -6170,9 +6181,10 @@ class PreparationPolicy:
         allow_integer_log_encoding: builtins.bool = False,
         allow_sense_normalization: builtins.bool = False,
         inequality_integer_slack_max_range: typing.Optional[builtins.int] = None,
-        allow_approximate_integer_slack: builtins.bool = False,
+        inequality_integer_slack_max_error: typing.Optional[builtins.float] = None,
         uniform_penalty_weight: typing.Optional[builtins.float] = None,
         penalty_weights: typing.Optional[collections.abc.Mapping[int, float]] = None,
+        atol: typing.Optional[builtins.float] = None,
     ) -> PreparationPolicy: ...
     def __repr__(self) -> builtins.str: ...
 

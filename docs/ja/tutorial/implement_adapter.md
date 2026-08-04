@@ -59,7 +59,7 @@ OMMXは広いクラスの最適化問題を保存できるようになってい�
 
 ### 決定変数を設定する
 
-PySCIPOptは決定変数を名前で管理するので、OMMXの決定変数のIDを文字列にして名前として登録します。これにより後述する `decode_to_state` においてPySCIPOptの決定変数から `ommx.State` を復元することができます。これはバックエンドソルバーの実装に応じて適切な方法が変わることに注意してください。重要なのは解を得た後に `ommx.State` に変換するための情報を保持することです。
+PySCIPOptは決定変数を名前で管理するので、OMMXでusedと判定された決定変数のIDを文字列にして名前として登録します。fixed variableとdependent variableは `Instance.evaluate()` が所有するため、backendの自由変数としてモデル化してはいけません。これにより後述する `decode_to_state` においてPySCIPOptの決定変数から `ommx.State` を復元することができます。これはバックエンドソルバーの実装に応じて適切な方法が変わることに注意してください。重要なのは解を得た後に `ommx.State` に変換するための情報を保持することです。
 
 ```{code-cell} ipython3
 import pyscipopt
@@ -73,7 +73,7 @@ def set_decision_variables(
     モデルに決定変数を追加し、変数名のマッピングを作成して返す
     """
     # OMMXの決定変数の情報からPySCIPOptの変数を作成
-    for var in instance.decision_variables:
+    for var in instance.used_decision_variables:
         if var.kind == DecisionVariable.BINARY:
             model.addVar(name=str(var.id), vtype="B")
         elif var.kind == DecisionVariable.INTEGER:
@@ -263,7 +263,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
         return State(
             entries={
                 var.id: sol[varname_map[str(var.id)]]
-                for var in instance.decision_variables
+                for var in instance.used_decision_variables
             }
         )
     except Exception:
@@ -327,9 +327,9 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 
 基底 class の推奨 Policy は identity preparation だけを許可します。具体的な Adapter は追加の OMMX-owned operation を推奨できますが、direct constructor と `solve()` は、実際に受け取った入力を厳密に扱います。
 
-Preparation全体はtransactionではありません。既存のin-place操作は `Instance` に直接
-適用され、それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作
-だけで、現在の `Instance` のclone上で実行し、penalty変換とparameter materializationが
+Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
+操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-weight penaltyの
+owner APIはread-only検証後に内部でcloneし、penalty変換とparameter materializationが
 成功した場合にだけcommitします。
 
 低レベルの制御が必要なら、呼び出し側が {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` を明示的に呼ぶこともできます。`kinds_to_lower` 引数では、以下の特殊制約 family selector を使います：
@@ -347,13 +347,30 @@ Preparation全体はtransactionではありません。既存のin-place操作�
 ここまでで用意した関数を使って次のように実装することができます：
 
 ```{code-cell} ipython3
+from ommx import DegreeBound, Equality, InstanceClass, InstanceClassClause, Kind, Sense
 from ommx.adapter import DiagnosticsSink, SolverAdapter
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    INPUT_CLASS = InstanceClass(
+        [
+            InstanceClassClause(
+                label="pyscipopt-quadratic-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(2),
+                regular_constraint_degree_bounds={
+                    Equality.EqualToZero: DegreeBound.at_most(2),
+                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
+                },
+                allowed_senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
+    )
+
     def __init__(
         self,
         ommx_instance: Instance,
     ):
+        self.require_applicable(ommx_instance)
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -518,6 +535,7 @@ class SamplerAdapter(SolverAdapter):
 `solve` と同様に、予約済みの `diagnostics` keyword は `Run.log_sample` が管理します。sink が `None` でない場合、sampler は adapter 固有の report を記録できます。
 
 ```{code-cell} ipython3
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
 from ommx.adapter import DiagnosticsSink, SamplerAdapter
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
@@ -527,16 +545,27 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     # SampleSetに変換する必要があるので、Instanceを保持
     ommx_instance: Instance
+
+    INPUT_CLASS = InstanceClass(
+        [
+            InstanceClassClause(
+                label="openjij-qubo",
+                allowed_variable_kinds={Kind.Binary},
+                objective_degree_bound=DegreeBound.at_most(2),
+                allowed_senses={Sense.Minimize},
+            )
+        ]
+    )
     
     def __init__(self, ommx_instance: Instance):
+        self.require_applicable(ommx_instance)
         self.ommx_instance = ommx_instance
 
     # サンプリングを行う
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
-        # QUBOの辞書形式に変換
-        # InstanceがQUBO形式でなければここでエラーになる
-        qubo, _offset = self.ommx_instance.to_qubo()
+        # applicableなQUBOをpreparationやmutationなしに取り出す
+        qubo, _offset = self.ommx_instance.as_qubo_format()
         return sampler.sample_qubo(qubo)
 
     # サンプリングを行う共通のメソッド
@@ -555,7 +584,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     # このAdapterでは `SamplerInput` は QUBO形式の辞書を使うことにする
     @property
     def sampler_input(self) -> dict[tuple[int, int], float]:
-        qubo, _offset = self.ommx_instance.to_qubo()
+        qubo, _offset = self.ommx_instance.as_qubo_format()
         return qubo
    
     # OpenJijのResponseをSampleSetに変換
@@ -592,21 +621,33 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
 $$
 \begin{aligned}
-\max & \quad x_0 + x_1 \\
-\text{s.t.} & \quad x_0 \cdot x_1 = 1 \\
+\max & \quad x_0 + 2x_1 \\
+\text{s.t.} & \quad x_0 + x_1 = 1 \\
 & \quad x_0, x_1 \in \{0, 1\}
 \end{aligned}
 $$
 
 ```{code-cell} ipython3
+from ommx import PreparationPolicy
+
 x = [DecisionVariable.binary(id, name="x", subscripts=[id]) for id in range(2)]
 instance = Instance.from_components(
     decision_variables=x,
-    objective=x[0] + x[1],
-    constraints={0: x[0] * x[1] == 1},
+    objective=x[0] + 2 * x[1],
+    constraints={0: x[0] + x[1] == 1},
     sense=Instance.MAXIMIZE,
 )
 
+# このtutorial Adapterが継承する推奨Policyはidentity-onlyなので、呼び出し側が
+# sense normalizationとfinite penaltyを明示的に許可してからstrictなdirect
+# Adapter APIを呼び出す
+assert OMMXOpenJijSAAdapter.INPUT_CLASS is not None
+policy = PreparationPolicy(
+    input_class=OMMXOpenJijSAAdapter.INPUT_CLASS,
+    allow_sense_normalization=True,
+    uniform_penalty_weight=4.0,
+)
+instance.prepare(policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 sample_set.summary
 ```

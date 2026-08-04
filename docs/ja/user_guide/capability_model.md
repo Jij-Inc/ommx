@@ -66,10 +66,14 @@ result = Adapter.solve(instance)
 `Instance` が評価します。Adapter固有のpreconditionはPolicy実行の外にあり、direct
 boundaryで検査されます。
 
-Preparation全体はtransactionではありません。既存のin-place操作は `instance` に直接
-適用され、それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作
-だけで、現在の `Instance` のclone上で実行し、penalty変換とparameter materializationの
-両方が成功した場合にだけ `instance` を置き換えます。
+結果に影響するpreparation操作の絶対許容誤差はPolicyに保持されます。`atol`を
+省略した場合はPolicy構築時点のSDK defaultを解決して保存するため、その後に
+ambient defaultを変更しても `Instance.prepare(policy)` の解釈は変わりません。
+
+Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
+操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-weight penaltyの
+owner APIはread-only検証後に内部でcloneし、penalty変換とparameter materializationの両方が
+成功した場合にだけ `instance` を置き換えます。
 
 finite penalty weight は正の値なので、minimization candidate にだけ適用されます。maximization source に finite penalty を適用する Policy では、sense normalization も許可する必要があります。
 

@@ -59,7 +59,7 @@ OMMX can store a wide range of optimization problems, so there may be cases wher
 
 ### Setting Decision Variables
 
-PySCIPOpt manages decision variables by name, so register the OMMX decision variable IDs as strings. This allows you to reconstruct `ommx.State` from PySCIPOpt decision variables in the `decode_to_state` function mentioned later. Note that the appropriate method depends on the backend solver's implementation. The important thing is to retain the information needed to convert to `ommx.State` after obtaining the solution.
+PySCIPOpt manages decision variables by name, so register the IDs of OMMX's used decision variables as strings. Fixed and dependent variables remain owned by `Instance.evaluate()` and must not be modeled as free backend variables. This allows you to reconstruct `ommx.State` from PySCIPOpt decision variables in the `decode_to_state` function mentioned later. Note that the appropriate method depends on the backend solver's implementation. The important thing is to retain the information needed to convert to `ommx.State` after obtaining the solution.
 
 ```{code-cell} ipython3
 import pyscipopt
@@ -73,7 +73,7 @@ def set_decision_variables(
     Add decision variables to the model and create a mapping from variable names to variables
     """
     # Create PySCIPOpt variables from OMMX decision variable information
-    for var in instance.decision_variables:
+    for var in instance.used_decision_variables:
         if var.kind == DecisionVariable.BINARY:
             model.addVar(name=str(var.id), vtype="B")
         elif var.kind == DecisionVariable.INTEGER:
@@ -267,7 +267,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
         return State(
             entries={
                 var.id: sol[varname_map[str(var.id)]]
-                for var in instance.decision_variables
+                for var in instance.used_decision_variables
             }
         )
     except Exception:
@@ -331,10 +331,10 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 
 The base recommendation permits only identity preparation. A concrete Adapter may recommend additional OMMX-owned operations, but its direct constructor and `solve()` remain strict about the exact input they receive.
 
-Preparation is not globally transactional. Existing in-place operations run
-directly on the `Instance` and retain their own failure semantics. The consuming
-penalty operation is the only exception: it runs on a clone of the current
-`Instance` and commits that value only after penalty conversion and parameter
+Preparation is not globally transactional: a later owner operation can fail
+after earlier operations succeeded. Each operation retains its owner API's
+failure semantics. The fixed-weight penalty owner API validates first, then
+clones internally and commits only after penalty conversion and parameter
 materialization succeed.
 
 For low-level control, a caller may instead explicitly call {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`. Its `kinds_to_lower` argument uses these special-constraint family selectors:
@@ -352,13 +352,30 @@ Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_specia
 Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
+from ommx import DegreeBound, Equality, InstanceClass, InstanceClassClause, Kind, Sense
 from ommx.adapter import DiagnosticsSink, SolverAdapter
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    INPUT_CLASS = InstanceClass(
+        [
+            InstanceClassClause(
+                label="pyscipopt-quadratic-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(2),
+                regular_constraint_degree_bounds={
+                    Equality.EqualToZero: DegreeBound.at_most(2),
+                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
+                },
+                allowed_senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
+    )
+
     def __init__(
         self,
         ommx_instance: Instance,
     ):
+        self.require_applicable(ommx_instance)
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -525,6 +542,7 @@ class SamplerAdapter(SolverAdapter):
 As with `solve`, the reserved `diagnostics` keyword is owned by `Run.log_sample`. A sampler may record adapter-defined reports into the sink when it is not `None`.
 
 ```{code-cell} ipython3
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
 from ommx.adapter import DiagnosticsSink, SamplerAdapter
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
@@ -534,16 +552,27 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     # Retain the Instance because it is required to convert to SampleSet
     ommx_instance: Instance
+
+    INPUT_CLASS = InstanceClass(
+        [
+            InstanceClassClause(
+                label="openjij-qubo",
+                allowed_variable_kinds={Kind.Binary},
+                objective_degree_bound=DegreeBound.at_most(2),
+                allowed_senses={Sense.Minimize},
+            )
+        ]
+    )
     
     def __init__(self, ommx_instance: Instance):
+        self.require_applicable(ommx_instance)
         self.ommx_instance = ommx_instance
 
     # Perform sampling
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
-        # Convert to QUBO dictionary format
-        # If the Instance is not in QUBO format, an error will be raised here
-        qubo, _offset = self.ommx_instance.to_qubo()
+        # Extract the already-applicable QUBO without preparing or mutating it
+        qubo, _offset = self.ommx_instance.as_qubo_format()
         return sampler.sample_qubo(qubo)
 
     # Common method for performing sampling
@@ -562,7 +591,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     # In this adapter, `SamplerInput` uses a QUBO dictionary
     @property
     def sampler_input(self) -> dict[tuple[int, int], float]:
-        qubo, _offset = self.ommx_instance.to_qubo()
+        qubo, _offset = self.ommx_instance.as_qubo_format()
         return qubo
    
     # Convert OpenJij Response to a SampleSet
@@ -599,21 +628,33 @@ Let's sample from the following optimization problem using our Adapter:
 
 $$
 \begin{aligned}
-\max & \quad x_0 + x_1 \\
-\text{s.t.} & \quad x_0 \cdot x_1 = 1 \\
+\max & \quad x_0 + 2x_1 \\
+\text{s.t.} & \quad x_0 + x_1 = 1 \\
 & \quad x_0, x_1 \in \{0, 1\}
 \end{aligned}
 $$
 
 ```{code-cell} ipython3
+from ommx import PreparationPolicy
+
 x = [DecisionVariable.binary(id, name="x", subscripts=[id]) for id in range(2)]
 instance = Instance.from_components(
     decision_variables=x,
-    objective=x[0] + x[1],
-    constraints={0: x[0] * x[1] == 1},
+    objective=x[0] + 2 * x[1],
+    constraints={0: x[0] + x[1] == 1},
     sense=Instance.MAXIMIZE,
 )
 
+# This tutorial Adapter inherits the identity-only recommendation. The caller
+# explicitly permits sense normalization and a finite penalty before invoking
+# the strict direct Adapter API.
+assert OMMXOpenJijSAAdapter.INPUT_CLASS is not None
+policy = PreparationPolicy(
+    input_class=OMMXOpenJijSAAdapter.INPUT_CLASS,
+    allow_sense_normalization=True,
+    uniform_penalty_weight=4.0,
+)
+instance.prepare(policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 sample_set.summary
 ```

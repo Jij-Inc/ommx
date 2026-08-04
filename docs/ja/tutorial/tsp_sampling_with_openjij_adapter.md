@@ -175,17 +175,18 @@ OMMXOpenJijSAAdapter.require_applicable(instance)
 }
 ```
 
-Preparation全体はtransactionではありません。既存のin-place操作は `instance` に直接
-適用され、それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作
-だけで、現在の `Instance` のclone上で実行し、penalty変換とparameter materializationが
+Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
+操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-weight penaltyの
+owner APIはread-only検証後に内部でcloneし、penalty変換とparameter materializationが
 成功した場合にだけcommitします。
 
-離散的なinteger slack近似を使うには、Policyを取得するときに
-`allow_approximate_integer_slack=True` を渡します。
-`inequality_integer_slack_max_range` の指定だけでは近似への同意になりません。
+離散的なinteger slack近似を使うには、Policyを取得するときに正の有限値
+`inequality_integer_slack_max_error` で元の制約式の単位における最大残差を指定します。
+`inequality_integer_slack_max_range` だけを指定した場合はexact変換だけを許可し、近似は
+行いません。指定range内で最大残差を実現できなければpreparationは失敗します。
 `uniform_penalty_weight` または `penalty_weights` はfinite penalty操作を明示的に
-選択します。制約ごとのweightは通常制約IDを指定するため、特殊制約loweringによって
-通常制約が追加される場合はuniform weightを使います。
+選択します。制約ごとのweightは、特殊制約loweringが生成する新しい通常制約IDも指定する
+必要があります。そのIDを明示的に指定しない場合はuniform weightを使います。
 
 変数boundから不等式が実行不可能だと証明できた場合、`Instance.prepare()` はcore所有の
 {py:class}`~ommx.InfeasibleDetected` を送出します。従来の

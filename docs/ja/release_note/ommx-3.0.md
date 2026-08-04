@@ -16,6 +16,8 @@ parameterを表します。{meth}`~ommx.Instance.prepare` が固定順序でPoli
 その `Instance` をin-placeに変更して `None` を返します。
 `SolverAdapter` は `recommended_preparation_policy()` でPolicyを推奨できますが、
 preparationを実行せず、直接入力に対する `INPUT_CLASS` checkも緩和しません。
+結果に影響する操作はPolicyに保存された絶対許容誤差を使い、
+`Instance.prepare()` はmutableなSDK defaultを読みません。
 
 ```python
 policy = OMMXHighsAdapter.recommended_preparation_policy()
@@ -25,21 +27,24 @@ solution = OMMXHighsAdapter.solve(instance)
 
 HiGHSの推奨Policyは、`Instance.prepare()` 中のIndicator、OneHot、SOS1の自動loweringを
 許可します。従来のOpenJij Adapter-owned preparation APIもこの共通workflowに
-置き換わり、有限penaltyと近似integer slackは引き続き明示的なPolicy optionです。
+置き換わり、有限penaltyと近似integer slackで許容する最大残差は、引き続き明示的な
+Policy optionです。
 
 変換の結果は、同じ `Instance` のdecision-variable dependency、removed constraint、
 provenance、補助変数としてその値自身が所有します。Adapterが返す
 {class}`~ommx.Solution` / {class}`~ommx.SampleSet` は、その値に対して既に評価済みです。
-通常制約のIDは通常制約に対する変換では保持されます。特殊制約のloweringだけは新しい
-通常制約rowを生成するため、制約ごとのpenalty weightはpreparation開始時の通常制約IDを
-使い、生成されたrowがactiveに残る場合はuniform weightが必要です。生成したparameter
-IDとremoved constraintの記録は、既存のpenalty操作が引き続き所有します。正の
+通常制約のIDは通常制約に対する変換では保持されます。制約ごとのpenalty weightは通常
+制約IDを使い、activeなrowをすべて指定します。既にremoved constraintsへ移動した通常
+制約へのentryは無視されます。特殊制約loweringが生成する新しい通常制約IDも制約ごとの
+mapで指定する必要があります。そのIDを明示的に指定しない場合はuniform weightを使います。
+制約IDからparameter IDへの対応、materialization、生成した
+parameter ID、removed constraintの記録はpenalty操作自身が所有します。正の
 finite weightはminimization candidateにだけ適用されるため、maximization sourceでは
 sense normalizationも許可する必要があります。
 
-Preparation全体はtransactionではありません。既存のin-place操作は `Instance` を直接
-変更し、それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作
-だけで、現在の `Instance` のclone上で実行し、penalty変換とparameter materializationが
+Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
+操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-weight penaltyの
+owner APIはread-only検証後に内部でcloneし、penalty変換とparameter materializationが
 成功した場合にだけcommitします。許可された操作をすべて適用してもinput classに
 到達しなければ通常のerrorを返します。
 
@@ -110,7 +115,8 @@ instance.prepare(policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
-有限penaltyとapproximate integer slackは明示的なopt-inが必要です。preparationは
+有限penaltyは明示的なopt-inが必要です。approximate integer slackには正の有限な
+最大残差が必要で、単なるbooleanの許可は受け付けません。preparationは
 渡された {class}`~ommx.Instance` を変更するため、その値でapplicabilityをもう一度
 確認してください。受け入れるmodel classとpreparationの詳細は
 [Adapter Input Class](../user_guide/capability_model.md) と

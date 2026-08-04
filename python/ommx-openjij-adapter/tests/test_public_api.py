@@ -15,16 +15,17 @@ def test_public_api_contains_only_adapter_and_decode_helper() -> None:
 
 
 def test_adapter_recommends_common_preparation_policy() -> None:
-    policy = package.OMMXOpenJijSAAdapter.recommended_preparation_policy()
+    policy = package.OMMXOpenJijSAAdapter.recommended_preparation_policy(atol=1e-4)
 
     assert isinstance(policy, PreparationPolicy)
     assert policy.allowed_special_constraint_lowerings
     assert policy.allow_integer_log_encoding
     assert policy.allow_sense_normalization
     assert policy.inequality_integer_slack_max_range == 32
-    assert not policy.allow_approximate_integer_slack
+    assert policy.inequality_integer_slack_max_error is None
     assert policy.uniform_penalty_weight is None
     assert policy.penalty_weights is None
+    assert policy.atol == 1e-4
 
 
 def test_adapter_specific_preparation_types_are_not_exported() -> None:
