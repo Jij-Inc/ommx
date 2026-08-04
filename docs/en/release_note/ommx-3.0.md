@@ -30,9 +30,13 @@ solution = OMMXHighsAdapter.solve(instance)
 
 The HiGHS recommendation permits automatic Indicator, OneHot, and SOS1
 lowering during `Instance.prepare()`. OpenJij's previous Adapter-owned
-preparation API is replaced by the same workflow, with finite penalty and
-the maximum residual permitted for approximate integer slack remaining
-explicit Policy options.
+preparation API is replaced by the same workflow, with finite penalty remaining
+an explicit Policy option. Integer slack is deliberately separate from
+`PreparationPolicy`: callers invoke
+{meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`
+directly, or explicitly select
+{meth}`~ommx.Instance.add_integer_slack_to_inequality` with a positive finite
+`max_error` after catching {class}`~ommx.ExactIntegerSlackError`.
 
 Transformation effects are owned by the same `Instance` through its
 decision-variable dependencies, removed constraints, provenance, and auxiliary
@@ -130,8 +134,11 @@ instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
-Finite penalties require explicit opt-in. Approximate integer slack requires a
-positive finite maximum residual; a bare boolean permission is not accepted.
+Finite penalties require explicit opt-in. Integer slack is not performed by
+preparation: callers select the exact `Instance` operation before preparation,
+and may explicitly select the approximate operation with a positive finite
+`max_error` after `ExactIntegerSlackError`. Preparation does not select that
+fallback automatically.
 Preparation changes the supplied {class}`~ommx.Instance`, so applicability must
 be checked again on that value. See
 [Adapter input classes](../user_guide/capability_model.md) and the
@@ -202,7 +209,7 @@ All inherit from {class}`~ommx.artifact.RemoteArtifactError`; catch
 without confusing it with authentication, authorization, transport, or invalid
 Artifact failures.
 
-Integer preparation operations expose three additional RuntimeError-compatible
+Integer transformation operations expose three additional RuntimeError-compatible
 specializations. {meth}`~ommx.Instance.log_encode` raises
 {class}`~ommx.LogEncodingError` when exact encoding is unavailable,
 {class}`~ommx.ExactIntegerSlackError` when exact slack conversion can be

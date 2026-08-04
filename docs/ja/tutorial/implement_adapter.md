@@ -279,7 +279,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 ```python
 class SolverAdapter(ABC):
     # Adapter applicability の OMMX 定義の構造条件
-    INPUT_CLASS: InstanceClass | None = None
+    INPUT_CLASS: InstanceClass
 
     @classmethod
     def recommended_preparation_policy(cls) -> PreparationPolicy:
@@ -325,7 +325,7 @@ OMMXPySCIPOptAdapter.require_applicable(instance)
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
-基底 class の推奨 Policy は identity preparation だけを許可します。具体的な Adapter は追加の OMMX-owned operation を推奨できますが、direct constructor と `solve()` は、実際に受け取った入力を厳密に扱います。
+基底 class の推奨 Policy は OMMX-owned の Indicator、OneHot、SOS1 lowering だけを許可します。具体的な Adapter は追加の OMMX-owned operation を推奨できますが、direct constructor と `solve()` は、実際に受け取った入力を厳密に扱います。
 
 Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
 操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-penalty変換が
@@ -637,7 +637,7 @@ instance = Instance.from_components(
     sense=Instance.MAXIMIZE,
 )
 
-# このtutorial Adapterが継承する推奨Policyはidentity-onlyなので、呼び出し側が
+# このtutorial Adapterが継承する推奨Policyは特殊制約loweringだけなので、呼び出し側が
 # sense normalizationとfinite penaltyを明示的に許可してからstrictなdirect
 # Adapter APIを呼び出す
 policy = PreparationPolicy(

@@ -11,18 +11,20 @@ kernelspec:
   name: python3
 ---
 
-# Adapter の入力 class、Preparation、明示的な特殊制約 lowering
+# Adapter の入力 class、Preparation、明示的な Instance 操作
 
-OMMX では、従来 Adapter Capability として一緒に説明されていた次の3つの概念を分けて扱います。
+OMMX では、従来 Adapter Capability として一緒に説明されていた概念を分けて扱います。
 
 - {class}`~ommx.InstanceClass` は、具体的な `Instance` 値の集合です。Adapter は構造的な入力条件を `INPUT_CLASS` で宣言し、その後に Adapter 固有の precondition を評価して applicability を判定します。
 - {class}`~ommx.PreparationPolicy` は、利用を許可する OMMX-owned operation を記述します。Adapter は Policy を推奨できますが、対象の {class}`~ommx.InstanceClass` は呼び出し側が独立に選び、{meth}`Instance.prepare <ommx.Instance.prepare>` が両方を解釈します。
+- 明示的なpreparation workflowでは、Integer slack変換は {class}`~ommx.Instance` の操作であり、`PreparationPolicy` のoptionではありません。呼び出し側がexact変換または誤差上限を明示した近似変換を選び、`Instance.prepare(...)` より前に実行します。
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` は、Instance 上で選択した特殊制約 family を明示的に lowering します。入力 class の宣言でも、Adapter applicability の証明でもありません。
 
 本ページでは以下を説明します。
 
 - `InstanceClass` の membership と Adapter applicability
 - `PreparationPolicy` と `Instance.prepare(input_class, policy)`
+- exact / approximate integer slack操作
 - 特殊制約 family selector としての {class}`~ommx.SpecialConstraintKind` と {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>`
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` による明示的な lowering
 - 手動で通常制約に変換するための API
@@ -75,6 +77,65 @@ Preparation全体はtransactionではなく、後段のowner操作が失敗し�
 途中までcommitされることはありません。
 
 finite penalty weight は正の値なので、minimization candidate にだけ適用されます。maximization source に finite penalty を適用する Policy では、sense normalization も許可する必要があります。
+
+## Integer slackはPreparationの外で選択する
+
+通常の不等式 $f(x) \leq 0$ に対し、OMMXは2つの異なるmutating operationを
+`Instance` に提供します。どちらも `PreparationPolicy` が選択・実行する操作では
+ありません。
+
+{meth}`Instance.convert_inequality_to_equality_with_integer_slack <ommx.Instance.convert_inequality_to_equality_with_integer_slack>` はexactな操作
+
+$$
+f(x) \leq 0 \quad\longmapsto\quad a f(x) + s = 0
+$$
+
+を行います。ここで $a$ は係数を整数化し、$s$ は有界な非負Integer変数です。
+`max_integer_range` は $s$ のrangeを制限します。係数をexactに整数化できない場合、または
+有限のrange内に収まらない場合は、別の操作へ自動的に切り替えず
+{class}`~ommx.ExactIntegerSlackError` を送出します。
+
+{meth}`Instance.add_integer_slack_to_inequality <ommx.Instance.add_integer_slack_to_inequality>` は近似操作
+
+$$
+f(x) \leq 0 \quad\longmapsto\quad f(x) + b s \leq 0,
+\qquad s \in \{0, \ldots, R\}
+$$
+
+を行います。`slack_upper_bound` が $R$ です。戻り値の係数 $b$ が離散化残差の上限となり、
+$b \leq \mathtt{max\_error}$ の場合だけ変換を行います。`max_error` は正の有限値で、
+元の制約式と同じ単位で指定します。
+
+したがって呼び出し側は、exact操作を試し、この回復理由に対してだけ近似操作を
+明示的に選べます。
+
+```python
+from ommx import ExactIntegerSlackError
+
+try:
+    instance.convert_inequality_to_equality_with_integer_slack(
+        constraint_id,
+        max_integer_range=32,
+    )
+except ExactIntegerSlackError:
+    residual_bound = instance.add_integer_slack_to_inequality(
+        constraint_id,
+        slack_upper_bound=32,
+        max_error=0.25,
+    )
+```
+
+その他のfailureは近似を選ぶ指示ではないため、そのまま伝播させます。どちらの操作も
+通常制約IDを保持し、失敗時には `Instance` を変更しません。特殊制約を先に通常の
+不等式へ変換する必要がある場合は、
+{meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` を
+明示的に呼び、生成された通常制約IDに選択したslack操作を適用してから
+`Instance.prepare(...)` を呼びます。
+
+従来の {meth}`Instance.to_qubo <ommx.Instance.to_qubo>` と
+{meth}`Instance.to_hubo <ommx.Instance.to_hubo>` Driver APIは、歴史的な
+exactからapproximateへのfallbackを維持します。この挙動を持つのは各Driverであり、
+Preparationではありません。近似誤差を制限する場合は、上記の明示的な操作を使います。
 
 ## SpecialConstraintKind と active_special_constraint_kinds
 
@@ -232,6 +293,8 @@ for cid, c in instance2.constraints.items():
 | preparation で許可する操作を推奨する | `recommended_preparation_policy()` |
 | 呼び出し側が選んだ input class と Policy で preparation する | {meth}`Instance.prepare <ommx.Instance.prepare>` |
 | membership と Adapter 固有の precondition を検査する | `check_applicability()` / `require_applicable()` |
+| 通常の不等式をInteger slackでexactに等式化する | {meth}`Instance.convert_inequality_to_equality_with_integer_slack <ommx.Instance.convert_inequality_to_equality_with_integer_slack>` |
+| 誤差上限付きの近似Integer slackを明示的に選ぶ | {meth}`Instance.add_integer_slack_to_inequality <ommx.Instance.add_integer_slack_to_inequality>` |
 | active な特殊制約 family を調べる | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | 選択した特殊制約を明示的に lowering する | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |

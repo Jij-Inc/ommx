@@ -29,8 +29,11 @@ solution = OMMXHighsAdapter.solve(instance)
 
 HiGHSの推奨Policyは、`Instance.prepare()` 中のIndicator、OneHot、SOS1の自動loweringを
 許可します。従来のOpenJij Adapter-owned preparation APIもこの共通workflowに
-置き換わり、有限penaltyと近似integer slackで許容する最大残差は、引き続き明示的な
-Policy optionです。
+置き換わり、有限penaltyは明示的なPolicy optionになります。Integer slackは
+`PreparationPolicy` とは明確に分離されています。呼び出し側が
+{meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` を直接呼び、
+{class}`~ommx.ExactIntegerSlackError` をcatchした後に近似操作を選ぶ場合だけ、正の有限な
+`max_error` とともに {meth}`~ommx.Instance.add_integer_slack_to_inequality` を呼びます。
 
 変換の結果は、同じ `Instance` のdecision-variable dependency、removed constraint、
 provenance、補助変数としてその値自身が所有します。Adapterが返す
@@ -116,8 +119,10 @@ instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
-有限penaltyは明示的なopt-inが必要です。approximate integer slackには正の有限な
-最大残差が必要で、単なるbooleanの許可は受け付けません。preparationは
+有限penaltyは明示的なopt-inが必要です。Integer slackはpreparationの操作ではありません。
+呼び出し側がpreparationの前にexactな `Instance` 操作を選び、
+`ExactIntegerSlackError` の後に近似操作を選ぶ場合は正の有限な `max_error` を明示します。
+preparationがこのfallbackを自動的に選ぶことはありません。preparationは
 渡された {class}`~ommx.Instance` を変更するため、その値でapplicabilityをもう一度
 確認してください。受け入れるmodel classとpreparationの詳細は
 [Adapter Input Class](../user_guide/capability_model.md) と
@@ -183,7 +188,7 @@ remoteの {meth}`~ommx.artifact.Artifact.load` と
 authentication、authorization、transport、invalid Artifactと区別するには
 {class}`~ommx.artifact.RemoteArtifactNotFoundError` をcatchしてください。
 
-Integer preparationのoperationには、`RuntimeError` と互換性のある3つの具体的な
+Integer変換のoperationには、`RuntimeError` と互換性のある3つの具体的な
 exceptionも追加しました。{meth}`~ommx.Instance.log_encode` は、要求された変数を
 exactにencodeできない場合に {class}`~ommx.LogEncodingError`、exact slack変換を
 明示的な近似で置き換えられる場合に {class}`~ommx.ExactIntegerSlackError`、boundから

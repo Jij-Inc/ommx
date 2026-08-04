@@ -66,8 +66,6 @@ def test_policy_snapshots_preparation_options() -> None:
         },
         allow_integer_log_encoding=True,
         allow_sense_normalization=True,
-        inequality_integer_slack_max_range=31,
-        inequality_integer_slack_max_error=0.25,
         penalty_weights=penalty_weights,
         atol=1e-4,
     )
@@ -79,8 +77,6 @@ def test_policy_snapshots_preparation_options() -> None:
     }
     assert policy.allow_integer_log_encoding
     assert policy.allow_sense_normalization
-    assert policy.inequality_integer_slack_max_range == 31
-    assert policy.inequality_integer_slack_max_error == 0.25
     assert policy.atol == 1e-4
     assert policy.uniform_penalty_weight is None
     assert policy.penalty_weights == {7: 2.0}
@@ -130,16 +126,6 @@ def test_policy_rejects_inconsistent_flat_options() -> None:
         PreparationPolicy(
             uniform_penalty_weight=2.0,
             penalty_weights={7: 2.0},
-        )
-
-    with pytest.raises(ValueError, match="requires inequality_integer_slack_max_range"):
-        PreparationPolicy(
-            inequality_integer_slack_max_error=0.25,
-        )
-
-    with pytest.raises(ValueError, match="integer in"):
-        PreparationPolicy(
-            inequality_integer_slack_max_range=0,
         )
 
     with pytest.raises(ValueError, match="ATol must be positive"):
@@ -194,29 +180,6 @@ def test_policy_rejects_non_mapping_penalty_weights() -> None:
     with pytest.raises(TypeError, match="Mapping"):
         PreparationPolicy(
             penalty_weights=cast(Mapping[int, float], [(7, 2.0)]),
-        )
-
-
-@pytest.mark.parametrize(
-    "max_range",
-    [True, False, -1, 2**64, 1.5, "32"],
-)
-def test_policy_rejects_invalid_integer_slack_max_range(max_range: object) -> None:
-    with pytest.raises(ValueError, match="integer in"):
-        PreparationPolicy(
-            inequality_integer_slack_max_range=cast(int, max_range),
-        )
-
-
-@pytest.mark.parametrize(
-    "max_error",
-    [True, False, 0.0, -1.0, float("inf"), float("nan"), "0.25"],
-)
-def test_policy_rejects_invalid_integer_slack_max_error(max_error: object) -> None:
-    with pytest.raises(ValueError, match="positive finite"):
-        PreparationPolicy(
-            inequality_integer_slack_max_range=32,
-            inequality_integer_slack_max_error=cast(float, max_error),
         )
 
 

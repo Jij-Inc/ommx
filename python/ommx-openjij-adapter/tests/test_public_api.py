@@ -21,8 +21,6 @@ def test_adapter_recommends_common_preparation_policy() -> None:
     assert policy.allowed_special_constraint_lowerings
     assert policy.allow_integer_log_encoding
     assert policy.allow_sense_normalization
-    assert policy.inequality_integer_slack_max_range == 32
-    assert policy.inequality_integer_slack_max_error is None
     assert policy.uniform_penalty_weight is None
     assert policy.penalty_weights is None
     assert policy.atol == 1e-4

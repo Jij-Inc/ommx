@@ -3395,7 +3395,10 @@ class Instance:
         3. Convert inequality constraints
 
           * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
+          * If exact conversion is unavailable, this legacy Driver invokes
+            {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the
+            maximum finite error bound. To enforce a specific ``max_error``,
+            use the individual conversion, penalty, and encoding APIs instead.
 
         4. Convert to QUBO with (uniform) penalty method
 
@@ -3462,7 +3465,10 @@ class Instance:
         3. Convert inequality constraints
 
           * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
+          * If exact conversion is unavailable, this legacy Driver invokes
+            {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the
+            maximum finite error bound. To enforce a specific ``max_error``,
+            use the individual conversion, penalty, and encoding APIs instead.
 
         4. Convert to HUBO with (uniform) penalty method
 
@@ -4312,7 +4318,11 @@ class Instance:
         infeasible.
         """
     def add_integer_slack_to_inequality(
-        self, constraint_id: builtins.int, slack_upper_bound: builtins.int
+        self,
+        constraint_id: builtins.int,
+        slack_upper_bound: builtins.int,
+        *,
+        max_error: builtins.float,
     ) -> typing.Optional[builtins.float]:
         r"""
         Convert inequality $f(x) \leq 0$ to **inequality** $f(x) + b s \leq 0$ with an integer slack variable $s$.
@@ -4325,7 +4335,9 @@ class Instance:
           no smaller than $-\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
 
         - Since the slack variable is integer, the yielded inequality has residual error $\min_s f(x) + b s$ at most $b$.
-          And thus $b$ is returned to use scaling the penalty weight or other things.
+          ``max_error`` is an inclusive upper bound on $b$. The operation
+          validates this bound before mutating the Instance, and $b$ is returned
+          for auditing or penalty scaling.
 
           - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,
             but it needs more bits for the slack variable, and thus the problem size becomes larger.
@@ -4360,7 +4372,8 @@ class Instance:
         ```python
         >>> b = instance.add_integer_slack_to_inequality(
         ...     constraint_id=0,
-        ...     slack_upper_bound=2
+        ...     slack_upper_bound=2,
+        ...     max_error=2.0,
         ... )
         >>> b, instance.constraints[0]
         (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
@@ -6131,17 +6144,6 @@ class PreparationPolicy:
         Whether a maximization objective may be normalized to minimization.
         """
     @property
-    def inequality_integer_slack_max_range(self) -> typing.Optional[builtins.int]:
-        r"""
-        Configured positive slack range, or ``None`` when integer slack is forbidden.
-        """
-    @property
-    def inequality_integer_slack_max_error(self) -> typing.Optional[builtins.float]:
-        r"""
-        Maximum residual introduced by approximate integer slack, or ``None``
-        when only exact integer slack is permitted.
-        """
-    @property
     def atol(self) -> builtins.float:
         r"""
         Absolute tolerance captured by this Policy for result-affecting
@@ -6175,8 +6177,6 @@ class PreparationPolicy:
         ] = set(),
         allow_integer_log_encoding: builtins.bool = False,
         allow_sense_normalization: builtins.bool = False,
-        inequality_integer_slack_max_range: typing.Optional[builtins.int] = None,
-        inequality_integer_slack_max_error: typing.Optional[builtins.float] = None,
         uniform_penalty_weight: typing.Optional[builtins.float] = None,
         penalty_weights: typing.Optional[collections.abc.Mapping[int, float]] = None,
         atol: typing.Optional[builtins.float] = None,

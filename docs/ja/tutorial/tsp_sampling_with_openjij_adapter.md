@@ -175,31 +175,6 @@ OMMXOpenJijSAAdapter.require_applicable(instance)
 }
 ```
 
-Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
-操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-penalty変換が
-途中までcommitされることはありません。
-
-離散的なinteger slack近似を使うには、Policyを取得するときに正の有限値
-`inequality_integer_slack_max_error` で元の制約式の単位における最大残差を指定します。
-`inequality_integer_slack_max_range` だけを指定した場合はexact変換だけを許可し、近似は
-行いません。指定range内で最大残差を実現できなければpreparationは失敗します。
-`uniform_penalty_weight` または `penalty_weights` はfinite penalty操作を明示的に
-選択します。制約ごとのweightは、特殊制約loweringが生成する新しい通常制約IDも指定する
-必要があります。そのIDを明示的に指定しない場合はuniform weightを使います。
-
-変数boundから不等式が実行不可能だと証明できた場合、`Instance.prepare()` はcore所有の
-{py:class}`~ommx.InfeasibleDetected` を送出します。従来の
-{py:class}`~ommx.adapter.InfeasibleDetected` importは同じexception objectへのalias
-として残ります。これはモデル自体の性質であり、Adapter applicabilityの失敗では
-ありません。
-
-使用されるInteger変数ごとに最大53個の補助bitという条件を検査しますが、これは
-OMMXのInteger-to-Binary log encodingのavailability limitです。OpenJij Adapterのinput classの
-性質ではなく、serialized semanticsをforward compatibilityのためにreaderが安全に
-解釈できるかを管理する `ommx.v2.Feature` とも別物です。OpenJijが直接受け付ける
-Spin入力を含むSpin変数のサポートは
-[OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082) で別途管理しています。
-
 各制約条件毎のfeasibilityを見るには `summary_with_constraints` プロパティを使います。
 
 ```{code-cell} ipython3

@@ -43,11 +43,12 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     Arbitrary polynomial objective degree is supported through OpenJij's QUBO
     and Binary-HUBO paths.
 
-    Integer encoding, sense normalization, slack introduction, and finite
-    penalties are explicit OMMX preparation operations, not part of the
-    declared input class. Use :meth:`recommended_preparation_policy` with
-    :meth:`ommx.Instance.prepare` to mutate the Instance before passing that
-    same value to the direct Adapter API.
+    Integer encoding, sense normalization, and finite penalties are explicit
+    OMMX preparation operations, not part of the declared input class. Integer
+    slack is a separate :class:`ommx.Instance` operation. Apply any required
+    slack explicitly, then use :meth:`recommended_preparation_policy` with
+    :meth:`ommx.Instance.prepare` before passing that same Instance to the
+    direct Adapter API.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
@@ -199,19 +200,18 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         *,
         uniform_penalty_weight: float | None = None,
         penalty_weights: Mapping[int, float] | None = None,
-        inequality_integer_slack_max_range: int = 32,
-        inequality_integer_slack_max_error: float | None = None,
         atol: float | None = None,
     ) -> PreparationPolicy:
         """Return the common OMMX Policy recommended for OpenJij input.
 
         The default permits the OMMX operations needed for bounded Integer
         encoding and minimization-sense normalization. Finite penalties and
-        the maximum residual introduced by approximate integer slack, and an
-        optional absolute tolerance remain explicit caller choices through
-        this method's keyword arguments. The returned Policy is executed only
-        by :meth:`ommx.Instance.prepare`, with :attr:`INPUT_CLASS` supplied
-        separately as its target; this Adapter's direct APIs stay strict.
+        an optional absolute tolerance remain explicit caller choices through
+        this method's keyword arguments. Integer slack is a separate Instance
+        operation and is not selected by this Policy. The returned Policy is
+        executed only by :meth:`ommx.Instance.prepare`, with
+        :attr:`INPUT_CLASS` supplied separately as its target; this Adapter's
+        direct APIs stay strict.
         """
         return PreparationPolicy(
             allowed_special_constraint_lowerings={
@@ -221,8 +221,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             },
             allow_integer_log_encoding=True,
             allow_sense_normalization=True,
-            inequality_integer_slack_max_range=inequality_integer_slack_max_range,
-            inequality_integer_slack_max_error=inequality_integer_slack_max_error,
             uniform_penalty_weight=uniform_penalty_weight,
             penalty_weights=None if penalty_weights is None else dict(penalty_weights),
             atol=atol,

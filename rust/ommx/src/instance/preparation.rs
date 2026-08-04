@@ -21,8 +21,6 @@ pub struct PreparationPolicy {
     allowed_special_constraint_lowerings: SpecialConstraintKinds,
     allow_integer_log_encoding: bool,
     allow_sense_normalization: bool,
-    inequality_integer_slack_max_range: Option<u64>,
-    inequality_integer_slack_max_error: Option<f64>,
     uniform_penalty_weight: Option<f64>,
     penalty_weights: Option<BTreeMap<ConstraintID, f64>>,
     atol: ATol,
@@ -30,30 +28,14 @@ pub struct PreparationPolicy {
 
 impl PreparationPolicy {
     /// Construct permissions and parameters for [`Instance::prepare`].
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         allowed_special_constraint_lowerings: SpecialConstraintKinds,
         allow_integer_log_encoding: bool,
         allow_sense_normalization: bool,
-        inequality_integer_slack_max_range: Option<u64>,
-        inequality_integer_slack_max_error: Option<f64>,
         uniform_penalty_weight: Option<f64>,
         penalty_weights: Option<BTreeMap<ConstraintID, f64>>,
         atol: ATol,
     ) -> crate::Result<Self> {
-        if inequality_integer_slack_max_range == Some(0) {
-            crate::bail!("inequality integer slack max range must be positive");
-        }
-        if inequality_integer_slack_max_error.is_some()
-            && inequality_integer_slack_max_range.is_none()
-        {
-            crate::bail!(
-                "inequality integer slack max error requires an inequality integer slack max range"
-            );
-        }
-        if let Some(max_error) = inequality_integer_slack_max_error {
-            ensure_positive_finite("inequality integer slack max error", max_error)?;
-        }
         if uniform_penalty_weight.is_some() && penalty_weights.is_some() {
             crate::bail!("uniform and per-constraint penalty weights are mutually exclusive");
         }
@@ -72,8 +54,6 @@ impl PreparationPolicy {
             allowed_special_constraint_lowerings,
             allow_integer_log_encoding,
             allow_sense_normalization,
-            inequality_integer_slack_max_range,
-            inequality_integer_slack_max_error,
             uniform_penalty_weight,
             penalty_weights,
             atol,
@@ -93,18 +73,6 @@ impl PreparationPolicy {
     /// Whether a maximization objective may be normalized to minimization.
     pub fn allow_sense_normalization(&self) -> bool {
         self.allow_sense_normalization
-    }
-
-    /// Maximum range for an Integer slack variable, when slack is permitted.
-    pub fn inequality_integer_slack_max_range(&self) -> Option<u64> {
-        self.inequality_integer_slack_max_range
-    }
-
-    /// Maximum residual introduced by approximate Integer slack.
-    ///
-    /// `None` permits only exact Integer slack conversion.
-    pub fn inequality_integer_slack_max_error(&self) -> Option<f64> {
-        self.inequality_integer_slack_max_error
     }
 
     /// Uniform finite penalty weight, when selected.
@@ -160,15 +128,6 @@ impl Instance {
             return_if_in_input_class!();
         }
 
-        if let Some(max_range) = policy.inequality_integer_slack_max_range {
-            self.convert_inequalities_with_integer_slack(
-                max_range,
-                policy.inequality_integer_slack_max_error,
-                policy.atol,
-            )?;
-            return_if_in_input_class!();
-        }
-
         if !self.constraints().is_empty()
             && (policy.uniform_penalty_weight.is_some() || policy.penalty_weights.is_some())
         {
@@ -205,8 +164,8 @@ fn ensure_positive_finite(name: &str, value: f64) -> crate::Result<()> {
 mod tests {
     use super::*;
     use crate::{
-        coeff, linear, v1, Bound, Coefficient, Constraint, DecisionVariable, DegreeBound, Equality,
-        Evaluate, Function, IndicatorConstraint, IndicatorConstraintID, InstanceClassClause, Kind,
+        coeff, linear, v1, Bound, Constraint, DecisionVariable, DegreeBound, Equality, Evaluate,
+        Function, IndicatorConstraint, IndicatorConstraintID, InstanceClassClause, Kind,
         OneHotConstraint, OneHotConstraintID, Sense, Sos1Constraint, Sos1ConstraintID,
         SpecialConstraintKind, VariableID,
     };
@@ -273,32 +232,17 @@ mod tests {
             SpecialConstraintKinds::new(),
             false,
             false,
-            Some(0),
-            None,
-            None,
-            None,
-            ATol::default(),
-        )
-        .is_err());
-        assert!(PreparationPolicy::new(
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            None,
-            Some(1.0),
-            None,
-            None,
-            ATol::default(),
-        )
-        .is_err());
-        assert!(PreparationPolicy::new(
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            None,
-            None,
             Some(1.0),
             Some(BTreeMap::new()),
+            ATol::default(),
+        )
+        .is_err());
+        assert!(PreparationPolicy::new(
+            SpecialConstraintKinds::new(),
+            false,
+            false,
+            Some(0.0),
+            None,
             ATol::default(),
         )
         .is_err());
@@ -328,8 +272,6 @@ mod tests {
                     false,
                     false,
                     None,
-                    None,
-                    None,
                     Some(BTreeMap::from([(ConstraintID::from(99), 1.0)])),
                     ATol::default(),
                 )
@@ -354,8 +296,6 @@ mod tests {
             SpecialConstraintKinds::new(),
             false,
             false,
-            None,
-            None,
             None,
             None,
             ATol::default(),
@@ -404,17 +344,9 @@ mod tests {
             .build()
             .unwrap();
         let atol = ATol::new(0.2).unwrap();
-        let policy = PreparationPolicy::new(
-            SpecialConstraintKinds::new(),
-            true,
-            false,
-            None,
-            None,
-            None,
-            None,
-            atol,
-        )
-        .unwrap();
+        let policy =
+            PreparationPolicy::new(SpecialConstraintKinds::new(), true, false, None, None, atol)
+                .unwrap();
 
         assert_eq!(policy.atol(), atol);
         instance.prepare(&openjij_class(), &policy).unwrap();
@@ -426,64 +358,6 @@ mod tests {
             .iter()
             .filter(|(id, _)| **id != x)
             .all(|(_, variable)| variable.kind() == Kind::Binary));
-    }
-
-    #[test]
-    fn prepare_uses_policy_atol_for_integer_slack() {
-        let x = VariableID::from(1);
-        let mut instance = Instance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(BTreeMap::from([(
-                x,
-                DecisionVariable::new(
-                    Kind::Integer,
-                    Bound::new(0.0, 1.0).unwrap(),
-                    ATol::default(),
-                )
-                .unwrap(),
-            )]))
-            .constraints(BTreeMap::from([(
-                ConstraintID::from(10),
-                Constraint::less_than_or_equal_to_zero(Function::from(
-                    (Coefficient::try_from(0.9993582466233818).unwrap() * linear!(x)).unwrap(),
-                )),
-            )]))
-            .build()
-            .unwrap();
-        let input_class = InstanceClass::new(vec![InstanceClassClause::new(
-            "integer-linear-equality",
-            BTreeSet::from([Kind::Integer]),
-            DegreeBound::at_most(1),
-            BTreeSet::from([Sense::Minimize]),
-        )
-        .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))]);
-        let atol = ATol::new(1e-17).unwrap();
-        let policy = PreparationPolicy::new(
-            SpecialConstraintKinds::new(),
-            false,
-            false,
-            Some(4),
-            None,
-            None,
-            None,
-            atol,
-        )
-        .unwrap();
-
-        let mut default_atol_result = instance.clone();
-        default_atol_result
-            .convert_inequalities_with_integer_slack(4, None, ATol::default())
-            .unwrap();
-        assert_eq!(default_atol_result.decision_variables().len(), 2);
-
-        instance.prepare(&input_class, &policy).unwrap();
-
-        assert_eq!(instance.decision_variables().len(), 1);
-        assert!(instance.constraints().is_empty());
-        assert!(instance
-            .removed_constraints()
-            .contains_key(&ConstraintID::from(10)));
     }
 
     #[test]
@@ -533,8 +407,6 @@ mod tests {
                     false,
                     None,
                     None,
-                    None,
-                    None,
                     ATol::default(),
                 )
                 .unwrap(),
@@ -568,8 +440,6 @@ mod tests {
                     SpecialConstraintKinds::new(),
                     true,
                     true,
-                    Some(16),
-                    None,
                     Some(5.0),
                     None,
                     ATol::default(),
@@ -590,41 +460,6 @@ mod tests {
         assert!(solution
             .evaluated_constraints()
             .is_removed(&ConstraintID::from(10)));
-    }
-
-    #[test]
-    fn approximate_slack_falls_back_only_from_exact_unavailable() {
-        let mut instance = integer_inequality_instance();
-        instance.as_minimization_problem();
-        let source_decision_variable_count = instance.decision_variables().len();
-        let input_class = InstanceClass::new(vec![InstanceClassClause::new(
-            "integer-unconstrained",
-            BTreeSet::from([Kind::Integer]),
-            DegreeBound::at_most(2),
-            BTreeSet::from([Sense::Minimize]),
-        )]);
-        instance
-            .prepare(
-                &input_class,
-                &PreparationPolicy::new(
-                    SpecialConstraintKinds::new(),
-                    false,
-                    false,
-                    Some(1),
-                    Some(2.0),
-                    Some(3.0),
-                    None,
-                    ATol::default(),
-                )
-                .unwrap(),
-            )
-            .unwrap();
-
-        assert!(instance.constraints().is_empty());
-        assert_eq!(
-            instance.decision_variables().len(),
-            source_decision_variable_count + 1
-        );
     }
 
     #[test]
@@ -659,8 +494,6 @@ mod tests {
                     SpecialConstraintKinds::new(),
                     false,
                     false,
-                    None,
-                    None,
                     None,
                     Some(BTreeMap::from([(x_constraint, 2.0), (y_constraint, 5.0)])),
                     ATol::default(),
@@ -703,8 +536,6 @@ mod tests {
                     false,
                     None,
                     None,
-                    None,
-                    None,
                     ATol::default(),
                 )
                 .unwrap(),
@@ -725,8 +556,6 @@ mod tests {
                     SpecialConstraintKinds::new(),
                     false,
                     true,
-                    None,
-                    None,
                     None,
                     Some(BTreeMap::new()),
                     ATol::default(),
@@ -762,8 +591,6 @@ mod tests {
                     SpecialConstraintKinds::new(),
                     false,
                     false,
-                    None,
-                    None,
                     Some(f64::MAX),
                     None,
                     ATol::default(),
@@ -773,56 +600,6 @@ mod tests {
             .unwrap_err();
 
         assert!(error.is::<crate::CoefficientError>());
-        assert_eq!(instance, expected);
-    }
-
-    #[test]
-    fn operation_errors_propagate_without_preparation_wrapper() {
-        let x = VariableID::from(1);
-        let mut instance = Instance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::from(linear!(x)))
-            .decision_variables(BTreeMap::from([(
-                x,
-                DecisionVariable::new(
-                    Kind::Continuous,
-                    Bound::new(0.0, 3.0).unwrap(),
-                    ATol::default(),
-                )
-                .unwrap(),
-            )]))
-            .constraints(BTreeMap::from([(
-                ConstraintID::from(10),
-                Constraint::less_than_or_equal_to_zero(Function::from(linear!(x) + coeff!(-2.0))),
-            )]))
-            .build()
-            .unwrap();
-        let expected = instance.clone();
-        let input_class = InstanceClass::new(vec![InstanceClassClause::new(
-            "continuous-linear-equality",
-            BTreeSet::from([Kind::Continuous]),
-            DegreeBound::at_most(1),
-            BTreeSet::from([Sense::Minimize]),
-        )
-        .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))]);
-        let error = instance
-            .prepare(
-                &input_class,
-                &PreparationPolicy::new(
-                    SpecialConstraintKinds::new(),
-                    false,
-                    false,
-                    Some(16),
-                    Some(1.0),
-                    None,
-                    None,
-                    ATol::default(),
-                )
-                .unwrap(),
-            )
-            .unwrap_err();
-
-        assert!(error.to_string().contains("continuous decision variables"));
         assert_eq!(instance, expected);
     }
 }

@@ -81,22 +81,16 @@ def test_recommended_policy_enables_common_operations() -> None:
     }
     assert policy.allow_integer_log_encoding
     assert policy.allow_sense_normalization
-    assert policy.inequality_integer_slack_max_range == 32
-    assert policy.inequality_integer_slack_max_error is None
     assert policy.uniform_penalty_weight is None
     assert policy.penalty_weights is None
 
 
-def test_recommended_policy_accepts_explicit_penalty_and_slack_values() -> None:
+def test_recommended_policy_accepts_explicit_penalty_values() -> None:
     uniform = OMMXOpenJijSAAdapter.recommended_preparation_policy(
         uniform_penalty_weight=3.0,
-        inequality_integer_slack_max_range=8,
-        inequality_integer_slack_max_error=0.25,
     )
     assert uniform.uniform_penalty_weight == 3.0
     assert uniform.penalty_weights is None
-    assert uniform.inequality_integer_slack_max_range == 8
-    assert uniform.inequality_integer_slack_max_error == 0.25
 
     weights = {7: 2.0}
     per_constraint = OMMXOpenJijSAAdapter.recommended_preparation_policy(

@@ -3,7 +3,13 @@ from typing import cast
 
 import openjij as oj
 import pytest
-from ommx import DecisionVariable, Instance, Sos1Constraint
+from ommx import (
+    DecisionVariable,
+    Equality,
+    Instance,
+    Sos1Constraint,
+    SpecialConstraintKind,
+)
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 
@@ -161,7 +167,21 @@ def hubo_binary_inequality():
     return pytest.param(instance, ans, id="hubo_binary_inequality")
 
 
+def _add_exact_integer_slack_to_active_inequalities(instance):
+    inequality_ids = [
+        constraint_id
+        for constraint_id, constraint in instance.constraints.items()
+        if constraint.equality == Equality.LessThanOrEqualToZero
+    ]
+    for constraint_id in inequality_ids:
+        instance.convert_inequality_to_equality_with_integer_slack(
+            constraint_id,
+            max_integer_range=32,
+        )
+
+
 def _openjij_input(instance):
+    _add_exact_integer_slack_to_active_inequalities(instance)
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
         uniform_penalty_weight=3.1 if instance.constraints else None,
     )
@@ -335,9 +355,10 @@ def test_prepared_input_evaluation_populates_variable_removed_with_trivial_inequ
         constraints={7: constraint(variable)},
         sense=Instance.MINIMIZE,
     )
+    _add_exact_integer_slack_to_active_inequalities(source)
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
-        # A source-ID weight remains valid when canonical Preparation
-        # removes that source constraint as trivial before the penalty phase.
+        # A source-ID weight remains valid when the explicit owner operation
+        # removes that source constraint as trivial before Preparation.
         penalty_weights={7: 2.0},
     )
     source.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
@@ -369,6 +390,8 @@ def test_sample_evaluates_integer_sos1_against_prepared_input():
         sense=Instance.MINIMIZE,
     )
 
+    instance.lower_special_constraints({SpecialConstraintKind.Sos1})
+    _add_exact_integer_slack_to_active_inequalities(instance)
     instance.prepare(
         OMMXOpenJijSAAdapter.INPUT_CLASS,
         OMMXOpenJijSAAdapter.recommended_preparation_policy(

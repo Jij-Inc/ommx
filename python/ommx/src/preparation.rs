@@ -9,38 +9,6 @@ use std::collections::{BTreeMap, HashSet};
 
 const MAX_U64: u64 = u64::MAX;
 
-struct IntegerSlackMaxRangeInput(u64);
-
-impl<'py> FromPyObject<'_, 'py> for IntegerSlackMaxRangeInput {
-    type Error = PyErr;
-
-    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
-        let value = ob.to_owned();
-        if value.is_instance_of::<PyBool>() || !value.is_instance_of::<PyInt>() {
-            return Err(invalid_integer_slack_max_range());
-        }
-        let value = value
-            .extract::<u64>()
-            .map_err(|_| invalid_integer_slack_max_range())?;
-        if value == 0 {
-            return Err(invalid_integer_slack_max_range());
-        }
-        Ok(Self(value))
-    }
-}
-
-impl pyo3_stub_gen::PyStubType for IntegerSlackMaxRangeInput {
-    fn type_output() -> pyo3_stub_gen::TypeInfo {
-        <u64 as pyo3_stub_gen::PyStubType>::type_output()
-    }
-}
-
-fn invalid_integer_slack_max_range() -> PyErr {
-    PyValueError::new_err(format!(
-        "inequality_integer_slack_max_range must be an integer in [1, {MAX_U64}]"
-    ))
-}
-
 struct PositiveFinitePenaltyWeightInput(f64);
 
 impl<'py> FromPyObject<'_, 'py> for PositiveFinitePenaltyWeightInput {
@@ -51,25 +19,6 @@ impl<'py> FromPyObject<'_, 'py> for PositiveFinitePenaltyWeightInput {
             &ob.to_owned(),
             "uniform_penalty_weight",
         )?))
-    }
-}
-
-struct PositiveFiniteIntegerSlackMaxErrorInput(f64);
-
-impl<'py> FromPyObject<'_, 'py> for PositiveFiniteIntegerSlackMaxErrorInput {
-    type Error = PyErr;
-
-    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
-        Ok(Self(extract_positive_finite_number(
-            &ob.to_owned(),
-            "inequality_integer_slack_max_error",
-        )?))
-    }
-}
-
-impl pyo3_stub_gen::PyStubType for PositiveFiniteIntegerSlackMaxErrorInput {
-    fn type_output() -> pyo3_stub_gen::TypeInfo {
-        <f64 as pyo3_stub_gen::PyStubType>::type_output()
     }
 }
 
@@ -178,31 +127,15 @@ impl PreparationPolicy {
 #[pymethods]
 impl PreparationPolicy {
     #[new]
-    #[pyo3(signature = (*, allowed_special_constraint_lowerings=HashSet::new(), allow_integer_log_encoding=false, allow_sense_normalization=false, inequality_integer_slack_max_range=None, inequality_integer_slack_max_error=None, uniform_penalty_weight=None, penalty_weights=None, atol=None))]
-    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (*, allowed_special_constraint_lowerings=HashSet::new(), allow_integer_log_encoding=false, allow_sense_normalization=false, uniform_penalty_weight=None, penalty_weights=None, atol=None))]
     fn new(
         allowed_special_constraint_lowerings: HashSet<SpecialConstraintKind>,
         allow_integer_log_encoding: bool,
         allow_sense_normalization: bool,
-        inequality_integer_slack_max_range: Option<IntegerSlackMaxRangeInput>,
-        inequality_integer_slack_max_error: Option<PositiveFiniteIntegerSlackMaxErrorInput>,
         uniform_penalty_weight: Option<PositiveFinitePenaltyWeightInput>,
         penalty_weights: Option<PenaltyWeightsInput>,
         atol: Option<f64>,
     ) -> OmmxPyResult<Self> {
-        let inequality_integer_slack_max_range =
-            inequality_integer_slack_max_range.map(|input| input.0);
-        let inequality_integer_slack_max_error =
-            inequality_integer_slack_max_error.map(|input| input.0);
-        if inequality_integer_slack_max_error.is_some()
-            && inequality_integer_slack_max_range.is_none()
-        {
-            return Err(PyValueError::new_err(
-                "inequality_integer_slack_max_error requires inequality_integer_slack_max_range",
-            )
-            .into());
-        }
-
         let (uniform_penalty_weight, penalty_weights) =
             match (uniform_penalty_weight, penalty_weights) {
                 (Some(_), Some(_)) => {
@@ -238,8 +171,6 @@ impl PreparationPolicy {
                 .collect(),
             allow_integer_log_encoding,
             allow_sense_normalization,
-            inequality_integer_slack_max_range,
-            inequality_integer_slack_max_error,
             uniform_penalty_weight,
             penalty_weights,
             atol,
@@ -267,19 +198,6 @@ impl PreparationPolicy {
     /// Whether a maximization objective may be normalized to minimization.
     pub fn allow_sense_normalization(&self) -> bool {
         self.0.allow_sense_normalization()
-    }
-
-    #[getter]
-    /// Configured positive slack range, or ``None`` when integer slack is forbidden.
-    pub fn inequality_integer_slack_max_range(&self) -> Option<u64> {
-        self.0.inequality_integer_slack_max_range()
-    }
-
-    #[getter]
-    /// Maximum residual introduced by approximate integer slack, or ``None``
-    /// when only exact integer slack is permitted.
-    pub fn inequality_integer_slack_max_error(&self) -> Option<f64> {
-        self.0.inequality_integer_slack_max_error()
     }
 
     #[getter]

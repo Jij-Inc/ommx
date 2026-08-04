@@ -63,20 +63,42 @@ constructor never prepare or mutate their input implicitly.
 by the Adapter. Independently, `INPUT_CLASS` describes the Adapter's direct
 inputs; the caller supplies that class separately as the target of
 `Instance.prepare()`. The default Policy permits special-constraint lowering,
-bounded Integer log encoding, minimization-sense normalization, and exact
-integer slack. Discrete slack approximation remains disabled unless
-`inequality_integer_slack_max_error` is set to a positive finite residual
-bound. `inequality_integer_slack_max_range` limits the Integer slack range; if
-that range cannot meet the error bound, preparation fails. Finite penalties
-remain disabled unless `uniform_penalty_weight` or `penalty_weights` is
-supplied.
+bounded Integer log encoding, and minimization-sense normalization. Integer
+slack is not a Policy option. Finite penalties remain disabled unless
+`uniform_penalty_weight` or `penalty_weights` is supplied.
 The optional `atol` argument is captured in the returned Policy and used by
 result-affecting preparation operations; later changes to the SDK default do
 not alter that Policy.
 
-Per-constraint penalty weights use regular-constraint IDs, which remain
-unchanged through integer-slack conversion. Every active row must have a
-weight; an entry for a regular constraint already moved to
+For a regular inequality that needs slack, explicitly select the exact
+`Instance` operation before preparation. `ExactIntegerSlackError` identifies
+the case in which the caller may instead choose the approximate operation;
+`Instance.prepare()` never selects that fallback automatically:
+
+```python
+from ommx import ExactIntegerSlackError
+
+try:
+    instance.convert_inequality_to_equality_with_integer_slack(
+        constraint_id,
+        max_integer_range=32,
+    )
+except ExactIntegerSlackError:
+    instance.add_integer_slack_to_inequality(
+        constraint_id,
+        slack_upper_bound=32,
+        max_error=0.25,
+    )
+```
+
+`max_error` is a positive finite upper bound on the approximation residual in
+the original constraint's units. If special constraints need to become regular
+inequalities first, call `Instance.lower_special_constraints()` explicitly and
+then apply the chosen slack operation to the generated regular IDs.
+
+Per-constraint penalty weights use regular-constraint IDs. Explicit integer
+slack conversion preserves those IDs. Every active row must have a weight; an
+entry for a regular constraint already moved to
 `removed_constraints` is ignored. Special-constraint lowering adds fresh
 regular IDs, which a per-constraint map must also cover. Use a uniform penalty
 weight when those generated IDs are not configured explicitly.

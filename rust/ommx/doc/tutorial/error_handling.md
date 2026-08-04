@@ -96,7 +96,7 @@ exact-operation signal while continuing to propagate unrelated failures:
 ```ignore
 match instance.convert_inequality_to_equality_with_integer_slack(id, 32, atol) {
     Err(e) if e.is::<ommx::ExactIntegerSlackUnavailable>() => {
-        instance.add_integer_slack_to_inequality(id, 32)?;
+        instance.add_integer_slack_to_inequality(id, 32, 1e-6)?;
     }
     Err(e) => return Err(e),
     Ok(()) => {}

@@ -15,6 +15,7 @@ from ommx import (
     PreparationPolicy,
     SampleSet,
     Solution,
+    SpecialConstraintKind,
 )
 
 
@@ -147,13 +148,20 @@ class SolverAdapter(ABC):
     def recommended_preparation_policy(cls) -> PreparationPolicy:
         """Return this Adapter's recommended OMMX preparation policy.
 
-        The base recommendation permits only identity preparation. Subclasses
-        may recommend additional OMMX-owned preparation operations. The target
+        The base recommendation permits OMMX-owned Indicator, OneHot, and SOS1
+        lowering, but no other transformation. Subclasses may recommend
+        additional OMMX-owned preparation operations. The target
         :attr:`INPUT_CLASS` is supplied separately to
         :meth:`ommx.Instance.prepare`; it is not part of the Policy. The Adapter
         does not execute the Policy and is not retained by it.
         """
-        return PreparationPolicy()
+        return PreparationPolicy(
+            allowed_special_constraint_lowerings={
+                SpecialConstraintKind.Indicator,
+                SpecialConstraintKind.OneHot,
+                SpecialConstraintKind.Sos1,
+            },
+        )
 
     @classmethod
     def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:

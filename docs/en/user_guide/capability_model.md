@@ -11,18 +11,20 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Input Classes, Preparation, and Explicit Constraint Lowering
+# Adapter Input Classes, Preparation, and Explicit Instance Operations
 
-OMMX separates three concepts that were previously described together as adapter capabilities:
+OMMX separates concepts that were previously described together as adapter capabilities:
 
 - An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
 - A {class}`~ommx.PreparationPolicy` describes which OMMX-owned operations may be used. An Adapter may recommend a Policy, but the caller independently chooses the target {class}`~ommx.InstanceClass` and {meth}`Instance.prepare <ommx.Instance.prepare>` interprets both.
+- In an explicit preparation workflow, Integer-slack conversion is an explicit {class}`~ommx.Instance` operation, not a `PreparationPolicy` option. The caller chooses either exact conversion or an explicitly bounded approximation before calling `Instance.prepare(...)`.
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` explicitly lowers selected special-constraint families on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
 
 - `InstanceClass` membership and adapter applicability
 - `PreparationPolicy` and `Instance.prepare(input_class, policy)`
+- Exact and approximate integer-slack operations
 - {class}`~ommx.SpecialConstraintKind` and {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` as special-constraint family selectors
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` for explicit lowering
 - Manual conversion APIs per constraint type
@@ -78,6 +80,69 @@ failure semantics. Fixed-penalty conversion does not commit a partial
 conversion.
 
 Finite penalty weights are positive and therefore apply to a minimization candidate. A Policy that prepares a maximization source with a finite penalty must also permit sense normalization.
+
+## Integer slack is outside Preparation
+
+For a regular inequality $f(x) \leq 0$, OMMX provides two distinct mutating
+operations on the `Instance`. Neither is selected or executed by
+`PreparationPolicy`.
+
+{meth}`Instance.convert_inequality_to_equality_with_integer_slack <ommx.Instance.convert_inequality_to_equality_with_integer_slack>` performs the exact operation
+
+$$
+f(x) \leq 0 \quad\longmapsto\quad a f(x) + s = 0,
+$$
+
+where $a$ makes the coefficients integral and $s$ is a bounded nonnegative
+Integer variable. `max_integer_range` limits the range of $s`. If exact
+coefficient normalization or that finite range is unavailable, the method
+raises {class}`~ommx.ExactIntegerSlackError` without selecting a different
+operation.
+
+{meth}`Instance.add_integer_slack_to_inequality <ommx.Instance.add_integer_slack_to_inequality>` performs the approximate operation
+
+$$
+f(x) \leq 0 \quad\longmapsto\quad f(x) + b s \leq 0,
+\qquad s \in \{0, \ldots, R\}.
+$$
+
+Here `slack_upper_bound` is $R$. The returned coefficient $b$ bounds the
+discretization residual, and the call is accepted only when
+$b \leq \mathtt{max\_error}$. `max_error` must be positive and finite and is
+expressed in the original constraint's units.
+
+The caller can therefore try the exact operation and deliberately choose the
+approximate operation only for that recovery case:
+
+```python
+from ommx import ExactIntegerSlackError
+
+try:
+    instance.convert_inequality_to_equality_with_integer_slack(
+        constraint_id,
+        max_integer_range=32,
+    )
+except ExactIntegerSlackError:
+    residual_bound = instance.add_integer_slack_to_inequality(
+        constraint_id,
+        slack_upper_bound=32,
+        max_error=0.25,
+    )
+```
+
+Other failures are not an instruction to approximate and should propagate.
+Both operations preserve the regular constraint ID and leave the `Instance`
+unchanged when they fail. If special constraints must first become regular
+inequalities, call
+{meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`
+explicitly, apply the selected slack operation to the generated regular
+constraint IDs, and only then call `Instance.prepare(...)`.
+
+The legacy {meth}`Instance.to_qubo <ommx.Instance.to_qubo>` and
+{meth}`Instance.to_hubo <ommx.Instance.to_hubo>` Driver APIs retain their
+historical exact-to-approximate fallback. That behavior belongs to those
+Drivers, not to Preparation. Use the explicit operations above when the
+approximation error must be bounded.
 
 ## SpecialConstraintKind and active_special_constraint_kinds
 
@@ -235,6 +300,8 @@ for cid, c in instance2.constraints.items():
 | Recommend allowed preparation operations | `recommended_preparation_policy()` |
 | Prepare toward a caller-selected input class under a Policy | {meth}`Instance.prepare <ommx.Instance.prepare>` |
 | Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
+| Convert a regular inequality exactly with Integer slack | {meth}`Instance.convert_inequality_to_equality_with_integer_slack <ommx.Instance.convert_inequality_to_equality_with_integer_slack>` |
+| Explicitly choose bounded approximate Integer slack | {meth}`Instance.add_integer_slack_to_inequality <ommx.Instance.add_integer_slack_to_inequality>` |
 | Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |

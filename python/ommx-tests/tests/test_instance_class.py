@@ -335,7 +335,7 @@ def test_solver_adapter_has_no_implicit_input_transformation_hook() -> None:
     assert "__init__" not in SolverAdapter.__dict__
 
 
-def test_solver_adapter_recommends_target_free_identity_policy() -> None:
+def test_solver_adapter_recommends_target_free_special_constraint_lowering() -> None:
     class Adapter(SolverAdapter):
         INPUT_CLASS = binary_linear_input_class()
 
@@ -343,11 +343,13 @@ def test_solver_adapter_recommends_target_free_identity_policy() -> None:
 
     assert isinstance(policy, PreparationPolicy)
     assert not hasattr(policy, "input_class")
-    assert policy.allowed_special_constraint_lowerings == set()
+    assert policy.allowed_special_constraint_lowerings == {
+        SpecialConstraintKind.Indicator,
+        SpecialConstraintKind.OneHot,
+        SpecialConstraintKind.Sos1,
+    }
     assert not policy.allow_integer_log_encoding
     assert not policy.allow_sense_normalization
-    assert policy.inequality_integer_slack_max_range is None
-    assert policy.inequality_integer_slack_max_error is None
     assert policy.uniform_penalty_weight is None
     assert policy.penalty_weights is None
 

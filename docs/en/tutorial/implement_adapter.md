@@ -283,7 +283,7 @@ Finally, create a class that inherits `ommx.adapter.SolverAdapter` to standardiz
 ```python
 class SolverAdapter(ABC):
     # OMMX-defined structural condition for adapter applicability.
-    INPUT_CLASS: InstanceClass | None = None
+    INPUT_CLASS: InstanceClass
 
     @classmethod
     def recommended_preparation_policy(cls) -> PreparationPolicy:
@@ -329,7 +329,7 @@ OMMXPySCIPOptAdapter.require_applicable(instance)
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
-The base recommendation permits only identity preparation. A concrete Adapter may recommend additional OMMX-owned operations, but its direct constructor and `solve()` remain strict about the exact input they receive.
+The base recommendation permits only OMMX-owned Indicator, OneHot, and SOS1 lowering. A concrete Adapter may recommend additional OMMX-owned operations, but its direct constructor and `solve()` remain strict about the exact input they receive.
 
 Preparation is not globally transactional: a later owner operation can fail
 after earlier operations succeeded. Each operation retains its owner API's
@@ -644,7 +644,7 @@ instance = Instance.from_components(
     sense=Instance.MAXIMIZE,
 )
 
-# This tutorial Adapter inherits the identity-only recommendation. The caller
+# This tutorial Adapter inherits only special-constraint lowering. The caller
 # explicitly permits sense normalization and a finite penalty before invoking
 # the strict direct Adapter API.
 policy = PreparationPolicy(

@@ -178,35 +178,6 @@ OMMXOpenJijSAAdapter.require_applicable(instance)
 }
 ```
 
-Preparation is not globally transactional: a later owner operation can fail
-after earlier operations succeeded. Each operation retains its owner API's
-failure semantics. Fixed-penalty conversion does not commit a partial
-conversion.
-
-Discrete integer slack approximation requires setting a positive finite
-`inequality_integer_slack_max_error` when obtaining the Policy; setting only
-`inequality_integer_slack_max_range` permits exact conversion but not
-approximation. Preparation fails if the configured range cannot realize that
-maximum residual in the original constraint's units.
-`uniform_penalty_weight` and `penalty_weights` explicitly select a finite
-penalty operation. Per-constraint weights address regular constraint IDs and
-must also cover any fresh IDs created by special-constraint lowering. Use a
-uniform weight when those generated IDs are not configured explicitly.
-
-If variable bounds prove an inequality infeasible, `Instance.prepare()` raises
-the core-owned {py:class}`~ommx.InfeasibleDetected`; the
-historical {py:class}`~ommx.adapter.InfeasibleDetected` import is an alias for
-the same exception object. This is a property of the model, not an adapter
-applicability failure.
-
-The maximum of 53 auxiliary bits checked for a used Integer variable is an
-availability limit of OMMX Integer-to-Binary log encoding. It is not a property of the
-OpenJij adapter's input class and is unrelated to `ommx.v2.Feature`, which gates
-whether a reader can safely interpret serialized semantics for forward
-compatibility. Spin-variable support, including direct Spin input for OpenJij,
-is tracked separately in
-[OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082).
-
 To view the feasibility for each constraint, use the `summary_with_constraints` property.
 
 ```{code-cell} ipython3

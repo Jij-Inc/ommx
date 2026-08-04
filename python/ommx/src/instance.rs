@@ -17,10 +17,40 @@ use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
     exceptions::{PyKeyError, PyRuntimeError, PyValueError},
     prelude::*,
-    types::{PyBytes, PyDict},
+    types::{PyBool, PyBytes, PyDict},
     Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+struct PositiveFiniteSlackMaxErrorInput(f64);
+
+impl<'py> FromPyObject<'_, 'py> for PositiveFiniteSlackMaxErrorInput {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let value = ob.to_owned();
+        if value.is_instance_of::<PyBool>() {
+            return Err(invalid_slack_max_error());
+        }
+        let value = value
+            .extract::<f64>()
+            .map_err(|_| invalid_slack_max_error())?;
+        if !value.is_finite() || value <= 0.0 {
+            return Err(invalid_slack_max_error());
+        }
+        Ok(Self(value))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for PositiveFiniteSlackMaxErrorInput {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        <f64 as pyo3_stub_gen::PyStubType>::type_output()
+    }
+}
+
+fn invalid_slack_max_error() -> PyErr {
+    PyValueError::new_err("max_error must be a positive finite number")
+}
 
 /// Optimization problem instance.
 ///
@@ -946,7 +976,10 @@ impl Instance {
     /// 3. Convert inequality constraints
     ///
     ///   * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-    ///   * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
+    ///   * If exact conversion is unavailable, this legacy Driver invokes
+    ///     {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the
+    ///     maximum finite error bound. To enforce a specific ``max_error``,
+    ///     use the individual conversion, penalty, and encoding APIs instead.
     ///
     /// 4. Convert to QUBO with (uniform) penalty method
     ///
@@ -1026,7 +1059,10 @@ impl Instance {
     /// 3. Convert inequality constraints
     ///
     ///   * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-    ///   * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
+    ///   * If exact conversion is unavailable, this legacy Driver invokes
+    ///     {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the
+    ///     maximum finite error bound. To enforce a specific ``max_error``,
+    ///     use the individual conversion, penalty, and encoding APIs instead.
     ///
     /// 4. Convert to HUBO with (uniform) penalty method
     ///
@@ -2100,7 +2136,9 @@ impl Instance {
     ///   no smaller than $-\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
     ///
     /// - Since the slack variable is integer, the yielded inequality has residual error $\min_s f(x) + b s$ at most $b$.
-    ///   And thus $b$ is returned to use scaling the penalty weight or other things.
+    ///   ``max_error`` is an inclusive upper bound on $b$. The operation
+    ///   validates this bound before mutating the Instance, and $b$ is returned
+    ///   for auditing or penalty scaling.
     ///
     ///   - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,
     ///     but it needs more bits for the slack variable, and thus the problem size becomes larger.
@@ -2135,19 +2173,24 @@ impl Instance {
     /// ```python
     /// >>> b = instance.add_integer_slack_to_inequality(
     /// ...     constraint_id=0,
-    /// ...     slack_upper_bound=2
+    /// ...     slack_upper_bound=2,
+    /// ...     max_error=2.0,
     /// ... )
     /// >>> b, instance.constraints[0]
     /// (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
     /// ```
-    pub fn add_integer_slack_to_inequality(
+    #[pyo3(signature = (constraint_id, slack_upper_bound, *, max_error))]
+    fn add_integer_slack_to_inequality(
         &mut self,
         constraint_id: u64,
         slack_upper_bound: u64,
+        max_error: PositiveFiniteSlackMaxErrorInput,
     ) -> OmmxPyResult<Option<f64>> {
-        let result = self
-            .inner
-            .add_integer_slack_to_inequality(constraint_id, slack_upper_bound)?;
+        let result = self.inner.add_integer_slack_to_inequality(
+            constraint_id,
+            slack_upper_bound,
+            max_error.0,
+        )?;
         Ok(result)
     }
 
@@ -2870,15 +2913,24 @@ impl Instance {
             .collect();
         for ineq_id in ineq_ids {
             let id_u64 = ineq_id.into_inner();
-            // Try exact integer slack first, fall back to approximate
-            if self
+            // Preserve this legacy Driver's approximate fallback, but only for
+            // the domain signal that says exact Integer slack is unavailable.
+            match self
+                .inner
                 .convert_inequality_to_equality_with_integer_slack(
                     id_u64,
                     inequality_integer_slack_max_range,
-                )
-                .is_err()
-            {
-                self.add_integer_slack_to_inequality(id_u64, inequality_integer_slack_max_range)?;
+                    ommx::ATol::default(),
+                ) {
+                Ok(()) => {}
+                Err(error) if error.is::<ommx::ExactIntegerSlackUnavailable>() => {
+                    self.inner.add_integer_slack_to_inequality(
+                        id_u64,
+                        inequality_integer_slack_max_range,
+                        f64::MAX,
+                    )?;
+                }
+                Err(error) => return Err(error.into()),
             }
         }
 
