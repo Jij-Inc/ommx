@@ -10,18 +10,20 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### 🆕 Solver Adapter向けのInstance-owned preparation policy ([#1139](https://github.com/Jij-Inc/ommx/pull/1139))
 
-{class}`~ommx.PreparationPolicy` は、呼び出し側が `input_class` として選んだ
-{class}`~ommx.InstanceClass` と、preparationで利用を許可する既存の `Instance` 操作・
-parameterを表します。{meth}`~ommx.Instance.prepare` が固定順序でPolicyを解釈し、
-その `Instance` をin-placeに変更して `None` を返します。
-`SolverAdapter` は `recommended_preparation_policy()` でPolicyを推奨できますが、
-preparationを実行せず、直接入力に対する `INPUT_CLASS` checkも緩和しません。
+{class}`~ommx.PreparationPolicy` は、preparationで利用を許可する既存の `Instance` 操作・
+parameterを表します。対象の {class}`~ommx.InstanceClass` は独立に
+{meth}`~ommx.Instance.prepare` へ渡し、同メソッドが固定順序でPolicyを解釈して
+その `Instance` をin-placeに変更し、`None` を返します。
+`SolverAdapter` は直接入力のclassを `INPUT_CLASS` として宣言し、呼び出し側はそのclassを
+preparationの対象として別に渡せます。Adapterはそれとは独立に
+`recommended_preparation_policy()` でPolicyを推奨できますが、preparationを実行せず、
+直接入力に対する `INPUT_CLASS` checkも緩和しません。
 結果に影響する操作はPolicyに保存された絶対許容誤差を使い、
 `Instance.prepare()` はmutableなSDK defaultを読みません。
 
 ```python
 policy = OMMXHighsAdapter.recommended_preparation_policy()
-instance.prepare(policy)
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
 solution = OMMXHighsAdapter.solve(instance)
 ```
 
@@ -43,10 +45,9 @@ finite weightはminimization candidateにだけ適用されるため、maximizat
 sense normalizationも許可する必要があります。
 
 Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
-操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-weight penaltyの
-owner APIはread-only検証後に内部でcloneし、penalty変換とparameter materializationが
-成功した場合にだけcommitします。許可された操作をすべて適用してもinput classに
-到達しなければ通常のerrorを返します。
+操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-penalty変換が
+途中までcommitされることはありません。許可された操作をすべて適用しても指定された
+input classに到達しなければ通常のerrorを返します。
 
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
@@ -111,7 +112,7 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
 )
-instance.prepare(policy)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 

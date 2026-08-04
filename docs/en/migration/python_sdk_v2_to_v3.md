@@ -400,15 +400,15 @@ parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not pr
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
 - `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
-- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, obtain the Adapter's recommended common Policy, call `instance.prepare(policy)`, and sample that same `instance`; the returned `SampleSet` is already evaluated against the prepared `Instance`.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, obtain the Adapter's recommended common Policy, call `instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)`, and sample that same `instance`; the returned `SampleSet` is already evaluated against the prepared `Instance`.
 
 In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
 `uniform_penalty_weight`, `penalty_weights`, and
 `inequality_integer_slack_max_range` directly and performed preparation
 implicitly. In v3, pass those settings to
-`OMMXOpenJijSAAdapter.recommended_preparation_policy()`, execute the returned
-common `PreparationPolicy` in place with `Instance.prepare()`, and sample that
-same `Instance`. Use `penalty_weights` instead of
+`OMMXOpenJijSAAdapter.recommended_preparation_policy()`, then pass the Adapter's
+independent `INPUT_CLASS` and the returned common `PreparationPolicy` to
+`Instance.prepare()`, and sample that same `Instance`. Use `penalty_weights` instead of
 `uniform_penalty_weight` when each regular constraint needs its own weight. v2
 also selected a uniform weight of `1.0` when neither penalty setting was
 supplied; v3 requires finite penalties to be selected explicitly when
@@ -430,7 +430,7 @@ policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     inequality_integer_slack_max_range=32,
     inequality_integer_slack_max_error=0.25,
 )
-instance.prepare(policy)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
@@ -442,9 +442,8 @@ and a finite penalty does not guarantee feasible samples.
 
 Preparation is not globally transactional: a later owner operation can fail
 after earlier operations succeeded. Each operation retains its owner API's
-failure semantics. The fixed-weight penalty owner API validates first, then
-clones internally and commits only after penalty conversion and parameter
-materialization succeed.
+failure semantics. Fixed-penalty conversion does not commit a partial
+conversion.
 
 ```python
 # v2.5.1

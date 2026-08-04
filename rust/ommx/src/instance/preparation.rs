@@ -11,14 +11,13 @@ use std::collections::BTreeMap;
 
 /// Caller-owned permissions and parameters interpreted by [`Instance::prepare`].
 ///
-/// This value is not an executable recipe. The SDK applies the permitted
-/// existing [`Instance`] operations in a fixed order and stops as soon as the
-/// input belongs to [`Self::input_class`]. Result-affecting numeric settings,
-/// including [`Self::atol`], are captured by the Policy; execution does not
-/// consult an ambient tolerance default.
+/// This Policy controls which existing [`Instance`] transformations preparation
+/// may apply and the parameters used by those transformations. The target
+/// [`InstanceClass`] is supplied separately to [`Instance::prepare`].
+/// Result-affecting numeric settings, including [`Self::atol`], are captured by
+/// the Policy; execution does not consult an ambient tolerance default.
 #[derive(Debug, Clone)]
 pub struct PreparationPolicy {
-    input_class: InstanceClass,
     allowed_special_constraint_lowerings: SpecialConstraintKinds,
     allow_integer_log_encoding: bool,
     allow_sense_normalization: bool,
@@ -33,7 +32,6 @@ impl PreparationPolicy {
     /// Construct permissions and parameters for [`Instance::prepare`].
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        input_class: InstanceClass,
         allowed_special_constraint_lowerings: SpecialConstraintKinds,
         allow_integer_log_encoding: bool,
         allow_sense_normalization: bool,
@@ -71,7 +69,6 @@ impl PreparationPolicy {
         }
 
         Ok(Self {
-            input_class,
             allowed_special_constraint_lowerings,
             allow_integer_log_encoding,
             allow_sense_normalization,
@@ -81,11 +78,6 @@ impl PreparationPolicy {
             penalty_weights,
             atol,
         })
-    }
-
-    /// The Adapter input class that the Instance must belong to after preparation.
-    pub fn input_class(&self) -> &InstanceClass {
-        &self.input_class
     }
 
     /// Special-constraint families that may be lowered.
@@ -132,18 +124,22 @@ impl PreparationPolicy {
 }
 
 impl Instance {
-    /// Prepare this Instance in place to satisfy the Policy's input class.
+    /// Prepare this Instance in place to satisfy `input_class`.
     ///
     /// Preparation applies the transformations permitted by `policy` in a fixed
-    /// order. On success, `policy.input_class().contains(self)` is true.
+    /// order. On success, `input_class.contains(self)` is true.
     ///
     /// This method is not transactional across transformations. If it returns
     /// an error, changes made by earlier transformations remain applied.
     #[tracing::instrument(skip_all)]
-    pub fn prepare(&mut self, policy: &PreparationPolicy) -> crate::Result<()> {
+    pub fn prepare(
+        &mut self,
+        input_class: &InstanceClass,
+        policy: &PreparationPolicy,
+    ) -> crate::Result<()> {
         macro_rules! return_if_in_input_class {
             () => {
-                if policy.input_class.contains(self) {
+                if input_class.contains(self) {
                     return Ok(());
                 }
             };
@@ -193,7 +189,7 @@ impl Instance {
             return_if_in_input_class!();
         }
 
-        let membership = policy.input_class.check_membership(self);
+        let membership = input_class.check_membership(self);
         crate::bail!("Preparation did not reach the input class:\n{membership}")
     }
 }
@@ -274,7 +270,6 @@ mod tests {
     #[test]
     fn policy_validates_only_its_own_values() {
         assert!(PreparationPolicy::new(
-            openjij_class(),
             SpecialConstraintKinds::new(),
             false,
             false,
@@ -286,7 +281,6 @@ mod tests {
         )
         .is_err());
         assert!(PreparationPolicy::new(
-            openjij_class(),
             SpecialConstraintKinds::new(),
             false,
             false,
@@ -298,7 +292,6 @@ mod tests {
         )
         .is_err());
         assert!(PreparationPolicy::new(
-            openjij_class(),
             SpecialConstraintKinds::new(),
             false,
             false,
@@ -329,8 +322,8 @@ mod tests {
         )]);
         instance
             .prepare(
+                &input_class,
                 &PreparationPolicy::new(
-                    input_class,
                     SpecialConstraintKinds::new(),
                     false,
                     false,
@@ -345,6 +338,51 @@ mod tests {
             .unwrap();
 
         assert_eq!(instance, expected);
+    }
+
+    #[test]
+    fn one_policy_can_be_used_with_different_input_classes() {
+        let x = VariableID::from(1);
+        let source = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(x)))
+            .decision_variables(BTreeMap::from([(x, DecisionVariable::binary())]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let policy = PreparationPolicy::new(
+            SpecialConstraintKinds::new(),
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            ATol::default(),
+        )
+        .unwrap();
+
+        let mut openjij_input = source.clone();
+        openjij_input.prepare(&openjij_class(), &policy).unwrap();
+        let mut highs_input = source.clone();
+        highs_input.prepare(&highs_class(), &policy).unwrap();
+        let continuous_class = InstanceClass::new(vec![InstanceClassClause::new(
+            "continuous-linear",
+            BTreeSet::from([Kind::Continuous]),
+            DegreeBound::at_most(1),
+            BTreeSet::from([Sense::Minimize]),
+        )]);
+        let mut continuous_input = source.clone();
+        let error = continuous_input
+            .prepare(&continuous_class, &policy)
+            .unwrap_err();
+
+        assert_eq!(openjij_input, source);
+        assert_eq!(highs_input, source);
+        assert_eq!(continuous_input, source);
+        assert!(error
+            .to_string()
+            .contains("Preparation did not reach the input class"));
     }
 
     #[test]
@@ -367,7 +405,6 @@ mod tests {
             .unwrap();
         let atol = ATol::new(0.2).unwrap();
         let policy = PreparationPolicy::new(
-            openjij_class(),
             SpecialConstraintKinds::new(),
             true,
             false,
@@ -380,7 +417,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(policy.atol(), atol);
-        instance.prepare(&policy).unwrap();
+        instance.prepare(&openjij_class(), &policy).unwrap();
 
         assert_eq!(instance.decision_variables().len(), 3);
         assert!(instance.decision_variable_dependency().get(&x).is_some());
@@ -423,7 +460,6 @@ mod tests {
         .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))]);
         let atol = ATol::new(1e-17).unwrap();
         let policy = PreparationPolicy::new(
-            input_class,
             SpecialConstraintKinds::new(),
             false,
             false,
@@ -441,7 +477,7 @@ mod tests {
             .unwrap();
         assert_eq!(default_atol_result.decision_variables().len(), 2);
 
-        instance.prepare(&policy).unwrap();
+        instance.prepare(&input_class, &policy).unwrap();
 
         assert_eq!(instance.decision_variables().len(), 1);
         assert!(instance.constraints().is_empty());
@@ -486,8 +522,8 @@ mod tests {
             .unwrap();
         instance
             .prepare(
+                &highs_class(),
                 &PreparationPolicy::new(
-                    highs_class(),
                     BTreeSet::from([
                         SpecialConstraintKind::Indicator,
                         SpecialConstraintKind::OneHot,
@@ -527,8 +563,8 @@ mod tests {
         let mut instance = integer_inequality_instance();
         instance
             .prepare(
+                &openjij_class(),
                 &PreparationPolicy::new(
-                    openjij_class(),
                     SpecialConstraintKinds::new(),
                     true,
                     true,
@@ -569,8 +605,8 @@ mod tests {
         )]);
         instance
             .prepare(
+                &input_class,
                 &PreparationPolicy::new(
-                    input_class,
                     SpecialConstraintKinds::new(),
                     false,
                     false,
@@ -618,8 +654,8 @@ mod tests {
             .unwrap();
         instance
             .prepare(
+                &openjij_class(),
                 &PreparationPolicy::new(
-                    openjij_class(),
                     SpecialConstraintKinds::new(),
                     false,
                     false,
@@ -660,8 +696,8 @@ mod tests {
         let mut instance = integer_inequality_instance();
         let error = instance
             .prepare(
+                &openjij_class(),
                 &PreparationPolicy::new(
-                    openjij_class(),
                     SpecialConstraintKinds::new(),
                     false,
                     false,
@@ -684,8 +720,8 @@ mod tests {
         let mut instance = integer_inequality_instance();
         let error = instance
             .prepare(
+                &openjij_class(),
                 &PreparationPolicy::new(
-                    openjij_class(),
                     SpecialConstraintKinds::new(),
                     false,
                     true,
@@ -721,8 +757,8 @@ mod tests {
 
         let error = instance
             .prepare(
+                &openjij_class(),
                 &PreparationPolicy::new(
-                    openjij_class(),
                     SpecialConstraintKinds::new(),
                     false,
                     false,
@@ -771,8 +807,8 @@ mod tests {
         .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))]);
         let error = instance
             .prepare(
+                &input_class,
                 &PreparationPolicy::new(
-                    input_class,
                     SpecialConstraintKinds::new(),
                     false,
                     false,

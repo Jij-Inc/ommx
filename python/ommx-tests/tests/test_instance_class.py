@@ -335,17 +335,14 @@ def test_solver_adapter_has_no_implicit_input_transformation_hook() -> None:
     assert "__init__" not in SolverAdapter.__dict__
 
 
-def test_solver_adapter_recommends_identity_policy_for_declared_input_class() -> None:
+def test_solver_adapter_recommends_target_free_identity_policy() -> None:
     class Adapter(SolverAdapter):
         INPUT_CLASS = binary_linear_input_class()
 
     policy = Adapter.recommended_preparation_policy()
 
     assert isinstance(policy, PreparationPolicy)
-    [policy_input_clause] = policy.input_class.clauses
-    assert Adapter.INPUT_CLASS is not None
-    [input_clause] = Adapter.INPUT_CLASS.clauses
-    assert policy_input_clause.label == input_clause.label
+    assert not hasattr(policy, "input_class")
     assert policy.allowed_special_constraint_lowerings == set()
     assert not policy.allow_integer_log_encoding
     assert not policy.allow_sense_normalization
@@ -355,12 +352,13 @@ def test_solver_adapter_recommends_identity_policy_for_declared_input_class() ->
     assert policy.penalty_weights is None
 
 
-def test_solver_adapter_policy_recommendation_requires_input_class() -> None:
+def test_solver_adapter_policy_recommendation_does_not_require_input_class() -> None:
     class MissingDeclaration(SolverAdapter):
         pass
 
-    with pytest.raises(TypeError, match="must declare INPUT_CLASS"):
-        MissingDeclaration.recommended_preparation_policy()
+    assert isinstance(
+        MissingDeclaration.recommended_preparation_policy(), PreparationPolicy
+    )
 
 
 def test_solver_adapter_layers_preconditions_and_preserves_the_caller() -> None:

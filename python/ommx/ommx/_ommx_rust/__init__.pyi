@@ -3110,12 +3110,12 @@ class Instance:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
-    def prepare(self, policy: PreparationPolicy) -> None:
+    def prepare(self, input_class: InstanceClass, policy: PreparationPolicy) -> None:
         r"""
-        Prepare this Instance in place to satisfy ``policy.input_class``.
+        Prepare this Instance in place to satisfy ``input_class``.
 
         Preparation applies the transformations permitted by ``policy`` in a
-        fixed order. On success, ``policy.input_class.contains(self)`` is true.
+        fixed order. On success, ``input_class.contains(self)`` is true.
 
         This method is not transactional across transformations. If it raises,
         changes made by earlier transformations remain applied.
@@ -6103,18 +6103,16 @@ class PreparationPolicy:
     r"""
     Caller-owned permissions and parameters for :meth:`Instance.prepare`.
 
-    This is an OMMX core value. Solver Adapters may recommend a policy, but the
-    policy neither retains an Adapter nor calls Adapter-owned Python code.
+    This Policy controls which transformations preparation may apply and the
+    parameters used by those transformations. Pass the target
+    :class:`InstanceClass` separately to :meth:`Instance.prepare`. Solver
+    Adapters may recommend a Policy; the caller independently supplies the
+    target, often the Adapter's ``INPUT_CLASS``.
     Positive finite penalty weights require a minimization candidate; permit
     sense normalization when preparing a maximization source.
     The absolute tolerance is resolved while constructing this immutable Policy,
     so later changes to the SDK default do not affect its interpretation.
     """
-    @property
-    def input_class(self) -> InstanceClass:
-        r"""
-        Adapter input class that the Instance must belong to after preparation.
-        """
     @property
     def allowed_special_constraint_lowerings(
         self,
@@ -6172,7 +6170,6 @@ class PreparationPolicy:
     def __new__(
         cls,
         *,
-        input_class: InstanceClass,
         allowed_special_constraint_lowerings: builtins.set[
             SpecialConstraintKind
         ] = set(),

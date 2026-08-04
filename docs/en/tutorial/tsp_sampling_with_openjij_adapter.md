@@ -140,7 +140,7 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
 )
-instance.prepare(policy)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
 sample_set = OMMXOpenJijSAAdapter.sample(
     instance,
@@ -172,7 +172,7 @@ against it.
 ```{code-cell} ipython3
 OMMXOpenJijSAAdapter.require_applicable(instance)
 {
-    "input_class_membership": policy.input_class.contains(instance),
+    "input_class_membership": OMMXOpenJijSAAdapter.INPUT_CLASS.contains(instance),
     "active_constraints": len(instance.constraints),
     "removed_constraints": len(instance.removed_constraints),
 }
@@ -180,9 +180,8 @@ OMMXOpenJijSAAdapter.require_applicable(instance)
 
 Preparation is not globally transactional: a later owner operation can fail
 after earlier operations succeeded. Each operation retains its owner API's
-failure semantics. The fixed-weight penalty owner API validates first, then
-clones internally and commits only after penalty conversion and parameter
-materialization succeed.
+failure semantics. Fixed-penalty conversion does not commit a partial
+conversion.
 
 Discrete integer slack approximation requires setting a positive finite
 `inequality_integer_slack_max_error` when obtaining the Policy; setting only

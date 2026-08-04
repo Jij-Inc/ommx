@@ -165,7 +165,7 @@ def _openjij_input(instance):
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
         uniform_penalty_weight=3.1 if instance.constraints else None,
     )
-    instance.prepare(policy)
+    instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
     return instance, instance.to_v2_bytes()
 
 
@@ -340,7 +340,7 @@ def test_prepared_input_evaluation_populates_variable_removed_with_trivial_inequ
         # removes that source constraint as trivial before the penalty phase.
         penalty_weights={7: 2.0},
     )
-    source.prepare(policy)
+    source.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
     assert policy.penalty_weights == {7: 2.0}
     assert source.used_decision_variables == []
 
@@ -370,9 +370,10 @@ def test_sample_evaluates_integer_sos1_against_prepared_input():
     )
 
     instance.prepare(
+        OMMXOpenJijSAAdapter.INPUT_CLASS,
         OMMXOpenJijSAAdapter.recommended_preparation_policy(
             uniform_penalty_weight=4.0,
-        )
+        ),
     )
     sample_set = OMMXOpenJijSAAdapter.sample(
         instance,

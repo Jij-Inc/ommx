@@ -1,4 +1,4 @@
-use crate::{error::OmmxPyResult, InstanceClass, SpecialConstraintKind};
+use crate::{error::OmmxPyResult, SpecialConstraintKind};
 use pyo3::{
     exceptions::{PyTypeError, PyValueError},
     prelude::*,
@@ -153,8 +153,11 @@ fn invalid_positive_finite_number(field: &str) -> PyErr {
 
 /// Caller-owned permissions and parameters for :meth:`Instance.prepare`.
 ///
-/// This is an OMMX core value. Solver Adapters may recommend a policy, but the
-/// policy neither retains an Adapter nor calls Adapter-owned Python code.
+/// This Policy controls which transformations preparation may apply and the
+/// parameters used by those transformations. Pass the target
+/// :class:`InstanceClass` separately to :meth:`Instance.prepare`. Solver
+/// Adapters may recommend a Policy; the caller independently supplies the
+/// target, often the Adapter's ``INPUT_CLASS``.
 /// Positive finite penalty weights require a minimization candidate; permit
 /// sense normalization when preparing a maximization source.
 /// The absolute tolerance is resolved while constructing this immutable Policy,
@@ -175,10 +178,9 @@ impl PreparationPolicy {
 #[pymethods]
 impl PreparationPolicy {
     #[new]
-    #[pyo3(signature = (*, input_class, allowed_special_constraint_lowerings=HashSet::new(), allow_integer_log_encoding=false, allow_sense_normalization=false, inequality_integer_slack_max_range=None, inequality_integer_slack_max_error=None, uniform_penalty_weight=None, penalty_weights=None, atol=None))]
+    #[pyo3(signature = (*, allowed_special_constraint_lowerings=HashSet::new(), allow_integer_log_encoding=false, allow_sense_normalization=false, inequality_integer_slack_max_range=None, inequality_integer_slack_max_error=None, uniform_penalty_weight=None, penalty_weights=None, atol=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
-        input_class: &InstanceClass,
         allowed_special_constraint_lowerings: HashSet<SpecialConstraintKind>,
         allow_integer_log_encoding: bool,
         allow_sense_normalization: bool,
@@ -230,7 +232,6 @@ impl PreparationPolicy {
         };
 
         Ok(Self(ommx::PreparationPolicy::new(
-            input_class.0.clone(),
             allowed_special_constraint_lowerings
                 .into_iter()
                 .map(Into::into)
@@ -243,12 +244,6 @@ impl PreparationPolicy {
             penalty_weights,
             atol,
         )?))
-    }
-
-    #[getter]
-    /// Adapter input class that the Instance must belong to after preparation.
-    pub fn input_class(&self) -> InstanceClass {
-        InstanceClass(self.0.input_class().clone())
     }
 
     #[getter]

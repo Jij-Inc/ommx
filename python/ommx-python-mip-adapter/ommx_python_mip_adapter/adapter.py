@@ -38,7 +38,7 @@ _LINEAR_CONSTRAINT_DEGREE_BOUNDS = {
 
 
 class OMMXPythonMIPAdapter(SolverAdapter):
-    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
                 label="python-mip-linear-mip",

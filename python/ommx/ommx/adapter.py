@@ -141,26 +141,19 @@ class SolverAdapter(ABC):
     or otherwise mutates the input instance.
     """
 
-    INPUT_CLASS: ClassVar[InstanceClass | None] = None
+    INPUT_CLASS: ClassVar[InstanceClass]
 
     @classmethod
     def recommended_preparation_policy(cls) -> PreparationPolicy:
         """Return this Adapter's recommended OMMX preparation policy.
 
-        The base recommendation uses :attr:`INPUT_CLASS` as ``input_class`` and
-        permits only identity preparation. Subclasses may permit additional
-        OMMX-owned preparation operations by returning another common
-        :class:`PreparationPolicy` value. The Adapter does not execute the
-        policy and is not retained by it. Reaching :attr:`INPUT_CLASS` does not
-        check Adapter-owned preconditions; the direct applicability boundary
-        remains separate.
+        The base recommendation permits only identity preparation. Subclasses
+        may recommend additional OMMX-owned preparation operations. The target
+        :attr:`INPUT_CLASS` is supplied separately to
+        :meth:`ommx.Instance.prepare`; it is not part of the Policy. The Adapter
+        does not execute the Policy and is not retained by it.
         """
-        input_class = cls.INPUT_CLASS
-        if input_class is None:
-            raise TypeError(
-                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
-            )
-        return PreparationPolicy(input_class=input_class)
+        return PreparationPolicy()
 
     @classmethod
     def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
@@ -171,7 +164,7 @@ class SolverAdapter(ABC):
         copy so it cannot mutate the caller's instance. After preparation
         mutates an instance, its current value must be checked again.
         """
-        input_class = cls.INPUT_CLASS
+        input_class = getattr(cls, "INPUT_CLASS", None)
         if input_class is None:
             raise TypeError(
                 f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"

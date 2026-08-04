@@ -70,13 +70,10 @@ def test_declares_binary_polynomial_input_class() -> None:
     assert clause.allowed_senses == {Sense.Minimize}
 
 
-def test_recommended_policy_uses_input_class_and_enables_common_operations() -> None:
+def test_recommended_policy_enables_common_operations() -> None:
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 
     assert isinstance(policy, PreparationPolicy)
-    [policy_input_clause] = policy.input_class.clauses
-    [input_clause] = OMMXOpenJijSAAdapter.INPUT_CLASS.clauses  # type: ignore[union-attr]
-    assert policy_input_clause.label == input_clause.label
     assert policy.allowed_special_constraint_lowerings == {
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.OneHot,

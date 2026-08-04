@@ -50,7 +50,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     same value to the direct Adapter API.
     """
 
-    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
                 label="openjij-binary-hubo",
@@ -210,16 +210,10 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         the maximum residual introduced by approximate integer slack, and an
         optional absolute tolerance remain explicit caller choices through
         this method's keyword arguments. The returned Policy is executed only
-        by :meth:`ommx.Instance.prepare`; this Adapter's direct APIs stay
-        strict.
+        by :meth:`ommx.Instance.prepare`, with :attr:`INPUT_CLASS` supplied
+        separately as its target; this Adapter's direct APIs stay strict.
         """
-        input_class = cls.INPUT_CLASS
-        if input_class is None:  # pragma: no cover - class declaration invariant
-            raise TypeError(
-                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
-            )
         return PreparationPolicy(
-            input_class=input_class,
             allowed_special_constraint_lowerings={
                 SpecialConstraintKind.Indicator,
                 SpecialConstraintKind.OneHot,

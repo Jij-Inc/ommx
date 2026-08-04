@@ -60,7 +60,6 @@ def test_policy_snapshots_preparation_options() -> None:
     mutable_weights = {7: 2.0}
     penalty_weights: Mapping[int, float] = MappingProxyType(mutable_weights)
     policy = PreparationPolicy(
-        input_class=binary_linear_class(),
         allowed_special_constraint_lowerings={
             SpecialConstraintKind.Indicator,
             SpecialConstraintKind.OneHot,
@@ -96,7 +95,7 @@ def test_policy_snapshots_default_atol_at_construction() -> None:
     original_atol = get_default_atol()
     try:
         set_default_atol(1e-4)
-        policy = PreparationPolicy(input_class=binary_linear_class())
+        policy = PreparationPolicy()
         set_default_atol(2e-4)
 
         assert policy.atol == 1e-4
@@ -104,47 +103,60 @@ def test_policy_snapshots_default_atol_at_construction() -> None:
         set_default_atol(original_atol)
 
 
-def test_policy_rejects_inconsistent_flat_options() -> None:
-    input_class = binary_linear_class()
+def test_policy_is_independent_of_the_target_input_class() -> None:
+    policy = PreparationPolicy()
+    assert not hasattr(policy, "input_class")
 
+    x = DecisionVariable.binary(0)
+    first = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Sense.Minimize,
+    )
+    second = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    assert first.prepare(binary_linear_class(), policy) is None
+    assert second.prepare(binary_unconstrained_class(), policy) is None
+
+
+def test_policy_rejects_inconsistent_flat_options() -> None:
     with pytest.raises(ValueError, match="mutually exclusive"):
         PreparationPolicy(
-            input_class=input_class,
             uniform_penalty_weight=2.0,
             penalty_weights={7: 2.0},
         )
 
     with pytest.raises(ValueError, match="requires inequality_integer_slack_max_range"):
         PreparationPolicy(
-            input_class=input_class,
             inequality_integer_slack_max_error=0.25,
         )
 
     with pytest.raises(ValueError, match="integer in"):
         PreparationPolicy(
-            input_class=input_class,
             inequality_integer_slack_max_range=0,
         )
 
     with pytest.raises(ValueError, match="ATol must be positive"):
-        PreparationPolicy(input_class=input_class, atol=0.0)
+        PreparationPolicy(atol=0.0)
 
 
 @pytest.mark.parametrize("weight", [0.0, -1.0, float("inf"), float("nan")])
 def test_policy_rejects_non_positive_or_non_finite_penalty_weights(
     weight: float,
 ) -> None:
-    input_class = binary_linear_class()
-
     with pytest.raises(ValueError, match="positive finite"):
         PreparationPolicy(
-            input_class=input_class,
             uniform_penalty_weight=weight,
         )
 
     with pytest.raises(ValueError, match="positive finite"):
         PreparationPolicy(
-            input_class=input_class,
             penalty_weights={7: weight},
         )
 
@@ -158,7 +170,6 @@ def test_policy_rejects_invalid_per_constraint_penalty_keys(key: object) -> None
 
     with pytest.raises(ValueError, match="integer constraint IDs"):
         PreparationPolicy(
-            input_class=binary_linear_class(),
             penalty_weights=weights,
         )
 
@@ -169,14 +180,12 @@ def test_policy_rejects_non_numeric_or_boolean_penalty_weights(
 ) -> None:
     with pytest.raises(ValueError, match="positive finite"):
         PreparationPolicy(
-            input_class=binary_linear_class(),
             uniform_penalty_weight=cast(float, weight),
         )
 
     weights = cast(Mapping[int, float], {7: weight})
     with pytest.raises(ValueError, match="positive finite"):
         PreparationPolicy(
-            input_class=binary_linear_class(),
             penalty_weights=weights,
         )
 
@@ -184,7 +193,6 @@ def test_policy_rejects_non_numeric_or_boolean_penalty_weights(
 def test_policy_rejects_non_mapping_penalty_weights() -> None:
     with pytest.raises(TypeError, match="Mapping"):
         PreparationPolicy(
-            input_class=binary_linear_class(),
             penalty_weights=cast(Mapping[int, float], [(7, 2.0)]),
         )
 
@@ -196,7 +204,6 @@ def test_policy_rejects_non_mapping_penalty_weights() -> None:
 def test_policy_rejects_invalid_integer_slack_max_range(max_range: object) -> None:
     with pytest.raises(ValueError, match="integer in"):
         PreparationPolicy(
-            input_class=binary_linear_class(),
             inequality_integer_slack_max_range=cast(int, max_range),
         )
 
@@ -208,7 +215,6 @@ def test_policy_rejects_invalid_integer_slack_max_range(max_range: object) -> No
 def test_policy_rejects_invalid_integer_slack_max_error(max_error: object) -> None:
     with pytest.raises(ValueError, match="positive finite"):
         PreparationPolicy(
-            input_class=binary_linear_class(),
             inequality_integer_slack_max_range=32,
             inequality_integer_slack_max_error=cast(float, max_error),
         )
@@ -222,7 +228,7 @@ def test_identity_preparation_returns_none_and_uses_instance_for_evaluation() ->
         constraints={},
         sense=Sense.Minimize,
     )
-    result = instance.prepare(PreparationPolicy(input_class=binary_linear_class()))
+    result = instance.prepare(binary_linear_class(), PreparationPolicy())
 
     assert result is None
 
@@ -249,10 +255,10 @@ def test_lowered_special_constraint_is_evaluated_by_prepared_instance() -> None:
         sense=Sense.Minimize,
     )
     result = instance.prepare(
+        binary_linear_class(),
         PreparationPolicy(
-            input_class=binary_linear_class(),
             allowed_special_constraint_lowerings={SpecialConstraintKind.OneHot},
-        )
+        ),
     )
 
     assert result is None
@@ -279,11 +285,10 @@ def test_identity_does_not_interpret_unused_per_constraint_penalty_ids() -> None
     )
     before = instance.to_v2_bytes()
     policy = PreparationPolicy(
-        input_class=binary_linear_class(),
         penalty_weights={999: 2.0},
     )
 
-    result = instance.prepare(policy)
+    result = instance.prepare(binary_linear_class(), policy)
 
     assert result is None
     assert instance.to_v2_bytes() == before
@@ -301,12 +306,11 @@ def test_extra_unknown_per_constraint_penalty_id_fails_when_penalty_is_reached()
     )
     before = instance.to_v2_bytes()
     policy = PreparationPolicy(
-        input_class=binary_unconstrained_class(),
         penalty_weights={9: 2.0, 999: 3.0},
     )
 
     with pytest.raises(RuntimeError):
-        instance.prepare(policy)
+        instance.prepare(binary_unconstrained_class(), policy)
 
     assert instance.to_v2_bytes() == before
 
@@ -320,10 +324,10 @@ def test_per_constraint_penalty_tracks_existing_regular_constraint_id() -> None:
         sense=Sense.Minimize,
     )
     result = instance.prepare(
+        binary_unconstrained_class(),
         PreparationPolicy(
-            input_class=binary_unconstrained_class(),
             penalty_weights={9: 2.0},
-        )
+        ),
     )
 
     assert result is None
@@ -343,12 +347,11 @@ def test_penalty_failure_keeps_prior_in_place_special_constraint_lowering() -> N
         sense=Sense.Minimize,
     )
     policy = PreparationPolicy(
-        input_class=binary_unconstrained_class(),
         allowed_special_constraint_lowerings={SpecialConstraintKind.OneHot},
         penalty_weights={},
     )
     with pytest.raises(RuntimeError):
-        instance.prepare(policy)
+        instance.prepare(binary_unconstrained_class(), policy)
 
     assert instance.one_hot_constraints == {}
     assert set(instance.removed_one_hot_constraints) == {7}
@@ -364,12 +367,11 @@ def test_operation_owned_error_is_preserved() -> None:
         sense=Sense.Minimize,
     )
     policy = PreparationPolicy(
-        input_class=binary_linear_class(),
         allow_integer_log_encoding=True,
     )
     before = instance.to_v2_bytes()
 
     with pytest.raises(LogEncodingError, match="bound must be finite"):
-        instance.prepare(policy)
+        instance.prepare(binary_linear_class(), policy)
 
     assert instance.to_v2_bytes() == before

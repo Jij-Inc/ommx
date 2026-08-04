@@ -9,7 +9,7 @@ use crate::{
         apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
         raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
     },
-    Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
+    Constraint, DecisionVariable, DecisionVariableRole, Function, InstanceClass, NamedFunction,
     ParametricInstance, PreparationPolicy, RemovedConstraint, Rng, SampleSet, Samples, Sense,
     Solution, State,
 };
@@ -95,16 +95,21 @@ impl Instance {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
-    /// Prepare this Instance in place to satisfy ``policy.input_class``.
+    /// Prepare this Instance in place to satisfy ``input_class``.
     ///
     /// Preparation applies the transformations permitted by ``policy`` in a
-    /// fixed order. On success, ``policy.input_class.contains(self)`` is true.
+    /// fixed order. On success, ``input_class.contains(self)`` is true.
     ///
     /// This method is not transactional across transformations. If it raises,
     /// changes made by earlier transformations remain applied.
-    pub fn prepare(&mut self, py: Python<'_>, policy: &PreparationPolicy) -> OmmxPyResult<()> {
+    pub fn prepare(
+        &mut self,
+        py: Python<'_>,
+        input_class: &InstanceClass,
+        policy: &PreparationPolicy,
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.inner.prepare(policy.as_core())?;
+        self.inner.prepare(&input_class.0, policy.as_core())?;
         Ok(())
     }
 

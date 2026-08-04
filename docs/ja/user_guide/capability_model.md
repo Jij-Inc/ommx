@@ -16,13 +16,13 @@ kernelspec:
 OMMX では、従来 Adapter Capability として一緒に説明されていた次の3つの概念を分けて扱います。
 
 - {class}`~ommx.InstanceClass` は、具体的な `Instance` 値の集合です。Adapter は構造的な入力条件を `INPUT_CLASS` で宣言し、その後に Adapter 固有の precondition を評価して applicability を判定します。
-- {class}`~ommx.PreparationPolicy` は `input_class` と、そこへ到達するために許可する OMMX-owned operation を記述します。Adapter は自身の `INPUT_CLASS` を `input_class` とする Policy を推奨できますが、それを選ぶのは呼び出し側、解釈するのは {meth}`Instance.prepare <ommx.Instance.prepare>` です。
+- {class}`~ommx.PreparationPolicy` は、利用を許可する OMMX-owned operation を記述します。Adapter は Policy を推奨できますが、対象の {class}`~ommx.InstanceClass` は呼び出し側が独立に選び、{meth}`Instance.prepare <ommx.Instance.prepare>` が両方を解釈します。
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` は、Instance 上で選択した特殊制約 family を明示的に lowering します。入力 class の宣言でも、Adapter applicability の証明でもありません。
 
 本ページでは以下を説明します。
 
 - `InstanceClass` の membership と Adapter applicability
-- `PreparationPolicy` と `Instance.prepare(policy)`
+- `PreparationPolicy` と `Instance.prepare(input_class, policy)`
 - 特殊制約 family selector としての {class}`~ommx.SpecialConstraintKind` と {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>`
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` による明示的な lowering
 - 手動で通常制約に変換するための API
@@ -52,11 +52,11 @@ Adapter は applicability の最初の条件を `INPUT_CLASS` として宣言し
 
 ## Adapter 入力の Preparation
 
-Adapter は direct `INPUT_CLASS` を対象とする共通 Policy を推奨するだけで、Policy を実行も解釈もしません。呼び出し側が選んだ Policy を `Instance` に渡し、変更された同じ `Instance` を direct Adapter API に渡します。
+Adapter は direct `INPUT_CLASS` を宣言し、それとは独立に共通 Policy を推奨できます。Adapter 自身は Policy を実行も解釈もしません。呼び出し側が両方を `Instance` に渡し、変更された同じ `Instance` を direct Adapter API に渡します。
 
 ```python
 policy = Adapter.recommended_preparation_policy()
-instance.prepare(policy)
+instance.prepare(Adapter.INPUT_CLASS, policy)
 Adapter.require_applicable(instance)
 result = Adapter.solve(instance)
 ```
@@ -68,12 +68,11 @@ boundaryで検査されます。
 
 結果に影響するpreparation操作の絶対許容誤差はPolicyに保持されます。`atol`を
 省略した場合はPolicy構築時点のSDK defaultを解決して保存するため、その後に
-ambient defaultを変更しても `Instance.prepare(policy)` の解釈は変わりません。
+ambient defaultを変更しても `Instance.prepare(input_class, policy)` の解釈は変わりません。
 
 Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
-操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-weight penaltyの
-owner APIはread-only検証後に内部でcloneし、penalty変換とparameter materializationの両方が
-成功した場合にだけ `instance` を置き換えます。
+操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-penalty変換が
+途中までcommitされることはありません。
 
 finite penalty weight は正の値なので、minimization candidate にだけ適用されます。maximization source に finite penalty を適用する Policy では、sense normalization も許可する必要があります。
 
@@ -230,8 +229,8 @@ for cid, c in instance2.constraints.items():
 |---|---|
 | Adapter 入力の構造的な集合を記述する | {class}`~ommx.InstanceClass` |
 | Adapter applicability の最初の条件を宣言する | `INPUT_CLASS` |
-| input class に向けて許可する操作を推奨する | `recommended_preparation_policy()` |
-| 呼び出し側が選んだ preparation policy を実行する | {meth}`Instance.prepare <ommx.Instance.prepare>` |
+| preparation で許可する操作を推奨する | `recommended_preparation_policy()` |
+| 呼び出し側が選んだ input class と Policy で preparation する | {meth}`Instance.prepare <ommx.Instance.prepare>` |
 | membership と Adapter 固有の precondition を検査する | `check_applicability()` / `require_applicable()` |
 | active な特殊制約 family を調べる | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | 選択した特殊制約を明示的に lowering する | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |

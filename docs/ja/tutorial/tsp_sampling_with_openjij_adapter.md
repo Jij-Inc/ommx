@@ -140,7 +140,7 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
 )
-instance.prepare(policy)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
 sample_set = OMMXOpenJijSAAdapter.sample(
     instance,
@@ -169,16 +169,15 @@ Adapterもこの `Instance` に対して結果を評価します。
 ```{code-cell} ipython3
 OMMXOpenJijSAAdapter.require_applicable(instance)
 {
-    "input_class_membership": policy.input_class.contains(instance),
+    "input_class_membership": OMMXOpenJijSAAdapter.INPUT_CLASS.contains(instance),
     "active_constraints": len(instance.constraints),
     "removed_constraints": len(instance.removed_constraints),
 }
 ```
 
 Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
-操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-weight penaltyの
-owner APIはread-only検証後に内部でcloneし、penalty変換とparameter materializationが
-成功した場合にだけcommitします。
+操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-penalty変換が
+途中までcommitされることはありません。
 
 離散的なinteger slack近似を使うには、Policyを取得するときに正の有限値
 `inequality_integer_slack_max_error` で元の制約式の単位における最大残差を指定します。

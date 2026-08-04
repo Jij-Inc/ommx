@@ -13,9 +13,10 @@ def test_log_sample_records_the_prepared_adapter_input() -> None:
         sense=Sense.Maximize,
     )
     adapter_input.prepare(
+        OMMXOpenJijSAAdapter.INPUT_CLASS,
         OMMXOpenJijSAAdapter.recommended_preparation_policy(
             uniform_penalty_weight=2.0,
-        )
+        ),
     )
     input_bytes = adapter_input.to_v2_bytes()
     experiment = Experiment.with_temp_local_registry()

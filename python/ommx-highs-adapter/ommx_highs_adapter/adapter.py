@@ -576,7 +576,7 @@ class OMMXHighsAdapter(SolverAdapter):
 
     """
 
-    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
                 label="highs-linear-mip",
@@ -590,14 +590,12 @@ class OMMXHighsAdapter(SolverAdapter):
 
     @classmethod
     def recommended_preparation_policy(cls) -> PreparationPolicy:
-        """Recommend special-constraint lowering for HiGHS input."""
-        input_class = cls.INPUT_CLASS
-        if input_class is None:  # pragma: no cover - class declaration invariant
-            raise TypeError(
-                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
-            )
+        """Recommend special-constraint lowering for HiGHS preparation.
+
+        Pass :attr:`INPUT_CLASS` separately as the target of
+        :meth:`ommx.Instance.prepare`.
+        """
         return PreparationPolicy(
-            input_class=input_class,
             allowed_special_constraint_lowerings={
                 SpecialConstraintKind.Indicator,
                 SpecialConstraintKind.OneHot,

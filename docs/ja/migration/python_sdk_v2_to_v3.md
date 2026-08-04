@@ -236,13 +236,14 @@ ids_list: list[int] = sample_set.sample_ids_list
 - `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
 - `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
 - `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合はAdapter推奨の共通Policyを取得し、`instance.prepare(policy)` を呼んで同じ `instance` をsampleします。返される `SampleSet` はその変換済み `Instance` に対して既に評価済みです（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
+- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合はAdapter推奨の共通Policyを取得し、`instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)` を呼んで同じ `instance` をsampleします。返される `SampleSet` はその変換済み `Instance` に対して既に評価済みです（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
 
 v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `uniform_penalty_weight`、`penalty_weights`、
 `inequality_integer_slack_max_range` を直接受け取り、暗黙にpreparationを実行していました。
 v3では、これらを `OMMXOpenJijSAAdapter.recommended_preparation_policy()` に渡し、
-返された共通 `PreparationPolicy` を `Instance.prepare()` でin-placeに実行したうえで、
+Adapterの独立した `INPUT_CLASS` と返された共通 `PreparationPolicy` を
+`Instance.prepare()` に渡してin-placeに実行したうえで、
 変更された同じ `Instance` をsampleします。通常制約ごとに
 異なるweightが必要な場合は、`uniform_penalty_weight` の代わりに `penalty_weights` を
 使います。v2はどちらのpenalty設定もない場合に一律weight `1.0` を選びましたが、v3では
@@ -262,7 +263,7 @@ policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     inequality_integer_slack_max_range=32,
     inequality_integer_slack_max_error=0.25,
 )
-instance.prepare(policy)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
@@ -272,9 +273,8 @@ sample_set = OMMXOpenJijSAAdapter.sample(instance)
 変換後のmodelのものであり、有限penaltyは実行可能なsampleを保証しません。
 
 Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
-操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-weight penaltyの
-owner APIはread-only検証後に内部でcloneし、penalty変換とparameter materializationが成功した
-場合にだけcommitします。
+操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-penalty変換が
+途中までcommitされることはありません。
 
 ## 8. DataFrame accessor
 

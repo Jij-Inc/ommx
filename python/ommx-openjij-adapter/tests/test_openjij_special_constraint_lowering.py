@@ -18,9 +18,10 @@ def test_preparation_explicitly_lowers_special_constraints() -> None:
     )
 
     instance.prepare(
+        OMMXOpenJijSAAdapter.INPUT_CLASS,
         OMMXOpenJijSAAdapter.recommended_preparation_policy(
             uniform_penalty_weight=2.0,
-        )
+        ),
     )
 
     assert instance.active_special_constraint_kinds == set()

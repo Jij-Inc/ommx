@@ -57,12 +57,10 @@ def _sos1_instance() -> Instance:
     )
 
 
-def test_recommended_policy_uses_highs_input_class() -> None:
+def test_recommended_policy_enables_special_constraint_lowering() -> None:
     policy = OMMXHighsAdapter.recommended_preparation_policy()
 
     assert isinstance(policy, PreparationPolicy)
-    [input_clause] = policy.input_class.clauses
-    assert input_clause.label == "highs-linear-mip"
     assert policy.allowed_special_constraint_lowerings == {
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.OneHot,
@@ -83,7 +81,10 @@ def test_instance_prepare_automatically_lowers_special_constraint(
 ) -> None:
     instance = make_source()
 
-    result = instance.prepare(OMMXHighsAdapter.recommended_preparation_policy())
+    result = instance.prepare(
+        OMMXHighsAdapter.INPUT_CLASS,
+        OMMXHighsAdapter.recommended_preparation_policy(),
+    )
 
     assert result is None
     assert kind not in instance.active_special_constraint_kinds
@@ -92,7 +93,10 @@ def test_instance_prepare_automatically_lowers_special_constraint(
 
 def test_sos1_solution_is_evaluated_against_prepared_input() -> None:
     instance = _sos1_instance()
-    instance.prepare(OMMXHighsAdapter.recommended_preparation_policy())
+    instance.prepare(
+        OMMXHighsAdapter.INPUT_CLASS,
+        OMMXHighsAdapter.recommended_preparation_policy(),
+    )
 
     solution = OMMXHighsAdapter.solve(instance)
     sos1 = solution.constraints_df(
@@ -110,11 +114,9 @@ def test_sos1_solution_is_evaluated_against_prepared_input() -> None:
 def test_identity_only_policy_rejects_lowering_without_mutating_source() -> None:
     source = _one_hot_instance()
     before = source.to_v2_bytes()
-    input_class = OMMXHighsAdapter.INPUT_CLASS
-    assert input_class is not None
-    policy = PreparationPolicy(input_class=input_class)
+    policy = PreparationPolicy()
 
     with pytest.raises(RuntimeError):
-        source.prepare(policy)
+        source.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
 
     assert source.to_v2_bytes() == before

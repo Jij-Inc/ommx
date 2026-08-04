@@ -111,7 +111,7 @@ def test_prepare_emits_rust_span() -> None:
             )
         ]
     )
-    instance.prepare(PreparationPolicy(input_class=input_class))
+    instance.prepare(input_class, PreparationPolicy())
 
     provider.force_flush()
     rust_spans = [span for span in exporter.spans if span.name == "prepare"]

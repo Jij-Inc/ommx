@@ -45,7 +45,10 @@ def test_explicit_preparation_does_not_wrap_the_direct_sample_operation():
     )
     prepared: bytes | None = None
     with capture_trace() as result:
-        instance.prepare(OMMXOpenJijSAAdapter.recommended_preparation_policy())
+        instance.prepare(
+            OMMXOpenJijSAAdapter.INPUT_CLASS,
+            OMMXOpenJijSAAdapter.recommended_preparation_policy(),
+        )
         prepared = instance.to_v2_bytes()
         OMMXOpenJijSAAdapter.sample(
             instance,

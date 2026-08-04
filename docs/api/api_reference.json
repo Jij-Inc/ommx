@@ -10519,10 +10519,19 @@
             },
             {
               "name": "prepare",
-              "doc": "Prepare this Instance in place to satisfy ``policy.input_class``.\n\nPreparation applies the transformations permitted by ``policy`` in a\nfixed order. On success, ``policy.input_class.contains(self)`` is true.\n\nThis method is not transactional across transformations. If it raises,\nchanges made by earlier transformations remain applied.",
+              "doc": "Prepare this Instance in place to satisfy ``input_class``.\n\nPreparation applies the transformations permitted by ``policy`` in a\nfixed order. On success, ``input_class.contains(self)`` is true.\n\nThis method is not transactional across transformations. If it raises,\nchanges made by earlier transformations remain applied.",
               "signatures": [
                 {
                   "parameters": [
+                    {
+                      "name": "input_class",
+                      "type_": {
+                        "display": "InstanceClass",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
                     {
                       "name": "policy",
                       "type_": {
@@ -18936,7 +18945,7 @@
         {
           "kind": "Class",
           "name": "PreparationPolicy",
-          "doc": "Caller-owned permissions and parameters for :meth:`Instance.prepare`.\n\nThis is an OMMX core value. Solver Adapters may recommend a policy, but the\npolicy neither retains an Adapter nor calls Adapter-owned Python code.\nPositive finite penalty weights require a minimization candidate; permit\nsense normalization when preparing a maximization source.\nThe absolute tolerance is resolved while constructing this immutable Policy,\nso later changes to the SDK default do not affect its interpretation.",
+          "doc": "Caller-owned permissions and parameters for :meth:`Instance.prepare`.\n\nThis Policy controls which transformations preparation may apply and the\nparameters used by those transformations. Pass the target\n:class:`InstanceClass` separately to :meth:`Instance.prepare`. Solver\nAdapters may recommend a Policy; the caller independently supplies the\ntarget, often the Adapter's ``INPUT_CLASS``.\nPositive finite penalty weights require a minimization candidate; permit\nsense normalization when preparing a maximization source.\nThe absolute tolerance is resolved while constructing this immutable Policy,\nso later changes to the SDK default do not affect its interpretation.",
           "bases": [],
           "methods": [
             {
@@ -18945,15 +18954,6 @@
               "signatures": [
                 {
                   "parameters": [
-                    {
-                      "name": "input_class",
-                      "type_": {
-                        "display": "InstanceClass",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
                     {
                       "name": "allowed_special_constraint_lowerings",
                       "type_": {
@@ -19206,17 +19206,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "input_class",
-              "doc": "Adapter input class that the Instance must belong to after preparation.",
-              "type_": {
-                "display": "InstanceClass",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true

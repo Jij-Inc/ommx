@@ -30,7 +30,7 @@ instance = Instance.from_components(
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=2.0,
 )
-instance.prepare(policy)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
 sample_set = OMMXOpenJijSAAdapter.sample(
     instance,
@@ -59,10 +59,12 @@ accepts directly:
 and the OpenJij-specific preconditions. `sample()`, `solve()`, and the Adapter
 constructor never prepare or mutate their input implicitly.
 
-`recommended_preparation_policy()` returns the common OMMX policy with that
-`INPUT_CLASS` as its `input_class`. The default permits special-constraint
-lowering, bounded Integer log encoding, minimization-sense normalization, and
-exact integer slack. Discrete slack approximation remains disabled unless
+`recommended_preparation_policy()` returns the common OMMX policy recommended
+by the Adapter. Independently, `INPUT_CLASS` describes the Adapter's direct
+inputs; the caller supplies that class separately as the target of
+`Instance.prepare()`. The default Policy permits special-constraint lowering,
+bounded Integer log encoding, minimization-sense normalization, and exact
+integer slack. Discrete slack approximation remains disabled unless
 `inequality_integer_slack_max_error` is set to a positive finite residual
 bound. `inequality_integer_slack_max_range` limits the Integer slack range; if
 that range cannot meet the error bound, preparation fails. Finite penalties
@@ -79,10 +81,10 @@ weight; an entry for a regular constraint already moved to
 regular IDs, which a per-constraint map must also cover. Use a uniform penalty
 weight when those generated IDs are not configured explicitly.
 
-`Instance.prepare(policy)` mutates the caller's `Instance` until it belongs to
-the Policy's `input_class`, copied from OpenJij `INPUT_CLASS`. It does not run
-the Adapter or check backend-specific preconditions. The direct Adapter
-boundary remains authoritative:
+`Instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)` mutates the caller's
+`Instance` until it belongs to the supplied input class. It does not run the
+Adapter or check backend-specific preconditions. The direct Adapter boundary
+remains authoritative:
 
 ```python
 OMMXOpenJijSAAdapter.require_applicable(instance)
@@ -96,9 +98,8 @@ objective, including any finite penalty.
 
 Preparation is not globally transactional: a later owner operation can fail
 after earlier operations succeeded. Each operation retains its owner API's
-failure semantics. The fixed-weight penalty owner API validates first, then
-clones internally and commits only after penalty conversion and parameter
-materialization succeed.
+failure semantics. Fixed-penalty conversion does not commit a partial
+conversion.
 
 The maximum of 53 auxiliary bits for each Integer variable belongs to OMMX's
 Integer-to-Binary log-encoding operation. It is neither a property of the

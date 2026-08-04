@@ -49,14 +49,16 @@ instance = Instance.from_components(
 )
 
 policy = OMMXHighsAdapter.recommended_preparation_policy()
-instance.prepare(policy)
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
 solution = OMMXHighsAdapter.solve(instance)
 print(solution)
 ```
 
 The recommended Policy permits OMMX's existing Indicator, OneHot, and SOS1
-lowering operations. `Instance.prepare()` mutates the same `Instance` and checks
-that it belongs to the Policy's `input_class`, copied from HiGHS `INPUT_CLASS`.
+lowering operations. The Adapter's `INPUT_CLASS` independently describes its
+direct inputs; the caller supplies that class separately as the target of
+`Instance.prepare()`. Preparation mutates the same `Instance` and checks that it
+belongs to the supplied class.
 The direct HiGHS boundary remains responsible for its own applicability check.
 The Adapter already evaluates the solver state against that `Instance`, which
 retains the dependency, removed-constraint, provenance, and auxiliary-variable
@@ -64,6 +66,5 @@ data produced by its transformations.
 
 Preparation is not globally transactional: a later owner operation can fail
 after earlier operations succeeded. Each operation retains its owner API's
-failure semantics. The fixed-weight penalty owner API validates first, then
-clones internally and commits only after penalty conversion and parameter
-materialization succeed.
+failure semantics. Fixed-penalty conversion does not commit a partial
+conversion.

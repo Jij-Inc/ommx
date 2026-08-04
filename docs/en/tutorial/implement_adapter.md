@@ -320,11 +320,11 @@ The `solve` class method may define additional adapter-specific keyword options 
 
 An adapter declares the structural set of exact `Instance` values it can receive with `INPUT_CLASS`. `check_applicability()` evaluates membership first and then adapter-owned preconditions without mutating the caller's instance; `require_applicable()` raises with the same structured report when either condition fails.
 
-An Adapter may recommend a common {class}`~ommx.PreparationPolicy` targeting its `INPUT_CLASS` through `recommended_preparation_policy()`. The caller chooses that Policy and passes it to {meth}`Instance.prepare <ommx.Instance.prepare>`; `Instance` interprets and executes the Policy in place, and that same `Instance` is passed to the direct Adapter API. The Adapter neither receives nor interprets the Policy.
+An Adapter declares `INPUT_CLASS` and may independently recommend a common {class}`~ommx.PreparationPolicy` through `recommended_preparation_policy()`. The caller passes both to {meth}`Instance.prepare <ommx.Instance.prepare>`; `Instance` interprets and executes the Policy toward the supplied class in place, and that same `Instance` is passed to the direct Adapter API. The Adapter neither receives nor interprets the Policy.
 
 ```python
 policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
-instance.prepare(policy)
+instance.prepare(OMMXPySCIPOptAdapter.INPUT_CLASS, policy)
 OMMXPySCIPOptAdapter.require_applicable(instance)
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
@@ -333,9 +333,8 @@ The base recommendation permits only identity preparation. A concrete Adapter ma
 
 Preparation is not globally transactional: a later owner operation can fail
 after earlier operations succeeded. Each operation retains its owner API's
-failure semantics. The fixed-weight penalty owner API validates first, then
-clones internally and commits only after penalty conversion and parameter
-materialization succeed.
+failure semantics. Fixed-penalty conversion does not commit a partial
+conversion.
 
 For low-level control, a caller may instead explicitly call {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`. Its `kinds_to_lower` argument uses these special-constraint family selectors:
 
@@ -648,13 +647,11 @@ instance = Instance.from_components(
 # This tutorial Adapter inherits the identity-only recommendation. The caller
 # explicitly permits sense normalization and a finite penalty before invoking
 # the strict direct Adapter API.
-assert OMMXOpenJijSAAdapter.INPUT_CLASS is not None
 policy = PreparationPolicy(
-    input_class=OMMXOpenJijSAAdapter.INPUT_CLASS,
     allow_sense_normalization=True,
     uniform_penalty_weight=4.0,
 )
-instance.prepare(policy)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 sample_set.summary
 ```
@@ -664,7 +661,7 @@ sample_set.summary
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. Declare the structural input condition with `INPUT_CLASS`. An Adapter may recommend a common `PreparationPolicy`, but the caller chooses it and `Instance.prepare(policy)` executes it in place. The direct Adapter receives that same `Instance` and checks applicability without interpreting the Policy.
+2. Declare the structural input condition with `INPUT_CLASS`. An Adapter may independently recommend a common `PreparationPolicy`; the caller passes both to `Instance.prepare(input_class, policy)`. The direct Adapter receives that same `Instance` and checks applicability without interpreting the Policy.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.

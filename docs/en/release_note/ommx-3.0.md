@@ -10,20 +10,21 @@ Changes merged after the most recent release will be appended here as they land,
 
 ### 🆕 Instance-owned preparation policies for solver adapters ([#1139](https://github.com/Jij-Inc/ommx/pull/1139))
 
-{class}`~ommx.PreparationPolicy` now holds a caller-selected
-{class}`~ommx.InstanceClass` as its `input_class`, together with the existing
-`Instance` operations and their parameters that preparation may use.
-{meth}`~ommx.Instance.prepare`
-interprets that Policy in a fixed order, mutates that `Instance`, and returns
-`None`. A `SolverAdapter` may recommend a Policy through
-`recommended_preparation_policy()`, but the Adapter neither executes
-preparation nor weakens its direct `INPUT_CLASS` check.
+{class}`~ommx.PreparationPolicy` holds the existing `Instance` operations and
+their parameters that preparation may use. The target
+{class}`~ommx.InstanceClass` is supplied independently to
+{meth}`~ommx.Instance.prepare`, which interprets the Policy in a fixed order,
+mutates that `Instance`, and returns `None`. A `SolverAdapter` declares its
+direct input class as `INPUT_CLASS`; the caller may supply that class separately
+as the preparation target. The Adapter may independently recommend a Policy
+through `recommended_preparation_policy()`, but it neither executes preparation
+nor weakens its direct `INPUT_CLASS` check.
 Result-affecting operations use the absolute tolerance captured by the Policy;
 `Instance.prepare()` does not read the mutable SDK default.
 
 ```python
 policy = OMMXHighsAdapter.recommended_preparation_policy()
-instance.prepare(policy)
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
 solution = OMMXHighsAdapter.solve(instance)
 ```
 
@@ -51,10 +52,9 @@ source must permit sense normalization.
 
 Preparation is not globally transactional: a later owner operation can fail
 after earlier operations succeeded. Each operation retains its owner API's
-failure semantics. The fixed-weight penalty owner API validates first, then
-clones internally and commits only after penalty conversion and parameter
-materialization succeed. Failure to reach the input class after all
-permitted operations is an ordinary error.
+failure semantics. Fixed-penalty conversion does not commit a partial
+conversion. Failure to reach the supplied input class after all permitted
+operations is an ordinary error.
 
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
@@ -126,7 +126,7 @@ from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
     uniform_penalty_weight=20.0,
 )
-instance.prepare(policy)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
