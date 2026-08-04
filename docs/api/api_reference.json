@@ -10519,7 +10519,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Prepare this Instance in place according to ``policy``.\n\nPreparation is an OMMX-owned Instance operation. It does not receive or\nretain a Solver Adapter. On success this same Instance belongs to\n``policy.input_class`` and owns the effects of every\napplied operation. Evaluate solver states and samples against it. Every\noperation is invoked through its owning Instance API. The fixed-weight\npenalty APIs validate first, then clone internally and commit only after\npenalty conversion and parameter materialization succeed.",
+              "doc": "Prepare this Instance in place to satisfy ``policy.input_class``.\n\nPreparation applies the transformations permitted by ``policy`` in a\nfixed order. On success, ``policy.input_class.contains(self)`` is true.\n\nThis method is not transactional across transformations. If it raises,\nchanges made by earlier transformations remain applied.",
               "signatures": [
                 {
                   "parameters": [

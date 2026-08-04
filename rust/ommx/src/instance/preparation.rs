@@ -132,18 +132,13 @@ impl PreparationPolicy {
 }
 
 impl Instance {
-    /// Apply Policy-permitted existing Instance operations in place.
+    /// Prepare this Instance in place to satisfy the Policy's input class.
     ///
-    /// Operations run in canonical order and stop as soon as this Instance
-    /// belongs to the input class. Every operation is invoked through its
-    /// owning [`Instance`] API and retains that API's failure semantics. The
-    /// fixed-weight penalty APIs validate first, then clone internally and
-    /// commit only after penalty materialization succeeds. Preparation is not
-    /// transactional across operations, so a later failure does not roll back
-    /// earlier successful operations.
-    /// Existing operation errors are returned unchanged. If all permitted
-    /// operations are exhausted, an ordinary error reports the final
-    /// [`InstanceClass`](crate::InstanceClass) membership failure.
+    /// Preparation applies the transformations permitted by `policy` in a fixed
+    /// order. On success, `policy.input_class().contains(self)` is true.
+    ///
+    /// This method is not transactional across transformations. If it returns
+    /// an error, changes made by earlier transformations remain applied.
     #[tracing::instrument(skip_all)]
     pub fn prepare(&mut self, policy: &PreparationPolicy) -> crate::Result<()> {
         macro_rules! return_if_in_input_class {

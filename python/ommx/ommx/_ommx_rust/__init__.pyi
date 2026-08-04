@@ -3112,15 +3112,13 @@ class Instance:
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     def prepare(self, policy: PreparationPolicy) -> None:
         r"""
-        Prepare this Instance in place according to ``policy``.
+        Prepare this Instance in place to satisfy ``policy.input_class``.
 
-        Preparation is an OMMX-owned Instance operation. It does not receive or
-        retain a Solver Adapter. On success this same Instance belongs to
-        ``policy.input_class`` and owns the effects of every
-        applied operation. Evaluate solver states and samples against it. Every
-        operation is invoked through its owning Instance API. The fixed-weight
-        penalty APIs validate first, then clone internally and commit only after
-        penalty conversion and parameter materialization succeed.
+        Preparation applies the transformations permitted by ``policy`` in a
+        fixed order. On success, ``policy.input_class.contains(self)`` is true.
+
+        This method is not transactional across transformations. If it raises,
+        changes made by earlier transformations remain applied.
         """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Instance: ...
