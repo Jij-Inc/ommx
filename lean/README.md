@@ -55,15 +55,18 @@ completeness of recognition or presolve algorithms remain outside this model.
 | `OMMXProof.Constraint.Indicator` | Indicator polarity, constraint syntax, and exact satisfaction semantics |
 | `OMMXProof.Instance` | Finite Instance syntax and exact denotation |
 | `OMMXProof.Instance.Extend` | Left-block embedding of states, expressions, constraints, and Instances into a larger finite space |
-| `OMMXProof.Instance.Transform` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
+| `OMMXProof.Instance.Transform.Basic` | Partial state transformations, directional reduction/relaxation and objective-preservation contracts, and independent source/target round trips |
 | `OMMXProof.Instance.Transform.IndicatorBigM.Formulation` | Pointwise Big-M sides and their exact relation to active-on-one Indicator semantics |
 | `OMMXProof.Instance.Transform.IndicatorBigM.Plan` | Indicator selection, affine body-bound computation, and validation of supported triggers, polarity, and finite endpoints |
 | `OMMXProof.Instance.Transform.IndicatorBigM.Target` | Generated linear rows, target Instance construction, and feasibility equivalence |
-| `OMMXProof.Instance.Transform.IndicatorBigM` | Partial lowering with identity state maps and transformation correctness |
+| `OMMXProof.Instance.Transform.IndicatorBigM.Basic` | Partial lowering with identity state maps and transformation correctness |
+| `OMMXProof.Instance.Transform.IndicatorBigM` | Entrypoint for the complete Indicator Big-M lowering |
 | `OMMXProof.Instance.Transform.SOS1BigM.Formulation` | Mixed reused/fresh selector formulation and its exact relation to SOS1 semantics |
 | `OMMXProof.Instance.Transform.SOS1BigM.Plan` | SOS1 selection, reused/fresh member partitioning, and finite-bound validation |
 | `OMMXProof.Instance.Transform.SOS1BigM.Target` | Big-M links, selector cardinality, target Instance construction, and feasibility equivalence |
-| `OMMXProof.Instance.Transform.SOS1BigM` | Partial lowering, canonical encoding, source projection, and transformation correctness |
+| `OMMXProof.Instance.Transform.SOS1BigM.Basic` | Partial lowering, canonical encoding, source projection, and transformation correctness |
+| `OMMXProof.Instance.Transform.SOS1BigM` | Entrypoint for the complete SOS1 Big-M lowering |
+| `OMMXProof.Instance.Transform` | Entrypoint for common transformation semantics and all concrete Instance transformations |
 
 ## Checks
 

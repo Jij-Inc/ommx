@@ -1,4 +1,4 @@
-import OMMXProof.Instance.Transform
+import OMMXProof.Instance.Transform.Basic
 
 namespace OMMXProof.Test.Transform
 

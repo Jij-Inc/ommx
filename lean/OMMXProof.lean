@@ -7,11 +7,14 @@ import OMMXProof.Function.Affine
 import OMMXProof.Instance
 import OMMXProof.Instance.Extend
 import OMMXProof.Instance.Transform
+import OMMXProof.Instance.Transform.Basic
 import OMMXProof.Instance.Transform.IndicatorBigM
+import OMMXProof.Instance.Transform.IndicatorBigM.Basic
 import OMMXProof.Instance.Transform.IndicatorBigM.Formulation
 import OMMXProof.Instance.Transform.IndicatorBigM.Plan
 import OMMXProof.Instance.Transform.IndicatorBigM.Target
 import OMMXProof.Instance.Transform.SOS1BigM
+import OMMXProof.Instance.Transform.SOS1BigM.Basic
 import OMMXProof.Instance.Transform.SOS1BigM.Formulation
 import OMMXProof.Instance.Transform.SOS1BigM.Plan
 import OMMXProof.Instance.Transform.SOS1BigM.Target
