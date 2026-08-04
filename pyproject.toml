@@ -1,3 +1,8 @@
+[tool.uv]
+# Keep the workspace lock on 0.12.0 while the intermittent OpenJij 0.12.1
+# test-book kernel termination is investigated.
+constraint-dependencies = ["openjij==0.12.0"]
+
 [tool.uv.sources]
 ommx = { workspace = true }
 
