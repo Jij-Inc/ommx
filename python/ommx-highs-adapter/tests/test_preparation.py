@@ -57,12 +57,12 @@ def _sos1_instance() -> Instance:
     )
 
 
-def test_recommended_policy_targets_highs_input_class() -> None:
+def test_recommended_policy_uses_highs_input_class() -> None:
     policy = OMMXHighsAdapter.recommended_preparation_policy()
 
     assert isinstance(policy, PreparationPolicy)
-    [target_clause] = policy.acceptable_instance_class.clauses
-    assert target_clause.label == "highs-linear-mip"
+    [input_clause] = policy.input_class.clauses
+    assert input_clause.label == "highs-linear-mip"
     assert policy.allowed_special_constraint_lowerings == {
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.OneHot,
@@ -112,7 +112,7 @@ def test_identity_only_policy_rejects_lowering_without_mutating_source() -> None
     before = source.to_v2_bytes()
     input_class = OMMXHighsAdapter.INPUT_CLASS
     assert input_class is not None
-    policy = PreparationPolicy(acceptable_instance_class=input_class)
+    policy = PreparationPolicy(input_class=input_class)
 
     with pytest.raises(RuntimeError):
         source.prepare(policy)

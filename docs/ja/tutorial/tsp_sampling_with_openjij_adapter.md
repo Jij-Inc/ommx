@@ -169,7 +169,7 @@ Adapterもこの `Instance` に対して結果を評価します。
 ```{code-cell} ipython3
 OMMXOpenJijSAAdapter.require_applicable(instance)
 {
-    "target_membership": policy.acceptable_instance_class.contains(instance),
+    "input_class_membership": policy.input_class.contains(instance),
     "active_constraints": len(instance.constraints),
     "removed_constraints": len(instance.removed_constraints),
 }

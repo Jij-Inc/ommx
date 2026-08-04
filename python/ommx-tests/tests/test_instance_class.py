@@ -342,10 +342,10 @@ def test_solver_adapter_recommends_identity_policy_for_declared_input_class() ->
     policy = Adapter.recommended_preparation_policy()
 
     assert isinstance(policy, PreparationPolicy)
-    [target_clause] = policy.acceptable_instance_class.clauses
+    [policy_input_clause] = policy.input_class.clauses
     assert Adapter.INPUT_CLASS is not None
     [input_clause] = Adapter.INPUT_CLASS.clauses
-    assert target_clause.label == input_clause.label
+    assert policy_input_clause.label == input_clause.label
     assert policy.allowed_special_constraint_lowerings == set()
     assert not policy.allow_integer_log_encoding
     assert not policy.allow_sense_normalization

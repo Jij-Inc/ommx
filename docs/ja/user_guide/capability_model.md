@@ -16,7 +16,7 @@ kernelspec:
 OMMX では、従来 Adapter Capability として一緒に説明されていた次の3つの概念を分けて扱います。
 
 - {class}`~ommx.InstanceClass` は、具体的な `Instance` 値の集合です。Adapter は構造的な入力条件を `INPUT_CLASS` で宣言し、その後に Adapter 固有の precondition を評価して applicability を判定します。
-- {class}`~ommx.PreparationPolicy` は、受け入れ可能な `InstanceClass` に到達するために許可する OMMX-owned operation を記述します。Adapter は Policy を推奨できますが、それを選ぶのは呼び出し側、解釈するのは {meth}`Instance.prepare <ommx.Instance.prepare>` です。
+- {class}`~ommx.PreparationPolicy` は `input_class` と、そこへ到達するために許可する OMMX-owned operation を記述します。Adapter は自身の `INPUT_CLASS` を `input_class` とする Policy を推奨できますが、それを選ぶのは呼び出し側、解釈するのは {meth}`Instance.prepare <ommx.Instance.prepare>` です。
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` は、Instance 上で選択した特殊制約 family を明示的に lowering します。入力 class の宣言でも、Adapter applicability の証明でもありません。
 
 本ページでは以下を説明します。

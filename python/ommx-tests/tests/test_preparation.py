@@ -58,7 +58,7 @@ def test_policy_snapshots_preparation_options() -> None:
     mutable_weights = {7: 2.0}
     penalty_weights: Mapping[int, float] = MappingProxyType(mutable_weights)
     policy = PreparationPolicy(
-        acceptable_instance_class=binary_linear_class(),
+        input_class=binary_linear_class(),
         allowed_special_constraint_lowerings={
             SpecialConstraintKind.Indicator,
             SpecialConstraintKind.OneHot,
@@ -89,24 +89,24 @@ def test_policy_snapshots_preparation_options() -> None:
 
 
 def test_policy_rejects_inconsistent_flat_options() -> None:
-    target = binary_linear_class()
+    input_class = binary_linear_class()
 
     with pytest.raises(ValueError, match="mutually exclusive"):
         PreparationPolicy(
-            acceptable_instance_class=target,
+            input_class=input_class,
             uniform_penalty_weight=2.0,
             penalty_weights={7: 2.0},
         )
 
     with pytest.raises(ValueError, match="requires inequality_integer_slack_max_range"):
         PreparationPolicy(
-            acceptable_instance_class=target,
+            input_class=input_class,
             allow_approximate_integer_slack=True,
         )
 
     with pytest.raises(ValueError, match="integer in"):
         PreparationPolicy(
-            acceptable_instance_class=target,
+            input_class=input_class,
             inequality_integer_slack_max_range=0,
         )
 
@@ -115,17 +115,17 @@ def test_policy_rejects_inconsistent_flat_options() -> None:
 def test_policy_rejects_non_positive_or_non_finite_penalty_weights(
     weight: float,
 ) -> None:
-    target = binary_linear_class()
+    input_class = binary_linear_class()
 
     with pytest.raises(ValueError, match="positive finite"):
         PreparationPolicy(
-            acceptable_instance_class=target,
+            input_class=input_class,
             uniform_penalty_weight=weight,
         )
 
     with pytest.raises(ValueError, match="positive finite"):
         PreparationPolicy(
-            acceptable_instance_class=target,
+            input_class=input_class,
             penalty_weights={7: weight},
         )
 
@@ -139,7 +139,7 @@ def test_policy_rejects_invalid_per_constraint_penalty_keys(key: object) -> None
 
     with pytest.raises(ValueError, match="integer constraint IDs"):
         PreparationPolicy(
-            acceptable_instance_class=binary_linear_class(),
+            input_class=binary_linear_class(),
             penalty_weights=weights,
         )
 
@@ -150,14 +150,14 @@ def test_policy_rejects_non_numeric_or_boolean_penalty_weights(
 ) -> None:
     with pytest.raises(ValueError, match="positive finite"):
         PreparationPolicy(
-            acceptable_instance_class=binary_linear_class(),
+            input_class=binary_linear_class(),
             uniform_penalty_weight=cast(float, weight),
         )
 
     weights = cast(Mapping[int, float], {7: weight})
     with pytest.raises(ValueError, match="positive finite"):
         PreparationPolicy(
-            acceptable_instance_class=binary_linear_class(),
+            input_class=binary_linear_class(),
             penalty_weights=weights,
         )
 
@@ -165,7 +165,7 @@ def test_policy_rejects_non_numeric_or_boolean_penalty_weights(
 def test_policy_rejects_non_mapping_penalty_weights() -> None:
     with pytest.raises(TypeError, match="Mapping"):
         PreparationPolicy(
-            acceptable_instance_class=binary_linear_class(),
+            input_class=binary_linear_class(),
             penalty_weights=cast(Mapping[int, float], [(7, 2.0)]),
         )
 
@@ -177,7 +177,7 @@ def test_policy_rejects_non_mapping_penalty_weights() -> None:
 def test_policy_rejects_invalid_integer_slack_max_range(max_range: object) -> None:
     with pytest.raises(ValueError, match="integer in"):
         PreparationPolicy(
-            acceptable_instance_class=binary_linear_class(),
+            input_class=binary_linear_class(),
             inequality_integer_slack_max_range=cast(int, max_range),
         )
 
@@ -190,9 +190,7 @@ def test_identity_preparation_returns_none_and_uses_instance_for_evaluation() ->
         constraints={},
         sense=Sense.Minimize,
     )
-    result = instance.prepare(
-        PreparationPolicy(acceptable_instance_class=binary_linear_class())
-    )
+    result = instance.prepare(PreparationPolicy(input_class=binary_linear_class()))
 
     assert result is None
 
@@ -220,7 +218,7 @@ def test_lowered_special_constraint_is_evaluated_by_prepared_instance() -> None:
     )
     result = instance.prepare(
         PreparationPolicy(
-            acceptable_instance_class=binary_linear_class(),
+            input_class=binary_linear_class(),
             allowed_special_constraint_lowerings={SpecialConstraintKind.OneHot},
         )
     )
@@ -249,7 +247,7 @@ def test_identity_does_not_interpret_unused_per_constraint_penalty_ids() -> None
     )
     before = instance.to_v2_bytes()
     policy = PreparationPolicy(
-        acceptable_instance_class=binary_linear_class(),
+        input_class=binary_linear_class(),
         penalty_weights={999: 2.0},
     )
 
@@ -271,7 +269,7 @@ def test_extra_unknown_per_constraint_penalty_id_fails_when_penalty_is_reached()
     )
     before = instance.to_v2_bytes()
     policy = PreparationPolicy(
-        acceptable_instance_class=binary_unconstrained_class(),
+        input_class=binary_unconstrained_class(),
         penalty_weights={9: 2.0, 999: 3.0},
     )
 
@@ -291,7 +289,7 @@ def test_per_constraint_penalty_tracks_existing_regular_constraint_id() -> None:
     )
     result = instance.prepare(
         PreparationPolicy(
-            acceptable_instance_class=binary_unconstrained_class(),
+            input_class=binary_unconstrained_class(),
             penalty_weights={9: 2.0},
         )
     )
@@ -313,7 +311,7 @@ def test_penalty_failure_keeps_prior_in_place_special_constraint_lowering() -> N
         sense=Sense.Minimize,
     )
     policy = PreparationPolicy(
-        acceptable_instance_class=binary_unconstrained_class(),
+        input_class=binary_unconstrained_class(),
         allowed_special_constraint_lowerings={SpecialConstraintKind.OneHot},
         penalty_weights={},
     )
@@ -334,7 +332,7 @@ def test_operation_owned_error_is_preserved() -> None:
         sense=Sense.Minimize,
     )
     policy = PreparationPolicy(
-        acceptable_instance_class=binary_linear_class(),
+        input_class=binary_linear_class(),
         allow_integer_log_encoding=True,
     )
     before = instance.to_v2_bytes()

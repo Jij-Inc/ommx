@@ -152,10 +152,10 @@ impl PreparationPolicy {
 #[pymethods]
 impl PreparationPolicy {
     #[new]
-    #[pyo3(signature = (*, acceptable_instance_class, allowed_special_constraint_lowerings=HashSet::new(), allow_integer_log_encoding=false, allow_sense_normalization=false, inequality_integer_slack_max_range=None, allow_approximate_integer_slack=false, uniform_penalty_weight=None, penalty_weights=None))]
+    #[pyo3(signature = (*, input_class, allowed_special_constraint_lowerings=HashSet::new(), allow_integer_log_encoding=false, allow_sense_normalization=false, inequality_integer_slack_max_range=None, allow_approximate_integer_slack=false, uniform_penalty_weight=None, penalty_weights=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
-        acceptable_instance_class: &InstanceClass,
+        input_class: &InstanceClass,
         allowed_special_constraint_lowerings: HashSet<SpecialConstraintKind>,
         allow_integer_log_encoding: bool,
         allow_sense_normalization: bool,
@@ -197,7 +197,7 @@ impl PreparationPolicy {
             };
 
         Ok(Self(ommx::PreparationPolicy::new(
-            acceptable_instance_class.0.clone(),
+            input_class.0.clone(),
             allowed_special_constraint_lowerings
                 .into_iter()
                 .map(Into::into)
@@ -212,9 +212,9 @@ impl PreparationPolicy {
     }
 
     #[getter]
-    /// InstanceClass that the Instance must belong to after preparation.
-    pub fn acceptable_instance_class(&self) -> InstanceClass {
-        InstanceClass(self.0.acceptable_instance_class().clone())
+    /// Adapter input class that the Instance must belong to after preparation.
+    pub fn input_class(&self) -> InstanceClass {
+        InstanceClass(self.0.input_class().clone())
     }
 
     #[getter]

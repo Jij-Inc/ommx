@@ -13,10 +13,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 ///
 /// This value is not an executable recipe. The SDK applies the permitted
 /// existing [`Instance`] operations in a fixed order and stops as soon as the
-/// input belongs to [`Self::acceptable_instance_class`].
+/// input belongs to [`Self::input_class`].
 #[derive(Debug, Clone)]
 pub struct PreparationPolicy {
-    acceptable_instance_class: InstanceClass,
+    input_class: InstanceClass,
     allowed_special_constraint_lowerings: SpecialConstraintKinds,
     allow_integer_log_encoding: bool,
     allow_sense_normalization: bool,
@@ -30,7 +30,7 @@ impl PreparationPolicy {
     /// Construct permissions and parameters for [`Instance::prepare`].
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        acceptable_instance_class: InstanceClass,
+        input_class: InstanceClass,
         allowed_special_constraint_lowerings: SpecialConstraintKinds,
         allow_integer_log_encoding: bool,
         allow_sense_normalization: bool,
@@ -62,7 +62,7 @@ impl PreparationPolicy {
         }
 
         Ok(Self {
-            acceptable_instance_class,
+            input_class,
             allowed_special_constraint_lowerings,
             allow_integer_log_encoding,
             allow_sense_normalization,
@@ -73,9 +73,9 @@ impl PreparationPolicy {
         })
     }
 
-    /// The class that the Instance must belong to after preparation.
-    pub fn acceptable_instance_class(&self) -> &InstanceClass {
-        &self.acceptable_instance_class
+    /// The Adapter input class that the Instance must belong to after preparation.
+    pub fn input_class(&self) -> &InstanceClass {
+        &self.input_class
     }
 
     /// Special-constraint families that may be lowered.
@@ -118,7 +118,7 @@ impl Instance {
     /// Apply Policy-permitted existing Instance operations in place.
     ///
     /// Operations run in canonical order and stop as soon as this Instance
-    /// belongs to the acceptable class. Existing in-place operations are
+    /// belongs to the input class. Existing in-place operations are
     /// applied directly and retain their own failure semantics. The consuming
     /// penalty operations are the only point where the current Instance is
     /// cloned, after their read-only validation; the clone replaces `self`
@@ -130,15 +130,15 @@ impl Instance {
     /// [`InstanceClass`](crate::InstanceClass) membership failure.
     #[tracing::instrument(skip_all)]
     pub fn prepare(&mut self, policy: &PreparationPolicy) -> crate::Result<()> {
-        macro_rules! return_if_acceptable {
+        macro_rules! return_if_in_input_class {
             () => {
-                if policy.acceptable_instance_class.contains(self) {
+                if policy.input_class.contains(self) {
                     return Ok(());
                 }
             };
         }
 
-        return_if_acceptable!();
+        return_if_in_input_class!();
 
         let source_constraint_ids = policy
             .penalty_weights
@@ -146,21 +146,21 @@ impl Instance {
             .map(|_| self.constraints().keys().copied().collect::<BTreeSet<_>>());
 
         self.lower_special_constraints(&policy.allowed_special_constraint_lowerings)?;
-        return_if_acceptable!();
+        return_if_in_input_class!();
 
         if policy.allow_integer_log_encoding {
             log_encode_used_integers(self)?;
-            return_if_acceptable!();
+            return_if_in_input_class!();
         }
 
         if policy.allow_sense_normalization {
             self.as_minimization_problem();
-            return_if_acceptable!();
+            return_if_in_input_class!();
         }
 
         if let Some(max_range) = policy.inequality_integer_slack_max_range {
             add_integer_slack(self, max_range, policy.allow_approximate_integer_slack)?;
-            return_if_acceptable!();
+            return_if_in_input_class!();
         }
 
         if !self.constraints().is_empty()
@@ -172,16 +172,16 @@ impl Instance {
                 policy.penalty_weights.as_ref(),
                 source_constraint_ids.as_ref(),
             )?;
-            return_if_acceptable!();
+            return_if_in_input_class!();
         }
 
         if policy.allow_integer_log_encoding {
             log_encode_used_integers(self)?;
-            return_if_acceptable!();
+            return_if_in_input_class!();
         }
 
-        let membership = policy.acceptable_instance_class.check_membership(self);
-        crate::bail!("Preparation did not reach the acceptable InstanceClass:\n{membership}")
+        let membership = policy.input_class.check_membership(self);
+        crate::bail!("Preparation did not reach the input class:\n{membership}")
     }
 }
 
@@ -433,7 +433,7 @@ mod tests {
             .build()
             .unwrap();
         let expected = instance.clone();
-        let target = InstanceClass::new(vec![InstanceClassClause::new(
+        let input_class = InstanceClass::new(vec![InstanceClassClause::new(
             "empty",
             BTreeSet::new(),
             DegreeBound::at_most(0),
@@ -442,7 +442,7 @@ mod tests {
         instance
             .prepare(
                 &PreparationPolicy::new(
-                    target,
+                    input_class,
                     SpecialConstraintKinds::new(),
                     false,
                     false,
@@ -567,7 +567,7 @@ mod tests {
         let mut instance = integer_inequality_instance();
         instance.as_minimization_problem();
         let source_decision_variable_count = instance.decision_variables().len();
-        let target = InstanceClass::new(vec![InstanceClassClause::new(
+        let input_class = InstanceClass::new(vec![InstanceClassClause::new(
             "integer-unconstrained",
             BTreeSet::from([Kind::Integer]),
             DegreeBound::at_most(2),
@@ -576,7 +576,7 @@ mod tests {
         instance
             .prepare(
                 &PreparationPolicy::new(
-                    target,
+                    input_class,
                     SpecialConstraintKinds::new(),
                     false,
                     false,
@@ -660,7 +660,7 @@ mod tests {
     }
 
     #[test]
-    fn final_membership_failure_is_an_ordinary_error() {
+    fn input_class_membership_failure_is_an_ordinary_error() {
         let mut instance = integer_inequality_instance();
         let error = instance
             .prepare(
@@ -678,9 +678,7 @@ mod tests {
             )
             .unwrap_err();
 
-        assert!(error
-            .to_string()
-            .contains("did not reach the acceptable InstanceClass"));
+        assert!(error.to_string().contains("did not reach the input class"));
         assert_eq!(instance, integer_inequality_instance());
     }
 
@@ -765,7 +763,7 @@ mod tests {
             .build()
             .unwrap();
         let expected = instance.clone();
-        let target = InstanceClass::new(vec![InstanceClassClause::new(
+        let input_class = InstanceClass::new(vec![InstanceClassClause::new(
             "continuous-linear-equality",
             BTreeSet::from([Kind::Continuous]),
             DegreeBound::at_most(1),
@@ -775,7 +773,7 @@ mod tests {
         let error = instance
             .prepare(
                 &PreparationPolicy::new(
-                    target,
+                    input_class,
                     SpecialConstraintKinds::new(),
                     false,
                     false,

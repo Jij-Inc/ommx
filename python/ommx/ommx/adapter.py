@@ -147,9 +147,9 @@ class SolverAdapter(ABC):
     def recommended_preparation_policy(cls) -> PreparationPolicy:
         """Return this Adapter's recommended OMMX preparation policy.
 
-        The base recommendation targets :attr:`INPUT_CLASS` and permits only
-        identity preparation. Subclasses may permit additional OMMX-owned
-        preparation operations by returning another common
+        The base recommendation uses :attr:`INPUT_CLASS` as ``input_class`` and
+        permits only identity preparation. Subclasses may permit additional
+        OMMX-owned preparation operations by returning another common
         :class:`PreparationPolicy` value. The Adapter does not execute the
         policy and is not retained by it. Reaching :attr:`INPUT_CLASS` does not
         check Adapter-owned preconditions; the direct applicability boundary
@@ -160,7 +160,7 @@ class SolverAdapter(ABC):
             raise TypeError(
                 f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
             )
-        return PreparationPolicy(acceptable_instance_class=input_class)
+        return PreparationPolicy(input_class=input_class)
 
     @classmethod
     def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:

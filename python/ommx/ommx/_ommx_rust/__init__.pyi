@@ -3116,7 +3116,7 @@ class Instance:
 
         Preparation is an OMMX-owned Instance operation. It does not receive or
         retain a Solver Adapter. On success this same Instance belongs to
-        ``policy.acceptable_instance_class`` and owns the effects of every
+        ``policy.input_class`` and owns the effects of every
         applied operation. Evaluate solver states and samples against it.
         Existing in-place operations are applied directly. After read-only
         validation, the current Instance is cloned only when a consuming penalty
@@ -6109,9 +6109,9 @@ class PreparationPolicy:
     sense normalization when preparing a maximization source.
     """
     @property
-    def acceptable_instance_class(self) -> InstanceClass:
+    def input_class(self) -> InstanceClass:
         r"""
-        InstanceClass that the Instance must belong to after preparation.
+        Adapter input class that the Instance must belong to after preparation.
         """
     @property
     def allowed_special_constraint_lowerings(
@@ -6163,7 +6163,7 @@ class PreparationPolicy:
     def __new__(
         cls,
         *,
-        acceptable_instance_class: InstanceClass,
+        input_class: InstanceClass,
         allowed_special_constraint_lowerings: builtins.set[
             SpecialConstraintKind
         ] = set(),

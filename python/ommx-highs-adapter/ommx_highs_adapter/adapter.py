@@ -597,7 +597,7 @@ class OMMXHighsAdapter(SolverAdapter):
                 f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
             )
         return PreparationPolicy(
-            acceptable_instance_class=input_class,
+            input_class=input_class,
             allowed_special_constraint_lowerings={
                 SpecialConstraintKind.Indicator,
                 SpecialConstraintKind.OneHot,

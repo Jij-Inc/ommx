@@ -98,7 +98,7 @@ def test_prepare_emits_rust_span() -> None:
     exporter.clear()
 
     instance = _instance_with_indicator()
-    target = InstanceClass(
+    input_class = InstanceClass(
         [
             InstanceClassClause(
                 label="indicator-linear",
@@ -111,7 +111,7 @@ def test_prepare_emits_rust_span() -> None:
             )
         ]
     )
-    instance.prepare(PreparationPolicy(acceptable_instance_class=target))
+    instance.prepare(PreparationPolicy(input_class=input_class))
 
     provider.force_flush()
     rust_spans = [span for span in exporter.spans if span.name == "prepare"]

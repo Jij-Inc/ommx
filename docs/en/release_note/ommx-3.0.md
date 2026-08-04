@@ -10,9 +10,10 @@ Changes merged after the most recent release will be appended here as they land,
 
 ### 🆕 Instance-owned preparation policies for solver adapters ([#1139](https://github.com/Jij-Inc/ommx/pull/1139))
 
-{class}`~ommx.PreparationPolicy` now describes a caller-selected acceptable
-{class}`~ommx.InstanceClass` together with the existing `Instance` operations
-and their parameters that preparation may use. {meth}`~ommx.Instance.prepare`
+{class}`~ommx.PreparationPolicy` now holds a caller-selected
+{class}`~ommx.InstanceClass` as its `input_class`, together with the existing
+`Instance` operations and their parameters that preparation may use.
+{meth}`~ommx.Instance.prepare`
 interprets that Policy in a fixed order, mutates that `Instance`, and returns
 `None`. A `SolverAdapter` may recommend a Policy through
 `recommended_preparation_policy()`, but the Adapter neither executes
@@ -46,7 +47,7 @@ Preparation is not globally transactional. Existing in-place operations mutate
 the `Instance` directly and retain their own failure semantics. The consuming
 penalty operation is the only exception: it runs on a clone of the current
 `Instance` and commits that value only after penalty conversion and parameter
-materialization succeed. Failure to reach the acceptable class after all
+materialization succeed. Failure to reach the input class after all
 permitted operations is an ordinary error.
 
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))

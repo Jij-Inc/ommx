@@ -10519,7 +10519,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Prepare this Instance in place according to ``policy``.\n\nPreparation is an OMMX-owned Instance operation. It does not receive or\nretain a Solver Adapter. On success this same Instance belongs to\n``policy.acceptable_instance_class`` and owns the effects of every\napplied operation. Evaluate solver states and samples against it.\nExisting in-place operations are applied directly. After read-only\nvalidation, the current Instance is cloned only when a consuming penalty\noperation is required, and is replaced only after that operation\nsucceeds.",
+              "doc": "Prepare this Instance in place according to ``policy``.\n\nPreparation is an OMMX-owned Instance operation. It does not receive or\nretain a Solver Adapter. On success this same Instance belongs to\n``policy.input_class`` and owns the effects of every\napplied operation. Evaluate solver states and samples against it.\nExisting in-place operations are applied directly. After read-only\nvalidation, the current Instance is cloned only when a consuming penalty\noperation is required, and is replaced only after that operation\nsucceeds.",
               "signatures": [
                 {
                   "parameters": [
@@ -18946,7 +18946,7 @@
                 {
                   "parameters": [
                     {
-                      "name": "acceptable_instance_class",
+                      "name": "input_class",
                       "type_": {
                         "display": "InstanceClass",
                         "link_target": null,
@@ -19103,17 +19103,6 @@
           ],
           "attributes": [
             {
-              "name": "acceptable_instance_class",
-              "doc": "InstanceClass that the Instance must belong to after preparation.",
-              "type_": {
-                "display": "InstanceClass",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
               "name": "allow_approximate_integer_slack",
               "doc": "Whether approximate integer slack may be used after exact slack is unavailable.",
               "type_": {
@@ -19176,6 +19165,17 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "input_class",
+              "doc": "Adapter input class that the Instance must belong to after preparation.",
+              "type_": {
+                "display": "InstanceClass",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true

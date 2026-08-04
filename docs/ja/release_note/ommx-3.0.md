@@ -10,7 +10,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### 🆕 Solver Adapter向けのInstance-owned preparation policy ([#1139](https://github.com/Jij-Inc/ommx/pull/1139))
 
-{class}`~ommx.PreparationPolicy` は、呼び出し側が選んだ受け入れ可能な
+{class}`~ommx.PreparationPolicy` は、呼び出し側が `input_class` として選んだ
 {class}`~ommx.InstanceClass` と、preparationで利用を許可する既存の `Instance` 操作・
 parameterを表します。{meth}`~ommx.Instance.prepare` が固定順序でPolicyを解釈し、
 その `Instance` をin-placeに変更して `None` を返します。
@@ -40,8 +40,8 @@ sense normalizationも許可する必要があります。
 Preparation全体はtransactionではありません。既存のin-place操作は `Instance` を直接
 変更し、それぞれの失敗時のsemanticsをそのまま保ちます。例外は消費型のpenalty操作
 だけで、現在の `Instance` のclone上で実行し、penalty変換とparameter materializationが
-成功した場合にだけcommitします。許可された操作をすべて適用しても受け入れ可能な
-classに到達しなければ通常のerrorを返します。
+成功した場合にだけcommitします。許可された操作をすべて適用してもinput classに
+到達しなければ通常のerrorを返します。
 
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 

@@ -99,7 +99,7 @@ impl Instance {
     ///
     /// Preparation is an OMMX-owned Instance operation. It does not receive or
     /// retain a Solver Adapter. On success this same Instance belongs to
-    /// ``policy.acceptable_instance_class`` and owns the effects of every
+    /// ``policy.input_class`` and owns the effects of every
     /// applied operation. Evaluate solver states and samples against it.
     /// Existing in-place operations are applied directly. After read-only
     /// validation, the current Instance is cloned only when a consuming penalty

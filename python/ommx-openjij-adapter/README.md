@@ -59,10 +59,10 @@ accepts directly:
 and the OpenJij-specific preconditions. `sample()`, `solve()`, and the Adapter
 constructor never prepare or mutate their input implicitly.
 
-`recommended_preparation_policy()` returns the common OMMX policy targeting
-that `INPUT_CLASS`. The default permits special-constraint lowering, bounded
-Integer log encoding, minimization-sense normalization, and exact integer
-slack. Discrete slack approximation remains disabled unless
+`recommended_preparation_policy()` returns the common OMMX policy with that
+`INPUT_CLASS` as its `input_class`. The default permits special-constraint
+lowering, bounded Integer log encoding, minimization-sense normalization, and
+exact integer slack. Discrete slack approximation remains disabled unless
 `allow_approximate_integer_slack=True` is passed. Finite penalties remain
 disabled unless `uniform_penalty_weight` or `penalty_weights` is supplied.
 
@@ -73,9 +73,9 @@ lowering instead adds fresh regular rows outside that source map's domain, so
 use a uniform penalty weight when such rows remain active.
 
 `Instance.prepare(policy)` mutates the caller's `Instance` until it belongs to
-the Policy's acceptable `InstanceClass`. It does not run the Adapter or check
-backend-specific preconditions. The direct Adapter boundary remains
-authoritative:
+the Policy's `input_class`, copied from OpenJij `INPUT_CLASS`. It does not run
+the Adapter or check backend-specific preconditions. The direct Adapter
+boundary remains authoritative:
 
 ```python
 OMMXOpenJijSAAdapter.require_applicable(instance)

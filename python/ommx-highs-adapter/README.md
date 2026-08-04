@@ -56,11 +56,11 @@ print(solution)
 
 The recommended Policy permits OMMX's existing Indicator, OneHot, and SOS1
 lowering operations. `Instance.prepare()` mutates the same `Instance` and checks
-that it belongs to the Policy's acceptable `InstanceClass`. The direct HiGHS
-boundary remains responsible for its own applicability check. The Adapter
-already evaluates the solver state against that `Instance`, which retains the
-dependency, removed-constraint, provenance, and auxiliary-variable data
-produced by its transformations.
+that it belongs to the Policy's `input_class`, copied from HiGHS `INPUT_CLASS`.
+The direct HiGHS boundary remains responsible for its own applicability check.
+The Adapter already evaluates the solver state against that `Instance`, which
+retains the dependency, removed-constraint, provenance, and auxiliary-variable
+data produced by its transformations.
 
 Preparation is not globally transactional. Existing in-place operations run
 directly and retain their own failure semantics. The consuming penalty operation

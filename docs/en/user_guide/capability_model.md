@@ -16,7 +16,7 @@ kernelspec:
 OMMX separates three concepts that were previously described together as adapter capabilities:
 
 - An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
-- A {class}`~ommx.PreparationPolicy` describes which OMMX-owned operations may be used to reach an acceptable `InstanceClass`. An Adapter may recommend a Policy, but the caller chooses it and {meth}`Instance.prepare <ommx.Instance.prepare>` interprets it.
+- A {class}`~ommx.PreparationPolicy` holds an `input_class` and describes which OMMX-owned operations may be used to reach it. An Adapter may recommend a Policy whose `input_class` is its `INPUT_CLASS`, but the caller chooses it and {meth}`Instance.prepare <ommx.Instance.prepare>` interprets it.
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` explicitly lowers selected special-constraint families on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
@@ -52,7 +52,7 @@ Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check
 
 ## Preparing an input for an Adapter
 
-An Adapter recommends a common Policy targeting its direct `INPUT_CLASS`; it does not execute or interpret that Policy. The caller passes the selected Policy to an `Instance`, then passes that same, now-prepared `Instance` to the direct Adapter API.
+An Adapter recommends a common Policy whose `input_class` is its direct `INPUT_CLASS`; it does not execute or interpret that Policy. The caller passes the selected Policy to an `Instance`, then passes that same, now-prepared `Instance` to the direct Adapter API.
 
 ```python
 policy = Adapter.recommended_preparation_policy()
