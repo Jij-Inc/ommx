@@ -27,14 +27,14 @@ def mixedExpr : OMMXProof.Affine 2 where
   constant := 1
 
 example :
-    mixedExpr.evaluateBound mixedDomains =
+    mixedExpr.evaluateBoundFromDomains mixedDomains =
       .finite (-7) 8 (by norm_num) := by
   native_decide
 
 example {state : State 2}
     (hdomains : ∀ i, state i ∈ mixedDomains i) :
-    mixedExpr.eval state ∈ mixedExpr.evaluateBound mixedDomains :=
-  OMMXProof.Affine.evaluateBound_sound mixedExpr mixedDomains hdomains
+    mixedExpr.eval state ∈ mixedExpr.evaluateBoundFromDomains mixedDomains :=
+  OMMXProof.Affine.evaluateBoundFromDomains_sound mixedExpr mixedDomains hdomains
 
 def identityExpr : OMMXProof.Affine 1 where
   coeff := fun _ => 1
@@ -45,7 +45,7 @@ def upperOnlyDomain : Fin 1 → Domain :=
 
 /-- A finite upper bound remains available when the lower side is unbounded. -/
 example :
-    identityExpr.evaluateBound upperOnlyDomain =
+    identityExpr.evaluateBoundFromDomains upperOnlyDomain =
       .upperBounded 3 := by
   native_decide
 
@@ -58,13 +58,13 @@ def unboundedDomain : Fin 1 → Domain :=
 
 /-- An unbounded variable is irrelevant when its coefficient is zero. -/
 example :
-    zeroExpr.evaluateBound unboundedDomain =
+    zeroExpr.evaluateBoundFromDomains unboundedDomain =
       .point 5 := by
   native_decide
 
 /-- Identity maps a two-sided unbounded domain to an unbounded interval. -/
 example :
-    identityExpr.evaluateBound unboundedDomain =
+    identityExpr.evaluateBoundFromDomains unboundedDomain =
       .unbounded := by
   native_decide
 

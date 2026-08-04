@@ -101,23 +101,28 @@ private theorem foldr_add_holds
       have hrest := ih htail
       simpa [add_assoc] using Bound.add_holds hterm hrest
 
+/-- The minimum rational interval containing every value of an affine function
+over the given decision-variable bounds. -/
+@[simp]
+def evaluateBound (expr : Affine n) (bounds : Fin n → Bound) : Bound :=
+  (List.ofFn fun i => (bounds i).scale (expr.coeff i)).foldr
+    Bound.add (Bound.point expr.constant)
+
 /-- A rational interval containing every value of an affine function over the
 given decision-variable domains.
 
-Each term is scaled and accumulated with `Bound` arithmetic. Integer domains
-contribute their containing rational intervals, so this theorem makes no
-tightness claim for the discrete affine image. -/
-def evaluateBound (expr : Affine n)
+Integer domains contribute their containing rational intervals, so this
+interval is in general not a tight bound for the discrete affine image. -/
+abbrev evaluateBoundFromDomains (expr : Affine n)
     (domains : Fin n → Domain) : Bound :=
-  (List.ofFn fun i =>
-      Bound.scale (expr.coeff i) (domains i).bound).foldr
-    Bound.add (Bound.point expr.constant)
+  evaluateBound expr (fun i => (domains i).bound)
 
-/-- Every state in the supplied domains evaluates inside `evaluateBound`. -/
-theorem evaluateBound_sound (expr : Affine n)
+/-- Every state in the supplied domains evaluates inside
+`evaluateBoundFromDomains`. -/
+theorem evaluateBoundFromDomains_sound (expr : Affine n)
     (domains : Fin n → Domain) {state : State n}
     (hdomains : ∀ i, state i ∈ domains i) :
-    expr.eval state ∈ expr.evaluateBound domains := by
+    expr.eval state ∈ expr.evaluateBoundFromDomains domains := by
   let terms : List (Bound × Rat) :=
     List.ofFn fun i =>
       (Bound.scale (expr.coeff i) (domains i).bound,
@@ -128,7 +133,7 @@ theorem evaluateBound_sound (expr : Affine n)
     intro i
     exact Bound.scale_holds (Domain.mem_bound (hdomains i))
   have hfold := foldr_add_holds terms hterms expr.constant
-  simpa [terms, evaluateBound, eval, Fin.sum_ofFn,
+  simpa [terms, evaluateBoundFromDomains, evaluateBound, eval, Fin.sum_ofFn,
     Function.comp_def] using hfold
 
 /-- The affine expression selecting one coordinate. -/

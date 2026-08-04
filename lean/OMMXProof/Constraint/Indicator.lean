@@ -35,21 +35,21 @@ structure IndicatorConstraint (n : Nat) where
   polarity : IndicatorPolarity
   body : LinearConstraint n
 
+def IndicatorPredicate (trigger : Fin n) (polarity : IndicatorPolarity)
+    (body : State n → Prop) (state : State n) : Prop :=
+  polarity.Active (state trigger) → body state
+
 namespace IndicatorConstraint
 
-def Holds (constraint : IndicatorConstraint n) (state : State n) : Prop :=
-  constraint.polarity.Active (state constraint.trigger) →
+abbrev Holds (constraint : IndicatorConstraint n) (state : State n) : Prop :=
+  IndicatorPredicate constraint.trigger constraint.polarity
     constraint.body.Holds state
 
 instance (constraint : IndicatorConstraint n) (state : State n) :
     Decidable (constraint.Holds state) := by
-  unfold Holds
+  unfold Holds IndicatorPredicate
   infer_instance
 
 end IndicatorConstraint
-
-def IndicatorPredicate (trigger : Fin n) (polarity : IndicatorPolarity)
-    (body : State n → Prop) (state : State n) : Prop :=
-  polarity.Active (state trigger) → body state
 
 end OMMXProof

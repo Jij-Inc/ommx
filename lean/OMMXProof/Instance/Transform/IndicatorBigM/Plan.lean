@@ -32,13 +32,13 @@ def bodyValue {source : Instance n} (plan : Plan source)
 
 /-- The affine domain-box bound computed from the source domains. -/
 def bodyBound {source : Instance n} (plan : Plan source) : Bound :=
-  plan.constraint.body.expr.evaluateBound source.domains
+  plan.constraint.body.expr.evaluateBoundFromDomains source.domains
 
 theorem bodyValue_mem_bodyBound {source : Instance n} (plan : Plan source)
     {state : State n} (hdomains : ∀ i, state i ∈ source.domains i) :
     plan.bodyValue state ∈ plan.bodyBound := by
   simpa [bodyBound, bodyValue] using
-    (Affine.evaluateBound_sound plan.constraint.body.expr
+    (Affine.evaluateBoundFromDomains_sound plan.constraint.body.expr
       source.domains hdomains)
 
 /-- Exact validation performed before Big-M coefficients are extracted.
