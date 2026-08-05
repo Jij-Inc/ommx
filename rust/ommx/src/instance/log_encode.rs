@@ -213,6 +213,30 @@ impl Instance {
         Ok(encodings)
     }
 
+    /// Log-encode all Integer decision variables currently used by solver input.
+    ///
+    /// The complete target set is derived from
+    /// [`Self::decision_variable_usage`] before mutation. All targets are
+    /// encoded together through [`Self::log_encode`]. On success,
+    /// [`DecisionVariableUsage::used_integer`](crate::DecisionVariableUsage::used_integer)
+    /// is empty; irrelevant Integer variables are not encoded.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error from [`Self::log_encode`] if any used Integer variable
+    /// cannot be encoded. In particular, used variables with non-finite bounds
+    /// retain [`LogEncodingUnavailable`], while an active SOS1 member retains
+    /// [`SubstitutionError`](crate::SubstitutionError). Lower active SOS1
+    /// constraints with [`Self::lower_special_constraints`] before calling this
+    /// method. Any error leaves the instance unchanged.
+    pub fn log_encode_all_used_integers(
+        &mut self,
+        atol: ATol,
+    ) -> crate::Result<BTreeMap<VariableID, Linear>> {
+        let ids = self.decision_variable_usage().used_integer().into_keys();
+        self.log_encode(ids, atol)
+    }
+
     fn plan_log_encodings(
         &self,
         encoding_specs: Vec<(VariableID, Vec<Coefficient>, f64)>,
@@ -285,8 +309,8 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, v1::State, Bound, DecisionVariable, Equality, Evaluate, Function,
-        IndicatorConstraint, IndicatorConstraintID, Instance, Kind, LinearMonomial,
+        coeff, v1::State, Bound, DecisionVariable, DecisionVariableRole, Equality, Evaluate,
+        Function, IndicatorConstraint, IndicatorConstraintID, Instance, Kind, LinearMonomial,
         OneHotConstraint, OneHotConstraintID, Sense, Solution, Sos1Constraint, Sos1ConstraintID,
     };
     use approx::relative_eq;
@@ -1074,6 +1098,146 @@ mod tests {
         assert!(instance.decision_variable_dependency.get(&id0).is_none());
         assert!(instance.decision_variable_dependency.get(&id1).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.log_encode"), 0);
+    }
+
+    #[test]
+    fn log_encode_all_used_integers_satisfies_its_postcondition() {
+        let used0 = VariableID::from(0);
+        let used1 = VariableID::from(1);
+        let irrelevant = VariableID::from(2);
+        let bounded_integer = || {
+            DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap()
+        };
+        let objective = (crate::linear!(0) + crate::linear!(1)).unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(objective))
+            .decision_variables(BTreeMap::from([
+                (used0, bounded_integer()),
+                (used1, bounded_integer()),
+                (irrelevant, bounded_integer()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let used_before = instance
+            .decision_variable_usage()
+            .used_integer()
+            .into_keys()
+            .collect::<BTreeSet<_>>();
+
+        let encodings = instance
+            .log_encode_all_used_integers(ATol::default())
+            .unwrap();
+
+        assert_eq!(
+            encodings.keys().copied().collect::<BTreeSet<_>>(),
+            used_before
+        );
+        assert!(instance.decision_variable_usage().used_integer().is_empty());
+        assert_eq!(
+            instance.decision_variable_role(used0),
+            Some(DecisionVariableRole::Dependent)
+        );
+        assert_eq!(
+            instance.decision_variable_role(used1),
+            Some(DecisionVariableRole::Dependent)
+        );
+        assert_eq!(
+            instance.decision_variable_role(irrelevant),
+            Some(DecisionVariableRole::Irrelevant)
+        );
+    }
+
+    #[test]
+    fn log_encode_all_used_integers_is_atomic_when_one_target_is_unbounded() {
+        let bounded = VariableID::from(0);
+        let unbounded = VariableID::from(1);
+        let bounded_integer = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(
+                (crate::linear!(0) + crate::linear!(1)).unwrap(),
+            ))
+            .decision_variables(BTreeMap::from([
+                (bounded, bounded_integer),
+                (unbounded, DecisionVariable::integer()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let before = instance.clone();
+
+        let err = instance
+            .log_encode_all_used_integers(ATol::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<LogEncodingUnavailable>(),
+            Some(LogEncodingUnavailable::NonFiniteBound { id, .. }) if *id == unbounded
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn log_encode_all_used_integers_requires_sos1_to_be_lowered() {
+        let ordinary = VariableID::from(0);
+        let sos1_member = VariableID::from(1);
+        let sos1_id = Sos1ConstraintID::from(0);
+        let bounded_integer = || {
+            DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap()
+        };
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(0)))
+            .decision_variables(BTreeMap::from([
+                (ordinary, bounded_integer()),
+                (sos1_member, bounded_integer()),
+            ]))
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(
+                sos1_id,
+                Sos1Constraint::new(BTreeSet::from([sos1_member])).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        assert_eq!(
+            instance
+                .decision_variable_usage()
+                .used_integer()
+                .into_keys()
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from([ordinary, sos1_member])
+        );
+        let before = instance.clone();
+
+        let err = instance
+            .log_encode_all_used_integers(ATol::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<crate::SubstitutionError>(),
+            Some(crate::SubstitutionError::Sos1VariableSubstitution {
+                variable,
+                constraint_id,
+            }) if *variable == sos1_member && *constraint_id == sos1_id
+        ));
+        assert_eq!(instance, before);
     }
 
     #[test]
