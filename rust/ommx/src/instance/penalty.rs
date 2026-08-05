@@ -134,8 +134,15 @@ impl Instance {
     /// operation mutates the [`Instance`] in place rather than returning a
     /// [`ParametricInstance`].
     ///
-    /// When the instance has no active constraints, an empty `weights` map is
-    /// an identity operation. Otherwise, conversion and parameter
+    /// On success, every regular, indicator, one-hot, and SOS1 constraint is in
+    /// its removed collection; all four active collections are empty. Every
+    /// active regular constraint is moved to the removed collection, and
+    /// existing removed constraints of every family are preserved. Active
+    /// special constraints are not penalty-converted: their presence returns
+    /// an error without modifying the instance.
+    ///
+    /// When no constraint of any family is active, an empty `weights` map is an
+    /// exact identity operation. Otherwise, conversion and parameter
     /// materialization are performed on an internal clone and committed only
     /// after both succeed.
     ///
@@ -302,7 +309,14 @@ impl Instance {
     /// materialized immediately, so this operation mutates the [`Instance`] in
     /// place rather than returning a [`ParametricInstance`].
     ///
-    /// When the instance has no active constraints, this is an identity
+    /// On success, every regular, indicator, one-hot, and SOS1 constraint is in
+    /// its removed collection; all four active collections are empty. Every
+    /// active regular constraint is moved to the removed collection, and
+    /// existing removed constraints of every family are preserved. Active
+    /// special constraints are not penalty-converted: their presence returns
+    /// an error without modifying the instance.
+    ///
+    /// When no constraint of any family is active, this is an exact identity
     /// operation. Otherwise, conversion and parameter materialization are
     /// performed on an internal clone and committed only after both succeed.
     ///
@@ -390,7 +404,14 @@ mod tests {
         coeff, constraint::Equality, linear, quadratic, v1::State, ATol, ConstraintContext,
         DecisionVariable, Evaluate, ModelingLabel, Sense,
     };
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum SpecialConstraintKind {
+        Indicator,
+        OneHot,
+        Sos1,
+    }
 
     /// Helper function to create a test instance with two decision variables and two constraints
     fn create_test_instance_with_constraints() -> Instance {
@@ -423,6 +444,65 @@ mod tests {
         );
 
         Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap()
+    }
+
+    fn create_test_instance_with_special_constraints(kinds: &[SpecialConstraintKind]) -> Instance {
+        let variable = VariableID::from(1);
+        let regular_constraint = Constraint::equal_to_zero(Function::from(linear!(variable)));
+        let has_kind = |kind| kinds.contains(&kind);
+
+        let indicator_constraints = has_kind(SpecialConstraintKind::Indicator)
+            .then(|| {
+                (
+                    crate::IndicatorConstraintID::from(1),
+                    crate::IndicatorConstraint::new(
+                        variable,
+                        Equality::EqualToZero,
+                        Function::Zero,
+                    ),
+                )
+            })
+            .into_iter()
+            .collect();
+        let one_hot_constraints = has_kind(SpecialConstraintKind::OneHot)
+            .then(|| {
+                (
+                    crate::OneHotConstraintID::from(1),
+                    crate::OneHotConstraint::new(BTreeSet::from([variable])).unwrap(),
+                )
+            })
+            .into_iter()
+            .collect();
+        let sos1_constraints = has_kind(SpecialConstraintKind::Sos1)
+            .then(|| {
+                (
+                    crate::Sos1ConstraintID::from(1),
+                    crate::Sos1Constraint::new(BTreeSet::from([variable])).unwrap(),
+                )
+            })
+            .into_iter()
+            .collect();
+
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+            .constraints(BTreeMap::from([(
+                ConstraintID::from(1),
+                regular_constraint,
+            )]))
+            .indicator_constraints(indicator_constraints)
+            .one_hot_constraints(one_hot_constraints)
+            .sos1_constraints(sos1_constraints)
+            .build()
+            .unwrap()
+    }
+
+    fn assert_no_active_constraints(instance: &Instance) {
+        assert!(instance.constraints().is_empty());
+        assert!(instance.indicator_constraints().is_empty());
+        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.sos1_constraints().is_empty());
     }
 
     /// Helper function to verify penalty method properties
@@ -703,7 +783,7 @@ mod tests {
             .uniform_penalty_method_with_fixed_weight(2.0)
             .unwrap();
 
-        assert!(instance.constraints().is_empty());
+        assert_no_active_constraints(&instance);
         assert_eq!(instance.removed_constraints().len(), 2);
         let state = State::from_iter([(1, 2.0), (2, 1.0)]);
         assert_eq!(
@@ -726,7 +806,7 @@ mod tests {
                 .unwrap(),
             objective.evaluate(&state, ATol::default()).unwrap()
         );
-        assert!(zero_weight.constraints().is_empty());
+        assert_no_active_constraints(&zero_weight);
     }
 
     #[test]
@@ -738,7 +818,7 @@ mod tests {
             .penalty_method_with_fixed_weights(&weights)
             .unwrap();
 
-        assert!(instance.constraints().is_empty());
+        assert_no_active_constraints(&instance);
         assert_eq!(instance.removed_constraints().len(), 2);
         let state = State::from_iter([(1, 2.0), (2, 1.0)]);
         assert_eq!(
@@ -801,6 +881,81 @@ mod tests {
             assert!(err.to_string().contains("constraint IDs"));
             assert_eq!(instance, before);
         }
+    }
+
+    #[test]
+    fn fixed_weight_penalty_rejects_each_active_special_constraint_atomically() {
+        for kind in [
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
+            SpecialConstraintKind::Sos1,
+        ] {
+            let before = create_test_instance_with_special_constraints(&[kind]);
+            let weights = before.constraints().keys().map(|id| (*id, 2.0)).collect();
+
+            let mut keyed = before.clone();
+            keyed
+                .penalty_method_with_fixed_weights(&weights)
+                .unwrap_err();
+            assert_eq!(keyed, before);
+
+            let mut uniform = before.clone();
+            uniform
+                .uniform_penalty_method_with_fixed_weight(2.0)
+                .unwrap_err();
+            assert_eq!(uniform, before);
+        }
+    }
+
+    #[test]
+    fn fixed_weight_penalty_success_leaves_every_constraint_family_removed() {
+        let mut lowered = create_test_instance_with_special_constraints(&[
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
+            SpecialConstraintKind::Sos1,
+        ]);
+        lowered
+            .convert_indicator_to_constraint(crate::IndicatorConstraintID::from(1))
+            .unwrap();
+        lowered
+            .convert_one_hot_to_constraint(crate::OneHotConstraintID::from(1))
+            .unwrap();
+        lowered
+            .convert_sos1_to_constraints(crate::Sos1ConstraintID::from(1))
+            .unwrap();
+
+        assert_eq!(lowered.removed_indicator_constraints().len(), 1);
+        assert_eq!(lowered.removed_one_hot_constraints().len(), 1);
+        assert_eq!(lowered.removed_sos1_constraints().len(), 1);
+        assert!(!lowered.constraints().is_empty());
+
+        let regular_constraint_count =
+            lowered.constraints().len() + lowered.removed_constraints().len();
+        let removed_indicators = lowered.removed_indicator_constraints().clone();
+        let removed_one_hots = lowered.removed_one_hot_constraints().clone();
+        let removed_sos1s = lowered.removed_sos1_constraints().clone();
+
+        let mut keyed = lowered.clone();
+        let weights = keyed.constraints().keys().map(|id| (*id, 2.0)).collect();
+        keyed.penalty_method_with_fixed_weights(&weights).unwrap();
+        assert_no_active_constraints(&keyed);
+        assert_eq!(keyed.removed_constraints().len(), regular_constraint_count);
+        assert_eq!(keyed.removed_indicator_constraints(), &removed_indicators);
+        assert_eq!(keyed.removed_one_hot_constraints(), &removed_one_hots);
+        assert_eq!(keyed.removed_sos1_constraints(), &removed_sos1s);
+
+        let mut uniform = lowered;
+        uniform
+            .uniform_penalty_method_with_fixed_weight(2.0)
+            .unwrap();
+        assert_no_active_constraints(&uniform);
+        assert_eq!(
+            uniform.removed_constraints().len(),
+            regular_constraint_count
+        );
+        assert_eq!(uniform.removed_indicator_constraints(), &removed_indicators);
+        assert_eq!(uniform.removed_one_hot_constraints(), &removed_one_hots);
+        assert_eq!(uniform.removed_sos1_constraints(), &removed_sos1s);
     }
 
     #[test]
