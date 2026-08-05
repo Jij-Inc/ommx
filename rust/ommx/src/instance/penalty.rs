@@ -1,7 +1,7 @@
 use super::*;
 use crate::{linear, Function, ParameterLabel, VariableID};
 use anyhow::Result;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
@@ -39,21 +39,14 @@ impl Instance {
     ///
     /// where $\lambda_1$ and $\lambda_2$ are penalty parameters.
     pub fn penalty_method(self) -> Result<ParametricInstance> {
-        anyhow::ensure!(
-            self.indicator_constraint_collection.active().is_empty(),
-            "penalty_method does not support indicator constraints. \
-             Remove or convert indicator constraints before applying penalty method."
-        );
-        anyhow::ensure!(
-            self.one_hot_constraint_collection.active().is_empty(),
-            "penalty_method does not support one-hot constraints. \
-             Remove or convert one-hot constraints before applying penalty method."
-        );
-        anyhow::ensure!(
-            self.sos1_constraint_collection.active().is_empty(),
-            "penalty_method does not support SOS1 constraints. \
-             Remove or convert SOS1 constraints before applying penalty method."
-        );
+        let (instance, _) = self.penalty_method_with_parameter_ids()?;
+        Ok(instance)
+    }
+
+    fn penalty_method_with_parameter_ids(
+        self,
+    ) -> Result<(ParametricInstance, BTreeMap<ConstraintID, VariableID>)> {
+        self.ensure_penalty_method_supported("penalty_method")?;
 
         let mut max_id = 0;
 
@@ -72,6 +65,7 @@ impl Instance {
         let id_base = max_id + 1;
         let mut objective = self.objective.clone();
         let mut parameters = ParameterTable::default();
+        let mut parameter_ids = BTreeMap::new();
         let mut constraint_collection = self.constraint_collection;
         let mut removals = BTreeMap::new();
         for (parameter_offset, (&constraint_id, constraint)) in
@@ -105,24 +99,68 @@ impl Instance {
             };
 
             parameters.insert(parameter_id, parameter_label)?;
+            parameter_ids.insert(constraint_id, parameter_id);
             removals.insert(constraint_id, (constraint.clone(), removed_reason));
         }
         constraint_collection.move_active_rows_to_removed(removals)?;
 
-        Ok(ParametricInstance {
-            sense: self.sense,
-            objective,
-            decision_variables: self.decision_variables,
-            parameters,
-            constraint_collection,
-            indicator_constraint_collection: self.indicator_constraint_collection,
-            one_hot_constraint_collection: self.one_hot_constraint_collection,
-            sos1_constraint_collection: self.sos1_constraint_collection,
-            decision_variable_dependency: self.decision_variable_dependency,
-            description: self.description,
-            named_functions: self.named_functions,
-            annotations: self.annotations,
-        })
+        Ok((
+            ParametricInstance {
+                sense: self.sense,
+                objective,
+                decision_variables: self.decision_variables,
+                parameters,
+                constraint_collection,
+                indicator_constraint_collection: self.indicator_constraint_collection,
+                one_hot_constraint_collection: self.one_hot_constraint_collection,
+                sos1_constraint_collection: self.sos1_constraint_collection,
+                decision_variable_dependency: self.decision_variable_dependency,
+                description: self.description,
+                named_functions: self.named_functions,
+                annotations: self.annotations,
+            },
+            parameter_ids,
+        ))
+    }
+
+    #[cfg_attr(doc, katexit::katexit)]
+    /// Convert every active regular constraint to a penalty term with its fixed weight.
+    ///
+    /// The keys of `weights` must be exactly the active regular constraint IDs.
+    /// Constraint `id` with body $f_{id}(x)$ contributes
+    /// $\lambda_{id} f_{id}(x)^2$ using `weights[&id]`, with the same
+    /// mathematical and provenance semantics as [`Self::penalty_method`].
+    /// Generated penalty parameters are materialized immediately, so this
+    /// operation mutates the [`Instance`] in place rather than returning a
+    /// [`ParametricInstance`].
+    ///
+    /// When no active regular constraints exist, an empty `weights` map is an
+    /// identity operation. Otherwise, conversion and parameter materialization
+    /// are performed on an internal clone and committed only after both
+    /// succeed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `weights` does not cover exactly the active regular
+    /// constraints, or if [`Self::penalty_method`] or
+    /// [`ParametricInstance::with_parameters`] fails. Any error leaves the
+    /// instance unchanged.
+    pub fn penalty_method_with_fixed_weights(
+        &mut self,
+        weights: &BTreeMap<ConstraintID, f64>,
+    ) -> crate::Result<()> {
+        self.ensure_penalty_method_supported("penalty_method")?;
+        self.ensure_fixed_penalty_weight_ids(weights)?;
+        if self.constraints().is_empty() {
+            return Ok(());
+        }
+
+        let (parametric, parameter_ids) = self.clone().penalty_method_with_parameter_ids()?;
+        let parameter_values = parameter_ids
+            .into_iter()
+            .map(|(constraint_id, parameter_id)| (parameter_id, weights[&constraint_id]))
+            .collect();
+        self.commit_materialized_penalty(parametric, parameter_values)
     }
 
     #[cfg_attr(doc, katexit::katexit)]
@@ -160,38 +198,34 @@ impl Instance {
     ///
     /// where $\lambda$ is the single penalty parameter.
     pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
-        anyhow::ensure!(
-            self.indicator_constraint_collection.active().is_empty(),
-            "uniform_penalty_method does not support indicator constraints. \
-             Remove or convert indicator constraints before applying penalty method."
-        );
-        anyhow::ensure!(
-            self.one_hot_constraint_collection.active().is_empty(),
-            "uniform_penalty_method does not support one-hot constraints. \
-             Remove or convert one-hot constraints before applying penalty method."
-        );
-        anyhow::ensure!(
-            self.sos1_constraint_collection.active().is_empty(),
-            "uniform_penalty_method does not support SOS1 constraints. \
-             Remove or convert SOS1 constraints before applying penalty method."
-        );
+        let (instance, _) = self.uniform_penalty_method_with_parameter_id()?;
+        Ok(instance)
+    }
+
+    fn uniform_penalty_method_with_parameter_id(
+        self,
+    ) -> Result<(ParametricInstance, Option<VariableID>)> {
+        self.ensure_penalty_method_supported("uniform_penalty_method")?;
 
         // Early return if no active constraints (preserve any existing removed constraints)
         if self.constraints().is_empty() {
-            return Ok(ParametricInstance {
-                sense: self.sense,
-                objective: self.objective,
-                decision_variables: self.decision_variables,
-                parameters: ParameterTable::default(),
-                constraint_collection: self.constraint_collection,
-                indicator_constraint_collection: self.indicator_constraint_collection,
-                one_hot_constraint_collection: self.one_hot_constraint_collection,
-                sos1_constraint_collection: self.sos1_constraint_collection,
-                decision_variable_dependency: self.decision_variable_dependency,
-                description: self.description,
-                named_functions: self.named_functions,
-                annotations: self.annotations,
-            });
+            return Ok((
+                ParametricInstance {
+                    sense: self.sense,
+                    objective: self.objective,
+                    decision_variables: self.decision_variables,
+                    parameters: ParameterTable::default(),
+                    constraint_collection: self.constraint_collection,
+                    indicator_constraint_collection: self.indicator_constraint_collection,
+                    one_hot_constraint_collection: self.one_hot_constraint_collection,
+                    sos1_constraint_collection: self.sos1_constraint_collection,
+                    decision_variable_dependency: self.decision_variable_dependency,
+                    description: self.description,
+                    named_functions: self.named_functions,
+                    annotations: self.annotations,
+                },
+                None,
+            ));
         }
 
         let mut max_id = 0;
@@ -239,20 +273,111 @@ impl Instance {
         let mut parameters = ParameterTable::default();
         parameters.insert(parameter_id, parameter_label)?;
 
-        Ok(ParametricInstance {
-            sense: self.sense,
-            objective,
-            decision_variables: self.decision_variables,
-            parameters,
-            constraint_collection,
-            indicator_constraint_collection: self.indicator_constraint_collection,
-            one_hot_constraint_collection: self.one_hot_constraint_collection,
-            sos1_constraint_collection: self.sos1_constraint_collection,
-            decision_variable_dependency: self.decision_variable_dependency,
-            description: self.description,
-            named_functions: self.named_functions,
-            annotations: self.annotations,
-        })
+        Ok((
+            ParametricInstance {
+                sense: self.sense,
+                objective,
+                decision_variables: self.decision_variables,
+                parameters,
+                constraint_collection,
+                indicator_constraint_collection: self.indicator_constraint_collection,
+                one_hot_constraint_collection: self.one_hot_constraint_collection,
+                sos1_constraint_collection: self.sos1_constraint_collection,
+                decision_variable_dependency: self.decision_variable_dependency,
+                description: self.description,
+                named_functions: self.named_functions,
+                annotations: self.annotations,
+            },
+            Some(parameter_id),
+        ))
+    }
+
+    #[cfg_attr(doc, katexit::katexit)]
+    /// Convert every active regular constraint to a penalty term with one fixed weight.
+    ///
+    /// Each constraint body $f_i(x)$ contributes `weight` $\cdot f_i(x)^2$,
+    /// with the same mathematical and provenance semantics as
+    /// [`Self::uniform_penalty_method`]. The generated penalty parameter is
+    /// materialized immediately, so this operation mutates the [`Instance`] in
+    /// place rather than returning a [`ParametricInstance`].
+    ///
+    /// When no active regular constraints exist, this is an identity
+    /// operation. Otherwise, conversion and parameter materialization are
+    /// performed on an internal clone and committed only after both succeed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if [`Self::uniform_penalty_method`] or
+    /// [`ParametricInstance::with_parameters`] fails. Any error leaves the
+    /// instance unchanged.
+    pub fn uniform_penalty_method_with_fixed_weight(&mut self, weight: f64) -> crate::Result<()> {
+        self.ensure_penalty_method_supported("uniform_penalty_method")?;
+        if self.constraints().is_empty() {
+            return Ok(());
+        }
+
+        let (parametric, parameter_id) = self.clone().uniform_penalty_method_with_parameter_id()?;
+        let parameter_id = parameter_id.expect("active constraints create one penalty parameter");
+        self.commit_materialized_penalty(parametric, BTreeMap::from([(parameter_id, weight)]))
+    }
+
+    fn ensure_penalty_method_supported(&self, operation: &str) -> crate::Result<()> {
+        anyhow::ensure!(
+            self.indicator_constraint_collection.active().is_empty(),
+            "{operation} does not support indicator constraints. \
+             Remove or convert indicator constraints before applying penalty method."
+        );
+        anyhow::ensure!(
+            self.one_hot_constraint_collection.active().is_empty(),
+            "{operation} does not support one-hot constraints. \
+             Remove or convert one-hot constraints before applying penalty method."
+        );
+        anyhow::ensure!(
+            self.sos1_constraint_collection.active().is_empty(),
+            "{operation} does not support SOS1 constraints. \
+             Remove or convert SOS1 constraints before applying penalty method."
+        );
+        Ok(())
+    }
+
+    fn ensure_fixed_penalty_weight_ids(
+        &self,
+        weights: &BTreeMap<ConstraintID, f64>,
+    ) -> crate::Result<()> {
+        let active_ids = self.constraints().keys().copied().collect::<BTreeSet<_>>();
+        let weight_ids = weights.keys().copied().collect::<BTreeSet<_>>();
+        let missing_ids = active_ids
+            .difference(&weight_ids)
+            .copied()
+            .collect::<Vec<_>>();
+        let unexpected_ids = weight_ids
+            .difference(&active_ids)
+            .copied()
+            .collect::<Vec<_>>();
+        if !missing_ids.is_empty() || !unexpected_ids.is_empty() {
+            crate::bail!(
+                { ?missing_ids, ?unexpected_ids },
+                "Fixed penalty weights must match active regular constraint IDs: \
+                 missing {missing_ids:?}, unexpected {unexpected_ids:?}",
+            );
+        }
+        Ok(())
+    }
+
+    fn commit_materialized_penalty(
+        &mut self,
+        parametric: ParametricInstance,
+        parameter_values: BTreeMap<VariableID, f64>,
+    ) -> crate::Result<()> {
+        let parameters = crate::v1::Parameters {
+            entries: parameter_values
+                .into_iter()
+                .map(|(id, value)| (id.into_inner(), value))
+                .collect(),
+        };
+        let materialized = parametric.with_parameters(parameters)?;
+        *self = materialized;
+        Ok(())
     }
 }
 
@@ -260,8 +385,8 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, constraint::Equality, linear, ConstraintContext, DecisionVariable, ModelingLabel,
-        Sense,
+        coeff, constraint::Equality, linear, quadratic, v1::State, ATol, ConstraintContext,
+        DecisionVariable, Evaluate, ModelingLabel, Sense,
     };
     use std::collections::BTreeMap;
 
@@ -566,5 +691,158 @@ mod tests {
                 .reason,
             "ommx.Instance.uniform_penalty_method"
         );
+    }
+
+    #[test]
+    fn uniform_fixed_weight_penalty_is_materialized_in_place() {
+        let mut instance = create_test_instance_with_constraints();
+
+        instance
+            .uniform_penalty_method_with_fixed_weight(2.0)
+            .unwrap();
+
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 2);
+        let state = State::from_iter([(1, 2.0), (2, 1.0)]);
+        assert_eq!(
+            instance
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            13.0
+        );
+
+        let mut zero_weight = create_test_instance_with_constraints();
+        let objective = zero_weight.objective().clone();
+        zero_weight
+            .uniform_penalty_method_with_fixed_weight(0.0)
+            .unwrap();
+        assert_eq!(
+            zero_weight
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            objective.evaluate(&state, ATol::default()).unwrap()
+        );
+        assert!(zero_weight.constraints().is_empty());
+    }
+
+    #[test]
+    fn fixed_penalty_weights_bind_by_constraint_id() {
+        let mut instance = create_test_instance_with_constraints();
+        let weights = BTreeMap::from([(ConstraintID::from(1), 2.0), (ConstraintID::from(2), 3.0)]);
+
+        instance
+            .penalty_method_with_fixed_weights(&weights)
+            .unwrap();
+
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 2);
+        let state = State::from_iter([(1, 2.0), (2, 1.0)]);
+        assert_eq!(
+            instance
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            14.0
+        );
+        let state = State::from_iter([(1, 0.0), (2, 0.0)]);
+        assert_eq!(
+            instance
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            2.0
+        );
+    }
+
+    #[test]
+    fn fixed_weight_penalty_is_identity_without_active_constraints() {
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            BTreeMap::from([(VariableID::from(1), DecisionVariable::continuous())]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let before = instance.clone();
+
+        instance
+            .penalty_method_with_fixed_weights(&BTreeMap::new())
+            .unwrap();
+        assert_eq!(instance, before);
+
+        instance
+            .uniform_penalty_method_with_fixed_weight(2.0)
+            .unwrap();
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn fixed_penalty_weights_require_exact_active_id_coverage() {
+        let before = create_test_instance_with_constraints();
+        let cases = [
+            BTreeMap::from([(ConstraintID::from(1), 2.0)]),
+            BTreeMap::from([
+                (ConstraintID::from(1), 2.0),
+                (ConstraintID::from(2), 3.0),
+                (ConstraintID::from(3), 4.0),
+            ]),
+        ];
+
+        for weights in cases {
+            let mut instance = before.clone();
+            let err = instance
+                .penalty_method_with_fixed_weights(&weights)
+                .unwrap_err();
+
+            assert!(err.to_string().contains("constraint IDs"));
+            assert_eq!(instance, before);
+        }
+    }
+
+    #[test]
+    fn fixed_weight_penalty_materialization_failure_is_atomic() {
+        let variable = VariableID::from(1);
+        let make_instance = || {
+            let objective =
+                Function::Quadratic((coeff!(f64::MAX) * quadratic!(variable, variable)).unwrap());
+            let constraint = Constraint {
+                equality: Equality::EqualToZero,
+                stage: crate::constraint::CreatedData {
+                    function: Function::from(linear!(variable)),
+                },
+            };
+            Instance::new(
+                Sense::Minimize,
+                objective,
+                BTreeMap::from([(variable, DecisionVariable::continuous())]),
+                BTreeMap::from([(ConstraintID::from(1), constraint)]),
+            )
+            .unwrap()
+        };
+
+        let mut uniform = make_instance();
+        let before = uniform.clone();
+
+        let err = uniform
+            .uniform_penalty_method_with_fixed_weight(f64::MAX)
+            .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<crate::CoefficientError>(),
+            Some(crate::CoefficientError::Infinite)
+        ));
+        assert_eq!(uniform, before);
+
+        let mut keyed = make_instance();
+        let before = keyed.clone();
+        let err = keyed
+            .penalty_method_with_fixed_weights(&BTreeMap::from([(ConstraintID::from(1), f64::MAX)]))
+            .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<crate::CoefficientError>(),
+            Some(crate::CoefficientError::Infinite)
+        ));
+        assert_eq!(keyed, before);
     }
 }
