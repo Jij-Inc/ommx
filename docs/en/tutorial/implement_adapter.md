@@ -329,7 +329,7 @@ OMMXPySCIPOptAdapter.require_applicable(instance)
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
-The base recommendation permits only OMMX-owned Indicator, OneHot, and SOS1 lowering. A concrete Adapter may recommend additional OMMX-owned operations, but its direct constructor and `solve()` remain strict about the exact input they receive.
+The base recommendation configures only OMMX-owned Indicator, OneHot, and SOS1 lowering. A concrete Adapter may recommend arguments for additional OMMX-owned operations, but its direct constructor and `solve()` remain strict about the exact input they receive.
 
 Preparation is not globally transactional: a later owner operation can fail
 after earlier operations succeeded. Each operation retains its owner API's
@@ -645,11 +645,11 @@ instance = Instance.from_components(
 )
 
 # This tutorial Adapter inherits only special-constraint lowering. The caller
-# explicitly permits sense normalization and a finite penalty before invoking
+# explicitly configures sense normalization and a finite penalty before invoking
 # the strict direct Adapter API.
 policy = PreparationPolicy(
-    allow_sense_normalization=True,
-    uniform_penalty_weight=4.0,
+    as_minimization_problem=True,
+    uniform_penalty_method_with_weight=4.0,
 )
 instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)

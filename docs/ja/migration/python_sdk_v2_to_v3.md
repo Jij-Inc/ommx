@@ -241,41 +241,27 @@ ids_list: list[int] = sample_set.sample_ids_list
 v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `uniform_penalty_weight`、`penalty_weights`、
 `inequality_integer_slack_max_range` を直接受け取り、入力を暗黙に変換していました。
-v3ではfinite penaltyの設定だけが共通の `PreparationPolicy` に属します。
+v3ではfinite penaltyの設定が共通の `PreparationPolicy` に属します。
 `OMMXOpenJijSAAdapter.recommended_preparation_policy()` にpenalty設定を渡し、Adapterの
 独立した `INPUT_CLASS` とそのPolicyを `Instance.prepare()` に渡します。通常制約ごとに
-異なるweightが必要な場合は、`uniform_penalty_weight` の代わりに `penalty_weights` を
-使います。v2はどちらのpenalty設定もない場合に一律weight `1.0` を選びましたが、v3では
-制約が残る場合、有限penaltyを明示的に選択する必要があります。
+異なるweightが必要な場合は、`uniform_penalty_method_with_weight` の代わりに
+`penalty_method_with_weights` を使います。v2はどちらのpenalty設定もない場合に一律weight
+`1.0` を選びましたが、v3では制約が残る場合、有限penaltyを明示的に選択する必要があります。
 
-Integer slackは `PreparationPolicy` に含まれません。preparationの前に、exact slackを
-追加する各通常不等式について
-`Instance.convert_inequality_to_equality_with_integer_slack()` を明示的に呼びます。
-この操作が `ExactIntegerSlackError` を送出した場合、呼び出し側は別の操作として
-`Instance.add_integer_slack_to_inequality()` を選択できます。その場合は元の制約式と
-同じ単位で正の有限値 `max_error` を指定する必要があります。`Instance.prepare()` が
-このfallbackを自動的に選ぶことはありません。
-特殊制約を先に通常不等式へ変換する必要がある場合は、それを明示的にloweringしてから、
-生成された通常制約IDに選択したslack操作を適用します。
+`PreparationPolicy` の各optionは既存の `Instance` owner操作と同じ名前を持ち、その操作の
+引数を保存します。Integer slackには独立した2つのoptionがあります。
+`convert_inequality_to_equality_with_integer_slack=(max_integer_range, atol)` と
+`add_integer_slack_to_inequality=slack_upper_bound` です。両方がある場合、
+`Instance.prepare()` は各active通常不等式にexact変換を試し、
+`ExactIntegerSlackError` の場合だけapproximate操作を呼びます。approximate optionだけなら、
+その操作を直接呼びます。特殊制約loweringはslack操作より前なので、生成された通常不等式も
+対象になります。
 
 ```python
-from ommx import ExactIntegerSlackError
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-try:
-    instance.convert_inequality_to_equality_with_integer_slack(
-        constraint_id,
-        max_integer_range=32,
-    )
-except ExactIntegerSlackError:
-    instance.add_integer_slack_to_inequality(
-        constraint_id,
-        slack_upper_bound=32,
-        max_error=0.25,
-    )
-
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
-    uniform_penalty_weight=20.0,
+    uniform_penalty_method_with_weight=20.0,
 )
 instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)

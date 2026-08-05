@@ -28,7 +28,7 @@ instance = Instance.from_components(
 )
 
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
-    uniform_penalty_weight=2.0,
+    uniform_penalty_method_with_weight=2.0,
 )
 instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
@@ -40,10 +40,12 @@ sample_set = OMMXOpenJijSAAdapter.sample(
 print(sample_set.summary)
 ```
 
-The finite penalty weight is part of `PreparationPolicy`, not an OpenJij
-backend sampler parameter. It must be selected explicitly when constraints
-remain. A finite penalty does not ensure that every returned sample is feasible
-for the original constraints; inspect the evaluated `SampleSet`.
+`uniform_penalty_method_with_weight` stores the argument for the existing
+`Instance.uniform_penalty_method_with_weight()` operation. It is part of
+`PreparationPolicy`, not an OpenJij backend sampler parameter, and must be
+selected explicitly when constraints remain. A finite penalty does not ensure
+that every returned sample is feasible for the original constraints; inspect
+the evaluated `SampleSet`.
 
 ## Input class and preparation
 
@@ -62,42 +64,32 @@ constructor never prepare or mutate their input implicitly.
 `recommended_preparation_policy()` returns the common OMMX policy recommended
 by the Adapter. Independently, `INPUT_CLASS` describes the Adapter's direct
 inputs; the caller supplies that class separately as the target of
-`Instance.prepare()`. The default Policy permits special-constraint lowering,
-bounded Integer log encoding, and minimization-sense normalization. Integer
-slack is not a Policy option. Finite penalties remain disabled unless
-`uniform_penalty_weight` or `penalty_weights` is supplied.
-The optional `atol` argument is captured in the returned Policy and used by
-result-affecting preparation operations; later changes to the SDK default do
-not alter that Policy.
+`Instance.prepare()`. Each Policy field is named after an existing `Instance`
+owner operation and stores its arguments. The default recommendation includes:
 
-For a regular inequality that needs slack, explicitly select the exact
-`Instance` operation before preparation. `ExactIntegerSlackError` identifies
-the case in which the caller may instead choose the approximate operation;
-`Instance.prepare()` never selects that fallback automatically:
+- `lower_special_constraints` for Indicator, OneHot, and SOS1;
+- `log_encode_used_integers` with the SDK default absolute tolerance;
+- `as_minimization_problem=True`;
+- `convert_inequality_to_equality_with_integer_slack=(32, atol)`; and
+- `add_integer_slack_to_inequality=32`.
 
-```python
-from ommx import ExactIntegerSlackError
+For every active regular inequality, preparation first invokes
+`Instance.convert_inequality_to_equality_with_integer_slack()` with maximum
+range 32. Only `ExactIntegerSlackError` selects
+`Instance.add_integer_slack_to_inequality()` as a fallback, using slack upper
+bound 32. Other failures propagate. Special-constraint lowering runs first, so
+any generated regular inequalities participate in the same slack stage; no
+manual slack processing is required.
 
-try:
-    instance.convert_inequality_to_equality_with_integer_slack(
-        constraint_id,
-        max_integer_range=32,
-    )
-except ExactIntegerSlackError:
-    instance.add_integer_slack_to_inequality(
-        constraint_id,
-        slack_upper_bound=32,
-        max_error=0.25,
-    )
-```
+Finite penalties remain disabled unless
+`uniform_penalty_method_with_weight` or `penalty_method_with_weights` is
+supplied; those two keyword arguments cannot be supplied together. The
+recommendation resolves the SDK default absolute tolerance and stores it
+independently for each operation that uses it. To choose different operation
+arguments, construct `PreparationPolicy` directly.
 
-`max_error` is a positive finite upper bound on the approximation residual in
-the original constraint's units. If special constraints need to become regular
-inequalities first, call `Instance.lower_special_constraints()` explicitly and
-then apply the chosen slack operation to the generated regular IDs.
-
-Per-constraint penalty weights use regular-constraint IDs. Explicit integer
-slack conversion preserves those IDs. Every active row must have a weight; an
+Per-constraint penalty weights use regular-constraint IDs. Both Integer-slack
+operations preserve those IDs. Every active row must have a weight; an
 entry for a regular constraint already moved to
 `removed_constraints` is ignored. Special-constraint lowering adds fresh
 regular IDs, which a per-constraint map must also cover. Use a uniform penalty

@@ -138,7 +138,7 @@ returns samples already evaluated against it.
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
-    uniform_penalty_weight=20.0,
+    uniform_penalty_method_with_weight=20.0,
 )
 instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
@@ -158,9 +158,13 @@ so the `feasible` column still accounts for the original TSP constraints after
 they have been converted into a penalty. The displayed objective is the
 prepared objective, including that finite penalty.
 
-The penalty weight in `policy` belongs to the explicit preparation, not to the
-OpenJij backend sampler. A finite penalty encourages feasibility but does not
-guarantee that every returned sample is feasible for the source problem.
+`uniform_penalty_method_with_weight=20.0` stores the argument for the existing
+`Instance.uniform_penalty_method_with_weight()` owner operation. It belongs to
+the explicit preparation, not to the OpenJij backend sampler. A finite penalty
+encourages feasibility but does not guarantee that every returned sample is
+feasible for the source problem. This TSP formulation has only equality
+constraints, so the Integer-slack options in the Adapter's recommended Policy
+have no active inequality to transform.
 
 ### Inspecting the prepared Instance
 

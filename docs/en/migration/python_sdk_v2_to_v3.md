@@ -409,40 +409,28 @@ implicitly. In v3, finite-penalty settings belong to the common
 `PreparationPolicy`: pass them to
 `OMMXOpenJijSAAdapter.recommended_preparation_policy()`, then pass the Adapter's
 independent `INPUT_CLASS` and that Policy to `Instance.prepare()`. Use
-`penalty_weights` instead of `uniform_penalty_weight` when each regular
-constraint needs its own weight. v2 also selected a uniform weight of `1.0`
-when neither penalty setting was supplied; v3 requires finite penalties to be
-selected explicitly when constraints remain.
+`penalty_method_with_weights` instead of
+`uniform_penalty_method_with_weight` when each regular constraint needs its own
+weight. v2 also selected a uniform weight of `1.0` when neither penalty setting
+was supplied; v3 requires finite penalties to be selected explicitly when
+constraints remain.
 
-Integer slack does not belong to `PreparationPolicy`. Before preparation,
-explicitly call
-`Instance.convert_inequality_to_equality_with_integer_slack()` for each regular
-inequality that should receive exact slack. If it raises
-`ExactIntegerSlackError`, the caller may separately choose
-`Instance.add_integer_slack_to_inequality()` and must provide a positive finite
-`max_error` in the original constraint's units. `Instance.prepare()` does not
-select that fallback automatically.
-If special constraints must first become regular inequalities, explicitly lower
-them before applying the selected slack operation to the generated regular IDs.
+Each `PreparationPolicy` option is named after an existing `Instance` owner
+operation and stores that operation's arguments. Integer slack therefore has
+two independent options:
+`convert_inequality_to_equality_with_integer_slack=(max_integer_range, atol)`
+and `add_integer_slack_to_inequality=slack_upper_bound`. When both are present,
+`Instance.prepare()` tries exact conversion for each active regular inequality
+and invokes the approximate operation only after `ExactIntegerSlackError`. If
+only the approximate option is present, it invokes that operation directly.
+Special-constraint lowering runs before these slack operations, so generated
+regular inequalities are included.
 
 ```python
-from ommx import ExactIntegerSlackError
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-try:
-    instance.convert_inequality_to_equality_with_integer_slack(
-        constraint_id,
-        max_integer_range=32,
-    )
-except ExactIntegerSlackError:
-    instance.add_integer_slack_to_inequality(
-        constraint_id,
-        slack_upper_bound=32,
-        max_error=0.25,
-    )
-
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
-    uniform_penalty_weight=20.0,
+    uniform_penalty_method_with_weight=20.0,
 )
 instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)

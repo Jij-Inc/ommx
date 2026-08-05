@@ -16,8 +16,8 @@ kernelspec:
 OMMX separates concepts that were previously described together as adapter capabilities:
 
 - An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
-- A {class}`~ommx.PreparationPolicy` describes which OMMX-owned operations may be used. An Adapter may recommend a Policy, but the caller independently chooses the target {class}`~ommx.InstanceClass` and {meth}`Instance.prepare <ommx.Instance.prepare>` interprets both.
-- In an explicit preparation workflow, Integer-slack conversion is an explicit {class}`~ommx.Instance` operation, not a `PreparationPolicy` option. The caller chooses either exact conversion or an explicitly bounded approximation before calling `Instance.prepare(...)`.
+- A {class}`~ommx.PreparationPolicy` stores optional arguments for existing OMMX-owned {class}`~ommx.Instance` operations. An Adapter may recommend a Policy, but the caller independently chooses the target {class}`~ommx.InstanceClass` and {meth}`Instance.prepare <ommx.Instance.prepare>` interprets both.
+- Integer slack is part of that preparation procedure. Its two Policy fields directly name {meth}`Instance.convert_inequality_to_equality_with_integer_slack <ommx.Instance.convert_inequality_to_equality_with_integer_slack>` and {meth}`Instance.add_integer_slack_to_inequality <ommx.Instance.add_integer_slack_to_inequality>` and store the arguments for those owner APIs.
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` explicitly lowers selected special-constraint families on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
@@ -63,29 +63,40 @@ Adapter.require_applicable(instance)
 result = Adapter.solve(instance)
 ```
 
+The aggregate success condition of preparation is only
+`input_class.contains(instance)`. Preparation does not define an additional
+encode/decode protocol or claim that the feasible set or objective is preserved.
+Those mathematical semantics belong to each selected `Instance` operation.
+Adapter applicability still includes the Adapter-owned preconditions checked at
+the direct boundary.
+
 The prepared `Instance` stores the decision-variable dependencies, removed
 constraints, provenance, and auxiliary variables produced by its
 transformations. Solver states and samples are evaluated by that same
 `Instance`. Adapter-owned preconditions remain outside Policy execution and are
 checked at the direct boundary.
 
-The Policy captures the absolute tolerance used by result-affecting
-preparation operations. When `atol` is omitted, the current SDK default is
-resolved while constructing the Policy; changing that ambient default later
-does not change how `Instance.prepare(input_class, policy)` interprets it.
+Each Policy field is named after the existing `Instance` operation it controls.
+For argument-bearing operations, `None` means the operation is not invoked and
+a present field stores its arguments other than the constraint ID selected by
+preparation. The no-argument `as_minimization_problem` operation uses a Boolean
+field. For example, `log_encode_used_integers` stores its absolute tolerance,
+while `convert_inequality_to_equality_with_integer_slack` stores
+`(max_integer_range, atol)`. There is no parallel preparation-specific
+parameter model.
 
 Preparation is not globally transactional: a later owner operation can fail
 after earlier operations succeeded. Each operation retains its owner API's
 failure semantics. Fixed-penalty conversion does not commit a partial
 conversion.
 
-Finite penalty weights are positive and therefore apply to a minimization candidate. A Policy that prepares a maximization source with a finite penalty must also permit sense normalization.
+Finite penalty weights are positive and therefore apply to a minimization candidate. A Policy that prepares a maximization source with a finite penalty must also set `as_minimization_problem=True`.
 
-## Integer slack is outside Preparation
+## Integer slack operations in Preparation
 
 For a regular inequality $f(x) \leq 0$, OMMX provides two distinct mutating
-operations on the `Instance`. Neither is selected or executed by
-`PreparationPolicy`.
+operations on the `Instance`. `PreparationPolicy` exposes each operation by
+the same name and stores only its owner-API arguments.
 
 {meth}`Instance.convert_inequality_to_equality_with_integer_slack <ommx.Instance.convert_inequality_to_equality_with_integer_slack>` performs the exact operation
 
@@ -107,42 +118,42 @@ f(x) \leq 0 \quad\longmapsto\quad f(x) + b s \leq 0,
 $$
 
 Here `slack_upper_bound` is $R$. The returned coefficient $b$ bounds the
-discretization residual, and the call is accepted only when
-$b \leq \mathtt{max\_error}$. `max_error` must be positive and finite and is
-expressed in the original constraint's units.
+discretization residual. A larger $R$ produces finer slack and generally a
+smaller $b$, at the cost of a larger Integer range and more bits when that
+Integer is encoded.
 
-The caller can therefore try the exact operation and deliberately choose the
-approximate operation only for that recovery case:
+Configure the two existing operations directly in the Policy:
 
 ```python
-from ommx import ExactIntegerSlackError
+from ommx import PreparationPolicy
 
-try:
-    instance.convert_inequality_to_equality_with_integer_slack(
-        constraint_id,
-        max_integer_range=32,
-    )
-except ExactIntegerSlackError:
-    residual_bound = instance.add_integer_slack_to_inequality(
-        constraint_id,
-        slack_upper_bound=32,
-        max_error=0.25,
-    )
+policy = PreparationPolicy(
+    convert_inequality_to_equality_with_integer_slack=(32, 1e-6),
+    add_integer_slack_to_inequality=32,
+)
+instance.prepare(Adapter.INPUT_CLASS, policy)
 ```
 
-Other failures are not an instruction to approximate and should propagate.
-Both operations preserve the regular constraint ID and leave the `Instance`
-unchanged when they fail. If special constraints must first become regular
-inequalities, call
-{meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`
-explicitly, apply the selected slack operation to the generated regular
-constraint IDs, and only then call `Instance.prepare(...)`.
+For every active regular inequality, preparation first invokes
+`convert_inequality_to_equality_with_integer_slack` when its field is present.
+Only {class}`~ommx.ExactIntegerSlackError` selects
+`add_integer_slack_to_inequality` as a fallback, and only when that second field
+is also present. If only `add_integer_slack_to_inequality` is present,
+preparation invokes it directly. Other exact-operation failures propagate.
+
+Both operations preserve the regular constraint ID and leave that constraint
+unchanged when they fail. Special-constraint lowering occurs earlier in the
+canonical preparation order, so inequalities generated by configured lowering
+are included in the same slack stage. No manual slack pass is required before
+`Instance.prepare(...)`.
+
+The OpenJij Adapter's recommended Policy configures both operations with range
+32. It therefore prefers exact conversion and automatically uses the
+approximate operation only when exact Integer slack is unavailable.
 
 The legacy {meth}`Instance.to_qubo <ommx.Instance.to_qubo>` and
 {meth}`Instance.to_hubo <ommx.Instance.to_hubo>` Driver APIs retain their
-historical exact-to-approximate fallback. That behavior belongs to those
-Drivers, not to Preparation. Use the explicit operations above when the
-approximation error must be bounded.
+historical exact-to-approximate fallback independently of PreparationPolicy.
 
 ## SpecialConstraintKind and active_special_constraint_kinds
 
@@ -297,11 +308,11 @@ for cid, c in instance2.constraints.items():
 |---|---|
 | Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
 | Declare the first adapter applicability condition | `INPUT_CLASS` |
-| Recommend allowed preparation operations | `recommended_preparation_policy()` |
+| Recommend preparation operation arguments | `recommended_preparation_policy()` |
 | Prepare toward a caller-selected input class under a Policy | {meth}`Instance.prepare <ommx.Instance.prepare>` |
 | Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
-| Convert a regular inequality exactly with Integer slack | {meth}`Instance.convert_inequality_to_equality_with_integer_slack <ommx.Instance.convert_inequality_to_equality_with_integer_slack>` |
-| Explicitly choose bounded approximate Integer slack | {meth}`Instance.add_integer_slack_to_inequality <ommx.Instance.add_integer_slack_to_inequality>` |
+| Configure exact Integer slack in Preparation | `PreparationPolicy(convert_inequality_to_equality_with_integer_slack=(max_integer_range, atol))` |
+| Configure approximate Integer slack or exact fallback | `PreparationPolicy(add_integer_slack_to_inequality=slack_upper_bound)` |
 | Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |

@@ -54,11 +54,11 @@ solution = OMMXHighsAdapter.solve(instance)
 print(solution)
 ```
 
-The recommended Policy permits OMMX's existing Indicator, OneHot, and SOS1
-lowering operations. The Adapter's `INPUT_CLASS` independently describes its
-direct inputs; the caller supplies that class separately as the target of
-`Instance.prepare()`. Preparation mutates the same `Instance` and checks that it
-belongs to the supplied class.
+The recommended Policy stores the arguments for OMMX's existing Indicator,
+OneHot, and SOS1 lowering operation. The Adapter's `INPUT_CLASS` independently
+describes its direct inputs; the caller supplies that class separately as the
+target of `Instance.prepare()`. Preparation mutates the same `Instance` and
+checks that it belongs to the supplied class.
 The direct HiGHS boundary remains responsible for its own applicability check.
 The Adapter already evaluates the solver state against that `Instance`, which
 retains the dependency, removed-constraint, provenance, and auxiliary-variable

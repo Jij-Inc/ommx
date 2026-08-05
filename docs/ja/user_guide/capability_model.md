@@ -16,8 +16,8 @@ kernelspec:
 OMMX では、従来 Adapter Capability として一緒に説明されていた概念を分けて扱います。
 
 - {class}`~ommx.InstanceClass` は、具体的な `Instance` 値の集合です。Adapter は構造的な入力条件を `INPUT_CLASS` で宣言し、その後に Adapter 固有の precondition を評価して applicability を判定します。
-- {class}`~ommx.PreparationPolicy` は、利用を許可する OMMX-owned operation を記述します。Adapter は Policy を推奨できますが、対象の {class}`~ommx.InstanceClass` は呼び出し側が独立に選び、{meth}`Instance.prepare <ommx.Instance.prepare>` が両方を解釈します。
-- 明示的なpreparation workflowでは、Integer slack変換は {class}`~ommx.Instance` の操作であり、`PreparationPolicy` のoptionではありません。呼び出し側がexact変換または誤差上限を明示した近似変換を選び、`Instance.prepare(...)` より前に実行します。
+- {class}`~ommx.PreparationPolicy` は、既存の OMMX-owned {class}`~ommx.Instance` operation に渡す引数をoptionとして保持します。Adapter は Policy を推奨できますが、対象の {class}`~ommx.InstanceClass` は呼び出し側が独立に選び、{meth}`Instance.prepare <ommx.Instance.prepare>` が両方を解釈します。
+- Integer slackはそのpreparation手順に含まれます。2つのPolicy fieldは {meth}`Instance.convert_inequality_to_equality_with_integer_slack <ommx.Instance.convert_inequality_to_equality_with_integer_slack>` と {meth}`Instance.add_integer_slack_to_inequality <ommx.Instance.add_integer_slack_to_inequality>` をそのまま名前に持ち、各owner APIの引数を保持します。
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` は、Instance 上で選択した特殊制約 family を明示的に lowering します。入力 class の宣言でも、Adapter applicability の証明でもありません。
 
 本ページでは以下を説明します。
@@ -63,26 +63,36 @@ Adapter.require_applicable(instance)
 result = Adapter.solve(instance)
 ```
 
+Preparation全体の成功条件は `input_class.contains(instance)` だけです。Preparationは
+追加のencode/decode protocolを定義せず、実行可能集合や目的関数の保存も主張しません。
+数学的semanticsは、選択された各 `Instance` operationが所有します。Adapter applicabilityには
+direct boundaryで検査するAdapter-owned preconditionも引き続き含まれます。
+
 変換によって作られたdecision-variable dependency、removed constraint、provenance、
 補助変数は、変換後の `Instance` 自身に記録されます。solver のstateやsamplesは、その同じ
 `Instance` が評価します。Adapter固有のpreconditionはPolicy実行の外にあり、direct
 boundaryで検査されます。
 
-結果に影響するpreparation操作の絶対許容誤差はPolicyに保持されます。`atol`を
-省略した場合はPolicy構築時点のSDK defaultを解決して保存するため、その後に
-ambient defaultを変更しても `Instance.prepare(input_class, policy)` の解釈は変わりません。
+各Policy fieldの名前は、それが制御する既存の `Instance` operationと同じです。引数を持つ
+operationでは、`None` はその操作を呼び出さないことを意味し、値があるfieldはpreparationが
+選ぶconstraint ID以外のowner API引数を保持します。引数なしの
+`as_minimization_problem` operationはBoolean fieldを使います。例えば
+`log_encode_used_integers` は絶対許容誤差を、
+`convert_inequality_to_equality_with_integer_slack` は
+`(max_integer_range, atol)` を保持します。preparation専用の並行したparameter modelは
+導入しません。
 
 Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
 操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-penalty変換が
 途中までcommitされることはありません。
 
-finite penalty weight は正の値なので、minimization candidate にだけ適用されます。maximization source に finite penalty を適用する Policy では、sense normalization も許可する必要があります。
+finite penalty weight は正の値なので、minimization candidate にだけ適用されます。maximization source に finite penalty を適用する Policy では、`as_minimization_problem=True` も指定する必要があります。
 
-## Integer slackはPreparationの外で選択する
+## PreparationにおけるInteger slack操作
 
 通常の不等式 $f(x) \leq 0$ に対し、OMMXは2つの異なるmutating operationを
-`Instance` に提供します。どちらも `PreparationPolicy` が選択・実行する操作では
-ありません。
+`Instance` に提供します。`PreparationPolicy` はそれぞれを同じ名前で公開し、
+owner APIの引数だけを保持します。
 
 {meth}`Instance.convert_inequality_to_equality_with_integer_slack <ommx.Instance.convert_inequality_to_equality_with_integer_slack>` はexactな操作
 
@@ -102,40 +112,40 @@ f(x) \leq 0 \quad\longmapsto\quad f(x) + b s \leq 0,
 \qquad s \in \{0, \ldots, R\}
 $$
 
-を行います。`slack_upper_bound` が $R$ です。戻り値の係数 $b$ が離散化残差の上限となり、
-$b \leq \mathtt{max\_error}$ の場合だけ変換を行います。`max_error` は正の有限値で、
-元の制約式と同じ単位で指定します。
+を行います。`slack_upper_bound` が $R$ です。戻り値の係数 $b$ が離散化残差の上限です。
+$R$ を大きくするとslackが細かくなり通常は $b$ が小さくなる一方、Integer rangeと、
+そのIntegerをencodeする際のbit数は増えます。
 
-したがって呼び出し側は、exact操作を試し、この回復理由に対してだけ近似操作を
-明示的に選べます。
+Policyには既存の2操作をそのまま設定します。
 
 ```python
-from ommx import ExactIntegerSlackError
+from ommx import PreparationPolicy
 
-try:
-    instance.convert_inequality_to_equality_with_integer_slack(
-        constraint_id,
-        max_integer_range=32,
-    )
-except ExactIntegerSlackError:
-    residual_bound = instance.add_integer_slack_to_inequality(
-        constraint_id,
-        slack_upper_bound=32,
-        max_error=0.25,
-    )
+policy = PreparationPolicy(
+    convert_inequality_to_equality_with_integer_slack=(32, 1e-6),
+    add_integer_slack_to_inequality=32,
+)
+instance.prepare(Adapter.INPUT_CLASS, policy)
 ```
 
-その他のfailureは近似を選ぶ指示ではないため、そのまま伝播させます。どちらの操作も
-通常制約IDを保持し、失敗時には `Instance` を変更しません。特殊制約を先に通常の
-不等式へ変換する必要がある場合は、
-{meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` を
-明示的に呼び、生成された通常制約IDに選択したslack操作を適用してから
-`Instance.prepare(...)` を呼びます。
+各activeな通常不等式に対し、exact側のfieldがあれば、preparationは最初に
+`convert_inequality_to_equality_with_integer_slack` を呼びます。
+{class}`~ommx.ExactIntegerSlackError` の場合に限り、2つ目のfieldもあれば
+`add_integer_slack_to_inequality` をfallbackとして呼びます。
+`add_integer_slack_to_inequality` だけが設定されていれば、最初からその操作を呼びます。
+exact操作のその他のfailureはそのまま伝播します。
+
+どちらの操作も通常制約IDを保持し、その制約に対する失敗時には変更を加えません。
+canonical preparation orderでは特殊制約のloweringがslackより先なので、設定された
+loweringが生成した不等式も同じslack stageで処理されます。
+`Instance.prepare(...)` の前に手動でslack処理を行う必要はありません。
+
+OpenJij Adapterの推奨Policyは両方の操作にrange 32を設定します。そのためexact変換を
+優先し、exact Integer slackが利用できない場合にだけ近似操作を自動的に使います。
 
 従来の {meth}`Instance.to_qubo <ommx.Instance.to_qubo>` と
 {meth}`Instance.to_hubo <ommx.Instance.to_hubo>` Driver APIは、歴史的な
-exactからapproximateへのfallbackを維持します。この挙動を持つのは各Driverであり、
-Preparationではありません。近似誤差を制限する場合は、上記の明示的な操作を使います。
+exactからapproximateへのfallbackをPreparationPolicyとは独立に維持します。
 
 ## SpecialConstraintKind と active_special_constraint_kinds
 
@@ -290,11 +300,11 @@ for cid, c in instance2.constraints.items():
 |---|---|
 | Adapter 入力の構造的な集合を記述する | {class}`~ommx.InstanceClass` |
 | Adapter applicability の最初の条件を宣言する | `INPUT_CLASS` |
-| preparation で許可する操作を推奨する | `recommended_preparation_policy()` |
+| preparation operationの引数を推奨する | `recommended_preparation_policy()` |
 | 呼び出し側が選んだ input class と Policy で preparation する | {meth}`Instance.prepare <ommx.Instance.prepare>` |
 | membership と Adapter 固有の precondition を検査する | `check_applicability()` / `require_applicable()` |
-| 通常の不等式をInteger slackでexactに等式化する | {meth}`Instance.convert_inequality_to_equality_with_integer_slack <ommx.Instance.convert_inequality_to_equality_with_integer_slack>` |
-| 誤差上限付きの近似Integer slackを明示的に選ぶ | {meth}`Instance.add_integer_slack_to_inequality <ommx.Instance.add_integer_slack_to_inequality>` |
+| Preparationでexact Integer slackを設定する | `PreparationPolicy(convert_inequality_to_equality_with_integer_slack=(max_integer_range, atol))` |
+| 近似Integer slackまたはexactのfallbackを設定する | `PreparationPolicy(add_integer_slack_to_inequality=slack_upper_bound)` |
 | active な特殊制約 family を調べる | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | 選択した特殊制約を明示的に lowering する | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |

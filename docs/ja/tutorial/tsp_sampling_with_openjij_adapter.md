@@ -138,7 +138,7 @@ instance = Instance.from_components(
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
-    uniform_penalty_weight=20.0,
+    uniform_penalty_method_with_weight=20.0,
 )
 instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
@@ -156,9 +156,12 @@ sample_set.summary
 制約も含まれるため、penaltyへ変換した後も `feasible` 列には元のTSP制約が反映されます。
 表示される目的関数はfinite penaltyを含む変換後の目的関数です。
 
-`policy` のペナルティ重みはOpenJij backend samplerのパラメータではなく、明示的な
-準備に対する指定です。有限ペナルティは実行可能なサンプルを得やすくしますが、
-すべてのサンプルが変換元の問題に対して実行可能になることを保証しません。
+`uniform_penalty_method_with_weight=20.0` は、既存のowner operation
+`Instance.uniform_penalty_method_with_weight()` に渡す引数を保持します。OpenJij backend
+samplerのパラメータではなく、明示的なpreparationに対する指定です。有限ペナルティは
+実行可能なサンプルを得やすくしますが、すべてのサンプルが変換元の問題に対して
+実行可能になることを保証しません。このTSP定式化が持つのは等式制約だけなので、
+Adapterの推奨Policyに含まれるInteger slack optionが変換するactiveな不等式はありません。
 
 ### 変換後のInstanceの確認
 

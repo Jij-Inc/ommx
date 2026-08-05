@@ -3114,8 +3114,10 @@ class Instance:
         r"""
         Prepare this Instance in place to satisfy ``input_class``.
 
-        Preparation applies the transformations permitted by ``policy`` in a
-        fixed order. On success, ``input_class.contains(self)`` is true.
+        Preparation invokes the configured :class:`Instance` operations in a
+        fixed order until ``input_class.contains(self)`` is true. It does not
+        evaluate Adapter-owned preconditions or add a composite mathematical
+        guarantee beyond the semantics of the invoked operations.
 
         This method is not transactional across transformations. If it raises,
         changes made by earlier transformations remain applied.
@@ -3396,9 +3398,8 @@ class Instance:
 
           * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
           * If exact conversion is unavailable, this legacy Driver invokes
-            {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the
-            maximum finite error bound. To enforce a specific ``max_error``,
-            use the individual conversion, penalty, and encoding APIs instead.
+            {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the same
+            integer range.
 
         4. Convert to QUBO with (uniform) penalty method
 
@@ -3466,9 +3467,8 @@ class Instance:
 
           * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
           * If exact conversion is unavailable, this legacy Driver invokes
-            {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the
-            maximum finite error bound. To enforce a specific ``max_error``,
-            use the individual conversion, penalty, and encoding APIs instead.
+            {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the same
+            integer range.
 
         4. Convert to HUBO with (uniform) penalty method
 
@@ -3536,6 +3536,19 @@ class Instance:
         RemovedConstraint(x1 + x2 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=4)
         ```
         """
+    def penalty_method_with_weights(
+        self, weights: collections.abc.Mapping[int, float]
+    ) -> None:
+        r"""
+        Convert active regular constraints to finite penalty terms with
+        constraint-specific weights.
+
+        ``weights`` maps regular-constraint IDs to positive finite weights.
+        This method mutates the Instance in place and moves converted rows to
+        :attr:`removed_constraints`. It validates before committing, so an
+        error from this operation leaves the Instance unchanged. Only the
+        internal consuming penalty conversion requires a temporary clone.
+        """
     def uniform_penalty_method(self) -> ParametricInstance:
         r"""
         Convert to a parametric unconstrained instance by penalty method with uniform weight.
@@ -3594,6 +3607,17 @@ class Instance:
         >>> p.name
         'uniform_penalty_weight'
         ```
+        """
+    def uniform_penalty_method_with_weight(self, weight: builtins.float) -> None:
+        r"""
+        Convert active regular constraints to finite penalty terms with one
+        shared weight.
+
+        ``weight`` must be positive and finite. This method mutates the Instance
+        in place and moves converted rows to :attr:`removed_constraints`. It
+        validates before committing, so an error from this operation leaves the
+        Instance unchanged. Only the internal consuming penalty conversion
+        requires a temporary clone.
         """
     def evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -4165,6 +4189,19 @@ class Instance:
         Function(x1 + x3 + 2*x4 + x5 + 2*x6)
         ```
         """
+    def log_encode_used_integers(
+        self, *, atol: typing.Optional[builtins.float] = None
+    ) -> None:
+        r"""
+        Log-encode every used Integer decision variable.
+
+        A variable is used when it appears in the objective or an active
+        constraint family. Fixed, dependent, and irrelevant Integer variables
+        are not selected. The operation is atomic across all selected variables.
+
+        ``atol`` is the absolute tolerance used to normalize Integer bounds. If
+        omitted, the SDK default is used.
+        """
     def unary_encode(
         self,
         decision_variable_ids: builtins.set[builtins.int] = set(),
@@ -4258,7 +4295,11 @@ class Instance:
         ```
         """
     def convert_inequality_to_equality_with_integer_slack(
-        self, constraint_id: builtins.int, max_integer_range: builtins.int
+        self,
+        constraint_id: builtins.int,
+        max_integer_range: builtins.int,
+        *,
+        atol: typing.Optional[builtins.float] = None,
     ) -> None:
         r"""
         Convert an inequality constraint $f(x) \leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.
@@ -4266,6 +4307,10 @@ class Instance:
         - Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,
           $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal
           range of $s$, and returns error if the range exceeds it.
+
+        - ``atol`` is the absolute tolerance used to recognize the calculated
+          slack bound as integral and to construct the slack variable. ``None``
+          uses the current OMMX default.
 
         - Since this method evaluates the bound of $f(x)$, we may find that:
 
@@ -4305,7 +4350,8 @@ class Instance:
         ```python
         >>> instance.convert_inequality_to_equality_with_integer_slack(
         ...     constraint_id=0,
-        ...     max_integer_range=32
+        ...     max_integer_range=32,
+        ...     atol=1e-6,
         ... )
         >>> instance.constraints[0]
         Constraint(x0 + 2*x1 + x3 - 5 == 0)
@@ -4318,11 +4364,7 @@ class Instance:
         infeasible.
         """
     def add_integer_slack_to_inequality(
-        self,
-        constraint_id: builtins.int,
-        slack_upper_bound: builtins.int,
-        *,
-        max_error: builtins.float,
+        self, constraint_id: builtins.int, slack_upper_bound: builtins.int
     ) -> typing.Optional[builtins.float]:
         r"""
         Convert inequality $f(x) \leq 0$ to **inequality** $f(x) + b s \leq 0$ with an integer slack variable $s$.
@@ -4335,9 +4377,7 @@ class Instance:
           no smaller than $-\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
 
         - Since the slack variable is integer, the yielded inequality has residual error $\min_s f(x) + b s$ at most $b$.
-          ``max_error`` is an inclusive upper bound on $b$. The operation
-          validates this bound before mutating the Instance, and $b$ is returned
-          for auditing or penalty scaling.
+          The coefficient $b$ is returned for auditing or penalty scaling.
 
           - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,
             but it needs more bits for the slack variable, and thus the problem size becomes larger.
@@ -4373,7 +4413,6 @@ class Instance:
         >>> b = instance.add_integer_slack_to_inequality(
         ...     constraint_id=0,
         ...     slack_upper_bound=2,
-        ...     max_error=2.0,
         ... )
         >>> b, instance.constraints[0]
         (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
@@ -6114,72 +6153,73 @@ class Polynomial:
 @typing.final
 class PreparationPolicy:
     r"""
-    Caller-owned permissions and parameters for :meth:`Instance.prepare`.
+    Arguments for existing :class:`Instance` operations used by
+    :meth:`Instance.prepare`.
 
-    This Policy controls which transformations preparation may apply and the
-    parameters used by those transformations. Pass the target
-    :class:`InstanceClass` separately to :meth:`Instance.prepare`. Solver
-    Adapters may recommend a Policy; the caller independently supplies the
+    Each optional field stores the arguments for one existing :class:`Instance`
+    operation. ``None`` means preparation does not call that operation.
+    ``as_minimization_problem`` selects its no-argument operation with a Boolean.
+    Pass the target :class:`InstanceClass` separately to :meth:`Instance.prepare`.
+    Solver Adapters may recommend a Policy; the caller independently supplies the
     target, often the Adapter's ``INPUT_CLASS``.
-    Positive finite penalty weights require a minimization candidate; permit
-    sense normalization when preparing a maximization source.
-    The absolute tolerance is resolved while constructing this immutable Policy,
-    so later changes to the SDK default do not affect its interpretation.
     """
     @property
-    def allowed_special_constraint_lowerings(
+    def lower_special_constraints(
         self,
-    ) -> builtins.set[SpecialConstraintKind]:
+    ) -> typing.Optional[builtins.set[SpecialConstraintKind]]:
         r"""
-        Special-constraint families whose existing OMMX lowering may be used.
+        Arguments for :meth:`Instance.lower_special_constraints`.
         """
     @property
-    def allow_integer_log_encoding(self) -> builtins.bool:
+    def log_encode_used_integers(self) -> typing.Optional[builtins.float]:
         r"""
-        Whether bounded Integer variables may be log encoded.
+        Argument for the bounded-Integer log-encoding owner operation.
         """
     @property
-    def allow_sense_normalization(self) -> builtins.bool:
+    def as_minimization_problem(self) -> builtins.bool:
         r"""
-        Whether a maximization objective may be normalized to minimization.
+        Whether :meth:`Instance.as_minimization_problem` is invoked.
         """
     @property
-    def atol(self) -> builtins.float:
+    def convert_inequality_to_equality_with_integer_slack(
+        self,
+    ) -> typing.Optional[tuple[builtins.int, builtins.float]]:
         r"""
-        Absolute tolerance captured by this Policy for result-affecting
-        preparation operations.
+        Arguments after ``constraint_id`` for the exact Integer-slack owner API.
         """
     @property
-    def uniform_penalty_weight(self) -> typing.Optional[builtins.float]:
+    def add_integer_slack_to_inequality(self) -> typing.Optional[builtins.int]:
         r"""
-        Uniform finite penalty weight, or ``None`` when another/no penalty mode
-        is configured.
+        Argument after ``constraint_id`` for the approximate Integer-slack API.
         """
     @property
-    def penalty_weights(
+    def uniform_penalty_method_with_weight(self) -> typing.Optional[builtins.float]:
+        r"""
+        Argument for the uniform fixed-weight penalty owner API.
+        """
+    @property
+    def penalty_method_with_weights(
         self,
     ) -> typing.Optional[builtins.dict[builtins.int, builtins.float]]:
         r"""
-        Per-constraint finite penalty weights.
-
-        Keys identify regular constraints by their stable IDs. The map must
-        cover every regular constraint active at the penalty step; entries for
-        regular constraints already moved to ``removed_constraints`` are
-        ignored. Special-constraint lowering adds fresh regular IDs; a
-        per-constraint map must cover those IDs too. Use a uniform penalty when
-        their weights are not configured explicitly.
+        Arguments for the per-constraint fixed-weight penalty owner API.
         """
     def __new__(
         cls,
         *,
-        allowed_special_constraint_lowerings: builtins.set[
-            SpecialConstraintKind
-        ] = set(),
-        allow_integer_log_encoding: builtins.bool = False,
-        allow_sense_normalization: builtins.bool = False,
-        uniform_penalty_weight: typing.Optional[builtins.float] = None,
-        penalty_weights: typing.Optional[collections.abc.Mapping[int, float]] = None,
-        atol: typing.Optional[builtins.float] = None,
+        lower_special_constraints: typing.Optional[
+            builtins.set[SpecialConstraintKind]
+        ] = None,
+        log_encode_used_integers: typing.Optional[builtins.float] = None,
+        as_minimization_problem: builtins.bool = False,
+        convert_inequality_to_equality_with_integer_slack: typing.Optional[
+            tuple[builtins.int, builtins.float]
+        ] = None,
+        add_integer_slack_to_inequality: typing.Optional[builtins.int] = None,
+        uniform_penalty_method_with_weight: typing.Optional[builtins.float] = None,
+        penalty_method_with_weights: typing.Optional[
+            collections.abc.Mapping[int, float]
+        ] = None,
     ) -> PreparationPolicy: ...
     def __repr__(self) -> builtins.str: ...
 

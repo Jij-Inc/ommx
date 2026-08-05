@@ -74,39 +74,65 @@ def test_recommended_policy_enables_common_operations() -> None:
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 
     assert isinstance(policy, PreparationPolicy)
-    assert policy.allowed_special_constraint_lowerings == {
+    assert policy.lower_special_constraints == {
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.OneHot,
         SpecialConstraintKind.Sos1,
     }
-    assert policy.allow_integer_log_encoding
-    assert policy.allow_sense_normalization
-    assert policy.uniform_penalty_weight is None
-    assert policy.penalty_weights is None
+    assert policy.log_encode_used_integers is not None
+    assert policy.as_minimization_problem
+    assert policy.convert_inequality_to_equality_with_integer_slack == (
+        32,
+        policy.log_encode_used_integers,
+    )
+    assert policy.add_integer_slack_to_inequality == 32
+    assert policy.uniform_penalty_method_with_weight is None
+    assert policy.penalty_method_with_weights is None
 
 
 def test_recommended_policy_accepts_explicit_penalty_values() -> None:
     uniform = OMMXOpenJijSAAdapter.recommended_preparation_policy(
-        uniform_penalty_weight=3.0,
+        uniform_penalty_method_with_weight=3.0,
     )
-    assert uniform.uniform_penalty_weight == 3.0
-    assert uniform.penalty_weights is None
+    assert uniform.uniform_penalty_method_with_weight == 3.0
+    assert uniform.penalty_method_with_weights is None
 
     weights = {7: 2.0}
     per_constraint = OMMXOpenJijSAAdapter.recommended_preparation_policy(
-        penalty_weights=weights,
+        penalty_method_with_weights=weights,
     )
     weights[7] = 4.0
-    assert per_constraint.uniform_penalty_weight is None
-    assert per_constraint.penalty_weights == {7: 2.0}
+    assert per_constraint.uniform_penalty_method_with_weight is None
+    assert per_constraint.penalty_method_with_weights == {7: 2.0}
 
 
-def test_recommended_policy_rejects_incompatible_penalty_values() -> None:
-    with pytest.raises(ValueError, match="mutually exclusive"):
+def test_recommended_policy_rejects_both_penalty_operation_arguments() -> None:
+    with pytest.raises(ValueError, match="cannot both be specified"):
         OMMXOpenJijSAAdapter.recommended_preparation_policy(
-            uniform_penalty_weight=2.0,
-            penalty_weights={7: 2.0},
+            uniform_penalty_method_with_weight=2.0,
+            penalty_method_with_weights={7: 2.0},
         )
+
+
+def test_recommended_policy_falls_back_to_approximate_integer_slack() -> None:
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={7: 100 * x <= 51},
+        sense=Sense.Minimize,
+    )
+
+    instance.prepare(
+        OMMXOpenJijSAAdapter.INPUT_CLASS,
+        OMMXOpenJijSAAdapter.recommended_preparation_policy(
+            uniform_penalty_method_with_weight=2.0,
+        ),
+    )
+
+    assert not instance.constraints
+    assert instance.removed_constraints[7].equality == Equality.LessThanOrEqualToZero
+    assert OMMXOpenJijSAAdapter.check_applicability(instance).is_applicable
 
 
 def test_direct_accepts_arbitrary_degree_binary_minimization_without_mutation() -> None:

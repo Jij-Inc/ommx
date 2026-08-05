@@ -343,15 +343,17 @@ def test_solver_adapter_recommends_target_free_special_constraint_lowering() -> 
 
     assert isinstance(policy, PreparationPolicy)
     assert not hasattr(policy, "input_class")
-    assert policy.allowed_special_constraint_lowerings == {
+    assert policy.lower_special_constraints == {
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.OneHot,
         SpecialConstraintKind.Sos1,
     }
-    assert not policy.allow_integer_log_encoding
-    assert not policy.allow_sense_normalization
-    assert policy.uniform_penalty_weight is None
-    assert policy.penalty_weights is None
+    assert policy.log_encode_used_integers is None
+    assert not policy.as_minimization_problem
+    assert policy.convert_inequality_to_equality_with_integer_slack is None
+    assert policy.add_integer_slack_to_inequality is None
+    assert policy.uniform_penalty_method_with_weight is None
+    assert policy.penalty_method_with_weights is None
 
 
 def test_solver_adapter_policy_recommendation_does_not_require_input_class() -> None:

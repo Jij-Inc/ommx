@@ -21,6 +21,7 @@ from ommx import (
     SampleSet,
     Solution,
     SpecialConstraintKind,
+    get_default_atol,
 )
 from ommx.adapter import (
     AdapterPreconditionViolation,
@@ -43,10 +44,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     Arbitrary polynomial objective degree is supported through OpenJij's QUBO
     and Binary-HUBO paths.
 
-    Integer encoding, sense normalization, and finite penalties are explicit
-    OMMX preparation operations, not part of the declared input class. Integer
-    slack is a separate :class:`ommx.Instance` operation. Apply any required
-    slack explicitly, then use :meth:`recommended_preparation_policy` with
+    Integer encoding, sense normalization, Integer slack, and finite penalties
+    are explicit OMMX Instance operations, not part of the declared input
+    class. Use :meth:`recommended_preparation_policy` with
     :meth:`ommx.Instance.prepare` before passing that same Instance to the
     direct Adapter API.
     """
@@ -198,32 +198,48 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     def recommended_preparation_policy(
         cls,
         *,
-        uniform_penalty_weight: float | None = None,
-        penalty_weights: Mapping[int, float] | None = None,
-        atol: float | None = None,
+        uniform_penalty_method_with_weight: float | None = None,
+        penalty_method_with_weights: Mapping[int, float] | None = None,
     ) -> PreparationPolicy:
         """Return the common OMMX Policy recommended for OpenJij input.
 
-        The default permits the OMMX operations needed for bounded Integer
-        encoding and minimization-sense normalization. Finite penalties and
-        an optional absolute tolerance remain explicit caller choices through
-        this method's keyword arguments. Integer slack is a separate Instance
-        operation and is not selected by this Policy. The returned Policy is
-        executed only by :meth:`ommx.Instance.prepare`, with
+        The default stores the arguments recommended for special-constraint
+        lowering, bounded Integer encoding, minimization-sense normalization,
+        and both exact and approximate Integer slack. The recommendation uses
+        the SDK default absolute tolerance. Finite-penalty arguments remain
+        caller choices through this method's keyword arguments. The returned
+        Policy is executed only by :meth:`ommx.Instance.prepare`, with
         :attr:`INPUT_CLASS` supplied separately as its target; this Adapter's
         direct APIs stay strict.
         """
+        if (
+            uniform_penalty_method_with_weight is not None
+            and penalty_method_with_weights is not None
+        ):
+            raise ValueError(
+                "uniform_penalty_method_with_weight and "
+                "penalty_method_with_weights cannot both be specified"
+            )
+        resolved_atol = get_default_atol()
         return PreparationPolicy(
-            allowed_special_constraint_lowerings={
+            lower_special_constraints={
                 SpecialConstraintKind.Indicator,
                 SpecialConstraintKind.OneHot,
                 SpecialConstraintKind.Sos1,
             },
-            allow_integer_log_encoding=True,
-            allow_sense_normalization=True,
-            uniform_penalty_weight=uniform_penalty_weight,
-            penalty_weights=None if penalty_weights is None else dict(penalty_weights),
-            atol=atol,
+            log_encode_used_integers=resolved_atol,
+            as_minimization_problem=True,
+            convert_inequality_to_equality_with_integer_slack=(
+                32,
+                resolved_atol,
+            ),
+            add_integer_slack_to_inequality=32,
+            uniform_penalty_method_with_weight=uniform_penalty_method_with_weight,
+            penalty_method_with_weights=(
+                None
+                if penalty_method_with_weights is None
+                else dict(penalty_method_with_weights)
+            ),
         )
 
     @classmethod

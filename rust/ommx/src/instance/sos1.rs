@@ -57,6 +57,7 @@ impl Instance {
         id: Sos1ConstraintID,
     ) -> Result<Vec<ConstraintID>> {
         let plans = self.plan_sos1_conversion(id)?;
+        self.ensure_new_decision_variable_capacity(fresh_indicator_count(&plans))?;
         self.apply_sos1_conversion(id, plans)
     }
 
@@ -64,10 +65,11 @@ impl Instance {
     ///
     /// See [`Self::convert_sos1_to_constraints`] for the conversion rule.
     ///
-    /// This is atomic: every active SOS1 is validated up front, and only once all
-    /// validations succeed are the conversions applied. If any SOS1 fails
-    /// validation (unsupported kind, non-finite bound, domain excludes 0, etc.),
-    /// no mutation happens and the instance is left untouched.
+    /// This is atomic: every active SOS1 and the total fresh-indicator capacity
+    /// are validated up front, and only once all validations succeed are the
+    /// conversions applied. If any SOS1 fails validation (unsupported kind,
+    /// non-finite bound, domain excludes 0, ID capacity, etc.), no mutation
+    /// happens and the instance is left untouched.
     ///
     /// Returns a map from each original [`Sos1ConstraintID`] to the IDs of the
     /// regular constraints it produced.
@@ -88,6 +90,15 @@ impl Instance {
             let plans = self.plan_sos1_conversion(id)?;
             all_plans.push((id, plans));
         }
+        let fresh_indicator_count = all_plans.iter().try_fold(
+            0usize,
+            |total, (_, plans)| -> Result<usize, crate::DecisionVariableError> {
+                total
+                    .checked_add(fresh_indicator_count(plans))
+                    .ok_or(crate::DecisionVariableError::NoAvailableID)
+            },
+        )?;
+        self.ensure_new_decision_variable_capacity(fresh_indicator_count)?;
         // Phase 2: apply. Planned state only references variables that existed at
         // plan time; `apply_sos1_conversion` only adds fresh variables / constraints
         // and relaxes its own SOS1, so earlier applications cannot invalidate later
@@ -269,6 +280,13 @@ impl Instance {
             .expect("new_id was allocated from this collection");
         new_id
     }
+}
+
+fn fresh_indicator_count(plans: &[(VariableID, IndicatorPlan)]) -> usize {
+    plans
+        .iter()
+        .filter(|(_, plan)| matches!(plan, IndicatorPlan::Fresh { .. }))
+        .count()
 }
 
 #[cfg(test)]
@@ -645,5 +663,44 @@ mod tests {
         assert_eq!(instance.decision_variables, before_vars);
         assert_eq!(instance.constraints(), &before_constraints);
         assert!(instance.removed_sos1_constraints().is_empty());
+    }
+
+    #[test]
+    fn bulk_conversion_preflights_fresh_indicator_capacity() {
+        let finite_integer = || {
+            DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(-1.0, 1.0).unwrap(),
+                crate::ATol::default(),
+            )
+            .unwrap()
+        };
+        let sos1 = Sos1Constraint::new(
+            [VariableID::from(0), VariableID::from(1)]
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(0)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(0), finite_integer()),
+                (VariableID::from(1), finite_integer()),
+                (VariableID::from(u64::MAX - 1), DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
+            .build()
+            .unwrap();
+        let expected = instance.clone();
+
+        let error = instance.convert_all_sos1_to_constraints().unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<crate::DecisionVariableError>(),
+            Some(crate::DecisionVariableError::NoAvailableID)
+        ));
+        assert_eq!(instance, expected);
     }
 }

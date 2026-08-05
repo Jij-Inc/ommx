@@ -325,7 +325,7 @@ OMMXPySCIPOptAdapter.require_applicable(instance)
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
-基底 class の推奨 Policy は OMMX-owned の Indicator、OneHot、SOS1 lowering だけを許可します。具体的な Adapter は追加の OMMX-owned operation を推奨できますが、direct constructor と `solve()` は、実際に受け取った入力を厳密に扱います。
+基底 class の推奨 Policy は OMMX-owned の Indicator、OneHot、SOS1 loweringの引数だけを設定します。具体的な Adapter は追加の OMMX-owned operationの引数を推奨できますが、direct constructor と `solve()` は、実際に受け取った入力を厳密に扱います。
 
 Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
 操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-penalty変換が
@@ -638,11 +638,11 @@ instance = Instance.from_components(
 )
 
 # このtutorial Adapterが継承する推奨Policyは特殊制約loweringだけなので、呼び出し側が
-# sense normalizationとfinite penaltyを明示的に許可してからstrictなdirect
+# sense normalizationとfinite penaltyを明示的に設定してからstrictなdirect
 # Adapter APIを呼び出す
 policy = PreparationPolicy(
-    allow_sense_normalization=True,
-    uniform_penalty_weight=4.0,
+    as_minimization_problem=True,
+    uniform_penalty_method_with_weight=4.0,
 )
 instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)

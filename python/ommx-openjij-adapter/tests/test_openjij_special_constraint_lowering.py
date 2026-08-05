@@ -20,7 +20,7 @@ def test_preparation_explicitly_lowers_special_constraints() -> None:
     instance.prepare(
         OMMXOpenJijSAAdapter.INPUT_CLASS,
         OMMXOpenJijSAAdapter.recommended_preparation_policy(
-            uniform_penalty_weight=2.0,
+            uniform_penalty_method_with_weight=2.0,
         ),
     )
 

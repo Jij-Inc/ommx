@@ -61,11 +61,15 @@ def test_recommended_policy_enables_special_constraint_lowering() -> None:
     policy = OMMXHighsAdapter.recommended_preparation_policy()
 
     assert isinstance(policy, PreparationPolicy)
-    assert policy.allowed_special_constraint_lowerings == {
+    assert policy.lower_special_constraints == {
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.OneHot,
         SpecialConstraintKind.Sos1,
     }
+    assert policy.log_encode_used_integers is None
+    assert not policy.as_minimization_problem
+    assert policy.convert_inequality_to_equality_with_integer_slack is None
+    assert policy.add_integer_slack_to_inequality is None
 
 
 @pytest.mark.parametrize(

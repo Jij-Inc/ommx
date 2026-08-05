@@ -15,41 +15,78 @@ use crate::{
 };
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
-    exceptions::{PyKeyError, PyRuntimeError, PyValueError},
+    exceptions::{PyKeyError, PyRuntimeError, PyTypeError, PyValueError},
     prelude::*,
-    types::{PyBool, PyBytes, PyDict},
+    types::{PyBool, PyBytes, PyDict, PyInt, PyMapping, PyMappingMethods, PyTuple, PyTupleMethods},
     Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-struct PositiveFiniteSlackMaxErrorInput(f64);
+const MAX_U64: u64 = u64::MAX;
 
-impl<'py> FromPyObject<'_, 'py> for PositiveFiniteSlackMaxErrorInput {
+pub(crate) struct PenaltyMethodWithWeightsInput(BTreeMap<u64, f64>);
+
+impl PenaltyMethodWithWeightsInput {
+    pub(crate) fn into_core(self) -> BTreeMap<ConstraintID, f64> {
+        self.0
+            .into_iter()
+            .map(|(id, weight)| (ConstraintID::from(id), weight))
+            .collect()
+    }
+}
+
+impl<'py> FromPyObject<'_, 'py> for PenaltyMethodWithWeightsInput {
     type Error = PyErr;
 
     fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
-        let value = ob.to_owned();
-        if value.is_instance_of::<PyBool>() {
-            return Err(invalid_slack_max_error());
+        let mapping = ob.cast::<PyMapping>().map_err(|_| {
+            PyTypeError::new_err("penalty_method_with_weights must be a Mapping[int, float]")
+        })?;
+        let mut snapshot = BTreeMap::new();
+        for item in mapping.items()?.iter() {
+            let pair = item.cast::<PyTuple>().map_err(|_| {
+                PyTypeError::new_err("penalty_method_with_weights must be a Mapping[int, float]")
+            })?;
+            let key = extract_penalty_weight_key(&pair.get_item(0)?)?;
+            let value = pair.get_item(1)?.extract::<f64>().map_err(|_| {
+                PyTypeError::new_err(format!(
+                    "penalty_method_with_weights[{key}] must be a float"
+                ))
+            })?;
+            snapshot.insert(key, value);
         }
-        let value = value
-            .extract::<f64>()
-            .map_err(|_| invalid_slack_max_error())?;
-        if !value.is_finite() || value <= 0.0 {
-            return Err(invalid_slack_max_error());
-        }
-        Ok(Self(value))
+        Ok(Self(snapshot))
     }
 }
 
-impl pyo3_stub_gen::PyStubType for PositiveFiniteSlackMaxErrorInput {
+impl pyo3_stub_gen::PyStubType for PenaltyMethodWithWeightsInput {
     fn type_output() -> pyo3_stub_gen::TypeInfo {
-        <f64 as pyo3_stub_gen::PyStubType>::type_output()
+        <BTreeMap<u64, f64> as pyo3_stub_gen::PyStubType>::type_output()
+    }
+
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            import: ["collections.abc".into()].into(),
+            name: "collections.abc.Mapping[int, float]".into(),
+            source_module: None,
+            type_refs: Default::default(),
+        }
     }
 }
 
-fn invalid_slack_max_error() -> PyErr {
-    PyValueError::new_err("max_error must be a positive finite number")
+fn extract_penalty_weight_key(value: &Bound<'_, PyAny>) -> PyResult<u64> {
+    if value.is_instance_of::<PyBool>() || !value.is_instance_of::<PyInt>() {
+        return Err(invalid_penalty_weight_key());
+    }
+    value
+        .extract::<u64>()
+        .map_err(|_| invalid_penalty_weight_key())
+}
+
+fn invalid_penalty_weight_key() -> PyErr {
+    PyValueError::new_err(format!(
+        "penalty_method_with_weights keys must be integer constraint IDs in [0, {MAX_U64}]"
+    ))
 }
 
 /// Optimization problem instance.
@@ -127,8 +164,10 @@ impl Instance {
 impl Instance {
     /// Prepare this Instance in place to satisfy ``input_class``.
     ///
-    /// Preparation applies the transformations permitted by ``policy`` in a
-    /// fixed order. On success, ``input_class.contains(self)`` is true.
+    /// Preparation invokes the configured :class:`Instance` operations in a
+    /// fixed order until ``input_class.contains(self)`` is true. It does not
+    /// evaluate Adapter-owned preconditions or add a composite mathematical
+    /// guarantee beyond the semantics of the invoked operations.
     ///
     /// This method is not transactional across transformations. If it raises,
     /// changes made by earlier transformations remain applied.
@@ -977,9 +1016,8 @@ impl Instance {
     ///
     ///   * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
     ///   * If exact conversion is unavailable, this legacy Driver invokes
-    ///     {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the
-    ///     maximum finite error bound. To enforce a specific ``max_error``,
-    ///     use the individual conversion, penalty, and encoding APIs instead.
+    ///     {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the same
+    ///     integer range.
     ///
     /// 4. Convert to QUBO with (uniform) penalty method
     ///
@@ -1060,9 +1098,8 @@ impl Instance {
     ///
     ///   * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
     ///   * If exact conversion is unavailable, this legacy Driver invokes
-    ///     {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the
-    ///     maximum finite error bound. To enforce a specific ``max_error``,
-    ///     use the individual conversion, penalty, and encoding APIs instead.
+    ///     {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the same
+    ///     integer range.
     ///
     /// 4. Convert to HUBO with (uniform) penalty method
     ///
@@ -1163,6 +1200,25 @@ impl Instance {
         })
     }
 
+    /// Convert active regular constraints to finite penalty terms with
+    /// constraint-specific weights.
+    ///
+    /// ``weights`` maps regular-constraint IDs to positive finite weights.
+    /// This method mutates the Instance in place and moves converted rows to
+    /// :attr:`removed_constraints`. It validates before committing, so an
+    /// error from this operation leaves the Instance unchanged. Only the
+    /// internal consuming penalty conversion requires a temporary clone.
+    fn penalty_method_with_weights(
+        &mut self,
+        py: Python<'_>,
+        weights: PenaltyMethodWithWeightsInput,
+    ) -> OmmxPyResult<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.inner
+            .penalty_method_with_weights(&weights.into_core())?;
+        Ok(())
+    }
+
     /// Convert to a parametric unconstrained instance by penalty method with uniform weight.
     ///
     /// Roughly, this converts a constrained problem:
@@ -1225,6 +1281,24 @@ impl Instance {
         Ok(ParametricInstance {
             inner: parametric_instance,
         })
+    }
+
+    /// Convert active regular constraints to finite penalty terms with one
+    /// shared weight.
+    ///
+    /// ``weight`` must be positive and finite. This method mutates the Instance
+    /// in place and moves converted rows to :attr:`removed_constraints`. It
+    /// validates before committing, so an error from this operation leaves the
+    /// Instance unchanged. Only the internal consuming penalty conversion
+    /// requires a temporary clone.
+    fn uniform_penalty_method_with_weight(
+        &mut self,
+        py: Python<'_>,
+        weight: f64,
+    ) -> OmmxPyResult<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.inner.uniform_penalty_method_with_weight(weight)?;
+        Ok(())
     }
 
     /// Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.
@@ -1931,6 +2005,25 @@ impl Instance {
         Ok(())
     }
 
+    /// Log-encode every used Integer decision variable.
+    ///
+    /// A variable is used when it appears in the objective or an active
+    /// constraint family. Fixed, dependent, and irrelevant Integer variables
+    /// are not selected. The operation is atomic across all selected variables.
+    ///
+    /// ``atol`` is the absolute tolerance used to normalize Integer bounds. If
+    /// omitted, the SDK default is used.
+    #[pyo3(signature = (*, atol=None))]
+    fn log_encode_used_integers(&mut self, py: Python<'_>, atol: Option<f64>) -> OmmxPyResult<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        self.inner.log_encode_used_integers(atol)?;
+        Ok(())
+    }
+
     /// Unary-encode the integer decision variables.
     ///
     /// Unary encoding of an integer variable $x \in [l, u]$ is to represent it
@@ -2063,6 +2156,10 @@ impl Instance {
     ///   $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal
     ///   range of $s$, and returns error if the range exceeds it.
     ///
+    /// - ``atol`` is the absolute tolerance used to recognize the calculated
+    ///   slack bound as integral and to construct the slack variable. ``None``
+    ///   uses the current OMMX default.
+    ///
     /// - Since this method evaluates the bound of $f(x)$, we may find that:
     ///
     ///   - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:
@@ -2101,7 +2198,8 @@ impl Instance {
     /// ```python
     /// >>> instance.convert_inequality_to_equality_with_integer_slack(
     /// ...     constraint_id=0,
-    /// ...     max_integer_range=32
+    /// ...     max_integer_range=32,
+    /// ...     atol=1e-6,
     /// ... )
     /// >>> instance.constraints[0]
     /// Constraint(x0 + 2*x1 + x3 - 5 == 0)
@@ -2112,16 +2210,19 @@ impl Instance {
     /// range exceeds ``max_integer_range``. Raises
     /// {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
     /// infeasible.
+    #[pyo3(signature = (constraint_id, max_integer_range, *, atol=None))]
     pub fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
+        atol: Option<f64>,
     ) -> OmmxPyResult<()> {
+        let atol = atol.map(ommx::ATol::new).transpose()?.unwrap_or_default();
         self.inner
             .convert_inequality_to_equality_with_integer_slack(
                 constraint_id,
                 max_integer_range,
-                ommx::ATol::default(),
+                atol,
             )?;
         Ok(())
     }
@@ -2136,9 +2237,7 @@ impl Instance {
     ///   no smaller than $-\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
     ///
     /// - Since the slack variable is integer, the yielded inequality has residual error $\min_s f(x) + b s$ at most $b$.
-    ///   ``max_error`` is an inclusive upper bound on $b$. The operation
-    ///   validates this bound before mutating the Instance, and $b$ is returned
-    ///   for auditing or penalty scaling.
+    ///   The coefficient $b$ is returned for auditing or penalty scaling.
     ///
     ///   - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,
     ///     but it needs more bits for the slack variable, and thus the problem size becomes larger.
@@ -2174,23 +2273,18 @@ impl Instance {
     /// >>> b = instance.add_integer_slack_to_inequality(
     /// ...     constraint_id=0,
     /// ...     slack_upper_bound=2,
-    /// ...     max_error=2.0,
     /// ... )
     /// >>> b, instance.constraints[0]
     /// (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
     /// ```
-    #[pyo3(signature = (constraint_id, slack_upper_bound, *, max_error))]
     fn add_integer_slack_to_inequality(
         &mut self,
         constraint_id: u64,
         slack_upper_bound: u64,
-        max_error: PositiveFiniteSlackMaxErrorInput,
     ) -> OmmxPyResult<Option<f64>> {
-        let result = self.inner.add_integer_slack_to_inequality(
-            constraint_id,
-            slack_upper_bound,
-            max_error.0,
-        )?;
+        let result = self
+            .inner
+            .add_integer_slack_to_inequality(constraint_id, slack_upper_bound)?;
         Ok(result)
     }
 
@@ -2927,7 +3021,6 @@ impl Instance {
                     self.inner.add_integer_slack_to_inequality(
                         id_u64,
                         inequality_integer_slack_max_range,
-                        f64::MAX,
                     )?;
                 }
                 Err(error) => return Err(error.into()),

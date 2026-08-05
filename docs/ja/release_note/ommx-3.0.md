@@ -10,16 +10,17 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### 🆕 Solver Adapter向けのInstance-owned preparation policy ([#1139](https://github.com/Jij-Inc/ommx/pull/1139))
 
-{class}`~ommx.PreparationPolicy` は、preparationで利用を許可する既存の `Instance` 操作・
-parameterを表します。対象の {class}`~ommx.InstanceClass` は独立に
+{class}`~ommx.PreparationPolicy` は、既存の `Instance` 操作に渡すoptionalな引数を
+保持します。対象の {class}`~ommx.InstanceClass` は独立に
 {meth}`~ommx.Instance.prepare` へ渡し、同メソッドが固定順序でPolicyを解釈して
 その `Instance` をin-placeに変更し、`None` を返します。
 `SolverAdapter` は直接入力のclassを `INPUT_CLASS` として宣言し、呼び出し側はそのclassを
 preparationの対象として別に渡せます。Adapterはそれとは独立に
 `recommended_preparation_policy()` でPolicyを推奨できますが、preparationを実行せず、
 直接入力に対する `INPUT_CLASS` checkも緩和しません。
-結果に影響する操作はPolicyに保存された絶対許容誤差を使い、
-`Instance.prepare()` はmutableなSDK defaultを読みません。
+各Policy optionは既存の `Instance` owner操作と同じ名前を持ち、その操作の引数を
+保存します。結果に影響する許容誤差も、それを使う操作の引数として保持され、
+`Instance.prepare()` が意味を再定義することはありません。
 
 ```python
 policy = OMMXHighsAdapter.recommended_preparation_policy()
@@ -27,13 +28,14 @@ instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
 solution = OMMXHighsAdapter.solve(instance)
 ```
 
-HiGHSの推奨Policyは、`Instance.prepare()` 中のIndicator、OneHot、SOS1の自動loweringを
-許可します。従来のOpenJij Adapter-owned preparation APIもこの共通workflowに
-置き換わり、有限penaltyは明示的なPolicy optionになります。Integer slackは
-`PreparationPolicy` とは明確に分離されています。呼び出し側が
-{meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` を直接呼び、
-{class}`~ommx.ExactIntegerSlackError` をcatchした後に近似操作を選ぶ場合だけ、正の有限な
-`max_error` とともに {meth}`~ommx.Instance.add_integer_slack_to_inequality` を呼びます。
+HiGHSの推奨Policyは、`Instance.prepare()` 中のIndicator、OneHot、SOS1 loweringの引数を
+保持します。従来のOpenJij Adapter-owned preparation APIもこの共通workflowに
+置き換わり、有限penaltyは明示的なPolicy optionになります。OpenJijの推奨Policyは
+{meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` と
+{meth}`~ommx.Instance.add_integer_slack_to_inequality` の両方の引数を保持します。
+Preparationは各active通常不等式にexact操作を先に試し、exact slackが利用不能な場合だけ
+approximate操作を呼びます。両方とも独立に選択可能なPolicy optionであり、直接呼べる
+`Instance` 操作でもあります。
 
 変換の結果は、同じ `Instance` のdecision-variable dependency、removed constraint、
 provenance、補助変数としてその値自身が所有します。Adapterが返す
@@ -45,11 +47,11 @@ mapで指定する必要があります。そのIDを明示的に指定しない
 制約IDからparameter IDへの対応、materialization、生成した
 parameter ID、removed constraintの記録はpenalty操作自身が所有します。正の
 finite weightはminimization candidateにだけ適用されるため、maximization sourceでは
-sense normalizationも許可する必要があります。
+`as_minimization_problem=True` も設定する必要があります。
 
 Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
 操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-penalty変換が
-途中までcommitされることはありません。許可された操作をすべて適用しても指定された
+途中までcommitされることはありません。設定された操作をすべて適用しても指定された
 input classに到達しなければ通常のerrorを返します。
 
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
@@ -113,16 +115,15 @@ OpenJijの `sample()` / `solve()` は、Integer encoding、sense反転、slack�
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
-    uniform_penalty_weight=20.0,
+    uniform_penalty_method_with_weight=20.0,
 )
 instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
-有限penaltyは明示的なopt-inが必要です。Integer slackはpreparationの操作ではありません。
-呼び出し側がpreparationの前にexactな `Instance` 操作を選び、
-`ExactIntegerSlackError` の後に近似操作を選ぶ場合は正の有限な `max_error` を明示します。
-preparationがこのfallbackを自動的に選ぶことはありません。preparationは
+有限penaltyは明示的なopt-inが必要です。推奨Policyは2つのInteger-slack owner操作を
+range 32で選択し、preparationはexact変換がexact slackを利用不能と通知した場合だけ
+approximate操作を使います。preparationは
 渡された {class}`~ommx.Instance` を変更するため、その値でapplicabilityをもう一度
 確認してください。受け入れるmodel classとpreparationの詳細は
 [Adapter Input Class](../user_guide/capability_model.md) と

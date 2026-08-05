@@ -181,9 +181,8 @@ impl Instance {
     /// $R = \text{slack\_upper\_bound}$, the returned coefficient is the
     /// round-to-nearest value of $A / R$, advanced to the next representable
     /// `f64` only when that rounded value is below $A / R$. Thus $bR \geq A$,
-    /// and the discretization residual is at most $b$. The caller-provided
-    /// `max_error` is an inclusive upper bound on $b$ and must be positive and
-    /// finite. A true zero value of $A$ needs no slack coefficient.
+    /// and the discretization residual is at most $b$. A true zero value of $A$
+    /// needs no slack coefficient.
     /// `slack_upper_bound` must be in `1..=2^53` so its conversion to `f64` is
     /// exact.
     ///
@@ -192,34 +191,19 @@ impl Instance {
     ///
     /// # Errors
     ///
-    /// Returns an ordinary error if `max_error` is not positive and finite or
-    /// if the planned residual coefficient exceeds it. Contract, allocation,
-    /// and arithmetic failures from constructing the slack variable are also
-    /// propagated as ordinary errors. Every failure leaves the instance
-    /// unchanged.
+    /// Contract, allocation, and arithmetic failures from constructing the
+    /// slack variable are propagated as ordinary errors. Every failure leaves
+    /// the instance unchanged.
     pub fn add_integer_slack_to_inequality(
         &mut self,
         constraint_id: u64,
         slack_upper_bound: u64,
-        max_error: f64,
     ) -> Result<Option<f64>> {
-        anyhow::ensure!(
-            max_error.is_finite() && max_error > 0.0,
-            "maximum Integer slack approximation error must be positive and finite: {max_error}"
-        );
         let constraint_id = ConstraintID::from(constraint_id);
         let bounds = self.bounds();
         let kinds = self.kinds();
         let plan =
             self.plan_approximate_integer_slack(constraint_id, slack_upper_bound, &bounds, &kinds)?;
-        if let Some(residual_coefficient) = plan
-            .residual_coefficient()
-            .filter(|&coefficient| coefficient > max_error)
-        {
-            crate::bail!(
-                "approximate Integer slack residual coefficient {residual_coefficient} exceeds maximum error {max_error} for constraint {constraint_id:?}"
-            );
-        }
         let mutation =
             self.plan_integer_slack_mutation([(constraint_id, plan)], ATol::default())?;
         Ok(self
@@ -481,10 +465,10 @@ mod tests {
     }
 
     #[test]
-    fn approximate_integer_slack_accepts_inclusive_error_bound() {
+    fn approximate_integer_slack_adds_bounded_integer_variable() {
         let mut instance = integer_inequality_instance();
 
-        instance.add_integer_slack_to_inequality(0, 1, 2.0).unwrap();
+        instance.add_integer_slack_to_inequality(0, 1).unwrap();
 
         assert_eq!(instance.decision_variables().len(), 2);
         assert_eq!(
@@ -495,35 +479,6 @@ mod tests {
                 .equality,
             Equality::LessThanOrEqualToZero
         );
-    }
-
-    #[test]
-    fn approximate_integer_slack_rejects_excessive_error_without_mutation() {
-        let mut instance = integer_inequality_instance();
-        let expected = instance.clone();
-
-        let error = instance
-            .add_integer_slack_to_inequality(0, 1, 1.0)
-            .unwrap_err();
-
-        assert!(error.to_string().contains("exceeds maximum error 1"));
-        assert!(!error.is::<ExactIntegerSlackUnavailable>());
-        assert_eq!(instance, expected);
-    }
-
-    #[test]
-    fn approximate_integer_slack_validates_error_before_mutation() {
-        for max_error in [0.0, -1.0, f64::INFINITY, f64::NAN] {
-            let mut instance = integer_inequality_instance();
-            let expected = instance.clone();
-
-            let error = instance
-                .add_integer_slack_to_inequality(0, 1, max_error)
-                .unwrap_err();
-
-            assert!(error.to_string().contains("must be positive and finite"));
-            assert_eq!(instance, expected);
-        }
     }
 
     #[test]
@@ -552,7 +507,7 @@ mod tests {
         .unwrap();
 
         let residual_coefficient = instance
-            .add_integer_slack_to_inequality(0, 2, f64::from_bits(1))
+            .add_integer_slack_to_inequality(0, 2)
             .unwrap()
             .expect("the inequality is not trivially satisfied");
 
@@ -627,7 +582,7 @@ mod tests {
         assert!(err.is::<ExactIntegerSlackUnavailable>());
         assert!(instance.constraints().contains_key(&ConstraintID::from(0)));
 
-        instance.add_integer_slack_to_inequality(0, 1, 2.0).unwrap();
+        instance.add_integer_slack_to_inequality(0, 1).unwrap();
         assert_eq!(instance.decision_variables().len(), 2);
         assert_eq!(
             instance
@@ -690,7 +645,7 @@ mod tests {
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
 
         let b = instance
-            .add_integer_slack_to_inequality(0, 2, 1.0)
+            .add_integer_slack_to_inequality(0, 2)
             .unwrap()
             .expect("constraint should still be active");
         assert!(b > 0.0);
@@ -729,7 +684,7 @@ mod tests {
         .unwrap();
 
         let coefficient = instance
-            .add_integer_slack_to_inequality(0, 3, 0.34)
+            .add_integer_slack_to_inequality(0, 3)
             .unwrap()
             .expect("the inequality is not trivially satisfied");
 
@@ -738,7 +693,7 @@ mod tests {
 
         let mut exactly_divisible = integer_inequality_instance();
         let coefficient = exactly_divisible
-            .add_integer_slack_to_inequality(0, 1, 2.0)
+            .add_integer_slack_to_inequality(0, 1)
             .unwrap()
             .expect("the inequality is not trivially satisfied");
         assert_eq!(coefficient, 2.0);
@@ -762,7 +717,7 @@ mod tests {
         };
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
 
-        let result = instance.add_integer_slack_to_inequality(0, 2, 1.0).unwrap();
+        let result = instance.add_integer_slack_to_inequality(0, 2).unwrap();
         assert!(result.is_none());
         assert!(instance.constraints().is_empty());
         assert_eq!(instance.removed_constraints().len(), 1);
@@ -786,9 +741,7 @@ mod tests {
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
         let expected = instance.clone();
 
-        let err = instance
-            .add_integer_slack_to_inequality(0, 0, 1.0)
-            .unwrap_err();
+        let err = instance.add_integer_slack_to_inequality(0, 0).unwrap_err();
         assert!(err.to_string().contains("1..=2^53"));
         assert_eq!(instance, expected);
     }
@@ -799,7 +752,7 @@ mod tests {
         let expected = instance.clone();
 
         let err = instance
-            .add_integer_slack_to_inequality(0, MAX_APPROXIMATE_INTEGER_SLACK_RANGE + 1, 1.0)
+            .add_integer_slack_to_inequality(0, MAX_APPROXIMATE_INTEGER_SLACK_RANGE + 1)
             .unwrap_err();
 
         assert!(err.to_string().contains("1..=2^53"));

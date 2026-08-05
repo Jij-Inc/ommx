@@ -1,5 +1,4 @@
 import math
-from typing import cast
 
 import ommx
 import pytest
@@ -223,7 +222,7 @@ def test_convert_inequality_to_equality_with_integer_slack_trivial():
         sense=Instance.MAXIMIZE,
     )
     instance.convert_inequality_to_equality_with_integer_slack(
-        constraint_id=0, max_integer_range=32
+        constraint_id=0, max_integer_range=32, atol=1e-6
     )
     assert instance.constraints == {}
     assert 0 in instance.removed_constraints
@@ -244,7 +243,7 @@ def test_add_integer_slack_to_inequality_infeasible():
         sense=Instance.MAXIMIZE,
     )
     with pytest.raises(InfeasibleDetected) as e:
-        instance.add_integer_slack_to_inequality(0, 4, max_error=1.0)
+        instance.add_integer_slack_to_inequality(0, 4)
     assert (
         str(e.value)
         == "The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound[1, 10]"
@@ -262,7 +261,7 @@ def test_add_integer_slack_to_inequality_trivial():
         constraints={0: x[0] + 2 * x[1] >= 0},  # Trivially satisfied
         sense=Instance.MAXIMIZE,
     )
-    b = instance.add_integer_slack_to_inequality(0, 4, max_error=1.0)
+    b = instance.add_integer_slack_to_inequality(0, 4)
     assert b is None
 
     # Check that the constraint is removed
@@ -279,54 +278,11 @@ def test_add_integer_slack_to_inequality_continuous():
         sense=Instance.MAXIMIZE,
     )
     with pytest.raises(RuntimeError) as e:
-        instance.add_integer_slack_to_inequality(0, 4, max_error=1.0)
+        instance.add_integer_slack_to_inequality(0, 4)
     assert (
         str(e.value)
         == "The constraint contains continuous decision variables: ID=VariableID(0)"
     )
-
-
-def test_add_integer_slack_to_inequality_checks_max_error_before_mutation():
-    x = DecisionVariable.integer(0, lower=0, upper=3)
-    instance = Instance.from_components(
-        decision_variables=[x],
-        objective=x,
-        constraints={0: x <= 2},
-        sense=Instance.MINIMIZE,
-    )
-    before = instance.to_v2_bytes()
-
-    with pytest.raises(RuntimeError, match="exceeds maximum error"):
-        instance.add_integer_slack_to_inequality(0, 2, max_error=0.5)
-
-    assert instance.to_v2_bytes() == before
-    assert instance.add_integer_slack_to_inequality(0, 2, max_error=1.0) == 1.0
-
-
-@pytest.mark.parametrize(
-    "max_error",
-    [True, False, 0.0, -1.0, float("inf"), float("nan"), "1.0"],
-)
-def test_add_integer_slack_to_inequality_rejects_invalid_max_error(
-    max_error: object,
-):
-    x = DecisionVariable.integer(0, lower=0, upper=3)
-    instance = Instance.from_components(
-        decision_variables=[x],
-        objective=x,
-        constraints={0: x <= 2},
-        sense=Instance.MINIMIZE,
-    )
-    before = instance.to_v2_bytes()
-
-    with pytest.raises(ValueError, match="positive finite"):
-        instance.add_integer_slack_to_inequality(
-            0,
-            2,
-            max_error=cast(float, max_error),
-        )
-
-    assert instance.to_v2_bytes() == before
 
 
 def test_to_qubo_penalty_weight():

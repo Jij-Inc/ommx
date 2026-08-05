@@ -21,8 +21,6 @@ from ommx import (
     Sense,
     SpecialConstraintKind,
     State,
-    get_default_atol,
-    set_default_atol,
 )
 
 
@@ -58,45 +56,45 @@ def binary_unconstrained_class() -> InstanceClass:
 
 def test_policy_snapshots_preparation_options() -> None:
     mutable_weights = {7: 2.0}
-    penalty_weights: Mapping[int, float] = MappingProxyType(mutable_weights)
+    penalty_method_with_weights: Mapping[int, float] = MappingProxyType(mutable_weights)
     policy = PreparationPolicy(
-        allowed_special_constraint_lowerings={
+        lower_special_constraints={
             SpecialConstraintKind.Indicator,
             SpecialConstraintKind.OneHot,
         },
-        allow_integer_log_encoding=True,
-        allow_sense_normalization=True,
-        penalty_weights=penalty_weights,
-        atol=1e-4,
+        log_encode_used_integers=1e-4,
+        as_minimization_problem=True,
+        convert_inequality_to_equality_with_integer_slack=(32, 2e-4),
+        add_integer_slack_to_inequality=32,
+        penalty_method_with_weights=penalty_method_with_weights,
     )
     mutable_weights[7] = 9.0
 
-    assert policy.allowed_special_constraint_lowerings == {
+    assert policy.lower_special_constraints == {
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.OneHot,
     }
-    assert policy.allow_integer_log_encoding
-    assert policy.allow_sense_normalization
-    assert policy.atol == 1e-4
-    assert policy.uniform_penalty_weight is None
-    assert policy.penalty_weights == {7: 2.0}
+    assert policy.log_encode_used_integers == 1e-4
+    assert policy.as_minimization_problem
+    assert policy.convert_inequality_to_equality_with_integer_slack == (32, 2e-4)
+    assert policy.add_integer_slack_to_inequality == 32
+    assert policy.uniform_penalty_method_with_weight is None
+    assert policy.penalty_method_with_weights == {7: 2.0}
 
-    returned_weights = policy.penalty_weights
+    returned_weights = policy.penalty_method_with_weights
     assert returned_weights is not None
     returned_weights[7] = 4.0
-    assert policy.penalty_weights == {7: 2.0}
+    assert policy.penalty_method_with_weights == {7: 2.0}
 
 
-def test_policy_snapshots_default_atol_at_construction() -> None:
-    original_atol = get_default_atol()
-    try:
-        set_default_atol(1e-4)
-        policy = PreparationPolicy()
-        set_default_atol(2e-4)
+def test_policy_stores_tolerance_with_each_owner_operation() -> None:
+    policy = PreparationPolicy(
+        log_encode_used_integers=1e-4,
+        convert_inequality_to_equality_with_integer_slack=(31, 2e-4),
+    )
 
-        assert policy.atol == 1e-4
-    finally:
-        set_default_atol(original_atol)
+    assert policy.log_encode_used_integers == 1e-4
+    assert policy.convert_inequality_to_equality_with_integer_slack == (31, 2e-4)
 
 
 def test_policy_is_independent_of_the_target_input_class() -> None:
@@ -121,30 +119,60 @@ def test_policy_is_independent_of_the_target_input_class() -> None:
     assert second.prepare(binary_unconstrained_class(), policy) is None
 
 
-def test_policy_rejects_inconsistent_flat_options() -> None:
-    with pytest.raises(ValueError, match="mutually exclusive"):
-        PreparationPolicy(
-            uniform_penalty_weight=2.0,
-            penalty_weights={7: 2.0},
-        )
+def test_policy_stores_alternative_penalty_operation_arguments_verbatim() -> None:
+    policy = PreparationPolicy(
+        uniform_penalty_method_with_weight=2.0,
+        penalty_method_with_weights={7: 2.0},
+    )
+
+    assert policy.uniform_penalty_method_with_weight == 2.0
+    assert policy.penalty_method_with_weights == {7: 2.0}
+
+
+def test_policy_rejects_invalid_owner_atol_arguments() -> None:
+    with pytest.raises(ValueError, match="ATol must be positive"):
+        PreparationPolicy(log_encode_used_integers=0.0)
 
     with pytest.raises(ValueError, match="ATol must be positive"):
-        PreparationPolicy(atol=0.0)
+        PreparationPolicy(convert_inequality_to_equality_with_integer_slack=(32, 0.0))
 
 
 @pytest.mark.parametrize("weight", [0.0, -1.0, float("inf"), float("nan")])
-def test_policy_rejects_non_positive_or_non_finite_penalty_weights(
+def test_uniform_penalty_owner_rejects_non_positive_or_non_finite_weight(
     weight: float,
 ) -> None:
-    with pytest.raises(ValueError, match="positive finite"):
-        PreparationPolicy(
-            uniform_penalty_weight=weight,
-        )
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={7: x == 0},
+        sense=Sense.Minimize,
+    )
+    before = instance.to_v2_bytes()
+    policy = PreparationPolicy(uniform_penalty_method_with_weight=weight)
 
-    with pytest.raises(ValueError, match="positive finite"):
-        PreparationPolicy(
-            penalty_weights={7: weight},
-        )
+    with pytest.raises(RuntimeError, match="positive and finite"):
+        instance.prepare(binary_unconstrained_class(), policy)
+
+    assert instance.to_v2_bytes() == before
+
+
+@pytest.mark.parametrize("weight", [0.0, -1.0, float("inf"), float("nan")])
+def test_per_constraint_penalty_owner_rejects_invalid_weight(weight: float) -> None:
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={7: x == 0},
+        sense=Sense.Minimize,
+    )
+    before = instance.to_v2_bytes()
+    policy = PreparationPolicy(penalty_method_with_weights={7: weight})
+
+    with pytest.raises(RuntimeError, match="positive and finite"):
+        instance.prepare(binary_unconstrained_class(), policy)
+
+    assert instance.to_v2_bytes() == before
 
 
 @pytest.mark.parametrize(
@@ -156,31 +184,86 @@ def test_policy_rejects_invalid_per_constraint_penalty_keys(key: object) -> None
 
     with pytest.raises(ValueError, match="integer constraint IDs"):
         PreparationPolicy(
-            penalty_weights=weights,
+            penalty_method_with_weights=weights,
         )
 
 
-@pytest.mark.parametrize("weight", [True, False, "2.0", object()])
-def test_policy_rejects_non_numeric_or_boolean_penalty_weights(
-    weight: object,
-) -> None:
-    with pytest.raises(ValueError, match="positive finite"):
-        PreparationPolicy(
-            uniform_penalty_weight=cast(float, weight),
-        )
-
-    weights = cast(Mapping[int, float], {7: weight})
-    with pytest.raises(ValueError, match="positive finite"):
-        PreparationPolicy(
-            penalty_weights=weights,
-        )
-
-
-def test_policy_rejects_non_mapping_penalty_weights() -> None:
+def test_policy_rejects_non_mapping_penalty_method_arguments() -> None:
     with pytest.raises(TypeError, match="Mapping"):
         PreparationPolicy(
-            penalty_weights=cast(Mapping[int, float], [(7, 2.0)]),
+            penalty_method_with_weights=cast(Mapping[int, float], [(7, 2.0)]),
         )
+
+
+def test_log_encode_used_integers_is_a_direct_instance_operation() -> None:
+    x = DecisionVariable.integer(0, lower=0, upper=3, name="x")
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    instance.log_encode_used_integers(atol=1e-6)
+
+    assert instance.dependent_decision_variable_ids() == {0}
+    encoded = [
+        variable
+        for variable in instance.decision_variables
+        if variable.name == "ommx.log_encode"
+    ]
+    assert len(encoded) == 2
+    assert {variable.kind for variable in encoded} == {Kind.Binary}
+
+
+def test_uniform_penalty_with_weight_is_a_direct_instance_operation() -> None:
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={7: x == 0},
+        sense=Sense.Minimize,
+    )
+
+    instance.uniform_penalty_method_with_weight(2.0)
+
+    assert not instance.constraints
+    assert set(instance.removed_constraints) == {7}
+    assert instance.evaluate(State({0: 1.0})).objective == pytest.approx(3.0)
+
+
+def test_penalty_with_weights_is_a_direct_instance_operation() -> None:
+    x = DecisionVariable.binary(0)
+    y = DecisionVariable.binary(1)
+    instance = Instance.from_components(
+        decision_variables=[x, y],
+        objective=0.0,
+        constraints={7: x == 0, 8: y == 0},
+        sense=Sense.Minimize,
+    )
+
+    instance.penalty_method_with_weights({7: 2.0, 8: 5.0})
+
+    assert not instance.constraints
+    assert set(instance.removed_constraints) == {7, 8}
+    assert instance.evaluate(State({0: 1.0, 1: 0.0})).objective == pytest.approx(2.0)
+    assert instance.evaluate(State({0: 0.0, 1: 1.0})).objective == pytest.approx(5.0)
+
+
+def test_direct_fixed_penalty_failure_is_atomic() -> None:
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={7: x == 0},
+        sense=Sense.Minimize,
+    )
+    before = instance.to_v2_bytes()
+
+    with pytest.raises(RuntimeError, match="positive and finite"):
+        instance.uniform_penalty_method_with_weight(0.0)
+
+    assert instance.to_v2_bytes() == before
 
 
 def test_identity_preparation_returns_none_and_uses_instance_for_evaluation() -> None:
@@ -220,7 +303,7 @@ def test_lowered_special_constraint_is_evaluated_by_prepared_instance() -> None:
     result = instance.prepare(
         binary_linear_class(),
         PreparationPolicy(
-            allowed_special_constraint_lowerings={SpecialConstraintKind.OneHot},
+            lower_special_constraints={SpecialConstraintKind.OneHot},
         ),
     )
 
@@ -248,7 +331,7 @@ def test_identity_does_not_interpret_unused_per_constraint_penalty_ids() -> None
     )
     before = instance.to_v2_bytes()
     policy = PreparationPolicy(
-        penalty_weights={999: 2.0},
+        penalty_method_with_weights={999: 2.0},
     )
 
     result = instance.prepare(binary_linear_class(), policy)
@@ -269,7 +352,7 @@ def test_extra_unknown_per_constraint_penalty_id_fails_when_penalty_is_reached()
     )
     before = instance.to_v2_bytes()
     policy = PreparationPolicy(
-        penalty_weights={9: 2.0, 999: 3.0},
+        penalty_method_with_weights={9: 2.0, 999: 3.0},
     )
 
     with pytest.raises(RuntimeError):
@@ -289,7 +372,7 @@ def test_per_constraint_penalty_tracks_existing_regular_constraint_id() -> None:
     result = instance.prepare(
         binary_unconstrained_class(),
         PreparationPolicy(
-            penalty_weights={9: 2.0},
+            penalty_method_with_weights={9: 2.0},
         ),
     )
 
@@ -310,8 +393,8 @@ def test_penalty_failure_keeps_prior_in_place_special_constraint_lowering() -> N
         sense=Sense.Minimize,
     )
     policy = PreparationPolicy(
-        allowed_special_constraint_lowerings={SpecialConstraintKind.OneHot},
-        penalty_weights={},
+        lower_special_constraints={SpecialConstraintKind.OneHot},
+        penalty_method_with_weights={},
     )
     with pytest.raises(RuntimeError):
         instance.prepare(binary_unconstrained_class(), policy)
@@ -330,7 +413,7 @@ def test_operation_owned_error_is_preserved() -> None:
         sense=Sense.Minimize,
     )
     policy = PreparationPolicy(
-        allow_integer_log_encoding=True,
+        log_encode_used_integers=1e-6,
     )
     before = instance.to_v2_bytes()
 
