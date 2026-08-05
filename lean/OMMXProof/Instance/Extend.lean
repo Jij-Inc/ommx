@@ -15,30 +15,31 @@ namespace OMMXProof
 
 namespace State
 
-def append (source : State n) (fresh : State k) : State (n + k) :=
-  Fin.append source fresh
+def append (source : State n) (extension : State k) : State (n + k) :=
+  Fin.append source extension
 
 def source (state : State (n + k)) : State n :=
   fun i => state (Fin.castAdd k i)
 
-def fresh (state : State (n + k)) : State k :=
+def extendedPart (state : State (n + k)) : State k :=
   fun i => state (Fin.natAdd n i)
 
 @[simp]
-theorem source_append (sourceState : State n) (freshState : State k) :
-    source (append sourceState freshState) = sourceState := by
+theorem source_append (sourceState : State n) (extensionState : State k) :
+    source (append sourceState extensionState) = sourceState := by
   funext i
   simp [source, append]
 
 @[simp]
-theorem fresh_append (sourceState : State n) (freshState : State k) :
-    fresh (append sourceState freshState) = freshState := by
+theorem extendedPart_append (sourceState : State n)
+    (extensionState : State k) :
+    extendedPart (append sourceState extensionState) = extensionState := by
   funext i
-  simp [fresh, append]
+  simp [extendedPart, append]
 
 @[simp]
-theorem append_source_fresh (state : State (n + k)) :
-    append (source state) (fresh state) = state := by
+theorem append_source_extendedPart (state : State (n + k)) :
+    append (source state) (extendedPart state) = state := by
   exact Fin.append_castAdd_natAdd
 
 end State
@@ -62,16 +63,16 @@ theorem extend_coeff_fresh (expr : Affine n) (k : Nat) (i : Fin k) :
 
 @[simp]
 theorem eval_extend_append (expr : Affine n)
-    (sourceState : State n) (freshState : State k) :
-    (extend expr k).eval (State.append sourceState freshState) =
+    (sourceState : State n) (extensionState : State k) :
+    (extend expr k).eval (State.append sourceState extensionState) =
       expr.eval sourceState := by
   simp [Affine.eval, extend, State.append, Fin.sum_univ_add]
 
 @[simp]
 theorem eval_extend (expr : Affine n) (state : State (n + k)) :
     (extend expr k).eval state = expr.eval (State.source state) := by
-  simpa only [State.append_source_fresh] using
-    eval_extend_append expr (State.source state) (State.fresh state)
+  simpa only [State.append_source_extendedPart] using
+    eval_extend_append expr (State.source state) (State.extendedPart state)
 
 end Affine
 
@@ -84,8 +85,8 @@ def extend (constraint : LinearConstraint n) (k : Nat) :
 
 @[simp]
 theorem holds_extend_append (constraint : LinearConstraint n)
-    (sourceState : State n) (freshState : State k) :
-    (extend constraint k).Holds (State.append sourceState freshState) ↔
+    (sourceState : State n) (extensionState : State k) :
+    (extend constraint k).Holds (State.append sourceState extensionState) ↔
       constraint.Holds sourceState := by
   rcases constraint with ⟨expr, sense⟩
   cases sense <;> simp [extend, Holds]
@@ -95,63 +96,67 @@ theorem holds_extend (constraint : LinearConstraint n)
     (state : State (n + k)) :
     (extend constraint k).Holds state ↔
       constraint.Holds (State.source state) := by
-  simpa only [State.append_source_fresh] using
-    holds_extend_append constraint (State.source state) (State.fresh state)
+  simpa only [State.append_source_extendedPart] using
+    holds_extend_append constraint (State.source state)
+      (State.extendedPart state)
 
 end LinearConstraint
 
-def extendMembers (members : Finset (Fin n)) (k : Nat) :
+def castAddFinsetFin (members : Finset (Fin n)) (k : Nat) :
     Finset (Fin (n + k)) :=
   members.map (Fin.castAddEmb k)
 
 @[simp]
-theorem mem_extendMembers (members : Finset (Fin n)) (k : Nat) (i : Fin n) :
-    Fin.castAdd k i ∈ extendMembers members k ↔ i ∈ members := by
-  simp [extendMembers]
+theorem mem_castAddFinsetFin (members : Finset (Fin n)) (k : Nat)
+    (i : Fin n) :
+    Fin.castAdd k i ∈ castAddFinsetFin members k ↔ i ∈ members := by
+  simp [castAddFinsetFin]
 
 namespace OneHotConstraint
 
-def extend (constraint : OneHotConstraint n) (k : Nat) :
+def castAdd (constraint : OneHotConstraint n) (k : Nat) :
     OneHotConstraint (n + k) where
-  members := extendMembers constraint.members k
+  members := castAddFinsetFin constraint.members k
 
 @[simp]
-theorem holds_extend_append (constraint : OneHotConstraint n)
-    (sourceState : State n) (freshState : State k) :
-    (extend constraint k).Holds (State.append sourceState freshState) ↔
+theorem holds_castAdd_append (constraint : OneHotConstraint n)
+    (sourceState : State n) (extensionState : State k) :
+    (castAdd constraint k).Holds (State.append sourceState extensionState) ↔
       constraint.Holds sourceState := by
-  simp [extend, Holds, extendMembers, State.append]
+  simp [castAdd, Holds, castAddFinsetFin, State.append]
 
 @[simp]
-theorem holds_extend (constraint : OneHotConstraint n)
+theorem holds_castAdd (constraint : OneHotConstraint n)
     (state : State (n + k)) :
-    (extend constraint k).Holds state ↔
+    (castAdd constraint k).Holds state ↔
       constraint.Holds (State.source state) := by
-  simpa only [State.append_source_fresh] using
-    holds_extend_append constraint (State.source state) (State.fresh state)
+  simpa only [State.append_source_extendedPart] using
+    holds_castAdd_append constraint (State.source state)
+      (State.extendedPart state)
 
 end OneHotConstraint
 
 namespace SOS1Constraint
 
-def extend (constraint : SOS1Constraint n) (k : Nat) :
+def castAdd (constraint : SOS1Constraint n) (k : Nat) :
     SOS1Constraint (n + k) where
-  members := extendMembers constraint.members k
+  members := castAddFinsetFin constraint.members k
 
 @[simp]
-theorem holds_extend_append (constraint : SOS1Constraint n)
-    (sourceState : State n) (freshState : State k) :
-    (extend constraint k).Holds (State.append sourceState freshState) ↔
+theorem holds_castAdd_append (constraint : SOS1Constraint n)
+    (sourceState : State n) (extensionState : State k) :
+    (castAdd constraint k).Holds (State.append sourceState extensionState) ↔
       constraint.Holds sourceState := by
-  simp [extend, Holds, extendMembers, State.append]
+  simp [castAdd, Holds, castAddFinsetFin, State.append]
 
 @[simp]
-theorem holds_extend (constraint : SOS1Constraint n)
+theorem holds_castAdd (constraint : SOS1Constraint n)
     (state : State (n + k)) :
-    (extend constraint k).Holds state ↔
+    (castAdd constraint k).Holds state ↔
       constraint.Holds (State.source state) := by
-  simpa only [State.append_source_fresh] using
-    holds_extend_append constraint (State.source state) (State.fresh state)
+  simpa only [State.append_source_extendedPart] using
+    holds_castAdd_append constraint (State.source state)
+      (State.extendedPart state)
 
 end SOS1Constraint
 
@@ -165,18 +170,18 @@ def extend (constraint : IndicatorConstraint n) (k : Nat) :
 
 @[simp]
 theorem holds_extend_append (constraint : IndicatorConstraint n)
-    (sourceState : State n) (freshState : State k) :
-    (extend constraint k).Holds (State.append sourceState freshState) ↔
+    (sourceState : State n) (extensionState : State k) :
+    (extend constraint k).Holds (State.append sourceState extensionState) ↔
       constraint.Holds sourceState := by
   constructor
   · intro hextended hactive
     apply (LinearConstraint.holds_extend_append constraint.body
-      sourceState freshState).mp
+      sourceState extensionState).mp
     apply hextended
     simpa [extend, State.append] using hactive
   · intro hsource hactive
     apply (LinearConstraint.holds_extend_append constraint.body
-      sourceState freshState).mpr
+      sourceState extensionState).mpr
     apply hsource
     simpa [extend, State.append] using hactive
 
@@ -185,8 +190,9 @@ theorem holds_extend (constraint : IndicatorConstraint n)
     (state : State (n + k)) :
     (extend constraint k).Holds state ↔
       constraint.Holds (State.source state) := by
-  simpa only [State.append_source_fresh] using
-    holds_extend_append constraint (State.source state) (State.fresh state)
+  simpa only [State.append_source_extendedPart] using
+    holds_extend_append constraint (State.source state)
+      (State.extendedPart state)
 
 end IndicatorConstraint
 
@@ -219,9 +225,9 @@ def extend (inst : Instance n) (freshDomains : Fin k → Domain) :
   constraints := inst.constraints.map fun constraint =>
     constraint.extend k
   oneHotConstraints := inst.oneHotConstraints.map fun constraint =>
-    constraint.extend k
+    constraint.castAdd k
   sos1Constraints := inst.sos1Constraints.map fun constraint =>
-    constraint.extend k
+    constraint.castAdd k
   indicatorConstraints := inst.indicatorConstraints.map fun constraint =>
     constraint.extend k
   objective := inst.objective.extend k
@@ -235,7 +241,7 @@ theorem feasible_extend (inst : Instance n) (freshDomains : Fin k → Domain)
         ∀ j, state (Fin.natAdd n j) ∈ freshDomains j := by
   simp only [Feasible, extend, Domain.append, Fin.forall_fin_add,
     Fin.append_left, Fin.append_right, LinearConstraint.holds_extend,
-    OneHotConstraint.holds_extend, SOS1Constraint.holds_extend,
+    OneHotConstraint.holds_castAdd, SOS1Constraint.holds_castAdd,
     IndicatorConstraint.holds_extend, List.forall_mem_map]
   aesop
 
