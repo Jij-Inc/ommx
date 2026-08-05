@@ -8,7 +8,33 @@ import Mathlib.Data.Fin.Tuple.Basic
 An Instance transformation may change the dimension of its state space.  This
 module embeds an `n`-component Instance into the left block of an
 `(n + k)`-component Instance and supplies the corresponding state operations.
-The fresh right block is absent from every lifted expression and constraint.
+
+For `D : Fin k → Domain`, write
+`⟦D⟧ := { y : State k | ∀ j, y j ∈ D j }` for the set of states satisfying
+the component domains in `D`.  The brackets denote this semantic interpretation
+and are not Lean notation.  For `A : Set (State n)`, its extension by `⟦D⟧` is
+
+```
+{ z : State (n + k) |
+    State.source z ∈ A ∧ State.extendedPart z ∈ ⟦D⟧ }.
+```
+
+`Instance.extend` appends `D` to the component domains and lifts every expression
+and constraint along `State.source`.  The central semantic property of this
+operation is that feasibility commutes with extension:
+
+```
+Instance n    ─── Instance.extend (-, D) ──▶ Instance (n + k)
+    │ Feasible                                │ Feasible
+    ▼                                         ▼
+Set (State n) ─── extend (-, ⟦D⟧) ─────▶ Set (State (n + k))
+```
+
+This square commutes because the fresh components occur only in their own domain
+conditions and are absent from every lifted constraint.  The theorem
+`Instance.feasible_extend` states this property pointwise.  Since the fresh
+components are also absent from the lifted objective, it satisfies the
+corresponding identity `Instance.objectiveValue_extend`.
 -/
 
 namespace OMMXProof
