@@ -39,7 +39,7 @@ jobs:
       - name: Build CodSpeed Benchmark Target(s)
         run: cargo codspeed build -p ommx --no-default-features
       - name: Run the benchmarks
-        uses: CodSpeedHQ/action@v4
+        uses: CodSpeedHQ/action@v5.0.1
         with:
           run: cargo codspeed run -p ommx
           token: ${{ secrets.CODSPEED_TOKEN }}
@@ -75,7 +75,7 @@ jobs:
           uv pip install wheels/*.whl
 
       - name: Run benchmarks
-        uses: CodSpeedHQ/action@v4
+        uses: CodSpeedHQ/action@v5.0.1
         with:
           run: |
             if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.suite }}" = "full" ]; then
