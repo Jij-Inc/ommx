@@ -134,15 +134,16 @@ impl Instance {
     /// operation mutates the [`Instance`] in place rather than returning a
     /// [`ParametricInstance`].
     ///
-    /// When no active regular constraints exist, an empty `weights` map is an
-    /// identity operation. Otherwise, conversion and parameter materialization
-    /// are performed on an internal clone and committed only after both
-    /// succeed.
+    /// When the instance has no active constraints, an empty `weights` map is
+    /// an identity operation. Otherwise, conversion and parameter
+    /// materialization are performed on an internal clone and committed only
+    /// after both succeed.
     ///
     /// # Errors
     ///
-    /// Returns an error if `weights` does not cover exactly the active regular
-    /// constraints, or if [`Self::penalty_method`] or
+    /// Returns an error if an unsupported active special constraint is present,
+    /// if `weights` does not cover exactly the active regular constraints, or
+    /// if [`Self::penalty_method`] or
     /// [`ParametricInstance::with_parameters`] fails. Any error leaves the
     /// instance unchanged.
     pub fn penalty_method_with_fixed_weights(
@@ -301,13 +302,14 @@ impl Instance {
     /// materialized immediately, so this operation mutates the [`Instance`] in
     /// place rather than returning a [`ParametricInstance`].
     ///
-    /// When no active regular constraints exist, this is an identity
+    /// When the instance has no active constraints, this is an identity
     /// operation. Otherwise, conversion and parameter materialization are
     /// performed on an internal clone and committed only after both succeed.
     ///
     /// # Errors
     ///
-    /// Returns an error if [`Self::uniform_penalty_method`] or
+    /// Returns an error if an unsupported active special constraint is present,
+    /// or if [`Self::uniform_penalty_method`] or
     /// [`ParametricInstance::with_parameters`] fails. Any error leaves the
     /// instance unchanged.
     pub fn uniform_penalty_method_with_fixed_weight(&mut self, weight: f64) -> crate::Result<()> {
