@@ -106,7 +106,13 @@ def OptionalUpperLink (upper member selector : Rat) : Prop :=
 def OptionalLowerLink (lower member selector : Rat) : Prop :=
   lower < 0 → lower * selector ≤ member
 
-/-- Exact formulation of a mixed reused/fresh selector layout. -/
+/-- Semantic satisfaction predicate for the mixed reused/fresh selector
+formulation used by SOS1 Big-M lowering.
+
+With valid member bounds, this formulation projects to `GenericSOS1`.
+Conversely, every bounded SOS1 state whose reused members are binary satisfies
+it under the canonical selector assignment. Generated linear constraints are
+shown separately to be equivalent to this predicate. -/
 structure PlannedSelectorFormulationHolds [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (bounds : SelectorBounds ι)
     (members freshSelectors : ι → Rat) : Prop where
