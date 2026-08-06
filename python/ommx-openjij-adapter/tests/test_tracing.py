@@ -35,7 +35,7 @@ def test_direct_sample_emits_convert_call_decode_spans():
     assert not [span for span in result.spans if span.name == "prepare"]
 
 
-def test_explicit_preparation_and_sample_are_sibling_operations():
+def test_explicit_preparation_does_not_wrap_the_direct_sample_operation():
     x = DecisionVariable.integer(0, lower=0, upper=3)
     instance = Instance.from_components(
         decision_variables=[x],
@@ -43,23 +43,30 @@ def test_explicit_preparation_and_sample_are_sibling_operations():
         constraints={},
         sense=Instance.MAXIMIZE,
     )
-    source = instance.to_v2_bytes()
-
+    prepared: bytes | None = None
     with capture_trace() as result:
-        preparation = OMMXOpenJijSAAdapter.prepare(instance)
+        instance.prepare(
+            OMMXOpenJijSAAdapter.INPUT_CLASS,
+            OMMXOpenJijSAAdapter.recommended_preparation_policy(),
+        )
+        prepared = instance.to_v2_bytes()
         OMMXOpenJijSAAdapter.sample(
-            preparation.input,
+            instance,
             num_reads=1,
             seed=0,
         )
 
     root = _single_span(result, "ommx_trace_block")
-    prepare = _single_span(result, "prepare")
     sample = _single_span(result, "sample")
-    assert prepare.parent_span_id == root.span_id
     assert sample.parent_span_id == root.span_id
+    # Common Preparation is a Rust-owned Instance operation. Its span follows
+    # the process RUST_LOG filter, unlike the Adapter's Python OTel spans. When
+    # recorded, it is a sibling of the strict direct sample operation.
+    for prepare in [span for span in result.spans if span.name == "prepare"]:
+        assert prepare.parent_span_id == root.span_id
     _assert_sample_span_tree(result)
-    assert instance.to_v2_bytes() == source
+    assert prepared is not None
+    assert instance.to_v2_bytes() == prepared
 
 
 def test_solve_delegates_to_sample_trace():

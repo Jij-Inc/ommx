@@ -156,6 +156,30 @@ impl Instance {
     /// for one integer decision variable.
     pub const MAX_LOG_ENCODING_BITS: usize = MAX_LOG_ENCODING_BITS;
 
+    /// Log-encode every currently used Integer decision variable.
+    ///
+    /// A variable is used when it appears in the objective or an active
+    /// constraint family. Fixed, dependent, and irrelevant Integer variables
+    /// are not selected. If no used Integer variables exist, this operation is
+    /// a no-op and returns an empty map.
+    ///
+    /// Selection is completed before delegating the entire set to
+    /// [`Self::log_encode`], so its all-or-nothing mutation guarantee applies
+    /// across every selected variable.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`Self::log_encode`] for the selected
+    /// variables.
+    #[tracing::instrument(skip(self))]
+    pub fn log_encode_used_integers(
+        &mut self,
+        atol: ATol,
+    ) -> crate::Result<BTreeMap<VariableID, Linear>> {
+        let ids = self.decision_variable_usage().used_integer().into_keys();
+        self.log_encode(ids, atol)
+    }
+
     /// Log-encode integer decision variables into binary decision variables.
     ///
     /// Every requested variable, auxiliary variable, and affected expression
@@ -730,6 +754,121 @@ mod tests {
         // Check the encoded linear expression has correct number of terms
         // Should have 3 terms for binary variables + 1 constant term
         assert_eq!(encoded.num_terms(), 4);
+    }
+
+    #[test]
+    fn test_log_encode_used_integers_encodes_all_used_and_leaves_unused_untouched() {
+        let used_id0 = VariableID::from(0);
+        let used_id1 = VariableID::from(1);
+        let unused_id = VariableID::from(2);
+        let integer = || {
+            DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap()
+        };
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(
+                (crate::linear!(0) + crate::linear!(1)).unwrap(),
+            ))
+            .decision_variables(BTreeMap::from([
+                (used_id0, integer()),
+                (used_id1, integer()),
+                (unused_id, integer()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let unused_before = instance
+            .decision_variables()
+            .get(&unused_id)
+            .unwrap()
+            .clone();
+
+        let encodings = instance.log_encode_used_integers(ATol::default()).unwrap();
+
+        assert_eq!(
+            encodings.keys().copied().collect::<BTreeSet<_>>(),
+            BTreeSet::from([used_id0, used_id1])
+        );
+        assert!(instance
+            .decision_variable_dependency
+            .get(&used_id0)
+            .is_some());
+        assert!(instance
+            .decision_variable_dependency
+            .get(&used_id1)
+            .is_some());
+        assert!(instance
+            .decision_variable_dependency
+            .get(&unused_id)
+            .is_none());
+        assert_eq!(
+            instance.decision_variables().get(&unused_id),
+            Some(&unused_before)
+        );
+    }
+
+    #[test]
+    fn test_log_encode_used_integers_is_no_op_without_used_integers() {
+        let unused_id = VariableID::from(0);
+        let unused = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(unused_id, unused)]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let before = instance.clone();
+
+        let encodings = instance.log_encode_used_integers(ATol::default()).unwrap();
+
+        assert!(encodings.is_empty());
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn test_log_encode_used_integers_is_atomic_when_one_used_variable_fails() {
+        let valid_id = VariableID::from(0);
+        let invalid_id = VariableID::from(1);
+        let valid = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(
+                (crate::linear!(0) + crate::linear!(1)).unwrap(),
+            ))
+            .decision_variables(BTreeMap::from([
+                (valid_id, valid),
+                (invalid_id, DecisionVariable::integer()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let before = instance.clone();
+
+        let err = instance
+            .log_encode_used_integers(ATol::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<LogEncodingUnavailable>(),
+            Some(LogEncodingUnavailable::NonFiniteBound { id, .. }) if *id == invalid_id
+        ));
+        assert_eq!(instance, before);
     }
 
     #[test]

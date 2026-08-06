@@ -1,4 +1,4 @@
-from ommx import Instance, DecisionVariable
+from ommx import DecisionVariable, Instance
 
 
 def test_evaluate_samples_type_check():

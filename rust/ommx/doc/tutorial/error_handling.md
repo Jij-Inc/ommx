@@ -90,8 +90,8 @@ match instance.propagate(&state, atol) {
 }
 ```
 
-For example, an Adapter preparation can select an approximate slack only for
-the exact-operation signal while continuing to propagate unrelated failures:
+For example, a caller can select an approximate slack only for the
+exact-operation signal while continuing to propagate unrelated failures:
 
 ```ignore
 match instance.convert_inequality_to_equality_with_integer_slack(id, 32, atol) {

@@ -400,43 +400,52 @@ parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not pr
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
 - `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
-- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, call `OMMXOpenJijSAAdapter.prepare(...)`, sample `preparation.input`, and use `preparation.evaluate_source(...)` to evaluate the samples against the source instance.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, obtain the Adapter's recommended common Policy, call `instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)`, and sample that same `instance`; the returned `SampleSet` is already evaluated against the prepared `Instance`.
 
 In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
 `uniform_penalty_weight`, `penalty_weights`, and
-`inequality_integer_slack_max_range` directly and performed preparation
-implicitly. In v3, move those settings into one immutable
-`OpenJijPreparationConfig`, pass it to `prepare()` through `config=`, and sample
-the resulting `preparation.input`. Use `penalty_weights` instead of
-`uniform_penalty_weight` when each regular constraint needs its own weight. v2
-also selected a uniform weight of `1.0` when neither penalty setting was
-supplied; v3 requires finite penalties to be selected explicitly when
-constraints remain after exact preparation.
+`inequality_integer_slack_max_range` directly and transformed the input
+implicitly. In v3, finite-penalty settings belong to the common
+`PreparationPolicy`: pass them to
+`OMMXOpenJijSAAdapter.recommended_preparation_policy()`, then pass the Adapter's
+independent `INPUT_CLASS` and that Policy to `Instance.prepare()`. Use
+`penalty_method_with_weights` instead of
+`uniform_penalty_method_with_weight` when each regular constraint needs its own
+weight. v2 also selected a uniform weight of `1.0` when neither penalty setting
+was supplied; v3 requires finite penalties to be selected explicitly when
+constraints remain.
 
-When exact integer slack conversion failed, v2 automatically attempted a
-discrete slack approximation. To retain that fallback, explicitly set the new
-`allow_approximate_integer_slack=True` field. Its v3 default is `False`, so the
-default preparation path uses only available exact operations.
+Each `PreparationPolicy` option is named after an existing `Instance` owner
+operation and stores that operation's arguments. Integer slack therefore has
+two independent options:
+`convert_inequality_to_equality_with_integer_slack=(max_integer_range, atol)`
+and `add_integer_slack_to_inequality=slack_upper_bound`. When both are present,
+`Instance.prepare()` tries exact conversion for each active regular inequality
+and invokes the approximate operation only after `ExactIntegerSlackError`. If
+only the approximate option is present, it invokes that operation directly.
+Special-constraint lowering runs before these slack operations, so generated
+regular inequalities are included.
 
 ```python
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-config = OpenJijPreparationConfig(
-    uniform_penalty_weight=20.0,
-    inequality_integer_slack_max_range=32,
-    allow_approximate_integer_slack=True,  # Retain v2's approximation fallback.
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
+    uniform_penalty_method_with_weight=20.0,
 )
-preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
-`preparation.report.config` records the normalized, immutable settings actually
-used. The remaining fields encode one of four terminal states: source rejected,
-preparation phase rejected, prepared candidate rejected by Adapter
-applicability, or success. `steps` is the prefix of operations completed before
-that terminal state, not a separate outcome.
+`Instance.prepare()` returns `None` and changes the same `Instance`. That value
+owns the decision-variable dependencies, removed constraints, provenance, and
+auxiliary variables produced by preparation, and Adapter results are evaluated
+against it. Their objective and sense therefore belong to the prepared model,
+and a finite penalty does not guarantee feasible samples.
+
+Preparation is not globally transactional: a later owner operation can fail
+after earlier operations succeeded. Each operation retains its owner API's
+failure semantics. Fixed-penalty conversion does not commit a partial
+conversion.
 
 ```python
 # v2.5.1

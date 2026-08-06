@@ -129,94 +129,54 @@ instance = Instance.from_components(
 
 `ommx-openjij-adapter` のinput classに属するのは、任意次数の多項式目的関数を
 持つバイナリ変数のみの制約なし最小化問題です。
-上で作成したTSPインスタンスには制約があるため、有限のペナルティ重みを指定して
-明示的に準備します。その後、`prepared.input` の `Instance` をAdapterへ渡し、
-得られたsampleを変換元モデルに対して明示的に評価します。
+上で作成したTSPインスタンスには制約があるため、有限のペナルティ重みを明示した
+共通のOMMX preparation Policyを取得します。そのPolicyを `Instance` にin-placeで
+適用し、変更された同じ `Instance` をAdapterへ渡します。Adapterは、その `Instance`
+に対して評価済みのサンプルを返します。
 
 ```{code-cell} ipython3
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-config = OpenJijPreparationConfig(
-    uniform_penalty_weight=20.0,
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
+    uniform_penalty_method_with_weight=20.0,
 )
-prepared = OMMXOpenJijSAAdapter.prepare(instance, config=config)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
-prepared_samples = OMMXOpenJijSAAdapter.sample(
-    prepared.input,
+sample_set = OMMXOpenJijSAAdapter.sample(
+    instance,
     num_reads=16,
 )
-sample_set = prepared.evaluate_source(prepared_samples)
 sample_set.summary
 ```
 
 {py:meth}`~ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample` は
 {py:class}`~ommx.SampleSet` を返します。これは決定変数のサンプル値に加えて、
 評価した目的関数値と制約違反を保持します。`SampleSet.summary` はこの情報の要約を
-表示します。`prepared.evaluate_source()` が準備済み入力のsampleを変換元モデルに
-対して評価するため、その `feasible` 列は変換元の制約付き問題に対する実行可能性を
-示します。
+表示します。変換済み `Instance` の評価にはremoved constraint collectionに保持された
+制約も含まれるため、penaltyへ変換した後も `feasible` 列には元のTSP制約が反映されます。
+表示される目的関数はfinite penaltyを含む変換後の目的関数です。
 
-`config` のペナルティ重みはOpenJij backend samplerのパラメータではなく、明示的な
-準備に対する指定です。有限ペナルティは実行可能なサンプルを得やすくしますが、
-すべてのサンプルが変換元の問題に対して実行可能になることを保証しません。
+`uniform_penalty_method_with_weight=20.0` は、既存のowner operation
+`Instance.uniform_penalty_method_with_weight()` に渡す引数を保持します。OpenJij backend
+samplerのパラメータではなく、明示的なpreparationに対する指定です。有限ペナルティは
+実行可能なサンプルを得やすくしますが、すべてのサンプルが変換元の問題に対して
+実行可能になることを保証しません。このTSP定式化が持つのは等式制約だけなので、
+Adapterの推奨Policyに含まれるInteger slack optionが変換するactiveな不等式はありません。
 
-### 準備内容の確認
+### 変換後のInstanceの確認
 
-`check_preparation` はインスタンスを変更せずに、変換元モデルと準備configを
-検査します。`prepare` は検査した変換を実行し、監査用レポートを
-`prepared.report` に保存します。
+`Instance.prepare()` は `instance` をin-placeに変更します。変換の結果は、その同じ値の
+decision-variable dependency、removed constraint、provenance、補助変数に記録されます。
+Adapterもこの `Instance` に対して結果を評価します。
 
 ```{code-cell} ipython3
-report = prepared.report
-config_used = report.config
-final = report.input_applicability
-outcomes = {
-    "source_membership": report.source_check.source_membership.is_member,
-    "steps": [step.operation for step in report.steps],
-    "preparation_failures": report.preparation_failures,
-    "input_applicability": None if final is None else final.is_applicable,
+OMMXOpenJijSAAdapter.require_applicable(instance)
+{
+    "input_class_membership": OMMXOpenJijSAAdapter.INPUT_CLASS.contains(instance),
+    "active_constraints": len(instance.constraints),
+    "removed_constraints": len(instance.removed_constraints),
 }
-config_used, outcomes
 ```
-
-`report.config` は、正規化済みで実際に使われた不変のpreparation設定を記録します。
-これは設定の監査記録です。その他のfieldは、次のいずれか1つの終端状態を表します。
-
-| 状態 | `source_check` | `preparation_failures` | `input_applicability` |
-| --- | --- | --- | --- |
-| Source rejected | preparation source classの外 | 空 | `None` |
-| Phase rejected | accepted | ownerの `operation` を含む非空の値 | `None` |
-| Candidate rejected | accepted | 空 | non-applicable report |
-| Success | accepted | 空 | applicable report |
-
-`source_check` は構造的なsource-class membershipです。operation availabilityと
-preparation policyは、そのoperationを実行するphaseが所有し、
-`preparation_failures` に記録します。`steps` は終端状態までに完了したoperationの
-prefixです。独立したoutcomeや、合成された数学的guaranteeではありません。
-共通のpreparation policy、guarantee、自動選択は
-[OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111) で扱います。このprototype
-が既定で使うのは、利用可能な厳密operationだけです。離散的なinteger slack近似には
-`OpenJijPreparationConfig` で `allow_approximate_integer_slack=True` を設定する必要が
-あり、`inequality_integer_slack_max_range` の指定だけでは近似への同意になりません。
-同じConfigで `uniform_penalty_weight` または `penalty_weights` を明示的に設定すると
-finite-penalty preparationが選択されますが、制約付き入力をAdapterが直接または厳密に
-サポートするという意味ではありません。
-
-変数boundから不等式が実行不可能だと証明できた場合、`check_preparation` と
-`prepare` はcore所有の {py:class}`~ommx.InfeasibleDetected` を送出します。従来の
-{py:class}`~ommx.adapter.InfeasibleDetected` importは同じexception objectへのalias
-として残ります。これはモデル自体の性質であり、Adapter applicabilityの失敗では
-ありません。
-
-使用されるInteger変数ごとに最大53個の補助bitという条件を検査しますが、これは
-OMMXのInteger-to-Binary log encodingのavailability limitです。OpenJij Adapterのinput classの
-性質ではなく、serialized semanticsをforward compatibilityのためにreaderが安全に
-解釈できるかを管理する `ommx.v2.Feature` とも別物です。OpenJijが直接受け付ける
-Spin入力を含むSpin変数のサポートは
-[OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082) で別途管理しています。
 
 各制約条件毎のfeasibilityを見るには `summary_with_constraints` プロパティを使います。
 

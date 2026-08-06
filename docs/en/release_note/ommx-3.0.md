@@ -8,6 +8,60 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Instance-owned preparation policies for solver adapters ([#1139](https://github.com/Jij-Inc/ommx/pull/1139))
+
+{class}`~ommx.PreparationPolicy` holds optional arguments for existing
+`Instance` operations. The target
+{class}`~ommx.InstanceClass` is supplied independently to
+{meth}`~ommx.Instance.prepare`, which interprets the Policy in a fixed order,
+mutates that `Instance`, and returns `None`. A `SolverAdapter` declares its
+direct input class as `INPUT_CLASS`; the caller may supply that class separately
+as the preparation target. The Adapter may independently recommend a Policy
+through `recommended_preparation_policy()`, but it neither executes preparation
+nor weakens its direct `INPUT_CLASS` check.
+Each Policy option has the name of its existing `Instance` owner operation and
+stores that operation's arguments. Result-affecting tolerances are therefore
+attached to the operation that consumes them; `Instance.prepare()` does not
+reinterpret their meaning.
+
+```python
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve(instance)
+```
+
+The HiGHS recommendation configures automatic Indicator, OneHot, and SOS1
+lowering during `Instance.prepare()`. OpenJij's previous Adapter-owned
+preparation API is replaced by the same workflow, with finite penalty remaining
+an explicit Policy option. The OpenJij recommendation stores arguments for both
+{meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` and
+{meth}`~ommx.Instance.add_integer_slack_to_inequality`. Preparation tries the
+exact operation first for each active regular inequality and invokes the
+approximate operation only when exact slack is unavailable. Both remain
+independently selectable Policy options and direct `Instance` operations.
+
+Transformation effects are owned by the same `Instance` through its
+decision-variable dependencies, removed constraints, provenance, and auxiliary
+variables. Adapters already evaluate their returned {class}`~ommx.Solution` or
+{class}`~ommx.SampleSet` against that exact value. Existing regular-constraint
+IDs remain stable through regular transformations. Lowering a special
+constraint creates fresh regular rows, so per-constraint penalty weights use
+regular-constraint IDs. Every active row must have a weight; an entry for a
+regular constraint already moved to `removed_constraints` is ignored. A
+special-constraint lowering creates fresh regular IDs, which a per-constraint
+map must also cover. Use a uniform weight when those generated IDs are not
+configured explicitly. The penalty
+operation itself owns constraint-to-parameter mapping, materialization,
+generated parameter IDs, and removed-constraint records.
+Positive finite weights require a minimization candidate, so a maximization
+source must configure `as_minimization_problem=True`.
+
+Preparation is not globally transactional: a later owner operation can fail
+after earlier operations succeeded. Each operation retains its owner API's
+failure semantics. Fixed-penalty conversion does not commit a partial
+conversion. Failure to reach the supplied input class after all configured
+operations is an ordinary error.
+
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
 Function, polynomial, constraint, named-function, and `Instance` evaluation
@@ -41,9 +95,10 @@ integer overflow or a strategy panic.
 {class}`~ommx.adapter.SolverAdapter` now defines `INPUT_CLASS`, which represents
 the set of {class}`~ommx.Instance` values an adapter can handle directly without
 transformation. An operation that transforms a source instance into a member of
-`INPUT_CLASS` is called `Prepare`. Preparation is currently available only for
-OpenJij; a future update will standardize it as part of the `SolverAdapter`
-workflow ([#1111](https://github.com/Jij-Inc/ommx/issues/1111)).
+`INPUT_CLASS` is called `Prepare`. Beta 2 provided an OpenJij-specific
+preparation API; the Unreleased common `PreparationPolicy` /
+`Instance.prepare()` workflow supersedes it as part of
+[#1111](https://github.com/Jij-Inc/ommx/issues/1111).
 
 `INPUT_CLASS` is an {class}`~ommx.InstanceClass`: a finite union of
 {class}`~ommx.InstanceClassClause` descriptions. A clause can constrain the
@@ -68,26 +123,25 @@ explicitly; this operation is separate from input-class membership.
 
 OpenJij no longer performs integer encoding, sense reversal, slack conversion,
 special-constraint lowering, or penalty selection inside `sample()` or
-`solve()`. Prepare a separate input explicitly and evaluate the result against
-the source model when source semantics are required:
+`solve()`. Prepare the `Instance` explicitly in place; the Adapter evaluates
+its result against that same prepared value:
 
 ```python
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-config = OpenJijPreparationConfig(
-    uniform_penalty_weight=20.0,
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
+    uniform_penalty_method_with_weight=20.0,
 )
-preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
-prepared_samples = OMMXOpenJijSAAdapter.sample(preparation.input)
-source_samples = preparation.evaluate_source(prepared_samples)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
-Finite penalties and approximate integer slack now require explicit opt-in.
-Every prepared value is a new {class}`~ommx.Instance`, so applicability must be
-checked on `preparation.input`, not inferred from the source. See
+Finite penalties require explicit opt-in. The recommended Policy selects both
+Integer-slack owner operations with an upper range of 32; preparation uses the
+approximate operation only after exact conversion reports that exact slack is
+unavailable.
+Preparation changes the supplied {class}`~ommx.Instance`, so applicability must
+be checked again on that value. See
 [Adapter input classes](../user_guide/capability_model.md) and the
 [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter.md) for the
 accepted model classes and preparation details.
@@ -97,7 +151,8 @@ adapter-specific exception for unsupported input. The canonical infeasibility
 exception is `ommx.InfeasibleDetected` (also available through the existing
 `ommx.adapter` alias). Replace `response_to_samples()` with
 `decode_to_samples()` and `sample_qubo_sa()` with the explicit workflow above;
-the replacement returns an evaluated `SampleSet` rather than raw `Samples`.
+the replacement returns a `SampleSet` evaluated against the prepared `Instance`
+rather than raw `Samples`.
 
 ### 🆕 Durable lifecycle reasons for Experiments and Runs ([#1109](https://github.com/Jij-Inc/ommx/pull/1109))
 
@@ -155,7 +210,7 @@ All inherit from {class}`~ommx.artifact.RemoteArtifactError`; catch
 without confusing it with authentication, authorization, transport, or invalid
 Artifact failures.
 
-Integer preparation operations expose three additional RuntimeError-compatible
+Integer transformation operations expose three additional RuntimeError-compatible
 specializations. {meth}`~ommx.Instance.log_encode` raises
 {class}`~ommx.LogEncodingError` when exact encoding is unavailable,
 {class}`~ommx.ExactIntegerSlackError` when exact slack conversion can be

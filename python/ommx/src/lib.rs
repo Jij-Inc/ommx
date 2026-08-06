@@ -31,6 +31,7 @@ mod parameter;
 mod parameters;
 mod parametric_instance;
 mod polynomial;
+mod preparation;
 mod provenance;
 mod pyo3_bridge;
 mod quadratic;
@@ -71,6 +72,7 @@ pub use parameter::*;
 pub use parameters::*;
 pub use parametric_instance::*;
 pub use polynomial::*;
+pub use preparation::*;
 pub use provenance::*;
 pub use quadratic::*;
 pub use random::*;
@@ -200,6 +202,7 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<InstanceClassMismatch>()?;
     m.add_class::<InstanceClassClauseReport>()?;
     m.add_class::<InstanceClassMembershipReport>()?;
+    m.add_class::<PreparationPolicy>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
@@ -297,6 +300,8 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "InstanceClassMismatch",
     "InstanceClassClauseReport",
     "InstanceClassMembershipReport",
+    // Preparation
+    "PreparationPolicy",
     // Constraint and named function
     "Constraint",
     "AttachedConstraint",

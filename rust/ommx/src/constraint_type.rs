@@ -562,15 +562,6 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         self.replace_and_remove_active_rows(replacements, BTreeMap::new())
     }
 
-    /// Replace one active row in place while preserving row identity and context.
-    pub(crate) fn replace_active_row(
-        &mut self,
-        id: T::ID,
-        constraint: T::Created,
-    ) -> crate::Result<()> {
-        self.replace_active_rows(BTreeMap::from([(id, constraint)]))
-    }
-
     /// Move active rows to the removed map with precomputed payloads and reasons.
     pub(crate) fn move_active_rows_to_removed(
         &mut self,

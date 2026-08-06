@@ -236,41 +236,45 @@ ids_list: list[int] = sample_set.sample_ids_list
 - `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
 - `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
 - `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合は `OMMXOpenJijSAAdapter.prepare(...)` を呼び、`preparation.input` をsampleしてから、`preparation.evaluate_source(...)` でsource instanceに対して評価します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
+- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合はAdapter推奨の共通Policyを取得し、`instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)` を呼んで同じ `instance` をsampleします。返される `SampleSet` はその変換済み `Instance` に対して既に評価済みです（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
 
 v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `uniform_penalty_weight`、`penalty_weights`、
-`inequality_integer_slack_max_range` を直接受け取り、暗黙にpreparationを実行していました。
-v3では、これらを1つの不変な `OpenJijPreparationConfig` にまとめ、`config=` から
-`prepare()` に渡したうえで、得られた `preparation.input` をsampleします。通常制約ごとに
-異なるweightが必要な場合は、`uniform_penalty_weight` の代わりに `penalty_weights` を
-使います。v2はどちらのpenalty設定もない場合に一律weight `1.0` を選びましたが、v3では
-exact preparation後に制約が残る場合、有限penaltyを明示的に選択する必要があります。
+`inequality_integer_slack_max_range` を直接受け取り、入力を暗黙に変換していました。
+v3ではfinite penaltyの設定が共通の `PreparationPolicy` に属します。
+`OMMXOpenJijSAAdapter.recommended_preparation_policy()` にpenalty設定を渡し、Adapterの
+独立した `INPUT_CLASS` とそのPolicyを `Instance.prepare()` に渡します。通常制約ごとに
+異なるweightが必要な場合は、`uniform_penalty_method_with_weight` の代わりに
+`penalty_method_with_weights` を使います。v2はどちらのpenalty設定もない場合に一律weight
+`1.0` を選びましたが、v3では制約が残る場合、有限penaltyを明示的に選択する必要があります。
 
-v2はexact integer slackへの変換に失敗すると、離散的なslack近似を自動的に試しました。
-このfallbackを維持するには、新しいfield
-`allow_approximate_integer_slack=True` を明示します。v3の既定値は `False` であり、
-既定のpreparation pathが使うのは利用可能なexact operationだけです。
+`PreparationPolicy` の各optionは既存の `Instance` owner操作と同じ名前を持ち、その操作の
+引数を保存します。Integer slackには独立した2つのoptionがあります。
+`convert_inequality_to_equality_with_integer_slack=(max_integer_range, atol)` と
+`add_integer_slack_to_inequality=slack_upper_bound` です。両方がある場合、
+`Instance.prepare()` は各active通常不等式にexact変換を試し、
+`ExactIntegerSlackError` の場合だけapproximate操作を呼びます。approximate optionだけなら、
+その操作を直接呼びます。特殊制約loweringはslack操作より前なので、生成された通常不等式も
+対象になります。
 
 ```python
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-config = OpenJijPreparationConfig(
-    uniform_penalty_weight=20.0,
-    inequality_integer_slack_max_range=32,
-    allow_approximate_integer_slack=True,  # v2の近似fallbackを維持
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
+    uniform_penalty_method_with_weight=20.0,
 )
-preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+sample_set = OMMXOpenJijSAAdapter.sample(instance)
 ```
 
-`preparation.report.config` は、正規化済みで実際に使われた不変の設定を記録します。
-その他のfieldは、source rejected、preparation phase rejected、準備したcandidateが
-Adapter applicabilityでrejected、successの4つの終端状態のいずれかを表します。
-`steps` はその終端状態までに完了したoperationのprefixであり、独立したoutcomeでは
-ありません。
+`Instance.prepare()` は `None` を返し、同じ `Instance` を変更します。preparationによって
+作られたdecision-variable dependency、removed constraint、provenance、補助変数は
+その値自身が所有し、Adapterの結果もその値に対して評価されます。結果のobjectiveとsenseは
+変換後のmodelのものであり、有限penaltyは実行可能なsampleを保証しません。
+
+Preparation全体はtransactionではなく、後段のowner操作が失敗しても、それ以前に成功した
+操作は残ります。各操作はowner APIの失敗時のsemanticsを保ちます。fixed-penalty変換が
+途中までcommitされることはありません。
 
 ## 8. DataFrame accessor
 

@@ -1,15 +1,37 @@
-import inspect
-from typing import get_type_hints
+from __future__ import annotations
 
-from ommx import DecisionVariable, Instance, Sense
 import ommx_openjij_adapter as package
-import pytest
-from ommx_openjij_adapter import _decode, _preparation, adapter
+from ommx import PreparationPolicy
+from ommx_openjij_adapter import _decode, adapter
 
 
-def test_package_root_is_the_stable_public_facade() -> None:
-    expected_exports = [
+def test_public_api_contains_only_adapter_and_decode_helper() -> None:
+    assert package.__all__ == [
         "OMMXOpenJijSAAdapter",
+        "decode_to_samples",
+    ]
+    assert issubclass(package.OMMXOpenJijSAAdapter, adapter.OMMXOpenJijSAAdapter)
+    assert package.decode_to_samples is _decode.decode_to_samples
+
+
+def test_adapter_recommends_common_preparation_policy() -> None:
+    policy = package.OMMXOpenJijSAAdapter.recommended_preparation_policy()
+
+    assert isinstance(policy, PreparationPolicy)
+    assert policy.lower_special_constraints
+    assert policy.log_encode_used_integers is not None
+    assert policy.as_minimization_problem
+    assert policy.convert_inequality_to_equality_with_integer_slack == (
+        32,
+        policy.log_encode_used_integers,
+    )
+    assert policy.add_integer_slack_to_inequality == 32
+    assert policy.uniform_penalty_method_with_weight is None
+    assert policy.penalty_method_with_weights is None
+
+
+def test_adapter_specific_preparation_types_are_not_exported() -> None:
+    for name in (
         "OpenJijPreparation",
         "OpenJijPreparationConfig",
         "OpenJijPreparationError",
@@ -17,69 +39,5 @@ def test_package_root_is_the_stable_public_facade() -> None:
         "OpenJijPreparationReport",
         "OpenJijPreparationSourceCheck",
         "OpenJijPreparationStep",
-        "decode_to_samples",
-    ]
-
-    assert package.__all__ == expected_exports
-    assert issubclass(package.OMMXOpenJijSAAdapter, adapter.OMMXOpenJijSAAdapter)
-    assert package.OpenJijPreparation is _preparation.OpenJijPreparation
-    assert package.OpenJijPreparationConfig is _preparation.OpenJijPreparationConfig
-    assert package.OpenJijPreparationError is _preparation.OpenJijPreparationError
-    assert package.OpenJijPreparationFailure is _preparation.OpenJijPreparationFailure
-    assert package.OpenJijPreparationReport is _preparation.OpenJijPreparationReport
-    assert (
-        package.OpenJijPreparationSourceCheck
-        is _preparation.OpenJijPreparationSourceCheck
-    )
-    assert package.OpenJijPreparationStep is _preparation.OpenJijPreparationStep
-    assert package.decode_to_samples is _decode.decode_to_samples
-    assert not hasattr(package, "response_to_samples")
-    assert not hasattr(package, "sample_qubo_sa")
-    assert not hasattr(_decode, "response_to_samples")
-
-    assert package.OMMXOpenJijSAAdapter.__module__ == "ommx_openjij_adapter"
-
-
-def test_public_classes_support_standard_introspection() -> None:
-    public_classes = [
-        package.OMMXOpenJijSAAdapter,
-        package.OpenJijPreparation,
-        package.OpenJijPreparationConfig,
-        package.OpenJijPreparationError,
-        package.OpenJijPreparationFailure,
-        package.OpenJijPreparationReport,
-        package.OpenJijPreparationSourceCheck,
-        package.OpenJijPreparationStep,
-    ]
-
-    for class_ in public_classes:
-        assert inspect.getsource(class_)
-        get_type_hints(class_)
-
-    assert (
-        get_type_hints(package.OpenJijPreparation)["report"]
-        is package.OpenJijPreparationReport
-    )
-    assert (
-        get_type_hints(package.OpenJijPreparationReport)["config"]
-        is package.OpenJijPreparationConfig
-    )
-
-
-def test_preparation_value_is_created_only_by_the_pipeline() -> None:
-    with pytest.raises(TypeError, match="created only by prepare"):
-        package.OpenJijPreparation()
-
-
-def test_adapter_identity_in_applicability_report_is_unchanged() -> None:
-    x = DecisionVariable.binary(0)
-    instance = Instance.from_components(
-        decision_variables=[x],
-        objective=x,
-        constraints={},
-        sense=Sense.Minimize,
-    )
-
-    report = package.OMMXOpenJijSAAdapter.check_applicability(instance)
-
-    assert report.adapter == "ommx_openjij_adapter.OMMXOpenJijSAAdapter"
+    ):
+        assert not hasattr(package, name)

@@ -12,8 +12,10 @@ from ommx import (
     Instance,
     InstanceClass,
     InstanceClassMembershipReport,
+    PreparationPolicy,
     SampleSet,
     Solution,
+    SpecialConstraintKind,
 )
 
 
@@ -135,12 +137,31 @@ class SolverAdapter(ABC):
     the input and combines class membership with the adapter's
     ``_check_preconditions`` hook.
 
-    ``INPUT_CLASS`` describes only which exact inputs an adapter accepts; it does
+    ``INPUT_CLASS`` describes only which direct inputs an adapter accepts; it does
     not prescribe how the subclass processes them. The base class never lowers
     or otherwise mutates the input instance.
     """
 
-    INPUT_CLASS: ClassVar[InstanceClass | None] = None
+    INPUT_CLASS: ClassVar[InstanceClass]
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Return this Adapter's recommended OMMX preparation policy.
+
+        The base recommendation stores arguments for OMMX-owned Indicator,
+        OneHot, and SOS1 lowering, but no other operation. Subclasses may
+        recommend additional OMMX-owned Instance operations. The target
+        :attr:`INPUT_CLASS` is supplied separately to
+        :meth:`ommx.Instance.prepare`; it is not part of the Policy. The Adapter
+        does not execute the Policy and is not retained by it.
+        """
+        return PreparationPolicy(
+            lower_special_constraints={
+                SpecialConstraintKind.Indicator,
+                SpecialConstraintKind.OneHot,
+                SpecialConstraintKind.Sos1,
+            },
+        )
 
     @classmethod
     def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
@@ -148,10 +169,10 @@ class SolverAdapter(ABC):
 
         Adapter-specific preconditions run only after at least one complete
         input-class clause contains the instance. The hook receives an isolated
-        copy so it cannot mutate the caller's instance. Any explicitly
-        transformed value is a different input and must be checked separately.
+        copy so it cannot mutate the caller's instance. After preparation
+        mutates an instance, its current value must be checked again.
         """
-        input_class = cls.INPUT_CLASS
+        input_class = getattr(cls, "INPUT_CLASS", None)
         if input_class is None:
             raise TypeError(
                 f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"

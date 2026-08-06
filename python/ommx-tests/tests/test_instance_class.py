@@ -16,6 +16,7 @@ from ommx import (
     InstanceClassMismatch,
     Kind,
     OneHotConstraint,
+    PreparationPolicy,
     Sense,
     Sos1Constraint,
     SpecialConstraintKind,
@@ -332,6 +333,36 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
 
 def test_solver_adapter_has_no_implicit_input_transformation_hook() -> None:
     assert "__init__" not in SolverAdapter.__dict__
+
+
+def test_solver_adapter_recommends_target_free_special_constraint_lowering() -> None:
+    class Adapter(SolverAdapter):
+        INPUT_CLASS = binary_linear_input_class()
+
+    policy = Adapter.recommended_preparation_policy()
+
+    assert isinstance(policy, PreparationPolicy)
+    assert not hasattr(policy, "input_class")
+    assert policy.lower_special_constraints == {
+        SpecialConstraintKind.Indicator,
+        SpecialConstraintKind.OneHot,
+        SpecialConstraintKind.Sos1,
+    }
+    assert policy.log_encode_used_integers is None
+    assert not policy.as_minimization_problem
+    assert policy.convert_inequality_to_equality_with_integer_slack is None
+    assert policy.add_integer_slack_to_inequality is None
+    assert policy.uniform_penalty_method_with_weight is None
+    assert policy.penalty_method_with_weights is None
+
+
+def test_solver_adapter_policy_recommendation_does_not_require_input_class() -> None:
+    class MissingDeclaration(SolverAdapter):
+        pass
+
+    assert isinstance(
+        MissingDeclaration.recommended_preparation_policy(), PreparationPolicy
+    )
 
 
 def test_solver_adapter_layers_preconditions_and_preserves_the_caller() -> None:

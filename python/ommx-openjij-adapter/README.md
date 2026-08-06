@@ -12,14 +12,12 @@ pip install ommx-openjij-adapter
 ```
 
 OpenJij directly accepts a Binary, unconstrained minimization model through
-this adapter. Prepare a constrained model explicitly before sampling it:
+this adapter. Preparation is an explicit `Instance` operation driven by a
+common OMMX policy recommended by the Adapter:
 
 ```python markdown-code-runner
 from ommx import DecisionVariable, Instance
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 x = DecisionVariable.binary(0, name="x")
 instance = Instance.from_components(
@@ -29,27 +27,27 @@ instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-config = OpenJijPreparationConfig(
-    uniform_penalty_weight=2.0,
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy(
+    uniform_penalty_method_with_weight=2.0,
 )
-prepared = OMMXOpenJijSAAdapter.prepare(instance, config=config)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
-prepared_samples = OMMXOpenJijSAAdapter.sample(
-    prepared.input,
+sample_set = OMMXOpenJijSAAdapter.sample(
+    instance,
     num_reads=16,
 )
-sample_set = prepared.evaluate_source(prepared_samples)
 
 print(sample_set.summary)
 ```
 
-The finite penalty weight is a field of the `OpenJijPreparationConfig` passed to
-`prepare` through `config=`, not an OpenJij backend sampler parameter. It must be
-chosen explicitly when constraints remain after exact preparation. A finite
-penalty does not guarantee that every returned sample is feasible for the source
-model; inspect the feasibility recorded in the decoded `SampleSet`.
+`uniform_penalty_method_with_weight` stores the argument for the existing
+`Instance.uniform_penalty_method_with_weight()` operation. It is part of
+`PreparationPolicy`, not an OpenJij backend sampler parameter, and must be
+selected explicitly when constraints remain. A finite penalty does not ensure
+that every returned sample is feasible for the original constraints; inspect
+the evaluated `SampleSet`.
 
-## Input class and explicit preparation
+## Input class and preparation
 
 `OMMXOpenJijSAAdapter.INPUT_CLASS` describes the instances that the adapter
 accepts directly:
@@ -59,58 +57,67 @@ accepts directly:
 - no active regular or special constraints
 - minimization
 
-`OMMXOpenJijSAAdapter.check_applicability()` checks whether an instance belongs
-to this input class and satisfies the adapter-specific preconditions. It does
-not include preparation that the adapter can perform first. Integer
-log-encoding, maximization-to-minimization conversion, exact lowering of
-Indicator/OneHot/SOS1 constraints, integer slack, and finite constraint
-penalties are explicit preparation operations provided by `check_preparation()`
-and `prepare()`.
+`OMMXOpenJijSAAdapter.check_applicability()` checks that direct-input contract
+and the OpenJij-specific preconditions. `sample()`, `solve()`, and the Adapter
+constructor never prepare or mutate their input implicitly.
 
-`sample()` and `solve()` keep the common adapter contract and accept an
-`Instance` only. Explicit preparation therefore returns an
-`OpenJijPreparation`: pass its `input` `Instance` to the adapter, then use
-`evaluate_source()` to evaluate the resulting samples against the source
-model. The preparation itself is not an Adapter input. The report's `config`
-field records the normalized, immutable preparation settings actually used.
-The remaining fields represent one of four terminal states:
+`recommended_preparation_policy()` returns the common OMMX policy recommended
+by the Adapter. Independently, `INPUT_CLASS` describes the Adapter's direct
+inputs; the caller supplies that class separately as the target of
+`Instance.prepare()`. Each Policy field is named after an existing `Instance`
+owner operation and stores its arguments. The default recommendation includes:
 
-| State | `source_check` | `preparation_failures` | `input_applicability` |
-| --- | --- | --- | --- |
-| Source rejected | outside the preparation source class | empty | `None` |
-| Phase rejected | accepted | non-empty, with the owning `operation` | `None` |
-| Candidate rejected | accepted | empty | non-applicable report |
-| Success | accepted | empty | applicable report |
+- `lower_special_constraints` for Indicator, OneHot, and SOS1;
+- `log_encode_used_integers` with the SDK default absolute tolerance;
+- `as_minimization_problem=True`;
+- `convert_inequality_to_equality_with_integer_slack=(32, atol)`; and
+- `add_integer_slack_to_inequality=32`.
 
-`source_check` is structural source-class membership. Operation availability
-and preparation policy are checked by the phase that owns them and appear in
-`preparation_failures`. `steps` is the prefix of OpenJij-specific operations
-that completed before the terminal state; it is an operation audit, not a
-separate outcome or a composed mathematical guarantee.
-Common preparation policy, guarantees, and automatic selection are tracked in
-[OMMX issue #1111](https://github.com/Jij-Inc/ommx/issues/1111). By default,
-this prototype applies only the available exact operations. Discrete integer
-slack approximation requires setting `allow_approximate_integer_slack=True` on
-`OpenJijPreparationConfig`; setting `inequality_integer_slack_max_range` alone
-does not opt into approximation. Finite penalties remain an explicit operation
-selected through `uniform_penalty_weight` or `penalty_weights` on that Config,
-and do not assert exact constrained support.
+For every active regular inequality, preparation first invokes
+`Instance.convert_inequality_to_equality_with_integer_slack()` with maximum
+range 32. Only `ExactIntegerSlackError` selects
+`Instance.add_integer_slack_to_inequality()` as a fallback, using slack upper
+bound 32. Other failures propagate. Special-constraint lowering runs first, so
+any generated regular inequalities participate in the same slack stage; no
+manual slack processing is required.
 
-Per-constraint penalty weights use regular constraint IDs. A model containing
-Indicator, OneHot, or SOS1 constraints must therefore use a uniform penalty
-weight after their exact lowering.
+Finite penalties remain disabled unless
+`uniform_penalty_method_with_weight` or `penalty_method_with_weights` is
+supplied; those two keyword arguments cannot be supplied together. The
+recommendation resolves the SDK default absolute tolerance and stores it
+independently for each operation that uses it. To choose different operation
+arguments, construct `PreparationPolicy` directly.
 
-If variable bounds prove an inequality infeasible, `check_preparation()` and
-`prepare()` raise the core-owned `ommx.InfeasibleDetected` instead of reporting
-an adapter limitation. `ommx.adapter.InfeasibleDetected` remains an alias for
-the same exception object.
+Per-constraint penalty weights use regular-constraint IDs. Both Integer-slack
+operations preserve those IDs. Every active row must have a weight; an
+entry for a regular constraint already moved to
+`removed_constraints` is ignored. Special-constraint lowering adds fresh
+regular IDs, which a per-constraint map must also cover. Use a uniform penalty
+weight when those generated IDs are not configured explicitly.
 
-The maximum of 53 auxiliary bits checked for each used Integer variable is an
-availability limit of OMMX's Integer-to-Binary log-encoding operation. It is neither a
-property of the OpenJij adapter's input class nor an `ommx.v2.Feature`. The
-latter is a wire-format forward-compatibility gate that tells readers which
-serialized semantics they must understand; an adapter's input class and
-preconditions determine its applicability to an in-memory `Instance`.
+`Instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)` mutates the caller's
+`Instance` until it belongs to the supplied input class. It does not run the
+Adapter or check backend-specific preconditions. The direct Adapter boundary
+remains authoritative:
+
+```python
+OMMXOpenJijSAAdapter.require_applicable(instance)
+```
+
+The Adapter already evaluates returned samples against that same `Instance`.
+It retains the decision-variable dependencies, removed constraints, provenance,
+and auxiliary variables created by its transformations, so its ordinary
+evaluation path is sufficient. The reported objective is the prepared
+objective, including any finite penalty.
+
+Preparation is not globally transactional: a later owner operation can fail
+after earlier operations succeeded. Each operation retains its owner API's
+failure semantics. Fixed-penalty conversion does not commit a partial
+conversion.
+
+The maximum of 53 auxiliary bits for each Integer variable belongs to OMMX's
+Integer-to-Binary log-encoding operation. It is neither a property of the
+OpenJij input class nor an `ommx.v2.Feature`.
 
 OMMX does not yet implement `Kind::Spin`. Its addition, including direct
 OpenJij Spin input, is tracked separately in

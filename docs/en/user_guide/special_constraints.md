@@ -25,7 +25,7 @@ The examples below use the PySCIPOpt Adapter, as in [Solving optimization proble
 pip install ommx-pyscipopt-adapter
 ```
 
-The PySCIPOpt Adapter passes Indicator and SOS1 constraints through to SCIP's `addConsIndicator` / `addConsSOS1` (equality indicators are split into two inequality indicators). It does not accept OneHot directly, so callers must explicitly lower OneHot to a regular equality before passing the resulting input to the adapter. This preparation is separate from `INPUT_CLASS` membership and adapter applicability; see [Adapter Input Classes and Explicit Constraint Lowering](./capability_model.md).
+The PySCIPOpt Adapter passes Indicator and SOS1 constraints through to SCIP's `addConsIndicator` / `addConsSOS1` (equality indicators are split into two inequality indicators). It does not accept OneHot directly, so callers must explicitly lower OneHot to a regular equality on the same Instance before passing it to the Adapter. Lowering mutates that Instance in place; check Adapter applicability afterward. See [Adapter Input Classes, Preparation, and Explicit Constraint Lowering](./capability_model.md).
 
 ## IndicatorConstraint
 
@@ -94,7 +94,7 @@ instance_oh = Instance.from_components(
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
 ```
 
-Explicitly lower OneHot before passing the instance to the PySCIPOpt Adapter. The conversion rewrites the constraint as the regular equality $x_0 + x_1 + x_2 - 1 = 0$. Because this produces a different input value, check its applicability before solving.
+Explicitly lower OneHot before passing the instance to the PySCIPOpt Adapter. The conversion rewrites the constraint as the regular equality $x_0 + x_1 + x_2 - 1 = 0$. Because this mutates the Instance in place, check its current applicability before solving.
 
 ```{code-cell} ipython3
 instance_oh.convert_all_one_hots_to_constraints()

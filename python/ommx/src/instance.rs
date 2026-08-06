@@ -9,17 +9,85 @@ use crate::{
         apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
         raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
     },
-    Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
-    ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
+    Constraint, DecisionVariable, DecisionVariableRole, Function, InstanceClass, NamedFunction,
+    ParametricInstance, PreparationPolicy, RemovedConstraint, Rng, SampleSet, Samples, Sense,
+    Solution, State,
 };
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
-    exceptions::{PyKeyError, PyRuntimeError, PyValueError},
+    exceptions::{PyKeyError, PyRuntimeError, PyTypeError, PyValueError},
     prelude::*,
-    types::{PyBytes, PyDict},
+    types::{PyBool, PyBytes, PyDict, PyInt, PyMapping, PyMappingMethods, PyTuple, PyTupleMethods},
     Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+const MAX_U64: u64 = u64::MAX;
+
+pub(crate) struct PenaltyMethodWithWeightsInput(BTreeMap<u64, f64>);
+
+impl PenaltyMethodWithWeightsInput {
+    pub(crate) fn into_core(self) -> BTreeMap<ConstraintID, f64> {
+        self.0
+            .into_iter()
+            .map(|(id, weight)| (ConstraintID::from(id), weight))
+            .collect()
+    }
+}
+
+impl<'py> FromPyObject<'_, 'py> for PenaltyMethodWithWeightsInput {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let mapping = ob.cast::<PyMapping>().map_err(|_| {
+            PyTypeError::new_err("penalty_method_with_weights must be a Mapping[int, float]")
+        })?;
+        let mut snapshot = BTreeMap::new();
+        for item in mapping.items()?.iter() {
+            let pair = item.cast::<PyTuple>().map_err(|_| {
+                PyTypeError::new_err("penalty_method_with_weights must be a Mapping[int, float]")
+            })?;
+            let key = extract_penalty_weight_key(&pair.get_item(0)?)?;
+            let value = pair.get_item(1)?.extract::<f64>().map_err(|_| {
+                PyTypeError::new_err(format!(
+                    "penalty_method_with_weights[{key}] must be a float"
+                ))
+            })?;
+            snapshot.insert(key, value);
+        }
+        Ok(Self(snapshot))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for PenaltyMethodWithWeightsInput {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        <BTreeMap<u64, f64> as pyo3_stub_gen::PyStubType>::type_output()
+    }
+
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            import: ["collections.abc".into()].into(),
+            name: "collections.abc.Mapping[int, float]".into(),
+            source_module: None,
+            type_refs: Default::default(),
+        }
+    }
+}
+
+fn extract_penalty_weight_key(value: &Bound<'_, PyAny>) -> PyResult<u64> {
+    if value.is_instance_of::<PyBool>() || !value.is_instance_of::<PyInt>() {
+        return Err(invalid_penalty_weight_key());
+    }
+    value
+        .extract::<u64>()
+        .map_err(|_| invalid_penalty_weight_key())
+}
+
+fn invalid_penalty_weight_key() -> PyErr {
+    PyValueError::new_err(format!(
+        "penalty_method_with_weights keys must be integer constraint IDs in [0, {MAX_U64}]"
+    ))
+}
 
 /// Optimization problem instance.
 ///
@@ -94,6 +162,26 @@ impl Instance {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
+    /// Prepare this Instance in place to satisfy ``input_class``.
+    ///
+    /// Preparation invokes the configured :class:`Instance` operations in a
+    /// fixed order until ``input_class.contains(self)`` is true. It does not
+    /// evaluate Adapter-owned preconditions or add a composite mathematical
+    /// guarantee beyond the semantics of the invoked operations.
+    ///
+    /// This method is not transactional across transformations. If it raises,
+    /// changes made by earlier transformations remain applied.
+    pub fn prepare(
+        &mut self,
+        py: Python<'_>,
+        input_class: &InstanceClass,
+        policy: &PreparationPolicy,
+    ) -> OmmxPyResult<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.inner.prepare(&input_class.0, policy.as_core())?;
+        Ok(())
+    }
+
     #[staticmethod]
     pub fn from_v1_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -748,7 +836,8 @@ impl Instance {
     /// :meth:`convert_all_sos1_to_constraints`) when that kind is active. The
     /// instance is mutated in place. Kinds omitted from ``kinds_to_lower``
     /// remain active, and an empty set is a no-op. This does not establish
-    /// :class:`InstanceClass` membership; check the resulting input separately.
+    /// :class:`InstanceClass` membership; check the current Instance after
+    /// lowering.
     ///
     /// Returns the set of :class:`SpecialConstraintKind` values that were
     /// requested and active, and therefore actually lowered. Empty when no
@@ -926,7 +1015,9 @@ impl Instance {
     /// 3. Convert inequality constraints
     ///
     ///   * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-    ///   * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
+    ///   * If exact conversion is unavailable, this legacy Driver invokes
+    ///     {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the same
+    ///     integer range.
     ///
     /// 4. Convert to QUBO with (uniform) penalty method
     ///
@@ -1006,7 +1097,9 @@ impl Instance {
     /// 3. Convert inequality constraints
     ///
     ///   * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-    ///   * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
+    ///   * If exact conversion is unavailable, this legacy Driver invokes
+    ///     {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the same
+    ///     integer range.
     ///
     /// 4. Convert to HUBO with (uniform) penalty method
     ///
@@ -1107,6 +1200,25 @@ impl Instance {
         })
     }
 
+    /// Convert active regular constraints to finite penalty terms with
+    /// constraint-specific weights.
+    ///
+    /// ``weights`` maps regular-constraint IDs to positive finite weights.
+    /// This method mutates the Instance in place and moves converted rows to
+    /// :attr:`removed_constraints`. It validates before committing, so an
+    /// error from this operation leaves the Instance unchanged. Only the
+    /// internal consuming penalty conversion requires a temporary clone.
+    fn penalty_method_with_weights(
+        &mut self,
+        py: Python<'_>,
+        weights: PenaltyMethodWithWeightsInput,
+    ) -> OmmxPyResult<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.inner
+            .penalty_method_with_weights(&weights.into_core())?;
+        Ok(())
+    }
+
     /// Convert to a parametric unconstrained instance by penalty method with uniform weight.
     ///
     /// Roughly, this converts a constrained problem:
@@ -1169,6 +1281,24 @@ impl Instance {
         Ok(ParametricInstance {
             inner: parametric_instance,
         })
+    }
+
+    /// Convert active regular constraints to finite penalty terms with one
+    /// shared weight.
+    ///
+    /// ``weight`` must be positive and finite. This method mutates the Instance
+    /// in place and moves converted rows to :attr:`removed_constraints`. It
+    /// validates before committing, so an error from this operation leaves the
+    /// Instance unchanged. Only the internal consuming penalty conversion
+    /// requires a temporary clone.
+    fn uniform_penalty_method_with_weight(
+        &mut self,
+        py: Python<'_>,
+        weight: f64,
+    ) -> OmmxPyResult<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        self.inner.uniform_penalty_method_with_weight(weight)?;
+        Ok(())
     }
 
     /// Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.
@@ -1866,23 +1996,31 @@ impl Instance {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
-            // Auto-detect: find all used integer decision variables
-            let usage = self.inner.decision_variable_usage();
-            let integer_ids: BTreeSet<u64> = usage
-                .used_integer()
-                .into_keys()
-                .map(|id| id.into_inner())
-                .collect();
-            if integer_ids.is_empty() {
-                return Ok(());
-            }
-            integer_ids
+        if decision_variable_ids.is_empty() {
+            self.inner.log_encode_used_integers(atol)?;
         } else {
-            decision_variable_ids
+            self.inner
+                .log_encode(decision_variable_ids.iter().map(|id| (*id).into()), atol)?;
+        }
+        Ok(())
+    }
+
+    /// Log-encode every used Integer decision variable.
+    ///
+    /// A variable is used when it appears in the objective or an active
+    /// constraint family. Fixed, dependent, and irrelevant Integer variables
+    /// are not selected. The operation is atomic across all selected variables.
+    ///
+    /// ``atol`` is the absolute tolerance used to normalize Integer bounds. If
+    /// omitted, the SDK default is used.
+    #[pyo3(signature = (*, atol=None))]
+    fn log_encode_used_integers(&mut self, py: Python<'_>, atol: Option<f64>) -> OmmxPyResult<()> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
         };
-        self.inner
-            .log_encode(ids.iter().map(|id| (*id).into()), atol)?;
+        self.inner.log_encode_used_integers(atol)?;
         Ok(())
     }
 
@@ -2018,6 +2156,10 @@ impl Instance {
     ///   $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal
     ///   range of $s$, and returns error if the range exceeds it.
     ///
+    /// - ``atol`` is the absolute tolerance used to recognize the calculated
+    ///   slack bound as integral and to construct the slack variable. ``None``
+    ///   uses the current OMMX default.
+    ///
     /// - Since this method evaluates the bound of $f(x)$, we may find that:
     ///
     ///   - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:
@@ -2056,7 +2198,8 @@ impl Instance {
     /// ```python
     /// >>> instance.convert_inequality_to_equality_with_integer_slack(
     /// ...     constraint_id=0,
-    /// ...     max_integer_range=32
+    /// ...     max_integer_range=32,
+    /// ...     atol=1e-6,
     /// ... )
     /// >>> instance.constraints[0]
     /// Constraint(x0 + 2*x1 + x3 - 5 == 0)
@@ -2067,16 +2210,19 @@ impl Instance {
     /// range exceeds ``max_integer_range``. Raises
     /// {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
     /// infeasible.
+    #[pyo3(signature = (constraint_id, max_integer_range, *, atol=None))]
     pub fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
+        atol: Option<f64>,
     ) -> OmmxPyResult<()> {
+        let atol = atol.map(ommx::ATol::new).transpose()?.unwrap_or_default();
         self.inner
             .convert_inequality_to_equality_with_integer_slack(
                 constraint_id,
                 max_integer_range,
-                ommx::ATol::default(),
+                atol,
             )?;
         Ok(())
     }
@@ -2085,10 +2231,13 @@ impl Instance {
     ///
     /// - This should be used when {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.
     ///
-    /// - The bound of $s$ will be $[0, \text{slack\_upper\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.
+    /// - The bound of $s$ will be $[0, \text{slack\_upper\_bound}]$, where
+    ///   ``slack_upper_bound`` must be in ``[1, 2**53]`` so it is represented
+    ///   exactly. The coefficient $b$ is the smallest representable ``float``
+    ///   no smaller than $-\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
     ///
     /// - Since the slack variable is integer, the yielded inequality has residual error $\min_s f(x) + b s$ at most $b$.
-    ///   And thus $b$ is returned to use scaling the penalty weight or other things.
+    ///   The coefficient $b$ is returned for auditing or penalty scaling.
     ///
     ///   - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,
     ///     but it needs more bits for the slack variable, and thus the problem size becomes larger.
@@ -2123,12 +2272,12 @@ impl Instance {
     /// ```python
     /// >>> b = instance.add_integer_slack_to_inequality(
     /// ...     constraint_id=0,
-    /// ...     slack_upper_bound=2
+    /// ...     slack_upper_bound=2,
     /// ... )
     /// >>> b, instance.constraints[0]
     /// (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
     /// ```
-    pub fn add_integer_slack_to_inequality(
+    fn add_integer_slack_to_inequality(
         &mut self,
         constraint_id: u64,
         slack_upper_bound: u64,
@@ -2858,15 +3007,23 @@ impl Instance {
             .collect();
         for ineq_id in ineq_ids {
             let id_u64 = ineq_id.into_inner();
-            // Try exact integer slack first, fall back to approximate
-            if self
+            // Preserve this legacy Driver's approximate fallback, but only for
+            // the domain signal that says exact Integer slack is unavailable.
+            match self
+                .inner
                 .convert_inequality_to_equality_with_integer_slack(
                     id_u64,
                     inequality_integer_slack_max_range,
-                )
-                .is_err()
-            {
-                self.add_integer_slack_to_inequality(id_u64, inequality_integer_slack_max_range)?;
+                    ommx::ATol::default(),
+                ) {
+                Ok(()) => {}
+                Err(error) if error.is::<ommx::ExactIntegerSlackUnavailable>() => {
+                    self.inner.add_integer_slack_to_inequality(
+                        id_u64,
+                        inequality_integer_slack_max_range,
+                    )?;
+                }
+                Err(error) => return Err(error.into()),
             }
         }
 

@@ -19,9 +19,15 @@ from opentelemetry.sdk.trace import ReadableSpan
 
 from ommx import (
     DecisionVariable,
+    DegreeBound,
     Equality,
     IndicatorConstraint,
     Instance,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    PreparationPolicy,
+    Sense,
     SpecialConstraintKind,
 )
 
@@ -82,6 +88,36 @@ def test_rust_spans_are_forwarded() -> None:
     assert len(rust_spans) >= 1, (
         "Expected at least one Rust 'lower_special_constraints' span, "
         f"got: {[s.name for s in exporter.spans]}"
+    )
+
+
+def test_prepare_emits_rust_span() -> None:
+    """The common Instance-owned preparation boundary emits its own span."""
+    exporter = get_test_exporter()
+    provider = get_test_provider()
+    exporter.clear()
+
+    instance = _instance_with_indicator()
+    input_class = InstanceClass(
+        [
+            InstanceClassClause(
+                label="indicator-linear",
+                allowed_variable_kinds={Kind.Binary, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(1),
+                allowed_senses={Sense.Minimize},
+                indicator_constraint_degree_bounds={
+                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1)
+                },
+            )
+        ]
+    )
+    instance.prepare(input_class, PreparationPolicy())
+
+    provider.force_flush()
+    rust_spans = [span for span in exporter.spans if span.name == "prepare"]
+    assert len(rust_spans) >= 1, (
+        "Expected at least one Rust 'prepare' span, "
+        f"got: {[span.name for span in exporter.spans]}"
     )
 
 

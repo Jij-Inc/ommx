@@ -8398,7 +8398,7 @@
             },
             {
               "name": "add_integer_slack_to_inequality",
-              "doc": "Convert inequality $f(x) \\leq 0$ to **inequality** $f(x) + b s \\leq 0$ with an integer slack variable $s$.\n\n- This should be used when {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.\n\n- The bound of $s$ will be $[0, \\text{slack\\_upper\\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.\n\n- Since the slack variable is integer, the yielded inequality has residual error $\\min_s f(x) + b s$ at most $b$.\n  And thus $b$ is returned to use scaling the penalty weight or other things.\n\n  - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,\n    but it needs more bits for the slack variable, and thus the problem size becomes larger.\n\n**Returns:**\nThe coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 4.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 4).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 4 <= 0)\n```\n\nIntroduce an integer slack variable s in [0, 2]\n\n```python\n>>> b = instance.add_integer_slack_to_inequality(\n...     constraint_id=0,\n...     slack_upper_bound=2\n... )\n>>> b, instance.constraints[0]\n(2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))\n```",
+              "doc": "Convert inequality $f(x) \\leq 0$ to **inequality** $f(x) + b s \\leq 0$ with an integer slack variable $s$.\n\n- This should be used when {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.\n\n- The bound of $s$ will be $[0, \\text{slack\\_upper\\_bound}]$, where\n  ``slack_upper_bound`` must be in ``[1, 2**53]`` so it is represented\n  exactly. The coefficient $b$ is the smallest representable ``float``\n  no smaller than $-\\mathrm{lower}(f(x)) / \\text{slack\\_upper\\_bound}$.\n\n- Since the slack variable is integer, the yielded inequality has residual error $\\min_s f(x) + b s$ at most $b$.\n  The coefficient $b$ is returned for auditing or penalty scaling.\n\n  - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,\n    but it needs more bits for the slack variable, and thus the problem size becomes larger.\n\n**Returns:**\nThe coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 4.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 4).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 4 <= 0)\n```\n\nIntroduce an integer slack variable s in [0, 2]\n\n```python\n>>> b = instance.add_integer_slack_to_inequality(\n...     constraint_id=0,\n...     slack_upper_bound=2,\n... )\n>>> b, instance.constraints[0]\n(2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -9121,7 +9121,7 @@
             },
             {
               "name": "convert_inequality_to_equality_with_integer_slack",
-              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```\n\nRaises {class}`~ommx.ExactIntegerSlackError` when exact conversion is\nunavailable because the coefficients cannot be normalized or the slack\nrange exceeds ``max_integer_range``. Raises\n{class}`~ommx.InfeasibleDetected` when the bounds prove the inequality\ninfeasible.",
+              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- ``atol`` is the absolute tolerance used to recognize the calculated\n  slack bound as integral and to construct the slack variable. ``None``\n  uses the current OMMX default.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32,\n...     atol=1e-6,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```\n\nRaises {class}`~ommx.ExactIntegerSlackError` when exact conversion is\nunavailable because the coefficients cannot be normalized or the slack\nrange exceeds ``max_integer_range``. Raises\n{class}`~ommx.InfeasibleDetected` when the bounds prove the inequality\ninfeasible.",
               "signatures": [
                 {
                   "parameters": [
@@ -9142,6 +9142,24 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -10178,6 +10196,41 @@
               "deprecated": null
             },
             {
+              "name": "log_encode_used_integers",
+              "doc": "Log-encode every used Integer decision variable.\n\nA variable is used when it appears in the objective or an active\nconstraint family. Fixed, dependent, and irrelevant Integer variables\nare not selected. The operation is atomic across all selected variables.\n\n``atol`` is the absolute tolerance used to normalize Integer bounds. If\nomitted, the SDK default is used.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "logical_memory_profile",
               "doc": "Generate folded stack format for memory profiling of this instance.\n\nThis method generates a format compatible with flamegraph visualization tools\nlike ``flamegraph.pl`` and ``inferno``. Each line has the format:\n\"frame1;frame2;...;frameN bytes\"\n\nThe output shows the hierarchical memory structure of the instance, making it\neasy to identify which components are consuming the most memory.\n\nTo visualize with flamegraph:\n\n1. Save the output to a file: ``profile.txt``\n2. Generate SVG: ``flamegraph.pl profile.txt > memory.svg``\n3. Open memory.svg in a browser\n\n**Returns:**\nFolded stack format string that can be visualized with flamegraph tools\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> profile = instance.logical_memory_profile()\n>>> isinstance(profile, str)\nTrue\n```",
               "signatures": [
@@ -10195,7 +10248,7 @@
             },
             {
               "name": "lower_special_constraints",
-              "doc": "Lower selected active special constraint kinds into regular constraints.\n\nFor every kind in ``kinds_to_lower``, the corresponding bulk conversion\nis invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`) when that kind is active. The\ninstance is mutated in place. Kinds omitted from ``kinds_to_lower``\nremain active, and an empty set is a no-op. This does not establish\n:class:`InstanceClass` membership; check the resulting input separately.\n\nReturns the set of :class:`SpecialConstraintKind` values that were\nrequested and active, and therefore actually lowered. Empty when no\nrequested kind was active.\n\nKinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each\nindividual family conversion is atomic, but the whole operation is not:\nan error in a later family does not roll back families already lowered.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "doc": "Lower selected active special constraint kinds into regular constraints.\n\nFor every kind in ``kinds_to_lower``, the corresponding bulk conversion\nis invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`) when that kind is active. The\ninstance is mutated in place. Kinds omitted from ``kinds_to_lower``\nremain active, and an empty set is a no-op. This does not establish\n:class:`InstanceClass` membership; check the current Instance after\nlowering.\n\nReturns the set of :class:`SpecialConstraintKind` values that were\nrequested and active, and therefore actually lowered. Empty when no\nrequested kind was active.\n\nKinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each\nindividual family conversion is atomic, but the whole operation is not:\nan error in a later family does not roll back families already lowered.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
               "signatures": [
                 {
                   "parameters": [
@@ -10464,6 +10517,43 @@
               "deprecated": null
             },
             {
+              "name": "penalty_method_with_weights",
+              "doc": "Convert active regular constraints to finite penalty terms with\nconstraint-specific weights.\n\n``weights`` maps regular-constraint IDs to positive finite weights.\nThis method mutates the Instance in place and moves converted rows to\n:attr:`removed_constraints`. It validates before committing, so an\nerror from this operation leaves the Instance unchanged. Only the\ninternal consuming penalty conversion requires a temporary clone.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "weights",
+                      "type_": {
+                        "display": "Mapping[int, float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "populate_state",
               "doc": "Populate fixed, irrelevant, and dependent decision variables in a state.\n\nThe input state must contain all decision variables that are actually used\nby this instance's objective and active constraints. The returned\n{class}`~ommx.State` contains every decision variable in the instance.",
               "signatures": [
@@ -10510,6 +10600,41 @@
                       "kind": "Class",
                       "attribute": null
                     },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "prepare",
+              "doc": "Prepare this Instance in place to satisfy ``input_class``.\n\nPreparation invokes the configured :class:`Instance` operations in a\nfixed order until ``input_class.contains(self)`` is true. It does not\nevaluate Adapter-owned preconditions or add a composite mathematical\nguarantee beyond the semantics of the invoked operations.\n\nThis method is not transactional across transformations. If it raises,\nchanges made by earlier transformations remain applied.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "input_class",
+                      "type_": {
+                        "display": "InstanceClass",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "policy",
+                      "type_": {
+                        "display": "PreparationPolicy",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
                     "children": []
                   }
                 }
@@ -10934,7 +11059,7 @@
             },
             {
               "name": "to_hubo",
-              "doc": "Convert the instance to a HUBO format.\n\nThis is a **Driver API** for HUBO conversion calling single-purpose methods in order:\n\n1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to HUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.\n\nPlease see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the\ndocumentation for each individual method for additional details. The\ndifference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't\nrestricted to quadratic or linear problems. If you want to customize the\nconversion, use the individual methods above manually.",
+              "doc": "Convert the instance to a HUBO format.\n\nThis is a **Driver API** for HUBO conversion calling single-purpose methods in order:\n\n1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If exact conversion is unavailable, this legacy Driver invokes\n    {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the same\n    integer range.\n\n4. Convert to HUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.\n\nPlease see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the\ndocumentation for each individual method for additional details. The\ndifference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't\nrestricted to quadratic or linear problems. If you want to customize the\nconversion, use the individual methods above manually.",
               "signatures": [
                 {
                   "parameters": [
@@ -11021,7 +11146,7 @@
             },
             {
               "name": "to_qubo",
-              "doc": "Convert the instance to a QUBO format.\n\nThis is a **Driver API** for QUBO conversion calling single-purpose methods in order:\n\n1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to QUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to QUBO format by {meth}`~ommx.Instance.as_qubo_format`.\n\nPlease see the document of each method for details.\nIf you want to customize the conversion, use the methods above manually.\n\n# Examples\n\nLet's consider a maximization problem with two integer variables $x_0, x_1 \\in [0, 2]$ subject to an inequality:\n\n$$\\max \\; x_0 + x_1 \\quad \\text{s.t.} \\quad x_0 + 2 x_1 \\leq 3$$\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.integer(i, lower=0, upper=2, name=\"x\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nConvert into QUBO format\n\n```python\n>>> qubo, offset = instance.to_qubo()\n>>> qubo\n{(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}\n>>> offset\n9.0\n```\n\nFor the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.\n\n```python\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n```",
+              "doc": "Convert the instance to a QUBO format.\n\nThis is a **Driver API** for QUBO conversion calling single-purpose methods in order:\n\n1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If exact conversion is unavailable, this legacy Driver invokes\n    {meth}`~ommx.Instance.add_integer_slack_to_inequality` with the same\n    integer range.\n\n4. Convert to QUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to QUBO format by {meth}`~ommx.Instance.as_qubo_format`.\n\nPlease see the document of each method for details.\nIf you want to customize the conversion, use the methods above manually.\n\n# Examples\n\nLet's consider a maximization problem with two integer variables $x_0, x_1 \\in [0, 2]$ subject to an inequality:\n\n$$\\max \\; x_0 + x_1 \\quad \\text{s.t.} \\quad x_0 + 2 x_1 \\leq 3$$\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.integer(i, lower=0, upper=2, name=\"x\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nConvert into QUBO format\n\n```python\n>>> qubo, offset = instance.to_qubo()\n>>> qubo\n{(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}\n>>> offset\n9.0\n```\n\nFor the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.\n\n```python\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -11211,6 +11336,32 @@
                   "parameters": [],
                   "return_type": {
                     "display": "ParametricInstance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "uniform_penalty_method_with_weight",
+              "doc": "Convert active regular constraints to finite penalty terms with one\nshared weight.\n\n``weight`` must be positive and finite. This method mutates the Instance\nin place and moves converted rows to :attr:`removed_constraints`. It\nvalidates before committing, so an error from this operation leaves the\nInstance unchanged. Only the internal consuming penalty conversion\nrequires a temporary clone.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "weight",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
                     "link_target": null,
                     "children": []
                   }
@@ -18905,6 +19056,339 @@
             }
           ],
           "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PreparationPolicy",
+          "doc": "Arguments for existing :class:`Instance` operations used by\n:meth:`Instance.prepare`.\n\nEach optional field stores the arguments for one existing :class:`Instance`\noperation. ``None`` means preparation does not call that operation.\n``as_minimization_problem`` selects its no-argument operation with a Boolean.\nPass the target :class:`InstanceClass` separately to :meth:`Instance.prepare`.\nSolver Adapters may recommend a Policy; the caller independently supplies the\ntarget, often the Adapter's ``INPUT_CLASS``.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "lower_special_constraints",
+                      "type_": {
+                        "display": "Optional[set[SpecialConstraintKind]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "set[SpecialConstraintKind]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "SpecialConstraintKind",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "log_encode_used_integers",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "as_minimization_problem",
+                      "type_": {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "False"
+                      }
+                    },
+                    {
+                      "name": "convert_inequality_to_equality_with_integer_slack",
+                      "type_": {
+                        "display": "Optional[tuple[int, float]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "tuple[int, float]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "float",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "add_integer_slack_to_inequality",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "uniform_penalty_method_with_weight",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "penalty_method_with_weights",
+                      "type_": {
+                        "display": "Optional[Mapping[int, float]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, float]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "float",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PreparationPolicy",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "add_integer_slack_to_inequality",
+              "doc": "Argument after ``constraint_id`` for the approximate Integer-slack API.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "as_minimization_problem",
+              "doc": "Whether :meth:`Instance.as_minimization_problem` is invoked.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "convert_inequality_to_equality_with_integer_slack",
+              "doc": "Arguments after ``constraint_id`` for the exact Integer-slack owner API.",
+              "type_": {
+                "display": "Optional[tuple[int, float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "tuple[int, float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "log_encode_used_integers",
+              "doc": "Argument for the bounded-Integer log-encoding owner operation.",
+              "type_": {
+                "display": "Optional[float]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "lower_special_constraints",
+              "doc": "Arguments for :meth:`Instance.lower_special_constraints`.",
+              "type_": {
+                "display": "Optional[set[SpecialConstraintKind]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "set[SpecialConstraintKind]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SpecialConstraintKind",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "penalty_method_with_weights",
+              "doc": "Arguments for the per-constraint fixed-weight penalty owner API.",
+              "type_": {
+                "display": "Optional[dict[int, float]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "dict[int, float]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "uniform_penalty_method_with_weight",
+              "doc": "Argument for the uniform fixed-weight penalty owner API.",
+              "type_": {
+                "display": "Optional[float]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
           "deprecated": null
         },
         {
@@ -32945,6 +33429,7 @@
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
+    "ommx.PreparationPolicy": "ommx",
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",
     "ommx.Quadratic": "ommx",

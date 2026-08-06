@@ -222,7 +222,7 @@ def test_convert_inequality_to_equality_with_integer_slack_trivial():
         sense=Instance.MAXIMIZE,
     )
     instance.convert_inequality_to_equality_with_integer_slack(
-        constraint_id=0, max_integer_range=32
+        constraint_id=0, max_integer_range=32, atol=1e-6
     )
     assert instance.constraints == {}
     assert 0 in instance.removed_constraints
@@ -333,6 +333,23 @@ def test_to_qubo_invalid_penalty_option():
         str(e.value)
         == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
     )
+
+
+def test_to_qubo_legacy_falls_back_when_exact_integer_slack_is_unavailable():
+    x = DecisionVariable.integer(0, lower=0, upper=3)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={0: x <= 2},
+        sense=Instance.MINIMIZE,
+    )
+
+    qubo, offset = instance.to_qubo(inequality_integer_slack_max_range=1)
+
+    assert qubo
+    assert isinstance(offset, float)
+    assert not instance.constraints
+    assert set(instance.removed_constraints) == {0}
 
 
 def test_hubo_3rd_degree():
