@@ -316,7 +316,7 @@ theorem sourceOneHotConstraints_eq
         (fun constraint ↦ constraint.castAdd witness.freshCount) := by
   symm
   simpa [retainedOneHotConstraints] using
-    witness.map_extend_filterMap_prefixOneHot
+    witness.map_castAdd_filterMap_prefixOneHot
       validated.standardBigMForm.oneHotConstraintsFreshIndependent
 
 theorem sourceSOS1Constraints_eq
@@ -326,7 +326,7 @@ theorem sourceSOS1Constraints_eq
         (fun constraint ↦ constraint.castAdd witness.freshCount) := by
   symm
   simpa [retainedSOS1Constraints] using
-    witness.map_extend_filterMap_prefixSOS1
+    witness.map_castAdd_filterMap_prefixSOS1
       validated.standardBigMForm.sos1ConstraintsFreshIndependent
 
 theorem sourceIndicatorConstraints_eq

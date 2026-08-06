@@ -146,7 +146,7 @@ theorem mem_prefixMembers
       Fin.castAdd witness.freshCount i ∈ members := by
   simp [prefixMembers]
 
-theorem extend_prefixMembers_of_freshIndependent
+theorem castAdd_prefixMembers_of_freshIndependent
     {members : Finset (Fin (n + witness.freshCount))}
     (h : witness.MembersFreshIndependent members) :
     castAddFinsetFin (witness.prefixMembers members) witness.freshCount = members := by
@@ -190,16 +190,16 @@ theorem prefixOneHot?_eq_some
       some { members := witness.prefixMembers constraint.members } := by
   simp [prefixOneHot?, h]
 
-theorem extend_prefixOneHot_of_freshIndependent
+theorem castAdd_prefixOneHot_of_freshIndependent
     {constraint : OneHotConstraint (n + witness.freshCount)}
     (h : witness.OneHotFreshIndependent constraint) :
     ({ members := witness.prefixMembers constraint.members } : OneHotConstraint n).castAdd
         witness.freshCount = constraint := by
   cases constraint
   simp only [OneHotConstraint.castAdd, OneHotFreshIndependent] at h ⊢
-  rw [witness.extend_prefixMembers_of_freshIndependent h]
+  rw [witness.castAdd_prefixMembers_of_freshIndependent h]
 
-theorem map_extend_filterMap_prefixOneHot
+theorem map_castAdd_filterMap_prefixOneHot
     {constraints : List (OneHotConstraint (n + witness.freshCount))}
     (h : constraints.Forall witness.OneHotFreshIndependent) :
     (constraints.filterMap witness.prefixOneHot?).map
@@ -209,7 +209,7 @@ theorem map_extend_filterMap_prefixOneHot
   | cons head tail ih =>
       simp only [List.forall_cons] at h
       simp [witness.prefixOneHot?_eq_some h.1,
-        witness.extend_prefixOneHot_of_freshIndependent h.1, ih h.2]
+        witness.castAdd_prefixOneHot_of_freshIndependent h.1, ih h.2]
 
 /-- An SOS1 constraint does not reference fresh selectors. -/
 def SOS1FreshIndependent
@@ -237,16 +237,16 @@ theorem prefixSOS1?_eq_some
       some { members := witness.prefixMembers constraint.members } := by
   simp [prefixSOS1?, h]
 
-theorem extend_prefixSOS1_of_freshIndependent
+theorem castAdd_prefixSOS1_of_freshIndependent
     {constraint : SOS1Constraint (n + witness.freshCount)}
     (h : witness.SOS1FreshIndependent constraint) :
     ({ members := witness.prefixMembers constraint.members } : SOS1Constraint n).castAdd
         witness.freshCount = constraint := by
   cases constraint
   simp only [SOS1Constraint.castAdd, SOS1FreshIndependent] at h ⊢
-  rw [witness.extend_prefixMembers_of_freshIndependent h]
+  rw [witness.castAdd_prefixMembers_of_freshIndependent h]
 
-theorem map_extend_filterMap_prefixSOS1
+theorem map_castAdd_filterMap_prefixSOS1
     {constraints : List (SOS1Constraint (n + witness.freshCount))}
     (h : constraints.Forall witness.SOS1FreshIndependent) :
     (constraints.filterMap witness.prefixSOS1?).map
@@ -256,7 +256,7 @@ theorem map_extend_filterMap_prefixSOS1
   | cons head tail ih =>
       simp only [List.forall_cons] at h
       simp [witness.prefixSOS1?_eq_some h.1,
-        witness.extend_prefixSOS1_of_freshIndependent h.1, ih h.2]
+        witness.castAdd_prefixSOS1_of_freshIndependent h.1, ih h.2]
 
 /-- An Indicator constraint has a retained trigger and a fresh-independent body. -/
 def IndicatorFreshIndependent
