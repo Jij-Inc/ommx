@@ -70,7 +70,7 @@ theorem selectedHolds_of_plannedSelectorFormulation
     {state : State n} {selectors : State witness.freshCount}
     (hdomains : ∀ i, state i ∈ (witness.target source).domains i)
     (hformulation :
-      PlannedSelectorFormulation witness.reusedMembers
+      PlannedSelectorFormulationHolds witness.reusedMembers
         (witness.selectorBounds source)
         (witness.memberState state)
         (witness.freshSelectorState state selectors)) :
@@ -89,7 +89,7 @@ theorem canonicalSelectorFormulation_of_selected
     {state : State n}
     (hdomains : ∀ i, state i ∈ (witness.target source).domains i)
     (hselected : witness.promotedConstraint.Holds state) :
-    PlannedSelectorFormulation witness.reusedMembers
+    PlannedSelectorFormulationHolds witness.reusedMembers
       (witness.selectorBounds source)
       (witness.memberState state)
       (canonicalSelector (witness.memberState state)) := by
@@ -105,7 +105,7 @@ theorem source_feasible_append_iff_base_and_formulation
     (state : State n) (selectors : State witness.freshCount) :
     source.Feasible (State.append state selectors) ↔
       witness.BaseFeasible source state ∧
-        PlannedSelectorFormulation witness.reusedMembers
+        PlannedSelectorFormulationHolds witness.reusedMembers
           (witness.selectorBounds source)
           (witness.memberState state)
           (witness.freshSelectorState state selectors) := by
@@ -124,7 +124,7 @@ theorem source_feasible_append_iff_base_and_formulation
     Domain.append, Fin.forall_fin_add, hretainedAt, hfreshAt,
     Fin.append_left, Fin.append_right, List.forall_mem_append,
     List.forall_mem_map, LinearConstraint.holds_extend_append,
-    OneHotConstraint.holds_extend_append, SOS1Constraint.holds_extend_append,
+    OneHotConstraint.holds_castAdd_append, SOS1Constraint.holds_castAdd_append,
     IndicatorConstraint.holds_extend_append, BaseFeasible]
   constructor
   · rintro ⟨⟨hdomains, hselectors⟩,
@@ -157,22 +157,22 @@ theorem source_feasible_iff_base_and_formulation
     (flatState : State (n + witness.freshCount)) :
     source.Feasible flatState ↔
       witness.BaseFeasible source (State.source flatState) ∧
-        PlannedSelectorFormulation witness.reusedMembers
+        PlannedSelectorFormulationHolds witness.reusedMembers
           (witness.selectorBounds source)
           (witness.memberState (State.source flatState))
           (witness.freshSelectorState (State.source flatState)
-            (State.fresh flatState)) := by
-  simpa only [State.append_source_fresh] using
+            (State.extendedPart flatState)) := by
+  simpa only [State.append_source_extendedPart] using
     source_feasible_append_iff_base_and_formulation
       (witness := witness) (source := source) validated
-      (State.source flatState) (State.fresh flatState)
+      (State.source flatState) (State.extendedPart flatState)
 
 theorem selectedHolds_of_plannedSelectorFormulation
     (validated : witness.Validated source)
     {state : State n} {selectors : State witness.freshCount}
     (hdomains : ∀ i, state i ∈ (witness.target source).domains i)
     (hformulation :
-      PlannedSelectorFormulation witness.reusedMembers
+      PlannedSelectorFormulationHolds witness.reusedMembers
         (witness.selectorBounds source)
         (witness.memberState state)
         (witness.freshSelectorState state selectors)) :
@@ -185,7 +185,7 @@ theorem canonicalSelectorFormulation_of_selected
     {state : State n}
     (hdomains : ∀ i, state i ∈ (witness.target source).domains i)
     (hselected : witness.promotedConstraint.Holds state) :
-    PlannedSelectorFormulation witness.reusedMembers
+    PlannedSelectorFormulationHolds witness.reusedMembers
       (witness.selectorBounds source)
       (witness.memberState state)
       (canonicalSelector (witness.memberState state)) :=

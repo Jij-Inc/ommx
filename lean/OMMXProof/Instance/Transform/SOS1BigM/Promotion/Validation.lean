@@ -313,7 +313,7 @@ theorem sourceOneHotConstraints_eq
     (validated : witness.Validated source) :
     source.oneHotConstraints =
       (witness.retainedOneHotConstraints source).map
-        (fun constraint ↦ constraint.extend witness.freshCount) := by
+        (fun constraint ↦ constraint.castAdd witness.freshCount) := by
   symm
   simpa [retainedOneHotConstraints] using
     witness.map_extend_filterMap_prefixOneHot
@@ -323,7 +323,7 @@ theorem sourceSOS1Constraints_eq
     (validated : witness.Validated source) :
     source.sos1Constraints =
       (witness.retainedSOS1Constraints source).map
-        (fun constraint ↦ constraint.extend witness.freshCount) := by
+        (fun constraint ↦ constraint.castAdd witness.freshCount) := by
   symm
   simpa [retainedSOS1Constraints] using
     witness.map_extend_filterMap_prefixSOS1

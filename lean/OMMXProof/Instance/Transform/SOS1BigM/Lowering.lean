@@ -1,4 +1,4 @@
-import OMMXProof.Instance.Transform
+import OMMXProof.Instance.Transform.Basic
 import OMMXProof.Instance.Transform.SOS1BigM.Lowering.Target
 import Mathlib.Tactic
 

@@ -367,7 +367,7 @@ theorem canonicalRows_hold_iff_plannedSelectorFormulation
     (hfreshBinary : ∀ j, selectors j ∈ Domain.binary) :
     (∀ constraint ∈ layout.canonicalRows bounds,
       constraint.Holds (State.append state selectors)) ↔
-      PlannedSelectorFormulation layout.reusedMembers bounds
+      PlannedSelectorFormulationHolds layout.reusedMembers bounds
         (layout.memberState state)
         (layout.freshSelectorState state selectors) := by
   rw [canonicalRows, List.forall_mem_append,
@@ -381,17 +381,17 @@ theorem canonicalRows_hold_iff_plannedSelectorFormulation
         hlinks, ?_⟩
     rw [← layout.selectorSum_eq_plannedSelector state selectors]
     exact hcardinality
-  · rintro ⟨_, hlinks, hcardinality⟩
-    refine ⟨hlinks, ?_⟩
+  · intro hformulation
+    refine ⟨hformulation.nonReusedHaveLinkedSelectors, ?_⟩
     rw [layout.selectorSum_eq_plannedSelector state selectors]
-    exact hcardinality
+    exact hformulation.selectorsSumLe1
 
 /-- The abstract formulation forces every fresh selector to be binary. -/
 theorem freshSelectors_binary_of_plannedSelectorFormulation
     (layout : SelectorLayout n) (bounds : SelectorBounds layout.Member)
     (state : State n) (selectors : State layout.freshCount)
     (hformulation :
-      PlannedSelectorFormulation layout.reusedMembers bounds
+      PlannedSelectorFormulationHolds layout.reusedMembers bounds
         (layout.memberState state)
         (layout.freshSelectorState state selectors)) :
     ∀ j, selectors j ∈ Domain.binary := by
@@ -400,7 +400,8 @@ theorem freshSelectors_binary_of_plannedSelectorFormulation
     (layout.freshMembers.orderIsoOfFin rfl j).property
   have hr : layout.freshMember j ∉ layout.reusedMembers := by
     simpa [reusedMembers] using hfresh
-  have hbinary := hformulation.1 (layout.freshMember j) (by simp)
+  have hbinary :=
+    hformulation.allSelectorsAreBinary (layout.freshMember j) (by simp)
   simpa [plannedSelector, hr, freshSelectorState, hfresh] using hbinary
 
 end SelectorLayout

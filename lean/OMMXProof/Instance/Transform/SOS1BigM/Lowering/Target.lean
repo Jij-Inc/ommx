@@ -41,7 +41,7 @@ theorem generatedConstraints_hold_iff_plannedSelectorFormulation
     (hselectorDomains : ∀ j, selectors j ∈ Domain.binary) :
     (∀ constraint ∈ validated.generatedConstraints,
       constraint.Holds (State.append state selectors)) ↔
-      PlannedSelectorFormulation plan.reusedMembers validated.bounds
+      PlannedSelectorFormulationHolds plan.reusedMembers validated.bounds
         (plan.memberState state)
         (plan.freshSelectorState state selectors) := by
   exact
@@ -53,7 +53,7 @@ theorem freshSelectors_binary_of_plannedSelectorFormulation
     {source : Instance n} {plan : Plan source} (validated : plan.Validated)
     (state : State n) (selectors : State plan.freshCount)
     (hformulation :
-      PlannedSelectorFormulation plan.reusedMembers validated.bounds
+      PlannedSelectorFormulationHolds plan.reusedMembers validated.bounds
         (plan.memberState state)
         (plan.freshSelectorState state selectors)) :
     ∀ j, selectors j ∈ Domain.binary := by
@@ -67,7 +67,7 @@ theorem selectedHolds_of_plannedSelectorFormulation
     {selectors : State plan.freshCount}
     (hdomains : ∀ i, state i ∈ source.domains i)
     (hformulation :
-      PlannedSelectorFormulation plan.reusedMembers validated.bounds
+      PlannedSelectorFormulationHolds plan.reusedMembers validated.bounds
         (plan.memberState state)
         (plan.freshSelectorState state selectors)) :
     plan.constraint.Holds state := by
@@ -133,10 +133,10 @@ def target {source : Instance n} {plan : Plan source}
       constraint.extend plan.freshCount) ++ validated.generatedConstraints
   oneHotConstraints :=
     source.oneHotConstraints.map fun constraint =>
-      constraint.extend plan.freshCount
+      constraint.castAdd plan.freshCount
   sos1Constraints :=
     (source.sos1Constraints.eraseIdx plan.constraintIndex.val).map
-      fun constraint => constraint.extend plan.freshCount
+      fun constraint => constraint.castAdd plan.freshCount
   indicatorConstraints :=
     source.indicatorConstraints.map fun constraint =>
       constraint.extend plan.freshCount
@@ -148,7 +148,7 @@ theorem target_feasible_append_iff_base_and_formulation
     (state : State n) (selectors : State plan.freshCount) :
     validated.target.Feasible (State.append state selectors) ↔
       plan.BaseFeasible state ∧
-        PlannedSelectorFormulation plan.reusedMembers validated.bounds
+        PlannedSelectorFormulationHolds plan.reusedMembers validated.bounds
           (plan.memberState state)
           (plan.freshSelectorState state selectors) := by
   have hsourceAt (i : Fin n) :
@@ -161,7 +161,7 @@ theorem target_feasible_append_iff_base_and_formulation
     Fin.forall_fin_add, hsourceAt, hfreshAt, Fin.append_left,
     Fin.append_right, List.forall_mem_append, List.forall_mem_map,
     LinearConstraint.holds_extend_append,
-    OneHotConstraint.holds_extend_append, SOS1Constraint.holds_extend_append,
+    OneHotConstraint.holds_castAdd_append, SOS1Constraint.holds_castAdd_append,
     IndicatorConstraint.holds_extend_append, BaseFeasible]
   constructor
   · rintro ⟨⟨hdomains, hselectors⟩,
@@ -187,13 +187,13 @@ theorem target_feasible_iff_base_and_formulation
     (state : State (n + plan.freshCount)) :
     validated.target.Feasible state ↔
       plan.BaseFeasible (State.source state) ∧
-        PlannedSelectorFormulation plan.reusedMembers validated.bounds
+        PlannedSelectorFormulationHolds plan.reusedMembers validated.bounds
           (plan.memberState (State.source state))
           (plan.freshSelectorState (State.source state)
-            (State.fresh state)) := by
-  simpa only [State.append_source_fresh] using
+            (State.extendedPart state)) := by
+  simpa only [State.append_source_extendedPart] using
     validated.target_feasible_append_iff_base_and_formulation
-      (State.source state) (State.fresh state)
+      (State.source state) (State.extendedPart state)
 
 end Validated
 

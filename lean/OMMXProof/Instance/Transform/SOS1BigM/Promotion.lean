@@ -1,4 +1,4 @@
-import OMMXProof.Instance.Transform
+import OMMXProof.Instance.Transform.Basic
 import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Semantics
 
 /-!
@@ -222,10 +222,10 @@ theorem promotion_sourceObjectiveValuePreserving
     (promotion witness source).SourceObjectiveValuePreserving := by
   intro flatState _
   simp only [promotion, Option.map_some, Option.some.injEq]
-  simpa only [State.append_source_fresh] using
+  simpa only [State.append_source_extendedPart] using
     (Witness.Validated.sourceObjectiveValue_append_eq_target
       (witness := witness) (source := source) validated
-      (State.source flatState) (State.fresh flatState)).symm
+      (State.source flatState) (State.extendedPart flatState)).symm
 
 /-- Canonically decoding a feasible promoted state preserves its objective. -/
 theorem promotion_targetObjectiveValuePreserving

@@ -149,7 +149,7 @@ theorem mem_prefixMembers
 theorem extend_prefixMembers_of_freshIndependent
     {members : Finset (Fin (n + witness.freshCount))}
     (h : witness.MembersFreshIndependent members) :
-    extendMembers (witness.prefixMembers members) witness.freshCount = members := by
+    castAddFinsetFin (witness.prefixMembers members) witness.freshCount = members := by
   ext i
   refine Fin.addCases ?_ ?_ i
   · intro j
@@ -157,7 +157,7 @@ theorem extend_prefixMembers_of_freshIndependent
   · intro j
     constructor
     · intro hmember
-      simp only [extendMembers, Finset.mem_map] at hmember
+      simp only [castAddFinsetFin, Finset.mem_map] at hmember
       rcases hmember with ⟨i, _, heq⟩
       have hval := congrArg Fin.val heq
       simp at hval
@@ -193,17 +193,17 @@ theorem prefixOneHot?_eq_some
 theorem extend_prefixOneHot_of_freshIndependent
     {constraint : OneHotConstraint (n + witness.freshCount)}
     (h : witness.OneHotFreshIndependent constraint) :
-    ({ members := witness.prefixMembers constraint.members } : OneHotConstraint n).extend
+    ({ members := witness.prefixMembers constraint.members } : OneHotConstraint n).castAdd
         witness.freshCount = constraint := by
   cases constraint
-  simp only [OneHotConstraint.extend, OneHotFreshIndependent] at h ⊢
+  simp only [OneHotConstraint.castAdd, OneHotFreshIndependent] at h ⊢
   rw [witness.extend_prefixMembers_of_freshIndependent h]
 
 theorem map_extend_filterMap_prefixOneHot
     {constraints : List (OneHotConstraint (n + witness.freshCount))}
     (h : constraints.Forall witness.OneHotFreshIndependent) :
     (constraints.filterMap witness.prefixOneHot?).map
-        (fun constraint ↦ constraint.extend witness.freshCount) = constraints := by
+        (fun constraint ↦ constraint.castAdd witness.freshCount) = constraints := by
   induction constraints with
   | nil => rfl
   | cons head tail ih =>
@@ -240,17 +240,17 @@ theorem prefixSOS1?_eq_some
 theorem extend_prefixSOS1_of_freshIndependent
     {constraint : SOS1Constraint (n + witness.freshCount)}
     (h : witness.SOS1FreshIndependent constraint) :
-    ({ members := witness.prefixMembers constraint.members } : SOS1Constraint n).extend
+    ({ members := witness.prefixMembers constraint.members } : SOS1Constraint n).castAdd
         witness.freshCount = constraint := by
   cases constraint
-  simp only [SOS1Constraint.extend, SOS1FreshIndependent] at h ⊢
+  simp only [SOS1Constraint.castAdd, SOS1FreshIndependent] at h ⊢
   rw [witness.extend_prefixMembers_of_freshIndependent h]
 
 theorem map_extend_filterMap_prefixSOS1
     {constraints : List (SOS1Constraint (n + witness.freshCount))}
     (h : constraints.Forall witness.SOS1FreshIndependent) :
     (constraints.filterMap witness.prefixSOS1?).map
-        (fun constraint ↦ constraint.extend witness.freshCount) = constraints := by
+        (fun constraint ↦ constraint.castAdd witness.freshCount) = constraints := by
   induction constraints with
   | nil => rfl
   | cons head tail ih =>
