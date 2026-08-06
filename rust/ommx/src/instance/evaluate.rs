@@ -161,7 +161,7 @@ struct StatePopulationPlan<'a> {
     used: VariableIDSet,
     fixed: Vec<(VariableID, f64)>,
     irrelevant: Vec<(VariableID, Kind, Bound)>,
-    dependency: &'a AcyclicAssignments,
+    dependency: &'a DecisionVariableDependencies,
 }
 
 enum PartialEvaluatePlan {
@@ -338,7 +338,7 @@ impl StatePopulationPlan<'_> {
             ensure_instance_value_is_finite(*id, *value)?;
             use std::collections::hash_map::Entry;
             match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(entry) => {
+                Entry::Occupied(mut entry) => {
                     let state_value = *entry.get();
                     if !values_are_consistent(state_value, *value, atol) {
                         return Err(DecisionVariableError::SubstitutedValueOverwrite {
@@ -349,6 +349,11 @@ impl StatePopulationPlan<'_> {
                         }
                         .into());
                     }
+                    // Fixed values are instance-owned canonical coordinates.
+                    // Keeping an atol-close assertion here would let a
+                    // discontinuous downstream DependentExpr observe the
+                    // assertion instead of the fixed value.
+                    entry.insert(*value);
                 }
                 Entry::Vacant(entry) => {
                     entry.insert(*value);
@@ -382,7 +387,7 @@ impl StatePopulationPlan<'_> {
             }
             use std::collections::hash_map::Entry;
             match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(entry) => {
+                Entry::Occupied(mut entry) => {
                     let state_value = *entry.get();
                     if !values_are_consistent(state_value, value, atol) {
                         return Err(InconsistentDependentValue {
@@ -392,6 +397,11 @@ impl StatePopulationPlan<'_> {
                         }
                         .into());
                     }
+                    // An accepted state entry is only a consistency assertion.
+                    // Always publish the deterministic reconstruction result
+                    // so later nodes in the dependency DAG observe the
+                    // canonical value, including across discontinuous nodes.
+                    entry.insert(value);
                 }
                 Entry::Vacant(entry) => {
                     entry.insert(value);
@@ -588,7 +598,8 @@ impl Instance {
             }
         }
 
-        self.decision_variable_dependency = AcyclicAssignments::new(remaining_assignments)?;
+        self.decision_variable_dependency =
+            DecisionVariableDependencies::new(remaining_assignments)?;
         Ok(evaluation_state)
     }
 }
@@ -1491,9 +1502,10 @@ mod tests {
     #[test]
     fn test_partial_evaluate_dependency_overflow_is_unclassified_and_atomic() {
         let mut instance = dependent_instance_y_eq_2x();
-        instance.decision_variable_dependency = crate::assign! {
+        instance.decision_variable_dependency = (crate::assign! {
             10 <- coeff!(f64::MAX) * linear!(1)
-        };
+        })
+        .into();
         let before = instance.clone();
 
         let error = instance
@@ -1575,6 +1587,83 @@ mod tests {
     }
 
     #[test]
+    fn test_populate_state_canonicalizes_consistent_dependency_before_next_node() {
+        let source = VariableID::from(1);
+        let first = VariableID::from(10);
+        let second = VariableID::from(11);
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (source, crate::DecisionVariable::continuous()),
+                (first, crate::DecisionVariable::binary()),
+                (second, crate::DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(
+                crate::DecisionVariableDependencies::new([
+                    (
+                        first,
+                        crate::DependentExpr::nonzero_indicator(Function::from(linear!(1))),
+                    ),
+                    (
+                        second,
+                        crate::DependentExpr::nonzero_indicator(Function::from(linear!(10))),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build()
+            .unwrap();
+
+        let populated = instance
+            .populate_state(
+                v1::State::from(HashMap::from([(1, 0.0), (10, 1.0e-7)])),
+                ATol::new(1.0e-6).unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(populated.entries.get(&10), Some(&0.0));
+        assert_eq!(populated.entries.get(&11), Some(&0.0));
+    }
+
+    #[test]
+    fn test_populate_state_canonicalizes_consistent_fixed_value_before_dependency() {
+        let source = VariableID::from(1);
+        let fixed = VariableID::from(2);
+        let dependent = VariableID::from(3);
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (source, crate::DecisionVariable::continuous()),
+                (fixed, crate::DecisionVariable::continuous()),
+                (dependent, crate::DecisionVariable::binary()),
+            ]))
+            .fixed_decision_variable_values(BTreeMap::from([(fixed, 0.0)]))
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(
+                crate::DecisionVariableDependencies::new([(
+                    dependent,
+                    crate::DependentExpr::nonzero_indicator(Function::from(linear!(2))),
+                )])
+                .unwrap(),
+            )
+            .build()
+            .unwrap();
+
+        let populated = instance
+            .populate_state(
+                v1::State::from(HashMap::from([(1, 0.0), (2, 1.0e-7)])),
+                ATol::new(1.0e-6).unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(populated.entries.get(&2), Some(&0.0));
+        assert_eq!(populated.entries.get(&3), Some(&0.0));
+    }
+
+    #[test]
     fn test_partial_evaluate_rejects_unverifiable_dependent_assertion_atomically() {
         let mut instance = dependent_instance_y_eq_2x();
 
@@ -1653,9 +1742,10 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        instance.decision_variable_dependency = crate::assign! {
+        instance.decision_variable_dependency = (crate::assign! {
             10 <- linear!(1)
-        };
+        })
+        .into();
         let state = v1::State::from(HashMap::from([(1, 1.0), (10, f64::INFINITY)]));
 
         let err = instance.populate_state(state, ATol::default()).unwrap_err();
@@ -1675,9 +1765,10 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        instance.decision_variable_dependency = crate::assign! {
+        instance.decision_variable_dependency = (crate::assign! {
             10 <- coeff!(f64::MAX) * linear!(1)
-        };
+        })
+        .into();
         let state = v1::State::from(HashMap::from([(1, f64::MAX)]));
 
         let err = instance.populate_state(state, ATol::default()).unwrap_err();
@@ -1753,7 +1844,7 @@ mod tests {
             .named_functions(named_functions)
             .build()
             .unwrap();
-        instance.decision_variable_dependency = decision_variable_dependency;
+        instance.decision_variable_dependency = decision_variable_dependency.into();
 
         // Verify the usage: x1 is used, x2 is fixed, x3 is dependent,
         // x4 and x5 should be irrelevant (named_functions don't contribute to "used")

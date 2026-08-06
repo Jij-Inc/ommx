@@ -5648,7 +5648,7 @@
           "attributes": [
             {
               "name": "Dependent",
-              "doc": "Defined by decision_variable_dependency",
+              "doc": "Defined by a deterministic reconstruction dependency",
               "type_": null
             },
             {
@@ -8231,7 +8231,7 @@
             },
             {
               "name": "add_constraint",
-              "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this instance's SoA store, and returns an\n{class}`~ommx.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.\nWhen modeling-label fields are provided, they replace the corresponding\nfields stored on the inserted constraint without modifying the input\nsnapshot. Omitted fields preserve the snapshot's existing values.\n\n**Args:**\n- `constraint`: Constraint to add\n- `name`: Optional modeling name for the inserted constraint\n- `subscripts`: Optional integer indices for the inserted constraint\n- `parameters`: Optional string-valued indices for the inserted constraint\n- `description`: Optional description for the inserted constraint\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey, matching the validation performed by other constraint-insertion\npaths.",
+              "doc": "Add a regular constraint to this instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this instance's SoA store, and returns an\n{class}`~ommx.AttachedConstraint` bound to the new id. The input\n{class}`~ommx.Constraint` is not mutated; subsequent writes that\nshould land in the instance must go through the returned handle.\nWhen modeling-label fields are provided, they replace the corresponding\nfields stored on the inserted constraint without modifying the input\nsnapshot. Omitted fields preserve the snapshot's existing values.\n\n**Args:**\n- `constraint`: Constraint to add\n- `name`: Optional modeling name for the inserted constraint\n- `subscripts`: Optional integer indices for the inserted constraint\n- `parameters`: Optional string-valued indices for the inserted constraint\n- `description`: Optional description for the inserted constraint\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a dependent-variable\nreconstruction target, matching the validation performed by other constraint-insertion\npaths.",
               "signatures": [
                 {
                   "parameters": [
@@ -8372,7 +8372,7 @@
             },
             {
               "name": "add_indicator_constraint",
-              "doc": "Add an indicator constraint to this instance.\n\nPicks an unused {class}`~ommx.IndicatorConstraintID`, drains the\nwrapper's context snapshot into this instance's SoA store, and\nreturns an {class}`~ommx.AttachedIndicatorConstraint` bound to the\nnew id.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a substitution-dependency\nkey.",
+              "doc": "Add an indicator constraint to this instance.\n\nPicks an unused {class}`~ommx.IndicatorConstraintID`, drains the\nwrapper's context snapshot into this instance's SoA store, and\nreturns an {class}`~ommx.AttachedIndicatorConstraint` bound to the\nnew id.\n\nRaises {class}`ValueError` if the constraint references an undefined\ndecision variable or one currently used as a dependent-variable\nreconstruction target.",
               "signatures": [
                 {
                   "parameters": [
@@ -9314,7 +9314,7 @@
             },
             {
               "name": "dependent_decision_variable_ids",
-              "doc": "Return IDs of decision variables defined by ``decision_variable_dependency``.",
+              "doc": "Return IDs of decision variables defined by reconstruction dependencies.",
               "signatures": [
                 {
                   "parameters": [],
@@ -15931,7 +15931,7 @@
             },
             {
               "name": "add_constraint",
-              "doc": "Add a regular constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this parametric instance's SoA store, and\nreturns an {class}`~ommx.AttachedConstraint` bound to the new id.\nThe input {class}`~ommx.Constraint` is not mutated; subsequent\nwrites that should land on this parametric instance must go through\nthe returned handle.\n\nRaises {class}`ValueError` if the constraint references an id that is\nneither a defined decision variable nor a defined parameter, or if it\nreferences an id currently used as a substitution-dependency key.",
+              "doc": "Add a regular constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.ConstraintID`, drains the wrapper's\ncontext snapshot into this parametric instance's SoA store, and\nreturns an {class}`~ommx.AttachedConstraint` bound to the new id.\nThe input {class}`~ommx.Constraint` is not mutated; subsequent\nwrites that should land on this parametric instance must go through\nthe returned handle.\n\nRaises {class}`ValueError` if the constraint references an id that is\nneither a defined decision variable nor a defined parameter, or if it\nreferences an id currently used as a dependent-variable reconstruction target.",
               "signatures": [
                 {
                   "parameters": [
@@ -15983,7 +15983,7 @@
             },
             {
               "name": "add_indicator_constraint",
-              "doc": "Add an indicator constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.IndicatorConstraintID`, drains the\nwrapper's context snapshot into this parametric instance's SoA\nstore, and returns an\n{class}`~ommx.AttachedIndicatorConstraint` bound to the new id.\n\nRaises {class}`ValueError` if the constraint references an id that\nis neither a defined decision variable nor a defined parameter, or\nif it references an id currently used as a substitution-dependency\nkey.",
+              "doc": "Add an indicator constraint to this parametric instance.\n\nPicks an unused {class}`~ommx.IndicatorConstraintID`, drains the\nwrapper's context snapshot into this parametric instance's SoA\nstore, and returns an\n{class}`~ommx.AttachedIndicatorConstraint` bound to the new id.\n\nRaises {class}`ValueError` if the constraint references an id that\nis neither a defined decision variable nor a defined parameter, or\nif it references an id currently used as a dependent-variable\nreconstruction target.",
               "signatures": [
                 {
                   "parameters": [

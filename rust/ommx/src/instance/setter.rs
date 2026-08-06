@@ -23,7 +23,7 @@ impl Instance {
     /// builder enforces (`builder.rs`): a constraint or objective cannot
     /// reference a variable whose value has been pinned via
     /// a table-owned fixed value (`fixed`), nor a variable
-    /// used as a substitution-dependency key (`dependent`).
+    /// used as a dependent-variable reconstruction target (`dependent`).
     fn validate_required_ids_with_sets(
         required_ids: &VariableIDSet,
         variable_ids: &VariableIDSet,
@@ -127,7 +127,7 @@ impl Instance {
     /// Enforces the same invariants as the [`Instance`] builder:
     /// - All variable IDs referenced by the constraint (function plus the
     ///   indicator variable) must be present in `decision_variables` and must
-    ///   not be substitution-dependency keys.
+    ///   not be dependent-variable reconstruction targets.
     /// - The indicator variable must have [`Kind::Binary`](crate::decision_variable::Kind).
     pub fn add_indicator_constraint(
         &mut self,
@@ -185,7 +185,7 @@ impl Instance {
     /// Insert a decision variable with its modeling label.
     ///
     /// The table key must not collide with any existing variable and must not
-    /// be a substitution-dependency key. Returns the inserted variable's id for
+    /// be a dependent-variable reconstruction target. Returns the inserted variable's id for
     /// symmetry with `add_constraint`.
     ///
     /// # Errors
@@ -204,7 +204,7 @@ impl Instance {
         {
             crate::bail!(
                 { ?id },
-                "Variable id {id:?} is currently used as a substitution-dependency key",
+                "Variable id {id:?} is currently a dependent-variable reconstruction target",
             );
         }
         self.decision_variables
@@ -328,8 +328,8 @@ impl Instance {
 
 impl ParametricInstance {
     /// Validate that all required IDs are defined either as decision variables
-    /// or as parameters, and are not currently used as substitution-dependency
-    /// keys.
+    /// or as parameters, and are not currently dependent-variable
+    /// reconstruction targets.
     ///
     /// `ParametricInstance` validation differs from
     /// [`Instance::validate_required_ids`](Instance) by also accepting
@@ -508,7 +508,7 @@ impl ParametricInstance {
     /// Insert a decision variable with its modeling label.
     ///
     /// The table key must not collide with any existing decision
-    /// variable, parameter, or substitution-dependency key.
+    /// variable, parameter, or dependent-variable reconstruction target.
     ///
     /// # Errors
     ///
@@ -530,7 +530,7 @@ impl ParametricInstance {
         if !has_decision_variable && self.decision_variable_dependency().keys().any(|k| k == id) {
             crate::bail!(
                 { ?id },
-                "Variable id {id:?} is currently used as a substitution-dependency key",
+                "Variable id {id:?} is currently a dependent-variable reconstruction target",
             );
         }
         self.decision_variables
@@ -830,9 +830,10 @@ mod tests {
         .unwrap();
 
         // Add a dependency: x2 = x1 + 1
-        instance.decision_variable_dependency = assign! {
+        instance.decision_variable_dependency = (assign! {
             2 <- linear!(1) + coeff!(1.0)
-        };
+        })
+        .into();
 
         // Try to insert constraint using variable 2 (which is in dependency keys)
         let constraint = Constraint::equal_to_zero((linear!(2) + coeff!(1.0)).into());
@@ -994,9 +995,10 @@ mod tests {
         .unwrap();
 
         // Add a dependency: x2 = x1 + 1
-        instance.decision_variable_dependency = assign! {
+        instance.decision_variable_dependency = (assign! {
             2 <- linear!(1) + coeff!(1.0)
-        };
+        })
+        .into();
 
         // Try to set objective using variable 2 (which is in dependency keys)
         let new_objective = linear!(2) + coeff!(1.0);
@@ -1256,9 +1258,10 @@ mod tests {
         .unwrap();
 
         // Add a dependency: x2 = x1 + 1
-        instance.decision_variable_dependency = assign! {
+        instance.decision_variable_dependency = (assign! {
             2 <- linear!(1) + coeff!(1.0)
-        };
+        })
+        .into();
 
         // Try to insert constraints using variable 2 (which is in dependency keys)
         let constraints = vec![

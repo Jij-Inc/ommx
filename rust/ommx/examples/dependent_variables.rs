@@ -3,9 +3,9 @@
 //! This example demonstrates how to add dependent variables to an Instance using
 //! the substitute_one and substitute_acyclic methods.
 //!
-//! Dependent variables are variables that are defined as functions of other variables.
-//! They are stored in the `decision_variable_dependency` field and are automatically
-//! excluded from appearing in the objective function and constraints after substitution.
+//! Dependent variables are reconstructed from deterministic expressions over other
+//! variables. They are stored in `decision_variable_dependency` and are automatically
+//! excluded from the objective function and active constraints after substitution.
 //!
 //! Key concepts:
 //! - `substitute_one`: Add a single dependent variable by substituting it in the instance
@@ -66,8 +66,8 @@ fn main() -> Result<()> {
         instance.decision_variable_dependency().len()
     );
     println!("  Dependent variable mapping:");
-    for (id, func) in instance.decision_variable_dependency().iter() {
-        println!("    x{} <- {:?}", id.into_inner(), func);
+    for (id, expression) in instance.decision_variable_dependency().iter() {
+        println!("    x{} <- {:?}", id.into_inner(), expression);
     }
 
     // Example 2: Using substitute_acyclic to add multiple dependent variables efficiently
@@ -91,8 +91,8 @@ fn main() -> Result<()> {
         instance.decision_variable_dependency().len()
     );
     println!("  Dependent variable mappings:");
-    for (id, func) in instance.decision_variable_dependency().iter() {
-        println!("    x{} <- {:?}", id.into_inner(), func);
+    for (id, expression) in instance.decision_variable_dependency().iter() {
+        println!("    x{} <- {:?}", id.into_inner(), expression);
     }
 
     println!("\n=== Key Points ===");

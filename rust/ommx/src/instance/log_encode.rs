@@ -1057,7 +1057,7 @@ mod tests {
 
         assert_eq!(
             instance.decision_variable_dependency.get(&dependent_id),
-            Some(&unrelated)
+            Some(&crate::DependentExpr::Function(unrelated))
         );
         assert!(instance
             .decision_variable_dependency

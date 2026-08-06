@@ -49,11 +49,14 @@ impl ParametricInstance {
 }
 
 impl From<Instance> for v2::Instance {
+    #[allow(deprecated)]
     fn from(value: Instance) -> Self {
+        let has_decision_variable_dependencies = !value.decision_variable_dependency.is_empty();
         let required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
+            has_decision_variable_dependencies,
         );
 
         let Instance {
@@ -71,6 +74,8 @@ impl From<Instance> for v2::Instance {
             annotations,
         } = value;
 
+        let decision_variable_dependencies =
+            decision_variable_dependencies_to_v2_map(decision_variable_dependency);
         Self {
             required_features,
             description,
@@ -82,21 +87,23 @@ impl From<Instance> for v2::Instance {
             indicator_constraints: Some(indicator_constraint_collection.into()),
             one_hot_constraints: Some(one_hot_constraint_collection.into()),
             sos1_constraints: Some(sos1_constraint_collection.into()),
-            decision_variable_dependency: decision_variable_dependency_to_v2_map(
-                decision_variable_dependency,
-            ),
+            decision_variable_dependency: Default::default(),
             named_functions: Some(named_functions.into()),
             annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
+            decision_variable_dependencies,
         }
     }
 }
 
 impl From<ParametricInstance> for v2::ParametricInstance {
+    #[allow(deprecated)]
     fn from(value: ParametricInstance) -> Self {
+        let has_decision_variable_dependencies = !value.decision_variable_dependency.is_empty();
         let required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
+            has_decision_variable_dependencies,
         );
 
         let ParametricInstance {
@@ -114,6 +121,8 @@ impl From<ParametricInstance> for v2::ParametricInstance {
             annotations,
         } = value;
 
+        let decision_variable_dependencies =
+            decision_variable_dependencies_to_v2_map(decision_variable_dependency);
         Self {
             required_features,
             description,
@@ -125,11 +134,10 @@ impl From<ParametricInstance> for v2::ParametricInstance {
             indicator_constraints: Some(indicator_constraint_collection.into()),
             one_hot_constraints: Some(one_hot_constraint_collection.into()),
             sos1_constraints: Some(sos1_constraint_collection.into()),
-            decision_variable_dependency: decision_variable_dependency_to_v2_map(
-                decision_variable_dependency,
-            ),
+            decision_variable_dependency: Default::default(),
             named_functions: Some(named_functions.into()),
             annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
+            decision_variable_dependencies,
         }
     }
 }
@@ -138,23 +146,26 @@ fn created_collection_has_payload<T: ConstraintType>(collection: &ConstraintColl
     !collection.active().is_empty() || !collection.removed().is_empty()
 }
 
-fn decision_variable_dependency_to_v2_map(
-    dependency: AcyclicAssignments,
-) -> std::collections::BTreeMap<u64, v1::Function> {
+fn decision_variable_dependencies_to_v2_map(
+    dependency: DecisionVariableDependencies,
+) -> std::collections::BTreeMap<u64, v2::DependentExpr> {
     dependency
-        .into_iter()
-        .map(|(id, function)| (id.into_inner(), function.into()))
+        .iter()
+        .map(|(&id, expr)| (id.into_inner(), expr.clone().into()))
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(deprecated)]
+
     use super::*;
     use crate::{
         v2, ATol, DecisionVariable, Equality, Evaluate, Function, IndicatorConstraint,
         IndicatorConstraintID, OneHotConstraint, OneHotConstraintID, ParameterLabelStore,
         ParameterTable, Sampled, Sos1Constraint, Sos1ConstraintID, VariableID,
     };
+    use proptest::prelude::*;
     use std::collections::{BTreeMap, BTreeSet, HashMap};
 
     fn instance_with_special_constraints() -> Instance {
@@ -203,6 +214,52 @@ mod tests {
             .unwrap()
     }
 
+    fn instance_with_non_polynomial_dependency() -> Instance {
+        let source = VariableID::from(1);
+        let polynomial_dependent = VariableID::from(2);
+        let indicator_dependent = VariableID::from(3);
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (source, DecisionVariable::continuous()),
+                (polynomial_dependent, DecisionVariable::continuous()),
+                (indicator_dependent, DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(
+                crate::DecisionVariableDependencies::new([
+                    (
+                        polynomial_dependent,
+                        crate::DependentExpr::from(Function::from(crate::linear!(1))),
+                    ),
+                    (
+                        indicator_dependent,
+                        crate::DependentExpr::nonzero_indicator(Function::from(crate::linear!(2))),
+                    ),
+                ])
+                .unwrap(),
+            )
+            .build()
+            .unwrap()
+    }
+
+    fn instance_with_function_dependency() -> Instance {
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(crate::linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::continuous()),
+                (VariableID::from(2), DecisionVariable::continuous()),
+            ]))
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(crate::assign! {
+                2 <- crate::linear!(1)
+            })
+            .build()
+            .unwrap()
+    }
+
     fn expected_special_features() -> Vec<i32> {
         vec![
             v2::Feature::ConstraintIndicator as i32,
@@ -234,6 +291,190 @@ mod tests {
             err.to_string().contains("to_v2_bytes"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn v1_serialization_rejects_dependencies_not_representable_as_function() {
+        let err = instance_with_non_polynomial_dependency()
+            .to_v1_bytes()
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("cannot be represented as ommx.v1.Function")
+                && err.to_string().contains("to_v2_bytes"),
+            "unexpected error: {err}"
+        );
+
+        let parametric: ParametricInstance = instance_with_non_polynomial_dependency().into();
+        let err = parametric.to_v1_bytes().unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("cannot be represented as ommx.v1.Function")
+                && err.to_string().contains("to_v2_bytes"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn v2_dependency_dag_uses_canonical_encoding() {
+        let instance = instance_with_non_polynomial_dependency();
+        let proto = v2::Instance::from(instance.clone());
+
+        assert!(proto.decision_variable_dependency.is_empty());
+        assert_eq!(proto.decision_variable_dependencies.len(), 2);
+        assert!(proto
+            .required_features
+            .contains(&(v2::Feature::DependentExpression as i32)));
+
+        let restored = Instance::try_from(proto).unwrap();
+        assert_eq!(restored, instance);
+        let populated = restored
+            .populate_state(v1::State::from_iter([(1, -2.0)]), ATol::default())
+            .unwrap();
+        assert_eq!(populated.entries[&2], -2.0);
+        assert_eq!(populated.entries[&3], 1.0);
+    }
+
+    #[test]
+    fn v2_function_dependencies_use_canonical_encoding() {
+        let instance = instance_with_function_dependency();
+
+        let proto = v2::Instance::from(instance.clone());
+        assert!(proto.decision_variable_dependency.is_empty());
+        assert_eq!(proto.decision_variable_dependencies.len(), 1);
+        assert!(proto
+            .required_features
+            .contains(&(v2::Feature::DependentExpression as i32)));
+        assert_eq!(Instance::try_from(proto).unwrap(), instance);
+
+        let parametric: ParametricInstance = instance_with_function_dependency().into();
+        let proto = v2::ParametricInstance::from(parametric.clone());
+        assert!(proto.decision_variable_dependency.is_empty());
+        assert_eq!(proto.decision_variable_dependencies.len(), 1);
+        assert!(proto
+            .required_features
+            .contains(&(v2::Feature::DependentExpression as i32)));
+        assert_eq!(ParametricInstance::try_from(proto).unwrap(), parametric);
+    }
+
+    #[test]
+    fn v2_empty_dependencies_omit_both_encodings_and_feature() {
+        let instance = instance_with_special_constraints();
+        let proto = v2::Instance::from(instance.clone());
+        assert!(proto.decision_variable_dependency.is_empty());
+        assert!(proto.decision_variable_dependencies.is_empty());
+        assert!(!proto
+            .required_features
+            .contains(&(v2::Feature::DependentExpression as i32)));
+
+        let parametric: ParametricInstance = instance.into();
+        let proto = v2::ParametricInstance::from(parametric);
+        assert!(proto.decision_variable_dependency.is_empty());
+        assert!(proto.decision_variable_dependencies.is_empty());
+        assert!(!proto
+            .required_features
+            .contains(&(v2::Feature::DependentExpression as i32)));
+    }
+
+    #[test]
+    fn v2_legacy_function_dependencies_are_read_and_rewritten_canonically() {
+        let instance = instance_with_function_dependency();
+        let mut proto = v2::Instance::from(instance.clone());
+        proto
+            .required_features
+            .retain(|value| *value != v2::Feature::DependentExpression as i32);
+        proto.decision_variable_dependencies.clear();
+        proto
+            .decision_variable_dependency
+            .insert(2, v1::Function::from(Function::from(crate::linear!(1))));
+        let restored = Instance::from_v2_bytes(&proto.encode_to_vec()).unwrap();
+        assert_eq!(restored, instance);
+        let rewritten = v2::Instance::decode(restored.to_v2_bytes().as_slice()).unwrap();
+        assert!(rewritten.decision_variable_dependency.is_empty());
+        assert_eq!(rewritten.decision_variable_dependencies.len(), 1);
+        assert!(rewritten
+            .required_features
+            .contains(&(v2::Feature::DependentExpression as i32)));
+
+        let parametric: ParametricInstance = instance.into();
+        let mut proto = v2::ParametricInstance::from(parametric.clone());
+        proto
+            .required_features
+            .retain(|value| *value != v2::Feature::DependentExpression as i32);
+        proto.decision_variable_dependencies.clear();
+        proto
+            .decision_variable_dependency
+            .insert(2, v1::Function::from(Function::from(crate::linear!(1))));
+        let restored = ParametricInstance::from_v2_bytes(&proto.encode_to_vec()).unwrap();
+        assert_eq!(restored, parametric);
+        let rewritten = v2::ParametricInstance::decode(restored.to_v2_bytes().as_slice()).unwrap();
+        assert!(rewritten.decision_variable_dependency.is_empty());
+        assert_eq!(rewritten.decision_variable_dependencies.len(), 1);
+        assert!(rewritten
+            .required_features
+            .contains(&(v2::Feature::DependentExpression as i32)));
+    }
+
+    #[test]
+    fn v2_dependency_wire_mode_and_feature_must_be_consistent() {
+        let instance = instance_with_non_polynomial_dependency();
+
+        let mut both = v2::Instance::from(instance.clone());
+        both.decision_variable_dependency
+            .insert(3, v1::Function::from(Function::Zero));
+        let err = Instance::try_from(both).unwrap_err();
+        assert!(err.to_string().contains("cannot both be non-empty"));
+
+        let mut missing_feature = v2::Instance::from(instance.clone());
+        missing_feature
+            .required_features
+            .retain(|value| *value != v2::Feature::DependentExpression as i32);
+        let err = Instance::try_from(missing_feature).unwrap_err();
+        assert!(err.to_string().contains("required_features"));
+
+        let mut extra_feature = v2::Instance::from(instance);
+        extra_feature.decision_variable_dependencies.clear();
+        let err = Instance::try_from(extra_feature).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("decision_variable_dependencies is empty"));
+    }
+
+    #[test]
+    fn v2_parametric_dependency_wire_mode_and_feature_must_be_consistent() {
+        let instance: ParametricInstance = instance_with_non_polynomial_dependency().into();
+
+        let mut both = v2::ParametricInstance::from(instance.clone());
+        both.decision_variable_dependency
+            .insert(3, v1::Function::from(Function::Zero));
+        let err = ParametricInstance::try_from(both).unwrap_err();
+        assert!(err.to_string().contains("cannot both be non-empty"));
+
+        let mut missing_feature = v2::ParametricInstance::from(instance.clone());
+        missing_feature
+            .required_features
+            .retain(|value| *value != v2::Feature::DependentExpression as i32);
+        let err = ParametricInstance::try_from(missing_feature).unwrap_err();
+        assert!(err.to_string().contains("required_features"));
+
+        let mut extra_feature = v2::ParametricInstance::from(instance);
+        extra_feature.decision_variable_dependencies.clear();
+        let err = ParametricInstance::try_from(extra_feature).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("decision_variable_dependencies is empty"));
+    }
+
+    #[test]
+    fn v2_parametric_instance_round_trips_non_polynomial_dependency() {
+        let instance: ParametricInstance = instance_with_non_polynomial_dependency().into();
+        let proto = v2::ParametricInstance::from(instance.clone());
+        assert!(proto.decision_variable_dependency.is_empty());
+        assert_eq!(proto.decision_variable_dependencies.len(), 2);
+        assert!(proto
+            .required_features
+            .contains(&(v2::Feature::DependentExpression as i32)));
+        assert_eq!(ParametricInstance::try_from(proto).unwrap(), instance);
     }
 
     #[test]
@@ -371,6 +612,20 @@ mod tests {
     }
 
     #[test]
+    fn v2_solution_rejects_instance_only_dependency_feature() {
+        let solution = instance_with_special_constraints()
+            .evaluate(&v1::State::from_iter([(1, 1.0), (2, 0.0)]), ATol::default())
+            .unwrap();
+        let mut proto = v2::Solution::from(solution);
+        proto
+            .required_features
+            .push(v2::Feature::DependentExpression as i32);
+
+        let err = crate::Solution::try_from(proto).unwrap_err();
+        assert!(err.to_string().contains("not applicable"));
+    }
+
+    #[test]
     fn v2_solution_deserialization_rejects_unknown_structural_special_variable() {
         let instance = instance_with_special_constraints();
         let solution = instance
@@ -456,6 +711,23 @@ mod tests {
                 .name(IndicatorConstraintID::from(10)),
             Some("indicator")
         );
+    }
+
+    #[test]
+    fn v2_sample_set_rejects_instance_only_dependency_feature() {
+        let sample_set = instance_with_special_constraints()
+            .evaluate_samples(
+                &Sampled::from(v1::State::from_iter([(1, 1.0), (2, 0.0)])),
+                ATol::default(),
+            )
+            .unwrap();
+        let mut proto = v2::SampleSet::from(sample_set);
+        proto
+            .required_features
+            .push(v2::Feature::DependentExpression as i32);
+
+        let err = crate::SampleSet::try_from(proto).unwrap_err();
+        assert!(err.to_string().contains("not applicable"));
     }
 
     #[test]
@@ -560,5 +832,15 @@ mod tests {
 
         assert_eq!(restored, instance);
         assert_eq!(restored.parameters().labels().name(parameter_id), Some("p"));
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(64))]
+
+        #[test]
+        fn full_v3_instance_round_trips_through_v2(instance in any::<Instance>()) {
+            let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+            prop_assert_eq!(restored, instance);
+        }
     }
 }

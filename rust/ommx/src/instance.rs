@@ -26,6 +26,7 @@ mod setter;
 mod slack;
 pub use slack::ExactIntegerSlackUnavailable;
 mod sos1;
+mod sos1_promotion;
 mod stats;
 mod substitute;
 mod unary_encode;
@@ -34,6 +35,7 @@ pub use analysis::*;
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
+pub use sos1_promotion::*;
 pub use stats::*;
 
 use crate::{
@@ -46,8 +48,8 @@ use crate::{
     parameter::ParameterTable,
     sos1_constraint::Sos1Constraint,
     v1, AcyclicAssignments, Constraint, ConstraintContext, ConstraintID, DecisionVariable,
-    Evaluate, Function, ModelingLabel, NamedFunction, NamedFunctionTable, VariableID,
-    VariableIDSet,
+    DecisionVariableDependencies, DependentExpr, Evaluate, Function, ModelingLabel, NamedFunction,
+    NamedFunctionTable, VariableID, VariableIDSet,
 };
 use std::collections::{BTreeMap, HashMap};
 
@@ -169,14 +171,19 @@ pub enum Sense {
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the objective function or constraints.
-///   These are "dependent variables" whose values are computed from other variables.
+///   These are "dependent variables" whose values are reconstructed from
+///   [`DependentExpr`] values after solver-provided state has been validated.
 /// - Decision variables are classified into mutually exclusive roles:
 ///   - **used**: Variable IDs appearing in the objective function or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
-///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
+///   Function-valued dependencies reachable from a removed row are substituted
+///   when the constraint is restored via [`Self::restore_constraint`]. Restore
+///   rejects a row atomically when its reachable dependency closure contains a
+///   dependency not representable as [`Function`]; unrelated postsolve-only
+///   dependencies do not block it.
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
@@ -253,7 +260,7 @@ pub struct Instance {
     sos1_constraint_collection: ConstraintCollection<Sos1Constraint>,
 
     #[getset(get = "pub")]
-    decision_variable_dependency: AcyclicAssignments,
+    decision_variable_dependency: DecisionVariableDependencies,
     /// Named-function rows plus their modeling labels.
     named_functions: NamedFunctionTable<NamedFunction>,
 
@@ -593,7 +600,7 @@ impl Instance {
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the objective function or constraints.
-///   The RHS expressions of [`Self::decision_variable_dependency`] may
+///   The [`DependentExpr`] RHS expressions of [`Self::decision_variable_dependency`] may
 ///   reference IDs from [`Self::decision_variables`] or [`Self::parameters`],
 ///   and may not reference undefined IDs. Parameter IDs in RHS expressions are
 ///   evaluated by [`Self::with_parameters`].
@@ -683,7 +690,7 @@ pub struct ParametricInstance {
     sos1_constraint_collection: ConstraintCollection<Sos1Constraint>,
 
     #[getset(get = "pub")]
-    decision_variable_dependency: AcyclicAssignments,
+    decision_variable_dependency: DecisionVariableDependencies,
     /// Named-function rows plus their modeling labels.
     named_functions: NamedFunctionTable<NamedFunction>,
 

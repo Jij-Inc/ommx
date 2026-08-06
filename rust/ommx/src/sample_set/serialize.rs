@@ -30,6 +30,7 @@ impl From<SampleSet> for v2::SampleSet {
             !value.indicator_constraints.is_empty(),
             !value.one_hot_constraints.is_empty(),
             !value.sos1_constraints.is_empty(),
+            false,
         );
 
         let SampleSet {

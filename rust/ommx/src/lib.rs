@@ -35,6 +35,8 @@ mod coefficient;
 mod constraint;
 mod constraint_type;
 mod decision_variable;
+mod decision_variable_dependencies;
+mod dependent_expr;
 pub mod error;
 mod evaluate;
 mod format;
@@ -63,6 +65,8 @@ pub use coefficient::*;
 pub use constraint::*;
 pub use constraint_type::*;
 pub use decision_variable::*;
+pub use decision_variable_dependencies::*;
+pub use dependent_expr::*;
 pub use error::*;
 pub use evaluate::{
     Evaluate, InconsistentDependentValue, MissingStateEntries, Propagate, PropagateOutcome,

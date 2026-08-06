@@ -1,6 +1,7 @@
 use super::*;
 use crate::ATol;
 use anyhow::Result;
+use std::collections::BTreeSet;
 
 fn normalize_restore_error<ID: std::fmt::Debug>(
     kind: &'static str,
@@ -25,6 +26,44 @@ fn normalize_restore_error<ID: std::fmt::Debug>(
     )
 }
 
+fn restore_function_dependencies<ID: std::fmt::Debug>(
+    dependencies: &crate::DecisionVariableDependencies,
+    required_ids: crate::VariableIDSet,
+    kind: &'static str,
+    constraint_id: ID,
+) -> crate::Result<crate::AcyclicAssignments> {
+    let dependency_keys = dependencies.keys().collect::<BTreeSet<_>>();
+    let mut pending = required_ids
+        .intersection(&dependency_keys)
+        .copied()
+        .collect::<Vec<_>>();
+    let mut visited = BTreeSet::new();
+    let mut assignments = Vec::new();
+
+    while let Some(id) = pending.pop() {
+        if !visited.insert(id) {
+            continue;
+        }
+        let expression = dependencies
+            .get(&id)
+            .expect("pending contains only dependency keys");
+        let crate::DependentExpr::Function(function) = expression else {
+            crate::bail!(
+                { kind, constraint_id = ?constraint_id, dependency = ?id },
+                "Cannot restore {kind} {constraint_id:?}: reachable dependency {id:?} is not algebraically substitutable"
+            );
+        };
+        for required in function.required_ids().intersection(&dependency_keys) {
+            if !visited.contains(required) {
+                pending.push(*required);
+            }
+        }
+        assignments.push((id, function.clone()));
+    }
+
+    crate::AcyclicAssignments::new(assignments).map_err(Into::into)
+}
+
 impl Instance {
     pub fn relax_constraint(
         &mut self,
@@ -45,7 +84,6 @@ impl Instance {
 
     pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
         let fixed_state = self.fixed_state();
-        let dependency = self.decision_variable_dependency.clone();
         let mut constraint = self
             .constraint_collection
             .removed()
@@ -53,6 +91,12 @@ impl Instance {
             .ok_or_else(|| crate::error!("Removed constraint with ID {:?} not found", id))?
             .0
             .clone();
+        let dependency = restore_function_dependencies(
+            &self.decision_variable_dependency,
+            constraint.required_ids(),
+            "constraint",
+            id,
+        )?;
 
         if !dependency.is_empty() {
             crate::substitute_acyclic(&mut constraint.stage.function, &dependency)
@@ -119,7 +163,12 @@ impl Instance {
         }
 
         let fixed_state = self.fixed_state();
-        let dependency = self.decision_variable_dependency.clone();
+        let dependency = restore_function_dependencies(
+            &self.decision_variable_dependency,
+            ic.stage.function.required_ids(),
+            "indicator constraint",
+            id,
+        )?;
         if !dependency.is_empty() {
             crate::substitute_acyclic(&mut ic.stage.function, &dependency).map_err(|error| {
                 normalize_restore_error("indicator constraint", id, error.into())
@@ -634,5 +683,123 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("indicator variable"));
+    }
+
+    #[test]
+    fn restore_constraint_rejects_reachable_non_polynomial_dependency_atomically() {
+        let constraint_id = ConstraintID::from(1);
+        let selector = VariableID::from(10);
+        let member = VariableID::from(1);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([
+                (member, DecisionVariable::continuous()),
+                (selector, DecisionVariable::binary()),
+            ]),
+            BTreeMap::from([(
+                constraint_id,
+                Constraint::less_than_or_equal_to_zero(Function::from(linear!(10))),
+            )]),
+        )
+        .unwrap();
+        instance
+            .relax_constraint(constraint_id, "test".to_string(), [])
+            .unwrap();
+        instance.decision_variable_dependency = crate::DecisionVariableDependencies::new([(
+            selector,
+            crate::DependentExpr::nonzero_indicator(Function::from(linear!(1))),
+        )])
+        .unwrap();
+        let before = instance.clone();
+
+        let error = instance.restore_constraint(constraint_id).unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("not algebraically substitutable"));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn restore_constraint_rejects_transitively_reachable_non_polynomial_dependency_atomically() {
+        let constraint_id = ConstraintID::from(1);
+        let member = VariableID::from(1);
+        let selector = VariableID::from(10);
+        let algebraic = VariableID::from(11);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([
+                (member, DecisionVariable::continuous()),
+                (selector, DecisionVariable::binary()),
+                (algebraic, DecisionVariable::continuous()),
+            ]),
+            BTreeMap::from([(
+                constraint_id,
+                Constraint::less_than_or_equal_to_zero(Function::from(linear!(11))),
+            )]),
+        )
+        .unwrap();
+        instance
+            .relax_constraint(constraint_id, "test".to_string(), [])
+            .unwrap();
+        instance.decision_variable_dependency = crate::DecisionVariableDependencies::new([
+            (
+                selector,
+                crate::DependentExpr::nonzero_indicator(Function::from(linear!(1))),
+            ),
+            (
+                algebraic,
+                crate::DependentExpr::from(Function::from(linear!(10))),
+            ),
+        ])
+        .unwrap();
+        let before = instance.clone();
+
+        let error = instance.restore_constraint(constraint_id).unwrap_err();
+
+        assert!(error
+            .to_string()
+            .contains("not algebraically substitutable"));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn restore_constraint_ignores_unreachable_non_polynomial_dependency() {
+        let constraint_id = ConstraintID::from(1);
+        let selector = VariableID::from(10);
+        let member = VariableID::from(2);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::continuous()),
+                (member, DecisionVariable::continuous()),
+                (selector, DecisionVariable::binary()),
+            ]),
+            BTreeMap::from([(
+                constraint_id,
+                Constraint::less_than_or_equal_to_zero(Function::from(linear!(1))),
+            )]),
+        )
+        .unwrap();
+        instance
+            .relax_constraint(constraint_id, "test".to_string(), [])
+            .unwrap();
+        instance.decision_variable_dependency = crate::DecisionVariableDependencies::new([(
+            selector,
+            crate::DependentExpr::nonzero_indicator(Function::from(linear!(2))),
+        )])
+        .unwrap();
+
+        instance.restore_constraint(constraint_id).unwrap();
+
+        assert!(instance.constraints().contains_key(&constraint_id));
+        assert!(instance.removed_constraints().is_empty());
+        assert!(instance
+            .decision_variable_dependency()
+            .get(&selector)
+            .is_some());
     }
 }

@@ -26,7 +26,7 @@ fn validate_fixed_decision_variable_partition(
     message: &'static str,
     objective: &Function,
     constraints: &BTreeMap<ConstraintID, Constraint>,
-    decision_variable_dependency: &AcyclicAssignments,
+    decision_variable_dependency: &DecisionVariableDependencies,
     fixed_decision_variable_values: &BTreeMap<VariableID, f64>,
 ) -> Result<(), ParseError> {
     let mut used: VariableIDSet = objective.required_ids();
@@ -59,20 +59,76 @@ fn validate_fixed_decision_variable_partition(
 }
 
 fn parse_v2_decision_variable_dependency(
-    dependency: BTreeMap<u64, v1::Function>,
+    legacy: BTreeMap<u64, v1::Function>,
+    dependencies: BTreeMap<u64, v2::DependentExpr>,
+    required_features: &std::collections::BTreeSet<v2::Feature>,
     message: &'static str,
-) -> Result<AcyclicAssignments, ParseError> {
-    let dependency = dependency
-        .into_iter()
-        .map(|(id, function)| {
-            Ok((
-                VariableID::from(id),
-                function.parse_as(&(), message, "decision_variable_dependency")?,
-            ))
+) -> Result<(DecisionVariableDependencies, &'static str), ParseError> {
+    if !legacy.is_empty() && !dependencies.is_empty() {
+        return Err(RawParseError::InvalidInstance(
+            "deprecated decision_variable_dependency and decision_variable_dependencies cannot both be non-empty"
+                .to_string(),
+        )
+        .context(message, "decision_variable_dependencies"));
+    }
+    crate::v2_io::validate_feature_payload(
+        required_features,
+        v2::Feature::DependentExpression,
+        !dependencies.is_empty(),
+        message,
+        "decision_variable_dependencies",
+    )?;
+
+    let dependency_field = if dependencies.is_empty() {
+        "decision_variable_dependency"
+    } else {
+        "decision_variable_dependencies"
+    };
+    let dependency = if dependencies.is_empty() {
+        legacy
+            .into_iter()
+            .map(|(id, function)| {
+                Ok((
+                    VariableID::from(id),
+                    DependentExpr::Function(function.parse_as(
+                        &(),
+                        message,
+                        "decision_variable_dependency",
+                    )?),
+                ))
+            })
+            .collect::<Result<BTreeMap<_, _>, ParseError>>()?
+    } else {
+        dependencies
+            .into_iter()
+            .map(|(id, expression)| {
+                Ok((
+                    VariableID::from(id),
+                    expression.parse_as(&(), message, "decision_variable_dependencies")?,
+                ))
+            })
+            .collect::<Result<BTreeMap<_, _>, ParseError>>()?
+    };
+    let dependency = DecisionVariableDependencies::new(dependency)
+        .map_err(|e| RawParseError::from(e).context(message, dependency_field))?;
+    Ok((dependency, dependency_field))
+}
+
+fn decision_variable_dependency_to_v1_map(
+    dependency: &DecisionVariableDependencies,
+) -> crate::Result<std::collections::HashMap<u64, v1::Function>> {
+    dependency
+        .iter()
+        .map(|(&id, expression)| {
+            let DependentExpr::Function(function) = expression else {
+                crate::bail!(
+                    { ?id },
+                    "Dependency for variable {id:?} cannot be represented as ommx.v1.Function; use to_v2_bytes()"
+                );
+            };
+            Ok((id.into_inner(), function.clone().into()))
         })
-        .collect::<Result<BTreeMap<_, _>, ParseError>>()?;
-    AcyclicAssignments::new(dependency)
-        .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))
+        .collect()
 }
 
 fn created_collection_has_payload<T: crate::ConstraintType>(
@@ -149,7 +205,7 @@ fn active_used_ids_from_created_collection<T: crate::ConstraintType>(
 fn validate_fixed_dependent_partition_from_sets(
     used: &VariableIDSet,
     fixed_values: &BTreeMap<VariableID, f64>,
-    decision_variable_dependency: &AcyclicAssignments,
+    decision_variable_dependency: &DecisionVariableDependencies,
     message: &'static str,
 ) -> Result<(), ParseError> {
     let fixed: VariableIDSet = fixed_values.keys().copied().collect();
@@ -407,6 +463,7 @@ impl Parse for v1::Instance {
         }
         let decision_variable_dependency = AcyclicAssignments::new(decision_variable_dependency)
             .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))?;
+        let decision_variable_dependency = decision_variable_dependency.into();
 
         ignore_legacy_constraint_hints(self.constraint_hints, message);
         validate_fixed_decision_variable_partition(
@@ -574,22 +631,29 @@ impl Parse for v2::Instance {
             }
         }
 
-        let decision_variable_dependency =
-            parse_v2_decision_variable_dependency(self.decision_variable_dependency, message)?;
+        #[allow(deprecated)]
+        let legacy_decision_variable_dependency = self.decision_variable_dependency;
+        let (decision_variable_dependency, dependency_field) =
+            parse_v2_decision_variable_dependency(
+                legacy_decision_variable_dependency,
+                self.decision_variable_dependencies,
+                &required_features,
+                message,
+            )?;
         for id in decision_variable_dependency.keys() {
             if !decision_variable_ids.contains(&id) {
                 return Err(RawParseError::InvalidInstance(format!(
-                    "Variable ID {id:?} in decision_variable_dependency is not in decision_variables"
+                    "Variable ID {id:?} in {dependency_field} is not in decision_variables"
                 ))
-                .context(message, "decision_variable_dependency"));
+                .context(message, dependency_field));
             }
         }
         for id in decision_variable_dependency.required_ids() {
             if !decision_variable_ids.contains(&id) {
                 return Err(RawParseError::InvalidInstance(format!(
-                    "Undefined variable ID is used in decision_variable_dependency: {id:?}"
+                    "Undefined variable ID is used in {dependency_field}: {id:?}"
                 ))
-                .context(message, "decision_variable_dependency"));
+                .context(message, dependency_field));
             }
         }
 
@@ -642,15 +706,12 @@ impl TryFrom<Instance> for v1::Instance {
     type Error = crate::Error;
 
     fn try_from(value: Instance) -> crate::Result<Self> {
+        let decision_variable_dependency =
+            decision_variable_dependency_to_v1_map(&value.decision_variable_dependency)?;
         let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
         let (constraints, removed_constraints): (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) =
             value.constraint_collection.into();
         let named_functions: Vec<v1::NamedFunction> = value.named_functions.into();
-        let decision_variable_dependency = value
-            .decision_variable_dependency
-            .into_iter()
-            .map(|(id, dep)| (id.into(), dep.into()))
-            .collect();
         // Special constraint types do not have a v1 proto representation yet.
         // Serialization is not supported when these collections are non-empty.
         if !value.indicator_constraint_collection.active().is_empty()
@@ -807,6 +868,7 @@ impl Parse for v1::ParametricInstance {
         }
         let decision_variable_dependency = AcyclicAssignments::new(decision_variable_dependency)
             .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))?;
+        let decision_variable_dependency = decision_variable_dependency.into();
 
         ignore_legacy_constraint_hints(self.constraint_hints, message);
         validate_fixed_decision_variable_partition(
@@ -983,22 +1045,29 @@ impl Parse for v2::ParametricInstance {
             }
         }
 
-        let decision_variable_dependency =
-            parse_v2_decision_variable_dependency(self.decision_variable_dependency, message)?;
+        #[allow(deprecated)]
+        let legacy_decision_variable_dependency = self.decision_variable_dependency;
+        let (decision_variable_dependency, dependency_field) =
+            parse_v2_decision_variable_dependency(
+                legacy_decision_variable_dependency,
+                self.decision_variable_dependencies,
+                &required_features,
+                message,
+            )?;
         for id in decision_variable_dependency.keys() {
             if !decision_variable_ids.contains(&id) {
                 return Err(RawParseError::InvalidInstance(format!(
-                    "Variable ID {id:?} in decision_variable_dependency is not in decision_variables"
+                    "Variable ID {id:?} in {dependency_field} is not in decision_variables"
                 ))
-                .context(message, "decision_variable_dependency"));
+                .context(message, dependency_field));
             }
         }
         for id in decision_variable_dependency.required_ids() {
             if !all_variable_ids.contains(&id) {
                 return Err(RawParseError::InvalidInstance(format!(
-                    "Undefined variable ID is used in decision_variable_dependency: {id:?}"
+                    "Undefined variable ID is used in {dependency_field}: {id:?}"
                 ))
-                .context(message, "decision_variable_dependency"));
+                .context(message, dependency_field));
             }
         }
 
@@ -1094,6 +1163,8 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
             Vec<v1::RemovedConstraint>,
         ) = constraint_collection.into();
         let v1_named_functions: Vec<v1::NamedFunction> = named_functions.into();
+        let decision_variable_dependency =
+            decision_variable_dependency_to_v1_map(&decision_variable_dependency)?;
         Ok(Self {
             description,
             sense: v1::instance::Sense::from(sense) as i32,
@@ -1103,10 +1174,7 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
             constraints: v1_constraints,
             named_functions: v1_named_functions,
             removed_constraints: v1_removed_constraints,
-            decision_variable_dependency: decision_variable_dependency
-                .into_iter()
-                .map(|(id, dep)| (id.into(), dep.into()))
-                .collect(),
+            decision_variable_dependency,
             constraint_hints: None,
             format_version: crate::CURRENT_FORMAT_VERSION,
             annotations: crate::protobuf_extension_annotations(annotations),
@@ -2173,6 +2241,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_v2_instance_parse_rejects_undefined_dependency_rhs() {
         use crate::{linear, DecisionVariable, Function, Sense, VariableID};
 
@@ -2196,6 +2265,53 @@ mod tests {
                 "Undefined variable ID is used in decision_variable_dependency: VariableID(999)"
             ),
             "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_v2_instance_parse_reports_dependent_expression_field_for_undefined_ids() {
+        use crate::{linear, DecisionVariable, DependentExpr, Function, Sense, VariableID};
+
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(maplit::btreemap! {
+                VariableID::from(1) => DecisionVariable::binary(),
+            })
+            .constraints(Default::default())
+            .build()
+            .unwrap();
+
+        let mut undefined_rhs = crate::v2::Instance::from(instance.clone());
+        undefined_rhs
+            .required_features
+            .push(crate::v2::Feature::DependentExpression as i32);
+        undefined_rhs.decision_variable_dependencies.insert(
+            1,
+            DependentExpr::nonzero_indicator(Function::from(linear!(999))).into(),
+        );
+        let error = Instance::try_from(undefined_rhs).unwrap_err();
+        assert!(
+            error.to_string().contains(
+                "Undefined variable ID is used in decision_variable_dependencies: VariableID(999)"
+            ),
+            "unexpected error: {error}"
+        );
+
+        let mut undefined_target = crate::v2::Instance::from(instance);
+        undefined_target
+            .required_features
+            .push(crate::v2::Feature::DependentExpression as i32);
+        undefined_target.decision_variable_dependencies.insert(
+            999,
+            DependentExpr::nonzero_indicator(Function::from(linear!(1))).into(),
+        );
+        let error = Instance::try_from(undefined_target).unwrap_err();
+        assert!(
+            error.to_string().contains(
+                "Variable ID VariableID(999) in decision_variable_dependencies is not in decision_variables"
+            ),
+            "unexpected error: {error}"
         );
     }
 

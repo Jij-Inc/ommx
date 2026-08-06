@@ -45,6 +45,8 @@ pub enum Feature {
     ConstraintOneHot = 2,
     /// The payload contains first-class SOS1 constraints.
     ConstraintSos1 = 3,
+    /// The payload uses the DependentExpr-based dependent-variable encoding.
+    DependentExpression = 4,
 }
 impl Feature {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -57,6 +59,7 @@ impl Feature {
             Feature::ConstraintIndicator => "FEATURE_CONSTRAINT_INDICATOR",
             Feature::ConstraintOneHot => "FEATURE_CONSTRAINT_ONE_HOT",
             Feature::ConstraintSos1 => "FEATURE_CONSTRAINT_SOS1",
+            Feature::DependentExpression => "FEATURE_DEPENDENT_EXPRESSION",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -66,6 +69,7 @@ impl Feature {
             "FEATURE_CONSTRAINT_INDICATOR" => Some(Self::ConstraintIndicator),
             "FEATURE_CONSTRAINT_ONE_HOT" => Some(Self::ConstraintOneHot),
             "FEATURE_CONSTRAINT_SOS1" => Some(Self::ConstraintSos1),
+            "FEATURE_DEPENDENT_EXPRESSION" => Some(Self::DependentExpression),
             _ => None,
         }
     }
@@ -514,6 +518,32 @@ pub struct SampledDecisionVariableTable {
     #[prost(btree_map = "uint64, message", tag = "2")]
     pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
 }
+/// Deterministic postsolve expression for reconstructing a dependent variable.
+///
+/// This is deliberately separate from ommx.v1.Function: postsolve
+/// reconstruction may use deterministic operations that are not valid
+/// objective or constraint functions.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct DependentExpr {
+    #[prost(oneof = "dependent_expr::Expression", tags = "1, 2")]
+    pub expression: ::core::option::Option<dependent_expr::Expression>,
+}
+/// Nested message and enum types in `DependentExpr`.
+pub mod dependent_expr {
+    #[non_exhaustive]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Expression {
+        #[prost(message, tag = "1")]
+        Function(super::super::v1::Function),
+        /// Evaluates to 0 when the inner value has absolute value below the
+        /// evaluation tolerance, and to 1 otherwise.
+        #[prost(message, tag = "2")]
+        NonzeroIndicator(::prost::alloc::boxed::Box<super::DependentExpr>),
+    }
+}
 /// Named function row used by v2 top-level table owners.
 ///
 /// The enclosing named-function table owns the NamedFunctionID and modeling
@@ -603,7 +633,11 @@ pub struct Instance {
     pub one_hot_constraints: ::core::option::Option<OneHotConstraintCollection>,
     #[prost(message, optional, tag = "10")]
     pub sos1_constraints: ::core::option::Option<Sos1ConstraintCollection>,
+    /// Deprecated Function-only encoding retained for reading existing v2
+    /// payloads. Writers must leave this field empty and use
+    /// decision_variable_dependencies instead.
     #[prost(btree_map = "uint64, message", tag = "11")]
+    #[deprecated]
     pub decision_variable_dependency:
         ::prost::alloc::collections::BTreeMap<u64, super::v1::Function>,
     #[prost(message, optional, tag = "12")]
@@ -613,6 +647,11 @@ pub struct Instance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
+    /// Canonical dependent-variable reconstruction DAG. Writers must include
+    /// FEATURE_DEPENDENT_EXPRESSION when this map is non-empty. Readers reject
+    /// payloads that also populate the deprecated decision_variable_dependency.
+    #[prost(btree_map = "uint64, message", tag = "14")]
+    pub decision_variable_dependencies: ::prost::alloc::collections::BTreeMap<u64, DependentExpr>,
 }
 /// Parameter IDs and labels owned by ParametricInstance.
 ///
@@ -655,7 +694,11 @@ pub struct ParametricInstance {
     pub one_hot_constraints: ::core::option::Option<OneHotConstraintCollection>,
     #[prost(message, optional, tag = "10")]
     pub sos1_constraints: ::core::option::Option<Sos1ConstraintCollection>,
+    /// Deprecated Function-only encoding retained for reading existing v2
+    /// payloads. Writers must leave this field empty and use
+    /// decision_variable_dependencies instead.
     #[prost(btree_map = "uint64, message", tag = "11")]
+    #[deprecated]
     pub decision_variable_dependency:
         ::prost::alloc::collections::BTreeMap<u64, super::v1::Function>,
     #[prost(message, optional, tag = "12")]
@@ -665,6 +708,11 @@ pub struct ParametricInstance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
+    /// Canonical dependent-variable reconstruction DAG. Writers must include
+    /// FEATURE_DEPENDENT_EXPRESSION when this map is non-empty. Readers reject
+    /// payloads that also populate the deprecated decision_variable_dependency.
+    #[prost(btree_map = "uint64, message", tag = "14")]
+    pub decision_variable_dependencies: ::prost::alloc::collections::BTreeMap<u64, DependentExpr>,
 }
 /// Validated multi-sample solver or sampler output serialization root.
 #[non_exhaustive]

@@ -82,6 +82,16 @@ impl ATol {
         self.0.into_inner()
     }
 
+    /// Return whether `value` is treated as zero by OMMX evaluation.
+    ///
+    /// This uses the same strict absolute-tolerance boundary as constraint
+    /// feasibility: values with `abs(value) < atol` are zero, while values on
+    /// the boundary are non-zero. Callers that require finite inputs must
+    /// validate them before using this classifier.
+    pub(crate) fn considers_zero(self, value: f64) -> bool {
+        value.abs() < self.into_inner()
+    }
+
     #[tracing::instrument(skip_all)]
     pub fn set_default(value: f64) -> crate::Result<()> {
         let atol = Self::new(value)?;
@@ -209,5 +219,17 @@ mod tests {
     #[test]
     fn accepts_small_positive() {
         assert!(ATol::new(1e-12).is_ok());
+    }
+
+    #[test]
+    fn zero_classifier_uses_strict_absolute_tolerance() {
+        let atol = ATol::new(1.0).unwrap();
+
+        assert!(atol.considers_zero(0.0));
+        assert!(atol.considers_zero(-0.0));
+        assert!(atol.considers_zero(0.5));
+        assert!(atol.considers_zero(-0.5));
+        assert!(!atol.considers_zero(1.0));
+        assert!(!atol.considers_zero(-1.0));
     }
 }

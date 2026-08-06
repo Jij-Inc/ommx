@@ -241,6 +241,58 @@ mod with_parameters_tests {
         );
     }
 
+    #[test]
+    fn parameter_substitution_descends_into_dependent_expression_ast() {
+        let dependent = VariableID::from(2);
+        let parameter = VariableID::from(100);
+        let parametric = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                dependent => DecisionVariable::binary(),
+            })
+            .parameters(parameters([parameter]))
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(
+                crate::DecisionVariableDependencies::new([(
+                    dependent,
+                    crate::DependentExpr::nonzero_indicator(Function::from(linear!(100))),
+                )])
+                .unwrap(),
+            )
+            .build()
+            .unwrap();
+
+        let instance = parametric
+            .with_parameters(crate::v1::Parameters {
+                entries: std::collections::HashMap::from([(100, 5.0e-7)]),
+            })
+            .unwrap();
+        let loose = instance
+            .populate_state(
+                crate::v1::State::default(),
+                crate::ATol::new(1.0e-6).unwrap(),
+            )
+            .unwrap();
+        let tight = instance
+            .populate_state(
+                crate::v1::State::default(),
+                crate::ATol::new(1.0e-8).unwrap(),
+            )
+            .unwrap();
+
+        assert_eq!(loose.entries[&2], 0.0);
+        assert_eq!(tight.entries[&2], 1.0);
+        assert!(matches!(
+            instance.decision_variable_dependency().get(&dependent),
+            Some(crate::DependentExpr::NonzeroIndicator(_))
+        ));
+        assert!(!instance
+            .decision_variable_dependency()
+            .required_ids()
+            .contains(&parameter));
+    }
+
     /// Parameter substitution must apply to *removed* regular constraints
     /// as well. `ParametricInstance` permits removed-constraint bodies to
     /// reference parameters (function bodies are unrestricted), but the
