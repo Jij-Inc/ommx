@@ -1,6 +1,7 @@
 use crate::{
     polynomial_base::QuadraticParseError, BoundError, CoefficientError, DecisionVariable,
-    DecisionVariableError, SampleID, SampleSetError, SolutionError, SubstitutionError, VariableID,
+    DecisionVariableError, OneHotConstraintError, ParameterIDCollision, SampleID, SampleSetError,
+    SolutionError, Sos1ConstraintError, SubstitutionError, VariableID,
 };
 use prost::DecodeError;
 use std::{
@@ -115,9 +116,8 @@ pub enum RawParseError {
     UnknownEnumValue { enum_name: &'static str, value: i32 },
 
     /// Catch-all for [`crate::Instance`] invariant violations discovered during
-    /// parsing (duplicated / undefined / non-unique IDs, etc.). Holds the
-    /// rendered message; we no longer expose a typed enum for this case since
-    /// downstream code never matched on discriminants.
+    /// parsing that have no curated recovery signal. Conditions with a stable
+    /// recovery contract use dedicated source-bearing variants below.
     #[error("{0}")]
     InvalidInstance(String),
 
@@ -147,6 +147,15 @@ pub enum RawParseError {
 
     #[error(transparent)]
     InvalidDecisionVariable(#[from] DecisionVariableError),
+
+    #[error("{0}")]
+    ParameterIDCollision(#[from] ParameterIDCollision),
+
+    #[error("{0}")]
+    OneHotConstraintError(#[from] OneHotConstraintError),
+
+    #[error("{0}")]
+    Sos1ConstraintError(#[from] Sos1ConstraintError),
 
     #[error("Duplicated sample ID: {id:?}")]
     DuplicatedSampleID { id: SampleID },

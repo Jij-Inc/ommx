@@ -365,7 +365,8 @@ impl Instance {
     /// label updates. The original wrapper is not modified.
     ///
     /// Raises {class}`ValueError` if the variable's id collides with an
-    /// existing variable, parameter, or substitution-dependency key.
+    /// existing decision variable. Substituted variables retain their ids and
+    /// therefore also count as existing decision variables.
     pub fn add_decision_variable(
         slf: Bound<'_, Self>,
         variable: DecisionVariable,
@@ -1213,7 +1214,7 @@ impl Instance {
     /// ```
     /// Traceback (most recent call last):
     ///     ...
-    /// ValueError: The state does not contain some required IDs: {VariableID(2)}
+    /// ValueError: state is missing required variable IDs: {VariableID(2)}
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(
         &self,
@@ -1226,10 +1227,7 @@ impl Instance {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let solution = self
-            .inner
-            .evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let solution = self.inner.evaluate(&state.0, atol)?;
         Ok(Solution { inner: solution })
     }
 
@@ -1250,10 +1248,7 @@ impl Instance {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let state = self
-            .inner
-            .populate_state(state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        let state = self.inner.populate_state(state.0, atol)?;
         Ok(State(state))
     }
 
@@ -1313,9 +1308,7 @@ impl Instance {
             None => ommx::ATol::default(),
         };
         let mut new_inner = self.inner.clone();
-        new_inner
-            .partial_evaluate(&state.0, atol)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        new_inner.partial_evaluate(&state.0, atol)?;
         Ok(Self { inner: new_inner })
     }
 
@@ -1400,6 +1393,10 @@ impl Instance {
     ///
     /// **Returns:**
     /// Samples object
+    ///
+    /// Raises {class}`ValueError` if the requested state groups cannot
+    /// partition the samples or the inclusive sample-ID range is too small.
+    /// `num_different_samples=0` is valid only when `num_samples=0`.
     ///
     /// # Examples
     ///
@@ -2006,13 +2003,12 @@ impl Instance {
         &mut self,
         py: Python<'_>,
         assignments: HashMap<u64, Function>,
-    ) -> PyResult<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let iter = assignments
             .into_iter()
             .map(|(id, f)| (VariableID::from(id), f.0));
-        ommx::substitute(&mut self.inner, iter)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        ommx::substitute(&mut self.inner, iter)?;
         Ok(())
     }
 

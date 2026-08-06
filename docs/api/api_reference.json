@@ -8346,7 +8346,7 @@
             },
             {
               "name": "add_decision_variable",
-              "doc": "Add a decision variable to this instance.\n\nDrains the wrapper's modeling-label snapshot into this instance's SoA\nstore and returns an {class}`~ommx.AttachedDecisionVariable`\nbound to the variable's id — a write-through handle for further\nlabel updates. The original wrapper is not modified.\n\nRaises {class}`ValueError` if the variable's id collides with an\nexisting variable, parameter, or substitution-dependency key.",
+              "doc": "Add a decision variable to this instance.\n\nDrains the wrapper's modeling-label snapshot into this instance's SoA\nstore and returns an {class}`~ommx.AttachedDecisionVariable`\nbound to the variable's id — a write-through handle for further\nlabel updates. The original wrapper is not modified.\n\nRaises {class}`ValueError` if the variable's id collides with an\nexisting decision variable. Substituted variables retain their ids and\ntherefore also count as existing decision variables.",
               "signatures": [
                 {
                   "parameters": [
@@ -9422,7 +9422,7 @@
             },
             {
               "name": "evaluate",
-              "doc": "Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.\n\nThis method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),\nand returns a {class}`~ommx.Solution` object containing objective value, evaluated constraint values, and feasibility information.\n\n# Examples\n\nCreate a simple instance with three binary variables and evaluate a solution:\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + x[1] <= 1).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nEvaluate it with a state x0 = 1, x1 = 0, x2 = 0, and show the objective and constraints:\n\n```python\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 0})\n>>> solution.objective\n1.0\n```\n\nIf the value is out of the range, the solution is infeasible:\n\n```python\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 2})\n>>> solution.feasible\nFalse\n```\n\nIf some of the decision variables are not set, this raises an error:\n\n```python\n>>> instance.evaluate({0: 1, 1: 0})\n```\nTraceback (most recent call last):\n    ...\nValueError: The state does not contain some required IDs: {VariableID(2)}",
+              "doc": "Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.\n\nThis method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),\nand returns a {class}`~ommx.Solution` object containing objective value, evaluated constraint values, and feasibility information.\n\n# Examples\n\nCreate a simple instance with three binary variables and evaluate a solution:\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + x[1] <= 1).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nEvaluate it with a state x0 = 1, x1 = 0, x2 = 0, and show the objective and constraints:\n\n```python\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 0})\n>>> solution.objective\n1.0\n```\n\nIf the value is out of the range, the solution is infeasible:\n\n```python\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 2})\n>>> solution.feasible\nFalse\n```\n\nIf some of the decision variables are not set, this raises an error:\n\n```python\n>>> instance.evaluate({0: 1, 1: 0})\n```\nTraceback (most recent call last):\n    ...\nValueError: state is missing required variable IDs: {VariableID(2)}",
               "signatures": [
                 {
                   "parameters": [
@@ -10519,7 +10519,7 @@
             },
             {
               "name": "random_samples",
-              "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\n# Examples\n\nGenerate samples for a simple instance:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(sum(x) <= 2).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5\n```",
+              "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\nRaises {class}`ValueError` if the requested state groups cannot\npartition the samples or the inclusive sample-ID range is too small.\n`num_different_samples=0` is valid only when `num_samples=0`.\n\n# Examples\n\nGenerate samples for a simple instance:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(sum(x) <= 2).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -15957,7 +15957,7 @@
             },
             {
               "name": "add_decision_variable",
-              "doc": "Add a decision variable to this parametric instance. Returns an\n{class}`~ommx.AttachedDecisionVariable` bound to the variable's\nid — a write-through handle for further label updates.",
+              "doc": "Add a decision variable to this parametric instance. Returns an\n{class}`~ommx.AttachedDecisionVariable` bound to the variable's\nid — a write-through handle for further label updates.\n\nRaises {class}`ValueError` if the variable's id collides with an\nexisting decision variable or parameter. Substituted variables retain\ntheir ids and therefore also count as existing decision variables.",
               "signatures": [
                 {
                   "parameters": [
@@ -16660,7 +16660,7 @@
             },
             {
               "name": "from_components",
-              "doc": "",
+              "doc": "Build a parametric instance from its model components.\n\nRaises {class}`ValueError` if a decision variable and parameter use the\nsame ID.",
               "signatures": [
                 {
                   "parameters": [
@@ -23053,7 +23053,7 @@
             },
             {
               "name": "append",
-              "doc": "Append a sample with the given sample IDs and state",
+              "doc": "Append a sample with the given sample IDs and state.\n\nRaises {class}`ValueError` if an ID already exists in this collection\nor occurs more than once in `sample_ids`. The collection is unchanged\nwhen validation fails.",
               "signatures": [
                 {
                   "parameters": [

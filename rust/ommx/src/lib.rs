@@ -64,7 +64,10 @@ pub use constraint::*;
 pub use constraint_type::*;
 pub use decision_variable::*;
 pub use error::*;
-pub use evaluate::{Evaluate, Propagate, PropagateOutcome};
+pub use evaluate::{
+    Evaluate, InconsistentDependentValue, MissingStateEntries, Propagate, PropagateOutcome,
+    UnknownStateEntries, UnverifiableDependentAssertion,
+};
 pub use format::{FormattedFunction, FunctionFormatOptions};
 pub use function::*;
 pub use indicator_constraint::*;

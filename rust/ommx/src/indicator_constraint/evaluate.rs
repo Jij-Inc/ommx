@@ -1,5 +1,28 @@
 use super::*;
 use crate::{ATol, Constraint, CreatedData, Evaluate, Propagate, PropagateOutcome, VariableIDSet};
+use anyhow::Context;
+
+// Full evaluation leaves ordinary kind and bound violations to Solution
+// feasibility. Indicator activation is structural, however, so its value must
+// be interpretable as binary before the constraint can be evaluated.
+fn indicator_is_active(
+    indicator_variable: VariableID,
+    value: f64,
+    sample_id: Option<SampleID>,
+    atol: ATol,
+) -> crate::Result<bool> {
+    crate::DecisionVariable::binary()
+        .check_value_consistency(indicator_variable, value, atol)
+        .with_context(|| match sample_id {
+            Some(sample_id) => format!(
+                "indicator variable {indicator_variable:?} has an invalid activation value in sample {sample_id:?}"
+            ),
+            None => format!(
+                "indicator variable {indicator_variable:?} has an invalid activation value"
+            ),
+        })?;
+    Ok((value - 1.0).abs() < *atol)
+}
 
 impl Propagate for IndicatorConstraint<Created> {
     type Transformed = Constraint<Created>;
@@ -12,7 +35,7 @@ impl Propagate for IndicatorConstraint<Created> {
         let empty_state = crate::v1::State::default();
 
         if let Some(&indicator_value) = state.entries.get(&self.indicator_variable.into_inner()) {
-            if (indicator_value - 1.0).abs() < *atol {
+            if indicator_is_active(self.indicator_variable, indicator_value, None, atol)? {
                 // Indicator ON (~1) → promote inner constraint to regular Constraint.
                 // Clone the function so self (going to removed) retains its data.
                 let mut promoted_function = self.stage.function.clone();
@@ -37,15 +60,9 @@ impl Propagate for IndicatorConstraint<Created> {
                     },
                     empty_state,
                 ))
-            } else if indicator_value.abs() < *atol {
+            } else {
                 // Indicator OFF (~0) → vacuously satisfied; the constraint is consumed.
                 Ok((PropagateOutcome::Consumed(self), empty_state))
-            } else {
-                crate::bail!(
-                    "Indicator variable {:?} of indicator constraint has invalid value {} (must be 0 or 1)",
-                    self.indicator_variable,
-                    indicator_value
-                );
             }
         } else {
             // Indicator variable not in state — partial-evaluate inner function in-place
@@ -74,17 +91,8 @@ impl Evaluate for IndicatorConstraint<Created> {
                 )
             })?;
 
-        let indicator_on = if (*indicator_value - 1.0).abs() < *atol {
-            true
-        } else if indicator_value.abs() < *atol {
-            false
-        } else {
-            crate::bail!(
-                "Indicator variable {:?} of indicator constraint has invalid value {} (must be 0 or 1)",
-                self.indicator_variable,
-                indicator_value
-            );
-        };
+        let indicator_on =
+            indicator_is_active(self.indicator_variable, *indicator_value, None, atol)?;
 
         let feasible = if indicator_on {
             // Indicator ON → check constraint as usual
@@ -139,18 +147,12 @@ impl Evaluate for IndicatorConstraint<Created> {
                         sample_id,
                     )
                 })?;
-            let indicator_on = if (*indicator_value - 1.0).abs() < *atol {
-                true
-            } else if indicator_value.abs() < *atol {
-                false
-            } else {
-                crate::bail!(
-                    "Indicator variable {:?} of indicator constraint has invalid value {} in sample {:?} (must be 0 or 1)",
-                    self.indicator_variable,
-                    indicator_value,
-                    sample_id
-                );
-            };
+            let indicator_on = indicator_is_active(
+                self.indicator_variable,
+                *indicator_value,
+                Some(sample_id),
+                atol,
+            )?;
 
             let f = if indicator_on {
                 match self.equality {
@@ -255,6 +257,30 @@ mod tests {
     }
 
     #[test]
+    fn test_evaluate_invalid_indicator_value_preserves_decision_variable_signal() {
+        let ic = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1)),
+        );
+        let state = crate::v1::State::from(HashMap::from([(1, 3.0), (10, 0.5)]));
+
+        let error = ic.evaluate(&state, ATol::default()).unwrap_err();
+        let signal = error
+            .downcast_ref::<crate::DecisionVariableError>()
+            .expect("invalid caller-owned indicator value must remain downcastable");
+        assert!(matches!(
+            signal,
+            crate::DecisionVariableError::SubstitutedValueInconsistent {
+                id,
+                kind: crate::Kind::Binary,
+                substituted_value,
+                ..
+            } if *id == VariableID::from(10) && *substituted_value == 0.5
+        ));
+    }
+
+    #[test]
     fn test_required_ids_includes_indicator() {
         let ic = IndicatorConstraint::new(
             VariableID::from(10),
@@ -350,6 +376,35 @@ mod tests {
         assert!(!result.stage.indicator_active[&s2]);
     }
 
+    #[test]
+    fn test_evaluate_samples_invalid_indicator_value_preserves_decision_variable_signal() {
+        let ic = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1)),
+        );
+        let sample_id = crate::SampleID::from(7);
+        let samples = crate::Sampled::from((
+            sample_id,
+            crate::v1::State::from(HashMap::from([(1, 3.0), (10, 0.5)])),
+        ));
+
+        let error = ic.evaluate_samples(&samples, ATol::default()).unwrap_err();
+        assert!(error.to_string().contains("sample SampleID(7)"));
+        let signal = error
+            .downcast_ref::<crate::DecisionVariableError>()
+            .expect("invalid sampled indicator value must remain downcastable");
+        assert!(matches!(
+            signal,
+            crate::DecisionVariableError::SubstitutedValueInconsistent {
+                id,
+                kind: crate::Kind::Binary,
+                substituted_value,
+                ..
+            } if *id == VariableID::from(10) && *substituted_value == 0.5
+        ));
+    }
+
     // === Propagate tests ===
 
     #[test]
@@ -390,6 +445,29 @@ mod tests {
         let (outcome, additional) = ic.propagate(&state, ATol::default()).unwrap();
         assert!(additional.entries.is_empty());
         assert!(matches!(outcome, PropagateOutcome::Consumed(_)));
+    }
+
+    #[test]
+    fn test_propagate_invalid_indicator_value_preserves_decision_variable_signal() {
+        let ic = IndicatorConstraint::new(
+            VariableID::from(10),
+            Equality::LessThanOrEqualToZero,
+            Function::from(linear!(1)),
+        );
+        let state = crate::v1::State::from(HashMap::from([(10, 0.5)]));
+
+        let error = ic.propagate(&state, ATol::default()).unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<crate::DecisionVariableError>(),
+            Some(
+                crate::DecisionVariableError::SubstitutedValueInconsistent {
+                    id,
+                    kind: crate::Kind::Binary,
+                    substituted_value,
+                    ..
+                }
+            ) if *id == VariableID::from(10) && *substituted_value == 0.5
+        ));
     }
 
     #[test]

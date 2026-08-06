@@ -1,4 +1,15 @@
+import pytest
 from ommx import Instance, DecisionVariable, Rng
+
+
+def _single_binary_instance() -> Instance:
+    x = DecisionVariable.binary(0)
+    return Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
 
 
 def test_random_samples_basic():
@@ -126,3 +137,71 @@ def test_random_samples_custom_max_sample_id():
     # Check that all sample IDs are within bounds
     all_ids = samples.sample_ids()
     assert all(0 <= sample_id <= 100 for sample_id in all_ids)
+
+
+@pytest.mark.parametrize(
+    ("num_different_samples", "num_samples", "max_sample_id", "message"),
+    [
+        (2, 1, 10, "less than or equal"),
+        (0, 1, 10, "must be positive"),
+        (1, 2, 0, "sample ID capacity"),
+    ],
+)
+def test_random_samples_invalid_parameters_raise_value_error(
+    num_different_samples: int,
+    num_samples: int,
+    max_sample_id: int,
+    message: str,
+):
+    instance = _single_binary_instance()
+
+    with pytest.raises(ValueError, match=message):
+        instance.random_samples(
+            Rng(),
+            num_different_samples=num_different_samples,
+            num_samples=num_samples,
+            max_sample_id=max_sample_id,
+        )
+
+
+def test_random_samples_accepts_minimal_nontrivial_partition():
+    samples = _single_binary_instance().random_samples(
+        Rng(),
+        num_different_samples=2,
+        num_samples=3,
+        max_sample_id=2,
+    )
+
+    assert samples.num_samples() == 3
+
+
+def test_random_samples_accepts_full_u64_sample_id_range():
+    samples = _single_binary_instance().random_samples(
+        Rng(),
+        num_different_samples=1,
+        num_samples=1,
+        max_sample_id=2**64 - 1,
+    )
+
+    assert samples.num_samples() == 1
+
+
+def test_random_samples_accepts_empty_full_u64_sample_id_range():
+    samples = _single_binary_instance().random_samples(
+        Rng(),
+        num_different_samples=0,
+        num_samples=0,
+        max_sample_id=2**64 - 1,
+    )
+
+    assert samples.num_samples() == 0
+
+
+def test_random_samples_rejects_sample_id_above_u64():
+    with pytest.raises(OverflowError):
+        _single_binary_instance().random_samples(
+            Rng(),
+            num_different_samples=1,
+            num_samples=1,
+            max_sample_id=2**64,
+        )

@@ -158,7 +158,7 @@ fn samples_from_any(entries: Bound<PyAny>) -> PyResult<Samples> {
             if let Ok(state) = extract_state(&value) {
                 sample_cand
                     .append(std::iter::once(SampleID::from(sample_id)), state)
-                    .unwrap(); // safe unwrap since key is unique
+                    .expect("Python dict keys are unique");
                 continue;
             }
             return Err(type_error());
@@ -187,7 +187,7 @@ fn samples_from_any(entries: Bound<PyAny>) -> PyResult<Samples> {
             if let Ok(state) = extract_state(&item) {
                 sampled
                     .append(std::iter::once(sample_id), state)
-                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+                    .expect("enumerate produces unique sample IDs");
                 continue;
             }
             return Err(type_error());
@@ -252,12 +252,14 @@ impl Samples {
         ))
     }
 
-    /// Append a sample with the given sample IDs and state
-    pub fn append(&mut self, sample_ids: Vec<u64>, state: crate::State) -> PyResult<()> {
+    /// Append a sample with the given sample IDs and state.
+    ///
+    /// Raises {class}`ValueError` if an ID already exists in this collection
+    /// or occurs more than once in `sample_ids`. The collection is unchanged
+    /// when validation fails.
+    pub fn append(&mut self, sample_ids: Vec<u64>, state: crate::State) -> OmmxPyResult<()> {
         let ids: Vec<ommx::SampleID> = sample_ids.into_iter().map(ommx::SampleID::from).collect();
-        self.0
-            .append(ids, state.0)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+        self.0.append(ids, state.0)?;
         Ok(())
     }
 }

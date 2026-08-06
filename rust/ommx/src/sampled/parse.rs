@@ -6,7 +6,7 @@ use crate::{
 
 impl From<DuplicatedSampleIDError> for RawParseError {
     fn from(e: DuplicatedSampleIDError) -> Self {
-        RawParseError::DuplicatedSampleID { id: e.id }
+        RawParseError::DuplicatedSampleID { id: e.id() }
     }
 }
 

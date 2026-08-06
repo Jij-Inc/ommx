@@ -167,8 +167,26 @@ def test_add_rejects_duplicate_id():
     instance = _empty_instance()  # variable id 0 already there
     duplicate = DecisionVariable.binary(0)
 
-    with pytest.raises(Exception, match="Duplicate"):
+    with pytest.raises(ValueError, match="Duplicate decision variable ID"):
         instance.add_decision_variable(duplicate)
+
+
+def test_add_rejects_substituted_variable_id_as_duplicate():
+    instance = Instance.from_components(
+        sense=Instance.MINIMIZE,
+        objective=0,
+        decision_variables=[
+            DecisionVariable.binary(0),
+            DecisionVariable.binary(7),
+        ],
+        constraints={},
+    )
+    instance.substitute({7: DecisionVariable.binary(0)})
+
+    with pytest.raises(ValueError, match="Duplicate decision variable ID"):
+        instance.add_decision_variable(DecisionVariable.binary(7))
+
+    assert [variable.id for variable in instance.decision_variables] == [0, 7]
 
 
 def test_kind_and_bound_getters_read_through():
@@ -227,5 +245,24 @@ def test_add_rejects_id_collision_with_parameter_on_parametric():
     parametric = _empty_parametric_instance()  # parameter id = 100
     bad = DecisionVariable.binary(100)
 
-    with pytest.raises(Exception, match="parameter"):
+    with pytest.raises(ValueError, match="parameter"):
         parametric.add_decision_variable(bad)
+
+
+def test_parametric_add_rejects_substituted_variable_id_as_duplicate():
+    parametric = ParametricInstance.from_components(
+        sense=Sense.Minimize,
+        objective=DecisionVariable.binary(7),
+        decision_variables=[
+            DecisionVariable.binary(0),
+            DecisionVariable.binary(7),
+        ],
+        constraints={},
+        parameters=[],
+    )
+    parametric.substitute({7: DecisionVariable.binary(0)})
+
+    with pytest.raises(ValueError, match="Duplicate decision variable ID"):
+        parametric.add_decision_variable(DecisionVariable.binary(7))
+
+    assert [variable.id for variable in parametric.decision_variables] == [0, 7]

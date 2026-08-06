@@ -10,10 +10,15 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
         for (monomial, coefficient) in self.iter() {
             let mut out = 1.0;
             for id in monomial.ids() {
-                out *= state
-                    .entries
-                    .get(&id.into_inner())
-                    .ok_or_else(|| crate::error!("Missing entry for id: {}", id.into_inner()))?;
+                let Some(value) = state.entries.get(&id.into_inner()) else {
+                    let missing_ids = self
+                        .required_ids()
+                        .into_iter()
+                        .filter(|id| !state.entries.contains_key(&id.into_inner()))
+                        .collect();
+                    return Err(crate::MissingStateEntries { ids: missing_ids }.into());
+                };
+                out *= value;
             }
             result += coefficient.into_inner() * out;
         }
@@ -37,10 +42,8 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
                     continue;
                 }
                 Err(e) => {
-                    return Err(crate::error!(
-                        "Partial evaluation yields non-finite coefficient: {}",
-                        e
-                    ));
+                    return Err(crate::Error::new(e)
+                        .context("Partial evaluation yields non-finite coefficient"));
                 }
             }
         }
@@ -70,6 +73,34 @@ mod tests {
     use crate::random::*;
     use ::approx::{assert_abs_diff_eq, AbsDiffEq};
     use proptest::prelude::*;
+
+    #[test]
+    fn missing_state_entries_preserve_all_required_ids() {
+        let linear = (crate::linear!(1) + crate::linear!(2)).unwrap();
+
+        let error = linear
+            .evaluate(&State::default(), crate::ATol::default())
+            .unwrap_err();
+
+        assert_eq!(
+            error
+                .downcast_ref::<crate::MissingStateEntries>()
+                .map(|error| &error.ids),
+            Some(&VariableIDSet::from([1.into(), 2.into()]))
+        );
+    }
+
+    #[test]
+    fn partial_evaluate_preserves_coefficient_error_source() {
+        let mut linear = (crate::coeff!(f64::MAX) * crate::linear!(1)).unwrap();
+        let state = State::from(std::collections::HashMap::from([(1, f64::MAX)]));
+
+        let error = linear
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap_err();
+
+        assert!(error.is::<crate::CoefficientError>());
+    }
 
     fn polynomial_and_state<M: Monomial>() -> impl Strategy<Value = (PolynomialBase<M>, State)> {
         PolynomialBase::arbitrary().prop_flat_map(|p| {

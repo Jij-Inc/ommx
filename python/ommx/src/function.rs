@@ -437,11 +437,8 @@ impl Function {
         Ok(Function((&self.0 * &polynomial.0)?))
     }
 
-    pub fn content_factor(&self) -> PyResult<f64> {
-        self.0
-            .content_factor()
-            .map(|c| c.into_inner())
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
+    pub fn content_factor(&self) -> crate::error::OmmxPyResult<f64> {
+        Ok(self.0.content_factor()?.into_inner())
     }
 
     pub fn required_ids(&self) -> BTreeSet<u64> {
@@ -526,10 +523,7 @@ impl Function {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        Ok(self
-            .0
-            .evaluate(&state.0, atol)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?)
+        Ok(self.0.evaluate(&state.0, atol)?)
     }
 
     #[pyo3(signature = (state, *, atol=None))]
@@ -543,9 +537,7 @@ impl Function {
             None => ommx::ATol::default(),
         };
         let mut inner = self.0.clone();
-        inner
-            .partial_evaluate(&state.0, atol)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+        inner.partial_evaluate(&state.0, atol)?;
         Ok(Function(inner))
     }
 

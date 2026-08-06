@@ -361,9 +361,9 @@ ids: set[int]  = sample_set.sample_ids()         # method
 ids: list[int] = sample_set.sample_ids_list      # separate property when you need a list
 ```
 
-### 6.5 `evaluate` / `partial_evaluate` raise `ValueError`, not `RuntimeError` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770))
+### 6.5 Evaluation input errors raise `ValueError`, not `RuntimeError` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770))
 
-Every `.evaluate(state)` / `.partial_evaluate(state)` method on `Linear`, `Quadratic`, `Polynomial`, `Function`, `Constraint`, `NamedFunction`, and `Instance` now raises `ValueError` (e.g. `ValueError: Missing entry for id: 2`) when the state is missing a required decision-variable ID or the atol is invalid. In v2.5.1 the same error surfaced as `RuntimeError` via anyhow. Update `except` clauses accordingly.
+Every `.evaluate(state)` method on `Linear`, `Quadratic`, `Polynomial`, `Function`, `Constraint`, `NamedFunction`, and `Instance` now raises `ValueError` (e.g. `ValueError: state is missing required variable IDs: {VariableID(2)}`) when the state is missing a required decision-variable ID or the atol is invalid. Partial evaluation intentionally accepts missing IDs, but raises `ValueError` for invalid provided entries, invalid tolerance, or inconsistent or unverifiable dependent-variable assertions. In v2.5.1 these errors surfaced as `RuntimeError` via anyhow. Update `except` clauses accordingly.
 
 ```python
 # v2.5.1

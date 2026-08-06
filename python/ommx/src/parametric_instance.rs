@@ -62,6 +62,10 @@ impl ParametricInstance {
         self.inner.format_summary()
     }
 
+    /// Build a parametric instance from its model components.
+    ///
+    /// Raises {class}`ValueError` if a decision variable and parameter use the
+    /// same ID.
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, indicator_constraints=None, one_hot_constraints=None, sos1_constraints=None, named_functions=None, description=None))]
     pub fn from_components(
@@ -297,13 +301,12 @@ impl ParametricInstance {
         &mut self,
         py: Python<'_>,
         assignments: HashMap<u64, Function>,
-    ) -> PyResult<()> {
+    ) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let iter = assignments
             .into_iter()
             .map(|(id, f)| (VariableID::from(id), f.0));
-        ommx::substitute(&mut self.inner, iter)
-            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        ommx::substitute(&mut self.inner, iter)?;
         Ok(())
     }
 
@@ -344,6 +347,10 @@ impl ParametricInstance {
     /// Add a decision variable to this parametric instance. Returns an
     /// {class}`~ommx.AttachedDecisionVariable` bound to the variable's
     /// id — a write-through handle for further label updates.
+    ///
+    /// Raises {class}`ValueError` if the variable's id collides with an
+    /// existing decision variable or parameter. Substituted variables retain
+    /// their ids and therefore also count as existing decision variables.
     pub fn add_decision_variable(
         slf: Bound<'_, Self>,
         variable: DecisionVariable,

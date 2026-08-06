@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rust Error Handling"
+  short_description: "Review OMMX Rust and PyO3 error ownership"
+  default_prompt: "Use $rust-error-handling to review an OMMX error change and verify its Rust signal ownership and Python exception boundary."

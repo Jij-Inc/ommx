@@ -11,7 +11,8 @@ structured fields.
 A small number of APIs return a typed error directly rather than
 `ommx::Result<T>` — specifically [`DecisionVariable::with_bound`](crate::DecisionVariable::with_bound),
 the [`SampleSet::best_feasible`](crate::SampleSet::best_feasible) family,
-and a few builders — because their single failure mode is already a
+[`Sampled::append`](crate::Sampled::append), and a few builders — because their
+single failure mode is already a
 **signal type** and the typed return surfaces that at the call site.
 Every such typed error implements [`std::error::Error`], so `?` still
 lifts it into `ommx::Result<T>` at a domain boundary; the distinction
@@ -30,6 +31,29 @@ returns the typed error directly):
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
+- [`DuplicatedSampleIDError`](crate::DuplicatedSampleIDError) — identifies a
+  sample ID already present in a [`Sampled`](crate::Sampled) collection or
+  repeated in one append input, so the caller can choose another ID and retry
+  the atomic append.
+- [`SamplesParametersError`](crate::random::SamplesParametersError) —
+  identifies invalid relations among random-sample counts and the inclusive ID
+  range, so the caller can correct the requested parameters before retrying.
+- [`ParameterIDCollision`](crate::ParameterIDCollision) — identifies a
+  decision-variable ID already owned by a parameter, so the caller can choose
+  another ID before retrying construction or insertion.
+- [`ContentFactorError`](crate::ContentFactorError) — identifies coefficients
+  that cannot be converted to a bounded rational multiplier, so the caller can
+  change the coefficients or choose another normalization operation.
+- [`OneHotConstraintError`](crate::OneHotConstraintError) and
+  [`Sos1ConstraintError`](crate::Sos1ConstraintError) — identify empty
+  structural constraints, so the caller can supply a non-empty variable set.
+- [`MissingStateEntries`](crate::MissingStateEntries) and
+  [`UnknownStateEntries`](crate::UnknownStateEntries) — state-shape signals for
+  callers that add or remove entries before retrying evaluation.
+- [`InconsistentDependentValue`](crate::InconsistentDependentValue) and
+  [`UnverifiableDependentAssertion`](crate::UnverifiableDependentAssertion) —
+  dependent-variable assertion signals for callers that correct, defer, or
+  complete an assertion before retrying partial evaluation.
 - [`ImageRefParseError`](crate::artifact::ImageRefParseError) and
   [`InvalidLocalRegistryImageRef`](crate::artifact::local_registry::InvalidLocalRegistryImageRef) —
   distinguish invalid image-reference input from an invalid name/reference pair
@@ -42,6 +66,19 @@ returns the typed error directly):
   caller may explicitly choose another mathematical operation. Contract,
   allocation, substitution, and arithmetic failures are not folded into these
   signals.
+
+Evaluation does not define an umbrella error type. Caller-provided numeric
+validation reuses [`DecisionVariableError`](crate::DecisionVariableError), and
+failures without a stable caller recovery path remain ordinary [`Error`](crate::Error)
+values.
+
+Direct function and polynomial partial evaluation retain
+[`CoefficientError`](crate::CoefficientError), because the caller can change
+the supplied state and retry. If the same arithmetic fails while an
+[`Instance`](crate::Instance) normalizes an Instance-owned dependency or a
+removed constraint against stored dependencies and fixed values, that signal
+no longer describes caller input and is converted to an ordinary
+[`Error`](crate::Error) with structured tracing context.
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 
@@ -66,6 +103,13 @@ match instance.convert_inequality_to_equality_with_integer_slack(id, 32, atol) {
 }
 ```
 
+If exact integer-slack conversion cannot normalize the coefficients, the same
+error chain retains both the outer
+[`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) signal
+and its inner [`ContentFactorError`](crate::ContentFactorError). Callers can
+therefore choose an approximate transformation from the outer operation signal
+or change the coefficients based on the narrower cause.
+
 Protobuf wire decoding and the [`Parse`](crate::Parse) trait share the
 [`ParseError`](crate::ParseError) signal. Public byte decoders preserve wire
 failures as `ParseError` in their [`Result<T>`](crate::Result) error chain,
@@ -74,6 +118,15 @@ while semantic parsing adds structured
 proto-tree metadata. [`ParseError`](crate::ParseError) implements
 [`std::error::Error`], so callers can downcast the SDK error or propagate it
 with `?`.
+
+Semantic parsing keeps `ParseError` as the outer owner while retaining a
+narrower validation signal in its standard source chain. This includes
+[`ParameterIDCollision`](crate::ParameterIDCollision) for v1 and v2
+ParametricInstance namespace collisions, and
+[`OneHotConstraintError`](crate::OneHotConstraintError) or
+[`Sos1ConstraintError`](crate::Sos1ConstraintError) for v2 special-constraint
+validation. This preserves the validation cause without changing the
+Python-visible parse contract.
 
 ## Fail-site macros
 

@@ -3189,7 +3189,8 @@ class Instance:
         label updates. The original wrapper is not modified.
 
         Raises {class}`ValueError` if the variable's id collides with an
-        existing variable, parameter, or substitution-dependency key.
+        existing decision variable. Substituted variables retain their ids and
+        therefore also count as existing decision variables.
         """
     def new_binary(
         self,
@@ -3623,7 +3624,7 @@ class Instance:
         ```
         Traceback (most recent call last):
             ...
-        ValueError: The state does not contain some required IDs: {VariableID(2)}
+        ValueError: state is missing required variable IDs: {VariableID(2)}
         """
     def populate_state(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -3756,6 +3757,10 @@ class Instance:
 
         **Returns:**
         Samples object
+
+        Raises {class}`ValueError` if the requested state groups cannot
+        partition the samples or the inclusive sample-ID range is too small.
+        `num_different_samples=0` is valid only when `num_samples=0`.
 
         # Examples
 
@@ -5740,7 +5745,13 @@ class ParametricInstance:
         ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
-    ) -> ParametricInstance: ...
+    ) -> ParametricInstance:
+        r"""
+        Build a parametric instance from its model components.
+
+        Raises {class}`ValueError` if a decision variable and parameter use the
+        same ID.
+        """
     @staticmethod
     def empty() -> ParametricInstance:
         r"""
@@ -5815,6 +5826,10 @@ class ParametricInstance:
         Add a decision variable to this parametric instance. Returns an
         {class}`~ommx.AttachedDecisionVariable` bound to the variable's
         id — a write-through handle for further label updates.
+
+        Raises {class}`ValueError` if the variable's id collides with an
+        existing decision variable or parameter. Substituted variables retain
+        their ids and therefore also count as existing decision variables.
         """
     def attached_decision_variable(
         self, variable_id: builtins.int
@@ -7219,7 +7234,11 @@ class Samples:
         """
     def append(self, sample_ids: typing.Sequence[builtins.int], state: ToState) -> None:
         r"""
-        Append a sample with the given sample IDs and state
+        Append a sample with the given sample IDs and state.
+
+        Raises {class}`ValueError` if an ID already exists in this collection
+        or occurs more than once in `sample_ids`. The collection is unchanged
+        when validation fails.
         """
 
 @typing.final

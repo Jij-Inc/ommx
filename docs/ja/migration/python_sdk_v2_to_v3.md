@@ -225,7 +225,7 @@ ids: set[int] = sample_set.sample_ids()
 ids_list: list[int] = sample_set.sample_ids_list
 ```
 
-`evaluate` / `partial_evaluate` は missing state などの入力エラーで `RuntimeError` ではなく `ValueError` を投げます。
+`evaluate` は、必要な decision variable ID が state にない場合や atol が不正な場合に、`RuntimeError` ではなく `ValueError` を投げます。`partial_evaluate` は不足 ID を許容しますが、与えた entry が不正な場合、atol が不正な場合、または dependent variable の assertion が不整合・検証不能な場合は `ValueError` を投げます。
 
 ## 7. 削除された helper
 
