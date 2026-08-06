@@ -101,28 +101,42 @@ def plannedSelector [DecidableEq ι] (reused : Finset ι)
   fun i => if i ∈ reused then members i else freshSelectors i
 
 def OptionalUpperLink (upper member selector : Rat) : Prop :=
-  if 0 < upper then member ≤ upper * selector else True
+  0 < upper → member ≤ upper * selector
 
 def OptionalLowerLink (lower member selector : Rat) : Prop :=
-  if lower < 0 then lower * selector ≤ member else True
+  lower < 0 → lower * selector ≤ member
 
 /-- Exact formulation of a mixed reused/fresh selector layout. -/
-def PlannedSelectorFormulation [Fintype ι] [DecidableEq ι]
+structure PlannedSelectorFormulationHolds [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (bounds : SelectorBounds ι)
-    (members freshSelectors : ι → Rat) : Prop :=
-  GenericBinaryOn Finset.univ (plannedSelector reused members freshSelectors) ∧
-    (∀ i, i ∉ reused →
+    (members freshSelectors : ι → Rat) : Prop where
+  allSelectorsAreBinary :
+    GenericBinaryOn Finset.univ (plannedSelector reused members freshSelectors)
+  nonReusedHaveLinkedSelectors :
+    ∀ i, i ∉ reused →
       OptionalUpperLink (bounds.upper i) (members i) (freshSelectors i) ∧
-        OptionalLowerLink (bounds.lower i) (members i) (freshSelectors i)) ∧
+        OptionalLowerLink (bounds.lower i) (members i) (freshSelectors i)
+  selectorsSumLe1 :
     ∑ i, plannedSelector reused members freshSelectors i ≤ 1
 
 instance [Fintype ι] [DecidableEq ι] (reused : Finset ι)
     (bounds : SelectorBounds ι) (members freshSelectors : ι → Rat) :
     Decidable
-      (PlannedSelectorFormulation reused bounds members freshSelectors) := by
-  unfold PlannedSelectorFormulation GenericBinaryOn OptionalUpperLink
-    OptionalLowerLink
-  infer_instance
+      (PlannedSelectorFormulationHolds reused bounds members freshSelectors) := by
+  let proposition :=
+    GenericBinaryOn Finset.univ (plannedSelector reused members freshSelectors) ∧
+      (∀ i, i ∉ reused →
+        OptionalUpperLink (bounds.upper i) (members i) (freshSelectors i) ∧
+          OptionalLowerLink (bounds.lower i) (members i) (freshSelectors i)) ∧
+      ∑ i, plannedSelector reused members freshSelectors i ≤ 1
+  letI : Decidable proposition := by
+    dsimp only [proposition]
+    unfold GenericBinaryOn OptionalUpperLink OptionalLowerLink
+    infer_instance
+  exact decidable_of_iff proposition
+    ⟨fun h => ⟨h.1, h.2.1, h.2.2⟩,
+      fun h => ⟨h.allSelectorsAreBinary, h.nonReusedHaveLinkedSelectors,
+        h.selectorsSumLe1⟩⟩
 
 /-- A linked member is zero whenever its fresh selector is zero. -/
 theorem member_eq_zero_of_fresh_selector_eq_zero [DecidableEq ι]
@@ -137,14 +151,12 @@ theorem member_eq_zero_of_fresh_selector_eq_zero [DecidableEq ι]
   have hupper : members i ≤ 0 := by
     by_cases hemitted : 0 < bounds.upper i
     · have h := hlinks.1
-      simp [OptionalUpperLink, hemitted, hselector] at h
-      exact h
+      simpa [hselector] using h hemitted
     · exact le_trans (hbound i).2 (le_of_not_gt hemitted)
   have hlower : 0 ≤ members i := by
     by_cases hemitted : bounds.lower i < 0
     · have h := hlinks.2
-      simp [OptionalLowerLink, hemitted, hselector] at h
-      exact h
+      simpa [hselector] using h hemitted
     · exact le_trans (le_of_not_gt hemitted) (hbound i).1
   exact le_antisymm hupper hlower
 
@@ -155,17 +167,17 @@ theorem plannedSelectorFormulation_project_sos1
     (members freshSelectors : ι → Rat)
     (hbound : WithinSelectorBounds bounds members)
     (hformulation :
-      PlannedSelectorFormulation reused bounds members freshSelectors) :
+      PlannedSelectorFormulationHolds reused bounds members freshSelectors) :
     GenericSOS1 members := by
-  rcases hformulation with ⟨hbinary, hlinks, hsum⟩
   have hselectorSOS1 : GenericSOS1 (plannedSelector reused members freshSelectors) := by
     unfold GenericSOS1
     have hcardRat :
         ((genericSupport Finset.univ
           (plannedSelector reused members freshSelectors)).card : Rat) ≤ 1 := by
       rw [← generic_binary_sum_eq_support_card Finset.univ
-        (plannedSelector reused members freshSelectors) hbinary]
-      exact hsum
+        (plannedSelector reused members freshSelectors)
+        hformulation.allSelectorsAreBinary]
+      exact hformulation.selectorsSumLe1
     exact_mod_cast hcardRat
   have hsubset :
       genericSupport Finset.univ members ⊆
@@ -177,7 +189,7 @@ theorem plannedSelectorFormulation_project_sos1
     · simp only [plannedSelector, hreused, ↓reduceIte]
       intro hselector
       exact hi (member_eq_zero_of_fresh_selector_eq_zero hbound
-        (hlinks i hreused) hselector)
+        (hformulation.nonReusedHaveLinkedSelectors i hreused) hselector)
   exact le_trans (Finset.card_le_card hsubset) hselectorSOS1
 
 /-- Reusing binary members agrees with the canonical selector on every member. -/
@@ -199,10 +211,14 @@ theorem canonicalSelector_plannedFormulation [Fintype ι] [DecidableEq ι]
     (hbound : WithinSelectorBounds bounds members)
     (hreusedBinary : GenericBinaryOn reused members)
     (hsos1 : GenericSOS1 members) :
-    PlannedSelectorFormulation reused bounds members
+    PlannedSelectorFormulationHolds reused bounds members
       (canonicalSelector members) := by
   have hplanned := plannedSelector_canonical reused members hreusedBinary
-  refine ⟨?_, ?_, ?_⟩
+  refine {
+    allSelectorsAreBinary := ?_
+    nonReusedHaveLinkedSelectors := ?_
+    selectorsSumLe1 := ?_
+  }
   · rw [hplanned]
     intro i _
     exact canonicalSelector_binary members i

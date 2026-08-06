@@ -113,8 +113,8 @@ theorem generatedConstraints_hold_iff {source : Instance n}
     (∀ constraint ∈ validated.generatedConstraints,
       constraint.Holds state) ↔
         plan.constraint.Holds state := by
-  rcases validated.valid with
-    ⟨htriggerDomain, hpolarity, _⟩
+  have htriggerDomain := validated.valid.triggerBinary
+  have hpolarity := validated.valid.polarityActiveOnOne
   have hbinary : state plan.constraint.trigger ∈ Domain.binary := by
     have htrigger := hdomains plan.constraint.trigger
     rw [htriggerDomain] at htrigger

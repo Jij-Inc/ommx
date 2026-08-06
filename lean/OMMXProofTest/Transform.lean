@@ -104,6 +104,7 @@ theorem nowhereDefined_not_reduction :
   have hfeasible : emptyInstance.Feasible state := by
     simp [emptyInstance, Instance.Feasible]
   rcases h hfeasible with ⟨sourceState, hdecode, _⟩
+  simp only [Option.mem_def] at hdecode
   simp [nowhereDefined] at hdecode
 
 theorem nowhereDefined_not_relaxation :
@@ -113,6 +114,7 @@ theorem nowhereDefined_not_relaxation :
   have hfeasible : emptyInstance.Feasible state := by
     simp [emptyInstance, Instance.Feasible]
   rcases h hfeasible with ⟨targetState, hencode, _⟩
+  simp only [Option.mem_def] at hencode
   simp [nowhereDefined] at hencode
 
 theorem nowhereDefined_not_sourceObjectivePreserving :

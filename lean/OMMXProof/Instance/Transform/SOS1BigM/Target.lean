@@ -304,7 +304,7 @@ theorem generatedConstraints_hold_iff_plannedSelectorFormulation
     (hselectorDomains : ∀ j, selectors j ∈ Domain.binary) :
     (∀ constraint ∈ validated.generatedConstraints,
       constraint.Holds (State.append state selectors)) ↔
-      PlannedSelectorFormulation plan.reusedMembers validated.bounds
+      PlannedSelectorFormulationHolds plan.reusedMembers validated.bounds
         (plan.memberState state)
         (plan.freshSelectorState state selectors) := by
   rw [generatedConstraints, List.forall_mem_append,
@@ -313,19 +313,23 @@ theorem generatedConstraints_hold_iff_plannedSelectorFormulation
     validated.linksForFresh_iff_linksForMembers]
   constructor
   · rintro ⟨hlinks, hcardinality⟩
-    refine ⟨plan.plannedSelector_binary_of_domains state selectors
-      hsourceDomains hselectorDomains, hlinks, ?_⟩
+    refine {
+      allSelectorsAreBinary := plan.plannedSelector_binary_of_domains state selectors
+        hsourceDomains hselectorDomains
+      nonReusedHaveLinkedSelectors := hlinks
+      selectorsSumLe1 := ?_
+    }
     rw [← plan.selectorSum_eq_plannedSelector state selectors]
     exact hcardinality
-  · rintro ⟨_, hlinks, hcardinality⟩
-    refine ⟨hlinks, ?_⟩
+  · intro hformulation
+    refine ⟨hformulation.nonReusedHaveLinkedSelectors, ?_⟩
     rw [plan.selectorSum_eq_plannedSelector state selectors]
-    exact hcardinality
+    exact hformulation.selectorsSumLe1
 
 theorem freshSelectors_binary_of_plannedSelectorFormulation
     {source : Instance n} {plan : Plan source} (validated : plan.Validated)
     (state : State n) (selectors : State plan.freshCount)
-    (hformulation : PlannedSelectorFormulation plan.reusedMembers validated.bounds
+    (hformulation : PlannedSelectorFormulationHolds plan.reusedMembers validated.bounds
       (plan.memberState state)
       (plan.freshSelectorState state selectors)) :
     ∀ j, selectors j ∈ Domain.binary := by
@@ -334,7 +338,7 @@ theorem freshSelectors_binary_of_plannedSelectorFormulation
     (plan.freshMembers.orderIsoOfFin rfl j).property
   have hr : plan.freshMember j ∉ plan.reusedMembers := by
     simpa [freshMembers] using hfresh
-  have hbinary := hformulation.1 (plan.freshMember j) (by simp)
+  have hbinary := hformulation.allSelectorsAreBinary (plan.freshMember j) (by simp)
   simpa [plannedSelector, hr, freshSelectorState, hfresh] using hbinary
 
 theorem selectedHolds_of_plannedSelectorFormulation
@@ -342,7 +346,7 @@ theorem selectedHolds_of_plannedSelectorFormulation
     {state : State n}
     {selectors : State plan.freshCount}
     (hdomains : ∀ i, state i ∈ source.domains i)
-    (hformulation : PlannedSelectorFormulation plan.reusedMembers validated.bounds
+    (hformulation : PlannedSelectorFormulationHolds plan.reusedMembers validated.bounds
       (plan.memberState state)
       (plan.freshSelectorState state selectors)) :
     plan.constraint.Holds state := by
@@ -422,7 +426,7 @@ theorem target_feasible_append_iff_base_and_formulation
     (state : State n) (selectors : State plan.freshCount) :
     validated.target.Feasible (State.append state selectors) ↔
       plan.BaseFeasible state ∧
-        PlannedSelectorFormulation plan.reusedMembers validated.bounds
+        PlannedSelectorFormulationHolds plan.reusedMembers validated.bounds
           (plan.memberState state)
           (plan.freshSelectorState state selectors) := by
   have hsourceAt (i : Fin n) :
@@ -461,7 +465,7 @@ theorem target_feasible_iff_base_and_formulation
     (state : State (n + plan.freshCount)) :
     validated.target.Feasible state ↔
       plan.BaseFeasible (State.source state) ∧
-        PlannedSelectorFormulation plan.reusedMembers validated.bounds
+        PlannedSelectorFormulationHolds plan.reusedMembers validated.bounds
           (plan.memberState (State.source state))
           (plan.freshSelectorState (State.source state)
             (State.extendedPart state)) := by

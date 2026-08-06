@@ -36,9 +36,8 @@ Instance. -/
 def IsReduction {source : Instance n} (transform : Transform source) : Prop :=
   ∀ {targetState},
     transform.target.Feasible targetState →
-      ∃ sourceState,
-        transform.decode targetState = some sourceState ∧
-          source.Feasible sourceState
+      ∃ sourceState ∈ transform.decode targetState,
+        source.Feasible sourceState
 
 /-- Every feasible source state can be encoded as a feasible target state.
 
@@ -47,9 +46,8 @@ feasible-region inclusion defining a relaxation. -/
 def IsRelaxation {source : Instance n} (transform : Transform source) : Prop :=
   ∀ {sourceState},
     source.Feasible sourceState →
-      ∃ targetState,
-        transform.encode sourceState = some targetState ∧
-          transform.target.Feasible targetState
+      ∃ targetState ∈ transform.encode sourceState,
+        transform.target.Feasible targetState
 
 /-- The optimization sense is unchanged by the transformation. -/
 def SensePreserving {source : Instance n}
@@ -143,6 +141,7 @@ theorem objectiveRange_eq {source : Instance n}
   · rintro ⟨sourceState, hsource, hvalue⟩
     rcases hrelaxation hsource with
       ⟨targetState, hencode, htarget⟩
+    simp only [Option.mem_def] at hencode
     have hobjective :
         transform.target.ObjectiveValue targetState =
           source.ObjectiveValue sourceState := by
@@ -151,6 +150,7 @@ theorem objectiveRange_eq {source : Instance n}
   · rintro ⟨targetState, htarget, hvalue⟩
     rcases hreduction htarget with
       ⟨sourceState, hdecode, hsource⟩
+    simp only [Option.mem_def] at hdecode
     have hobjective :
         source.ObjectiveValue sourceState =
           transform.target.ObjectiveValue targetState := by
@@ -226,6 +226,7 @@ theorem comp_isReduction {source : Instance n}
   intro targetState htarget
   rcases hsecond htarget with ⟨middleState, hdecodeSecond, hmiddle⟩
   rcases hfirst hmiddle with ⟨sourceState, hdecodeFirst, hsource⟩
+  simp only [Option.mem_def] at hdecodeSecond hdecodeFirst
   refine ⟨sourceState, ?_, hsource⟩
   simp [comp, hdecodeSecond, hdecodeFirst]
 
@@ -236,8 +237,9 @@ theorem comp_isRelaxation {source : Instance n}
   intro sourceState hsource
   rcases hfirst hsource with ⟨middleState, hencodeFirst, hmiddle⟩
   rcases hsecond hmiddle with ⟨targetState, hencodeSecond, htarget⟩
+  simp only [Option.mem_def] at hencodeFirst hencodeSecond
   refine ⟨targetState, ?_, htarget⟩
-  simp [comp, hencodeFirst, hencodeSecond]
+  exact Option.mem_def.mpr (by simp [comp, hencodeFirst, hencodeSecond])
 
 theorem comp_sensePreserving {source : Instance n}
     {first : Transform source} {second : Transform first.target}
@@ -255,6 +257,7 @@ theorem comp_sourceObjectiveValuePreserving {source : Instance n}
   intro sourceState hsource
   rcases hfirstRelaxation hsource with
     ⟨middleState, hencodeFirst, hmiddle⟩
+  simp only [Option.mem_def] at hencodeFirst
   have hfirstObjective :
       first.target.ObjectiveValue middleState =
         source.ObjectiveValue sourceState := by
@@ -270,6 +273,7 @@ theorem comp_targetObjectiveValuePreserving {source : Instance n}
   intro targetState htarget
   rcases hsecondReduction htarget with
     ⟨middleState, hdecodeSecond, hmiddle⟩
+  simp only [Option.mem_def] at hdecodeSecond
   have hsecondObjective :
       first.target.ObjectiveValue middleState =
         second.target.ObjectiveValue targetState := by
@@ -305,6 +309,7 @@ theorem comp_sourceRoundTrip {source : Instance n}
   intro sourceState hsource
   rcases hfirstRelaxation hsource with
     ⟨middleState, hencodeFirst, hmiddle⟩
+  simp only [Option.mem_def] at hencodeFirst
   have hdecodeFirst :
       first.decode middleState = some sourceState := by
     simpa [hencodeFirst] using hfirst hsource
@@ -321,6 +326,7 @@ theorem comp_targetRoundTrip {source : Instance n}
   intro targetState htarget
   rcases hsecondReduction htarget with
     ⟨middleState, hdecodeSecond, hmiddle⟩
+  simp only [Option.mem_def] at hdecodeSecond
   have hencodeSecond :
       second.encode middleState = some targetState := by
     have hroundTrip := hsecond htarget
