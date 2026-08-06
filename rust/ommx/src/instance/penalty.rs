@@ -139,7 +139,8 @@ impl Instance {
     /// active regular constraint is moved to the removed collection, and
     /// existing removed constraints of every family are preserved. Active
     /// special constraints are not penalty-converted: their presence returns
-    /// an error without modifying the instance.
+    /// an error without modifying the instance. Existing parameter assignments
+    /// are preserved when the penalty weights are materialized.
     ///
     /// When no constraint of any family is active, an empty `weights` map is an
     /// exact identity operation. Otherwise, conversion and parameter
@@ -314,7 +315,8 @@ impl Instance {
     /// active regular constraint is moved to the removed collection, and
     /// existing removed constraints of every family are preserved. Active
     /// special constraints are not penalty-converted: their presence returns
-    /// an error without modifying the instance.
+    /// an error without modifying the instance. Existing parameter assignments
+    /// are preserved when the penalty weight is materialized.
     ///
     /// When no constraint of any family is active, this is an exact identity
     /// operation. Otherwise, conversion and parameter materialization are
@@ -383,15 +385,26 @@ impl Instance {
     fn commit_materialized_penalty(
         &mut self,
         parametric: ParametricInstance,
-        parameter_values: BTreeMap<VariableID, f64>,
+        penalty_parameter_values: BTreeMap<VariableID, f64>,
     ) -> crate::Result<()> {
         let parameters = crate::v1::Parameters {
-            entries: parameter_values
+            entries: penalty_parameter_values
                 .into_iter()
                 .map(|(id, value)| (id.into_inner(), value))
                 .collect(),
         };
-        let materialized = parametric.with_parameters(parameters)?;
+        let mut materialized = parametric.with_parameters(parameters)?;
+        if let Some(existing_parameters) = &self.parameters {
+            let materialized_parameters = materialized.parameters.get_or_insert_default();
+            for (&id, &value) in &existing_parameters.entries {
+                if materialized_parameters.entries.insert(id, value).is_some() {
+                    crate::bail!(
+                        { id },
+                        "Penalty parameter ID {id} collides with an existing parameter assignment",
+                    );
+                }
+            }
+        }
         *self = materialized;
         Ok(())
     }
@@ -956,6 +969,89 @@ mod tests {
         assert_eq!(uniform.removed_indicator_constraints(), &removed_indicators);
         assert_eq!(uniform.removed_one_hot_constraints(), &removed_one_hots);
         assert_eq!(uniform.removed_sos1_constraints(), &removed_sos1s);
+    }
+
+    #[test]
+    fn fixed_weight_penalty_preserves_existing_parameter_assignments_in_serialization() {
+        let original_variable = VariableID::from(1);
+        let existing_parameter = VariableID::from(2);
+        let make_instance = || {
+            let mut instance = ParametricInstance::new(
+                Sense::Minimize,
+                Function::from(linear!(existing_parameter)),
+                BTreeMap::from([(original_variable, DecisionVariable::binary())]),
+                ParameterTable::from_ids(BTreeSet::from([existing_parameter])),
+                BTreeMap::from([(
+                    ConstraintID::from(1),
+                    Constraint::equal_to_zero(Function::from(linear!(original_variable))),
+                )]),
+            )
+            .unwrap()
+            .with_parameters(crate::v1::Parameters {
+                entries: [(existing_parameter.into_inner(), 3.0)]
+                    .into_iter()
+                    .collect(),
+            })
+            .unwrap();
+            assert_eq!(instance.new_binary(), existing_parameter);
+            instance
+                .set_objective(Function::from(linear!(existing_parameter)))
+                .unwrap();
+            instance
+        };
+        let assert_preserved = |instance: &Instance| {
+            let parameters = instance.parameters.as_ref().unwrap();
+            assert_eq!(
+                parameters.entries.get(&existing_parameter.into_inner()),
+                Some(&3.0)
+            );
+            assert_eq!(parameters.entries.len(), 2);
+            assert!(parameters
+                .entries
+                .iter()
+                .any(|(&id, &value)| id != existing_parameter.into_inner() && value == 2.0));
+
+            let evaluate_objective = |original_value| {
+                instance
+                    .objective
+                    .evaluate(
+                        &crate::v1::State {
+                            entries: [
+                                (original_variable.into_inner(), original_value),
+                                (existing_parameter.into_inner(), 5.0),
+                            ]
+                            .into_iter()
+                            .collect(),
+                        },
+                        crate::ATol::default(),
+                    )
+                    .unwrap()
+            };
+            assert_eq!(evaluate_objective(0.0), 5.0);
+            assert_eq!(evaluate_objective(1.0), 7.0);
+        };
+        let assert_preserved_after_serialization = |instance: &Instance| {
+            assert_preserved(instance);
+
+            let restored_v1 = Instance::from_v1_bytes(&instance.to_v1_bytes().unwrap()).unwrap();
+            assert_eq!(restored_v1.parameters, instance.parameters);
+            assert_preserved(&restored_v1);
+            let restored_v2 = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+            assert_eq!(restored_v2.parameters, instance.parameters);
+            assert_preserved(&restored_v2);
+        };
+
+        let mut keyed = make_instance();
+        keyed
+            .penalty_method_with_fixed_weights(&BTreeMap::from([(ConstraintID::from(1), 2.0)]))
+            .unwrap();
+        assert_preserved_after_serialization(&keyed);
+
+        let mut uniform = make_instance();
+        uniform
+            .uniform_penalty_method_with_fixed_weight(2.0)
+            .unwrap();
+        assert_preserved_after_serialization(&uniform);
     }
 
     #[test]
