@@ -19,6 +19,7 @@ mod parametric_builder;
 mod parse;
 mod pass;
 mod penalty;
+mod preparation;
 mod qubo;
 mod reduce_binary_power;
 mod serialize;
@@ -34,6 +35,10 @@ pub use analysis::*;
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
+pub use preparation::{
+    AddIntegerSlackToInequalityArguments, ConvertInequalityToEqualityWithIntegerSlackArguments,
+    PreparationPolicy,
+};
 pub use stats::*;
 
 use crate::{
