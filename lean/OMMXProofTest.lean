@@ -1,3 +1,6 @@
-import OMMXProofTest.Acceptance
-import OMMXProofTest.Fixtures
+import OMMXProofTest.Affine
+import OMMXProofTest.Domain
+import OMMXProofTest.IndicatorBigM
+import OMMXProofTest.SOS1BigM
+import OMMXProofTest.Transform
 import OMMXProofTest.Trust
