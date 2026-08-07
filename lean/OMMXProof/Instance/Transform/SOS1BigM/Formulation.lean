@@ -5,10 +5,10 @@ import Mathlib.Tactic
 /-!
 # SOS1 Big-M selector formulation
 
-This module gives the intermediate semantics used to prove the SOS1 Big-M
-lowering. The formulation may reuse binary SOS1 members as selectors, introduce
-fresh selectors for the remaining members, and omit a link side whose bound is
-zero.
+This module gives the Big-M selector semantics shared by SOS1 lowering and
+promotion. The formulation may reuse binary SOS1 members as selectors,
+introduce fresh selectors for the remaining members, and omit a link side
+whose bound is zero.
 -/
 
 namespace OMMXProof
@@ -107,12 +107,12 @@ def OptionalLowerLink (lower member selector : Rat) : Prop :=
   lower < 0 → lower * selector ≤ member
 
 /-- Semantic satisfaction predicate for the mixed reused/fresh selector
-formulation used by SOS1 Big-M lowering.
+formulation shared by SOS1 Big-M lowering and promotion.
 
 With valid member bounds, this formulation projects to `GenericSOS1`.
 Conversely, every bounded SOS1 state whose reused members are binary satisfies
-it under the canonical selector assignment. Generated linear constraints are
-shown separately to be equivalent to this predicate. -/
+it under the canonical selector assignment. Canonical linear rows are shown
+separately to be equivalent to this predicate. -/
 structure PlannedSelectorFormulationHolds [Fintype ι] [DecidableEq ι]
     (reused : Finset ι) (bounds : SelectorBounds ι)
     (members freshSelectors : ι → Rat) : Prop where

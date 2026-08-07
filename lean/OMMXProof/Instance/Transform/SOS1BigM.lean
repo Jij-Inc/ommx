@@ -1,35 +1,22 @@
-import OMMXProof.Instance.Transform.SOS1BigM.Basic
 import OMMXProof.Instance.Transform.SOS1BigM.Formulation
-import OMMXProof.Instance.Transform.SOS1BigM.Plan
-import OMMXProof.Instance.Transform.SOS1BigM.Target
+import OMMXProof.Instance.Transform.SOS1BigM.CanonicalRows
+import OMMXProof.Instance.Transform.SOS1BigM.Lowering
+import OMMXProof.Instance.Transform.SOS1BigM.Promotion
 
 /-!
-# SOS1 Big-M lowering
+# SOS1 Big-M transformations
 
-This module is the entrypoint for the SDK SOS1 conversion as an actual
-`Instance.Transform`, including the formulation, validated plans, target
-construction, encode/decode maps, and lowering correctness.
+This module collects both directions of the SOS1 Big-M formulation:
 
-## Terminology
+- `SOS1BigM.CanonicalRows` specifies the selector layout and canonical regular
+  rows shared by both directions.
+- `SOS1BigM.lowering` replaces one first-class SOS1 constraint with binary
+  selectors, Big-M links, and a selector-cardinality row.
+- `SOS1BigM.promotion` recognizes that standard Big-M layout and replaces it
+  with one first-class SOS1 constraint while preserving existing special
+  constraints which do not reference the removed selectors.
 
-- An **SOS1 member** is a source decision-variable component named by the
-  selected SOS1 constraint.
-- A **selector** is the binary value associated with an SOS1 member in the
-  at-most-one formulation. A selector value of zero forces its member to zero;
-  a value of one only permits the member to be nonzero.
-- A **reused selector** is a binary SOS1 member used directly as its own
-  selector.
-- A **fresh selector** is a new binary variable appended to the target instance
-  for a non-binary SOS1 member.
-- The **canonical selector** is the deterministic selector used by `encode`: it
-  is zero exactly when its member is zero.
-- A **link constraint** is a Big-M inequality connecting a non-binary member
-  `vᵢ` to its fresh selector `sᵢ`. For finite bounds `lᵢ ≤ vᵢ ≤ uᵢ`, the
-  generated sides are `vᵢ ≤ uᵢ sᵢ` when `0 < uᵢ` and
-  `lᵢ sᵢ ≤ vᵢ` when `lᵢ < 0`.
-- The **cardinality constraint** is the at-most-one inequality over all reused
-  and fresh selectors.
-- A **plan** selects the occurrence of the source SOS1 constraint to lower. A
-  **validated plan** additionally proves that every member has finite bounds,
-  so all required Big-M coefficients can be constructed.
+The promotion checker deliberately accepts a conservative sufficient
+condition. Other valid formulations of SOS1 remain outside this Big-M-specific
+transform family.
 -/
