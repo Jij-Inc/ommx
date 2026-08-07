@@ -1,7 +1,7 @@
 use super::*;
 use crate::{linear, Function, ParameterLabel, VariableID};
 use anyhow::Result;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
@@ -39,21 +39,7 @@ impl Instance {
     ///
     /// where $\lambda_1$ and $\lambda_2$ are penalty parameters.
     pub fn penalty_method(self) -> Result<ParametricInstance> {
-        anyhow::ensure!(
-            self.indicator_constraint_collection.active().is_empty(),
-            "penalty_method does not support indicator constraints. \
-             Remove or convert indicator constraints before applying penalty method."
-        );
-        anyhow::ensure!(
-            self.one_hot_constraint_collection.active().is_empty(),
-            "penalty_method does not support one-hot constraints. \
-             Remove or convert one-hot constraints before applying penalty method."
-        );
-        anyhow::ensure!(
-            self.sos1_constraint_collection.active().is_empty(),
-            "penalty_method does not support SOS1 constraints. \
-             Remove or convert SOS1 constraints before applying penalty method."
-        );
+        self.ensure_penalty_method_supported("penalty_method")?;
 
         let mut max_id = 0;
 
@@ -126,6 +112,55 @@ impl Instance {
     }
 
     #[cfg_attr(doc, katexit::katexit)]
+    /// Convert every active regular constraint to a penalty term with its fixed weight.
+    ///
+    /// The keys of `weights` must be exactly the active regular constraint IDs.
+    /// Constraint `id` with body $f_{id}(x)$ contributes
+    /// `weights[&id]` $\cdot f_{id}(x)^2$ directly to the objective. No
+    /// parameter ID or assignment is created, and the instance's recorded
+    /// parameter assignments remain exactly unchanged.
+    ///
+    /// On success, every regular, indicator, one-hot, and SOS1 constraint is in
+    /// its removed collection; all four active collections are empty. Every
+    /// active regular constraint is moved to the removed collection, and
+    /// existing removed constraints of every family are preserved. Active
+    /// special constraints are not penalty-converted: their presence returns
+    /// an error without modifying the instance.
+    ///
+    /// When no constraint of any family is active, an empty `weights` map is an
+    /// exact identity operation. Otherwise, fallible function arithmetic and
+    /// regular-constraint lifecycle changes are completed on local values and
+    /// committed only after both succeed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if an unsupported active special constraint is present,
+    /// if `weights` does not cover exactly the active regular constraints, or
+    /// if constructing or adding a penalty term fails. Any error leaves the
+    /// instance unchanged.
+    pub fn penalty_method_with_fixed_weights(
+        &mut self,
+        weights: &BTreeMap<ConstraintID, f64>,
+    ) -> crate::Result<()> {
+        let operation = "penalty_method_with_fixed_weights";
+        self.ensure_penalty_method_supported(operation)?;
+        self.ensure_fixed_penalty_weight_ids(weights)?;
+        if self.constraints().is_empty() {
+            return Ok(());
+        }
+
+        let mut objective = self.objective.clone();
+        for (&id, constraint) in self.constraint_collection.active() {
+            let function = constraint.function();
+            let mut penalty_term = function.clone();
+            penalty_term.try_mul_assign_in_place(function)?;
+            penalty_term.try_mul_assign_in_place(&Function::try_from(weights[&id])?)?;
+            objective.try_add_assign_in_place(penalty_term)?;
+        }
+        self.commit_fixed_penalty(objective, operation)
+    }
+
+    #[cfg_attr(doc, katexit::katexit)]
     /// Convert constraints to penalty terms using a single penalty parameter.
     ///
     /// This method is similar to `penalty_method` but uses a single penalty parameter $\lambda$
@@ -160,21 +195,7 @@ impl Instance {
     ///
     /// where $\lambda$ is the single penalty parameter.
     pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
-        anyhow::ensure!(
-            self.indicator_constraint_collection.active().is_empty(),
-            "uniform_penalty_method does not support indicator constraints. \
-             Remove or convert indicator constraints before applying penalty method."
-        );
-        anyhow::ensure!(
-            self.one_hot_constraint_collection.active().is_empty(),
-            "uniform_penalty_method does not support one-hot constraints. \
-             Remove or convert one-hot constraints before applying penalty method."
-        );
-        anyhow::ensure!(
-            self.sos1_constraint_collection.active().is_empty(),
-            "uniform_penalty_method does not support SOS1 constraints. \
-             Remove or convert SOS1 constraints before applying penalty method."
-        );
+        self.ensure_penalty_method_supported("uniform_penalty_method")?;
 
         // Early return if no active constraints (preserve any existing removed constraints)
         if self.constraints().is_empty() {
@@ -254,16 +275,139 @@ impl Instance {
             annotations: self.annotations,
         })
     }
+
+    #[cfg_attr(doc, katexit::katexit)]
+    /// Convert every active regular constraint to a penalty term with one fixed weight.
+    ///
+    /// Each constraint body $f_i(x)$ contributes `weight` $\cdot f_i(x)^2$
+    /// directly to the objective. No parameter ID or assignment is created,
+    /// and the instance's recorded parameter assignments remain exactly
+    /// unchanged.
+    ///
+    /// On success, every regular, indicator, one-hot, and SOS1 constraint is in
+    /// its removed collection; all four active collections are empty. Every
+    /// active regular constraint is moved to the removed collection, and
+    /// existing removed constraints of every family are preserved. Active
+    /// special constraints are not penalty-converted: their presence returns
+    /// an error without modifying the instance.
+    ///
+    /// When no constraint of any family is active, this is an exact identity
+    /// operation. Otherwise, fallible function arithmetic and regular-constraint
+    /// lifecycle changes are completed on local values and committed only after
+    /// both succeed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if an unsupported active special constraint is present,
+    /// or if constructing or adding the penalty term fails. Any error leaves
+    /// the instance unchanged.
+    pub fn uniform_penalty_method_with_fixed_weight(&mut self, weight: f64) -> crate::Result<()> {
+        let operation = "uniform_penalty_method_with_fixed_weight";
+        self.ensure_penalty_method_supported(operation)?;
+        if self.constraints().is_empty() {
+            return Ok(());
+        }
+
+        let mut penalty_term = Function::zero();
+        for constraint in self.constraint_collection.active().values() {
+            let function = constraint.function();
+            let mut squared = function.clone();
+            squared.try_mul_assign_in_place(function)?;
+            penalty_term.try_add_assign_in_place(squared)?;
+        }
+        penalty_term.try_mul_assign_in_place(&Function::try_from(weight)?)?;
+
+        let mut objective = self.objective.clone();
+        objective.try_add_assign_in_place(penalty_term)?;
+        self.commit_fixed_penalty(objective, operation)
+    }
+
+    fn ensure_penalty_method_supported(&self, operation: &str) -> crate::Result<()> {
+        anyhow::ensure!(
+            self.indicator_constraint_collection.active().is_empty(),
+            "{operation} does not support indicator constraints. \
+             Remove or convert indicator constraints before applying penalty method."
+        );
+        anyhow::ensure!(
+            self.one_hot_constraint_collection.active().is_empty(),
+            "{operation} does not support one-hot constraints. \
+             Remove or convert one-hot constraints before applying penalty method."
+        );
+        anyhow::ensure!(
+            self.sos1_constraint_collection.active().is_empty(),
+            "{operation} does not support SOS1 constraints. \
+             Remove or convert SOS1 constraints before applying penalty method."
+        );
+        Ok(())
+    }
+
+    fn ensure_fixed_penalty_weight_ids(
+        &self,
+        weights: &BTreeMap<ConstraintID, f64>,
+    ) -> crate::Result<()> {
+        let active_ids = self.constraints().keys().copied().collect::<BTreeSet<_>>();
+        let weight_ids = weights.keys().copied().collect::<BTreeSet<_>>();
+        let missing_ids = active_ids
+            .difference(&weight_ids)
+            .copied()
+            .collect::<Vec<_>>();
+        let unexpected_ids = weight_ids
+            .difference(&active_ids)
+            .copied()
+            .collect::<Vec<_>>();
+        if !missing_ids.is_empty() || !unexpected_ids.is_empty() {
+            crate::bail!(
+                { ?missing_ids, ?unexpected_ids },
+                "Fixed penalty weights must match active regular constraint IDs: \
+                 missing {missing_ids:?}, unexpected {unexpected_ids:?}",
+            );
+        }
+        Ok(())
+    }
+
+    fn commit_fixed_penalty(&mut self, objective: Function, operation: &str) -> crate::Result<()> {
+        let reason = format!("ommx.Instance.{operation}");
+        let removals = self
+            .constraint_collection
+            .active()
+            .iter()
+            .map(|(&id, constraint)| {
+                (
+                    id,
+                    (
+                        constraint.clone(),
+                        crate::constraint::RemovedReason {
+                            reason: reason.clone(),
+                            parameters: Default::default(),
+                        },
+                    ),
+                )
+            })
+            .collect();
+        let mut constraint_collection = self.constraint_collection.clone();
+        constraint_collection.move_active_rows_to_removed(removals)?;
+
+        self.objective = objective;
+        self.constraint_collection = constraint_collection;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        coeff, constraint::Equality, linear, ConstraintContext, DecisionVariable, ModelingLabel,
-        Sense,
+        coeff, constraint::Equality, linear, quadratic, v1::State, ATol, ConstraintContext,
+        DecisionVariable, Evaluate, ModelingLabel, Sense,
     };
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum SpecialConstraintKind {
+        Indicator,
+        OneHot,
+        Sos1,
+    }
 
     /// Helper function to create a test instance with two decision variables and two constraints
     fn create_test_instance_with_constraints() -> Instance {
@@ -296,6 +440,73 @@ mod tests {
         );
 
         Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap()
+    }
+
+    fn create_test_instance_with_special_constraints(kinds: &[SpecialConstraintKind]) -> Instance {
+        let variable = VariableID::from(1);
+        let regular_constraint = Constraint::equal_to_zero(Function::from(linear!(variable)));
+        let has_kind = |kind| kinds.contains(&kind);
+
+        let indicator_constraints = has_kind(SpecialConstraintKind::Indicator)
+            .then(|| {
+                (
+                    crate::IndicatorConstraintID::from(1),
+                    crate::IndicatorConstraint::new(
+                        variable,
+                        Equality::EqualToZero,
+                        Function::Zero,
+                    ),
+                )
+            })
+            .into_iter()
+            .collect();
+        let one_hot_constraints = has_kind(SpecialConstraintKind::OneHot)
+            .then(|| {
+                (
+                    crate::OneHotConstraintID::from(1),
+                    crate::OneHotConstraint::new(BTreeSet::from([variable])).unwrap(),
+                )
+            })
+            .into_iter()
+            .collect();
+        let sos1_constraints = has_kind(SpecialConstraintKind::Sos1)
+            .then(|| {
+                (
+                    crate::Sos1ConstraintID::from(1),
+                    crate::Sos1Constraint::new(BTreeSet::from([variable])).unwrap(),
+                )
+            })
+            .into_iter()
+            .collect();
+
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+            .constraints(BTreeMap::from([(
+                ConstraintID::from(1),
+                regular_constraint,
+            )]))
+            .indicator_constraints(indicator_constraints)
+            .one_hot_constraints(one_hot_constraints)
+            .sos1_constraints(sos1_constraints)
+            .build()
+            .unwrap()
+    }
+
+    fn assert_no_active_constraints(instance: &Instance) {
+        assert!(instance.constraints().is_empty());
+        assert!(instance.indicator_constraints().is_empty());
+        assert!(instance.one_hot_constraints().is_empty());
+        assert!(instance.sos1_constraints().is_empty());
+    }
+
+    fn assert_fixed_penalty_removal_provenance(instance: &Instance, operation: &str) {
+        let expected_reason = format!("ommx.Instance.{operation}");
+        for (_, reason) in instance.removed_constraints().values() {
+            assert_eq!(reason.reason, expected_reason);
+            assert!(reason.parameters.is_empty());
+        }
     }
 
     /// Helper function to verify penalty method properties
@@ -566,5 +777,321 @@ mod tests {
                 .reason,
             "ommx.Instance.uniform_penalty_method"
         );
+    }
+
+    #[test]
+    fn uniform_fixed_weight_penalty_updates_objective_in_place() {
+        let mut instance = create_test_instance_with_constraints();
+
+        instance
+            .uniform_penalty_method_with_fixed_weight(2.0)
+            .unwrap();
+
+        assert_no_active_constraints(&instance);
+        assert_eq!(instance.removed_constraints().len(), 2);
+        assert!(instance.parameters.is_none());
+        assert_fixed_penalty_removal_provenance(
+            &instance,
+            "uniform_penalty_method_with_fixed_weight",
+        );
+        let state = State::from_iter([(1, 2.0), (2, 1.0)]);
+        assert_eq!(
+            instance
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            13.0
+        );
+
+        let mut zero_weight = create_test_instance_with_constraints();
+        let objective = zero_weight.objective().clone();
+        zero_weight
+            .uniform_penalty_method_with_fixed_weight(0.0)
+            .unwrap();
+        assert_eq!(
+            zero_weight
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            objective.evaluate(&state, ATol::default()).unwrap()
+        );
+        assert_no_active_constraints(&zero_weight);
+    }
+
+    #[test]
+    fn fixed_penalty_weights_bind_by_constraint_id() {
+        let mut instance = create_test_instance_with_constraints();
+        instance
+            .set_constraint_context(
+                ConstraintID::from(1),
+                ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("penalized".to_string()),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let weights = BTreeMap::from([(ConstraintID::from(1), 2.0), (ConstraintID::from(2), 3.0)]);
+
+        instance
+            .penalty_method_with_fixed_weights(&weights)
+            .unwrap();
+
+        assert_no_active_constraints(&instance);
+        assert_eq!(instance.removed_constraints().len(), 2);
+        assert!(instance.parameters.is_none());
+        assert_eq!(
+            instance.constraint_context().name(ConstraintID::from(1)),
+            Some("penalized")
+        );
+        assert_fixed_penalty_removal_provenance(&instance, "penalty_method_with_fixed_weights");
+        let state = State::from_iter([(1, 2.0), (2, 1.0)]);
+        assert_eq!(
+            instance
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            14.0
+        );
+        let state = State::from_iter([(1, 0.0), (2, 0.0)]);
+        assert_eq!(
+            instance
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            2.0
+        );
+    }
+
+    #[test]
+    fn fixed_weight_penalty_is_identity_without_active_constraints() {
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            BTreeMap::from([(VariableID::from(1), DecisionVariable::continuous())]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let before = instance.clone();
+
+        instance
+            .penalty_method_with_fixed_weights(&BTreeMap::new())
+            .unwrap();
+        assert_eq!(instance, before);
+
+        instance
+            .uniform_penalty_method_with_fixed_weight(2.0)
+            .unwrap();
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn fixed_penalty_weights_require_exact_active_id_coverage() {
+        let before = create_test_instance_with_constraints();
+        let cases = [
+            BTreeMap::from([(ConstraintID::from(1), 2.0)]),
+            BTreeMap::from([
+                (ConstraintID::from(1), 2.0),
+                (ConstraintID::from(2), 3.0),
+                (ConstraintID::from(3), 4.0),
+            ]),
+        ];
+
+        for weights in cases {
+            let mut instance = before.clone();
+            let err = instance
+                .penalty_method_with_fixed_weights(&weights)
+                .unwrap_err();
+
+            assert!(err.to_string().contains("constraint IDs"));
+            assert_eq!(instance, before);
+        }
+    }
+
+    #[test]
+    fn fixed_weight_penalty_rejects_each_active_special_constraint_atomically() {
+        for kind in [
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
+            SpecialConstraintKind::Sos1,
+        ] {
+            let before = create_test_instance_with_special_constraints(&[kind]);
+            let weights = before.constraints().keys().map(|id| (*id, 2.0)).collect();
+
+            let mut keyed = before.clone();
+            keyed
+                .penalty_method_with_fixed_weights(&weights)
+                .unwrap_err();
+            assert_eq!(keyed, before);
+
+            let mut uniform = before.clone();
+            uniform
+                .uniform_penalty_method_with_fixed_weight(2.0)
+                .unwrap_err();
+            assert_eq!(uniform, before);
+        }
+    }
+
+    #[test]
+    fn fixed_weight_penalty_success_leaves_every_constraint_family_removed() {
+        let mut lowered = create_test_instance_with_special_constraints(&[
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
+            SpecialConstraintKind::Sos1,
+        ]);
+        lowered
+            .convert_indicator_to_constraint(crate::IndicatorConstraintID::from(1))
+            .unwrap();
+        lowered
+            .convert_one_hot_to_constraint(crate::OneHotConstraintID::from(1))
+            .unwrap();
+        lowered
+            .convert_sos1_to_constraints(crate::Sos1ConstraintID::from(1))
+            .unwrap();
+
+        assert_eq!(lowered.removed_indicator_constraints().len(), 1);
+        assert_eq!(lowered.removed_one_hot_constraints().len(), 1);
+        assert_eq!(lowered.removed_sos1_constraints().len(), 1);
+        assert!(!lowered.constraints().is_empty());
+
+        let already_removed_regular_id = ConstraintID::from(1);
+        lowered
+            .set_constraint_context(
+                already_removed_regular_id,
+                ConstraintContext {
+                    label: ModelingLabel {
+                        name: Some("already_removed_regular".to_string()),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        lowered
+            .relax_constraint(
+                already_removed_regular_id,
+                "pre_existing".to_string(),
+                std::iter::empty::<(String, String)>(),
+            )
+            .unwrap();
+
+        let regular_constraint_count =
+            lowered.constraints().len() + lowered.removed_constraints().len();
+        let already_removed_regular =
+            lowered.removed_constraints()[&already_removed_regular_id].clone();
+        let removed_indicators = lowered.removed_indicator_constraints().clone();
+        let removed_one_hots = lowered.removed_one_hot_constraints().clone();
+        let removed_sos1s = lowered.removed_sos1_constraints().clone();
+
+        let mut keyed = lowered.clone();
+        let weights = keyed.constraints().keys().map(|id| (*id, 2.0)).collect();
+        keyed.penalty_method_with_fixed_weights(&weights).unwrap();
+        assert_no_active_constraints(&keyed);
+        assert_eq!(keyed.removed_constraints().len(), regular_constraint_count);
+        assert_eq!(
+            keyed.removed_constraints()[&already_removed_regular_id],
+            already_removed_regular
+        );
+        assert_eq!(
+            keyed.constraint_context().name(already_removed_regular_id),
+            Some("already_removed_regular")
+        );
+        assert_eq!(keyed.removed_indicator_constraints(), &removed_indicators);
+        assert_eq!(keyed.removed_one_hot_constraints(), &removed_one_hots);
+        assert_eq!(keyed.removed_sos1_constraints(), &removed_sos1s);
+
+        let mut uniform = lowered;
+        uniform
+            .uniform_penalty_method_with_fixed_weight(2.0)
+            .unwrap();
+        assert_no_active_constraints(&uniform);
+        assert_eq!(
+            uniform.removed_constraints().len(),
+            regular_constraint_count
+        );
+        assert_eq!(
+            uniform.removed_constraints()[&already_removed_regular_id],
+            already_removed_regular
+        );
+        assert_eq!(
+            uniform
+                .constraint_context()
+                .name(already_removed_regular_id),
+            Some("already_removed_regular")
+        );
+        assert_eq!(uniform.removed_indicator_constraints(), &removed_indicators);
+        assert_eq!(uniform.removed_one_hot_constraints(), &removed_one_hots);
+        assert_eq!(uniform.removed_sos1_constraints(), &removed_sos1s);
+    }
+
+    #[test]
+    fn fixed_weight_penalty_preserves_parameters_exactly() {
+        let parameters = Some(crate::v1::Parameters {
+            entries: [(100, 3.0), (200, -4.0)].into_iter().collect(),
+        });
+
+        let mut keyed = create_test_instance_with_constraints();
+        keyed.parameters = parameters.clone();
+        keyed
+            .penalty_method_with_fixed_weights(&BTreeMap::from([
+                (ConstraintID::from(1), 2.0),
+                (ConstraintID::from(2), 3.0),
+            ]))
+            .unwrap();
+        assert_eq!(keyed.parameters, parameters);
+
+        let mut uniform = create_test_instance_with_constraints();
+        uniform.parameters = parameters.clone();
+        uniform
+            .uniform_penalty_method_with_fixed_weight(2.0)
+            .unwrap();
+        assert_eq!(uniform.parameters, parameters);
+    }
+
+    #[test]
+    fn fixed_weight_penalty_arithmetic_failure_is_atomic() {
+        let variable = VariableID::from(1);
+        let make_instance = || {
+            let objective =
+                Function::Quadratic((coeff!(f64::MAX) * quadratic!(variable, variable)).unwrap());
+            let constraint = Constraint {
+                equality: Equality::EqualToZero,
+                stage: crate::constraint::CreatedData {
+                    function: Function::from(linear!(variable)),
+                },
+            };
+            Instance::new(
+                Sense::Minimize,
+                objective,
+                BTreeMap::from([(variable, DecisionVariable::continuous())]),
+                BTreeMap::from([(ConstraintID::from(1), constraint)]),
+            )
+            .unwrap()
+        };
+
+        let mut uniform = make_instance();
+        let before = uniform.clone();
+
+        let err = uniform
+            .uniform_penalty_method_with_fixed_weight(f64::MAX)
+            .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<crate::CoefficientError>(),
+            Some(crate::CoefficientError::Infinite)
+        ));
+        assert_eq!(uniform, before);
+
+        let mut keyed = make_instance();
+        let before = keyed.clone();
+        let err = keyed
+            .penalty_method_with_fixed_weights(&BTreeMap::from([(ConstraintID::from(1), f64::MAX)]))
+            .unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<crate::CoefficientError>(),
+            Some(crate::CoefficientError::Infinite)
+        ));
+        assert_eq!(keyed, before);
     }
 }
