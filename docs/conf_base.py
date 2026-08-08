@@ -93,6 +93,7 @@ autoapi_dirs = [
     python_root / "ommx-pyscipopt-adapter",
     python_root / "ommx-highs-adapter",
     python_root / "ommx-openjij-adapter",
+    python_root / "ommx-column-generation",
 ]
 autoapi_options = [
     "members",
@@ -105,6 +106,7 @@ autoapi_member_order = "groupwise"
 autoapi_file_patterns = ["*.pyi", "*.py"]
 autoapi_ignore = [
     "**/tests/**",
+    "**/examples/**",
     "**/conftest.py",
     "**/ommx/v1/**",
     "**/ommx/artifact/**",
