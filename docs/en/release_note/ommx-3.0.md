@@ -8,7 +8,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🆕 User-controlled `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147), [#1152](https://github.com/Jij-Inc/ommx/pull/1152))
+### 🆕 User-controlled `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147), [#1152](https://github.com/Jij-Inc/ommx/pull/1152), [#1153](https://github.com/Jij-Inc/ommx/pull/1153))
 
 In Python SDK v2, solver adapters selected and performed the model conversions
 needed by their solvers. Python SDK v3 makes this an explicit, caller-owned step.
@@ -35,6 +35,34 @@ instance.prepare(input_class, policy)
 OMMXHighsAdapter.require_applicable(instance)
 solution = OMMXHighsAdapter.solve(instance)
 ```
+
+OpenJij uses the same workflow for its Binary, unconstrained minimization input
+class. Its recommendation lowers Indicator, OneHot, and SOS1 constraints,
+normalizes the sense, configures Integer slack with an inequality-preserving
+fallback when exact equality conversion is unavailable, and log-encodes all
+used Integer variables. Finite penalty weights remain application-specific, so
+the recommendation leaves that field for the caller to set:
+
+```python
+from ommx import FixedPenaltyPreparation
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+
+input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
+assert input_class is not None
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
+policy.fixed_penalty = (
+    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
+)
+
+instance.prepare(input_class, policy)
+OMMXOpenJijSAAdapter.require_applicable(instance)
+sample_set = OMMXOpenJijSAAdapter.sample(instance)
+```
+
+The same mutated instance is passed to OpenJij and remains the evaluation owner
+for the returned samples. The prerelease-only `OpenJijPreparationConfig`,
+`OpenJijPreparation`, reports, and Adapter-owned preparation methods have been
+removed in favor of this common API.
 
 {meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy` returns a
 fresh, editable policy on every call. The base recommendation enables no

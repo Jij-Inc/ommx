@@ -8,7 +8,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### 🆕 ユーザーが制御する `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147)、[#1152](https://github.com/Jij-Inc/ommx/pull/1152))
+### 🆕 ユーザーが制御する `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147)、[#1152](https://github.com/Jij-Inc/ommx/pull/1152)、[#1153](https://github.com/Jij-Inc/ommx/pull/1153))
 
 Python SDK v2では、solver adapterがsolverに必要なモデル変換を選び、実行していました。
 Python SDK v3では、この操作をユーザーが明示的に制御します。
@@ -35,6 +35,33 @@ instance.prepare(input_class, policy)
 OMMXHighsAdapter.require_applicable(instance)
 solution = OMMXHighsAdapter.solve(instance)
 ```
+
+OpenJijでも、Binary変数のみの制約なし最小化input classに対して同じworkflowを使います。
+推奨Policyでは、Indicator、OneHot、SOS1制約のlowering、senseの正規化、exactなequality
+変換が利用できない場合にinequalityのまま残すことを許可したInteger slack、使用中の全
+Integer変数のlog encodingを有効にします。finite penalty weightはapplication固有なので、
+推奨Policyでは呼び出し側が設定するfieldとして残します。
+
+```python
+from ommx import FixedPenaltyPreparation
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
+
+input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
+assert input_class is not None
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
+policy.fixed_penalty = (
+    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
+)
+
+instance.prepare(input_class, policy)
+OMMXOpenJijSAAdapter.require_applicable(instance)
+sample_set = OMMXOpenJijSAAdapter.sample(instance)
+```
+
+同じin-placeで変更されたinstanceをOpenJijへ渡し、返されたsampleのevaluation ownerとして
+引き続き使います。pre-releaseでのみ提供していた `OpenJijPreparationConfig`、
+`OpenJijPreparation`、report、Adapter所有のpreparation methodは、この共通APIに
+置き換えて削除しました。
 
 {meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy` は、呼び出すたびに
 新しい編集可能なPolicyを返します。基底classの推奨では変換を何も有効にせず、各Adapterは
