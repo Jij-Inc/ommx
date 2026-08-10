@@ -282,6 +282,10 @@ class SolverAdapter(ABC):
     INPUT_CLASS: InstanceClass | None = None
 
     @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        return PreparationPolicy()
+
+    @classmethod
     @abstractmethod
     def solve(
         cls,
@@ -308,36 +312,73 @@ class SolverAdapter(ABC):
 
 具体的な adapter の `solve` クラスメソッドは、adapter 固有の keyword option を追加で定義できます。予約済みの `diagnostics` keyword は `Run.log_solve` が管理します。`Run.log_solve(..., store_diagnostics=True)` を使う場合、adapter はその sink に adapter 定義の diagnostic report を記録できます。`None` の場合、diagnostics は無効です。
 
-#### 入力 class と明示的な特殊制約 lowering
+#### 入力 class と推奨 Preparation
 
 Adapter は、受け取れる具体的な `Instance` 値の構造的な集合を `INPUT_CLASS` で宣言します。`check_applicability()` は membership、続いて Adapter 固有の precondition を呼び出し元の instance を変更せずに評価します。いずれかを満たさない場合に同じ構造化 report で例外を送出するには `require_applicable()` を使います。
 
-`SolverAdapter` は、受理した入力を具体的な Adapter がどのように処理するかを規定せず、基底 class の constructor で instance を変更しません。具体的な Adapter は、実装上必要であれば {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` を明示的に呼び出せます。`kinds_to_lower` 引数では、以下の特殊制約 family selector を使います：
+Adapter の直接 API は厳格であり、入力を適用可能にするための変換を内部では行いません。代わりに、Adapter は `recommended_preparation_policy()` を override して、その `INPUT_CLASS` 向けの新しい編集可能な {class}`~ommx.PreparationPolicy` を返せます。推奨 Policy は instance を参照・変更せず、Preparation を実行せず、Adapter applicability も保証しません。`INPUT_CLASS` と Policy は {meth}`~ommx.Instance.prepare` に別々の引数として渡します。
+
+推奨 Policy から特殊制約 lowering を有効にする場合は、以下の family selector を使います：
 
 - `SpecialConstraintKind.Indicator`: インジケーター制約 (`binvar = 1 → f(x) <= 0`)
 - `SpecialConstraintKind.OneHot`: バイナリ変数集合のうち丁度1つが1
 - `SpecialConstraintKind.Sos1`: 変数集合のうち高々1つが非ゼロ
 
-`Instance` が現在保持する family は {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` で確認できます。`lower_special_constraints` は選択した active な family を通常制約へ変換し（indicator/SOS1 は Big-M、one-hot は線形等式）、instance を in-place に変更して、各 lowering を `INFO` level で記録します。この property も lowering も、`INPUT_CLASS` の membership や Adapter applicability を保証しません。
+`Instance` が現在保持する family は {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` で確認できます。選択された Preparation phase は {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` に委譲し、active な family を通常制約へ変換します（indicator/SOS1 は Big-M、one-hot は線形等式）。Validation と数学的な意味は引き続き owner operation が定義します。
 
 ```{important}
-`INPUT_CLASS` は Adapter の内部実装にかかわらず、Adapter が受け取る時点の入力値そのものを記述します。呼び出し側が Adapter を選ぶ前に instance を明示的に lowering した場合、結果は別の入力値なので、`check_applicability()` または `require_applicable()` で再評価する必要があります。
+`INPUT_CLASS` は Adapter が受け取る時点の入力値そのものを記述します。Preparation は呼び出し側が所有し、その値を in-place に変更します。Preparation の成功が保証するのは `INPUT_CLASS` membership だけなので、Adapter は通常どおり Adapter 固有の precondition を含む applicability check を行う必要があります。
 ```
 
 ここまでで用意した関数を使って次のように実装することができます：
 
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SolverAdapter
-from ommx import SpecialConstraintKind
+from ommx import (
+    DegreeBound,
+    Equality,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    PreparationPolicy,
+    Sense,
+    SpecialConstraintKind,
+    SpecialConstraintPreparation,
+)
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    INPUT_CLASS = InstanceClass(
+        [
+            InstanceClassClause(
+                label="tutorial-quadratic-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(2),
+                regular_constraint_degree_bounds={
+                    Equality.EqualToZero: DegreeBound.at_most(2),
+                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
+                },
+                allowed_senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
+    )
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        return PreparationPolicy(
+            special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+                kinds={
+                    SpecialConstraintKind.Indicator,
+                    SpecialConstraintKind.OneHot,
+                    SpecialConstraintKind.Sos1,
+                }
+            )
+        )
+
     def __init__(
         self,
         ommx_instance: Instance,
     ):
-        # この Adapter は Indicator と SOS1 を直接処理し、OneHot を
-        # 明示的に lowering する
-        ommx_instance.lower_special_constraints({SpecialConstraintKind.OneHot})
+        self.require_applicable(ommx_instance)
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -389,6 +430,18 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             solution.optimality = Solution.OPTIMAL
 
         return solution
+```
+
+呼び出し側は、厳格な Adapter API を呼ぶ前に推奨 Policy を使うかどうかを決め、必要に応じて編集します：
+
+```python
+input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
+assert input_class is not None
+policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
+# Application に異なる選択が必要なら、ここで public field を編集します。
+instance.prepare(input_class, policy)
+OMMXPySCIPOptAdapter.require_applicable(instance)
+solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
 これでSolver Adapter完成です 🎉
@@ -600,7 +653,7 @@ sample_set.summary
 このチュートリアルでは、PySCIPOptと接続するSolver Adapterの実装とOpenJijと接続するSampler Adapterの実装を通して、OMMX Adapterの実装方法について学びました。以下がOMMX Adapterを実装する際の重要なポイントです：
 
 1. OMMX Adapterは `SolverAdapter` または `SamplerAdapter` の抽象基底クラスを継承することで実装します
-2. `INPUT_CLASS` で構造的な入力条件を宣言し、`check_applicability()` または `require_applicable()` で membership と Adapter 固有の precondition を評価します。lowering が必要な場合は具体的な Adapter または呼び出し側の明示的な操作とし、基底 Adapter の契約では入力を変更しません
+2. `INPUT_CLASS` で厳格な構造的入力条件を宣言します。有用な場合は、`recommended_preparation_policy()` から新しい編集可能な Policy を返します。呼び出し側が `Instance.prepare()` で適用した後、Adapter は通常の applicability check を行います
 3. 実装の主なステップは以下の通りです：
    - `ommx.Instance` をバックエンドソルバーが理解できる形式に変換する
    - バックエンドソルバーを実行して解を取得する

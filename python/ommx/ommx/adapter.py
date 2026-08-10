@@ -12,6 +12,7 @@ from ommx import (
     Instance,
     InstanceClass,
     InstanceClassMembershipReport,
+    PreparationPolicy,
     SampleSet,
     Solution,
 )
@@ -141,6 +142,21 @@ class SolverAdapter(ABC):
     """
 
     INPUT_CLASS: ClassVar[InstanceClass | None] = None
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Return a fresh, caller-editable policy recommended by this adapter.
+
+        The recommendation and :attr:`INPUT_CLASS` are independent inputs to
+        :meth:`ommx.Instance.prepare`. This method does not inspect or mutate an
+        instance, execute preparation, or guarantee adapter applicability.
+        Concrete adapters may override it when they can recommend model changes
+        for reaching their input class.
+
+        The default recommendation enables no preparation phases. A new policy
+        is returned on every call so callers may edit it without sharing state.
+        """
+        return PreparationPolicy()
 
     @classmethod
     def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
