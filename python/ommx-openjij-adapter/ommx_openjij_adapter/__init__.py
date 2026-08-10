@@ -1,13 +1,4 @@
 from .adapter import OMMXOpenJijSAAdapter as _OMMXOpenJijSAAdapter
-from ._preparation import (
-    OpenJijPreparation,
-    OpenJijPreparationConfig,
-    OpenJijPreparationError,
-    OpenJijPreparationFailure,
-    OpenJijPreparationReport,
-    OpenJijPreparationSourceCheck,
-    OpenJijPreparationStep,
-)
 from ._decode import decode_to_samples
 
 
@@ -20,21 +11,15 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     Arbitrary polynomial objective degree is supported through OpenJij's QUBO
     and Binary-HUBO paths.
 
-    Integer encoding, sense reversal, slack introduction, and finite constraint
-    penalties are explicit preparation operations, not part of the declared
-    input class. Pass :attr:`OpenJijPreparation.input` back to this Adapter
-    as a separate :class:`ommx.Instance` value.
+    Integer encoding, sense normalization, slack introduction, and finite
+    constraint penalties are explicit preparation operations, not part of the
+    declared input class. Start from
+    :meth:`recommended_preparation_policy`, edit caller-owned choices such as
+    finite penalty weights, and apply the policy with :meth:`Instance.prepare`.
     """
 
 
 __all__ = [
     "OMMXOpenJijSAAdapter",
-    "OpenJijPreparation",
-    "OpenJijPreparationConfig",
-    "OpenJijPreparationError",
-    "OpenJijPreparationFailure",
-    "OpenJijPreparationReport",
-    "OpenJijPreparationSourceCheck",
-    "OpenJijPreparationStep",
     "decode_to_samples",
 ]
