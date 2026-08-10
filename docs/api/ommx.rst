@@ -18,6 +18,7 @@ ommx
    _items/ommx.ExactIntegerSlackError
    _items/ommx.InfeasibleDetected
    _items/ommx.LogEncodingError
+   _items/ommx.PreparationTargetNotReachedError
    _items/ommx.Linear
    _items/ommx.Quadratic
    _items/ommx.Polynomial
@@ -32,6 +33,12 @@ ommx
    _items/ommx.InstanceClassMismatch
    _items/ommx.InstanceClassClauseReport
    _items/ommx.InstanceClassMembershipReport
+   _items/ommx.SpecialConstraintPreparation
+   _items/ommx.SensePreparation
+   _items/ommx.IntegerSlackPreparation
+   _items/ommx.IntegerEncodingPreparation
+   _items/ommx.FixedPenaltyPreparation
+   _items/ommx.PreparationPolicy
    _items/ommx.Constraint
    _items/ommx.AttachedConstraint
    _items/ommx.IndicatorConstraint

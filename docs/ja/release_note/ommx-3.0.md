@@ -8,6 +8,53 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🆕 ユーザーが制御する `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147))
+
+Python SDK v2では、solver adapterがsolverに必要なモデル変換を選び、実行していました。
+Python SDK v3では、この操作をユーザーが明示的に制御します。
+{meth}`~ommx.Instance.prepare` は、呼び出し側が所有する
+{class}`~ommx.Instance` を、指定した {class}`~ommx.InstanceClass` に含まれるまで
+in-placeで変更します。Adapterを直接呼び出した場合は引き続き入力を厳密に検査し、
+暗黙の変換は行いません。
+
+Adapterが `INPUT_CLASS` 向けの推奨 {class}`~ommx.PreparationPolicy` を提供する場合は、
+それを出発点にします。必要に応じてユーザーがpublic fieldを書き換え、`INPUT_CLASS` と
+policyを別々に {meth}`~ommx.Instance.prepare` へ渡します。Policyを直接構築することも
+できます。
+
+```python
+from ommx import (
+    IntegerEncodingPreparation,
+    PreparationPolicy,
+    SensePreparation,
+)
+
+# `target_class` にはAdapterのINPUT_CLASSも指定できます。
+policy = PreparationPolicy(
+    sense=SensePreparation.as_minimization_problem(),
+)
+# Adapterが返したpolicyも同じ方法で編集できます。
+policy.integer_encoding = (
+    IntegerEncodingPreparation.log_encode_all_used_integers()
+)
+
+instance.prepare(target_class, policy)
+assert target_class.contains(instance)
+```
+
+Policyでは、特殊制約の通常制約化、最小化へのsense統一、Integer slack、使用中の
+Integer変数のencoding、固定weight penaltyを許可できます。OMMXは有効な変換を
+定められた順序で適用し、instanceがtargetに含まれた時点で停止します。
+
+{meth}`~ommx.Instance.prepare` が `None` を返すのは、target membershipへ到達した
+場合だけです。許可した変換をすべて使っても到達できない場合は、
+{class}`~ommx.PreparationTargetNotReachedError` の `error.report` から最終的な
+{class}`~ommx.InstanceClassMembershipReport` を取得できます。個々の変換で発生する
+errorは既存のPython exception typeを保ちます。Preparationはinstanceをrollback
+しないため、後のerrorより前に完了した変更は残ります。成功時に保証されるのはtarget
+membershipだけです。targetがAdapterの `INPUT_CLASS` である場合も、Adapterが行う通常の
+applicability checkは引き続き必要です。
+
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
 Function、polynomial、constraint、named function、`Instance` のevaluation APIは、

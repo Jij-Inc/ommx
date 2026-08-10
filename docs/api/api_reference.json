@@ -6346,6 +6346,105 @@
         },
         {
           "kind": "Class",
+          "name": "FixedPenaltyPreparation",
+          "doc": "Selection for the fixed-weight penalty Preparation phase.\n\nExactly one fixed-weight owner operation is selected. Weight and\nconstraint-ID validation remains owned by that operation.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "penalty_method_with_fixed_weights",
+              "doc": "Select the keyed fixed-weight penalty owner operation.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "weights",
+                      "type_": {
+                        "display": "Mapping[int, float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "FixedPenaltyPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "uniform_penalty_method_with_fixed_weight",
+              "doc": "Select the uniform fixed-weight penalty owner operation.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "weight",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "FixedPenaltyPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Function",
           "doc": "General mathematical function of decision variables.",
           "bases": [],
@@ -10518,6 +10617,41 @@
               "deprecated": null
             },
             {
+              "name": "prepare",
+              "doc": "Prepare this instance in place for membership in ``input_class``.\n\n``policy`` selects existing :class:`Instance` owner operations. The\nmethod stops once ``input_class`` contains this instance and returns\n``None``. Success guarantees only that membership; Adapter-specific\napplicability remains a separate check.\n\nPreparation is not globally transactional. Changes committed by an\nearlier owner operation remain if a later operation raises an error.\nExisting Rust owner signals retain their Python exception mappings.\nWhen configured phases are exhausted without reaching ``input_class``,\n:class:`PreparationTargetNotReachedError` exposes the final membership\nreport through its ``report`` attribute.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "input_class",
+                      "type_": {
+                        "display": "InstanceClass",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "policy",
+                      "type_": {
+                        "display": "PreparationPolicy",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "random_samples",
               "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\nRaises {class}`ValueError` if the requested state groups cannot\npartition the samples or the inclusive sample-ID range is too small.\n`num_different_samples=0` is valid only when `num_samples=0`.\n\n# Examples\n\nGenerate samples for a simple instance:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(sum(x) <= 2).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5\n```",
               "signatures": [
@@ -12431,6 +12565,215 @@
           "bases": [],
           "methods": [],
           "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "IntegerEncodingPreparation",
+          "doc": "Selection for the used-Integer encoding Preparation phase.\n\nExactly one encoding owner operation is selected. Validation and mutation\nsemantics remain owned by that operation.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "log_encode_all_used_integers",
+              "doc": "Select the underlying Rust ``log_encode_all_used_integers`` owner\noperation. On success, no used Integer decision variables remain.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IntegerEncodingPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "IntegerSlackPreparation",
+          "doc": "Integer-slack Preparation for active regular inequalities.\n\nPreparation first attempts exact conversion to equality using\n``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the\nconstraint to become an equality or be removed as trivially satisfied, so\n:class:`ExactIntegerSlackError` is propagated. An integer value permits the\nconstraint to remain an inequality: only that signal selects the\ninequality-preserving owner operation with this upper bound. The latter is\nnot an approximation of the original feasible set. Every other owner error\nis propagated unchanged.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "max_integer_range",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "slack_upper_bound",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IntegerSlackPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "atol",
+              "doc": "Absolute tolerance used to normalize bounds to integers.",
+              "type_": {
+                "display": "float",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "max_integer_range",
+              "doc": "Maximum finite range accepted for exact Integer slack.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "slack_upper_bound",
+              "doc": "Optional upper bound for inequality-preserving Integer slack.\n\n``None`` requires equality. An integer permits the inequality-preserving\nowner operation only after :class:`ExactIntegerSlackError`.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
           "deprecated": null
         },
         {
@@ -18909,6 +19252,262 @@
         },
         {
           "kind": "Class",
+          "name": "PreparationPolicy",
+          "doc": "Optional phases interpreted by :meth:`Instance.prepare`.\n\nEach property independently selects at most one well-formed phase. Fields\nmay be combined freely, although owner validation and target membership can\nstill make a combination fail for a particular :class:`Instance`.\n\n``Instance.prepare`` applies selected phases at most once in the canonical\nRust-owned order: special constraints, optimization sense, Integer slack,\nInteger encoding, then fixed penalty. All phases are disabled by default.\nFuture phases will also default to disabled.\n\nConstruct the table with keyword arguments or assign its public properties:\n\n```python\nfrom ommx import PreparationPolicy, SensePreparation\n\npolicy = PreparationPolicy()\npolicy.sense = SensePreparation.as_minimization_problem()\n```",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "special_constraints",
+                      "type_": {
+                        "display": "Optional[SpecialConstraintPreparation]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "SpecialConstraintPreparation",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "sense",
+                      "type_": {
+                        "display": "Optional[SensePreparation]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "SensePreparation",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "integer_slack",
+                      "type_": {
+                        "display": "Optional[IntegerSlackPreparation]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "IntegerSlackPreparation",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "integer_encoding",
+                      "type_": {
+                        "display": "Optional[IntegerEncodingPreparation]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "IntegerEncodingPreparation",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "fixed_penalty",
+                      "type_": {
+                        "display": "Optional[FixedPenaltyPreparation]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "FixedPenaltyPreparation",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PreparationPolicy",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "fixed_penalty",
+              "doc": "",
+              "type_": {
+                "display": "Optional[FixedPenaltyPreparation]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "FixedPenaltyPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true
+            },
+            {
+              "name": "integer_encoding",
+              "doc": "",
+              "type_": {
+                "display": "Optional[IntegerEncodingPreparation]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "IntegerEncodingPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true
+            },
+            {
+              "name": "integer_slack",
+              "doc": "",
+              "type_": {
+                "display": "Optional[IntegerSlackPreparation]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "IntegerSlackPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true
+            },
+            {
+              "name": "sense",
+              "doc": "",
+              "type_": {
+                "display": "Optional[SensePreparation]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "SensePreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true
+            },
+            {
+              "name": "special_constraints",
+              "doc": "",
+              "type_": {
+                "display": "Optional[SpecialConstraintPreparation]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "SpecialConstraintPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PreparationTargetNotReachedError",
+          "doc": "Configured Preparation phases were exhausted without reaching the target InstanceClass.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "report",
+              "doc": "Final membership report for the partially prepared Instance.",
+              "type_": {
+                "display": "InstanceClassMembershipReport",
+                "link_target": {
+                  "fqn": "ommx.InstanceClassMembershipReport",
+                  "doc_module": "ommx",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Provenance",
           "doc": "One step in a regular constraint's transformation history.\n\nWhen a special constraint (indicator / one-hot / SOS1) is converted into a\nregular {class}`~ommx.Constraint` — for example via\n:meth:`~ommx.Instance.convert_one_hot_to_constraint` or\n:meth:`~ommx.Instance.lower_special_constraints` —\nthe generated constraint records a {class}`Provenance` entry naming the\noriginal special constraint. This lets callers trace a regular constraint\nback to the special constraint it was derived from.",
           "bases": [],
@@ -23239,6 +23838,58 @@
         },
         {
           "kind": "Class",
+          "name": "SensePreparation",
+          "doc": "Selection for the optimization-sense Preparation phase.\n\nConstruct a value with an owner-operation factory. Validation and mutation\nsemantics remain owned by that :class:`Instance` operation.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "as_minimization_problem",
+              "doc": "Select :meth:`Instance.as_minimization_problem`.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "SensePreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Solution",
           "doc": "Python SDK domain type for evaluated optimization results.\n\nThis class contains annotations persisted in protobuf payloads and mirrored\nto OMMX Artifact descriptors.",
           "bases": [],
@@ -25118,6 +25769,74 @@
               "type_": null
             }
           ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "SpecialConstraintPreparation",
+          "doc": "Selection for the special-constraint Preparation phase.\n\nConstruct a value with an owner-operation factory. Validation and mutation\nsemantics remain owned by that :class:`Instance` operation.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "lower_special_constraints",
+              "doc": "Select :meth:`Instance.lower_special_constraints`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kinds",
+                      "type_": {
+                        "display": "set[SpecialConstraintKind]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "SpecialConstraintKind",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SpecialConstraintPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
           "deprecated": null
         },
         {
@@ -32927,6 +33646,7 @@
     "ommx.EvaluatedDecisionVariable": "ommx",
     "ommx.EvaluatedNamedFunction": "ommx",
     "ommx.ExactIntegerSlackError": "ommx",
+    "ommx.FixedPenaltyPreparation": "ommx",
     "ommx.Function": "ommx",
     "ommx.IndicatorConstraint": "ommx",
     "ommx.InfeasibleDetected": "ommx",
@@ -32936,6 +33656,8 @@
     "ommx.InstanceClassClauseReport": "ommx",
     "ommx.InstanceClassMembershipReport": "ommx",
     "ommx.InstanceClassMismatch": "ommx",
+    "ommx.IntegerEncodingPreparation": "ommx",
+    "ommx.IntegerSlackPreparation": "ommx",
     "ommx.Kind": "ommx",
     "ommx.Linear": "ommx",
     "ommx.LogEncodingError": "ommx",
@@ -32945,6 +33667,8 @@
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
+    "ommx.PreparationPolicy": "ommx",
+    "ommx.PreparationTargetNotReachedError": "ommx",
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",
     "ommx.Quadratic": "ommx",
@@ -32960,9 +33684,11 @@
     "ommx.SampledNamedFunction": "ommx",
     "ommx.Samples": "ommx",
     "ommx.Sense": "ommx",
+    "ommx.SensePreparation": "ommx",
     "ommx.Solution": "ommx",
     "ommx.Sos1Constraint": "ommx",
     "ommx.SpecialConstraintKind": "ommx",
+    "ommx.SpecialConstraintPreparation": "ommx",
     "ommx.State": "ommx",
     "ommx.ToSamples": "ommx",
     "ommx.ToState": "ommx",

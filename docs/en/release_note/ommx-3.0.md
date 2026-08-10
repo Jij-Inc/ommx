@@ -8,6 +8,54 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 User-controlled `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147))
+
+In Python SDK v2, solver adapters selected and performed the model conversions
+needed by their solvers. Python SDK v3 makes this an explicit, caller-owned step.
+{meth}`~ommx.Instance.prepare` changes the caller's {class}`~ommx.Instance` in
+place until it belongs to a requested {class}`~ommx.InstanceClass`; direct
+adapter calls remain strict and do not transform their input automatically.
+
+When an adapter supplies a recommended {class}`~ommx.PreparationPolicy` for its
+`INPUT_CLASS`, use that recommendation as a starting point, change any public
+policy fields needed by the application, and then pass the `INPUT_CLASS` and
+the policy separately to {meth}`~ommx.Instance.prepare`. A policy can also be
+constructed directly:
+
+```python
+from ommx import (
+    IntegerEncodingPreparation,
+    PreparationPolicy,
+    SensePreparation,
+)
+
+# `target_class` may be an adapter's INPUT_CLASS.
+policy = PreparationPolicy(
+    sense=SensePreparation.as_minimization_problem(),
+)
+# A policy returned by an adapter can be edited in the same way.
+policy.integer_encoding = (
+    IntegerEncodingPreparation.log_encode_all_used_integers()
+)
+
+instance.prepare(target_class, policy)
+assert target_class.contains(instance)
+```
+
+Policy fields let the caller allow special-constraint lowering, minimization
+sense normalization, Integer slack, used-Integer encoding, and fixed-weight
+penalties. OMMX applies enabled changes in a fixed order and stops as soon as
+the target contains the instance.
+
+{meth}`~ommx.Instance.prepare` returns `None` only after target membership is
+reached. If the allowed changes are exhausted first,
+{class}`~ommx.PreparationTargetNotReachedError` provides the final
+{class}`~ommx.InstanceClassMembershipReport` as `error.report`. Errors from an
+individual model change keep their existing Python exception types. Preparation
+does not roll the instance back: changes completed before a later error remain.
+Successful preparation guarantees target membership only. When the target is an
+adapter's `INPUT_CLASS`, the adapter's normal applicability check still applies.
+
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
 Function, polynomial, constraint, named-function, and `Instance` evaluation
