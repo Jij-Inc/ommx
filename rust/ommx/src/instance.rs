@@ -37,7 +37,8 @@ pub use builder::*;
 pub use parametric_builder::*;
 pub use preparation::{
     AddIntegerSlackToInequalityArguments, ConvertInequalityToEqualityWithIntegerSlackArguments,
-    PreparationPolicy,
+    FixedPenaltyPreparation, IntegerEncodingPreparation, IntegerSlackPreparation,
+    PreparationPolicy, SensePreparation, SpecialConstraintPreparation,
 };
 pub use stats::*;
 

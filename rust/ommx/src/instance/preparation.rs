@@ -27,54 +27,273 @@ pub struct AddIntegerSlackToInequalityArguments {
     pub slack_upper_bound: u64,
 }
 
-/// Optional arguments for the [`Instance`] owner operations interpreted by
-/// [`Instance::prepare`].
+/// Preparation of active special constraints.
 ///
-/// Every field is named after the owner operation it configures. `None` means
-/// that operation is not invoked. The policy does not contain an
-/// [`InstanceClass`], redefine any mathematical argument, or add validation on
-/// top of the configured owner APIs.
+/// Each variant selects one existing [`Instance`] owner operation and retains
+/// its argument names and meanings.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpecialConstraintPreparation {
+    /// Invoke [`Instance::lower_special_constraints`].
+    LowerSpecialConstraints {
+        /// Special-constraint kinds passed to the owner operation.
+        kinds: SpecialConstraintKinds,
+    },
+}
+
+/// Preparation of the optimization sense.
 ///
-/// Preparation interprets configured operations in one canonical order:
-/// special-constraint lowering, minimization normalization, exact Integer slack
-/// with the configured approximate fallback, used-Integer log encoding, keyed
-/// fixed penalties, then uniform fixed penalties. Whole-class membership is
-/// checked before and between owner operations, so interpretation stops as soon
-/// as the target class contains the instance.
+/// Each variant selects one existing [`Instance`] owner operation.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SensePreparation {
+    /// Invoke [`Instance::as_minimization_problem`].
+    AsMinimizationProblem,
+}
+
+/// Preparation that introduces Integer slack variables into active regular
+/// inequalities.
+///
+/// Exactly one primary owner operation is selected. Exact conversion may carry
+/// an approximate fallback, but that fallback is invoked only for
+/// [`ExactIntegerSlackUnavailable`]. Every other owner error is propagated
+/// unchanged. Numeric and Instance-dependent validation remains owned by the
+/// selected [`Instance`] operations.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntegerSlackPreparation {
+    /// Invoke
+    /// [`Instance::convert_inequality_to_equality_with_integer_slack`] for
+    /// every active regular inequality.
+    ConvertInequalityToEqualityWithIntegerSlack {
+        /// Arguments passed to exact Integer slack conversion.
+        arguments: ConvertInequalityToEqualityWithIntegerSlackArguments,
+        /// Arguments passed to [`Instance::add_integer_slack_to_inequality`]
+        /// only when exact conversion returns
+        /// [`ExactIntegerSlackUnavailable`].
+        on_exact_integer_slack_unavailable: Option<AddIntegerSlackToInequalityArguments>,
+    },
+    /// Invoke [`Instance::add_integer_slack_to_inequality`] directly for every
+    /// active regular inequality.
+    AddIntegerSlackToInequality(AddIntegerSlackToInequalityArguments),
+}
+
+/// Preparation of currently used Integer decision variables.
+///
+/// Exactly one encoding owner operation is selected. Validation and mutation
+/// semantics remain owned by that operation.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntegerEncodingPreparation {
+    /// Invoke [`Instance::log_encode_all_used_integers`].
+    LogEncodeAllUsedIntegers {
+        /// Absolute tolerance passed to the owner operation.
+        atol: ATol,
+    },
+}
+
+/// Fixed-weight penalty preparation of active regular constraints.
+///
+/// Exactly one fixed-weight penalty owner operation is selected. Weight and
+/// constraint-ID validation remains owned by that operation.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq)]
+pub enum FixedPenaltyPreparation {
+    /// Invoke [`Instance::penalty_method_with_fixed_weights`].
+    PenaltyMethodWithFixedWeights {
+        /// Constraint-ID-keyed weights passed unchanged to the owner operation.
+        weights: BTreeMap<ConstraintID, f64>,
+    },
+    /// Invoke [`Instance::uniform_penalty_method_with_fixed_weight`].
+    UniformPenaltyMethodWithFixedWeight {
+        /// Weight passed unchanged to the owner operation.
+        weight: f64,
+    },
+}
+
+/// Optional Preparation phases interpreted by [`Instance::prepare`].
+///
+/// Each public field independently selects at most one well-formed phase.
+/// Fields may be combined freely, but not every combination is guaranteed to
+/// succeed for every [`Instance`] and target [`InstanceClass`]. Owner-operation
+/// validation is not duplicated by this table.
+///
+/// This struct is non-exhaustive because additional Preparation phases may be
+/// added in future releases. Downstream callers should construct it with
+/// [`PreparationPolicy::default`] and assign the desired public fields. Every
+/// phase is disabled by default, including fields added in future releases.
+///
+/// [`Instance::prepare`] applies each selected phase at most once in this
+/// canonical order: special constraints, optimization sense, Integer slack,
+/// Integer encoding, then fixed penalty. It checks whole-class membership
+/// before and after each selected phase and stops as soon as the target class
+/// contains the instance.
+///
+/// # Examples
+///
+/// ```
+/// use ommx::{
+///     AddIntegerSlackToInequalityArguments, ATol,
+///     ConvertInequalityToEqualityWithIntegerSlackArguments, FixedPenaltyPreparation,
+///     IntegerSlackPreparation, PreparationPolicy, SensePreparation,
+/// };
+///
+/// let mut policy = PreparationPolicy::default();
+/// policy.sense = Some(SensePreparation::AsMinimizationProblem);
+/// policy.integer_slack = Some(
+///     IntegerSlackPreparation::ConvertInequalityToEqualityWithIntegerSlack {
+///         arguments: ConvertInequalityToEqualityWithIntegerSlackArguments {
+///             max_integer_range: 32,
+///             atol: ATol::default(),
+///         },
+///         on_exact_integer_slack_unavailable: Some(
+///             AddIntegerSlackToInequalityArguments {
+///                 slack_upper_bound: 32,
+///             },
+///         ),
+///     },
+/// );
+/// policy.fixed_penalty = Some(
+///     FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight { weight: 2.0 },
+/// );
+/// ```
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PreparationPolicy {
-    /// Arguments for [`Instance::lower_special_constraints`].
-    pub lower_special_constraints: Option<SpecialConstraintKinds>,
-    /// Invoke [`Instance::as_minimization_problem`] when this is `Some(())`.
-    pub as_minimization_problem: Option<()>,
-    /// Arguments for exact Integer slack conversion of every active inequality.
-    pub convert_inequality_to_equality_with_integer_slack:
-        Option<ConvertInequalityToEqualityWithIntegerSlackArguments>,
-    /// Arguments for approximate Integer slack conversion.
-    ///
-    /// When exact conversion is configured, this is used only after
-    /// [`ExactIntegerSlackUnavailable`]. When exact conversion is absent, it is
-    /// applied directly to every active inequality.
-    pub add_integer_slack_to_inequality: Option<AddIntegerSlackToInequalityArguments>,
-    /// Absolute tolerance passed to [`Instance::log_encode_all_used_integers`].
-    pub log_encode_all_used_integers: Option<ATol>,
-    /// Constraint-ID-keyed weights passed unchanged to
-    /// [`Instance::penalty_method_with_fixed_weights`].
-    pub penalty_method_with_fixed_weights: Option<BTreeMap<ConstraintID, f64>>,
-    /// Weight passed unchanged to
-    /// [`Instance::uniform_penalty_method_with_fixed_weight`].
-    pub uniform_penalty_method_with_fixed_weight: Option<f64>,
+    /// Optional special-constraint phase.
+    pub special_constraints: Option<SpecialConstraintPreparation>,
+    /// Optional optimization-sense phase.
+    pub sense: Option<SensePreparation>,
+    /// Optional Integer slack phase.
+    pub integer_slack: Option<IntegerSlackPreparation>,
+    /// Optional used-Integer encoding phase.
+    pub integer_encoding: Option<IntegerEncodingPreparation>,
+    /// Optional fixed-weight penalty phase.
+    pub fixed_penalty: Option<FixedPenaltyPreparation>,
+}
+
+trait PreparationStep {
+    /// Apply one configured phase completely unless an owner operation fails.
+    fn apply(&self, instance: &mut Instance) -> crate::Result<()>;
+}
+
+impl PreparationStep for SpecialConstraintPreparation {
+    fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
+        match self {
+            Self::LowerSpecialConstraints { kinds } => {
+                instance.lower_special_constraints(kinds)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl PreparationStep for SensePreparation {
+    fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
+        match self {
+            Self::AsMinimizationProblem => {
+                instance.as_minimization_problem();
+            }
+        }
+        Ok(())
+    }
+}
+
+impl PreparationStep for IntegerSlackPreparation {
+    fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
+        let inequality_ids = instance
+            .constraints()
+            .iter()
+            .filter_map(|(&id, constraint)| {
+                (constraint.equality == Equality::LessThanOrEqualToZero).then_some(id)
+            })
+            .collect::<Vec<_>>();
+
+        for id in inequality_ids {
+            match self {
+                Self::ConvertInequalityToEqualityWithIntegerSlack {
+                    arguments,
+                    on_exact_integer_slack_unavailable,
+                } => {
+                    match instance.convert_inequality_to_equality_with_integer_slack(
+                        id.into_inner(),
+                        arguments.max_integer_range,
+                        arguments.atol,
+                    ) {
+                        Ok(()) => {}
+                        Err(error) if error.is::<ExactIntegerSlackUnavailable>() => {
+                            let Some(arguments) = on_exact_integer_slack_unavailable else {
+                                return Err(error);
+                            };
+                            instance.add_integer_slack_to_inequality(
+                                id.into_inner(),
+                                arguments.slack_upper_bound,
+                            )?;
+                        }
+                        Err(error) => return Err(error),
+                    }
+                }
+                Self::AddIntegerSlackToInequality(arguments) => {
+                    instance.add_integer_slack_to_inequality(
+                        id.into_inner(),
+                        arguments.slack_upper_bound,
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl PreparationStep for IntegerEncodingPreparation {
+    fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
+        match self {
+            Self::LogEncodeAllUsedIntegers { atol } => {
+                instance.log_encode_all_used_integers(*atol)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl PreparationStep for FixedPenaltyPreparation {
+    fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
+        match self {
+            Self::PenaltyMethodWithFixedWeights { weights } => {
+                instance.penalty_method_with_fixed_weights(weights)?;
+            }
+            Self::UniformPenaltyMethodWithFixedWeight { weight } => {
+                instance.uniform_penalty_method_with_fixed_weight(*weight)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn apply_preparation_step<S: PreparationStep>(
+    instance: &mut Instance,
+    input_class: &InstanceClass,
+    step: Option<&S>,
+) -> crate::Result<bool> {
+    match step {
+        Some(step) => {
+            step.apply(instance)?;
+            Ok(input_class.contains(instance))
+        }
+        None => Ok(false),
+    }
 }
 
 impl Instance {
     /// Prepare this instance for membership in `input_class` using configured
     /// [`Instance`] owner operations.
     ///
-    /// This is a partial, in-place interpreter. It checks whole-class
-    /// membership before and between configured operations and returns as soon
-    /// as `input_class.contains(self)` is true. Success therefore guarantees
-    /// only membership in `input_class`; adapter-specific applicability remains
-    /// outside this operation.
+    /// This is a partial, in-place interpreter. It applies each configured
+    /// phase at most once in the canonical order documented by
+    /// [`PreparationPolicy`], checks whole-class membership before and after
+    /// each selected phase, and returns as soon as `input_class.contains(self)`
+    /// is true. Success therefore guarantees only membership in `input_class`;
+    /// adapter-specific applicability remains outside this operation.
     ///
     /// Active regular inequalities are processed in ascending constraint-ID
     /// order. Exact Integer slack conversion falls back to the configured
@@ -99,84 +318,24 @@ impl Instance {
             return Ok(());
         }
 
-        if let Some(kinds) = &policy.lower_special_constraints {
-            self.lower_special_constraints(kinds)?;
-            if input_class.contains(self) {
-                return Ok(());
-            }
+        if apply_preparation_step(self, input_class, policy.special_constraints.as_ref())? {
+            return Ok(());
         }
 
-        if policy.as_minimization_problem.is_some() {
-            self.as_minimization_problem();
-            if input_class.contains(self) {
-                return Ok(());
-            }
+        if apply_preparation_step(self, input_class, policy.sense.as_ref())? {
+            return Ok(());
         }
 
-        if policy
-            .convert_inequality_to_equality_with_integer_slack
-            .is_some()
-            || policy.add_integer_slack_to_inequality.is_some()
-        {
-            let inequality_ids = self
-                .constraints()
-                .iter()
-                .filter_map(|(&id, constraint)| {
-                    (constraint.equality == Equality::LessThanOrEqualToZero).then_some(id)
-                })
-                .collect::<Vec<_>>();
-
-            for id in inequality_ids {
-                if let Some(arguments) = policy.convert_inequality_to_equality_with_integer_slack {
-                    match self.convert_inequality_to_equality_with_integer_slack(
-                        id.into_inner(),
-                        arguments.max_integer_range,
-                        arguments.atol,
-                    ) {
-                        Ok(()) => {}
-                        Err(error) if error.is::<ExactIntegerSlackUnavailable>() => {
-                            let Some(approximate) = policy.add_integer_slack_to_inequality else {
-                                return Err(error);
-                            };
-                            self.add_integer_slack_to_inequality(
-                                id.into_inner(),
-                                approximate.slack_upper_bound,
-                            )?;
-                        }
-                        Err(error) => return Err(error),
-                    }
-                } else if let Some(arguments) = policy.add_integer_slack_to_inequality {
-                    self.add_integer_slack_to_inequality(
-                        id.into_inner(),
-                        arguments.slack_upper_bound,
-                    )?;
-                }
-
-                if input_class.contains(self) {
-                    return Ok(());
-                }
-            }
+        if apply_preparation_step(self, input_class, policy.integer_slack.as_ref())? {
+            return Ok(());
         }
 
-        if let Some(atol) = policy.log_encode_all_used_integers {
-            self.log_encode_all_used_integers(atol)?;
-            if input_class.contains(self) {
-                return Ok(());
-            }
+        if apply_preparation_step(self, input_class, policy.integer_encoding.as_ref())? {
+            return Ok(());
         }
 
-        if let Some(weights) = &policy.penalty_method_with_fixed_weights {
-            self.penalty_method_with_fixed_weights(weights)?;
-            if input_class.contains(self) {
-                return Ok(());
-            }
-        }
-
-        if let Some(weight) = policy.uniform_penalty_method_with_fixed_weight {
-            self.uniform_penalty_method_with_fixed_weight(weight)?;
-            if input_class.contains(self) {
-                return Ok(());
-            }
+        if apply_preparation_step(self, input_class, policy.fixed_penalty.as_ref())? {
+            return Ok(());
         }
 
         let report = input_class.check_membership(self);
@@ -188,7 +347,7 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, linear, Bound, Constraint, DecisionVariable, DegreeBound, Function,
+        coeff, linear, quadratic, Bound, Constraint, DecisionVariable, DegreeBound, Function,
         InfeasibleDetected, InstanceClassClause, Kind, OneHotConstraint, OneHotConstraintID, Sense,
         SpecialConstraintKind, VariableID,
     };
@@ -240,10 +399,9 @@ mod tests {
         .unwrap();
         let target = unconstrained_class("constant", [], DegreeBound::at_most(0));
         let policy = PreparationPolicy {
-            penalty_method_with_fixed_weights: Some(BTreeMap::from([(
-                ConstraintID::from(999),
-                1.0,
-            )])),
+            fixed_penalty: Some(FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
+                weights: BTreeMap::from([(ConstraintID::from(999), 1.0)]),
+            }),
             ..Default::default()
         };
         let before = instance.clone();
@@ -265,10 +423,13 @@ mod tests {
         .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))
         .into();
         let policy = PreparationPolicy {
-            convert_inequality_to_equality_with_integer_slack: Some(
-                ConvertInequalityToEqualityWithIntegerSlackArguments {
-                    max_integer_range: 1,
-                    atol: ATol::default(),
+            integer_slack: Some(
+                IntegerSlackPreparation::ConvertInequalityToEqualityWithIntegerSlack {
+                    arguments: ConvertInequalityToEqualityWithIntegerSlackArguments {
+                        max_integer_range: 1,
+                        atol: ATol::default(),
+                    },
+                    on_exact_integer_slack_unavailable: None,
                 },
             ),
             ..Default::default()
@@ -287,17 +448,25 @@ mod tests {
         let target =
             unconstrained_class("binary quadratic", [Kind::Binary], DegreeBound::at_most(2));
         let policy = PreparationPolicy {
-            convert_inequality_to_equality_with_integer_slack: Some(
-                ConvertInequalityToEqualityWithIntegerSlackArguments {
-                    max_integer_range: 1,
-                    atol: ATol::default(),
+            integer_slack: Some(
+                IntegerSlackPreparation::ConvertInequalityToEqualityWithIntegerSlack {
+                    arguments: ConvertInequalityToEqualityWithIntegerSlackArguments {
+                        max_integer_range: 1,
+                        atol: ATol::default(),
+                    },
+                    on_exact_integer_slack_unavailable: Some(
+                        AddIntegerSlackToInequalityArguments {
+                            slack_upper_bound: 2,
+                        },
+                    ),
                 },
             ),
-            add_integer_slack_to_inequality: Some(AddIntegerSlackToInequalityArguments {
-                slack_upper_bound: 2,
+            integer_encoding: Some(IntegerEncodingPreparation::LogEncodeAllUsedIntegers {
+                atol: ATol::default(),
             }),
-            log_encode_all_used_integers: Some(ATol::default()),
-            uniform_penalty_method_with_fixed_weight: Some(2.0),
+            fixed_penalty: Some(
+                FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight { weight: 2.0 },
+            ),
             ..Default::default()
         };
 
@@ -310,6 +479,96 @@ mod tests {
             .decision_variables()
             .keys()
             .any(|id| instance.variable_labels().name(*id) == Some("ommx.slack")));
+    }
+
+    #[test]
+    fn direct_approximate_slack_and_keyed_penalty_reach_target_membership() {
+        let mut instance = integer_inequality_instance();
+        let target = unconstrained_class(
+            "integer quadratic",
+            [Kind::Integer],
+            DegreeBound::at_most(2),
+        );
+        let policy = PreparationPolicy {
+            integer_slack: Some(IntegerSlackPreparation::AddIntegerSlackToInequality(
+                AddIntegerSlackToInequalityArguments {
+                    slack_upper_bound: 2,
+                },
+            )),
+            fixed_penalty: Some(FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
+                weights: BTreeMap::from([(ConstraintID::from(1), 2.0)]),
+            }),
+            ..Default::default()
+        };
+
+        instance.prepare(&target, &policy).unwrap();
+
+        assert!(target.contains(&instance));
+        assert!(instance.constraints().is_empty());
+        assert!(instance
+            .decision_variables()
+            .keys()
+            .any(|id| instance.variable_labels().name(*id) == Some("ommx.slack")));
+    }
+
+    #[test]
+    fn integer_slack_phase_applies_to_every_active_inequality() {
+        let variable = VariableID::from(1);
+        let first_id = ConstraintID::from(1);
+        let second_id = ConstraintID::from(2);
+        let quadratic_inequality =
+            Function::Quadratic((quadratic!(variable, variable) + coeff!(-10.0)).unwrap());
+        let linear_inequality = (Function::from(linear!(variable)) + coeff!(-2.0)).unwrap();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([(
+                variable,
+                DecisionVariable::new(
+                    Kind::Integer,
+                    Bound::new(0.0, 3.0).unwrap(),
+                    ATol::default(),
+                )
+                .unwrap(),
+            )]),
+            BTreeMap::from([
+                (
+                    first_id,
+                    Constraint::less_than_or_equal_to_zero(quadratic_inequality),
+                ),
+                (
+                    second_id,
+                    Constraint::less_than_or_equal_to_zero(linear_inequality),
+                ),
+            ]),
+        )
+        .unwrap();
+        let target: InstanceClass = InstanceClassClause::new(
+            "linear integer inequalities",
+            BTreeSet::from([Kind::Integer]),
+            DegreeBound::at_most(0),
+            BTreeSet::from([Sense::Minimize]),
+        )
+        .with_regular_constraint(Equality::LessThanOrEqualToZero, DegreeBound::at_most(1))
+        .into();
+        let policy = PreparationPolicy {
+            integer_slack: Some(IntegerSlackPreparation::AddIntegerSlackToInequality(
+                AddIntegerSlackToInequalityArguments {
+                    slack_upper_bound: 2,
+                },
+            )),
+            ..Default::default()
+        };
+
+        instance.prepare(&target, &policy).unwrap();
+
+        assert!(target.contains(&instance));
+        assert!(instance.constraints().contains_key(&second_id));
+        assert!(instance.removed_constraints().contains_key(&first_id));
+        assert!(instance.decision_variables().keys().any(|id| {
+            instance.variable_labels().name(*id) == Some("ommx.slack")
+                && instance.variable_labels().subscripts(*id) == [second_id.into_inner() as i64]
+        }));
     }
 
     #[test]
@@ -338,17 +597,23 @@ mod tests {
         let target =
             unconstrained_class("binary quadratic", [Kind::Binary], DegreeBound::at_most(2));
         let policy = PreparationPolicy {
-            lower_special_constraints: Some(BTreeSet::from([SpecialConstraintKind::OneHot])),
-            as_minimization_problem: Some(()),
-            convert_inequality_to_equality_with_integer_slack: Some(
-                ConvertInequalityToEqualityWithIntegerSlackArguments {
-                    max_integer_range: 32,
-                    atol: ATol::default(),
+            special_constraints: Some(SpecialConstraintPreparation::LowerSpecialConstraints {
+                kinds: BTreeSet::from([SpecialConstraintKind::OneHot]),
+            }),
+            sense: Some(SensePreparation::AsMinimizationProblem),
+            integer_slack: Some(
+                IntegerSlackPreparation::ConvertInequalityToEqualityWithIntegerSlack {
+                    arguments: ConvertInequalityToEqualityWithIntegerSlackArguments {
+                        max_integer_range: 32,
+                        atol: ATol::default(),
+                    },
+                    on_exact_integer_slack_unavailable: Some(
+                        AddIntegerSlackToInequalityArguments {
+                            slack_upper_bound: 2,
+                        },
+                    ),
                 },
             ),
-            add_integer_slack_to_inequality: Some(AddIntegerSlackToInequalityArguments {
-                slack_upper_bound: 2,
-            }),
             ..Default::default()
         };
 
