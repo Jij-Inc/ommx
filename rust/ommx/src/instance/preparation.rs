@@ -1,5 +1,5 @@
 use super::{ExactIntegerSlackUnavailable, Instance, SpecialConstraintKinds};
-use crate::{ATol, ConstraintID, Equality, InstanceClass};
+use crate::{ATol, ConstraintID, Equality, InstanceClass, InstanceClassMembershipReport};
 use std::collections::BTreeMap;
 
 /// Preparation of active special constraints.
@@ -143,6 +143,26 @@ pub struct PreparationPolicy {
     pub fixed_penalty: Option<FixedPenaltyPreparation>,
 }
 
+/// Signal returned when configured Preparation phases are exhausted before the
+/// target [`InstanceClass`] contains the [`Instance`].
+///
+/// Callers can inspect [`Self::report`] to select additional Preparation
+/// phases, revise the target class, or report the remaining mismatches. The
+/// instance may retain changes committed by configured phases before this
+/// signal is returned.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("Preparation did not reach the target InstanceClass:\n{report}")]
+pub struct PreparationTargetNotReached {
+    report: InstanceClassMembershipReport,
+}
+
+impl PreparationTargetNotReached {
+    /// Return the final membership report for the prepared instance.
+    pub fn report(&self) -> &InstanceClassMembershipReport {
+        &self.report
+    }
+}
+
 trait PreparationStep {
     /// Apply one configured phase completely unless an owner operation fails.
     fn apply(&self, instance: &mut Instance) -> crate::Result<()>;
@@ -264,9 +284,10 @@ impl Instance {
     ///
     /// # Errors
     ///
-    /// Returns an error from a configured owner operation, or an ordinary
-    /// [`crate::Error`] with the final membership report when the configured
-    /// operations are exhausted without reaching `input_class`.
+    /// Returns an error from a configured owner operation, or
+    /// [`PreparationTargetNotReached`] with the final membership report when
+    /// the configured operations are exhausted without reaching
+    /// `input_class`.
     pub fn prepare(
         &mut self,
         input_class: &InstanceClass,
@@ -297,7 +318,7 @@ impl Instance {
         }
 
         let report = input_class.check_membership(self);
-        crate::bail!("Preparation did not reach the target InstanceClass:\n{report}")
+        crate::bail!(PreparationTargetNotReached { report })
     }
 }
 
@@ -568,10 +589,10 @@ mod tests {
     }
 
     #[test]
-    fn exhausted_policy_returns_error_outside_target() {
+    fn exhausted_policy_returns_the_final_membership_report() {
         let variable = VariableID::from(1);
         let mut instance = Instance::new(
-            Sense::Minimize,
+            Sense::Maximize,
             Function::from(linear!(variable)),
             BTreeMap::from([(variable, DecisionVariable::binary())]),
             BTreeMap::from([(
@@ -585,15 +606,22 @@ mod tests {
             [Kind::Binary],
             DegreeBound::at_most(1),
         );
-        let before = instance.clone();
-        let membership_report = target.check_membership(&instance).to_string();
+        let policy = PreparationPolicy {
+            sense: Some(SensePreparation::AsMinimizationProblem),
+            ..Default::default()
+        };
 
-        let error = instance
-            .prepare(&target, &PreparationPolicy::default())
-            .unwrap_err();
+        let error = instance.prepare(&target, &policy).unwrap_err();
+        let membership_report = target.check_membership(&instance);
 
         assert!(!target.contains(&instance));
-        assert_eq!(instance, before);
-        assert!(error.to_string().contains(&membership_report));
+        assert_eq!(instance.sense(), Sense::Minimize);
+        assert_eq!(
+            error
+                .downcast_ref::<PreparationTargetNotReached>()
+                .unwrap()
+                .report(),
+            &membership_report
+        );
     }
 }
