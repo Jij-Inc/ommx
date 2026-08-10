@@ -341,13 +341,14 @@ mod tests {
             ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn),
         };
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
+        let before = instance.clone();
 
         let err = instance
             .convert_inequality_to_equality_with_integer_slack(0, 1, ATol::default())
             .unwrap_err();
 
         assert!(err.is::<ExactIntegerSlackUnavailable>());
-        assert!(instance.constraints().contains_key(&ConstraintID::from(0)));
+        assert_eq!(instance, before);
     }
 
     #[test]

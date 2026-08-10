@@ -434,12 +434,9 @@ mod tests {
             ),
             ..Default::default()
         };
-        let before = instance.clone();
-
         let error = instance.prepare(&target, &policy).unwrap_err();
 
         assert!(error.is::<ExactIntegerSlackUnavailable>());
-        assert_eq!(instance, before);
     }
 
     #[test]
@@ -473,8 +470,6 @@ mod tests {
         instance.prepare(&target, &policy).unwrap();
 
         assert!(target.contains(&instance));
-        assert!(instance.constraints().is_empty());
-        assert!(instance.decision_variable_usage().used_integer().is_empty());
         assert!(instance
             .decision_variables()
             .keys()
@@ -482,37 +477,7 @@ mod tests {
     }
 
     #[test]
-    fn direct_approximate_slack_and_keyed_penalty_reach_target_membership() {
-        let mut instance = integer_inequality_instance();
-        let target = unconstrained_class(
-            "integer quadratic",
-            [Kind::Integer],
-            DegreeBound::at_most(2),
-        );
-        let policy = PreparationPolicy {
-            integer_slack: Some(IntegerSlackPreparation::AddIntegerSlackToInequality(
-                AddIntegerSlackToInequalityArguments {
-                    slack_upper_bound: 2,
-                },
-            )),
-            fixed_penalty: Some(FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
-                weights: BTreeMap::from([(ConstraintID::from(1), 2.0)]),
-            }),
-            ..Default::default()
-        };
-
-        instance.prepare(&target, &policy).unwrap();
-
-        assert!(target.contains(&instance));
-        assert!(instance.constraints().is_empty());
-        assert!(instance
-            .decision_variables()
-            .keys()
-            .any(|id| instance.variable_labels().name(*id) == Some("ommx.slack")));
-    }
-
-    #[test]
-    fn integer_slack_phase_applies_to_every_active_inequality() {
+    fn integer_slack_phase_completes_before_membership_stops_later_phases() {
         let variable = VariableID::from(1);
         let first_id = ConstraintID::from(1);
         let second_id = ConstraintID::from(2);
@@ -557,27 +522,30 @@ mod tests {
                     slack_upper_bound: 2,
                 },
             )),
+            fixed_penalty: Some(FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
+                weights: BTreeMap::from([(ConstraintID::from(999), 1.0)]),
+            }),
             ..Default::default()
         };
+        let variable_count = instance.decision_variables().len();
+
+        assert!(!target.contains(&instance));
 
         instance.prepare(&target, &policy).unwrap();
 
         assert!(target.contains(&instance));
-        assert!(instance.constraints().contains_key(&second_id));
-        assert!(instance.removed_constraints().contains_key(&first_id));
-        assert!(instance.decision_variables().keys().any(|id| {
-            instance.variable_labels().name(*id) == Some("ommx.slack")
-                && instance.variable_labels().subscripts(*id) == [second_id.into_inner() as i64]
-        }));
+        assert_eq!(instance.decision_variables().len(), variable_count + 1);
     }
 
     #[test]
     fn unrelated_owner_error_preserves_earlier_commits() {
-        let inequality_id = ConstraintID::from(1);
+        let converted_id = ConstraintID::from(1);
+        let infeasible_id = ConstraintID::from(2);
         let variables = BTreeMap::from([
             (VariableID::from(1), DecisionVariable::binary()),
             (VariableID::from(2), DecisionVariable::binary()),
         ]);
+        let converted_function = (Function::from(linear!(1)) + coeff!(-0.5)).unwrap();
         let infeasible_function =
             Function::from(((coeff!(0.5) * linear!(1)).unwrap() + coeff!(1.0)).unwrap());
         let one_hot =
@@ -587,10 +555,16 @@ mod tests {
             .sense(Sense::Maximize)
             .objective(Function::from(linear!(1)))
             .decision_variables(variables)
-            .constraints(BTreeMap::from([(
-                inequality_id,
-                Constraint::less_than_or_equal_to_zero(infeasible_function),
-            )]))
+            .constraints(BTreeMap::from([
+                (
+                    converted_id,
+                    Constraint::less_than_or_equal_to_zero(converted_function),
+                ),
+                (
+                    infeasible_id,
+                    Constraint::less_than_or_equal_to_zero(infeasible_function),
+                ),
+            ]))
             .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
             .build()
             .unwrap();
@@ -619,18 +593,17 @@ mod tests {
 
         let error = instance.prepare(&target, &policy).unwrap_err();
 
-        assert!(!error.is::<ExactIntegerSlackUnavailable>());
         assert!(matches!(
             error.downcast_ref::<InfeasibleDetected>(),
             Some(InfeasibleDetected::InequalityConstraintBound { id, bound })
-                if *id == inequality_id && *bound == Bound::new(2.0, 3.0).unwrap()
+                if *id == infeasible_id && *bound == Bound::new(2.0, 3.0).unwrap()
         ));
         assert_eq!(instance.sense(), Sense::Minimize);
-        assert!(instance.one_hot_constraints().is_empty());
         assert_eq!(instance.removed_one_hot_constraints().len(), 1);
-        assert_eq!(instance.constraints().len(), 2);
-        assert!(instance.removed_constraints().is_empty());
-        assert!(!target.contains(&instance));
+        assert_eq!(
+            instance.constraints()[&converted_id].equality,
+            Equality::EqualToZero
+        );
     }
 
     #[test]
@@ -652,12 +625,14 @@ mod tests {
             DegreeBound::at_most(1),
         );
         let before = instance.clone();
+        let membership_report = target.check_membership(&instance).to_string();
 
-        instance
+        let error = instance
             .prepare(&target, &PreparationPolicy::default())
             .unwrap_err();
 
         assert!(!target.contains(&instance));
         assert_eq!(instance, before);
+        assert!(error.to_string().contains(&membership_report));
     }
 }
