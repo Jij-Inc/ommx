@@ -357,6 +357,11 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     Equality.EqualToZero: DegreeBound.at_most(2),
                     Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
                 },
+                indicator_constraint_degree_bounds={
+                    Equality.EqualToZero: DegreeBound.at_most(1),
+                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+                },
+                allows_sos1=True,
                 allowed_senses={Sense.Minimize, Sense.Maximize},
             )
         ]
@@ -366,11 +371,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     def recommended_preparation_policy(cls) -> PreparationPolicy:
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
-                kinds={
-                    SpecialConstraintKind.Indicator,
-                    SpecialConstraintKind.OneHot,
-                    SpecialConstraintKind.Sos1,
-                }
+                kinds={SpecialConstraintKind.OneHot}
             )
         )
 

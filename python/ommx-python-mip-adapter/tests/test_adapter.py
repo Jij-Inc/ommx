@@ -171,3 +171,37 @@ def test_rejects_special_constraints_without_mutating_input() -> None:
     assert InstanceClassMismatch.OneHotConstraintsNotAllowed in mismatch_types
     assert InstanceClassMismatch.Sos1ConstraintsNotAllowed in mismatch_types
     assert instance.to_v2_bytes() == before
+
+
+def test_recommended_preparation_reaches_the_python_mip_input_class() -> None:
+    x = DecisionVariable.binary(0)
+    y = DecisionVariable.continuous(1, lower=0, upper=2)
+    instance = Instance.from_components(
+        decision_variables=[x, y],
+        objective=x + y,
+        constraints={},
+        sense=Sense.Minimize,
+        indicator_constraints={
+            10: IndicatorConstraint(
+                indicator_variable=x,
+                function=y - 1,
+                equality=Equality.LessThanOrEqualToZero,
+            )
+        },
+        one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        sos1_constraints={30: Sos1Constraint(variables=[y])},
+    )
+    input_class = OMMXPythonMIPAdapter.INPUT_CLASS
+    assert input_class is not None
+    assert not input_class.contains(instance)
+
+    policy = OMMXPythonMIPAdapter.recommended_preparation_policy()
+    assert policy.special_constraints is not None
+    assert policy.sense is None
+    assert policy.integer_slack is None
+    assert policy.integer_encoding is None
+    assert policy.fixed_penalty is None
+
+    assert instance.prepare(input_class, policy) is None
+    assert input_class.contains(instance)
+    assert OMMXPythonMIPAdapter.check_applicability(instance).is_applicable

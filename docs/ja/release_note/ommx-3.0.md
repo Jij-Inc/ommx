@@ -19,7 +19,9 @@ in-placeで変更します。Adapterを直接呼び出した場合は引き続�
 
 まずAdapterが推奨するPolicyを取得し、applicationに応じてpublic fieldを編集してから、
 そのAdapterの `INPUT_CLASS` 向けにinstanceをprepareします。例えばHiGHSは、activeな
-Indicator、OneHot、SOS1制約を通常制約へloweringすることを推奨します。
+Indicator、OneHot、SOS1制約を通常制約へloweringすることを推奨します。Python-MIPも
+同じPolicyを推奨します。PySCIPOptはIndicatorとSOS1制約を直接扱えるため、OneHot制約
+だけをloweringすることを推奨します。
 
 ```python
 from ommx_highs_adapter import OMMXHighsAdapter

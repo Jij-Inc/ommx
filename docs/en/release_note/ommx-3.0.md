@@ -19,7 +19,9 @@ adapter calls remain strict and do not transform their input automatically.
 Start with the policy recommended by the adapter, edit any public policy fields
 needed by the application, and then prepare the instance for that adapter's
 `INPUT_CLASS`. For example, HiGHS recommends lowering active Indicator, OneHot,
-and SOS1 constraints into regular constraints:
+and SOS1 constraints into regular constraints. Python-MIP makes the same
+recommendation. PySCIPOpt accepts Indicator and SOS1 constraints directly, so
+it recommends lowering only OneHot constraints:
 
 ```python
 from ommx_highs_adapter import OMMXHighsAdapter
