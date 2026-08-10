@@ -19,8 +19,11 @@ from ommx import (
     InstanceClass,
     InstanceClassClause,
     Kind,
+    PreparationPolicy,
     Sense,
     Solution,
+    SpecialConstraintKind,
+    SpecialConstraintPreparation,
     State,
 )
 from ommx.adapter import (
@@ -585,6 +588,26 @@ class OMMXHighsAdapter(SolverAdapter):
             )
         ]
     )
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Recommend lowering special constraints before using HiGHS.
+
+        HiGHS accepts both optimization senses, Binary, Integer, and Continuous
+        variables, and linear regular constraints directly. Its recommendation
+        therefore enables only lowering for the special-constraint families
+        currently understood by OMMX. The returned policy is fresh and may be
+        edited by the caller before :meth:`Instance.prepare` is invoked.
+        """
+        return PreparationPolicy(
+            special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+                kinds={
+                    SpecialConstraintKind.Indicator,
+                    SpecialConstraintKind.OneHot,
+                    SpecialConstraintKind.Sos1,
+                }
+            )
+        )
 
     def __init__(self, ommx_instance: Instance, *, verbose: bool = False):
         """

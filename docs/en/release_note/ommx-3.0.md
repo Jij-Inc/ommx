@@ -8,7 +8,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🆕 User-controlled `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147))
+### 🆕 User-controlled `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147), [#1152](https://github.com/Jij-Inc/ommx/pull/1152))
 
 In Python SDK v2, solver adapters selected and performed the model conversions
 needed by their solvers. Python SDK v3 makes this an explicit, caller-owned step.
@@ -16,31 +16,32 @@ needed by their solvers. Python SDK v3 makes this an explicit, caller-owned step
 place until it belongs to a requested {class}`~ommx.InstanceClass`; direct
 adapter calls remain strict and do not transform their input automatically.
 
-When an adapter supplies a recommended {class}`~ommx.PreparationPolicy` for its
-`INPUT_CLASS`, use that recommendation as a starting point, change any public
-policy fields needed by the application, and then pass the `INPUT_CLASS` and
-the policy separately to {meth}`~ommx.Instance.prepare`. A policy can also be
-constructed directly:
+Start with the policy recommended by the adapter, edit any public policy fields
+needed by the application, and then prepare the instance for that adapter's
+`INPUT_CLASS`. For example, HiGHS recommends lowering active Indicator, OneHot,
+and SOS1 constraints into regular constraints. Python-MIP makes the same
+recommendation. PySCIPOpt accepts Indicator and SOS1 constraints directly, so
+it recommends lowering only OneHot constraints:
 
 ```python
-from ommx import (
-    IntegerEncodingPreparation,
-    PreparationPolicy,
-    SensePreparation,
-)
+from ommx_highs_adapter import OMMXHighsAdapter
 
-# `target_class` may be an adapter's INPUT_CLASS.
-policy = PreparationPolicy(
-    sense=SensePreparation.as_minimization_problem(),
-)
-# A policy returned by an adapter can be edited in the same way.
-policy.integer_encoding = (
-    IntegerEncodingPreparation.log_encode_all_used_integers()
-)
+input_class = OMMXHighsAdapter.INPUT_CLASS
+assert input_class is not None
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Change public policy fields here when the application needs different choices.
 
-instance.prepare(target_class, policy)
-assert target_class.contains(instance)
+instance.prepare(input_class, policy)
+OMMXHighsAdapter.require_applicable(instance)
+solution = OMMXHighsAdapter.solve(instance)
 ```
+
+{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy` returns a
+fresh, editable policy on every call. The base recommendation enables no
+changes; each adapter may override it with choices suitable for its direct
+input class. A recommendation does not inspect or mutate an instance, execute
+preparation, or guarantee applicability. Applications may also construct a
+{class}`~ommx.PreparationPolicy` directly.
 
 Policy fields let the caller allow special-constraint lowering, minimization
 sense normalization, Integer slack, used-Integer encoding, and fixed-weight
@@ -53,8 +54,8 @@ reached. If the allowed changes are exhausted first,
 {class}`~ommx.InstanceClassMembershipReport` as `error.report`. Errors from an
 individual model change keep their existing Python exception types. Preparation
 does not roll the instance back: changes completed before a later error remain.
-Successful preparation guarantees target membership only. When the target is an
-adapter's `INPUT_CLASS`, the adapter's normal applicability check still applies.
+Successful preparation guarantees target membership only. The adapter's normal
+applicability check still applies, as shown above.
 
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 

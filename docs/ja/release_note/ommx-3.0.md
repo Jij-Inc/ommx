@@ -8,7 +8,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### 🆕 ユーザーが制御する `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147))
+### 🆕 ユーザーが制御する `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147)、[#1152](https://github.com/Jij-Inc/ommx/pull/1152))
 
 Python SDK v2では、solver adapterがsolverに必要なモデル変換を選び、実行していました。
 Python SDK v3では、この操作をユーザーが明示的に制御します。
@@ -17,30 +17,30 @@ Python SDK v3では、この操作をユーザーが明示的に制御します�
 in-placeで変更します。Adapterを直接呼び出した場合は引き続き入力を厳密に検査し、
 暗黙の変換は行いません。
 
-Adapterが `INPUT_CLASS` 向けの推奨 {class}`~ommx.PreparationPolicy` を提供する場合は、
-それを出発点にします。必要に応じてユーザーがpublic fieldを書き換え、`INPUT_CLASS` と
-policyを別々に {meth}`~ommx.Instance.prepare` へ渡します。Policyを直接構築することも
-できます。
+まずAdapterが推奨するPolicyを取得し、applicationに応じてpublic fieldを編集してから、
+そのAdapterの `INPUT_CLASS` 向けにinstanceをprepareします。例えばHiGHSは、activeな
+Indicator、OneHot、SOS1制約を通常制約へloweringすることを推奨します。Python-MIPも
+同じPolicyを推奨します。PySCIPOptはIndicatorとSOS1制約を直接扱えるため、OneHot制約
+だけをloweringすることを推奨します。
 
 ```python
-from ommx import (
-    IntegerEncodingPreparation,
-    PreparationPolicy,
-    SensePreparation,
-)
+from ommx_highs_adapter import OMMXHighsAdapter
 
-# `target_class` にはAdapterのINPUT_CLASSも指定できます。
-policy = PreparationPolicy(
-    sense=SensePreparation.as_minimization_problem(),
-)
-# Adapterが返したpolicyも同じ方法で編集できます。
-policy.integer_encoding = (
-    IntegerEncodingPreparation.log_encode_all_used_integers()
-)
+input_class = OMMXHighsAdapter.INPUT_CLASS
+assert input_class is not None
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Applicationに異なる選択が必要なら、ここでpublic fieldを編集します。
 
-instance.prepare(target_class, policy)
-assert target_class.contains(instance)
+instance.prepare(input_class, policy)
+OMMXHighsAdapter.require_applicable(instance)
+solution = OMMXHighsAdapter.solve(instance)
 ```
+
+{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy` は、呼び出すたびに
+新しい編集可能なPolicyを返します。基底classの推奨では変換を何も有効にせず、各Adapterは
+直接受け取れるinput classに適した選択でoverrideできます。推奨Policyはinstanceを参照・
+変更せず、Preparationを実行せず、Adapter applicabilityも保証しません。
+{class}`~ommx.PreparationPolicy` をapplication側で直接構築することもできます。
 
 Policyでは、特殊制約の通常制約化、最小化へのsense統一、Integer slack、使用中の
 Integer変数のencoding、固定weight penaltyを許可できます。OMMXは有効な変換を
@@ -52,8 +52,8 @@ Integer変数のencoding、固定weight penaltyを許可できます。OMMXは�
 {class}`~ommx.InstanceClassMembershipReport` を取得できます。個々の変換で発生する
 errorは既存のPython exception typeを保ちます。Preparationはinstanceをrollback
 しないため、後のerrorより前に完了した変更は残ります。成功時に保証されるのはtarget
-membershipだけです。targetがAdapterの `INPUT_CLASS` である場合も、Adapterが行う通常の
-applicability checkは引き続き必要です。
+membershipだけです。上の例のとおり、Adapterが行う通常のapplicability checkは
+引き続き必要です。
 
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 

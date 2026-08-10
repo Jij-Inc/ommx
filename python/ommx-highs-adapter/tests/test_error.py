@@ -177,6 +177,40 @@ def test_rejects_special_constraints_without_mutating_input():
     assert instance.to_v2_bytes() == before
 
 
+def test_recommended_preparation_reaches_the_highs_input_class():
+    x = DecisionVariable.binary(0)
+    y = DecisionVariable.continuous(1, lower=0, upper=2)
+    instance = Instance.from_components(
+        decision_variables=[x, y],
+        objective=x + y,
+        constraints={},
+        sense=Sense.Minimize,
+        indicator_constraints={
+            10: IndicatorConstraint(
+                indicator_variable=x,
+                function=y - 1,
+                equality=Equality.LessThanOrEqualToZero,
+            )
+        },
+        one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        sos1_constraints={30: Sos1Constraint(variables=[y])},
+    )
+    input_class = OMMXHighsAdapter.INPUT_CLASS
+    assert input_class is not None
+    assert not input_class.contains(instance)
+
+    policy = OMMXHighsAdapter.recommended_preparation_policy()
+    assert policy.special_constraints is not None
+    assert policy.sense is None
+    assert policy.integer_slack is None
+    assert policy.integer_encoding is None
+    assert policy.fixed_penalty is None
+
+    assert instance.prepare(input_class, policy) is None
+    assert input_class.contains(instance)
+    assert OMMXHighsAdapter.check_applicability(instance).is_applicable
+
+
 def test_error_infeasible_constant_equality_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[],

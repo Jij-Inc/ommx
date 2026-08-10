@@ -25,8 +25,11 @@ from ommx import (
     InstanceClass,
     InstanceClassClause,
     Kind,
+    PreparationPolicy,
     Sense,
     Solution,
+    SpecialConstraintKind,
+    SpecialConstraintPreparation,
     State,
     ToState,
 )
@@ -517,6 +520,21 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
         ]
     )
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Recommend lowering OneHot constraints before using PySCIPOpt.
+
+        PySCIPOpt accepts Indicator and SOS1 constraints directly, so this
+        recommendation preserves those families and lowers only OneHot
+        constraints. The returned policy is fresh and may be edited by the
+        caller before :meth:`Instance.prepare` is invoked.
+        """
+        return PreparationPolicy(
+            special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+                kinds={SpecialConstraintKind.OneHot}
+            )
+        )
 
     def __init__(
         self,

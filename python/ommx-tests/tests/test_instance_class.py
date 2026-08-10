@@ -16,7 +16,9 @@ from ommx import (
     InstanceClassMismatch,
     Kind,
     OneHotConstraint,
+    PreparationPolicy,
     Sense,
+    SensePreparation,
     Sos1Constraint,
     SpecialConstraintKind,
 )
@@ -332,6 +334,18 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
 
 def test_solver_adapter_has_no_implicit_input_transformation_hook() -> None:
     assert "__init__" not in SolverAdapter.__dict__
+
+
+def test_solver_adapter_returns_a_fresh_empty_preparation_recommendation() -> None:
+    first = SolverAdapter.recommended_preparation_policy()
+    second = SolverAdapter.recommended_preparation_policy()
+
+    assert first == PreparationPolicy()
+    assert second == PreparationPolicy()
+    assert first is not second
+
+    first.sense = SensePreparation.as_minimization_problem()
+    assert second.sense is None
 
 
 def test_solver_adapter_layers_preconditions_and_preserves_the_caller() -> None:

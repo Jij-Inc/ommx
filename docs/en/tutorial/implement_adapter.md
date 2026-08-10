@@ -286,6 +286,10 @@ class SolverAdapter(ABC):
     INPUT_CLASS: InstanceClass | None = None
 
     @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        return PreparationPolicy()
+
+    @classmethod
     @abstractmethod
     def solve(
         cls,
@@ -312,36 +316,74 @@ This abstract base class assumes the following two use cases:
 
 The `solve` class method may define additional adapter-specific keyword options in concrete adapters. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When `Run.log_solve(..., store_diagnostics=True)` is used, adapters may record adapter-defined diagnostic reports into that sink; `None` means diagnostics are disabled.
 
-#### Input Class and Explicit Constraint Lowering
+#### Input Class and Recommended Preparation
 
 An adapter declares the structural set of exact `Instance` values it can receive with `INPUT_CLASS`. `check_applicability()` evaluates membership first and then adapter-owned preconditions without mutating the caller's instance; `require_applicable()` raises with the same structured report when either condition fails.
 
-`SolverAdapter` does not prescribe how a concrete adapter processes an accepted input and does not mutate the instance in a base constructor. A concrete adapter may explicitly call {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` as an implementation detail. Its `kinds_to_lower` argument uses these special-constraint family selectors:
+Direct adapter APIs are strict: they do not transform an input to make it applicable. Instead, an adapter may override `recommended_preparation_policy()` to return a fresh, caller-editable {class}`~ommx.PreparationPolicy` for its `INPUT_CLASS`. The recommendation does not inspect or mutate an instance, run preparation, or guarantee applicability. `INPUT_CLASS` and the policy remain independent inputs to {meth}`~ommx.Instance.prepare`.
+
+A recommendation can enable special-constraint lowering with these family selectors:
 
 - `SpecialConstraintKind.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
 - `SpecialConstraintKind.OneHot`: Exactly one of a set of binary variables is 1
 - `SpecialConstraintKind.Sos1`: At most one of a set of variables is non-zero
 
-Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. `lower_special_constraints` converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot), mutates the instance in place, and logs each lowering at `INFO` level. Neither this property nor lowering establishes `INPUT_CLASS` membership or adapter applicability.
+Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. The selected Preparation phase delegates to {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`, which converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot). The owner operation still defines its validation and mathematical meaning.
 
 ```{important}
-`INPUT_CLASS` describes the exact value received by the adapter, regardless of its internal implementation. If a caller explicitly lowers an instance before choosing an adapter, the result is a different input value and must be checked again with `check_applicability()` or `require_applicable()`.
+`INPUT_CLASS` describes the exact value received by the adapter. Preparation is owned by the caller and changes that value in place. Successful preparation guarantees `INPUT_CLASS` membership only; the adapter must still run its normal applicability check for adapter-owned preconditions.
 ```
 
 Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SolverAdapter
-from ommx import SpecialConstraintKind
+from ommx import (
+    DegreeBound,
+    Equality,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    PreparationPolicy,
+    Sense,
+    SpecialConstraintKind,
+    SpecialConstraintPreparation,
+)
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
+    INPUT_CLASS = InstanceClass(
+        [
+            InstanceClassClause(
+                label="tutorial-quadratic-mip",
+                allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
+                objective_degree_bound=DegreeBound.at_most(2),
+                regular_constraint_degree_bounds={
+                    Equality.EqualToZero: DegreeBound.at_most(2),
+                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
+                },
+                indicator_constraint_degree_bounds={
+                    Equality.EqualToZero: DegreeBound.at_most(1),
+                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+                },
+                allows_sos1=True,
+                allowed_senses={Sense.Minimize, Sense.Maximize},
+            )
+        ]
+    )
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        return PreparationPolicy(
+            special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+                kinds={SpecialConstraintKind.OneHot}
+            )
+        )
+
     def __init__(
         self,
         ommx_instance: Instance,
     ):
-        # This adapter handles Indicator and SOS1 directly, and explicitly
-        # lowers OneHot constraints.
-        ommx_instance.lower_special_constraints({SpecialConstraintKind.OneHot})
+        self.require_applicable(ommx_instance)
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
@@ -393,6 +435,18 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             solution.optimality = Solution.OPTIMAL
 
         return solution
+```
+
+The caller decides whether to use and modify the recommendation before invoking the strict adapter API:
+
+```python
+input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
+assert input_class is not None
+policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
+# Edit public policy fields here when the application needs different choices.
+instance.prepare(input_class, policy)
+OMMXPySCIPOptAdapter.require_applicable(instance)
+solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
 This completes the Solver Adapter 🎉
@@ -606,7 +660,7 @@ sample_set.summary
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. Declare the structural input condition with `INPUT_CLASS`, then use `check_applicability()` or `require_applicable()` to evaluate membership and adapter-owned preconditions. If lowering is needed, make it an explicit concrete-adapter or caller operation; the base Adapter contract never mutates the input.
+2. Declare the strict structural input condition with `INPUT_CLASS`. If useful, return a fresh caller-editable policy from `recommended_preparation_policy()`; the caller applies it with `Instance.prepare()` before the adapter performs its normal applicability check.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.
