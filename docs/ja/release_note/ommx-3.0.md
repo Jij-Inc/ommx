@@ -8,6 +8,38 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🆕 `InstanceClass` membershipへのin-place Preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147))
+
+レビュー済みのRust Preparation interpreterをPythonから利用できるようになりました。
+{class}`~ommx.PreparationPolicy` には、特殊制約、最適化sense、Integer slack、
+used Integer encoding、fixed-weight penaltyという5つのoptional phaseを、
+それぞれ高々1つ選択して組み合わせます。各phaseのfactoryは対応するRust
+`Instance` owner operationの引数名と意味を保持し、validationは引き続きowner
+operationが所有します。canonicalな適用順序もRustが所有します。
+
+```python
+from ommx import (
+    IntegerEncodingPreparation,
+    PreparationPolicy,
+    SensePreparation,
+)
+
+policy = PreparationPolicy(
+    sense=SensePreparation.as_minimization_problem(),
+    integer_encoding=(
+        IntegerEncodingPreparation.log_encode_all_used_integers()
+    ),
+)
+instance.prepare(input_class, policy)
+assert input_class.contains(instance)
+```
+
+{meth}`~ommx.Instance.prepare` は同じinstanceをin-placeに変更し、渡した
+{class}`~ommx.InstanceClass` がそのinstanceを含む場合にだけ `None` を返します。
+成功時にAdapter固有の追加保証はありません。既存owner exceptionのPython mappingは
+維持され、Preparation全体はtransactionではないため、後のphaseが失敗しても
+先行phaseでcommit済みの変更は残ります。
+
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
 Function、polynomial、constraint、named function、`Instance` のevaluation APIは、

@@ -8,6 +8,39 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 In-place Preparation for `InstanceClass` membership ([#1147](https://github.com/Jij-Inc/ommx/pull/1147))
+
+The reviewed Rust Preparation interpreter is now available in Python. A
+{class}`~ommx.PreparationPolicy` combines at most one selected operation for
+each of five optional phases: special constraints, optimization sense, Integer
+slack, used-Integer encoding, and fixed-weight penalty. Phase factories retain
+the corresponding Rust `Instance` owner operation's argument names and
+meanings; validation remains with those owner operations, while Rust owns their
+canonical application order.
+
+```python
+from ommx import (
+    IntegerEncodingPreparation,
+    PreparationPolicy,
+    SensePreparation,
+)
+
+policy = PreparationPolicy(
+    sense=SensePreparation.as_minimization_problem(),
+    integer_encoding=(
+        IntegerEncodingPreparation.log_encode_all_used_integers()
+    ),
+)
+instance.prepare(input_class, policy)
+assert input_class.contains(instance)
+```
+
+{meth}`~ommx.Instance.prepare` mutates the same instance and returns `None`
+only after the supplied {class}`~ommx.InstanceClass` contains it. Success adds
+no Adapter-specific guarantee. Existing owner exceptions retain their Python
+mappings, and Preparation is not globally transactional: changes committed by
+an earlier phase remain if a later phase fails.
+
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
 Function, polynomial, constraint, named-function, and `Instance` evaluation
