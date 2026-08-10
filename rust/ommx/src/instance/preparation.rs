@@ -1,4 +1,4 @@
-use super::{Instance, SpecialConstraintKinds};
+use super::{ExactIntegerSlackUnavailable, Instance, SpecialConstraintKinds};
 use crate::{ATol, ConstraintID, Equality, InstanceClass};
 use std::collections::BTreeMap;
 
@@ -31,14 +31,24 @@ pub enum SensePreparation {
 ///
 /// Selecting this step permits Integer slack introduction. Its variant states
 /// whether active regular constraints may remain inequalities or must become
-/// equalities. Numeric and Instance-dependent validation remains owned by the
+/// equalities. Both variants first attempt exact conversion to equality.
+/// Numeric and Instance-dependent validation remains owned by the
 /// corresponding [`Instance`] operations.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntegerSlackPreparation {
-    /// Add Integer slack while allowing active regular constraints to remain
-    /// inequalities.
+    /// Prefer equality conversion while allowing active regular constraints to
+    /// remain inequalities when exact conversion is unavailable.
+    ///
+    /// [`Instance::convert_inequality_to_equality_with_integer_slack`] is
+    /// attempted first. Only [`ExactIntegerSlackUnavailable`] selects
+    /// [`Instance::add_integer_slack_to_inequality`]; every other owner error
+    /// is propagated unchanged.
     AllowInequality {
+        /// Maximum finite range accepted for an exact Integer slack variable.
+        max_integer_range: u64,
+        /// Absolute tolerance used to normalize bounds to integers.
+        atol: ATol,
         /// Upper bound passed to
         /// [`Instance::add_integer_slack_to_inequality`].
         slack_upper_bound: u64,
@@ -181,9 +191,25 @@ impl PreparationStep for IntegerSlackPreparation {
 
         for id in inequality_ids {
             match self {
-                Self::AllowInequality { slack_upper_bound } => {
-                    instance
-                        .add_integer_slack_to_inequality(id.into_inner(), *slack_upper_bound)?;
+                Self::AllowInequality {
+                    max_integer_range,
+                    atol,
+                    slack_upper_bound,
+                } => {
+                    match instance.convert_inequality_to_equality_with_integer_slack(
+                        id.into_inner(),
+                        *max_integer_range,
+                        *atol,
+                    ) {
+                        Ok(()) => {}
+                        Err(error) if error.is::<ExactIntegerSlackUnavailable>() => {
+                            instance.add_integer_slack_to_inequality(
+                                id.into_inner(),
+                                *slack_upper_bound,
+                            )?;
+                        }
+                        Err(error) => return Err(error),
+                    }
                 }
                 Self::RequireEquality {
                     max_integer_range,
@@ -250,11 +276,12 @@ impl Instance {
     /// adapter-specific applicability remains outside this operation.
     ///
     /// Active regular inequalities are processed in ascending constraint-ID
-    /// order. Integer slack Preparation either allows them to remain
-    /// inequalities or requires them to become equalities, according to the
-    /// selected [`IntegerSlackPreparation`] variant. Owner errors are
-    /// propagated unchanged; Preparation does not weaken the requested
-    /// postcondition by selecting another operation.
+    /// order. Integer slack Preparation first attempts to convert them to
+    /// equalities. [`IntegerSlackPreparation::AllowInequality`] selects the
+    /// inequality-preserving owner operation only for
+    /// [`ExactIntegerSlackUnavailable`], while
+    /// [`IntegerSlackPreparation::RequireEquality`] propagates that signal.
+    /// Every other owner error is propagated unchanged.
     ///
     /// Preparation has no global transaction. Each owner operation retains its
     /// own mutation and failure semantics, and changes committed by earlier
@@ -417,6 +444,31 @@ mod tests {
     }
 
     #[test]
+    fn allowing_inequality_still_prefers_an_equality_when_available() {
+        let mut instance = integer_inequality_instance();
+        let target = InstanceClassClause::new(
+            "integer equality",
+            BTreeSet::from([Kind::Integer]),
+            DegreeBound::at_most(1),
+            BTreeSet::from([Sense::Minimize]),
+        )
+        .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))
+        .into();
+        let policy = PreparationPolicy {
+            integer_slack: Some(IntegerSlackPreparation::AllowInequality {
+                max_integer_range: 32,
+                atol: ATol::default(),
+                slack_upper_bound: 2,
+            }),
+            ..Default::default()
+        };
+
+        instance.prepare(&target, &policy).unwrap();
+
+        assert!(target.contains(&instance));
+    }
+
+    #[test]
     fn integer_slack_phase_completes_before_membership_stops_later_phases() {
         let variable = VariableID::from(1);
         let first_id = ConstraintID::from(1);
@@ -458,6 +510,8 @@ mod tests {
         .into();
         let policy = PreparationPolicy {
             integer_slack: Some(IntegerSlackPreparation::AllowInequality {
+                max_integer_range: 1,
+                atol: ATol::default(),
                 slack_upper_bound: 2,
             }),
             fixed_penalty: Some(FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
@@ -476,7 +530,7 @@ mod tests {
     }
 
     #[test]
-    fn unrelated_owner_error_preserves_earlier_commits() {
+    fn allowing_inequality_propagates_unrelated_error_after_earlier_commits() {
         let converted_id = ConstraintID::from(1);
         let infeasible_id = ConstraintID::from(2);
         let variables = BTreeMap::from([
@@ -513,9 +567,10 @@ mod tests {
                 kinds: BTreeSet::from([SpecialConstraintKind::OneHot]),
             }),
             sense: Some(SensePreparation::AsMinimizationProblem),
-            integer_slack: Some(IntegerSlackPreparation::RequireEquality {
+            integer_slack: Some(IntegerSlackPreparation::AllowInequality {
                 max_integer_range: 32,
                 atol: ATol::default(),
+                slack_upper_bound: 2,
             }),
             ..Default::default()
         };
