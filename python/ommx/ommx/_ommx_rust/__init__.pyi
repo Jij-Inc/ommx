@@ -19,6 +19,7 @@ import typing_extensions
 from typing import TypeAlias
 
 __all__ = [
+    "AddIntegerSlackToInequalityArguments",
     "AnonymousArtifactRef",
     "ArchiveDescriptor",
     "ArchiveManifest",
@@ -33,6 +34,7 @@ __all__ = [
     "AutosavePolicy",
     "Bound",
     "Constraint",
+    "ConvertInequalityToEqualityWithIntegerSlackArguments",
     "DecisionVariable",
     "DecisionVariableRole",
     "DegreeBound",
@@ -46,6 +48,7 @@ __all__ = [
     "Experiment",
     "ExperimentCheckpointRef",
     "ExperimentRef",
+    "FixedPenaltyPreparation",
     "Function",
     "GcBlob",
     "GcInvalidManifest",
@@ -61,6 +64,8 @@ __all__ = [
     "InstanceClassMembershipReport",
     "InstanceClassMismatch",
     "InstanceDescription",
+    "IntegerEncodingPreparation",
+    "IntegerSlackPreparation",
     "InvalidRemoteArtifactError",
     "Kind",
     "Linear",
@@ -74,6 +79,7 @@ __all__ = [
     "Parameters",
     "ParametricInstance",
     "Polynomial",
+    "PreparationPolicy",
     "Provenance",
     "ProvenanceKind",
     "PruneAnonymousReport",
@@ -99,10 +105,12 @@ __all__ = [
     "ScalarLike",
     "SealedRun",
     "Sense",
+    "SensePreparation",
     "Solution",
     "Solve",
     "Sos1Constraint",
     "SpecialConstraintKind",
+    "SpecialConstraintPreparation",
     "State",
     "ToFunction",
     "ToSamples",
@@ -155,6 +163,25 @@ VariableIDLike: TypeAlias = builtins.int | DecisionVariable | AttachedDecisionVa
 r"""
 A variable ID or decision-variable object. APIs using this type consume only the OMMX variable identity, not kind or bound metadata.
 """
+
+@typing.final
+class AddIntegerSlackToInequalityArguments:
+    r"""
+    Arguments for approximate Integer-slack conversion during Preparation.
+
+    ``Instance.prepare`` supplies each active inequality's constraint ID. This
+    value retains the name and meaning of the remaining
+    :meth:`Instance.add_integer_slack_to_inequality` argument.
+    """
+    @property
+    def slack_upper_bound(self) -> builtins.int:
+        r"""
+        Upper bound passed to approximate Integer-slack conversion.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls, *, slack_upper_bound: builtins.int
+    ) -> AddIntegerSlackToInequalityArguments: ...
 
 @typing.final
 class AnonymousArtifactRef:
@@ -1480,6 +1507,35 @@ class Constraint:
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
 
 @typing.final
+class ConvertInequalityToEqualityWithIntegerSlackArguments:
+    r"""
+    Arguments for exact Integer-slack conversion during Preparation.
+
+    ``Instance.prepare`` supplies each active inequality's constraint ID. These
+    values retain the names and meanings of the remaining arguments of the
+    underlying Rust ``Instance`` owner operation. Preparation exposes its
+    tolerance argument even though the standalone Python method uses the
+    default tolerance.
+    """
+    @property
+    def max_integer_range(self) -> builtins.int:
+        r"""
+        Maximum finite range accepted for an exact Integer slack variable.
+        """
+    @property
+    def atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance used to normalize bounds to integers.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        *,
+        max_integer_range: builtins.int,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> ConvertInequalityToEqualityWithIntegerSlackArguments: ...
+
+@typing.final
 class DecisionVariable:
     r"""
     Decision variable in an optimization problem.
@@ -2458,6 +2514,30 @@ class ExperimentRef:
         Complete Experiment config JSON stored by `config_digest`.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class FixedPenaltyPreparation:
+    r"""
+    Selection for the fixed-weight penalty Preparation phase.
+
+    Exactly one fixed-weight owner operation is selected. Weight and
+    constraint-ID validation remains owned by that operation.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def penalty_method_with_fixed_weights(
+        *, weights: typing.Mapping[builtins.int, builtins.float]
+    ) -> FixedPenaltyPreparation:
+        r"""
+        Select the keyed fixed-weight penalty owner operation.
+        """
+    @staticmethod
+    def uniform_penalty_method_with_fixed_weight(
+        *, weight: builtins.float
+    ) -> FixedPenaltyPreparation:
+        r"""
+        Select the uniform fixed-weight penalty owner operation.
+        """
 
 @typing.final
 class Function:
@@ -4720,6 +4800,19 @@ class Instance:
         True
         ```
         """
+    def prepare(self, input_class: InstanceClass, policy: PreparationPolicy) -> None:
+        r"""
+        Prepare this instance in place for membership in ``input_class``.
+
+        ``policy`` selects existing :class:`Instance` owner operations. The
+        method stops once ``input_class`` contains this instance and returns
+        ``None``. Success guarantees only that membership; Adapter-specific
+        applicability remains a separate check.
+
+        Preparation is not globally transactional. Changes committed by an
+        earlier owner operation remain if a later operation raises an error.
+        Existing Rust owner signals retain their Python exception mappings.
+        """
 
 @typing.final
 class InstanceClass:
@@ -5023,6 +5116,53 @@ class InstanceDescription:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> InstanceDescription: ...
     def __deepcopy__(self, _memo: typing.Any) -> InstanceDescription: ...
+
+@typing.final
+class IntegerEncodingPreparation:
+    r"""
+    Selection for the used-Integer encoding Preparation phase.
+
+    Exactly one encoding owner operation is selected. Validation and mutation
+    semantics remain owned by that operation.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def log_encode_all_used_integers(
+        *, atol: typing.Optional[builtins.float] = None
+    ) -> IntegerEncodingPreparation:
+        r"""
+        Select the underlying Rust ``log_encode_all_used_integers`` owner
+        operation. On success, no used Integer decision variables remain.
+        """
+
+@typing.final
+class IntegerSlackPreparation:
+    r"""
+    Selection for the Integer-slack Preparation phase.
+
+    Exactly one primary owner operation is selected. Exact conversion may carry
+    an approximate fallback, which is invoked only for
+    :class:`ExactIntegerSlackError`; every other owner error is propagated.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def convert_inequality_to_equality_with_integer_slack(
+        *,
+        arguments: ConvertInequalityToEqualityWithIntegerSlackArguments,
+        on_exact_integer_slack_unavailable: typing.Optional[
+            AddIntegerSlackToInequalityArguments
+        ] = None,
+    ) -> IntegerSlackPreparation:
+        r"""
+        Select exact Integer-slack conversion with an optional typed fallback.
+        """
+    @staticmethod
+    def add_integer_slack_to_inequality(
+        *, arguments: AddIntegerSlackToInequalityArguments
+    ) -> IntegerSlackPreparation:
+        r"""
+        Select :meth:`Instance.add_integer_slack_to_inequality` directly.
+        """
 
 class InvalidRemoteArtifactError(RemoteArtifactError):
     r"""
@@ -6082,6 +6222,68 @@ class Polynomial:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
+
+@typing.final
+class PreparationPolicy:
+    r"""
+    Optional phases interpreted by :meth:`Instance.prepare`.
+
+    Each property independently selects at most one well-formed phase. Fields
+    may be combined freely, although owner validation and target membership can
+    still make a combination fail for a particular :class:`Instance`.
+
+    ``Instance.prepare`` applies selected phases at most once in the canonical
+    Rust-owned order: special constraints, optimization sense, Integer slack,
+    Integer encoding, then fixed penalty. All phases are disabled by default.
+    Future phases will also default to disabled.
+
+    Construct the table with keyword arguments or assign its public properties:
+
+    ```python
+    from ommx import PreparationPolicy, SensePreparation
+
+    policy = PreparationPolicy()
+    policy.sense = SensePreparation.as_minimization_problem()
+    ```
+    """
+    @property
+    def special_constraints(self) -> typing.Optional[SpecialConstraintPreparation]: ...
+    @special_constraints.setter
+    def special_constraints(
+        self, value: typing.Optional[SpecialConstraintPreparation]
+    ) -> None: ...
+    @property
+    def sense(self) -> typing.Optional[SensePreparation]: ...
+    @sense.setter
+    def sense(self, value: typing.Optional[SensePreparation]) -> None: ...
+    @property
+    def integer_slack(self) -> typing.Optional[IntegerSlackPreparation]: ...
+    @integer_slack.setter
+    def integer_slack(
+        self, value: typing.Optional[IntegerSlackPreparation]
+    ) -> None: ...
+    @property
+    def integer_encoding(self) -> typing.Optional[IntegerEncodingPreparation]: ...
+    @integer_encoding.setter
+    def integer_encoding(
+        self, value: typing.Optional[IntegerEncodingPreparation]
+    ) -> None: ...
+    @property
+    def fixed_penalty(self) -> typing.Optional[FixedPenaltyPreparation]: ...
+    @fixed_penalty.setter
+    def fixed_penalty(
+        self, value: typing.Optional[FixedPenaltyPreparation]
+    ) -> None: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        *,
+        special_constraints: typing.Optional[SpecialConstraintPreparation] = None,
+        sense: typing.Optional[SensePreparation] = None,
+        integer_slack: typing.Optional[IntegerSlackPreparation] = None,
+        integer_encoding: typing.Optional[IntegerEncodingPreparation] = None,
+        fixed_penalty: typing.Optional[FixedPenaltyPreparation] = None,
+    ) -> PreparationPolicy: ...
 
 @typing.final
 class Provenance:
@@ -7405,6 +7607,21 @@ class SealedRun:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class SensePreparation:
+    r"""
+    Selection for the optimization-sense Preparation phase.
+
+    Construct a value with an owner-operation factory. Validation and mutation
+    semantics remain owned by that :class:`Instance` operation.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def as_minimization_problem() -> SensePreparation:
+        r"""
+        Select :meth:`Instance.as_minimization_problem`.
+        """
+
+@typing.final
 class Solution:
     r"""
     Python SDK domain type for evaluated optimization results.
@@ -7932,6 +8149,23 @@ class Sos1Constraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Sos1Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Sos1Constraint: ...
+
+@typing.final
+class SpecialConstraintPreparation:
+    r"""
+    Selection for the special-constraint Preparation phase.
+
+    Construct a value with an owner-operation factory. Validation and mutation
+    semantics remain owned by that :class:`Instance` operation.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def lower_special_constraints(
+        *, kinds: builtins.set[SpecialConstraintKind]
+    ) -> SpecialConstraintPreparation:
+        r"""
+        Select :meth:`Instance.lower_special_constraints`.
+        """
 
 @typing.final
 class State:
