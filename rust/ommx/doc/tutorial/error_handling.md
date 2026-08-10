@@ -66,6 +66,11 @@ returns the typed error directly):
   caller may explicitly choose another mathematical operation or postcondition.
   Contract, allocation, substitution, and arithmetic failures are not folded
   into these signals.
+- [`PreparationTargetNotReached`](crate::PreparationTargetNotReached) — reports
+  that all configured Preparation phases completed without establishing the
+  target [`InstanceClass`](crate::InstanceClass) membership. Callers can inspect
+  its typed membership report before adding phases, revising the target class,
+  or reporting the remaining mismatches.
 
 Evaluation does not define an umbrella error type. Caller-provided numeric
 validation reuses [`DecisionVariableError`](crate::DecisionVariableError), and

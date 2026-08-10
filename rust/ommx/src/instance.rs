@@ -37,7 +37,7 @@ pub use builder::*;
 pub use parametric_builder::*;
 pub use preparation::{
     FixedPenaltyPreparation, IntegerEncodingPreparation, IntegerSlackPreparation,
-    PreparationPolicy, SensePreparation, SpecialConstraintPreparation,
+    PreparationPolicy, PreparationTargetNotReached, SensePreparation, SpecialConstraintPreparation,
 };
 pub use stats::*;
 
