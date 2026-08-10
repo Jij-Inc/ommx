@@ -341,7 +341,8 @@ Unknown, fixed, or non-Integer variables and auxiliary-allocation or
 substitution failures remain ordinary errors. Exact integer-slack callers can
 similarly downcast to
 [`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) before
-selecting an explicitly approximate transformation.
+selecting a different operation that does not require the inequality to become
+an equality.
 
 **Moved / renamed error types:**
 

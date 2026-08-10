@@ -63,9 +63,9 @@ returns the typed error directly):
 - [`LogEncodingUnavailable`](crate::LogEncodingUnavailable) and
   [`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) — identify
   the narrow cases where an exact encoding operation is unavailable and a
-  caller may explicitly choose another mathematical operation. Contract,
-  allocation, substitution, and arithmetic failures are not folded into these
-  signals.
+  caller may explicitly choose another mathematical operation or postcondition.
+  Contract, allocation, substitution, and arithmetic failures are not folded
+  into these signals.
 
 Evaluation does not define an umbrella error type. Caller-provided numeric
 validation reuses [`DecisionVariableError`](crate::DecisionVariableError), and
@@ -90,12 +90,16 @@ match instance.propagate(&state, atol) {
 }
 ```
 
-For example, an Adapter preparation can select an approximate slack only for
-the exact-operation signal while continuing to propagate unrelated failures:
+For example, a caller that does not require the inequality to become an
+equality can explicitly select the inequality-preserving Integer slack
+operation after the exact-operation signal, while continuing to propagate
+unrelated failures:
 
 ```ignore
 match instance.convert_inequality_to_equality_with_integer_slack(id, 32, atol) {
     Err(e) if e.is::<ommx::ExactIntegerSlackUnavailable>() => {
+        // This operation keeps the relation as an inequality. It is not an
+        // approximate representation of the original feasible set.
         instance.add_integer_slack_to_inequality(id, 32)?;
     }
     Err(e) => return Err(e),
@@ -107,8 +111,8 @@ If exact integer-slack conversion cannot normalize the coefficients, the same
 error chain retains both the outer
 [`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) signal
 and its inner [`ContentFactorError`](crate::ContentFactorError). Callers can
-therefore choose an approximate transformation from the outer operation signal
-or change the coefficients based on the narrower cause.
+therefore choose an inequality-preserving transformation from the outer
+operation signal or change the coefficients based on the narrower cause.
 
 Protobuf wire decoding and the [`Parse`](crate::Parse) trait share the
 [`ParseError`](crate::ParseError) signal. Public byte decoders preserve wire
