@@ -7,80 +7,6 @@
       "items": [
         {
           "kind": "Class",
-          "name": "AddIntegerSlackToInequalityArguments",
-          "doc": "Arguments for approximate Integer-slack conversion during Preparation.\n\n``Instance.prepare`` supplies each active inequality's constraint ID. This\nvalue retains the name and meaning of the remaining\n:meth:`Instance.add_integer_slack_to_inequality` argument.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__new__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "slack_upper_bound",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "AddIntegerSlackToInequalityArguments",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "slack_upper_bound",
-              "doc": "Upper bound passed to approximate Integer-slack conversion.",
-              "type_": {
-                "display": "int",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "AttachedConstraint",
           "doc": "Attached constraint — a write-through handle bound to a host\n({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).\n\n`AttachedConstraint` is returned by `Instance.add_constraint` /\n`ParametricInstance.add_constraint` and by their `constraints[id]`\ngetters. Unlike {class}`~ommx.Constraint`, which is a snapshot, reads\npull live data from the parent host and context setters write through\nto its SoA context store. Two `AttachedConstraint` instances pointing\nat the same id on the same host observe the same state.\n\nThe handle keeps the parent host alive through a refcount; drop the\nwrapper to release the back-reference.",
           "bases": [],
@@ -4043,109 +3969,6 @@
                     "children": []
                   }
                 ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "ConvertInequalityToEqualityWithIntegerSlackArguments",
-          "doc": "Arguments for exact Integer-slack conversion during Preparation.\n\n``Instance.prepare`` supplies each active inequality's constraint ID. These\nvalues retain the names and meanings of the remaining arguments of the\nunderlying Rust ``Instance`` owner operation. Preparation exposes its\ntolerance argument even though the standalone Python method uses the\ndefault tolerance.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__new__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "max_integer_range",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "atol",
-                      "type_": {
-                        "display": "Optional[float]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
-                    }
-                  ],
-                  "return_type": {
-                    "display": "ConvertInequalityToEqualityWithIntegerSlackArguments",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "atol",
-              "doc": "Absolute tolerance used to normalize bounds to integers.",
-              "type_": {
-                "display": "float",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "max_integer_range",
-              "doc": "Maximum finite range accepted for an exact Integer slack variable.",
-              "type_": {
-                "display": "int",
-                "link_target": null,
-                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -12818,7 +12641,7 @@
         {
           "kind": "Class",
           "name": "IntegerSlackPreparation",
-          "doc": "Selection for the Integer-slack Preparation phase.\n\nExactly one primary owner operation is selected. Exact conversion may carry\nan approximate fallback, which is invoked only for\n:class:`ExactIntegerSlackError`; every other owner error is propagated.",
+          "doc": "Integer-slack Preparation for active regular inequalities.\n\nPreparation first attempts exact conversion to equality using\n``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the\nconstraint to become an equality or be removed as trivially satisfied, so\n:class:`ExactIntegerSlackError` is propagated. An integer value permits the\nconstraint to remain an inequality: only that signal selects the\ninequality-preserving owner operation with this upper bound. The latter is\nnot an approximation of the original feasible set. Every other owner error\nis propagated unchanged.",
           "bases": [],
           "methods": [
             {
@@ -12848,54 +12671,46 @@
               "deprecated": null
             },
             {
-              "name": "add_integer_slack_to_inequality",
-              "doc": "Select :meth:`Instance.add_integer_slack_to_inequality` directly.",
+              "name": "__new__",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [
                     {
-                      "name": "arguments",
+                      "name": "max_integer_range",
                       "type_": {
-                        "display": "AddIntegerSlackToInequalityArguments",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "IntegerSlackPreparation",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "convert_inequality_to_equality_with_integer_slack",
-              "doc": "Select exact Integer-slack conversion with an optional typed fallback.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "arguments",
-                      "type_": {
-                        "display": "ConvertInequalityToEqualityWithIntegerSlackArguments",
+                        "display": "int",
                         "link_target": null,
                         "children": []
                       },
                       "default": null
                     },
                     {
-                      "name": "on_exact_integer_slack_unavailable",
+                      "name": "atol",
                       "type_": {
-                        "display": "Optional[AddIntegerSlackToInequalityArguments]",
+                        "display": "Optional[float]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "AddIntegerSlackToInequalityArguments",
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "slack_upper_bound",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
                             "link_target": null,
                             "children": []
                           }
@@ -12918,7 +12733,47 @@
               "deprecated": null
             }
           ],
-          "attributes": [],
+          "attributes": [
+            {
+              "name": "atol",
+              "doc": "Absolute tolerance used to normalize bounds to integers.",
+              "type_": {
+                "display": "float",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "max_integer_range",
+              "doc": "Maximum finite range accepted for exact Integer slack.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "slack_upper_bound",
+              "doc": "Optional upper bound for inequality-preserving Integer slack.\n\n``None`` requires equality. An integer permits the inequality-preserving\nowner operation only after :class:`ExactIntegerSlackError`.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
           "deprecated": null
         },
         {
@@ -33744,7 +33599,6 @@
     }
   },
   "export_map": {
-    "ommx.AddIntegerSlackToInequalityArguments": "ommx",
     "ommx.AttachedConstraint": "ommx",
     "ommx.AttachedDecisionVariable": "ommx",
     "ommx.AttachedIndicatorConstraint": "ommx",
@@ -33752,7 +33606,6 @@
     "ommx.AttachedSos1Constraint": "ommx",
     "ommx.Bound": "ommx",
     "ommx.Constraint": "ommx",
-    "ommx.ConvertInequalityToEqualityWithIntegerSlackArguments": "ommx",
     "ommx.DecisionVariable": "ommx",
     "ommx.DecisionVariableRole": "ommx",
     "ommx.DegreeBound": "ommx",

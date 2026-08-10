@@ -2,7 +2,6 @@
 # ruff: noqa: F401
 
 from ommx._ommx_rust import (
-    AddIntegerSlackToInequalityArguments,
     AttachedConstraint,
     AttachedDecisionVariable,
     AttachedIndicatorConstraint,
@@ -10,7 +9,6 @@ from ommx._ommx_rust import (
     AttachedSos1Constraint,
     Bound,
     Constraint,
-    ConvertInequalityToEqualityWithIntegerSlackArguments,
     DecisionVariable,
     DecisionVariableRole,
     DegreeBound,
@@ -70,7 +68,6 @@ from ommx._ommx_rust import (
 )
 
 __all__ = [
-    "AddIntegerSlackToInequalityArguments",
     "AttachedConstraint",
     "AttachedDecisionVariable",
     "AttachedIndicatorConstraint",
@@ -78,7 +75,6 @@ __all__ = [
     "AttachedSos1Constraint",
     "Bound",
     "Constraint",
-    "ConvertInequalityToEqualityWithIntegerSlackArguments",
     "DecisionVariable",
     "DecisionVariableRole",
     "DegreeBound",

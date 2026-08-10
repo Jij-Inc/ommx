@@ -13,19 +13,30 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 レビュー済みのRust Preparation interpreterをPythonから利用できるようになりました。
 {class}`~ommx.PreparationPolicy` には、特殊制約、最適化sense、Integer slack、
 used Integer encoding、fixed-weight penaltyという5つのoptional phaseを、
-それぞれ高々1つ選択して組み合わせます。各phaseのfactoryは対応するRust
+それぞれ高々1つ選択して組み合わせます。各phaseのtyped valueは対応するRust
 `Instance` owner operationの引数名と意味を保持し、validationは引き続きowner
 operationが所有します。canonicalな適用順序もRustが所有します。
+
+{class}`~ommx.IntegerSlackPreparation` は単一のInteger-slack phaseを表します。
+まず必ずequalityへのexact conversionを試します。`slack_upper_bound=None` は
+equalityを要求し、整数値を指定すると、exact conversionが
+{class}`~ommx.ExactIntegerSlackError` を返した場合にだけconstraintをinequalityの
+まま残す操作を許します。この操作は元のfeasible setを正確に保存し、近似ではありません。
 
 ```python
 from ommx import (
     IntegerEncodingPreparation,
+    IntegerSlackPreparation,
     PreparationPolicy,
     SensePreparation,
 )
 
 policy = PreparationPolicy(
     sense=SensePreparation.as_minimization_problem(),
+    integer_slack=IntegerSlackPreparation(
+        max_integer_range=32,
+        slack_upper_bound=32,
+    ),
     integer_encoding=(
         IntegerEncodingPreparation.log_encode_all_used_integers()
     ),

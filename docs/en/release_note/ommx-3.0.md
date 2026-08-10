@@ -13,20 +13,32 @@ Changes merged after the most recent release will be appended here as they land,
 The reviewed Rust Preparation interpreter is now available in Python. A
 {class}`~ommx.PreparationPolicy` combines at most one selected operation for
 each of five optional phases: special constraints, optimization sense, Integer
-slack, used-Integer encoding, and fixed-weight penalty. Phase factories retain
-the corresponding Rust `Instance` owner operation's argument names and
-meanings; validation remains with those owner operations, while Rust owns their
-canonical application order.
+slack, used-Integer encoding, and fixed-weight penalty. Typed phase values retain
+the corresponding Rust `Instance` owner operation's argument names and meanings;
+validation remains with those owner operations, while Rust owns their canonical
+application order.
+
+{class}`~ommx.IntegerSlackPreparation` represents one Integer-slack phase.
+Exact conversion to equality is always attempted first. Setting
+`slack_upper_bound=None` requires equality, while an integer value permits the
+constraint to remain an inequality only when exact conversion raises
+{class}`~ommx.ExactIntegerSlackError`. This alternative preserves the original
+feasible set exactly; it is not an approximation.
 
 ```python
 from ommx import (
     IntegerEncodingPreparation,
+    IntegerSlackPreparation,
     PreparationPolicy,
     SensePreparation,
 )
 
 policy = PreparationPolicy(
     sense=SensePreparation.as_minimization_problem(),
+    integer_slack=IntegerSlackPreparation(
+        max_integer_range=32,
+        slack_upper_bound=32,
+    ),
     integer_encoding=(
         IntegerEncodingPreparation.log_encode_all_used_integers()
     ),

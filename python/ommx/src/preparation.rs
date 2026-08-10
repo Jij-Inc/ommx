@@ -10,77 +10,6 @@ fn resolve_atol(value: Option<f64>) -> OmmxPyResult<ommx::ATol> {
     })
 }
 
-/// Arguments for exact Integer-slack conversion during Preparation.
-///
-/// ``Instance.prepare`` supplies each active inequality's constraint ID. These
-/// values retain the names and meanings of the remaining arguments of the
-/// underlying Rust ``Instance`` owner operation. Preparation exposes its
-/// tolerance argument even though the standalone Python method uses the
-/// default tolerance.
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ConvertInequalityToEqualityWithIntegerSlackArguments {
-    inner: ommx::ConvertInequalityToEqualityWithIntegerSlackArguments,
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl ConvertInequalityToEqualityWithIntegerSlackArguments {
-    #[new]
-    #[pyo3(signature = (*, max_integer_range, atol=None))]
-    pub fn new(max_integer_range: u64, atol: Option<f64>) -> OmmxPyResult<Self> {
-        Ok(Self {
-            inner: ommx::ConvertInequalityToEqualityWithIntegerSlackArguments {
-                max_integer_range,
-                atol: resolve_atol(atol)?,
-            },
-        })
-    }
-
-    /// Maximum finite range accepted for an exact Integer slack variable.
-    #[getter]
-    pub fn max_integer_range(&self) -> u64 {
-        self.inner.max_integer_range
-    }
-
-    /// Absolute tolerance used to normalize bounds to integers.
-    #[getter]
-    pub fn atol(&self) -> f64 {
-        self.inner.atol.into_inner()
-    }
-}
-
-/// Arguments for approximate Integer-slack conversion during Preparation.
-///
-/// ``Instance.prepare`` supplies each active inequality's constraint ID. This
-/// value retains the name and meaning of the remaining
-/// :meth:`Instance.add_integer_slack_to_inequality` argument.
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AddIntegerSlackToInequalityArguments {
-    inner: ommx::AddIntegerSlackToInequalityArguments,
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pymethods]
-#[pymethods]
-impl AddIntegerSlackToInequalityArguments {
-    #[new]
-    #[pyo3(signature = (*, slack_upper_bound))]
-    pub fn new(slack_upper_bound: u64) -> Self {
-        Self {
-            inner: ommx::AddIntegerSlackToInequalityArguments { slack_upper_bound },
-        }
-    }
-
-    /// Upper bound passed to approximate Integer-slack conversion.
-    #[getter]
-    pub fn slack_upper_bound(&self) -> u64 {
-        self.inner.slack_upper_bound
-    }
-}
-
 /// Selection for the special-constraint Preparation phase.
 ///
 /// Construct a value with an owner-operation factory. Validation and mutation
@@ -154,14 +83,19 @@ impl From<ommx::SensePreparation> for SensePreparation {
     }
 }
 
-/// Selection for the Integer-slack Preparation phase.
+/// Integer-slack Preparation for active regular inequalities.
 ///
-/// Exactly one primary owner operation is selected. Exact conversion may carry
-/// an approximate fallback, which is invoked only for
-/// :class:`ExactIntegerSlackError`; every other owner error is propagated.
+/// Preparation first attempts exact conversion to equality using
+/// ``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the
+/// constraint to become an equality or be removed as trivially satisfied, so
+/// :class:`ExactIntegerSlackError` is propagated. An integer value permits the
+/// constraint to remain an inequality: only that signal selects the
+/// inequality-preserving owner operation with this upper bound. The latter is
+/// not an approximation of the original feasible set. Every other owner error
+/// is propagated unchanged.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IntegerSlackPreparation {
     inner: ommx::IntegerSlackPreparation,
 }
@@ -169,31 +103,41 @@ pub struct IntegerSlackPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl IntegerSlackPreparation {
-    /// Select exact Integer-slack conversion with an optional typed fallback.
-    #[staticmethod]
-    #[pyo3(signature = (*, arguments, on_exact_integer_slack_unavailable=None))]
-    pub fn convert_inequality_to_equality_with_integer_slack(
-        arguments: ConvertInequalityToEqualityWithIntegerSlackArguments,
-        on_exact_integer_slack_unavailable: Option<AddIntegerSlackToInequalityArguments>,
-    ) -> Self {
-        Self {
-            inner: ommx::IntegerSlackPreparation::ConvertInequalityToEqualityWithIntegerSlack {
-                arguments: arguments.inner,
-                on_exact_integer_slack_unavailable: on_exact_integer_slack_unavailable
-                    .map(|value| value.inner),
+    #[new]
+    #[pyo3(signature = (*, max_integer_range, atol=None, slack_upper_bound=None))]
+    pub fn new(
+        max_integer_range: u64,
+        atol: Option<f64>,
+        slack_upper_bound: Option<u64>,
+    ) -> OmmxPyResult<Self> {
+        Ok(Self {
+            inner: ommx::IntegerSlackPreparation {
+                max_integer_range,
+                atol: resolve_atol(atol)?,
+                slack_upper_bound,
             },
-        }
+        })
     }
 
-    /// Select :meth:`Instance.add_integer_slack_to_inequality` directly.
-    #[staticmethod]
-    #[pyo3(signature = (*, arguments))]
-    pub fn add_integer_slack_to_inequality(
-        arguments: AddIntegerSlackToInequalityArguments,
-    ) -> Self {
-        Self {
-            inner: ommx::IntegerSlackPreparation::AddIntegerSlackToInequality(arguments.inner),
-        }
+    /// Maximum finite range accepted for exact Integer slack.
+    #[getter]
+    pub fn max_integer_range(&self) -> u64 {
+        self.inner.max_integer_range
+    }
+
+    /// Absolute tolerance used to normalize bounds to integers.
+    #[getter]
+    pub fn atol(&self) -> f64 {
+        self.inner.atol.into_inner()
+    }
+
+    /// Optional upper bound for inequality-preserving Integer slack.
+    ///
+    /// ``None`` requires equality. An integer permits the inequality-preserving
+    /// owner operation only after :class:`ExactIntegerSlackError`.
+    #[getter]
+    pub fn slack_upper_bound(&self) -> Option<u64> {
+        self.inner.slack_upper_bound
     }
 }
 

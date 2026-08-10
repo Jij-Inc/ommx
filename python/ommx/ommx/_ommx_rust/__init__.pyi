@@ -19,7 +19,6 @@ import typing_extensions
 from typing import TypeAlias
 
 __all__ = [
-    "AddIntegerSlackToInequalityArguments",
     "AnonymousArtifactRef",
     "ArchiveDescriptor",
     "ArchiveManifest",
@@ -34,7 +33,6 @@ __all__ = [
     "AutosavePolicy",
     "Bound",
     "Constraint",
-    "ConvertInequalityToEqualityWithIntegerSlackArguments",
     "DecisionVariable",
     "DecisionVariableRole",
     "DegreeBound",
@@ -163,25 +161,6 @@ VariableIDLike: TypeAlias = builtins.int | DecisionVariable | AttachedDecisionVa
 r"""
 A variable ID or decision-variable object. APIs using this type consume only the OMMX variable identity, not kind or bound metadata.
 """
-
-@typing.final
-class AddIntegerSlackToInequalityArguments:
-    r"""
-    Arguments for approximate Integer-slack conversion during Preparation.
-
-    ``Instance.prepare`` supplies each active inequality's constraint ID. This
-    value retains the name and meaning of the remaining
-    :meth:`Instance.add_integer_slack_to_inequality` argument.
-    """
-    @property
-    def slack_upper_bound(self) -> builtins.int:
-        r"""
-        Upper bound passed to approximate Integer-slack conversion.
-        """
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-    def __new__(
-        cls, *, slack_upper_bound: builtins.int
-    ) -> AddIntegerSlackToInequalityArguments: ...
 
 @typing.final
 class AnonymousArtifactRef:
@@ -1505,35 +1484,6 @@ class Constraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
-
-@typing.final
-class ConvertInequalityToEqualityWithIntegerSlackArguments:
-    r"""
-    Arguments for exact Integer-slack conversion during Preparation.
-
-    ``Instance.prepare`` supplies each active inequality's constraint ID. These
-    values retain the names and meanings of the remaining arguments of the
-    underlying Rust ``Instance`` owner operation. Preparation exposes its
-    tolerance argument even though the standalone Python method uses the
-    default tolerance.
-    """
-    @property
-    def max_integer_range(self) -> builtins.int:
-        r"""
-        Maximum finite range accepted for an exact Integer slack variable.
-        """
-    @property
-    def atol(self) -> builtins.float:
-        r"""
-        Absolute tolerance used to normalize bounds to integers.
-        """
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-    def __new__(
-        cls,
-        *,
-        max_integer_range: builtins.int,
-        atol: typing.Optional[builtins.float] = None,
-    ) -> ConvertInequalityToEqualityWithIntegerSlackArguments: ...
 
 @typing.final
 class DecisionVariable:
@@ -5138,31 +5088,43 @@ class IntegerEncodingPreparation:
 @typing.final
 class IntegerSlackPreparation:
     r"""
-    Selection for the Integer-slack Preparation phase.
+    Integer-slack Preparation for active regular inequalities.
 
-    Exactly one primary owner operation is selected. Exact conversion may carry
-    an approximate fallback, which is invoked only for
-    :class:`ExactIntegerSlackError`; every other owner error is propagated.
+    Preparation first attempts exact conversion to equality using
+    ``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the
+    constraint to become an equality or be removed as trivially satisfied, so
+    :class:`ExactIntegerSlackError` is propagated. An integer value permits the
+    constraint to remain an inequality: only that signal selects the
+    inequality-preserving owner operation with this upper bound. The latter is
+    not an approximation of the original feasible set. Every other owner error
+    is propagated unchanged.
     """
+    @property
+    def max_integer_range(self) -> builtins.int:
+        r"""
+        Maximum finite range accepted for exact Integer slack.
+        """
+    @property
+    def atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance used to normalize bounds to integers.
+        """
+    @property
+    def slack_upper_bound(self) -> typing.Optional[builtins.int]:
+        r"""
+        Optional upper bound for inequality-preserving Integer slack.
+
+        ``None`` requires equality. An integer permits the inequality-preserving
+        owner operation only after :class:`ExactIntegerSlackError`.
+        """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-    @staticmethod
-    def convert_inequality_to_equality_with_integer_slack(
+    def __new__(
+        cls,
         *,
-        arguments: ConvertInequalityToEqualityWithIntegerSlackArguments,
-        on_exact_integer_slack_unavailable: typing.Optional[
-            AddIntegerSlackToInequalityArguments
-        ] = None,
-    ) -> IntegerSlackPreparation:
-        r"""
-        Select exact Integer-slack conversion with an optional typed fallback.
-        """
-    @staticmethod
-    def add_integer_slack_to_inequality(
-        *, arguments: AddIntegerSlackToInequalityArguments
-    ) -> IntegerSlackPreparation:
-        r"""
-        Select :meth:`Instance.add_integer_slack_to_inequality` directly.
-        """
+        max_integer_range: builtins.int,
+        atol: typing.Optional[builtins.float] = None,
+        slack_upper_bound: typing.Optional[builtins.int] = None,
+    ) -> IntegerSlackPreparation: ...
 
 class InvalidRemoteArtifactError(RemoteArtifactError):
     r"""

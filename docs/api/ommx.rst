@@ -32,8 +32,6 @@ ommx
    _items/ommx.InstanceClassMismatch
    _items/ommx.InstanceClassClauseReport
    _items/ommx.InstanceClassMembershipReport
-   _items/ommx.ConvertInequalityToEqualityWithIntegerSlackArguments
-   _items/ommx.AddIntegerSlackToInequalityArguments
    _items/ommx.SpecialConstraintPreparation
    _items/ommx.SensePreparation
    _items/ommx.IntegerSlackPreparation

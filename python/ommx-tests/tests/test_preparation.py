@@ -3,8 +3,6 @@ from __future__ import annotations
 import pytest
 
 from ommx import (
-    AddIntegerSlackToInequalityArguments,
-    ConvertInequalityToEqualityWithIntegerSlackArguments,
     DecisionVariable,
     DegreeBound,
     ExactIntegerSlackError,
@@ -62,15 +60,9 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
         kinds={SpecialConstraintKind.OneHot}
     )
     policy.sense = SensePreparation.as_minimization_problem()
-    policy.integer_slack = (
-        IntegerSlackPreparation.convert_inequality_to_equality_with_integer_slack(
-            arguments=ConvertInequalityToEqualityWithIntegerSlackArguments(
-                max_integer_range=1
-            ),
-            on_exact_integer_slack_unavailable=AddIntegerSlackToInequalityArguments(
-                slack_upper_bound=2
-            ),
-        )
+    policy.integer_slack = IntegerSlackPreparation(
+        max_integer_range=1,
+        slack_upper_bound=2,
     )
     policy.integer_encoding = IntegerEncodingPreparation.log_encode_all_used_integers()
     policy.fixed_penalty = (
@@ -97,13 +89,7 @@ def test_prepare_preserves_owner_signal_and_earlier_commits() -> None:
     )
     policy = PreparationPolicy(
         sense=SensePreparation.as_minimization_problem(),
-        integer_slack=(
-            IntegerSlackPreparation.convert_inequality_to_equality_with_integer_slack(
-                arguments=ConvertInequalityToEqualityWithIntegerSlackArguments(
-                    max_integer_range=1
-                )
-            )
-        ),
+        integer_slack=IntegerSlackPreparation(max_integer_range=1),
     )
 
     with pytest.raises(ExactIntegerSlackError):

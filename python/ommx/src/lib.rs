@@ -202,8 +202,6 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<InstanceClassMismatch>()?;
     m.add_class::<InstanceClassClauseReport>()?;
     m.add_class::<InstanceClassMembershipReport>()?;
-    m.add_class::<ConvertInequalityToEqualityWithIntegerSlackArguments>()?;
-    m.add_class::<AddIntegerSlackToInequalityArguments>()?;
     m.add_class::<SpecialConstraintPreparation>()?;
     m.add_class::<SensePreparation>()?;
     m.add_class::<IntegerSlackPreparation>()?;
@@ -308,8 +306,6 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "InstanceClassClauseReport",
     "InstanceClassMembershipReport",
     // Preparation
-    "ConvertInequalityToEqualityWithIntegerSlackArguments",
-    "AddIntegerSlackToInequalityArguments",
     "SpecialConstraintPreparation",
     "SensePreparation",
     "IntegerSlackPreparation",
