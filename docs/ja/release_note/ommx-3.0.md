@@ -47,9 +47,11 @@ assert input_class.contains(instance)
 
 {meth}`~ommx.Instance.prepare` は同じinstanceをin-placeに変更し、渡した
 {class}`~ommx.InstanceClass` がそのinstanceを含む場合にだけ `None` を返します。
-成功時にAdapter固有の追加保証はありません。既存owner exceptionのPython mappingは
-維持され、Preparation全体はtransactionではないため、後のphaseが失敗しても
-先行phaseでcommit済みの変更は残ります。
+成功時にAdapter固有の追加保証はありません。設定したphaseをすべて適用してもtargetへ
+到達しない場合は、{class}`~ommx.PreparationTargetNotReachedError` の `report`
+属性から最終的な {class}`~ommx.InstanceClassMembershipReport` を取得できます。
+既存owner exceptionのPython mappingは維持され、Preparation全体はtransactionでは
+ないため、後のphaseが失敗しても先行phaseでcommit済みの変更は残ります。
 
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 

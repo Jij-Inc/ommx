@@ -288,6 +288,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "ExactIntegerSlackError",
     "InfeasibleDetected",
     "LogEncodingError",
+    "PreparationTargetNotReachedError",
     // Function types
     "Linear",
     "Quadratic",

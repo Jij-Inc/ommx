@@ -10618,7 +10618,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Prepare this instance in place for membership in ``input_class``.\n\n``policy`` selects existing :class:`Instance` owner operations. The\nmethod stops once ``input_class`` contains this instance and returns\n``None``. Success guarantees only that membership; Adapter-specific\napplicability remains a separate check.\n\nPreparation is not globally transactional. Changes committed by an\nearlier owner operation remain if a later operation raises an error.\nExisting Rust owner signals retain their Python exception mappings.",
+              "doc": "Prepare this instance in place for membership in ``input_class``.\n\n``policy`` selects existing :class:`Instance` owner operations. The\nmethod stops once ``input_class`` contains this instance and returns\n``None``. Success guarantees only that membership; Adapter-specific\napplicability remains a separate check.\n\nPreparation is not globally transactional. Changes committed by an\nearlier owner operation remain if a later operation raises an error.\nExisting Rust owner signals retain their Python exception mappings.\nWhen configured phases are exhausted without reaching ``input_class``,\n:class:`PreparationTargetNotReachedError` exposes the final membership\nreport through its ``report`` attribute.",
               "signatures": [
                 {
                   "parameters": [
@@ -19470,6 +19470,38 @@
                 ]
               },
               "is_property": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PreparationTargetNotReachedError",
+          "doc": "Configured Preparation phases were exhausted without reaching the target InstanceClass.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "report",
+              "doc": "Final membership report for the partially prepared Instance.",
+              "type_": {
+                "display": "InstanceClassMembershipReport",
+                "link_target": {
+                  "fqn": "ommx.InstanceClassMembershipReport",
+                  "doc_module": "ommx",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             }
           ],
           "deprecated": null
@@ -33636,6 +33668,7 @@
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
     "ommx.PreparationPolicy": "ommx",
+    "ommx.PreparationTargetNotReachedError": "ommx",
     "ommx.Provenance": "ommx",
     "ommx.ProvenanceKind": "ommx",
     "ommx.Quadratic": "ommx",

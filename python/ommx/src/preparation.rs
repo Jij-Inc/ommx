@@ -353,6 +353,9 @@ impl Instance {
     /// Preparation is not globally transactional. Changes committed by an
     /// earlier owner operation remain if a later operation raises an error.
     /// Existing Rust owner signals retain their Python exception mappings.
+    /// When configured phases are exhausted without reaching ``input_class``,
+    /// :class:`PreparationTargetNotReachedError` exposes the final membership
+    /// report through its ``report`` attribute.
     pub fn prepare(
         &mut self,
         py: Python<'_>,

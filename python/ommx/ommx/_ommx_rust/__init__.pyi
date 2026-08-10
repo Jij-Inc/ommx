@@ -78,6 +78,7 @@ __all__ = [
     "ParametricInstance",
     "Polynomial",
     "PreparationPolicy",
+    "PreparationTargetNotReachedError",
     "Provenance",
     "ProvenanceKind",
     "PruneAnonymousReport",
@@ -4762,6 +4763,9 @@ class Instance:
         Preparation is not globally transactional. Changes committed by an
         earlier owner operation remain if a later operation raises an error.
         Existing Rust owner signals retain their Python exception mappings.
+        When configured phases are exhausted without reaching ``input_class``,
+        :class:`PreparationTargetNotReachedError` exposes the final membership
+        report through its ``report`` attribute.
         """
 
 @typing.final
@@ -6246,6 +6250,16 @@ class PreparationPolicy:
         integer_encoding: typing.Optional[IntegerEncodingPreparation] = None,
         fixed_penalty: typing.Optional[FixedPenaltyPreparation] = None,
     ) -> PreparationPolicy: ...
+
+class PreparationTargetNotReachedError(builtins.RuntimeError):
+    r"""
+    Configured Preparation phases were exhausted without reaching the target InstanceClass.
+    """
+    @property
+    def report(self) -> InstanceClassMembershipReport:
+        r"""
+        Final membership report for the partially prepared Instance.
+        """
 
 @typing.final
 class Provenance:

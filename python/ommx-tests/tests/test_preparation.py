@@ -15,6 +15,7 @@ from ommx import (
     Kind,
     OneHotConstraint,
     PreparationPolicy,
+    PreparationTargetNotReachedError,
     Sense,
     SensePreparation,
     SpecialConstraintKind,
@@ -98,7 +99,7 @@ def test_prepare_preserves_owner_signal_and_earlier_commits() -> None:
     assert instance.sense == Sense.Minimize
 
 
-def test_prepare_errors_when_policy_is_exhausted_outside_target() -> None:
+def test_prepare_exposes_final_report_when_policy_is_exhausted() -> None:
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
         sense=Sense.Minimize,
@@ -111,10 +112,8 @@ def test_prepare_errors_when_policy_is_exhausted_outside_target() -> None:
         objective_degree=1,
     )
 
-    with pytest.raises(
-        RuntimeError,
-        match="Preparation did not reach the target InstanceClass",
-    ):
+    with pytest.raises(PreparationTargetNotReachedError) as error:
         instance.prepare(target, PreparationPolicy())
 
     assert not target.contains(instance)
+    assert error.value.report == target.check_membership(instance)

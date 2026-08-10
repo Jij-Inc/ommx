@@ -18,6 +18,7 @@ ommx
    _items/ommx.ExactIntegerSlackError
    _items/ommx.InfeasibleDetected
    _items/ommx.LogEncodingError
+   _items/ommx.PreparationTargetNotReachedError
    _items/ommx.Linear
    _items/ommx.Quadratic
    _items/ommx.Polynomial

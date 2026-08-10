@@ -49,9 +49,12 @@ assert input_class.contains(instance)
 
 {meth}`~ommx.Instance.prepare` mutates the same instance and returns `None`
 only after the supplied {class}`~ommx.InstanceClass` contains it. Success adds
-no Adapter-specific guarantee. Existing owner exceptions retain their Python
-mappings, and Preparation is not globally transactional: changes committed by
-an earlier phase remain if a later phase fails.
+no Adapter-specific guarantee. If all configured phases complete without
+reaching the target, {class}`~ommx.PreparationTargetNotReachedError` exposes the
+final {class}`~ommx.InstanceClassMembershipReport` through its `report`
+attribute. Existing owner exceptions retain their Python mappings, and
+Preparation is not globally transactional: changes committed by an earlier
+phase remain if a later phase fails.
 
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
