@@ -8,53 +8,53 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🆕 In-place Preparation for `InstanceClass` membership ([#1147](https://github.com/Jij-Inc/ommx/pull/1147))
+### 🆕 User-controlled `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147))
 
-The reviewed Rust Preparation interpreter is now available in Python. A
-{class}`~ommx.PreparationPolicy` combines at most one selected operation for
-each of five optional phases: special constraints, optimization sense, Integer
-slack, used-Integer encoding, and fixed-weight penalty. Typed phase values retain
-the corresponding Rust `Instance` owner operation's argument names and meanings;
-validation remains with those owner operations, while Rust owns their canonical
-application order.
+In Python SDK v2, solver adapters selected and performed the model conversions
+needed by their solvers. Python SDK v3 makes this an explicit, caller-owned step.
+{meth}`~ommx.Instance.prepare` changes the caller's {class}`~ommx.Instance` in
+place until it belongs to a requested {class}`~ommx.InstanceClass`; direct
+adapter calls remain strict and do not transform their input automatically.
 
-{class}`~ommx.IntegerSlackPreparation` represents one Integer-slack phase.
-Exact conversion to equality is always attempted first. Setting
-`slack_upper_bound=None` requires equality, while an integer value permits the
-constraint to remain an inequality only when exact conversion raises
-{class}`~ommx.ExactIntegerSlackError`. This alternative preserves the original
-feasible set exactly; it is not an approximation.
+When an adapter supplies a recommended {class}`~ommx.PreparationPolicy` for its
+`INPUT_CLASS`, use that recommendation as a starting point, change any public
+policy fields needed by the application, and then pass the `INPUT_CLASS` and
+the policy separately to {meth}`~ommx.Instance.prepare`. A policy can also be
+constructed directly:
 
 ```python
 from ommx import (
     IntegerEncodingPreparation,
-    IntegerSlackPreparation,
     PreparationPolicy,
     SensePreparation,
 )
 
+# `target_class` may be an adapter's INPUT_CLASS.
 policy = PreparationPolicy(
     sense=SensePreparation.as_minimization_problem(),
-    integer_slack=IntegerSlackPreparation(
-        max_integer_range=32,
-        slack_upper_bound=32,
-    ),
-    integer_encoding=(
-        IntegerEncodingPreparation.log_encode_all_used_integers()
-    ),
 )
-instance.prepare(input_class, policy)
-assert input_class.contains(instance)
+# A policy returned by an adapter can be edited in the same way.
+policy.integer_encoding = (
+    IntegerEncodingPreparation.log_encode_all_used_integers()
+)
+
+instance.prepare(target_class, policy)
+assert target_class.contains(instance)
 ```
 
-{meth}`~ommx.Instance.prepare` mutates the same instance and returns `None`
-only after the supplied {class}`~ommx.InstanceClass` contains it. Success adds
-no Adapter-specific guarantee. If all configured phases complete without
-reaching the target, {class}`~ommx.PreparationTargetNotReachedError` exposes the
-final {class}`~ommx.InstanceClassMembershipReport` through its `report`
-attribute. Existing owner exceptions retain their Python mappings, and
-Preparation is not globally transactional: changes committed by an earlier
-phase remain if a later phase fails.
+Policy fields let the caller allow special-constraint lowering, minimization
+sense normalization, Integer slack, used-Integer encoding, and fixed-weight
+penalties. OMMX applies enabled changes in a fixed order and stops as soon as
+the target contains the instance.
+
+{meth}`~ommx.Instance.prepare` returns `None` only after target membership is
+reached. If the allowed changes are exhausted first,
+{class}`~ommx.PreparationTargetNotReachedError` provides the final
+{class}`~ommx.InstanceClassMembershipReport` as `error.report`. Errors from an
+individual model change keep their existing Python exception types. Preparation
+does not roll the instance back: changes completed before a later error remain.
+Successful preparation guarantees target membership only. When the target is an
+adapter's `INPUT_CLASS`, the adapter's normal applicability check still applies.
 
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 

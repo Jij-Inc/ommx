@@ -8,50 +8,52 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### 🆕 `InstanceClass` membershipへのin-place Preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147))
+### 🆕 ユーザーが制御する `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147))
 
-レビュー済みのRust Preparation interpreterをPythonから利用できるようになりました。
-{class}`~ommx.PreparationPolicy` には、特殊制約、最適化sense、Integer slack、
-used Integer encoding、fixed-weight penaltyという5つのoptional phaseを、
-それぞれ高々1つ選択して組み合わせます。各phaseのtyped valueは対応するRust
-`Instance` owner operationの引数名と意味を保持し、validationは引き続きowner
-operationが所有します。canonicalな適用順序もRustが所有します。
+Python SDK v2では、solver adapterがsolverに必要なモデル変換を選び、実行していました。
+Python SDK v3では、この操作をユーザーが明示的に制御します。
+{meth}`~ommx.Instance.prepare` は、呼び出し側が所有する
+{class}`~ommx.Instance` を、指定した {class}`~ommx.InstanceClass` に含まれるまで
+in-placeで変更します。Adapterを直接呼び出した場合は引き続き入力を厳密に検査し、
+暗黙の変換は行いません。
 
-{class}`~ommx.IntegerSlackPreparation` は単一のInteger-slack phaseを表します。
-まず必ずequalityへのexact conversionを試します。`slack_upper_bound=None` は
-equalityを要求し、整数値を指定すると、exact conversionが
-{class}`~ommx.ExactIntegerSlackError` を返した場合にだけconstraintをinequalityの
-まま残す操作を許します。この操作は元のfeasible setを正確に保存し、近似ではありません。
+Adapterが `INPUT_CLASS` 向けの推奨 {class}`~ommx.PreparationPolicy` を提供する場合は、
+それを出発点にします。必要に応じてユーザーがpublic fieldを書き換え、`INPUT_CLASS` と
+policyを別々に {meth}`~ommx.Instance.prepare` へ渡します。Policyを直接構築することも
+できます。
 
 ```python
 from ommx import (
     IntegerEncodingPreparation,
-    IntegerSlackPreparation,
     PreparationPolicy,
     SensePreparation,
 )
 
+# `target_class` にはAdapterのINPUT_CLASSも指定できます。
 policy = PreparationPolicy(
     sense=SensePreparation.as_minimization_problem(),
-    integer_slack=IntegerSlackPreparation(
-        max_integer_range=32,
-        slack_upper_bound=32,
-    ),
-    integer_encoding=(
-        IntegerEncodingPreparation.log_encode_all_used_integers()
-    ),
 )
-instance.prepare(input_class, policy)
-assert input_class.contains(instance)
+# Adapterが返したpolicyも同じ方法で編集できます。
+policy.integer_encoding = (
+    IntegerEncodingPreparation.log_encode_all_used_integers()
+)
+
+instance.prepare(target_class, policy)
+assert target_class.contains(instance)
 ```
 
-{meth}`~ommx.Instance.prepare` は同じinstanceをin-placeに変更し、渡した
-{class}`~ommx.InstanceClass` がそのinstanceを含む場合にだけ `None` を返します。
-成功時にAdapter固有の追加保証はありません。設定したphaseをすべて適用してもtargetへ
-到達しない場合は、{class}`~ommx.PreparationTargetNotReachedError` の `report`
-属性から最終的な {class}`~ommx.InstanceClassMembershipReport` を取得できます。
-既存owner exceptionのPython mappingは維持され、Preparation全体はtransactionでは
-ないため、後のphaseが失敗しても先行phaseでcommit済みの変更は残ります。
+Policyでは、特殊制約の通常制約化、最小化へのsense統一、Integer slack、使用中の
+Integer変数のencoding、固定weight penaltyを許可できます。OMMXは有効な変換を
+定められた順序で適用し、instanceがtargetに含まれた時点で停止します。
+
+{meth}`~ommx.Instance.prepare` が `None` を返すのは、target membershipへ到達した
+場合だけです。許可した変換をすべて使っても到達できない場合は、
+{class}`~ommx.PreparationTargetNotReachedError` の `error.report` から最終的な
+{class}`~ommx.InstanceClassMembershipReport` を取得できます。個々の変換で発生する
+errorは既存のPython exception typeを保ちます。Preparationはinstanceをrollback
+しないため、後のerrorより前に完了した変更は残ります。成功時に保証されるのはtarget
+membershipだけです。targetがAdapterの `INPUT_CLASS` である場合も、Adapterが行う通常の
+applicability checkは引き続き必要です。
 
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
