@@ -42,10 +42,13 @@ sample_set = OMMXOpenJijSAAdapter.sample(
 print(sample_set.summary)
 ```
 
-The finite penalty weight is part of the caller-owned preparation policy, not
-an OpenJij backend sampler parameter. The adapter deliberately does not choose
-one: a finite penalty is application-specific and does not guarantee that every
-returned sample is feasible.
+The fixed penalty weight is a nonnegative magnitude in the caller-owned
+preparation policy, not an OpenJij backend sampler parameter. The owner
+operation accepts values down to `-atol` and normalizes tolerated negative
+values to zero. The adapter deliberately does not choose a magnitude: zero
+adds no preference for feasibility, while a sufficiently large positive value
+is application-specific and still does not guarantee that every returned
+sample is feasible.
 
 ## Input class and preparation recommendation
 
@@ -72,10 +75,11 @@ interaction coefficients are finite.
   conversion is unavailable; and
 - log-encoding all used Integer variables.
 
-Finite penalty remains disabled until the caller selects either a uniform
-weight or weights keyed by active regular constraint ID. Uniform weights are
-usually the convenient choice when special-constraint lowering creates regular
-constraints with generated IDs.
+Fixed penalty remains disabled until the caller selects either a uniform
+magnitude or magnitudes keyed by active regular constraint ID. Uniform weights
+are usually the convenient choice when special-constraint lowering creates
+regular constraints with generated IDs. OMMX validates the weight domain; the
+caller remains responsible for selecting a sufficient magnitude.
 
 `Instance.prepare()` mutates the same `Instance` that is then passed to the
 adapter. Success guarantees membership in `INPUT_CLASS`; the adapter-specific

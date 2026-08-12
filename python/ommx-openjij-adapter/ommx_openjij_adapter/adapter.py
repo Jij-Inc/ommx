@@ -47,11 +47,11 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     Arbitrary polynomial objective degree is supported through OpenJij's QUBO
     and Binary-HUBO paths.
 
-    Integer encoding, sense normalization, slack introduction, and finite
+    Integer encoding, sense normalization, slack introduction, and fixed
     constraint penalties are explicit preparation operations, not part of the
     declared input class. Start from
     :meth:`recommended_preparation_policy`, edit caller-owned choices such as
-    finite penalty weights, and apply the policy with :meth:`Instance.prepare`.
+    fixed penalty magnitudes, and apply the policy with :meth:`Instance.prepare`.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
@@ -77,9 +77,11 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         and log-encodes every used Integer variable. Both Integer slack ranges
         use 32.
 
-        Finite penalty weights remain explicit caller parameters because their
-        mathematical values depend on the application. Set ``fixed_penalty``
-        on the fresh returned policy when active constraints must be removed.
+        Fixed penalty magnitudes remain explicit caller parameters because
+        sufficient values depend on the application. The shared ``Instance``
+        owner operation validates their nonnegative-with-tolerance domain. Set
+        ``fixed_penalty`` on the fresh returned policy when active constraints
+        must be removed.
         """
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(

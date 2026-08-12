@@ -8,7 +8,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### 🆕 ユーザーが制御する `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147)、[#1152](https://github.com/Jij-Inc/ommx/pull/1152)、[#1153](https://github.com/Jij-Inc/ommx/pull/1153))
+### 🆕 ユーザーが制御する `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147)、[#1152](https://github.com/Jij-Inc/ommx/pull/1152)、[#1153](https://github.com/Jij-Inc/ommx/pull/1153)、[#1154](https://github.com/Jij-Inc/ommx/pull/1154))
 
 Python SDK v2では、solver adapterがsolverに必要なモデル変換を選び、実行していました。
 Python SDK v3では、この操作をユーザーが明示的に制御します。
@@ -39,8 +39,8 @@ solution = OMMXHighsAdapter.solve(instance)
 OpenJijでも、Binary変数のみの制約なし最小化input classに対して同じworkflowを使います。
 推奨Policyでは、Indicator、OneHot、SOS1制約のlowering、senseの正規化、exactなequality
 変換が利用できない場合にinequalityのまま残すことを許可したInteger slack、使用中の全
-Integer変数のlog encodingを有効にします。finite penalty weightはapplication固有なので、
-推奨Policyでは呼び出し側が設定するfieldとして残します。
+Integer変数のlog encodingを有効にします。十分な固定penalty magnitudeはapplication固有
+なので、推奨Policyでは呼び出し側が設定するfieldとして残します。
 
 ```python
 from ommx import FixedPenaltyPreparation
@@ -72,6 +72,14 @@ sample_set = OMMXOpenJijSAAdapter.sample(instance)
 Policyでは、特殊制約の通常制約化、最小化へのsense統一、Integer slack、使用中の
 Integer変数のencoding、固定weight penaltyを許可できます。OMMXは有効な変換を
 定められた順序で適用し、instanceがtargetに含まれた時点で停止します。
+
+{class}`~ommx.FixedPenaltyPreparation` のweightは、非負のpenalty magnitudeとして
+扱われます。このphaseを適用すると、最小化では `w * f(x) ** 2` を目的関数へ加え、
+最大化では同じ項を引きます。任意指定の `atol` により、決定則の出力が
+`[-atol, 0)` に入る場合は受け入れて0へ正規化します。非有限値または `-atol` より
+小さい値では、penalty phaseをcommitせずに `ValueError` を送出します。用途に十分な
+大きさのweightを選ぶ責任はapplication側にあり、OMMXはweightの決定や上限設定を
+行いません。
 
 {meth}`~ommx.Instance.prepare` が `None` を返すのは、target membershipへ到達した
 場合だけです。許可した変換をすべて使っても到達できない場合は、

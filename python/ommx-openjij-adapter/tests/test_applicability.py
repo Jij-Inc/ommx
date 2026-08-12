@@ -210,7 +210,7 @@ def test_direct_rejects_all_special_constraint_families_without_mutation() -> No
     assert sos1.constraint_ids == {30}
 
 
-def test_recommended_policy_keeps_finite_penalty_caller_owned() -> None:
+def test_recommended_policy_keeps_fixed_penalty_caller_owned() -> None:
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
         decision_variables=[x],

@@ -416,10 +416,12 @@ exact operation is unavailable, permits inequality-preserving slack with upper
 bound 32. Set `slack_upper_bound=None` on a replacement
 `IntegerSlackPreparation` when equality is required.
 
-Finite penalty weights remain explicit caller parameters. v2 selected a
-uniform weight of `1.0` when no penalty setting was supplied; v3 does not guess
-an application-specific mathematical weight. Select either a uniform operation
-or constraint-ID-keyed weights through `policy.fixed_penalty` when constraints
+Fixed penalty weights are nonnegative magnitudes selected explicitly by the
+caller. v2 selected a uniform weight of `1.0` when no penalty setting was
+supplied; v3 does not guess an application-specific sufficient magnitude.
+The owner operation accepts values down to `-atol` and normalizes tolerated
+negative values to zero. Select either a uniform operation or
+constraint-ID-keyed weights through `policy.fixed_penalty` when constraints
 must be removed for OpenJij.
 
 ```python

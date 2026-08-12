@@ -130,8 +130,8 @@ The variable names and subscripts added to `DecisionVariable.binary` during crea
 The OpenJij adapter's input class contains Binary, unconstrained minimization
 instances with a polynomial objective of any degree.
 The TSP instance above contains constraints, so start from the adapter's
-recommended policy, select a finite penalty weight, and prepare the same
-instance in place before sampling it.
+recommended policy, select a nonnegative fixed penalty magnitude, and prepare
+the same instance in place before sampling it.
 
 ```{code-cell} ipython3
 from ommx import FixedPenaltyPreparation
@@ -163,16 +163,20 @@ retains removed constraints and variable dependencies for evaluation, so its
 `feasible` column still reports violations of the TSP constraints.
 
 The penalty weight in `policy` belongs to explicit OMMX preparation, not to the
-OpenJij backend sampler. A finite penalty encourages feasibility but does not
-guarantee that every returned sample is feasible.
+OpenJij backend sampler. A positive magnitude encourages feasibility, while
+zero is permitted but contributes no such preference. Values in `[-atol, 0)`
+are normalized to zero; a smaller or non-finite value raises `ValueError`.
+Choosing a sufficiently large magnitude is application-specific, and no finite
+choice guarantees that every returned sample is feasible.
 
 ### Editing the recommendation
 
 The recommendation enables the model changes OpenJij commonly needs: lowering
 Indicator, OneHot, and SOS1 constraints; normalizing the optimization sense;
-Integer slack; and log encoding all used Integer variables. It leaves finite
-penalty disabled because its value is application-specific. Every call returns
-a fresh policy, so changing it does not modify a shared adapter setting.
+Integer slack; and log encoding all used Integer variables. It leaves fixed
+penalty disabled because a sufficient magnitude is application-specific. Every
+call returns a fresh policy, so changing it does not modify a shared adapter
+setting.
 
 Integer slack first attempts exact conversion of each inequality to equality
 with a maximum range of 32. The recommendation also permits an inequality to

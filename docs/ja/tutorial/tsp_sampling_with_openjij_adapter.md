@@ -130,7 +130,8 @@ instance = Instance.from_components(
 `ommx-openjij-adapter` のinput classに属するのは、任意次数の多項式目的関数を
 持つバイナリ変数のみの制約なし最小化問題です。
 上で作成したTSPインスタンスには制約があるため、Adapterの推奨Policyを取得し、
-有限のpenalty weightを選択して、同じinstanceをin-placeでprepareしてからsampleします。
+非負の固定penalty magnitudeを選択して、同じinstanceをin-placeでprepareしてから
+sampleします。
 
 ```{code-cell} ipython3
 from ommx import FixedPenaltyPreparation
@@ -161,16 +162,19 @@ sample_set.summary
 評価用に保持するため、`feasible` 列にはTSP制約の違反も引き続き表示されます。
 
 `policy` のpenalty weightはOpenJij backend samplerのパラメータではなく、明示的な
-OMMX preparationに対する指定です。有限penaltyは実行可能なsampleを得やすくしますが、
-すべてのsampleが実行可能になることを保証しません。
+OMMX preparationに対する指定です。正のmagnitudeは実行可能なsampleを得やすくしますが、
+0も許可され、その場合は実行可能性を優先する項を追加しません。`[-atol, 0)` の値は0へ
+正規化され、それより小さい値や非有限値では `ValueError` を送出します。用途に十分な
+magnitudeはapplication固有であり、どの有限値もすべてのsampleが実行可能になることを
+保証しません。
 
 ### 推奨Policyの編集
 
 推奨Policyでは、OpenJijで一般に必要となるmodel変換、すなわちIndicator、OneHot、
 SOS1制約のlowering、optimization senseの正規化、Integer slack、使用中の全Integer
-変数のlog encodingを有効にします。finite penaltyの値はapplication固有なので、
-推奨Policyでは無効のままです。呼び出すたびに新しいPolicyが返るため、編集しても
-共有されたAdapter設定は変わりません。
+変数のlog encodingを有効にします。十分な固定penalty magnitudeはapplication固有なので、
+推奨Policyでは無効のままです。呼び出すたびに新しいPolicyが返るため、編集しても共有された
+Adapter設定は変わりません。
 
 Integer slackはまず、最大range 32で各inequalityをequalityへ厳密に変換しようとします。
 推奨Policyは、厳密な変換が利用できない場合に、上限32のInteger slackを追加したまま

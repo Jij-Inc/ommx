@@ -251,9 +251,10 @@ equality変換を最初に試し、そのoperationが利用できない場合に
 追加してinequalityのまま残すことを許可します。equalityが必須なら、置き換える
 `IntegerSlackPreparation` の `slack_upper_bound=None` を指定します。
 
-finite penalty weightは引き続き呼び出し側が明示するparameterです。v2はpenalty設定が
-ない場合に一律weight `1.0` を選びましたが、v3はapplication固有の数学的weightを
-推測しません。OpenJij向けに制約を取り除く必要がある場合は、uniform operationまたは
+固定penalty weightは、呼び出し側が明示的に選ぶ非負のmagnitudeです。v2はpenalty設定が
+ない場合に一律weight `1.0` を選びましたが、v3はapplicationに十分なmagnitudeを推測
+しません。owner operationは `-atol` までの値を受け入れ、許容された負値を0へ正規化
+します。OpenJij向けに制約を取り除く必要がある場合は、uniform operationまたは
 constraint IDごとのweightを `policy.fixed_penalty` で選択します。
 
 ```python

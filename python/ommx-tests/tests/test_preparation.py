@@ -117,3 +117,47 @@ def test_prepare_exposes_final_report_when_policy_is_exhausted() -> None:
 
     assert not target.contains(instance)
     assert error.value.report == target.check_membership(instance)
+
+
+@pytest.mark.parametrize("keyed", [False, True])
+def test_fixed_penalty_weight_tolerance_reaches_the_owner_boundary(keyed: bool) -> None:
+    target = unconstrained_class(
+        allowed_variable_kinds={Kind.Binary},
+        objective_degree=2,
+    )
+
+    def fixed_penalty(weight: float) -> FixedPenaltyPreparation:
+        if keyed:
+            return FixedPenaltyPreparation.penalty_method_with_fixed_weights(
+                weights={10: weight}, atol=0.1
+            )
+        return FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
+            weight=weight, atol=0.1
+        )
+
+    x = DecisionVariable.binary(0)
+    accepted = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[x],
+        constraints={10: x == 1},
+    )
+    accepted.prepare(
+        target,
+        PreparationPolicy(fixed_penalty=fixed_penalty(-0.1)),
+    )
+    assert target.contains(accepted)
+
+    rejected = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[x],
+        constraints={10: x == 1},
+    )
+    before = rejected.to_v2_bytes()
+    with pytest.raises(ValueError, match="Fixed penalty weight"):
+        rejected.prepare(
+            target,
+            PreparationPolicy(fixed_penalty=fixed_penalty(-0.100_001)),
+        )
+    assert rejected.to_v2_bytes() == before

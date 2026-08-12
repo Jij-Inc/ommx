@@ -8,7 +8,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🆕 User-controlled `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147), [#1152](https://github.com/Jij-Inc/ommx/pull/1152), [#1153](https://github.com/Jij-Inc/ommx/pull/1153))
+### 🆕 User-controlled `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147), [#1152](https://github.com/Jij-Inc/ommx/pull/1152), [#1153](https://github.com/Jij-Inc/ommx/pull/1153), [#1154](https://github.com/Jij-Inc/ommx/pull/1154))
 
 In Python SDK v2, solver adapters selected and performed the model conversions
 needed by their solvers. Python SDK v3 makes this an explicit, caller-owned step.
@@ -40,8 +40,9 @@ OpenJij uses the same workflow for its Binary, unconstrained minimization input
 class. Its recommendation lowers Indicator, OneHot, and SOS1 constraints,
 normalizes the sense, configures Integer slack with an inequality-preserving
 fallback when exact equality conversion is unavailable, and log-encodes all
-used Integer variables. Finite penalty weights remain application-specific, so
-the recommendation leaves that field for the caller to set:
+used Integer variables. A sufficient fixed penalty magnitude remains
+application-specific, so the recommendation leaves that field for the caller
+to set:
 
 ```python
 from ommx import FixedPenaltyPreparation
@@ -75,6 +76,14 @@ Policy fields let the caller allow special-constraint lowering, minimization
 sense normalization, Integer slack, used-Integer encoding, and fixed-weight
 penalties. OMMX applies enabled changes in a fixed order and stops as soon as
 the target contains the instance.
+
+{class}`~ommx.FixedPenaltyPreparation` treats each weight as a nonnegative
+penalty magnitude. When that phase runs, OMMX adds `w * f(x) ** 2` to a
+minimization objective and subtracts it from a maximization objective. Its
+optional `atol` accepts decision-rule output in `[-atol, 0)` and normalizes it
+to zero. A non-finite value or one below `-atol` raises `ValueError` without
+committing the penalty phase. The application remains responsible for choosing
+a sufficiently large magnitude; OMMX neither selects nor caps it.
 
 {meth}`~ommx.Instance.prepare` returns `None` only after target membership is
 reached. If the allowed changes are exhausted first,
