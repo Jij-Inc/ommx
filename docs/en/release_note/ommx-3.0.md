@@ -70,7 +70,7 @@ were removed during preparation. If a later preparation step fails, changes
 from earlier completed steps remain. If you are migrating from v2 or Beta 2,
 replace OpenJij's model-conversion options and the prerelease
 `OpenJijPreparation*` APIs with this common workflow. See
-[Sampling with OpenJij](../tutorial/tsp_sampling_with_openjij_adapter.md) for a
+[Sampling with OpenJij](../tutorial/tsp_sampling_with_openjij_adapter) for a
 complete example and the
 [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
 the corresponding API replacements.
@@ -132,7 +132,7 @@ Finite penalties and approximate integer slack now require explicit opt-in.
 Every prepared value is a new {class}`~ommx.Instance`, so applicability must be
 checked on `preparation.input`, not inferred from the source. See
 [Adapter input classes](../user_guide/capability_model.md) and the
-[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter.md) for the
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) for the
 accepted model classes and preparation details.
 
 When migrating from 2.6.1, catch `AdapterNotApplicableError` instead of an

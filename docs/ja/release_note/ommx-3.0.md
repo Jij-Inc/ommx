@@ -65,7 +65,7 @@ HiGHS、Python-MIP、PySCIPOpt、OpenJijはいずれもこのフローを利用�
 preparation stepが失敗した場合、それより前に完了した変更はinstanceに残ります。v2または
 Beta 2から移行する場合は、OpenJijのモデル変換optionとpre-release版の
 `OpenJijPreparation*` APIを、この共通フローに置き換えてください。完全な利用例は
-[OpenJijによるサンプリング](../tutorial/tsp_sampling_with_openjij_adapter.md)、対応するAPIの
+[OpenJijによるサンプリング](../tutorial/tsp_sampling_with_openjij_adapter)、対応するAPIの
 置き換えは[Python SDK v2からv3へのマイグレーションガイド](../migration/python_sdk_v2_to_v3.md)
 を参照してください。
 
@@ -123,7 +123,7 @@ source_samples = preparation.evaluate_source(prepared_samples)
 別の {class}`~ommx.Instance` なので、sourceから推論せず `preparation.input` 自体の
 applicabilityを確認してください。受け入れるmodel classとpreparationの詳細は
 [Adapter Input Class](../user_guide/capability_model.md) と
-[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter.md) を参照してください。
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) を参照してください。
 
 2.6.1から移行する場合、非対応入力にはAdapter固有exceptionではなく
 `AdapterNotApplicableError`をcatchしてください。infeasibilityのcanonicalな型は
