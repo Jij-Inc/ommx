@@ -8,6 +8,31 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+## 3.0.0 Beta 3
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)
+
+### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
+
+Function、polynomial、constraint、named function、`Instance` のevaluation APIは、
+RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
+未知のID・不正な値と、回復可能なdependent-variable assertionは`ValueError`になります。
+Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
+`Instance`が所有するdependencyの正規化とremoved constraintの復元で発生した
+coefficient failureは`RuntimeError`にfallbackします。
+
+Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/SOS1の
+構築も、このboundaryを直接使います。Decision variable / parameter IDの衝突、
+不正なsubstitution、表現できないcontent factor、空の特殊制約は、Rust SDKの
+signal ownerを保持したまま`ValueError`になります。型付けされていないdefensive
+invariant failureは、引き続き`RuntimeError`にfallbackします。
+
+`Samples.append`も同じboundaryへ重複sample IDを伝播し、変更前に入力IDをすべて
+検証するため、失敗してもcollectionは変更されません。`Instance.random_samples`は、
+state group数とsample数の不整合、およびinclusiveなsample ID rangeの容量不足を
+`ValueError`として通知します。`u64`全域のID rangeと正しい正数partitionは、
+integer overflowやstrategy panicなしで生成できます。
+
 ### 🆕 ユーザーが制御する `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147)、[#1152](https://github.com/Jij-Inc/ommx/pull/1152)、[#1153](https://github.com/Jij-Inc/ommx/pull/1153)、[#1154](https://github.com/Jij-Inc/ommx/pull/1154))
 
 Python SDK v2では、solver adapterがsolverに必要なモデル変換を選び、実行していました。
@@ -89,27 +114,6 @@ errorは既存のPython exception typeを保ちます。Preparationはinstance�
 しないため、後のerrorより前に完了した変更は残ります。成功時に保証されるのはtarget
 membershipだけです。上の例のとおり、Adapterが行う通常のapplicability checkは
 引き続き必要です。
-
-### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
-
-Function、polynomial、constraint、named function、`Instance` のevaluation APIは、
-RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
-未知のID・不正な値と、回復可能なdependent-variable assertionは`ValueError`になります。
-Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
-`Instance`が所有するdependencyの正規化とremoved constraintの復元で発生した
-coefficient failureは`RuntimeError`にfallbackします。
-
-Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/SOS1の
-構築も、このboundaryを直接使います。Decision variable / parameter IDの衝突、
-不正なsubstitution、表現できないcontent factor、空の特殊制約は、Rust SDKの
-signal ownerを保持したまま`ValueError`になります。型付けされていないdefensive
-invariant failureは、引き続き`RuntimeError`にfallbackします。
-
-`Samples.append`も同じboundaryへ重複sample IDを伝播し、変更前に入力IDをすべて
-検証するため、失敗してもcollectionは変更されません。`Instance.random_samples`は、
-state group数とsample数の不整合、およびinclusiveなsample ID rangeの容量不足を
-`ValueError`として通知します。`u64`全域のID rangeと正しい正数partitionは、
-integer overflowやstrategy panicなしで生成できます。
 
 ## 3.0.0 Beta 2
 

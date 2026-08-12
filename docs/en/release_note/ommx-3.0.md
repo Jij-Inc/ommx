@@ -8,6 +8,34 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+## 3.0.0 Beta 3
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)
+
+### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
+
+Function, polynomial, constraint, named-function, and `Instance` evaluation
+APIs use the shared Rust-to-Python error boundary directly. Missing or unknown
+caller-owned state, invalid caller-provided values, and recoverable
+dependent-variable assertions raise `ValueError`. Direct function and
+polynomial partial evaluation preserves `CoefficientError`, while coefficient
+failures from `Instance`-owned dependency normalization and removed-constraint
+restoration fall back to `RuntimeError`.
+
+Decision-variable insertion and substitution, `Function.content_factor`, and
+OneHot/SOS1 construction also use this boundary directly. Duplicate decision
+variable or parameter IDs, invalid substitutions, unrepresentable content
+factors, and empty structural constraints raise `ValueError` while retaining
+their Rust SDK signal owner. Untyped defensive invariant failures continue to
+fall back to `RuntimeError`.
+
+`Samples.append` propagates duplicate sample IDs through the same boundary and
+validates every incoming ID before mutation, so a failed append leaves the
+collection unchanged. `Instance.random_samples` reports inconsistent state
+group counts and an undersized inclusive sample-ID range as `ValueError`.
+Full `u64` ID ranges and valid positive partitions are generated without
+integer overflow or a strategy panic.
+
 ### 🆕 User-controlled `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147), [#1152](https://github.com/Jij-Inc/ommx/pull/1152), [#1153](https://github.com/Jij-Inc/ommx/pull/1153), [#1154](https://github.com/Jij-Inc/ommx/pull/1154))
 
 In Python SDK v2, solver adapters selected and performed the model conversions
@@ -93,30 +121,6 @@ individual model change keep their existing Python exception types. Preparation
 does not roll the instance back: changes completed before a later error remain.
 Successful preparation guarantees target membership only. The adapter's normal
 applicability check still applies, as shown above.
-
-### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
-
-Function, polynomial, constraint, named-function, and `Instance` evaluation
-APIs use the shared Rust-to-Python error boundary directly. Missing or unknown
-caller-owned state, invalid caller-provided values, and recoverable
-dependent-variable assertions raise `ValueError`. Direct function and
-polynomial partial evaluation preserves `CoefficientError`, while coefficient
-failures from `Instance`-owned dependency normalization and removed-constraint
-restoration fall back to `RuntimeError`.
-
-Decision-variable insertion and substitution, `Function.content_factor`, and
-OneHot/SOS1 construction also use this boundary directly. Duplicate decision
-variable or parameter IDs, invalid substitutions, unrepresentable content
-factors, and empty structural constraints raise `ValueError` while retaining
-their Rust SDK signal owner. Untyped defensive invariant failures continue to
-fall back to `RuntimeError`.
-
-`Samples.append` propagates duplicate sample IDs through the same boundary and
-validates every incoming ID before mutation, so a failed append leaves the
-collection unchanged. `Instance.random_samples` reports inconsistent state
-group counts and an undersized inclusive sample-ID range as `ValueError`.
-Full `u64` ID ranges and valid positive partitions are generated without
-integer overflow or a strategy panic.
 
 ## 3.0.0 Beta 2
 
