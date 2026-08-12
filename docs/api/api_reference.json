@@ -6378,7 +6378,7 @@
             },
             {
               "name": "penalty_method_with_fixed_weights",
-              "doc": "Select the keyed fixed-weight penalty owner operation.",
+              "doc": "Select the keyed fixed-weight penalty owner operation.\n\n``atol`` is used by the owner operation to accept a decision-rule weight\ndown to ``-atol`` and normalize a tolerated negative value to zero.",
               "signatures": [
                 {
                   "parameters": [
@@ -6401,6 +6401,24 @@
                         ]
                       },
                       "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -6415,7 +6433,7 @@
             },
             {
               "name": "uniform_penalty_method_with_fixed_weight",
-              "doc": "Select the uniform fixed-weight penalty owner operation.",
+              "doc": "Select the uniform fixed-weight penalty owner operation.\n\n``atol`` is used by the owner operation to accept a decision-rule weight\ndown to ``-atol`` and normalize a tolerated negative value to zero.",
               "signatures": [
                 {
                   "parameters": [
@@ -6427,6 +6445,24 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {

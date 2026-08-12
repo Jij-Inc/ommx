@@ -19,6 +19,7 @@ mod parametric_builder;
 mod parse;
 mod pass;
 mod penalty;
+pub use penalty::InvalidPenaltyWeight;
 mod preparation;
 mod qubo;
 mod reduce_binary_power;
