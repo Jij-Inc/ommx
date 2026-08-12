@@ -11,14 +11,63 @@ impl Function {
         &mut self,
         binary_ids: &VariableIDSet,
     ) -> Result<bool, CoefficientError> {
-        Ok(match self {
-            Function::Zero => false,
-            Function::Constant(_) => false,
-            Function::Linear(_) => false, // Linear functions are already in reduced form.
-            Function::Quadratic(q) => q.reduce_binary_power(binary_ids)?,
-            Function::Polynomial(p) => p.reduce_binary_power(binary_ids)?,
-        })
+        match self {
+            Function::Zero | Function::Constant(_) | Function::Linear(_) => Ok(false),
+            Function::Quadratic(q) => q.reduce_binary_power(binary_ids),
+            Function::Polynomial(p) => p.reduce_binary_power(binary_ids),
+            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => {
+                let owned = self.clone();
+                let (rebuilt, reduced) = match owned {
+                    Function::Unary(operation) => {
+                        let (operator, mut operand) = operation.into_parts();
+                        let reduced = operand.reduce_binary_power(binary_ids)?;
+                        (Function::unary_operation(operator, operand), reduced)
+                    }
+                    Function::Nary(operation) => {
+                        let (operator, mut operands) = operation.into_parts();
+                        let mut reduced = false;
+                        for operand in &mut operands {
+                            reduced |= operand.reduce_binary_power(binary_ids)?;
+                        }
+                        (Function::nary_expression(operator, operands), reduced)
+                    }
+                    Function::Binary(operation) => {
+                        let (operator, mut lhs, mut rhs) = operation.into_parts();
+                        let mut reduced = lhs.reduce_binary_power(binary_ids)?
+                            | rhs.reduce_binary_power(binary_ids)?;
+                        if operator == BinaryOperator::Pow
+                            && is_binary_variable(&lhs, binary_ids)
+                            && rhs
+                                .as_constant()
+                                .is_some_and(|exponent| exponent >= 1.0 && exponent.fract() == 0.0)
+                        {
+                            reduced = true;
+                            (lhs, reduced)
+                        } else {
+                            (Function::binary_expression(operator, lhs, rhs), reduced)
+                        }
+                    }
+                    _ => unreachable!("composite variants matched above"),
+                };
+                *self = rebuilt;
+                Ok(reduced)
+            }
+        }
     }
+}
+
+fn is_binary_variable(function: &Function, binary_ids: &VariableIDSet) -> bool {
+    if function.constant_term() != Some(0.0) || function.degree() != Some(1.into()) {
+        return false;
+    }
+    let Some(mut terms) = function.linear_terms() else {
+        return false;
+    };
+    matches!(
+        (terms.next(), terms.next()),
+        (Some((id, coefficient)), None)
+            if binary_ids.contains(&id) && coefficient == crate::Coefficient::one()
+    )
 }
 
 #[cfg(test)]
@@ -49,5 +98,33 @@ mod tests {
             (quadratic!(1) + (coeff!(2.0) * quadratic!(1, 2)).unwrap()).unwrap(),
         );
         assert_abs_diff_eq!(f, expected);
+    }
+
+    #[test]
+    fn no_op_reduction_preserves_composite_expression_shape() {
+        let operand = Function::from((coeff!(1e150) * crate::linear!(1)).unwrap());
+        let mut product =
+            Function::nary_expression(NaryOperator::Mul, vec![operand.clone(), operand.clone()]);
+        let original_product = product.clone();
+        assert!(!product.reduce_binary_power(&VariableIDSet::new()).unwrap());
+        assert!(product == original_product);
+
+        let mut quotient = Function::binary_expression(
+            BinaryOperator::Div,
+            operand,
+            Function::try_from(2.0).unwrap(),
+        );
+        let original_quotient = quotient.clone();
+        assert!(!quotient.reduce_binary_power(&VariableIDSet::new()).unwrap());
+        assert!(quotient == original_quotient);
+    }
+
+    #[test]
+    fn binary_power_node_reduces_for_a_binary_variable() {
+        let binary_ids = crate::variable_ids!(1);
+        let mut function = Function::from(crate::linear!(1)).pow(Function::try_from(2.0).unwrap());
+
+        assert!(function.reduce_binary_power(&binary_ids).unwrap());
+        assert!(function == Function::from(crate::linear!(1)));
     }
 }

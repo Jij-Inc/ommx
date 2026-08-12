@@ -150,7 +150,7 @@ impl Instance {
             .iter()
             .map(|(v, dv)| (*v, dv.bound()))
             .collect();
-        let fbound = function.evaluate_bound(&bounds);
+        let fbound = function.evaluate_bound(&bounds)?;
 
         // Upper side is always considered. Require a finite upper bound.
         let upper_val = fbound.upper();

@@ -24,8 +24,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Cumulative polynomial-degree bound in an [`InstanceClassClause`].
 ///
 /// `AtMost(n)` includes every polynomial degree up to and including `n`.
-/// `Unbounded` includes every degree representable by the current
-/// [`crate::Function`] domain.
+/// `Unbounded` includes every polynomial degree, but does not include
+/// non-polynomial [`crate::Function`] values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum DegreeBound {
     AtMost(Degree),
@@ -148,7 +148,8 @@ impl InstanceClassClause {
         }
     }
 
-    /// Include one regular-constraint relation up to `degree_bound`.
+    /// Include one regular-constraint relation whose function is polynomial
+    /// and satisfies `degree_bound`.
     pub fn with_regular_constraint(
         mut self,
         relation: Equality,
@@ -158,7 +159,8 @@ impl InstanceClassClause {
         self
     }
 
-    /// Include one Indicator body relation up to `degree_bound`.
+    /// Include one Indicator body relation whose function is polynomial and
+    /// satisfies `degree_bound`.
     pub fn with_indicator_constraint(
         mut self,
         relation: Equality,
@@ -191,7 +193,9 @@ impl InstanceClassClause {
         &self.allowed_variable_kinds
     }
 
-    /// Return the objective's cumulative degree bound.
+    /// Return the objective's cumulative polynomial-degree bound.
+    ///
+    /// Every bound excludes non-polynomial objective functions.
     pub fn objective_degree_bound(&self) -> DegreeBound {
         self.objective_degree_bound
     }
@@ -238,14 +242,15 @@ impl InstanceClassClause {
             }
         }
 
-        if !self
-            .objective_degree_bound
-            .includes(facts.objective_degree())
-        {
-            mismatches.push(InstanceClassMismatch::ObjectiveDegreeExceedsBound {
-                actual_degree: facts.objective_degree(),
-                bound: self.objective_degree_bound,
-            });
+        match facts.objective_degree() {
+            Some(actual_degree) if !self.objective_degree_bound.includes(actual_degree) => {
+                mismatches.push(InstanceClassMismatch::ObjectiveDegreeExceedsBound {
+                    actual_degree,
+                    bound: self.objective_degree_bound,
+                });
+            }
+            None => mismatches.push(InstanceClassMismatch::ObjectiveFunctionNotPolynomial),
+            Some(_) => {}
         }
 
         check_regular_constraints(
@@ -286,8 +291,8 @@ impl InstanceClassClause {
 
 fn group_constraint_facts<ID: Copy + Ord>(
     facts: &BTreeMap<ID, ConstraintFacts>,
-) -> BTreeMap<Equality, BTreeMap<ID, Degree>> {
-    let mut grouped = BTreeMap::<Equality, BTreeMap<ID, Degree>>::new();
+) -> BTreeMap<Equality, BTreeMap<ID, Option<Degree>>> {
+    let mut grouped = BTreeMap::<Equality, BTreeMap<ID, Option<Degree>>>::new();
     for (id, fact) in facts {
         grouped
             .entry(fact.relation())
@@ -311,8 +316,21 @@ fn check_regular_constraints(
             });
             continue;
         };
+        let non_polynomial_ids = constraints
+            .iter()
+            .filter_map(|(id, degree)| degree.is_none().then_some(*id))
+            .collect::<BTreeSet<_>>();
+        if !non_polynomial_ids.is_empty() {
+            mismatches.push(
+                InstanceClassMismatch::RegularConstraintFunctionNotPolynomial {
+                    relation,
+                    constraint_ids: non_polynomial_ids,
+                },
+            );
+        }
         let actual_degrees = constraints
             .into_iter()
+            .filter_map(|(id, degree)| degree.map(|degree| (id, degree)))
             .filter(|(_, degree)| !bound.includes(*degree))
             .collect::<BTreeMap<_, _>>();
         if !actual_degrees.is_empty() {
@@ -350,8 +368,19 @@ fn check_indicator_constraints(
             );
             continue;
         };
+        let non_polynomial_ids = constraints
+            .iter()
+            .filter_map(|(id, degree)| degree.is_none().then_some(*id))
+            .collect::<BTreeSet<_>>();
+        if !non_polynomial_ids.is_empty() {
+            mismatches.push(InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
+                relation,
+                constraint_ids: non_polynomial_ids,
+            });
+        }
         let actual_degrees = constraints
             .into_iter()
+            .filter_map(|(id, degree)| degree.map(|degree| (id, degree)))
             .filter(|(_, degree)| !bound.includes(*degree))
             .collect::<BTreeMap<_, _>>();
         if !actual_degrees.is_empty() {
@@ -441,6 +470,7 @@ pub enum InstanceClassMismatch {
         actual_degree: Degree,
         bound: DegreeBound,
     },
+    ObjectiveFunctionNotPolynomial,
     RegularConstraintRelationNotAllowed {
         relation: Equality,
         constraint_ids: BTreeSet<ConstraintID>,
@@ -450,6 +480,10 @@ pub enum InstanceClassMismatch {
         relation: Equality,
         actual_degrees: BTreeMap<ConstraintID, Degree>,
         bound: DegreeBound,
+    },
+    RegularConstraintFunctionNotPolynomial {
+        relation: Equality,
+        constraint_ids: BTreeSet<ConstraintID>,
     },
     IndicatorConstraintsNotAllowed {
         constraint_ids: BTreeSet<IndicatorConstraintID>,
@@ -463,6 +497,10 @@ pub enum InstanceClassMismatch {
         relation: Equality,
         actual_degrees: BTreeMap<IndicatorConstraintID, Degree>,
         bound: DegreeBound,
+    },
+    IndicatorBodyFunctionNotPolynomial {
+        relation: Equality,
+        constraint_ids: BTreeSet<IndicatorConstraintID>,
     },
     OneHotConstraintsNotAllowed {
         constraint_ids: BTreeSet<OneHotConstraintID>,
@@ -491,6 +529,9 @@ impl std::fmt::Display for InstanceClassMismatch {
                 actual_degree,
                 bound,
             } => write!(f, "objective degree {actual_degree} exceeds {bound}"),
+            Self::ObjectiveFunctionNotPolynomial => {
+                f.write_str("objective function is not polynomial")
+            }
             Self::RegularConstraintRelationNotAllowed {
                 relation,
                 constraint_ids,
@@ -506,6 +547,13 @@ impl std::fmt::Display for InstanceClassMismatch {
             } => write!(
                 f,
                 "regular {relation:?} constraint degrees {actual_degrees:?} exceed {bound}"
+            ),
+            Self::RegularConstraintFunctionNotPolynomial {
+                relation,
+                constraint_ids,
+            } => write!(
+                f,
+                "regular {relation:?} constraint functions for IDs {constraint_ids:?} are not polynomial"
             ),
             Self::IndicatorConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "indicator constraints {constraint_ids:?} are not allowed")
@@ -525,6 +573,13 @@ impl std::fmt::Display for InstanceClassMismatch {
             } => write!(
                 f,
                 "indicator {relation:?} body degrees {actual_degrees:?} exceed {bound}"
+            ),
+            Self::IndicatorBodyFunctionNotPolynomial {
+                relation,
+                constraint_ids,
+            } => write!(
+                f,
+                "indicator {relation:?} body functions for IDs {constraint_ids:?} are not polynomial"
             ),
             Self::OneHotConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "one-hot constraints {constraint_ids:?} are not allowed")
@@ -653,20 +708,21 @@ mod tests {
         )
     }
 
-    fn covering_clause(facts: &InstanceFacts) -> InstanceClassClause {
+    fn covering_clause(facts: &InstanceFacts) -> Option<InstanceClassClause> {
         let mut clause = InstanceClassClause::new(
             "covering",
             facts.used_variables_by_kind().keys().copied().collect(),
-            DegreeBound::AtMost(facts.objective_degree()),
+            DegreeBound::AtMost(facts.objective_degree()?),
             BTreeSet::from([facts.sense()]),
         );
 
         let mut regular = BTreeMap::<Equality, Degree>::new();
         for fact in facts.regular_constraints().values() {
+            let fact_degree = fact.degree()?;
             regular
                 .entry(fact.relation())
-                .and_modify(|degree| *degree = (*degree).max(fact.degree()))
-                .or_insert(fact.degree());
+                .and_modify(|degree| *degree = (*degree).max(fact_degree))
+                .or_insert(fact_degree);
         }
         for (relation, degree) in regular {
             clause = clause.with_regular_constraint(relation, DegreeBound::AtMost(degree));
@@ -674,10 +730,11 @@ mod tests {
 
         let mut indicator = BTreeMap::<Equality, Degree>::new();
         for fact in facts.indicator_constraints().values() {
+            let fact_degree = fact.degree()?;
             indicator
                 .entry(fact.relation())
-                .and_modify(|degree| *degree = (*degree).max(fact.degree()))
-                .or_insert(fact.degree());
+                .and_modify(|degree| *degree = (*degree).max(fact_degree))
+                .or_insert(fact_degree);
         }
         for (relation, degree) in indicator {
             clause = clause.with_indicator_constraint(relation, DegreeBound::AtMost(degree));
@@ -688,7 +745,7 @@ mod tests {
         if !facts.sos1_constraint_ids().is_empty() {
             clause = clause.with_sos1();
         }
-        clause
+        Some(clause)
     }
 
     #[test]
@@ -794,7 +851,7 @@ mod tests {
 
         // Compare serialized bytes to make the side-effect-free contract
         // observable across the complete instance.
-        let before = instance.to_v2_bytes();
+        let before = instance.to_v2_bytes().unwrap();
         let limited = InstanceClassClause::new(
             "limited",
             BTreeSet::from([Kind::Binary]),
@@ -850,7 +907,55 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(instance.to_v2_bytes(), before);
+        assert_eq!(instance.to_v2_bytes().unwrap(), before);
+    }
+
+    #[test]
+    fn every_degree_bound_rejects_non_polynomial_functions() {
+        let x = VariableID::from(1);
+        let regular_id = ConstraintID::from(10);
+        let indicator_id = IndicatorConstraintID::from(20);
+        let absolute_x = || Function::from(linear!(x)).abs();
+        let instance = crate::Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(absolute_x())
+            .decision_variables(BTreeMap::from([(x, DecisionVariable::binary())]))
+            .constraints(BTreeMap::from([(
+                regular_id,
+                Constraint::equal_to_zero(absolute_x()),
+            )]))
+            .indicator_constraints(BTreeMap::from([(
+                indicator_id,
+                IndicatorConstraint::new(x, Equality::EqualToZero, absolute_x()),
+            )]))
+            .build()
+            .unwrap();
+
+        for bound in [DegreeBound::at_most(2), DegreeBound::Unbounded] {
+            let polynomial_only = InstanceClass::from(
+                clause("polynomial-only", &[Kind::Binary], bound)
+                    .with_regular_constraint(Equality::EqualToZero, bound)
+                    .with_indicator_constraint(Equality::EqualToZero, bound),
+            );
+
+            let report = polynomial_only.check_membership(&instance);
+            assert_eq!(
+                report.clause_reports()[0].mismatches(),
+                &[
+                    InstanceClassMismatch::ObjectiveFunctionNotPolynomial,
+                    InstanceClassMismatch::RegularConstraintFunctionNotPolynomial {
+                        relation: Equality::EqualToZero,
+                        constraint_ids: BTreeSet::from([regular_id]),
+                    },
+                    InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
+                        relation: Equality::EqualToZero,
+                        constraint_ids: BTreeSet::from([indicator_id]),
+                    },
+                ]
+            );
+            assert!(!report.is_member());
+            assert!(!polynomial_only.contains(&instance));
+        }
     }
 
     #[test]
@@ -990,11 +1095,14 @@ mod tests {
         }
 
         #[test]
-        fn covering_clause_contains_every_current_instance(
+        fn covering_clause_contains_every_polynomial_instance(
             instance in any_with::<crate::Instance>(InstanceParameters::full_v3())
         ) {
             let facts = InstanceFacts::from(&instance);
-            let instance_class = InstanceClass::from(covering_clause(&facts));
+            let Some(clause) = covering_clause(&facts) else {
+                return Ok(());
+            };
+            let instance_class = InstanceClass::from(clause);
             let report = instance_class.check_membership(&instance);
             prop_assert!(report.is_member(), "{report}");
             prop_assert!(instance_class.contains(&instance));

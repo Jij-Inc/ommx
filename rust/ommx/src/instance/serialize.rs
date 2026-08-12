@@ -1,50 +1,236 @@
 use super::*;
-use crate::{message_io, v1, v2, ConstraintType, Message, Parse};
-use anyhow::Result;
+use crate::{message_io, parse::RawParseError, v1, v2, ConstraintType, Message, Parse};
+use anyhow::{Context, Result};
+
+pub(super) fn ensure_root_function_depths(
+    action: &'static str,
+    root: &'static str,
+    objective: &Function,
+    constraints: &ConstraintCollection<Constraint>,
+    indicator_constraints: &ConstraintCollection<IndicatorConstraint>,
+    decision_variable_dependency: &AcyclicAssignments,
+    named_functions: &NamedFunctionTable<NamedFunction>,
+) -> Result<()> {
+    objective
+        .ensure_wire_expression_depth()
+        .with_context(|| format!("{action} {root} objective"))?;
+
+    for (id, constraint) in constraints.active() {
+        constraint
+            .function()
+            .ensure_wire_expression_depth()
+            .with_context(|| format!("{action} active regular constraint {id}"))?;
+    }
+    for (id, (constraint, _)) in constraints.removed() {
+        constraint
+            .function()
+            .ensure_wire_expression_depth()
+            .with_context(|| format!("{action} removed regular constraint {id}"))?;
+    }
+    for (id, constraint) in indicator_constraints.active() {
+        constraint
+            .function()
+            .ensure_wire_expression_depth()
+            .with_context(|| format!("{action} active indicator constraint {id}"))?;
+    }
+    for (id, (constraint, _)) in indicator_constraints.removed() {
+        constraint
+            .function()
+            .ensure_wire_expression_depth()
+            .with_context(|| format!("{action} removed indicator constraint {id}"))?;
+    }
+    for (id, function) in decision_variable_dependency.iter() {
+        function
+            .ensure_wire_expression_depth()
+            .with_context(|| format!("{action} decision variable dependency {id}"))?;
+    }
+    for (id, named_function) in named_functions {
+        named_function
+            .function
+            .ensure_wire_expression_depth()
+            .with_context(|| format!("{action} named function {id}"))?;
+    }
+    Ok(())
+}
 
 impl Instance {
+    /// Serialize this instance as `ommx.v1.Instance` protobuf bytes.
+    ///
+    /// Returns an error if an embedded function expression exceeds the
+    /// protobuf-safe serialization depth or cannot be represented in v1.
     pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
+        // Validate before cloning: cloning a recursively nested Function walks
+        // the expression tree recursively and must not precede the wire-depth
+        // guard that makes this API fallible.
+        ensure_root_function_depths(
+            "Cannot serialize",
+            "Instance",
+            &self.objective,
+            &self.constraint_collection,
+            &self.indicator_constraint_collection,
+            &self.decision_variable_dependency,
+            &self.named_functions,
+        )?;
         let v1_instance = v1::Instance::try_from(self.clone())?;
         Ok(v1_instance.encode_to_vec())
     }
 
-    pub fn to_v2_bytes(&self) -> Vec<u8> {
+    /// Serialize this instance as `ommx.v2.Instance` protobuf bytes.
+    ///
+    /// Returns an error if an embedded function expression exceeds the
+    /// protobuf-safe serialization depth.
+    pub fn to_v2_bytes(&self) -> Result<Vec<u8>> {
+        ensure_root_function_depths(
+            "Cannot serialize",
+            "Instance",
+            &self.objective,
+            &self.constraint_collection,
+            &self.indicator_constraint_collection,
+            &self.decision_variable_dependency,
+            &self.named_functions,
+        )?;
         let v2_instance = v2::Instance::from(self.clone());
-        v2_instance.encode_to_vec()
+        Ok(v2_instance.encode_to_vec())
     }
 
+    /// Deserialize an `ommx.v1.Instance` from protobuf bytes.
+    ///
+    /// Malformed or semantically invalid messages, including embedded
+    /// functions beyond the managed wire-depth limit, preserve
+    /// [`crate::ParseError`] in the returned error chain.
     pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = message_io::decode::<v1::Instance>(bytes, "ommx.v1.Instance")?;
-        Ok(Parse::parse(inner, &())?)
+        let instance = Parse::parse(inner, &())?;
+        ensure_root_function_depths(
+            "Cannot deserialize",
+            "Instance",
+            &instance.objective,
+            &instance.constraint_collection,
+            &instance.indicator_constraint_collection,
+            &instance.decision_variable_dependency,
+            &instance.named_functions,
+        )
+        .map_err(|error| {
+            RawParseError::InvalidFunction(format!("{error:#}"))
+                .context("ommx.v1.Instance", "bytes")
+        })?;
+        Ok(instance)
     }
 
+    /// Deserialize an `ommx.v2.Instance` from protobuf bytes.
+    ///
+    /// Malformed or semantically invalid messages, including embedded
+    /// functions beyond the managed wire-depth limit, preserve
+    /// [`crate::ParseError`] in the returned error chain.
     pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = message_io::decode::<v2::Instance>(bytes, "ommx.v2.Instance")?;
-        Ok(Parse::parse(inner, &())?)
+        let instance = Parse::parse(inner, &())?;
+        ensure_root_function_depths(
+            "Cannot deserialize",
+            "Instance",
+            &instance.objective,
+            &instance.constraint_collection,
+            &instance.indicator_constraint_collection,
+            &instance.decision_variable_dependency,
+            &instance.named_functions,
+        )
+        .map_err(|error| {
+            RawParseError::InvalidFunction(format!("{error:#}"))
+                .context("ommx.v2.Instance", "bytes")
+        })?;
+        Ok(instance)
     }
 }
 
 impl ParametricInstance {
+    /// Serialize this parametric instance as `ommx.v1.ParametricInstance`
+    /// protobuf bytes.
+    ///
+    /// Returns an error if an embedded function expression exceeds the
+    /// protobuf-safe serialization depth or cannot be represented in v1.
     pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
+        // Keep the depth guard ahead of the recursive clone for the same reason
+        // as Instance::to_v1_bytes.
+        ensure_root_function_depths(
+            "Cannot serialize",
+            "ParametricInstance",
+            &self.objective,
+            &self.constraint_collection,
+            &self.indicator_constraint_collection,
+            &self.decision_variable_dependency,
+            &self.named_functions,
+        )?;
         let v1_instance = v1::ParametricInstance::try_from(self.clone())?;
         Ok(v1_instance.encode_to_vec())
     }
 
-    pub fn to_v2_bytes(&self) -> Vec<u8> {
+    /// Serialize this parametric instance as `ommx.v2.ParametricInstance`
+    /// protobuf bytes.
+    ///
+    /// Returns an error if an embedded function expression exceeds the
+    /// protobuf-safe serialization depth.
+    pub fn to_v2_bytes(&self) -> Result<Vec<u8>> {
+        ensure_root_function_depths(
+            "Cannot serialize",
+            "ParametricInstance",
+            &self.objective,
+            &self.constraint_collection,
+            &self.indicator_constraint_collection,
+            &self.decision_variable_dependency,
+            &self.named_functions,
+        )?;
         let v2_instance = v2::ParametricInstance::from(self.clone());
-        v2_instance.encode_to_vec()
+        Ok(v2_instance.encode_to_vec())
     }
 
+    /// Deserialize an `ommx.v1.ParametricInstance` from protobuf bytes.
+    ///
+    /// Malformed or semantically invalid messages, including embedded
+    /// functions beyond the managed wire-depth limit, preserve
+    /// [`crate::ParseError`] in the returned error chain.
     pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
         let inner =
             message_io::decode::<v1::ParametricInstance>(bytes, "ommx.v1.ParametricInstance")?;
-        Ok(Parse::parse(inner, &())?)
+        let instance = Parse::parse(inner, &())?;
+        ensure_root_function_depths(
+            "Cannot deserialize",
+            "ParametricInstance",
+            &instance.objective,
+            &instance.constraint_collection,
+            &instance.indicator_constraint_collection,
+            &instance.decision_variable_dependency,
+            &instance.named_functions,
+        )
+        .map_err(|error| {
+            RawParseError::InvalidFunction(format!("{error:#}"))
+                .context("ommx.v1.ParametricInstance", "bytes")
+        })?;
+        Ok(instance)
     }
 
+    /// Deserialize an `ommx.v2.ParametricInstance` from protobuf bytes.
+    ///
+    /// Malformed or semantically invalid messages, including embedded
+    /// functions beyond the managed wire-depth limit, preserve
+    /// [`crate::ParseError`] in the returned error chain.
     pub fn from_v2_bytes(bytes: &[u8]) -> Result<Self> {
         let inner =
             message_io::decode::<v2::ParametricInstance>(bytes, "ommx.v2.ParametricInstance")?;
-        Ok(Parse::parse(inner, &())?)
+        let instance = Parse::parse(inner, &())?;
+        ensure_root_function_depths(
+            "Cannot deserialize",
+            "ParametricInstance",
+            &instance.objective,
+            &instance.constraint_collection,
+            &instance.indicator_constraint_collection,
+            &instance.decision_variable_dependency,
+            &instance.named_functions,
+        )
+        .map_err(|error| {
+            RawParseError::InvalidFunction(format!("{error:#}"))
+                .context("ommx.v2.ParametricInstance", "bytes")
+        })?;
+        Ok(instance)
     }
 }
 
@@ -151,11 +337,144 @@ fn decision_variable_dependency_to_v2_map(
 mod tests {
     use super::*;
     use crate::{
-        v2, ATol, DecisionVariable, Equality, Evaluate, Function, IndicatorConstraint,
+        linear, v2, ATol, DecisionVariable, Equality, Evaluate, Function, IndicatorConstraint,
         IndicatorConstraintID, OneHotConstraint, OneHotConstraintID, ParameterLabelStore,
         ParameterTable, Sampled, Sos1Constraint, Sos1ConstraintID, VariableID,
     };
     use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+    fn function_at_depth(depth: usize) -> Function {
+        (0..depth).fold(Function::from(linear!(1)), |function, level| {
+            if level % 2 == 0 {
+                function.abs()
+            } else {
+                function.signum()
+            }
+        })
+    }
+
+    fn instance_with_objective_at_depth(depth: usize) -> Instance {
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(function_at_depth(depth))
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                DecisionVariable::continuous(),
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap()
+    }
+
+    fn instance_with_named_function_at_depth(depth: usize) -> Instance {
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                DecisionVariable::continuous(),
+            )]))
+            .constraints(BTreeMap::new())
+            .named_functions(BTreeMap::from([(
+                NamedFunctionID::from(1),
+                NamedFunction {
+                    function: function_at_depth(depth),
+                },
+            )]))
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn instance_protobuf_bytes_enforce_embedded_expression_depth_boundary() {
+        let boundary = instance_with_objective_at_depth(Function::MAX_WIRE_EXPRESSION_DEPTH);
+        let v1_bytes = boundary.to_v1_bytes().unwrap();
+        assert_eq!(Instance::from_v1_bytes(&v1_bytes).unwrap(), boundary);
+        let v2_bytes = boundary.to_v2_bytes().unwrap();
+        assert_eq!(Instance::from_v2_bytes(&v2_bytes).unwrap(), boundary);
+
+        // Named functions sit below a table and a protobuf map entry, making
+        // this one of the deepest supported Function containers in v2.
+        let deepest_container =
+            instance_with_named_function_at_depth(Function::MAX_WIRE_EXPRESSION_DEPTH);
+        let v2_bytes = deepest_container.to_v2_bytes().unwrap();
+        assert_eq!(
+            Instance::from_v2_bytes(&v2_bytes).unwrap(),
+            deepest_container,
+        );
+
+        let too_deep = instance_with_objective_at_depth(Function::MAX_WIRE_EXPRESSION_DEPTH + 1);
+        let direct_v1_error = v1::Instance::try_from(too_deep.clone()).unwrap_err();
+        assert!(
+            format!("{direct_v1_error:#}").contains("protobuf serialization limit of 32"),
+            "unexpected error: {direct_v1_error:#}",
+        );
+        for error in [
+            too_deep.to_v1_bytes().unwrap_err(),
+            too_deep.to_v2_bytes().unwrap_err(),
+        ] {
+            let message = format!("{error:#}");
+            assert!(
+                message.contains("protobuf serialization limit of 32"),
+                "unexpected error: {error:#}",
+            );
+        }
+
+        let parametric: ParametricInstance = too_deep.into();
+        let direct_v1_error = v1::ParametricInstance::try_from(parametric.clone()).unwrap_err();
+        assert!(
+            format!("{direct_v1_error:#}").contains("protobuf serialization limit of 32"),
+            "unexpected error: {direct_v1_error:#}",
+        );
+        let error = parametric.to_v1_bytes().unwrap_err();
+        assert!(
+            format!("{error:#}").contains("protobuf serialization limit of 32"),
+            "unexpected error: {error:#}",
+        );
+        assert!(parametric.to_v2_bytes().is_err());
+
+        // Raw protobuf construction remains available to low-level callers,
+        // but managed decoders must reject roots that cannot subsequently be
+        // encoded by the corresponding managed API.
+        let raw_function = function_at_depth(Function::MAX_WIRE_EXPRESSION_DEPTH + 1);
+
+        let mut raw_v1 = v1::Instance::try_from(instance_with_objective_at_depth(0)).unwrap();
+        raw_v1.objective = Some(raw_function.clone().into());
+        let error = Instance::from_v1_bytes(&raw_v1.encode_to_vec()).unwrap_err();
+        assert!(error.downcast_ref::<crate::ParseError>().is_some());
+        assert!(
+            format!("{error:#}").contains("protobuf serialization limit of 32"),
+            "unexpected error: {error:#}",
+        );
+
+        let mut raw_v2 = v2::Instance::from(instance_with_objective_at_depth(0));
+        raw_v2.objective = Some(raw_function.clone().into());
+        let error = Instance::from_v2_bytes(&raw_v2.encode_to_vec()).unwrap_err();
+        assert!(error.downcast_ref::<crate::ParseError>().is_some());
+        assert!(
+            format!("{error:#}").contains("protobuf serialization limit of 32"),
+            "unexpected error: {error:#}",
+        );
+
+        let base_parametric: ParametricInstance = instance_with_objective_at_depth(0).into();
+        let mut raw_v1 = v1::ParametricInstance::try_from(base_parametric.clone()).unwrap();
+        raw_v1.objective = Some(raw_function.clone().into());
+        let error = ParametricInstance::from_v1_bytes(&raw_v1.encode_to_vec()).unwrap_err();
+        assert!(error.downcast_ref::<crate::ParseError>().is_some());
+        assert!(
+            format!("{error:#}").contains("protobuf serialization limit of 32"),
+            "unexpected error: {error:#}",
+        );
+
+        let mut raw_v2 = v2::ParametricInstance::from(base_parametric);
+        raw_v2.objective = Some(raw_function.into());
+        let error = ParametricInstance::from_v2_bytes(&raw_v2.encode_to_vec()).unwrap_err();
+        assert!(error.downcast_ref::<crate::ParseError>().is_some());
+        assert!(
+            format!("{error:#}").contains("protobuf serialization limit of 32"),
+            "unexpected error: {error:#}",
+        );
+    }
 
     fn instance_with_special_constraints() -> Instance {
         let variable_1 = VariableID::from(1);
@@ -268,7 +587,7 @@ mod tests {
     #[test]
     fn v2_instance_deserializes_special_constraint_collections() {
         let instance = instance_with_special_constraints();
-        let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+        let restored = Instance::from_v2_bytes(&instance.to_v2_bytes().unwrap()).unwrap();
 
         assert_eq!(restored, instance);
         assert_eq!(
@@ -482,7 +801,7 @@ mod tests {
 
     #[test]
     fn to_v2_bytes_encodes_v2_instance() {
-        let bytes = instance_with_special_constraints().to_v2_bytes();
+        let bytes = instance_with_special_constraints().to_v2_bytes().unwrap();
         let proto = v2::Instance::decode(bytes.as_slice()).unwrap();
 
         assert_eq!(proto.required_features, expected_special_features());
@@ -556,7 +875,7 @@ mod tests {
             .build()
             .unwrap();
 
-        let restored = ParametricInstance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+        let restored = ParametricInstance::from_v2_bytes(&instance.to_v2_bytes().unwrap()).unwrap();
 
         assert_eq!(restored, instance);
         assert_eq!(restored.parameters().labels().name(parameter_id), Some("p"));

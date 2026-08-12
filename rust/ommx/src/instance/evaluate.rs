@@ -43,7 +43,7 @@ fn normalize_dependency_partial_evaluation_error(
     id: VariableID,
     error: crate::Error,
 ) -> crate::Error {
-    if !error.is::<crate::CoefficientError>() {
+    if !error.is::<crate::CoefficientError>() && !error.is::<crate::FunctionEvaluationError>() {
         return error;
     }
 
@@ -55,6 +55,20 @@ fn normalize_dependency_partial_evaluation_error(
         { id = ?id, cause = %error },
         "failed to normalize dependent variable {id:?}: {error:#}",
     )
+}
+
+fn dependent_function_evaluation_error(id: VariableID, error: crate::Error) -> crate::Error {
+    if error.is::<crate::FunctionEvaluationError>() {
+        // A direct Function evaluation exposes FunctionEvaluationError so its
+        // caller can change the state or expression. At this Instance-owned
+        // boundary the value is internally derived, so exposing that signal
+        // would give Python the wrong ValueError recovery contract.
+        return crate::error!(
+            { id = ?id, cause = %error },
+            "failed to evaluate dependent variable {id:?}: {error:#}",
+        );
+    }
+    error.context(format!("failed to evaluate dependent variable {id:?}"))
 }
 
 fn ensure_instance_value_is_finite(var_id: VariableID, value: f64) -> Result<()> {
@@ -371,9 +385,12 @@ impl StatePopulationPlan<'_> {
         }
 
         for (id, f) in self.dependency.evaluation_order_iter() {
-            let value = f.evaluate(&state, atol).inspect_err(|e| {
-                tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
-            })?;
+            let value = f
+                .evaluate(&state, atol)
+                .map_err(|error| dependent_function_evaluation_error(id, error))
+                .inspect_err(|e| {
+                    tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
+                })?;
             if !value.is_finite() {
                 crate::bail!(
                     { id = ?id, value },
@@ -554,7 +571,9 @@ impl Instance {
             let required_ids = function.required_ids();
 
             if required_ids.is_empty() {
-                let value = function.evaluate(&v1::State::default(), atol)?;
+                let value = function
+                    .evaluate(&v1::State::default(), atol)
+                    .map_err(|error| dependent_function_evaluation_error(id, error))?;
                 if !value.is_finite() {
                     crate::bail!(
                         { id = ?id, value },
@@ -1686,7 +1705,10 @@ mod tests {
         assert!(!err.is::<InconsistentDependentValue>());
         assert!(!err.is::<UnverifiableDependentAssertion>());
         assert!(!err.is::<DecisionVariableError>());
-        assert!(err.to_string().contains("evaluated to non-finite value"));
+        assert!(err
+            .to_string()
+            .contains("failed to evaluate dependent variable VariableID(10)"));
+        assert!(!err.is::<crate::FunctionEvaluationError>());
     }
 
     /// Test that named functions can reference fixed, dependent, and irrelevant variables

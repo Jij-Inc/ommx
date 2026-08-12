@@ -22,6 +22,15 @@ impl LogicalMemoryProfile for Function {
             Function::Polynomial(polynomial) => {
                 polynomial.visit_logical_memory(path.with("Polynomial").as_mut(), visitor);
             }
+            Function::Unary(operation) => {
+                operation.visit_logical_memory(path.with("Unary").as_mut(), visitor);
+            }
+            Function::Nary(operation) => {
+                operation.visit_logical_memory(path.with("Nary").as_mut(), visitor);
+            }
+            Function::Binary(operation) => {
+                operation.visit_logical_memory(path.with("Binary").as_mut(), visitor);
+            }
         }
     }
 }

@@ -414,6 +414,11 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         Translate ommx.Function to `mip.LinExpr` or `float`.
         """
         degree = f.degree()
+        if degree is None:
+            raise OMMXPythonMIPAdapterError(
+                "Non-polynomial functions are not supported. "
+                "Only linear (degree 1) and constant (degree 0) functions are supported."
+            )
         constant = f.constant_term
         if degree > 1:
             raise OMMXPythonMIPAdapterError(

@@ -211,6 +211,7 @@ pub enum InstanceClassMismatch {
         actual_degree: u32,
         bound: DegreeBound,
     },
+    ObjectiveFunctionNotPolynomial {},
     RegularConstraintRelationNotAllowed {
         relation: Equality,
         constraint_ids: BTreeSet<u64>,
@@ -220,6 +221,10 @@ pub enum InstanceClassMismatch {
         relation: Equality,
         actual_degrees: BTreeMap<u64, u32>,
         bound: DegreeBound,
+    },
+    RegularConstraintFunctionNotPolynomial {
+        relation: Equality,
+        constraint_ids: BTreeSet<u64>,
     },
     IndicatorConstraintsNotAllowed {
         constraint_ids: BTreeSet<u64>,
@@ -233,6 +238,10 @@ pub enum InstanceClassMismatch {
         relation: Equality,
         actual_degrees: BTreeMap<u64, u32>,
         bound: DegreeBound,
+    },
+    IndicatorBodyFunctionNotPolynomial {
+        relation: Equality,
+        constraint_ids: BTreeSet<u64>,
     },
     OneHotConstraintsNotAllowed {
         constraint_ids: BTreeSet<u64>,
@@ -268,6 +277,9 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                 actual_degree: actual_degree.into_inner(),
                 bound: DegreeBound(bound),
             },
+            ommx::InstanceClassMismatch::ObjectiveFunctionNotPolynomial => {
+                Self::ObjectiveFunctionNotPolynomial {}
+            }
             ommx::InstanceClassMismatch::RegularConstraintRelationNotAllowed {
                 relation,
                 constraint_ids,
@@ -291,6 +303,16 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                     .map(|(id, degree)| (id.into_inner(), degree.into_inner()))
                     .collect(),
                 bound: DegreeBound(bound),
+            },
+            ommx::InstanceClassMismatch::RegularConstraintFunctionNotPolynomial {
+                relation,
+                constraint_ids,
+            } => Self::RegularConstraintFunctionNotPolynomial {
+                relation: relation.into(),
+                constraint_ids: constraint_ids
+                    .into_iter()
+                    .map(|id| id.into_inner())
+                    .collect(),
             },
             ommx::InstanceClassMismatch::IndicatorConstraintsNotAllowed { constraint_ids } => {
                 Self::IndicatorConstraintsNotAllowed {
@@ -323,6 +345,16 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                     .map(|(id, degree)| (id.into_inner(), degree.into_inner()))
                     .collect(),
                 bound: DegreeBound(bound),
+            },
+            ommx::InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
+                relation,
+                constraint_ids,
+            } => Self::IndicatorBodyFunctionNotPolynomial {
+                relation: relation.into(),
+                constraint_ids: constraint_ids
+                    .into_iter()
+                    .map(|id| id.into_inner())
+                    .collect(),
             },
             ommx::InstanceClassMismatch::OneHotConstraintsNotAllowed { constraint_ids } => {
                 Self::OneHotConstraintsNotAllowed {

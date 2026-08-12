@@ -6486,6 +6486,27 @@
           "bases": [],
           "methods": [
             {
+              "name": "__abs__",
+              "doc": "Absolute value operator",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__add__",
               "doc": "Addition",
               "signatures": [
@@ -6786,6 +6807,44 @@
               "deprecated": null
             },
             {
+              "name": "__pow__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "exponent",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "modulo",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__radd__",
               "doc": "Reverse addition (lhs + self)",
               "signatures": [
@@ -6874,6 +6933,44 @@
               "deprecated": null
             },
             {
+              "name": "__rpow__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "base",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "modulo",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__rsub__",
               "doc": "Reverse subtraction (lhs - self)",
               "signatures": [
@@ -6910,8 +7007,80 @@
               "deprecated": null
             },
             {
+              "name": "__rtruediv__",
+              "doc": "Reverse division (lhs / self)",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__sub__",
               "doc": "Subtraction",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__truediv__",
+              "doc": "Division",
               "signatures": [
                 {
                   "parameters": [
@@ -7189,7 +7358,7 @@
             },
             {
               "name": "content_factor",
-              "doc": "",
+              "doc": "Return the minimal positive factor that makes all coefficients integers.\n\nRaises `TypeError` for a composed, non-polynomial Function.",
               "signatures": [
                 {
                   "parameters": [],
@@ -7205,14 +7374,20 @@
             },
             {
               "name": "degree",
-              "doc": "Get the degree of this function.\n\nReturns the highest degree of any term in the function.\nZero function has degree 0, constant function has degree 0,\nlinear function has degree 1, quadratic function has degree 2, etc.",
+              "doc": "Get the degree of this function.\n\nReturns the highest degree of any term in a polynomial function.\nZero function has degree 0, constant function has degree 0,\nlinear function has degree 1, quadratic function has degree 2, etc.\nReturns None for non-polynomial expression functions.",
               "signatures": [
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "int",
+                    "display": "Optional[int]",
                     "link_target": null,
-                    "children": []
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -7270,7 +7445,7 @@
             },
             {
               "name": "evaluate_bound",
-              "doc": "Compute an interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.\n\n**Returns:** A {class}`~ommx.Bound` that contains $[\\inf f, \\sup f]$ over the given variable bounds.\n\n**Tightness:** This evaluates the bound **term by term** (monomial-wise)\nand sums the per-term intervals. The result is a **sound\nover-approximation** of the true range $[\\inf f, \\sup f]$ but is **not\nguaranteed to be tight**, because it ignores dependencies between terms\nthat share variables. For example, $f = x^2 - x$ with $x \\in [0, 1]$\nhas true range $[-1/4, 0]$ (minimum at $x = 1/2$), but term-wise\nevaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.\n\n# Examples\n\n```python\n>>> from ommx import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> (b.lower, b.upper)\n(3.0, 7.0)\n```",
+              "doc": "Compute an interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.\n\n**Returns:** A {class}`~ommx.Bound` that contains $[\\inf f, \\sup f]$ over the given variable bounds.\n\n**Tightness:** Polynomial leaves are bounded **term by term**\n(monomial-wise), and composed expression nodes combine their operand\nbounds with interval arithmetic. The result is a **sound\nover-approximation** of the true range $[\\inf f, \\sup f]$ but is **not\nguaranteed to be tight**, because it ignores dependencies between terms\nor operands that share variables. For example, $f = x^2 - x$ with\n$x \\in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but\nterm-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.\n\n**Raises:** `RuntimeError` when an interval crosses an undefined\ndivision or real-power domain, or when a function-valued exponent is\nnot a point interval. Raises `ValueError` if valid bound endpoints\ncannot be constructed after numeric overflow.\n\n# Examples\n\n```python\n>>> from ommx import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> b.lower <= 3.0 and b.upper >= 7.0\nTrue\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -7430,6 +7605,78 @@
               "deprecated": null
             },
             {
+              "name": "maximum",
+              "doc": "Pointwise maximum",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "minimum",
+              "doc": "Pointwise minimum",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "mul_linear",
               "doc": "",
               "signatures": [
@@ -7555,14 +7802,20 @@
             },
             {
               "name": "num_terms",
-              "doc": "Get the number of terms in this function.\n\nZero function has 0 terms, constant function has 1 term,\nand polynomial functions have the number of non-zero coefficient terms.",
+              "doc": "Get the number of terms in this function.\n\nZero function has 0 terms, constant function has 1 term,\nand polynomial functions have the number of non-zero coefficient terms.\nReturns None for non-polynomial expression functions.",
               "signatures": [
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "int",
+                    "display": "Optional[int]",
                     "link_target": null,
-                    "children": []
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -7743,12 +7996,33 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "signum",
+              "doc": "Sign of the function value",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [
             {
               "name": "constant_term",
-              "doc": "Get the constant term of the function.\n\nReturns the constant term. Returns 0.0 if function has no constant term.\nWorks for all polynomial functions by filtering the degree-0 term.",
+              "doc": "Get the constant term of the function.\n\nReturns the constant term. Returns 0.0 if function has no constant term.\nWorks for all polynomial functions by filtering the degree-0 term.\nRaises TypeError if this is a non-polynomial expression function.",
               "type_": {
                 "display": "float",
                 "link_target": null,
@@ -7759,7 +8033,7 @@
             },
             {
               "name": "linear_terms",
-              "doc": "Get linear terms as a dictionary mapping variable id to coefficient.\n\nReturns dictionary mapping variable IDs to their linear coefficients.\nReturns empty dict if function has no linear terms.\nWorks for all polynomial functions by filtering only degree-1 terms.",
+              "doc": "Get linear terms as a dictionary mapping variable id to coefficient.\n\nReturns dictionary mapping variable IDs to their linear coefficients.\nReturns empty dict if function has no linear terms.\nWorks for all polynomial functions by filtering only degree-1 terms.\nRaises TypeError if this is a non-polynomial expression function.",
               "type_": {
                 "display": "dict[int, float]",
                 "link_target": null,
@@ -7781,7 +8055,7 @@
             },
             {
               "name": "quadratic_terms",
-              "doc": "Get quadratic terms as a dictionary mapping (row, col) to coefficient.\n\nReturns dictionary mapping variable ID pairs to their quadratic coefficients.\nReturns empty dict if function has no quadratic terms.\nWorks for all polynomial functions by filtering only degree-2 terms.",
+              "doc": "Get quadratic terms as a dictionary mapping (row, col) to coefficient.\n\nReturns dictionary mapping variable ID pairs to their quadratic coefficients.\nReturns empty dict if function has no quadratic terms.\nWorks for all polynomial functions by filtering only degree-2 terms.\nRaises TypeError if this is a non-polynomial expression function.",
               "type_": {
                 "display": "dict[tuple[int, int], float]",
                 "link_target": null,
@@ -7814,7 +8088,7 @@
             },
             {
               "name": "terms",
-              "doc": "",
+              "doc": "Get all polynomial terms as a dictionary mapping monomial tuples to coefficients.\n\nRaises TypeError if this is a non-polynomial expression function.",
               "type_": {
                 "display": "dict",
                 "link_target": null,
@@ -9953,7 +10227,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "",
+              "doc": "Deserialize an instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed,\nsemantically invalid, or contains a function expression beyond the\nmanaged wire-depth limit.",
               "signatures": [
                 {
                   "parameters": [
@@ -9979,7 +10253,7 @@
             },
             {
               "name": "from_v2_bytes",
-              "doc": "",
+              "doc": "Deserialize an instance from v2 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed,\nsemantically invalid, or contains a function expression beyond the\nmanaged wire-depth limit.",
               "signatures": [
                 {
                   "parameters": [
@@ -11278,7 +11552,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "",
+              "doc": "Serialize this instance as v1 protobuf bytes.\n\nRaises {class}`RuntimeError` if a recursive function expression exceeds\nthe protobuf-safe serialization depth.",
               "signatures": [
                 {
                   "parameters": [],
@@ -11294,7 +11568,7 @@
             },
             {
               "name": "to_v2_bytes",
-              "doc": "",
+              "doc": "Serialize this instance as v2 protobuf bytes.\n\nRaises {class}`RuntimeError` if a recursive function expression exceeds\nthe protobuf-safe serialization depth.",
               "signatures": [
                 {
                   "parameters": [],
@@ -17258,7 +17532,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "",
+              "doc": "Deserialize a parametric instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed,\nsemantically invalid, or contains a function expression beyond the\nmanaged wire-depth limit.",
               "signatures": [
                 {
                   "parameters": [
@@ -17284,7 +17558,7 @@
             },
             {
               "name": "from_v2_bytes",
-              "doc": "",
+              "doc": "Deserialize a parametric instance from v2 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed,\nsemantically invalid, or contains a function expression beyond the\nmanaged wire-depth limit.",
               "signatures": [
                 {
                   "parameters": [
@@ -17679,7 +17953,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "",
+              "doc": "Serialize this parametric instance as v1 protobuf bytes.\n\nRaises {class}`RuntimeError` if a recursive function expression exceeds\nthe protobuf-safe serialization depth.",
               "signatures": [
                 {
                   "parameters": [],
@@ -17695,7 +17969,7 @@
             },
             {
               "name": "to_v2_bytes",
-              "doc": "",
+              "doc": "Serialize this parametric instance as v2 protobuf bytes.\n\nRaises {class}`RuntimeError` if a recursive function expression exceeds\nthe protobuf-safe serialization depth.",
               "signatures": [
                 {
                   "parameters": [],

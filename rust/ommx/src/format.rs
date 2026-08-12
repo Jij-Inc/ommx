@@ -121,13 +121,122 @@ fn format_zero(opts: FunctionFormatOptions) -> FormattedFunction {
     }
 }
 
+fn total_polynomial_terms(function: &Function) -> usize {
+    match function {
+        Function::Zero => 0,
+        Function::Constant(_) => 1,
+        Function::Linear(value) => value.num_terms(),
+        Function::Quadratic(value) => value.num_terms(),
+        Function::Polynomial(value) => value.num_terms(),
+        Function::Unary(operation) => total_polynomial_terms(operation.operand()),
+        Function::Nary(operation) => operation
+            .operands()
+            .iter()
+            .map(total_polynomial_terms)
+            .sum(),
+        Function::Binary(operation) => {
+            total_polynomial_terms(operation.lhs()) + total_polynomial_terms(operation.rhs())
+        }
+    }
+}
+
+fn render_function_with_symbols(
+    function: &Function,
+    symbols: &BTreeMap<VariableID, String>,
+) -> crate::Result<String> {
+    if function.is_polynomial() {
+        return Ok(format_function_with_symbols(
+            function,
+            symbols,
+            FunctionFormatOptions::default(),
+        )?
+        .text);
+    }
+    Ok(match function {
+        Function::Unary(operation) => {
+            let operand = render_function_with_symbols(operation.operand(), symbols)?;
+            match operation.operator() {
+                crate::UnaryOperator::Neg => format!("-({operand})"),
+                crate::UnaryOperator::Abs => format!("abs({operand})"),
+                crate::UnaryOperator::Signum => format!("signum({operand})"),
+            }
+        }
+        Function::Nary(operation) => {
+            let operands = operation
+                .operands()
+                .iter()
+                .map(|operand| render_function_with_symbols(operand, symbols))
+                .collect::<crate::Result<Vec<_>>>()?;
+            match operation.operator() {
+                crate::NaryOperator::Add => operands
+                    .into_iter()
+                    .map(|operand| format!("({operand})"))
+                    .collect::<Vec<_>>()
+                    .join(" + "),
+                crate::NaryOperator::Mul => operands
+                    .into_iter()
+                    .map(|operand| format!("({operand})"))
+                    .collect::<Vec<_>>()
+                    .join(" * "),
+                crate::NaryOperator::Min => format!("min({})", operands.join(", ")),
+                crate::NaryOperator::Max => format!("max({})", operands.join(", ")),
+            }
+        }
+        Function::Binary(operation) => {
+            let lhs = render_function_with_symbols(operation.lhs(), symbols)?;
+            let rhs = render_function_with_symbols(operation.rhs(), symbols)?;
+            match operation.operator() {
+                crate::BinaryOperator::Div => format!("({lhs}) / ({rhs})"),
+                crate::BinaryOperator::Pow => format!("pow({lhs}, {rhs})"),
+            }
+        }
+        _ => unreachable!("polynomial variants returned above"),
+    })
+}
+
 pub(crate) fn format_function_with_symbols(
     function: &Function,
     symbols: &BTreeMap<VariableID, String>,
     opts: FunctionFormatOptions,
 ) -> crate::Result<FormattedFunction> {
+    if !function.is_polynomial() {
+        let total_terms = total_polynomial_terms(function);
+        // Resolve every referenced symbol before applying display limits. This
+        // preserves the validation contract of the polynomial formatter: an
+        // unknown variable ID must not be hidden by truncation.
+        let rendered = render_function_with_symbols(function, symbols)?;
+        let max_terms_truncated = opts
+            .max_terms
+            .is_some_and(|max_terms| max_terms < total_terms);
+        let mut text = if max_terms_truncated {
+            "…".to_string()
+        } else {
+            rendered
+        };
+        let mut truncated_by_chars = false;
+        if let Some(max_chars) = opts.max_chars {
+            if text.chars().count() > max_chars {
+                text.truncate(char_prefix_byte_len(&text, max_chars));
+                truncated_by_chars = true;
+            }
+        }
+        let written_terms = if max_terms_truncated || truncated_by_chars {
+            0
+        } else {
+            total_terms
+        };
+        return Ok(FormattedFunction {
+            text,
+            total_terms,
+            written_terms,
+            omitted_terms: total_terms.saturating_sub(written_terms),
+            truncated_by_chars,
+        });
+    }
+
     let mut terms: Vec<_> = function
         .iter()
+        .expect("polynomial functions expose terms")
         .map(|(monomial, coefficient)| (monomial, coefficient.into_inner()))
         .collect();
     if terms.is_empty() {
@@ -251,6 +360,51 @@ impl fmt::Display for crate::Function {
             crate::Function::Linear(linear) => write!(f, "{linear}"),
             crate::Function::Quadratic(quadratic) => write!(f, "{quadratic}"),
             crate::Function::Polynomial(polynomial) => write!(f, "{polynomial}"),
+            crate::Function::Unary(operation) => match operation.operator() {
+                crate::UnaryOperator::Neg => write!(f, "-({})", operation.operand()),
+                crate::UnaryOperator::Abs => write!(f, "abs({})", operation.operand()),
+                crate::UnaryOperator::Signum => write!(f, "signum({})", operation.operand()),
+            },
+            crate::Function::Nary(operation) => {
+                let mut operands = operation.operands().iter();
+                let first = operands
+                    .next()
+                    .expect("nary operation always has at least two operands");
+                match operation.operator() {
+                    crate::NaryOperator::Min | crate::NaryOperator::Max => {
+                        let name = match operation.operator() {
+                            crate::NaryOperator::Min => "min",
+                            crate::NaryOperator::Max => "max",
+                            _ => unreachable!(),
+                        };
+                        write!(f, "{name}({first}")?;
+                        for operand in operands {
+                            write!(f, ", {operand}")?;
+                        }
+                        write!(f, ")")
+                    }
+                    crate::NaryOperator::Add | crate::NaryOperator::Mul => {
+                        let separator = match operation.operator() {
+                            crate::NaryOperator::Add => " + ",
+                            crate::NaryOperator::Mul => " * ",
+                            _ => unreachable!(),
+                        };
+                        write!(f, "({first})")?;
+                        for operand in operands {
+                            write!(f, "{separator}({operand})")?;
+                        }
+                        Ok(())
+                    }
+                }
+            }
+            crate::Function::Binary(operation) => match operation.operator() {
+                crate::BinaryOperator::Div => {
+                    write!(f, "({}) / ({})", operation.lhs(), operation.rhs())
+                }
+                crate::BinaryOperator::Pow => {
+                    write!(f, "pow({}, {})", operation.lhs(), operation.rhs())
+                }
+            },
         }
     }
 }
@@ -263,12 +417,36 @@ impl fmt::Debug for crate::Function {
             crate::Function::Linear(linear) => write!(f, "Linear({linear})"),
             crate::Function::Quadratic(quadratic) => write!(f, "Quadratic({quadratic})"),
             crate::Function::Polynomial(polynomial) => write!(f, "Polynomial({polynomial})"),
+            crate::Function::Unary(operation) => write!(
+                f,
+                "Unary({:?}, {:?})",
+                operation.operator(),
+                operation.operand()
+            ),
+            crate::Function::Nary(operation) => {
+                write!(f, "Nary({:?}, [", operation.operator())?;
+                for (index, operand) in operation.operands().iter().enumerate() {
+                    if index > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{operand:?}")?;
+                }
+                write!(f, "])")
+            }
+            crate::Function::Binary(operation) => write!(
+                f,
+                "Binary({:?}, {:?}, {:?})",
+                operation.operator(),
+                operation.lhs(),
+                operation.rhs()
+            ),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::{coeff, linear, quadratic, Linear};
 
     #[test]
@@ -322,5 +500,20 @@ mod tests {
     fn test_polynomial_base_display_coefficient_negative_one() {
         let poly = (coeff!(-1.0) * linear!(1)).unwrap();
         assert_eq!(format!("{poly}"), "-x1");
+    }
+
+    #[test]
+    fn composite_format_validates_symbols_before_truncation() {
+        let function = Function::from(linear!(1)).abs();
+        let error = format_function_with_symbols(
+            &function,
+            &BTreeMap::new(),
+            FunctionFormatOptions {
+                max_terms: Some(0),
+                max_chars: Some(0),
+            },
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("Missing symbol for variable ID"));
     }
 }

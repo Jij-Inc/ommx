@@ -19,10 +19,55 @@ impl Div<Coefficient> for Function {
             Function::Linear(l) => l.try_div_assign_in_place(rhs)?,
             Function::Quadratic(q) => q.try_div_assign_in_place(rhs)?,
             Function::Polynomial(p) => p.try_div_assign_in_place(rhs)?,
+            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => {
+                if rhs != Coefficient::one() {
+                    let lhs = std::mem::take(&mut self);
+                    self = Function::binary_operation(
+                        BinaryOperator::Div,
+                        lhs,
+                        Function::Constant(rhs),
+                    );
+                }
+            }
         }
         // Division can underflow coefficients to zero and remove terms, so
         // the variant may need to be downgraded.
         Ok(self.normalize())
+    }
+}
+
+impl Div for Function {
+    type Output = Result<Self, CoefficientError>;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        match rhs {
+            Function::Constant(coefficient) => self / coefficient,
+            rhs => Ok(Function::binary_operation(BinaryOperator::Div, self, rhs)),
+        }
+    }
+}
+
+impl Div for &Function {
+    type Output = Result<Function, CoefficientError>;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        self.clone() / rhs.clone()
+    }
+}
+
+impl Div<Function> for &Function {
+    type Output = Result<Function, CoefficientError>;
+
+    fn div(self, rhs: Function) -> Self::Output {
+        self.clone() / rhs
+    }
+}
+
+impl Div<&Function> for Function {
+    type Output = Result<Function, CoefficientError>;
+
+    fn div(self, rhs: &Function) -> Self::Output {
+        self / rhs.clone()
     }
 }
 

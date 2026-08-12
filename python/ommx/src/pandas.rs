@@ -855,6 +855,9 @@ pub fn set_function_type(dict: &Bound<PyDict>, function: &ommx::Function) -> PyR
         ommx::Function::Linear(_) => "Linear",
         ommx::Function::Quadratic(_) => "Quadratic",
         ommx::Function::Polynomial(_) => "Polynomial",
+        ommx::Function::Unary(_) => "Unary",
+        ommx::Function::Nary(_) => "Nary",
+        ommx::Function::Binary(_) => "Binary",
     };
     dict.set_item("type", s)
 }

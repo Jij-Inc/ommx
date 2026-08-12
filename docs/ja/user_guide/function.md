@@ -13,14 +13,14 @@ kernelspec:
 
 # ommx.Function
 
-数理最適化では目的関数や制約条件を表現するために（数学的な意味での）関数を扱う必要があります。OMMXでは特に多項式を中心に扱い、OMMX Messageには多項式を表すためのデータ構造として以下のものが存在します。
+数理最適化では目的関数や制約条件を表現するために（数学的な意味での）関数を扱う必要があります。OMMX は多項式をコンパクトに保持し、それらに絶対値、最小値、除算、べき乗などのスカラー演算を組み合わせられます。
 
 | データ構造 | 説明 |
 | --- | --- |
 | {class}`~ommx.Linear` | 線形の関数。決定変数のIDとその係数のペアを持つ |
 | {class}`~ommx.Quadratic` | 二次の関数。決定変数のIDのペアとその係数のペアを持つ |
 | {class}`~ommx.Polynomial` | 多項式。決定変数のIDの組とその係数のペアを持つ |
-| {class}`~ommx.Function` | 上記のいずれかあるいは定数 |
+| {class}`~ommx.Function` | 多項式またはスカラー演算を組み合わせた式 |
 
 
 ## ommx.Function の作成
@@ -65,7 +65,7 @@ p = x * x * x + y * y
 print(p)
 ```
 
-`Linear`, `Quadratic`, `Polynomial` はそれぞれ固有のデータの保持方法を持っているため別のMessageになっていますが、目的関数や制約条件としてはどれを使ってもいいので、それらのいずれかあるいは定数である `Function` というMessageが用意されています。
+`Linear`, `Quadratic`, `Polynomial` はそれぞれ固有のデータの保持方法を持っているため別のMessageになっていますが、目的関数や制約条件として共通に扱うための `Function` が用意されています。`Function` は、これらの多項式に加えてスカラー演算を組み合わせた式も保持します。
 
 ```{code-cell} ipython3
 from ommx import Function
@@ -80,9 +80,52 @@ print(Function(q))
 print(Function(p))
 ```
 
+## スカラー関数の組み合わせ
+
+複合演算を適用する前に、算術式を `Function` に変換します。Python の `abs` と算術演算子は式ノードを構築し、点ごとの最小値・最大値には `minimum`・`maximum` メソッドを使います。
+
+```{code-cell} ipython3
+fx = Function(x)
+fy = Function(y)
+
+absolute = abs(fx - 3)
+sign = (fx - 1).signum()
+minimum = fx.minimum(fy)
+maximum = fx.maximum(fy)
+quotient = fx / (fy + 1)
+power = fx**2
+
+print(absolute)
+print(minimum)
+print(quotient)
+print(power)
+```
+
+Python 組み込みの `min(fx, fy)` と `max(fx, fy)` は比較演算を行うため、式ノードを構築しません。代わりに `fx.minimum(fy)` と `fx.maximum(fy)` を使ってください。
+
+複合式では、複数のオペランドを持つ演算は順序を保持し、左から右へ評価されます。左辺にある同じ演算子のグループは平坦化されるため、`(abs(a) + abs(b)) + abs(c)` は順序付きの 3 オペランド加算になります。一方、右辺の明示的なグループはネストしたまま保持されるため、`abs(a) + (abs(b) + abs(c))` は右辺の括弧構造を保持します。オーバーフローや未定義演算のエラーは、この表現された評価順で発生します。多項式だけからなる算術式は、引き続きコンパクトな多項式表現へ正規化されます。
+
+複合関数は実数値として次の規約で評価されます。
+
+- `signum(0)` は符号付きゼロも含めて `0` です。
+- 分母がゼロの除算は未定義です。
+- 負の底に非整数の指数を適用する場合など、実数の定義域外のべき乗は未定義です。`0**0` は `1` と定義します。
+- 未定義の演算や非有限の中間結果は、Python では `ValueError` になります。
+
+除算とべき乗によって `Function` は部分関数になり得ます。代数的な簡約でも定義域は保存されるため、例えば `0 * (1 / fx)` は `fx == 0` の点で引き続き未定義です。
+
+```{code-cell} ipython3
+try:
+    (1 / fx).evaluate({1: 0})
+except ValueError as e:
+    print(f"Error: {e}")
+```
+
+多項式のメタデータは、`Function` がコンパクトな多項式表現を使っている場合に限って利用できます。複合式では `degree()` と `num_terms()` は `None` を返し、`terms` などの係数プロパティは `TypeError` を送出します。ソルバーアダプターも、宣言した input class が複合式をサポートしない場合は受け付けません。
+
 ## 決定変数の代入・部分評価
 
-`Function` 及び他の多項式は決定変数の値を代入する `evaluate` メソッドを持ちます。例えば上で作った線形関数 $x_1 + 2x_2 + 3$ に $x_1 = 1, x_2 = 0$ を代入すると $1 + 2 \times 0 + 3 = 4$ となります。
+`Function` と各多項式型は決定変数の値を代入する `evaluate` メソッドを持ちます。例えば上で作った線形関数 $x_1 + 2x_2 + 3$ に $x_1 = 1, x_2 = 0$ を代入すると $1 + 2 \times 0 + 3 = 4$ となります。
 
 ```{code-cell} ipython3
 value = linear.evaluate({1: 1, 2: 0})
@@ -105,13 +148,13 @@ linear2 = linear.partial_evaluate({1: 1})
 print(f"{linear2=}")
 ```
 
-部分評価された結果は多項式になるため、元の多項式と同じ型で返されます。
+`Linear`、`Quadratic`、`Polynomial` の部分評価では元の Python 型が保たれます。複合 `Function` では未代入の変数に依存する式構造を保持し、すべてのオペランドの値が決まると compact な定数 `Function` に畳み込まれます。
 
 +++
 
 ## 係数の比較
 
-`Function` や他の多項式型には `almost_equal` 関数が用意されています。これは多項式の各係数が指定された誤差で一致するかどうかを判定するための関数です。例えば $ (x + 1)^2 = x^2 + 2x + 1 $ であることを確認するには次のように書きます
+`Function` と各多項式型には `almost_equal` 関数が用意されています。多項式では各係数が指定された誤差で一致するかを判定します。複合式では同じ式構造を再帰的に比較するものであり、数学的な大域同値性を証明するものではありません。例えば $ (x + 1)^2 = x^2 + 2x + 1 $ であることを確認するには次のように書きます。
 
 ```{code-cell} ipython3
 xx = (x + 1) * (x + 1)

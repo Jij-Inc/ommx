@@ -10,14 +10,39 @@ impl AbsDiffEq for Function {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        // Compute residual function and check max absolute coefficient
-        let Ok(diff) = self.clone() - other.clone() else {
-            return false;
-        };
-        diff.values()
-            .map(|c| c.abs())
-            .max()
-            .is_none_or(|c| c <= epsilon)
+        if self.is_polynomial() && other.is_polynomial() {
+            let Ok(diff) = self.clone() - other.clone() else {
+                return false;
+            };
+            return diff
+                .values()
+                .expect("difference of polynomials is a polynomial")
+                .map(|c| c.abs())
+                .max()
+                .is_none_or(|c| c <= epsilon);
+        }
+
+        match (self, other) {
+            (Function::Unary(lhs), Function::Unary(rhs)) => {
+                lhs.operator() == rhs.operator()
+                    && lhs.operand().abs_diff_eq(rhs.operand(), epsilon)
+            }
+            (Function::Nary(lhs), Function::Nary(rhs)) => {
+                lhs.operator() == rhs.operator()
+                    && lhs.operands().len() == rhs.operands().len()
+                    && lhs
+                        .operands()
+                        .iter()
+                        .zip(rhs.operands())
+                        .all(|(lhs, rhs)| lhs.abs_diff_eq(rhs, epsilon))
+            }
+            (Function::Binary(lhs), Function::Binary(rhs)) => {
+                lhs.operator() == rhs.operator()
+                    && lhs.lhs().abs_diff_eq(rhs.lhs(), epsilon)
+                    && lhs.rhs().abs_diff_eq(rhs.rhs(), epsilon)
+            }
+            _ => false,
+        }
     }
 }
 

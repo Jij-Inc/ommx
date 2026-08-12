@@ -961,7 +961,8 @@ class OMMXHighsAdapter(SolverAdapter):
         # NOTE we explicityly don't convert to `highspy.highs.highs_linear_expression`
         # before returning as the callers want to check whether the returned
         # value is a constant float.
-        if ommx_func.degree() >= 2:
+        degree = ommx_func.degree()
+        if degree is None or degree >= 2:
             raise OMMXHighsAdapterError(
                 "HiGHS Adapter currently only supports linear problems"
             )

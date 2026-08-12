@@ -97,7 +97,7 @@ impl Instance {
         })?;
         let af = (function.clone() * a)?;
 
-        let af_bound = af.evaluate_bound(&bounds);
+        let af_bound = af.evaluate_bound(&bounds)?;
         let af_bound = af_bound.as_integer_bound(atol).ok_or(
             InfeasibleDetected::InequalityConstraintBound {
                 id: constraint_id,
@@ -202,7 +202,7 @@ impl Instance {
             }
         }
 
-        let f_bound = function.evaluate_bound(&bounds);
+        let f_bound = function.evaluate_bound(&bounds)?;
         if f_bound.lower() > 0.0 {
             bail!(InfeasibleDetected::InequalityConstraintBound {
                 id: constraint_id,

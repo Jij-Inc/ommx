@@ -40,6 +40,29 @@ impl Substitute for Function {
                 let substituted = p.substitute_one(assigned, f)?;
                 Ok(substituted)
             }
+            Function::Unary(operation) => {
+                let (operator, operand) = operation.into_parts();
+                Ok(Function::unary_operation(
+                    operator,
+                    operand.substitute_one(assigned, f)?,
+                ))
+            }
+            Function::Nary(operation) => {
+                let (operator, operands) = operation.into_parts();
+                let operands = operands
+                    .into_iter()
+                    .map(|operand| operand.substitute_one(assigned, f))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(Function::nary_expression(operator, operands))
+            }
+            Function::Binary(operation) => {
+                let (operator, lhs, rhs) = operation.into_parts();
+                Ok(Function::binary_expression(
+                    operator,
+                    lhs.substitute_one(assigned, f)?,
+                    rhs.substitute_one(assigned, f)?,
+                ))
+            }
         }
     }
 }

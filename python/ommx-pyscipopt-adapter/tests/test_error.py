@@ -12,6 +12,7 @@ from ommx import (
     DecisionVariable,
     DegreeBound,
     Equality,
+    Function,
     Instance,
     InstanceClassMismatch,
     Kind,
@@ -88,6 +89,22 @@ def test_error_polynomial_objective():
     assert isinstance(mismatch, InstanceClassMismatch.ObjectiveDegreeExceedsBound)
     assert mismatch.actual_degree == 3
     assert mismatch.bound == DegreeBound.at_most(2)
+
+
+def test_error_non_polynomial_objective():
+    x = DecisionVariable.continuous(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=abs(Function(x)),
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    with pytest.raises(AdapterNotApplicableError) as error:
+        OMMXPySCIPOptAdapter(instance)
+
+    [mismatch] = error.value.report.input_membership.clause_reports[0].mismatches
+    assert isinstance(mismatch, InstanceClassMismatch.ObjectiveFunctionNotPolynomial)
 
 
 def test_rejects_inapplicable_input_before_backend_construction(monkeypatch):

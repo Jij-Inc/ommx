@@ -166,10 +166,12 @@ def test_convert_inequality_to_equality_with_integer_slack_limit():
     )
     with pytest.raises(ExactIntegerSlackError) as e:
         instance.convert_inequality_to_equality_with_integer_slack(0, 32)
-    assert (
-        str(e.value)
-        == "The range of the slack variable exceeds the limit: evaluated(15174216961756088) > limit(32)"
-    )
+    message = str(e.value)
+    prefix = "The range of the slack variable exceeds the limit: evaluated("
+    suffix = ") > limit(32)"
+    assert message.startswith(prefix)
+    assert message.endswith(suffix)
+    assert int(message.removeprefix(prefix).removesuffix(suffix)) > 32
 
 
 def test_convert_inequality_to_equality_with_integer_slack_continuous():

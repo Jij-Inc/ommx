@@ -58,6 +58,10 @@ fn _pyo3_bridge_v0_constraint_from_bytes(
     let constraint =
         decode::<ommx::v2::RegularConstraint>(constraint.as_bytes(), "ommx.v2.RegularConstraint")?
             .parse(&())?;
+    // A malformed or incompatible independent extension can bypass the
+    // sender-side guard. Keep the private receiver boundary symmetric with
+    // Function and root bridge payloads.
+    constraint.function().to_bytes()?;
     let context =
         decode::<ommx::v2::ConstraintContext>(context.as_bytes(), "ommx.v2.ConstraintContext")?
             .parse(&())?;
@@ -100,6 +104,17 @@ pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ommx::Message as _;
+
+    fn function_at_depth(depth: usize) -> ommx::Function {
+        (0..depth).fold(ommx::Function::from(ommx::linear!(1)), |function, level| {
+            if level % 2 == 0 {
+                function.abs()
+            } else {
+                function.signum()
+            }
+        })
+    }
 
     #[test]
     fn invalid_payload_is_a_bridge_runtime_error() {
@@ -117,6 +132,32 @@ mod tests {
                     .to_string()
                     .contains("invalid OMMX PyO3 bridge v0 payload"),
                 "{error}"
+            );
+        });
+    }
+
+    #[test]
+    fn constraint_receiver_rejects_excessive_expression_depth() {
+        Python::initialize();
+        Python::attach(|py| {
+            let constraint = ommx::v2::RegularConstraint::from(ommx::Constraint::equal_to_zero(
+                function_at_depth(33),
+            ))
+            .encode_to_vec();
+            let context = ommx::v2::ConstraintContext::default().encode_to_vec();
+            let constraint = PyBytes::new(py, &constraint);
+            let context = PyBytes::new(py, &context);
+
+            let error = _pyo3_bridge_v0_constraint_from_bytes(&constraint, &context)
+                .err()
+                .expect("over-depth bridge payload must fail");
+            let error: PyErr = error.into();
+            assert!(error.is_instance_of::<PyRuntimeError>(py));
+            assert!(
+                error
+                    .to_string()
+                    .contains("protobuf serialization limit of 32"),
+                "{error}",
             );
         });
     }

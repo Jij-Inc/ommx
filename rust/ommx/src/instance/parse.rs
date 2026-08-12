@@ -642,6 +642,15 @@ impl TryFrom<Instance> for v1::Instance {
     type Error = crate::Error;
 
     fn try_from(value: Instance) -> crate::Result<Self> {
+        super::serialize::ensure_root_function_depths(
+            "Cannot serialize",
+            "Instance",
+            &value.objective,
+            &value.constraint_collection,
+            &value.indicator_constraint_collection,
+            &value.decision_variable_dependency,
+            &value.named_functions,
+        )?;
         let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
         let (constraints, removed_constraints): (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) =
             value.constraint_collection.into();
@@ -1050,8 +1059,17 @@ impl TryFrom<v2::ParametricInstance> for ParametricInstance {
 impl TryFrom<ParametricInstance> for v1::ParametricInstance {
     type Error = crate::Error;
 
-    fn try_from(
-        ParametricInstance {
+    fn try_from(value: ParametricInstance) -> crate::Result<Self> {
+        super::serialize::ensure_root_function_depths(
+            "Cannot serialize",
+            "ParametricInstance",
+            &value.objective,
+            &value.constraint_collection,
+            &value.indicator_constraint_collection,
+            &value.decision_variable_dependency,
+            &value.named_functions,
+        )?;
+        let ParametricInstance {
             sense,
             objective,
             decision_variables,
@@ -1064,8 +1082,7 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
             description,
             named_functions,
             annotations,
-        }: ParametricInstance,
-    ) -> crate::Result<Self> {
+        } = value;
         // Special constraint types do not have a v1 proto representation yet.
         if !indicator_constraint_collection.active().is_empty()
             || !indicator_constraint_collection.removed().is_empty()

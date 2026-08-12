@@ -28,6 +28,9 @@ returns the typed error directly):
   becomes infeasible after substitution.
 - [`CoefficientError`](crate::CoefficientError), [`BoundError`](crate::BoundError), [`AtolError`](crate::AtolError),
   [`InvalidPenaltyWeight`](crate::InvalidPenaltyWeight) — numeric-domain validation failures.
+- [`FunctionEvaluationError`](crate::FunctionEvaluationError) — identifies
+  undefined division or real-power inputs and non-finite function results, so
+  a caller can change the state or expression before retrying evaluation.
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
@@ -72,10 +75,13 @@ returns the typed error directly):
   its typed membership report before adding phases, revising the target class,
   or reporting the remaining mismatches.
 
-Evaluation does not define an umbrella error type. Caller-provided numeric
-validation reuses [`DecisionVariableError`](crate::DecisionVariableError), and
-failures without a stable caller recovery path remain ordinary [`Error`](crate::Error)
-values.
+Evaluation does not define an operation-wide umbrella error type.
+Caller-provided decision-variable validation reuses
+[`DecisionVariableError`](crate::DecisionVariableError), while
+[`FunctionEvaluationError`](crate::FunctionEvaluationError) covers the
+function-owned undefined-domain and non-finite-result conditions above.
+Failures without a stable caller recovery path remain ordinary
+[`Error`](crate::Error) values.
 
 Direct function and polynomial partial evaluation retain
 [`CoefficientError`](crate::CoefficientError), because the caller can change
@@ -84,6 +90,12 @@ the supplied state and retry. If the same arithmetic fails while an
 removed constraint against stored dependencies and fixed values, that signal
 no longer describes caller input and is converted to an ordinary
 [`Error`](crate::Error) with structured tracing context.
+
+The same ownership transition applies to
+[`FunctionEvaluationError`](crate::FunctionEvaluationError): direct function
+evaluation retains the signal, while an internally derived dependent-variable
+or assignment value converts it to ordinary owner-contextualized
+[`Error`](crate::Error).
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 
