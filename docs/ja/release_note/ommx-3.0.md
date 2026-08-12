@@ -8,6 +8,30 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))
+
+{class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
+なりました。絶対値、符号関数、最小値、最大値、除算、累乗をPythonから直接構築
+できます。
+
+```python
+f = abs(x - 2).maximum(y) / (z + 1)
+g = f**2
+```
+
+名前付きの演算には {meth}`~ommx.Function.signum`、
+{meth}`~ommx.Function.minimum`、{meth}`~ommx.Function.maximum` を使用します。
+ゼロ除算、実数値として定義されない累乗、非有限なevaluation結果は`ValueError`に
+なります。複合式はOMMX protobuf payloadへserializeできます。一方、現在のHiGHS、
+Python-MIP、PySCIPOpt adapterの入力はpolynomialに限られるため、複合式を含むmodelは
+明示的に拒否されます。
+
+`Function`が常にpolynomialとは限らなくなったため、複合式に対する
+{meth}`~ommx.Function.degree` と {meth}`~ommx.Function.num_terms` は`None`を返します。
+polynomial termのaccessorと {meth}`~ommx.Function.content_factor` は、複合式を空の
+polynomialとして扱わず`TypeError`を送出します。演算順序、evaluation error、
+serializationの詳細は [Function user guide](../user_guide/function.md) を参照してください。
+
 ## 3.0.0 Beta 3
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)
