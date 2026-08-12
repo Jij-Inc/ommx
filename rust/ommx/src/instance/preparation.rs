@@ -83,11 +83,15 @@ pub enum FixedPenaltyPreparation {
     PenaltyMethodWithFixedWeights {
         /// Constraint-ID-keyed weights passed unchanged to the owner operation.
         weights: BTreeMap<ConstraintID, f64>,
+        /// Absolute tolerance passed to the owner operation for weight validation.
+        atol: ATol,
     },
     /// Invoke [`Instance::uniform_penalty_method_with_fixed_weight`].
     UniformPenaltyMethodWithFixedWeight {
         /// Weight passed unchanged to the owner operation.
         weight: f64,
+        /// Absolute tolerance passed to the owner operation for weight validation.
+        atol: ATol,
     },
 }
 
@@ -125,7 +129,10 @@ pub enum FixedPenaltyPreparation {
 ///     slack_upper_bound: None,
 /// });
 /// policy.fixed_penalty = Some(
-///     FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight { weight: 2.0 },
+///     FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight {
+///         weight: 2.0,
+///         atol: ATol::default(),
+///     },
 /// );
 /// ```
 #[non_exhaustive]
@@ -234,11 +241,11 @@ impl PreparationStep for IntegerEncodingPreparation {
 impl PreparationStep for FixedPenaltyPreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
         match self {
-            Self::PenaltyMethodWithFixedWeights { weights } => {
-                instance.penalty_method_with_fixed_weights(weights)?;
+            Self::PenaltyMethodWithFixedWeights { weights, atol } => {
+                instance.penalty_method_with_fixed_weights(weights, *atol)?;
             }
-            Self::UniformPenaltyMethodWithFixedWeight { weight } => {
-                instance.uniform_penalty_method_with_fixed_weight(*weight)?;
+            Self::UniformPenaltyMethodWithFixedWeight { weight, atol } => {
+                instance.uniform_penalty_method_with_fixed_weight(*weight, *atol)?;
             }
         }
         Ok(())
@@ -380,6 +387,7 @@ mod tests {
         let policy = PreparationPolicy {
             fixed_penalty: Some(FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
                 weights: BTreeMap::from([(ConstraintID::from(999), 1.0)]),
+                atol: ATol::default(),
             }),
             ..Default::default()
         };
@@ -514,6 +522,7 @@ mod tests {
             }),
             fixed_penalty: Some(FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
                 weights: BTreeMap::from([(ConstraintID::from(999), 1.0)]),
+                atol: ATol::default(),
             }),
             ..Default::default()
         };

@@ -207,26 +207,42 @@ pub struct FixedPenaltyPreparation {
 #[pymethods]
 impl FixedPenaltyPreparation {
     /// Select the keyed fixed-weight penalty owner operation.
+    ///
+    /// ``atol`` is used by the owner operation to accept a decision-rule weight
+    /// down to ``-atol`` and normalize a tolerated negative value to zero.
     #[staticmethod]
-    #[pyo3(signature = (*, weights))]
-    pub fn penalty_method_with_fixed_weights(weights: BTreeMap<u64, f64>) -> Self {
-        Self {
+    #[pyo3(signature = (*, weights, atol=None))]
+    pub fn penalty_method_with_fixed_weights(
+        weights: BTreeMap<u64, f64>,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<Self> {
+        Ok(Self {
             inner: ommx::FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
                 weights: weights
                     .into_iter()
                     .map(|(id, weight)| (ommx::ConstraintID::from(id), weight))
                     .collect(),
+                atol: resolve_atol(atol)?,
             },
-        }
+        })
     }
 
     /// Select the uniform fixed-weight penalty owner operation.
+    ///
+    /// ``atol`` is used by the owner operation to accept a decision-rule weight
+    /// down to ``-atol`` and normalize a tolerated negative value to zero.
     #[staticmethod]
-    #[pyo3(signature = (*, weight))]
-    pub fn uniform_penalty_method_with_fixed_weight(weight: f64) -> Self {
-        Self {
-            inner: ommx::FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight { weight },
-        }
+    #[pyo3(signature = (*, weight, atol=None))]
+    pub fn uniform_penalty_method_with_fixed_weight(
+        weight: f64,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<Self> {
+        Ok(Self {
+            inner: ommx::FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight {
+                weight,
+                atol: resolve_atol(atol)?,
+            },
+        })
     }
 }
 

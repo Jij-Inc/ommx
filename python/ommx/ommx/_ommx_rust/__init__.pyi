@@ -2477,17 +2477,25 @@ class FixedPenaltyPreparation:
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def penalty_method_with_fixed_weights(
-        *, weights: typing.Mapping[builtins.int, builtins.float]
+        *,
+        weights: typing.Mapping[builtins.int, builtins.float],
+        atol: typing.Optional[builtins.float] = None,
     ) -> FixedPenaltyPreparation:
         r"""
         Select the keyed fixed-weight penalty owner operation.
+
+        ``atol`` is used by the owner operation to accept a decision-rule weight
+        down to ``-atol`` and normalize a tolerated negative value to zero.
         """
     @staticmethod
     def uniform_penalty_method_with_fixed_weight(
-        *, weight: builtins.float
+        *, weight: builtins.float, atol: typing.Optional[builtins.float] = None
     ) -> FixedPenaltyPreparation:
         r"""
         Select the uniform fixed-weight penalty owner operation.
+
+        ``atol`` is used by the owner operation to accept a decision-rule weight
+        down to ``-atol`` and normalize a tolerated negative value to zero.
         """
 
 @typing.final

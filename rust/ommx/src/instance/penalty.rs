@@ -1,7 +1,43 @@
 use super::*;
-use crate::{linear, Function, ParameterLabel, VariableID};
+use crate::{linear, ATol, Function, ParameterLabel, VariableID};
 use anyhow::Result;
 use std::collections::{BTreeMap, BTreeSet};
+
+/// Signal returned when a fixed penalty weight is outside its numeric domain.
+///
+/// A fixed penalty weight must be finite and no smaller than the negative
+/// absolute tolerance supplied to the owner operation. Callers can inspect the
+/// rejected [`Self::weight`] and [`Self::atol`], revise the weight decision rule
+/// or tolerance, and retry the unchanged [`Instance`].
+#[derive(Debug, Clone, Copy, PartialEq, thiserror::Error)]
+#[non_exhaustive]
+#[error(
+    "Fixed penalty weight must be finite and at least -atol: weight={weight}, atol={atol}",
+    atol = .atol.into_inner()
+)]
+pub struct InvalidPenaltyWeight {
+    weight: f64,
+    atol: ATol,
+}
+
+impl InvalidPenaltyWeight {
+    /// Return the rejected weight.
+    pub fn weight(&self) -> f64 {
+        self.weight
+    }
+
+    /// Return the absolute tolerance used to validate the weight.
+    pub fn atol(&self) -> ATol {
+        self.atol
+    }
+}
+
+fn normalize_fixed_penalty_weight(weight: f64, atol: ATol) -> Result<f64, InvalidPenaltyWeight> {
+    if !weight.is_finite() || weight < -atol {
+        return Err(InvalidPenaltyWeight { weight, atol });
+    }
+    Ok(if weight < 0.0 { 0.0 } else { weight })
+}
 
 impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
@@ -115,9 +151,14 @@ impl Instance {
     /// Convert every active regular constraint to a penalty term with its fixed weight.
     ///
     /// The keys of `weights` must be exactly the active regular constraint IDs.
-    /// Constraint `id` with body $f_{id}(x)$ contributes
-    /// `weights[&id]` $\cdot f_{id}(x)^2$ directly to the objective. No
-    /// parameter ID or assignment is created, and the instance's recorded
+    /// Each weight is a penalty magnitude: it must be finite and at least
+    /// `-atol`. A weight in `[-atol, 0)` is normalized to zero. Constraint `id`
+    /// with body $f_{id}(x)$ contributes $+w_{id} f_{id}(x)^2$ to a minimization
+    /// objective and $-w_{id} f_{id}(x)^2$ to a maximization objective, where
+    /// $w_{id}$ is the normalized nonnegative magnitude. OMMX does not decide
+    /// whether a weight is large enough for an application's penalty rule.
+    ///
+    /// No parameter ID or assignment is created, and the instance's recorded
     /// parameter assignments remain exactly unchanged.
     ///
     /// On success, every regular, indicator, one-hot, and SOS1 constraint is in
@@ -135,12 +176,14 @@ impl Instance {
     /// # Errors
     ///
     /// Returns an error if an unsupported active special constraint is present,
-    /// if `weights` does not cover exactly the active regular constraints, or
-    /// if constructing or adding a penalty term fails. Any error leaves the
-    /// instance unchanged.
+    /// if `weights` does not cover exactly the active regular constraints, if a
+    /// weight is invalid, or if constructing or adding a penalty term fails.
+    /// Invalid weights retain [`InvalidPenaltyWeight`] in the error chain. Any
+    /// error leaves the instance unchanged.
     pub fn penalty_method_with_fixed_weights(
         &mut self,
         weights: &BTreeMap<ConstraintID, f64>,
+        atol: ATol,
     ) -> crate::Result<()> {
         let operation = "penalty_method_with_fixed_weights";
         self.ensure_penalty_method_supported(operation)?;
@@ -149,12 +192,18 @@ impl Instance {
             return Ok(());
         }
 
+        let normalized_weights = weights
+            .iter()
+            .map(|(&id, &weight)| Ok((id, normalize_fixed_penalty_weight(weight, atol)?)))
+            .collect::<Result<BTreeMap<_, _>, InvalidPenaltyWeight>>()?;
+
         let mut objective = self.objective.clone();
         for (&id, constraint) in self.constraint_collection.active() {
             let function = constraint.function();
             let mut penalty_term = function.clone();
             penalty_term.try_mul_assign_in_place(function)?;
-            penalty_term.try_mul_assign_in_place(&Function::try_from(weights[&id])?)?;
+            let weight = self.fixed_penalty_objective_coefficient(normalized_weights[&id]);
+            penalty_term.try_mul_assign_in_place(&Function::try_from(weight)?)?;
             objective.try_add_assign_in_place(penalty_term)?;
         }
         self.commit_fixed_penalty(objective, operation)
@@ -279,10 +328,15 @@ impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
     /// Convert every active regular constraint to a penalty term with one fixed weight.
     ///
-    /// Each constraint body $f_i(x)$ contributes `weight` $\cdot f_i(x)^2$
-    /// directly to the objective. No parameter ID or assignment is created,
-    /// and the instance's recorded parameter assignments remain exactly
-    /// unchanged.
+    /// `weight` is a penalty magnitude: it must be finite and at least `-atol`.
+    /// A value in `[-atol, 0)` is normalized to zero. Each constraint body
+    /// $f_i(x)$ contributes $+w f_i(x)^2$ to a minimization objective and
+    /// $-w f_i(x)^2$ to a maximization objective, where $w$ is the normalized
+    /// nonnegative magnitude. OMMX does not decide whether the weight is large
+    /// enough for an application's penalty rule.
+    ///
+    /// No parameter ID or assignment is created, and the instance's recorded
+    /// parameter assignments remain exactly unchanged.
     ///
     /// On success, every regular, indicator, one-hot, and SOS1 constraint is in
     /// its removed collection; all four active collections are empty. Every
@@ -299,14 +353,22 @@ impl Instance {
     /// # Errors
     ///
     /// Returns an error if an unsupported active special constraint is present,
-    /// or if constructing or adding the penalty term fails. Any error leaves
-    /// the instance unchanged.
-    pub fn uniform_penalty_method_with_fixed_weight(&mut self, weight: f64) -> crate::Result<()> {
+    /// if `weight` is invalid, or if constructing or adding the penalty term
+    /// fails. Invalid weights retain [`InvalidPenaltyWeight`] in the error
+    /// chain. Any error leaves the instance unchanged.
+    pub fn uniform_penalty_method_with_fixed_weight(
+        &mut self,
+        weight: f64,
+        atol: ATol,
+    ) -> crate::Result<()> {
         let operation = "uniform_penalty_method_with_fixed_weight";
         self.ensure_penalty_method_supported(operation)?;
         if self.constraints().is_empty() {
             return Ok(());
         }
+
+        let weight = normalize_fixed_penalty_weight(weight, atol)?;
+        let weight = self.fixed_penalty_objective_coefficient(weight);
 
         let mut penalty_term = Function::zero();
         for constraint in self.constraint_collection.active().values() {
@@ -320,6 +382,13 @@ impl Instance {
         let mut objective = self.objective.clone();
         objective.try_add_assign_in_place(penalty_term)?;
         self.commit_fixed_penalty(objective, operation)
+    }
+
+    fn fixed_penalty_objective_coefficient(&self, weight: f64) -> f64 {
+        match self.sense() {
+            Sense::Minimize => weight,
+            Sense::Maximize => -weight,
+        }
     }
 
     fn ensure_penalty_method_supported(&self, operation: &str) -> crate::Result<()> {
@@ -784,7 +853,7 @@ mod tests {
         let mut instance = create_test_instance_with_constraints();
 
         instance
-            .uniform_penalty_method_with_fixed_weight(2.0)
+            .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
             .unwrap();
 
         assert_no_active_constraints(&instance);
@@ -806,7 +875,7 @@ mod tests {
         let mut zero_weight = create_test_instance_with_constraints();
         let objective = zero_weight.objective().clone();
         zero_weight
-            .uniform_penalty_method_with_fixed_weight(0.0)
+            .uniform_penalty_method_with_fixed_weight(0.0, ATol::default())
             .unwrap();
         assert_eq!(
             zero_weight
@@ -816,6 +885,129 @@ mod tests {
             objective.evaluate(&state, ATol::default()).unwrap()
         );
         assert_no_active_constraints(&zero_weight);
+    }
+
+    #[test]
+    fn fixed_penalty_direction_follows_instance_sense() {
+        let state = State::from_iter([(1, 2.0), (2, 1.0)]);
+
+        let mut uniform = create_test_instance_with_constraints();
+        uniform.sense = Sense::Maximize;
+        uniform
+            .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
+            .unwrap();
+        assert_eq!(
+            uniform
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            -7.0
+        );
+
+        let mut keyed = create_test_instance_with_constraints();
+        keyed.sense = Sense::Maximize;
+        keyed
+            .penalty_method_with_fixed_weights(
+                &BTreeMap::from([(ConstraintID::from(1), 2.0), (ConstraintID::from(2), 3.0)]),
+                ATol::default(),
+            )
+            .unwrap();
+        assert_eq!(
+            keyed.objective().evaluate(&state, ATol::default()).unwrap(),
+            -8.0
+        );
+    }
+
+    #[test]
+    fn fixed_penalty_normalizes_tolerated_negative_weights_to_zero() {
+        let atol = ATol::new(0.1).unwrap();
+        let state = State::from_iter([(1, 2.0), (2, 1.0)]);
+
+        let mut uniform = create_test_instance_with_constraints();
+        let uniform_objective = uniform.objective().clone();
+        uniform
+            .uniform_penalty_method_with_fixed_weight(-0.1, atol)
+            .unwrap();
+        assert_eq!(
+            uniform
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            uniform_objective.evaluate(&state, ATol::default()).unwrap()
+        );
+        assert_no_active_constraints(&uniform);
+
+        let mut keyed = create_test_instance_with_constraints();
+        let keyed_objective = keyed.objective().clone();
+        keyed
+            .penalty_method_with_fixed_weights(
+                &BTreeMap::from([
+                    (ConstraintID::from(1), -0.1),
+                    (ConstraintID::from(2), -0.05),
+                ]),
+                atol,
+            )
+            .unwrap();
+        assert_eq!(
+            keyed.objective().evaluate(&state, ATol::default()).unwrap(),
+            keyed_objective.evaluate(&state, ATol::default()).unwrap()
+        );
+        assert_no_active_constraints(&keyed);
+    }
+
+    #[test]
+    fn fixed_penalty_rejects_weights_below_tolerance_atomically() {
+        let atol = ATol::new(0.1).unwrap();
+        let before = create_test_instance_with_constraints();
+
+        let mut uniform = before.clone();
+        let error = uniform
+            .uniform_penalty_method_with_fixed_weight(-0.100_001, atol)
+            .unwrap_err();
+        let signal = error.downcast_ref::<InvalidPenaltyWeight>().unwrap();
+        assert_eq!(signal.weight(), -0.100_001);
+        assert_eq!(signal.atol(), atol);
+        assert_eq!(uniform, before);
+
+        let mut keyed = before.clone();
+        let error = keyed
+            .penalty_method_with_fixed_weights(
+                &BTreeMap::from([
+                    (ConstraintID::from(1), 2.0),
+                    (ConstraintID::from(2), -0.100_001),
+                ]),
+                atol,
+            )
+            .unwrap_err();
+        assert!(error.is::<InvalidPenaltyWeight>());
+        assert_eq!(keyed, before);
+    }
+
+    #[test]
+    fn fixed_penalty_rejects_non_finite_weights_atomically() {
+        for weight in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let before = create_test_instance_with_constraints();
+
+            let mut uniform = before.clone();
+            let error = uniform
+                .uniform_penalty_method_with_fixed_weight(weight, ATol::default())
+                .unwrap_err();
+            assert!(error.is::<InvalidPenaltyWeight>());
+            assert_eq!(uniform, before);
+
+            let mut keyed = before.clone();
+            let error = keyed
+                .penalty_method_with_fixed_weights(
+                    &BTreeMap::from([
+                        (ConstraintID::from(1), 2.0),
+                        (ConstraintID::from(2), weight),
+                    ]),
+                    ATol::default(),
+                )
+                .unwrap_err();
+            assert!(error.is::<InvalidPenaltyWeight>());
+            assert_eq!(keyed, before);
+        }
     }
 
     #[test]
@@ -836,7 +1028,7 @@ mod tests {
         let weights = BTreeMap::from([(ConstraintID::from(1), 2.0), (ConstraintID::from(2), 3.0)]);
 
         instance
-            .penalty_method_with_fixed_weights(&weights)
+            .penalty_method_with_fixed_weights(&weights, ATol::default())
             .unwrap();
 
         assert_no_active_constraints(&instance);
@@ -877,12 +1069,12 @@ mod tests {
         let before = instance.clone();
 
         instance
-            .penalty_method_with_fixed_weights(&BTreeMap::new())
+            .penalty_method_with_fixed_weights(&BTreeMap::new(), ATol::default())
             .unwrap();
         assert_eq!(instance, before);
 
         instance
-            .uniform_penalty_method_with_fixed_weight(2.0)
+            .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
             .unwrap();
         assert_eq!(instance, before);
     }
@@ -902,7 +1094,7 @@ mod tests {
         for weights in cases {
             let mut instance = before.clone();
             let err = instance
-                .penalty_method_with_fixed_weights(&weights)
+                .penalty_method_with_fixed_weights(&weights, ATol::default())
                 .unwrap_err();
 
             assert!(err.to_string().contains("constraint IDs"));
@@ -922,13 +1114,13 @@ mod tests {
 
             let mut keyed = before.clone();
             keyed
-                .penalty_method_with_fixed_weights(&weights)
+                .penalty_method_with_fixed_weights(&weights, ATol::default())
                 .unwrap_err();
             assert_eq!(keyed, before);
 
             let mut uniform = before.clone();
             uniform
-                .uniform_penalty_method_with_fixed_weight(2.0)
+                .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
                 .unwrap_err();
             assert_eq!(uniform, before);
         }
@@ -987,7 +1179,9 @@ mod tests {
 
         let mut keyed = lowered.clone();
         let weights = keyed.constraints().keys().map(|id| (*id, 2.0)).collect();
-        keyed.penalty_method_with_fixed_weights(&weights).unwrap();
+        keyed
+            .penalty_method_with_fixed_weights(&weights, ATol::default())
+            .unwrap();
         assert_no_active_constraints(&keyed);
         assert_eq!(keyed.removed_constraints().len(), regular_constraint_count);
         assert_eq!(
@@ -1004,7 +1198,7 @@ mod tests {
 
         let mut uniform = lowered;
         uniform
-            .uniform_penalty_method_with_fixed_weight(2.0)
+            .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
             .unwrap();
         assert_no_active_constraints(&uniform);
         assert_eq!(
@@ -1035,17 +1229,17 @@ mod tests {
         let mut keyed = create_test_instance_with_constraints();
         keyed.parameters = parameters.clone();
         keyed
-            .penalty_method_with_fixed_weights(&BTreeMap::from([
-                (ConstraintID::from(1), 2.0),
-                (ConstraintID::from(2), 3.0),
-            ]))
+            .penalty_method_with_fixed_weights(
+                &BTreeMap::from([(ConstraintID::from(1), 2.0), (ConstraintID::from(2), 3.0)]),
+                ATol::default(),
+            )
             .unwrap();
         assert_eq!(keyed.parameters, parameters);
 
         let mut uniform = create_test_instance_with_constraints();
         uniform.parameters = parameters.clone();
         uniform
-            .uniform_penalty_method_with_fixed_weight(2.0)
+            .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
             .unwrap();
         assert_eq!(uniform.parameters, parameters);
     }
@@ -1075,7 +1269,7 @@ mod tests {
         let before = uniform.clone();
 
         let err = uniform
-            .uniform_penalty_method_with_fixed_weight(f64::MAX)
+            .uniform_penalty_method_with_fixed_weight(f64::MAX, ATol::default())
             .unwrap_err();
         assert!(matches!(
             err.downcast_ref::<crate::CoefficientError>(),
@@ -1086,7 +1280,10 @@ mod tests {
         let mut keyed = make_instance();
         let before = keyed.clone();
         let err = keyed
-            .penalty_method_with_fixed_weights(&BTreeMap::from([(ConstraintID::from(1), f64::MAX)]))
+            .penalty_method_with_fixed_weights(
+                &BTreeMap::from([(ConstraintID::from(1), f64::MAX)]),
+                ATol::default(),
+            )
             .unwrap_err();
         assert!(matches!(
             err.downcast_ref::<crate::CoefficientError>(),
