@@ -33,20 +33,14 @@ state group数とsample数の不整合、およびinclusiveなsample ID rangeの
 `ValueError`として通知します。`u64`全域のID rangeと正しい正数partitionは、
 integer overflowやstrategy panicなしで生成できます。
 
-### 🆕 ユーザーが制御する `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147)、[#1152](https://github.com/Jij-Inc/ommx/pull/1152)、[#1153](https://github.com/Jij-Inc/ommx/pull/1153)、[#1154](https://github.com/Jij-Inc/ommx/pull/1154))
+### 🆕 Solver Adapter 共通のモデル準備フロー ([#1147](https://github.com/Jij-Inc/ommx/pull/1147)、[#1152](https://github.com/Jij-Inc/ommx/pull/1152)、[#1153](https://github.com/Jij-Inc/ommx/pull/1153)、[#1154](https://github.com/Jij-Inc/ommx/pull/1154))
 
-Python SDK v2では、solver adapterがsolverに必要なモデル変換を選び、実行していました。
-Python SDK v3では、この操作をユーザーが明示的に制御します。
-{meth}`~ommx.Instance.prepare` は、呼び出し側が所有する
-{class}`~ommx.Instance` を、指定した {class}`~ommx.InstanceClass` に含まれるまで
-in-placeで変更します。Adapterを直接呼び出した場合は引き続き入力を厳密に検査し、
-暗黙の変換は行いません。
-
-まずAdapterが推奨するPolicyを取得し、applicationに応じてpublic fieldを編集してから、
-そのAdapterの `INPUT_CLASS` 向けにinstanceをprepareします。例えばHiGHSは、activeな
-Indicator、OneHot、SOS1制約を通常制約へloweringすることを推奨します。Python-MIPも
-同じPolicyを推奨します。PySCIPOptはIndicatorとSOS1制約を直接扱えるため、OneHot制約
-だけをloweringすることを推奨します。
+Solverごとに受け付けるモデルの形は異なります。Beta 3では、使いたいSolverに合わせて
+{class}`~ommx.Instance` を変換する操作を、共通のフローで行えるようになりました。
+Adapterの推奨Policyを取得し、application固有の選択を必要に応じて変更して、
+{meth}`~ommx.Instance.prepare` を呼び出します。その同じinstanceをAdapterへ渡します。
+Adapterの直接呼び出しは引き続き厳格であり、受け付けられる形にするためのpreparationや
+instanceの変更を暗黙には行いません。
 
 ```python
 from ommx_highs_adapter import OMMXHighsAdapter
@@ -54,66 +48,26 @@ from ommx_highs_adapter import OMMXHighsAdapter
 input_class = OMMXHighsAdapter.INPUT_CLASS
 assert input_class is not None
 policy = OMMXHighsAdapter.recommended_preparation_policy()
-# Applicationに異なる選択が必要なら、ここでpublic fieldを編集します。
+# Applicationに異なる選択が必要なら、ここでPolicyを調整します。
 
 instance.prepare(input_class, policy)
-OMMXHighsAdapter.require_applicable(instance)
 solution = OMMXHighsAdapter.solve(instance)
 ```
 
-OpenJijでも、Binary変数のみの制約なし最小化input classに対して同じworkflowを使います。
-推奨Policyでは、Indicator、OneHot、SOS1制約のlowering、senseの正規化、exactなequality
-変換が利用できない場合にinequalityのまま残すことを許可したInteger slack、使用中の全
-Integer変数のlog encodingを有効にします。十分な固定penalty magnitudeはapplication固有
-なので、推奨Policyでは呼び出し側が設定するfieldとして残します。
+HiGHS、Python-MIP、PySCIPOpt、OpenJijはいずれもこのフローを利用できます。各Adapterの
+推奨Policyには、そのSolverで一般的に必要となるモデル変換が設定されています。一方、
+安全な共通defaultを決められない選択はユーザーが制御します。例えばBeta 3では、制約付き
+モデルをOpenJij向けに準備する際、最小化・最大化に適した向きで固定penaltyを適用しますが、
+その大きさはユーザーが選択します。
 
-```python
-from ommx import FixedPenaltyPreparation
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter
-
-input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-assert input_class is not None
-policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
-policy.fixed_penalty = (
-    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
-)
-
-instance.prepare(input_class, policy)
-OMMXOpenJijSAAdapter.require_applicable(instance)
-sample_set = OMMXOpenJijSAAdapter.sample(instance)
-```
-
-同じin-placeで変更されたinstanceをOpenJijへ渡し、返されたsampleのevaluation ownerとして
-引き続き使います。pre-releaseでのみ提供していた `OpenJijPreparationConfig`、
-`OpenJijPreparation`、report、Adapter所有のpreparation methodは、この共通APIに
-置き換えて削除しました。
-
-{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy` は、呼び出すたびに
-新しい編集可能なPolicyを返します。基底classの推奨では変換を何も有効にせず、各Adapterは
-直接受け取れるinput classに適した選択でoverrideできます。推奨Policyはinstanceを参照・
-変更せず、Preparationを実行せず、Adapter applicabilityも保証しません。
-{class}`~ommx.PreparationPolicy` をapplication側で直接構築することもできます。
-
-Policyでは、特殊制約の通常制約化、最小化へのsense統一、Integer slack、使用中の
-Integer変数のencoding、固定weight penaltyを許可できます。OMMXは有効な変換を
-定められた順序で適用し、instanceがtargetに含まれた時点で停止します。
-
-{class}`~ommx.FixedPenaltyPreparation` のweightは、非負のpenalty magnitudeとして
-扱われます。このphaseを適用すると、最小化では `w * f(x) ** 2` を目的関数へ加え、
-最大化では同じ項を引きます。任意指定の `atol` により、決定則の出力が
-`[-atol, 0)` に入る場合は受け入れて0へ正規化します。非有限値または `-atol` より
-小さい値では、penalty phaseをcommitせずに `ValueError` を送出します。用途に十分な
-大きさのweightを選ぶ責任はapplication側にあり、OMMXはweightの決定や上限設定を
-行いません。
-
-{meth}`~ommx.Instance.prepare` が `None` を返すのは、target membershipへ到達した
-場合だけです。許可した変換をすべて使っても到達できない場合は、
-{class}`~ommx.PreparationTargetNotReachedError` の `error.report` から最終的な
-{class}`~ommx.InstanceClassMembershipReport` を取得できます。個々の変換で発生する
-errorは既存のPython exception typeを保ちます。Preparationはinstanceをrollback
-しないため、後のerrorより前に完了した変更は残ります。成功時に保証されるのはtarget
-membershipだけです。上の例のとおり、Adapterが行う通常のapplicability checkは
-引き続き必要です。
+`prepare()` はinstanceをin-placeで更新します。Solverが返したsolutionやsampleを評価する
+ときは、変換前の変数値を復元し、preparation中に取り除かれた制約を検査できます。後の
+preparation stepが失敗した場合、それより前に完了した変更はinstanceに残ります。v2または
+Beta 2から移行する場合は、OpenJijのモデル変換optionとpre-release版の
+`OpenJijPreparation*` APIを、この共通フローに置き換えてください。完全な利用例は
+[OpenJijによるサンプリング](../tutorial/tsp_sampling_with_openjij_adapter.md)、対応するAPIの
+置き換えは[Python SDK v2からv3へのマイグレーションガイド](../migration/python_sdk_v2_to_v3.md)
+を参照してください。
 
 ## 3.0.0 Beta 2
 

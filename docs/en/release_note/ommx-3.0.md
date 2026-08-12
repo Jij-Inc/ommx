@@ -36,20 +36,14 @@ group counts and an undersized inclusive sample-ID range as `ValueError`.
 Full `u64` ID ranges and valid positive partitions are generated without
 integer overflow or a strategy panic.
 
-### 🆕 User-controlled `Instance` preparation ([#1147](https://github.com/Jij-Inc/ommx/pull/1147), [#1152](https://github.com/Jij-Inc/ommx/pull/1152), [#1153](https://github.com/Jij-Inc/ommx/pull/1153), [#1154](https://github.com/Jij-Inc/ommx/pull/1154))
+### 🆕 One preparation workflow across solver adapters ([#1147](https://github.com/Jij-Inc/ommx/pull/1147), [#1152](https://github.com/Jij-Inc/ommx/pull/1152), [#1153](https://github.com/Jij-Inc/ommx/pull/1153), [#1154](https://github.com/Jij-Inc/ommx/pull/1154))
 
-In Python SDK v2, solver adapters selected and performed the model conversions
-needed by their solvers. Python SDK v3 makes this an explicit, caller-owned step.
-{meth}`~ommx.Instance.prepare` changes the caller's {class}`~ommx.Instance` in
-place until it belongs to a requested {class}`~ommx.InstanceClass`; direct
-adapter calls remain strict and do not transform their input automatically.
-
-Start with the policy recommended by the adapter, edit any public policy fields
-needed by the application, and then prepare the instance for that adapter's
-`INPUT_CLASS`. For example, HiGHS recommends lowering active Indicator, OneHot,
-and SOS1 constraints into regular constraints. Python-MIP makes the same
-recommendation. PySCIPOpt accepts Indicator and SOS1 constraints directly, so
-it recommends lowering only OneHot constraints:
+Different solvers accept different kinds of models. Beta 3 adds one explicit
+workflow for adapting an {class}`~ommx.Instance` to the solver you want to use:
+start from the adapter's recommendation, adjust choices that depend on your
+application, call {meth}`~ommx.Instance.prepare`, and pass that same instance to
+the adapter. Direct adapter calls remain strict: they do not prepare or mutate
+the supplied instance to make it applicable.
 
 ```python
 from ommx_highs_adapter import OMMXHighsAdapter
@@ -57,70 +51,29 @@ from ommx_highs_adapter import OMMXHighsAdapter
 input_class = OMMXHighsAdapter.INPUT_CLASS
 assert input_class is not None
 policy = OMMXHighsAdapter.recommended_preparation_policy()
-# Change public policy fields here when the application needs different choices.
+# Adjust the policy here if your application needs different choices.
 
 instance.prepare(input_class, policy)
-OMMXHighsAdapter.require_applicable(instance)
 solution = OMMXHighsAdapter.solve(instance)
 ```
 
-OpenJij uses the same workflow for its Binary, unconstrained minimization input
-class. Its recommendation lowers Indicator, OneHot, and SOS1 constraints,
-normalizes the sense, configures Integer slack with an inequality-preserving
-fallback when exact equality conversion is unavailable, and log-encodes all
-used Integer variables. A sufficient fixed penalty magnitude remains
-application-specific, so the recommendation leaves that field for the caller
-to set:
+HiGHS, Python-MIP, PySCIPOpt, and OpenJij all support this workflow. Each
+recommendation covers the model changes commonly needed by that solver, while
+choices without a safe universal default stay under your control. For example,
+Beta 3 applies fixed penalties in the direction appropriate to minimization or
+maximization when preparing a constrained model for OpenJij; you still choose
+the magnitude.
 
-```python
-from ommx import FixedPenaltyPreparation
-from ommx_openjij_adapter import OMMXOpenJijSAAdapter
-
-input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-assert input_class is not None
-policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
-policy.fixed_penalty = (
-    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
-)
-
-instance.prepare(input_class, policy)
-OMMXOpenJijSAAdapter.require_applicable(instance)
-sample_set = OMMXOpenJijSAAdapter.sample(instance)
-```
-
-The same mutated instance is passed to OpenJij and remains the evaluation owner
-for the returned samples. The prerelease-only `OpenJijPreparationConfig`,
-`OpenJijPreparation`, reports, and Adapter-owned preparation methods have been
-removed in favor of this common API.
-
-{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy` returns a
-fresh, editable policy on every call. The base recommendation enables no
-changes; each adapter may override it with choices suitable for its direct
-input class. A recommendation does not inspect or mutate an instance, execute
-preparation, or guarantee applicability. Applications may also construct a
-{class}`~ommx.PreparationPolicy` directly.
-
-Policy fields let the caller allow special-constraint lowering, minimization
-sense normalization, Integer slack, used-Integer encoding, and fixed-weight
-penalties. OMMX applies enabled changes in a fixed order and stops as soon as
-the target contains the instance.
-
-{class}`~ommx.FixedPenaltyPreparation` treats each weight as a nonnegative
-penalty magnitude. When that phase runs, OMMX adds `w * f(x) ** 2` to a
-minimization objective and subtracts it from a maximization objective. Its
-optional `atol` accepts decision-rule output in `[-atol, 0)` and normalizes it
-to zero. A non-finite value or one below `-atol` raises `ValueError` without
-committing the penalty phase. The application remains responsible for choosing
-a sufficiently large magnitude; OMMX neither selects nor caps it.
-
-{meth}`~ommx.Instance.prepare` returns `None` only after target membership is
-reached. If the allowed changes are exhausted first,
-{class}`~ommx.PreparationTargetNotReachedError` provides the final
-{class}`~ommx.InstanceClassMembershipReport` as `error.report`. Errors from an
-individual model change keep their existing Python exception types. Preparation
-does not roll the instance back: changes completed before a later error remain.
-Successful preparation guarantees target membership only. The adapter's normal
-applicability check still applies, as shown above.
+`prepare()` updates the instance in place. When you evaluate returned solutions
+and samples, OMMX can restore source-variable values and check constraints that
+were removed during preparation. If a later preparation step fails, changes
+from earlier completed steps remain. If you are migrating from v2 or Beta 2,
+replace OpenJij's model-conversion options and the prerelease
+`OpenJijPreparation*` APIs with this common workflow. See
+[Sampling with OpenJij](../tutorial/tsp_sampling_with_openjij_adapter.md) for a
+complete example and the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the corresponding API replacements.
 
 ## 3.0.0 Beta 2
 
