@@ -8,6 +8,58 @@ import "ommx/v1/quadratic.proto";
 
 // Real-valued multivariate function used for objective function and constraints.
 message Function {
+  // An operation applied to one operand.
+  message UnaryOperation {
+    enum Operator {
+      OPERATOR_UNSPECIFIED = 0;
+      // Negation: `-operand`.
+      OPERATOR_NEG = 1;
+      // Absolute value: `|operand|`.
+      OPERATOR_ABS = 2;
+      // Sign of the operand: -1 for negative values, 0 for zero, and 1 for positive values.
+      OPERATOR_SIGNUM = 3;
+    }
+
+    Operator operator = 1;
+    Function operand = 2;
+  }
+
+  // An ordered n-ary operation applied to two or more operands.
+  // Operands are evaluated from left to right. Nested operations preserve grouping,
+  // except that a same-operator first operand may be flattened into the same left fold.
+  message NaryOperation {
+    enum Operator {
+      OPERATOR_UNSPECIFIED = 0;
+      // Sum of the operands.
+      OPERATOR_ADD = 1;
+      // Product of the operands.
+      OPERATOR_MUL = 2;
+      // Minimum of the operands.
+      OPERATOR_MIN = 3;
+      // Maximum of the operands.
+      OPERATOR_MAX = 4;
+    }
+
+    Operator operator = 1;
+    repeated Function operands = 2;
+  }
+
+  // An ordered operation applied to a left-hand side and a right-hand side.
+  message BinaryOperation {
+    enum Operator {
+      OPERATOR_UNSPECIFIED = 0;
+      // Division: `lhs / rhs`. Evaluation is undefined when rhs is zero.
+      OPERATOR_DIV = 1;
+      // Real-valued exponentiation with `lhs` as the base and `rhs` as the exponent.
+      // Evaluation rejects combinations outside the real domain and defines 0^0 as 1.
+      OPERATOR_POW = 2;
+    }
+
+    Operator operator = 1;
+    Function lhs = 2;
+    Function rhs = 3;
+  }
+
   oneof function {
     // Constant function like `f(x_1, x_2) = 2`
     double constant = 1;
@@ -17,5 +69,11 @@ message Function {
     Quadratic quadratic = 3;
     // Polynomial like `f(x_1, x_2) = 4 x_1^2 + 5 x_2^3 + 6 x_1 x_2^2 + 7 x_2^2 + 8 x_1 x_2 + 9 x_1 + 10 x_2 + 11`
     Polynomial polynomial = 4;
+    // Unary operation such as `abs(f(x))`.
+    UnaryOperation unary = 5;
+    // Ordered n-ary operation such as `min(f(x), g(x), h(x))`.
+    NaryOperation nary = 6;
+    // Ordered binary operation such as `f(x) / g(x)` or `f(x) ^ g(x)`.
+    BinaryOperation binary = 7;
   }
 }

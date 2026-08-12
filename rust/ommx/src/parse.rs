@@ -142,6 +142,10 @@ pub enum RawParseError {
     #[error(transparent)]
     QuadraticParseError(#[from] QuadraticParseError),
 
+    /// Catch-all for [`crate::Function`] invariant violations discovered during parsing.
+    #[error("{0}")]
+    InvalidFunction(String),
+
     #[error(transparent)]
     InvalidBound(#[from] BoundError),
 

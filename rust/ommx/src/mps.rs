@@ -87,8 +87,9 @@ pub fn load(path: impl AsRef<Path>) -> crate::Result<crate::Instance> {
 ///
 /// Limitation
 /// ----------
-/// Only linear problems are supported. See [`format()`] for detailed information about information loss,
-/// removed constraints handling, and variable filtering behavior.
+/// Only the model family described by [`format()`] is supported. See it for
+/// detailed information about required lowering, information loss, removed
+/// constraints handling, and variable filtering behavior.
 // Note: the caller's output path is intentionally not recorded as a span
 // field to avoid leaking local directory structure through exported telemetry.
 #[tracing::instrument(skip_all, fields(compress))]
@@ -97,6 +98,10 @@ pub fn save(
     out_path: impl AsRef<Path>,
     compress: bool,
 ) -> crate::Result<()> {
+    // Reject unsupported model content before creating directories or
+    // truncating an existing destination. `format` repeats this guard for
+    // callers that provide their own writer.
+    format::preflight(instance)?;
     let path = std::path::absolute(out_path.as_ref())?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -114,4 +119,31 @@ pub fn save(
         format::format(instance, &mut file)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod save_tests {
+    use super::*;
+    use crate::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn unsupported_model_does_not_truncate_existing_destination() {
+        let id = VariableID::from(1);
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(id)).abs(),
+            BTreeMap::from([(id, DecisionVariable::continuous())]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("existing.mps");
+        std::fs::write(&path, b"existing content").unwrap();
+
+        let error = save(&instance, &path, false).unwrap_err();
+
+        assert!(error.to_string().contains("non-polynomial objective"));
+        assert_eq!(std::fs::read(path).unwrap(), b"existing content");
+    }
 }

@@ -72,6 +72,7 @@ impl Function {
                     _ => Function::Constant(constant_term(&p)),
                 }
             }
+            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => self,
         }
     }
 
@@ -121,6 +122,7 @@ impl Function {
             (Function::Polynomial(lhs), Function::Polynomial(rhs)) => {
                 Function::Polynomial((lhs + rhs)?)
             }
+            (lhs, rhs) => Function::nary_operation(NaryOperator::Add, vec![lhs, rhs]),
         };
         Ok(())
     }
@@ -197,7 +199,7 @@ impl Add<Function> for Coefficient {
     type Output = Result<Function, CoefficientError>;
 
     fn add(self, rhs: Function) -> Self::Output {
-        rhs + self
+        Function::Constant(self) + rhs
     }
 }
 
@@ -205,7 +207,7 @@ impl Add<&Function> for Coefficient {
     type Output = Result<Function, CoefficientError>;
 
     fn add(self, rhs: &Function) -> Self::Output {
-        rhs.clone() + self
+        Function::Constant(self) + rhs
     }
 }
 
@@ -259,8 +261,13 @@ impl Neg for Function {
     type Output = Self;
 
     fn neg(mut self) -> Self::Output {
-        self.values_mut().for_each(|v| *v = -(*v));
-        self
+        if self.is_polynomial() {
+            self.values_mut()
+                .expect("polynomial function has coefficient values")
+                .for_each(|v| *v = -(*v));
+            return self;
+        }
+        Function::unary_operation(UnaryOperator::Neg, self)
     }
 }
 
@@ -292,7 +299,7 @@ mod tests {
         }
 
         #[test]
-        fn add_associative(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
+        fn add_nary(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
             assert_abs_diff_eq!((&a + (&b + &c).unwrap()).unwrap(), ((&a + &b).unwrap() + &c).unwrap());
         }
     }

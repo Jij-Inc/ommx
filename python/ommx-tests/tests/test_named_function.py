@@ -1,5 +1,7 @@
 """Tests for NamedFunction wrapper and its integration with Instance, Solution, and SampleSet."""
 
+import sys
+
 from ommx import (
     DecisionVariable,
     Function,
@@ -132,6 +134,17 @@ class TestNamedFunctionArithmetic:
         result = 3 * nf
         assert isinstance(result, Function)
         assert result.evaluate({1: 2.0}) == 9.0
+
+    def test_reverse_nary_operations_preserve_left_operand_order(self):
+        x = Function(DecisionVariable.continuous(1))
+        lhs = Function(Linear(terms={1: sys.float_info.max}))
+        rhs = NamedFunction(id=0, function=1 / (x - 2))
+
+        for expression in (lhs + rhs, lhs * rhs):
+            with pytest.raises(
+                ValueError, match="polynomial function produced a non-finite value"
+            ):
+                expression.evaluate({1: 2})
 
     def test_neg(self):
         x = DecisionVariable.integer(1)

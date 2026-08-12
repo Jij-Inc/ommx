@@ -1,10 +1,11 @@
 # Expressions: `Linear`, `Quadratic`, `Polynomial`, and `Function`
 
-These types represent mathematical expressions in optimization problems with different degree characteristics:
+These types represent mathematical expressions in optimization problems:
 
 - **[`Linear`](crate::Linear)**: Up to degree 1 polynomials (linear terms + constant)
 - **[`Quadratic`](crate::Quadratic)**: Up to degree 2 polynomials (may contain only linear terms, no quadratic terms required)
-- **[`Function`](crate::Function)**: Dynamic degree handling, can represent any polynomial degree at runtime
+- **[`Polynomial`](crate::Polynomial)**: Polynomials of any finite degree
+- **[`Function`](crate::Function)**: Either a compact polynomial or a composed scalar expression such as an absolute value, minimum, division, or real power
 
 Use the convenience macros [`linear!`](crate::linear), [`quadratic!`](crate::quadratic), [`coeff!`](crate::coeff), and [`monomial!`](crate::monomial) for easy expression building.
 
@@ -26,11 +27,15 @@ assert_eq!(quad_expr.degree(), 2);
 let linear_only_quad = ((coeff!(3.0) * quadratic!(1))? + coeff!(2.0))?;
 assert_eq!(linear_only_quad.degree(), 1);
 
-// Functions can dynamically handle any degree
+// Compact polynomial Functions report their polynomial degree.
 let linear_func = Function::from(linear_expr);  // Degree 1
-assert_eq!(linear_func.degree(), 1);
+assert_eq!(linear_func.degree(), Some(1.into()));
 let quad_func = Function::from(quad_expr);      // Degree 2
-assert_eq!(quad_func.degree(), 2);
+assert_eq!(quad_func.degree(), Some(2.into()));
+
+// A composed Function is not classified by polynomial degree.
+let absolute = linear_func.abs();
+assert_eq!(absolute.degree(), None);
 # Ok::<(), ommx::CoefficientError>(())
 ```
 

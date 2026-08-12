@@ -821,7 +821,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         # Check if objective is quadratic to add auxiliary variable
         degree = self.instance.objective.degree()
-        if degree > 2:
+        if degree is None or degree > 2:
             raise OMMXPySCIPOptAdapterError(
                 f"Objective function degree {degree} is not supported. "
                 "Only constant, linear, and quadratic objectives are supported."

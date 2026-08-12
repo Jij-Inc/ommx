@@ -74,7 +74,7 @@ impl Sub<Function> for Coefficient {
     type Output = Result<Function, CoefficientError>;
 
     fn sub(self, rhs: Function) -> Self::Output {
-        (-rhs) + self
+        Function::Constant(self) + (-rhs)
     }
 }
 

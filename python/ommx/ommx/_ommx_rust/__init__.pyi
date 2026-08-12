@@ -2504,7 +2504,12 @@ class Function:
     General mathematical function of decision variables.
     """
     @property
-    def terms(self) -> dict: ...
+    def terms(self) -> dict:
+        r"""
+        Get all polynomial terms as a dictionary mapping monomial tuples to coefficients.
+
+        Raises TypeError if this is a non-polynomial expression function.
+        """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
@@ -2513,6 +2518,7 @@ class Function:
         Returns dictionary mapping variable IDs to their linear coefficients.
         Returns empty dict if function has no linear terms.
         Works for all polynomial functions by filtering only degree-1 terms.
+        Raises TypeError if this is a non-polynomial expression function.
         """
     @property
     def quadratic_terms(
@@ -2524,6 +2530,7 @@ class Function:
         Returns dictionary mapping variable ID pairs to their quadratic coefficients.
         Returns empty dict if function has no quadratic terms.
         Works for all polynomial functions by filtering only degree-2 terms.
+        Raises TypeError if this is a non-polynomial expression function.
         """
     @property
     def constant_term(self) -> builtins.float:
@@ -2532,10 +2539,13 @@ class Function:
 
         Returns the constant term. Returns 0.0 if function has no constant term.
         Works for all polynomial functions by filtering the degree-0 term.
+        Raises TypeError if this is a non-polynomial expression function.
         """
     @property
     def type_name(self) -> builtins.str: ...
     def __iadd__(self, rhs: ToFunction) -> Function: ...
+    def __pow__(self, exponent: ToFunction, modulo: None = None) -> Function: ...
+    def __rpow__(self, base: ToFunction, modulo: None = None) -> Function: ...
     def __new__(cls, inner: ToFunction) -> Function:
         r"""
         Create a Function from various types.
@@ -2574,20 +2584,22 @@ class Function:
         Returns Some(Quadratic) if the function can be represented as quadratic,
         None otherwise.
         """
-    def degree(self) -> builtins.int:
+    def degree(self) -> typing.Optional[builtins.int]:
         r"""
         Get the degree of this function.
 
-        Returns the highest degree of any term in the function.
+        Returns the highest degree of any term in a polynomial function.
         Zero function has degree 0, constant function has degree 0,
         linear function has degree 1, quadratic function has degree 2, etc.
+        Returns None for non-polynomial expression functions.
         """
-    def num_terms(self) -> builtins.int:
+    def num_terms(self) -> typing.Optional[builtins.int]:
         r"""
         Get the number of terms in this function.
 
         Zero function has 0 terms, constant function has 1 term,
         and polynomial functions have the number of non-zero coefficient terms.
+        Returns None for non-polynomial expression functions.
         """
     def almost_equal(
         self, other: ToFunction, atol: builtins.float = 1e-06
@@ -2596,6 +2608,22 @@ class Function:
     def __neg__(self) -> Function:
         r"""
         Negation operator
+        """
+    def __abs__(self) -> Function:
+        r"""
+        Absolute value operator
+        """
+    def signum(self) -> Function:
+        r"""
+        Sign of the function value
+        """
+    def minimum(self, rhs: ToFunction) -> Function:
+        r"""
+        Pointwise minimum
+        """
+    def maximum(self, rhs: ToFunction) -> Function:
+        r"""
+        Pointwise maximum
         """
     def __add__(self, rhs: ToFunction) -> Function:
         r"""
@@ -2622,6 +2650,14 @@ class Function:
         r"""
         Reverse multiplication (lhs * self)
         """
+    def __truediv__(self, rhs: ToFunction) -> Function:
+        r"""
+        Division
+        """
+    def __rtruediv__(self, lhs: ToFunction) -> Function:
+        r"""
+        Reverse division (lhs / self)
+        """
     def add_scalar(self, scalar: builtins.float) -> Function: ...
     def add_linear(self, linear: Linear) -> Function: ...
     def add_quadratic(self, quadratic: Quadratic) -> Function: ...
@@ -2630,7 +2666,12 @@ class Function:
     def mul_linear(self, linear: Linear) -> Function: ...
     def mul_quadratic(self, quadratic: Quadratic) -> Function: ...
     def mul_polynomial(self, polynomial: Polynomial) -> Function: ...
-    def content_factor(self) -> builtins.float: ...
+    def content_factor(self) -> builtins.float:
+        r"""
+        Return the minimal positive factor that makes all coefficients integers.
+
+        Raises `TypeError` for a composed, non-polynomial Function.
+        """
     def required_ids(self) -> builtins.set[builtins.int]: ...
     @staticmethod
     def random(
@@ -2657,13 +2698,19 @@ class Function:
 
         **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
 
-        **Tightness:** This evaluates the bound **term by term** (monomial-wise)
-        and sums the per-term intervals. The result is a **sound
+        **Tightness:** Polynomial leaves are bounded **term by term**
+        (monomial-wise), and composed expression nodes combine their operand
+        bounds with interval arithmetic. The result is a **sound
         over-approximation** of the true range $[\inf f, \sup f]$ but is **not
         guaranteed to be tight**, because it ignores dependencies between terms
-        that share variables. For example, $f = x^2 - x$ with $x \in [0, 1]$
-        has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but term-wise
-        evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
+        or operands that share variables. For example, $f = x^2 - x$ with
+        $x \in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but
+        term-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
+
+        **Raises:** `RuntimeError` when an interval crosses an undefined
+        division or real-power domain, or when a function-valued exponent is
+        not a point interval. Raises `ValueError` if valid bound endpoints
+        cannot be constructed after numeric overflow.
 
         # Examples
 
@@ -2671,8 +2718,8 @@ class Function:
         >>> from ommx import Function, Linear, Bound
         >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
         >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
-        >>> (b.lower, b.upper)
-        (3.0, 7.0)
+        >>> b.lower <= 3.0 and b.upper >= 7.0
+        True
         ```
         """
     def __copy__(self) -> Function: ...
@@ -3149,9 +3196,23 @@ class Instance:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     @staticmethod
-    def from_v1_bytes(bytes: bytes) -> Instance: ...
+    def from_v1_bytes(bytes: bytes) -> Instance:
+        r"""
+        Deserialize an instance from v1 protobuf bytes.
+
+        Raises {class}`ValueError` if the protobuf payload is malformed,
+        semantically invalid, or contains a function expression beyond the
+        managed wire-depth limit.
+        """
     @staticmethod
-    def from_v2_bytes(bytes: bytes) -> Instance: ...
+    def from_v2_bytes(bytes: bytes) -> Instance:
+        r"""
+        Deserialize an instance from v2 protobuf bytes.
+
+        Raises {class}`ValueError` if the protobuf payload is malformed,
+        semantically invalid, or contains a function expression beyond the
+        managed wire-depth limit.
+        """
     @staticmethod
     def from_components(
         *,
@@ -3352,8 +3413,20 @@ class Instance:
         Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
         with a non-finite bound).
         """
-    def to_v1_bytes(self) -> bytes: ...
-    def to_v2_bytes(self) -> bytes: ...
+    def to_v1_bytes(self) -> bytes:
+        r"""
+        Serialize this instance as v1 protobuf bytes.
+
+        Raises {class}`RuntimeError` if a recursive function expression exceeds
+        the protobuf-safe serialization depth.
+        """
+    def to_v2_bytes(self) -> bytes:
+        r"""
+        Serialize this instance as v2 protobuf bytes.
+
+        Raises {class}`RuntimeError` if a recursive function expression exceeds
+        the protobuf-safe serialization depth.
+        """
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...
     def format_function(
@@ -4920,6 +4993,11 @@ class InstanceClassMismatch:
         ) -> InstanceClassMismatch.ObjectiveDegreeExceedsBound: ...
 
     @typing.final
+    class ObjectiveFunctionNotPolynomial(InstanceClassMismatch):
+        __match_args__ = ()
+        def __new__(cls) -> InstanceClassMismatch.ObjectiveFunctionNotPolynomial: ...
+
+    @typing.final
     class RegularConstraintRelationNotAllowed(InstanceClassMismatch):
         __match_args__ = (
             "relation",
@@ -4958,6 +5036,20 @@ class InstanceClassMismatch:
             actual_degrees: typing.Mapping[builtins.int, builtins.int],
             bound: DegreeBound,
         ) -> InstanceClassMismatch.RegularConstraintDegreeExceedsBound: ...
+
+    @typing.final
+    class RegularConstraintFunctionNotPolynomial(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "constraint_ids",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def __new__(
+            cls, relation: Equality, constraint_ids: builtins.set[builtins.int]
+        ) -> InstanceClassMismatch.RegularConstraintFunctionNotPolynomial: ...
 
     @typing.final
     class IndicatorConstraintsNotAllowed(InstanceClassMismatch):
@@ -5007,6 +5099,20 @@ class InstanceClassMismatch:
             actual_degrees: typing.Mapping[builtins.int, builtins.int],
             bound: DegreeBound,
         ) -> InstanceClassMismatch.IndicatorBodyDegreeExceedsBound: ...
+
+    @typing.final
+    class IndicatorBodyFunctionNotPolynomial(InstanceClassMismatch):
+        __match_args__ = (
+            "relation",
+            "constraint_ids",
+        )
+        @property
+        def relation(self) -> Equality: ...
+        @property
+        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def __new__(
+            cls, relation: Equality, constraint_ids: builtins.set[builtins.int]
+        ) -> InstanceClassMismatch.IndicatorBodyFunctionNotPolynomial: ...
 
     @typing.final
     class OneHotConstraintsNotAllowed(InstanceClassMismatch):
@@ -5833,11 +5939,37 @@ class ParametricInstance:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     @staticmethod
-    def from_v1_bytes(bytes: bytes) -> ParametricInstance: ...
+    def from_v1_bytes(bytes: bytes) -> ParametricInstance:
+        r"""
+        Deserialize a parametric instance from v1 protobuf bytes.
+
+        Raises {class}`ValueError` if the protobuf payload is malformed,
+        semantically invalid, or contains a function expression beyond the
+        managed wire-depth limit.
+        """
     @staticmethod
-    def from_v2_bytes(bytes: bytes) -> ParametricInstance: ...
-    def to_v1_bytes(self) -> bytes: ...
-    def to_v2_bytes(self) -> bytes: ...
+    def from_v2_bytes(bytes: bytes) -> ParametricInstance:
+        r"""
+        Deserialize a parametric instance from v2 protobuf bytes.
+
+        Raises {class}`ValueError` if the protobuf payload is malformed,
+        semantically invalid, or contains a function expression beyond the
+        managed wire-depth limit.
+        """
+    def to_v1_bytes(self) -> bytes:
+        r"""
+        Serialize this parametric instance as v1 protobuf bytes.
+
+        Raises {class}`RuntimeError` if a recursive function expression exceeds
+        the protobuf-safe serialization depth.
+        """
+    def to_v2_bytes(self) -> bytes:
+        r"""
+        Serialize this parametric instance as v2 protobuf bytes.
+
+        Raises {class}`RuntimeError` if a recursive function expression exceeds
+        the protobuf-safe serialization depth.
+        """
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...
     @staticmethod

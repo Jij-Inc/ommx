@@ -12,10 +12,13 @@ impl Instance {
     ///   - Use penalty method (TODO: ALM will be added) to convert into an unconstrained problem.
     /// - The objective function uses only binary decision variables.
     ///   - TODO: Binary encoding will be added.
-    /// - The degree of the objective is at most 2.
+    /// - The objective is a polynomial of degree at most 2.
     ///
     #[tracing::instrument(skip_all)]
     pub fn as_qubo_format(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
+        let Some(terms) = self.objective().iter() else {
+            bail!("QUBO format does not support a non-polynomial objective function.");
+        };
         if self.sense() == Sense::Maximize {
             bail!("QUBO format is only for minimization problems.");
         }
@@ -37,7 +40,7 @@ impl Instance {
         }
         let mut constant = 0.0;
         let mut quad: BTreeMap<BinaryIdPair, f64> = BTreeMap::new();
-        for (ids, coefficient) in self.objective().iter() {
+        for (ids, coefficient) in terms {
             let c = coefficient.into_inner();
             if c.abs() <= f64::EPSILON {
                 continue;
@@ -63,9 +66,13 @@ impl Instance {
     ///   - Use penalty method (TODO: ALM will be added) to convert into an unconstrained problem.
     /// - The objective function uses only binary decision variables.
     ///   - TODO: Binary encoding will be added.
+    /// - The objective is polynomial.
     ///
     #[tracing::instrument(skip_all)]
     pub fn as_hubo_format(&self) -> Result<(BTreeMap<BinaryIds, f64>, f64)> {
+        let Some(terms) = self.objective().iter() else {
+            bail!("HUBO format does not support a non-polynomial objective function.");
+        };
         if self.sense() == Sense::Maximize {
             bail!("HUBO format is only for minimization problems.");
         }
@@ -87,7 +94,7 @@ impl Instance {
         }
         let mut constant = 0.0;
         let mut hubo: BTreeMap<BinaryIds, f64> = BTreeMap::new();
-        for (ids, coefficient) in self.objective().iter() {
+        for (ids, coefficient) in terms {
             let c = coefficient.into_inner();
             if c.abs() <= f64::EPSILON {
                 continue;
@@ -154,6 +161,24 @@ mod tests {
         .unwrap();
         let err = instance.as_qubo_format().unwrap_err();
         assert!(err.to_string().contains("minimization"));
+    }
+
+    #[test]
+    fn qubo_and_hubo_reject_non_polynomial_objectives() {
+        let objective = Function::from(linear!(VariableID::from(1))).abs();
+        let instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            binary_vars([1]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let qubo_error = instance.as_qubo_format().unwrap_err();
+        assert!(qubo_error.to_string().contains("non-polynomial objective"));
+
+        let hubo_error = instance.as_hubo_format().unwrap_err();
+        assert!(hubo_error.to_string().contains("non-polynomial objective"));
     }
 
     #[test]

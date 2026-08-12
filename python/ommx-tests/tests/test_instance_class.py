@@ -8,6 +8,7 @@ from ommx import (
     DecisionVariable,
     DegreeBound,
     Equality,
+    Function,
     IndicatorConstraint,
     Instance,
     InstanceClass,
@@ -297,6 +298,57 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
         if isinstance(mismatch, InstanceClassMismatch.IndicatorConstraintsNotAllowed)
     )
     assert unsupported_indicator.constraint_ids == {20, 21}
+
+
+def test_non_polynomial_mismatches_preserve_function_location() -> None:
+    x = DecisionVariable.binary(1)
+    absolute_x = abs(Function(x))
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=absolute_x,
+        decision_variables=[x],
+        constraints={10: absolute_x == 0},
+        indicator_constraints={
+            20: IndicatorConstraint(
+                indicator_variable=x,
+                function=absolute_x,
+                equality=Equality.EqualToZero,
+            )
+        },
+    )
+    polynomial_only = clause(
+        "polynomial-only",
+        allowed_variable_kinds={Kind.Binary},
+        objective_degree_bound=DegreeBound.unbounded(),
+        regular_constraint_degree_bounds={
+            Equality.EqualToZero: DegreeBound.unbounded()
+        },
+        indicator_constraint_degree_bounds={
+            Equality.EqualToZero: DegreeBound.unbounded()
+        },
+    )
+
+    mismatches = (
+        InstanceClass([polynomial_only])
+        .check_membership(instance)
+        .clause_reports[0]
+        .mismatches
+    )
+
+    assert isinstance(
+        mismatches[0], InstanceClassMismatch.ObjectiveFunctionNotPolynomial
+    )
+    assert isinstance(
+        mismatches[1],
+        InstanceClassMismatch.RegularConstraintFunctionNotPolynomial,
+    )
+    assert mismatches[1].relation == Equality.EqualToZero
+    assert mismatches[1].constraint_ids == {10}
+    assert isinstance(
+        mismatches[2], InstanceClassMismatch.IndicatorBodyFunctionNotPolynomial
+    )
+    assert mismatches[2].relation == Equality.EqualToZero
+    assert mismatches[2].constraint_ids == {20}
 
 
 def test_membership_is_recomputed_after_explicit_lowering() -> None:

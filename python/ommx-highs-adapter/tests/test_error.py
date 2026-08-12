@@ -5,6 +5,7 @@ from ommx import (
     DecisionVariable,
     DegreeBound,
     Equality,
+    Function,
     IndicatorConstraint,
     Instance,
     InstanceClassMismatch,
@@ -75,6 +76,22 @@ def test_error_nonlinear_objective():
         mismatches[0],
         InstanceClassMismatch.ObjectiveDegreeExceedsBound,
     )
+
+
+def test_error_non_polynomial_objective():
+    x = DecisionVariable.continuous(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=abs(Function(x)),
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    with pytest.raises(AdapterNotApplicableError) as error:
+        OMMXHighsAdapter(instance)
+
+    [mismatch] = error.value.report.input_membership.clause_reports[0].mismatches
+    assert isinstance(mismatch, InstanceClassMismatch.ObjectiveFunctionNotPolynomial)
 
 
 def test_error_nonlinear_constraint():

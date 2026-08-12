@@ -8,6 +8,32 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))
+
+{class}`~ommx.Function` can now represent composed expressions as well as
+compact polynomials. Python users can construct absolute values, sign
+functions, minima, maxima, divisions, and powers directly:
+
+```python
+f = abs(x - 2).maximum(y) / (z + 1)
+g = f**2
+```
+
+Use {meth}`~ommx.Function.signum`, {meth}`~ommx.Function.minimum`, and
+{meth}`~ommx.Function.maximum` for the named operations. Division by zero,
+powers outside the real-valued domain, and non-finite evaluation results raise
+`ValueError`. Composed expressions are serialized in OMMX protobuf payloads,
+while HiGHS, Python-MIP, and PySCIPOpt reject them explicitly because their
+current adapter inputs remain polynomial-only.
+
+Because a `Function` is no longer necessarily a polynomial,
+{meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` return
+`None` for composed expressions. Polynomial-term accessors and
+{meth}`~ommx.Function.content_factor` raise `TypeError` instead of treating a
+composed expression as an empty polynomial. See the
+[Function user guide](../user_guide/function.md) for operation ordering,
+evaluation errors, and serialization details.
+
 ## 3.0.0 Beta 3
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)

@@ -145,6 +145,34 @@ impl PyStubType for PyDecisionVariable {
     }
 }
 
+trait RootPayload {
+    fn into_v2_bytes(self) -> ommx::Result<Vec<u8>>;
+}
+
+impl RootPayload for ommx::Instance {
+    fn into_v2_bytes(self) -> ommx::Result<Vec<u8>> {
+        self.to_v2_bytes()
+    }
+}
+
+impl RootPayload for ommx::ParametricInstance {
+    fn into_v2_bytes(self) -> ommx::Result<Vec<u8>> {
+        self.to_v2_bytes()
+    }
+}
+
+impl RootPayload for ommx::Solution {
+    fn into_v2_bytes(self) -> ommx::Result<Vec<u8>> {
+        Ok(self.to_v2_bytes())
+    }
+}
+
+impl RootPayload for ommx::SampleSet {
+    fn into_v2_bytes(self) -> ommx::Result<Vec<u8>> {
+        Ok(self.to_v2_bytes())
+    }
+}
+
 macro_rules! root_wrapper {
     ($wrapper:ident, $rust_type:ty, $python_name:literal) => {
         #[doc = concat!("Output wrapper converting a Rust [`", stringify!($rust_type), "`] into `ommx.", $python_name, "`.")]
@@ -170,7 +198,11 @@ macro_rules! root_wrapper {
             type Error = PyErr;
 
             fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-                protocol::v0::root_into_py(self.0.to_v2_bytes(), $python_name, py)
+                let bytes = RootPayload::into_v2_bytes(self.0)
+                    .map_err(|error| {
+                        pyo3::exceptions::PyRuntimeError::new_err(format!("{error:#}"))
+                    })?;
+                protocol::v0::root_into_py(bytes, $python_name, py)
             }
         }
 

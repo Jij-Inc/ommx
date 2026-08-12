@@ -13,14 +13,14 @@ kernelspec:
 
 # ommx.Function
 
-In mathematical optimization, functions are used to express objective functions and constraints. Specifically, OMMX handles polynomials and provides the following data structures in OMMX Message to represent polynomials.
+In mathematical optimization, functions are used to express objective functions and constraints. OMMX stores polynomials compactly and can compose them with scalar operations such as absolute value, minimum, division, and power.
 
 | Data Structure | Description |
 | --- | --- |
 | {class}`~ommx.Linear` | Linear function. Holds pairs of variable IDs and their coefficients |
 | {class}`~ommx.Quadratic` | Quadratic function. Holds pairs of variable ID pairs and their coefficients |
 | {class}`~ommx.Polynomial` | Polynomial. Holds pairs of variable ID combinations and their coefficients |
-| {class}`~ommx.Function` | One of the above or a constant |
+| {class}`~ommx.Function` | A polynomial or a composed scalar expression |
 
 
 ## Creating ommx.Function
@@ -65,7 +65,7 @@ p = x * x * x + y * y
 print(p)
 ```
 
-`Linear`, `Quadratic`, and `Polynomial` each have their own unique data storage methods, so they are separate Messages. However, since any of them can be used as objective functions or constraints, a Message called `Function` is provided, which can be any of the above or a constant.
+`Linear`, `Quadratic`, and `Polynomial` each have their own unique data storage methods, so they are separate Messages. Since any of them can be used as objective functions or constraints, `Function` provides one common representation and also owns composed scalar expressions.
 
 ```{code-cell} ipython3
 from ommx import Function
@@ -80,9 +80,52 @@ print(Function(q))
 print(Function(p))
 ```
 
+## Composing Scalar Functions
+
+Convert an arithmetic expression to `Function` before applying the composed operations. Python's `abs` and arithmetic operators build expression nodes; pointwise minimum and maximum use the named `minimum` and `maximum` methods.
+
+```{code-cell} ipython3
+fx = Function(x)
+fy = Function(y)
+
+absolute = abs(fx - 3)
+sign = (fx - 1).signum()
+minimum = fx.minimum(fy)
+maximum = fx.maximum(fy)
+quotient = fx / (fy + 1)
+power = fx**2
+
+print(absolute)
+print(minimum)
+print(quotient)
+print(power)
+```
+
+The built-in Python functions `min(fx, fy)` and `max(fx, fy)` perform comparisons and therefore do not construct expression nodes. Use `fx.minimum(fy)` and `fx.maximum(fy)` instead.
+
+Within a composed expression, operations with several operands are ordered and evaluated from left to right. A same-operator group on the left is flattened, so `(abs(a) + abs(b)) + abs(c)` becomes one ordered three-operand addition. Explicit grouping on the right remains nested, so `abs(a) + (abs(b) + abs(c))` retains that right-hand group. Overflow and undefined-operation errors therefore occur in the represented evaluation order. Arithmetic containing only polynomials continues to normalize to the compact polynomial representation.
+
+Composed functions follow real-valued evaluation semantics:
+
+- `signum(0)` is `0` (including signed zero).
+- Division is undefined when the denominator is zero.
+- Power is undefined outside the real domain, such as a negative base with a non-integer exponent; `0**0` is defined as `1`.
+- Undefined operations and non-finite intermediate results raise `ValueError` in Python.
+
+Division and power can make a `Function` partial. Algebraic simplification preserves that domain: for example, `0 * (1 / fx)` is still undefined where `fx == 0`.
+
+```{code-cell} ipython3
+try:
+    (1 / fx).evaluate({1: 0})
+except ValueError as e:
+    print(f"Error: {e}")
+```
+
+Polynomial metadata is available only when the `Function` uses the compact polynomial representation. `degree()` and `num_terms()` return `None` for composed expressions, while coefficient properties such as `terms` raise `TypeError`. Solver adapters also reject a composed expression unless their declared input class supports it.
+
 ## Substitution and Partial Evaluation of Decision Variables
 
-`Function` and other polynomials have an `evaluate` method that substitutes values for decision variables. For example, substituting $x_1 = 1$ and $x_2 = 0$ into the linear function $x_1 + 2x_2 + 3$ created above results in $1 + 2 \times 0 + 3 = 4$.
+`Function` and the polynomial types have an `evaluate` method that substitutes values for decision variables. For example, substituting $x_1 = 1$ and $x_2 = 0$ into the linear function $x_1 + 2x_2 + 3$ created above results in $1 + 2 \times 0 + 3 = 4$.
 
 ```{code-cell} ipython3
 value= linear.evaluate({1: 1, 2: 0})
@@ -105,13 +148,13 @@ linear2= linear.partial_evaluate({1: 1})
 print(f"{linear2=}")
 ```
 
-The result of partial evaluation is a polynomial, so it is returned in the same type as the original polynomial.
+`Linear`, `Quadratic`, and `Polynomial` partial evaluation keeps the original Python type. For a composed `Function`, the expression structure that still depends on unassigned variables is preserved; when every operand becomes known, it is folded to a compact constant `Function`.
 
 +++
 
 ## Comparison of Coefficients
 
-`Function` and other polynomial types have an `almost_equal` function. This function determines whether the coefficients of the polynomial match within a specified error. For example, to confirm that $ (x + 1)^2 = x^2 + 2x + 1 $, write as follows
+`Function` and the polynomial types have an `almost_equal` function. For polynomial functions, it determines whether the coefficients match within a specified error. For composed functions, it compares matching expression structures recursively; it is not a proof of global mathematical equivalence. For example, to confirm that $ (x + 1)^2 = x^2 + 2x + 1 $, write as follows
 
 ```{code-cell} ipython3
 xx = (x + 1) * (x + 1)

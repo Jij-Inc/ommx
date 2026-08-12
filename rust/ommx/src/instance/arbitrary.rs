@@ -578,16 +578,12 @@ mod tests {
     proptest! {
         #[test]
         fn test_variable_id_is_defined(instance in Instance::arbitrary()) {
-            for ids in instance.objective.keys() {
-                for id in ids {
-                    prop_assert!(instance.decision_variables.contains_key(&id));
-                }
+            for id in instance.objective.required_ids() {
+                prop_assert!(instance.decision_variables.contains_key(&id));
             }
             for c in instance.constraints().values() {
-                for ids in c.function().keys() {
-                    for id in ids {
-                        prop_assert!(instance.decision_variables.contains_key(&id));
-                    }
+                for id in c.function().required_ids() {
+                    prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
             for (c, _) in instance.removed_constraints().values() {

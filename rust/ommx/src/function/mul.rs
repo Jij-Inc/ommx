@@ -27,6 +27,15 @@ impl Function {
             Function::Linear(l) => l.try_scale_assign_in_place(rhs)?,
             Function::Quadratic(q) => q.try_scale_assign_in_place(rhs)?,
             Function::Polynomial(p) => p.try_scale_assign_in_place(rhs)?,
+            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => {
+                if rhs != Coefficient::one() {
+                    let lhs = std::mem::take(self);
+                    *self = Function::nary_operation(
+                        NaryOperator::Mul,
+                        vec![lhs, Function::Constant(rhs)],
+                    );
+                }
+            }
         }
         Ok(())
     }
@@ -39,12 +48,24 @@ impl Function {
         &mut self,
         rhs: &Function,
     ) -> Result<(), CoefficientError> {
+        if !self.is_polynomial() || !rhs.is_polynomial() {
+            let lhs = std::mem::take(self);
+            *self = match (&lhs, rhs) {
+                (_, Function::Constant(c)) if *c == Coefficient::one() => lhs,
+                (Function::Constant(c), _) if *c == Coefficient::one() => rhs.clone(),
+                _ => Function::nary_operation(NaryOperator::Mul, vec![lhs, rhs.clone()]),
+            };
+            return Ok(());
+        }
         match rhs {
             Function::Zero => *self = Function::Zero,
             Function::Constant(c) => self.try_scale_assign_in_place(*c)?,
             Function::Linear(l) => self.try_mul_linear_assign_in_place(l)?,
             Function::Quadratic(q) => self.try_mul_quadratic_assign_in_place(q)?,
             Function::Polynomial(p) => self.try_mul_polynomial_ref_assign_in_place(p)?,
+            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => {
+                unreachable!("composite functions were handled above")
+            }
         }
         Ok(())
     }
@@ -60,6 +81,9 @@ impl Function {
             Function::Linear(l) => Function::Polynomial((&l * &rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * &rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * &rhs)?),
+            lhs @ (Function::Unary(_) | Function::Nary(_) | Function::Binary(_)) => {
+                Function::nary_operation(NaryOperator::Mul, vec![lhs, Function::Polynomial(rhs)])
+            }
         };
         Ok(())
     }
@@ -72,6 +96,12 @@ impl Function {
             Function::Linear(l) => Function::Quadratic((&l * rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
+            lhs @ (Function::Unary(_) | Function::Nary(_) | Function::Binary(_)) => {
+                Function::nary_operation(
+                    NaryOperator::Mul,
+                    vec![lhs, Function::Linear(rhs.clone())],
+                )
+            }
         };
         Ok(())
     }
@@ -87,6 +117,12 @@ impl Function {
             Function::Linear(l) => Function::Polynomial((&l * rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
+            lhs @ (Function::Unary(_) | Function::Nary(_) | Function::Binary(_)) => {
+                Function::nary_operation(
+                    NaryOperator::Mul,
+                    vec![lhs, Function::Quadratic(rhs.clone())],
+                )
+            }
         };
         Ok(())
     }
@@ -102,6 +138,12 @@ impl Function {
             Function::Linear(l) => Function::Polynomial((&l * rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
+            lhs @ (Function::Unary(_) | Function::Nary(_) | Function::Binary(_)) => {
+                Function::nary_operation(
+                    NaryOperator::Mul,
+                    vec![lhs, Function::Polynomial(rhs.clone())],
+                )
+            }
         };
         Ok(())
     }
@@ -145,7 +187,7 @@ impl Mul<Function> for Coefficient {
     type Output = Result<Function, CoefficientError>;
 
     fn mul(self, rhs: Function) -> Self::Output {
-        rhs * self
+        Function::Constant(self) * rhs
     }
 }
 
@@ -153,7 +195,7 @@ impl Mul<&Function> for Coefficient {
     type Output = Result<Function, CoefficientError>;
 
     fn mul(self, rhs: &Function) -> Self::Output {
-        rhs.clone() * self
+        Function::Constant(self) * rhs
     }
 }
 
@@ -247,7 +289,7 @@ mod tests {
         }
 
         #[test]
-        fn mul_associative(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
+        fn mul_nary(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
             assert_abs_diff_eq!((&a * (&b * &c).unwrap()).unwrap(), ((&a * &b).unwrap() * &c).unwrap());
         }
     }

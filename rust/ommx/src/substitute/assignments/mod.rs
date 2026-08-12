@@ -42,6 +42,18 @@ fn build_dependency_graph<'a>(
     Ok((dependency, topological_order))
 }
 
+fn assignment_function_evaluation_error(var_id: VariableID, error: crate::Error) -> crate::Error {
+    if error.is::<crate::FunctionEvaluationError>() {
+        return crate::error!(
+            { var_id = ?var_id, cause = %error },
+            "failed to evaluate assignment for variable {var_id:?}: {error:#}",
+        );
+    }
+    error.context(format!(
+        "failed to evaluate assignment for variable {var_id:?}"
+    ))
+}
+
 /// Represents a set of assignment rules (`VariableID` -> `Function`)
 /// that has been validated to be free of any circular dependencies.
 #[derive(Debug, Clone, Default)]
@@ -298,7 +310,9 @@ impl Evaluate for AcyclicAssignments {
         // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
         // we first evaluate x1 = 3, then x4 = 5. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 5}.
         for (var_id, function) in self.evaluation_order_iter() {
-            let value = function.evaluate(&extended_state, atol)?;
+            let value = function
+                .evaluate(&extended_state, atol)
+                .map_err(|error| assignment_function_evaluation_error(var_id, error))?;
             if !value.is_finite() {
                 return Err(crate::error!(
                     "Assignment for variable {var_id:?} evaluated to non-finite value: {value}"
@@ -547,6 +561,9 @@ mod tests {
         let state = State::from_iter([(2, f64::INFINITY)]);
 
         let err = assignments.evaluate(&state, ATol::default()).unwrap_err();
-        assert!(err.to_string().contains("evaluated to non-finite value"));
+        assert!(err
+            .to_string()
+            .contains("failed to evaluate assignment for variable VariableID(1)"));
+        assert!(!err.is::<crate::FunctionEvaluationError>());
     }
 }

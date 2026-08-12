@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConstraintFacts {
     relation: Equality,
-    degree: Degree,
+    degree: Option<Degree>,
 }
 
 impl ConstraintFacts {
@@ -16,7 +16,7 @@ impl ConstraintFacts {
         self.relation
     }
 
-    pub fn degree(&self) -> Degree {
+    pub fn degree(&self) -> Option<Degree> {
         self.degree
     }
 }
@@ -32,7 +32,7 @@ impl ConstraintFacts {
 pub struct InstanceFacts {
     sense: Sense,
     used_variables_by_kind: BTreeMap<Kind, VariableIDSet>,
-    objective_degree: Degree,
+    objective_degree: Option<Degree>,
     regular_constraints: BTreeMap<ConstraintID, ConstraintFacts>,
     indicator_constraints: BTreeMap<IndicatorConstraintID, ConstraintFacts>,
     one_hot_constraint_ids: BTreeSet<OneHotConstraintID>,
@@ -56,7 +56,7 @@ impl InstanceFacts {
             .collect()
     }
 
-    pub fn objective_degree(&self) -> Degree {
+    pub fn objective_degree(&self) -> Option<Degree> {
         self.objective_degree
     }
 
@@ -214,7 +214,7 @@ mod tests {
             after.regular_constraints().get(&regular_id),
             Some(&ConstraintFacts {
                 relation: Equality::EqualToZero,
-                degree: 1.into(),
+                degree: Some(1.into()),
             })
         );
         assert_eq!(after.used_variable_ids(), before.used_variable_ids());
