@@ -82,6 +82,8 @@ sample_set.summary
 
 The `summary` attribute displays each sample's objective value and feasibility in a DataFrame format. For example, the sample with `sample_id=2` is infeasible and shows `feasible=False`. The table is sorted with feasible samples appearing first, and within them, those with better bjective values (depending on whether `Instance.sense` is maximization or minimization) appear at the top.
 
+When an Instance has removed constraints, `SampleSet.feasible` checks them for each sample, while `SampleSet.feasible_relaxed` checks only the active constraints. See [Removed Constraints and Feasibility](./removed_constraints.md) for details.
+
 ```{note}
 For clarity, we explicitly pass `ommx.Samples` created by `to_samples` to `evaluate_samples`, but you can omit it because `to_samples` would be called automatically.
 ```

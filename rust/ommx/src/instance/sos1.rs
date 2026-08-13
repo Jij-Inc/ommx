@@ -41,13 +41,16 @@ impl Instance {
     /// kind is [`Kind::SemiInteger`] or [`Kind::SemiContinuous`] (the split domain
     /// $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase, so Big-M
     /// conversion of these kinds is not supported yet).
-    /// All validation happens before any mutation, so a failed call leaves the instance
-    /// unchanged.
+    /// These mathematical preconditions are validated before mutation. Fresh indicator
+    /// IDs are then allocated in variable-ID order. If a later allocation fails because
+    /// no ID remains, earlier auxiliary variables remain in the instance.
     ///
     /// The original SOS1 constraint is moved to [`Instance::removed_sos1_constraints`]
     /// with `reason = "ommx.Instance.convert_sos1_to_constraints"` and a
     /// `constraint_ids` parameter listing the new regular constraint IDs
     /// (comma-separated in insertion order).
+    /// Every generated regular constraint records [`Provenance::Sos1Constraint`]
+    /// naming the original ID.
     ///
     /// Returns the [`ConstraintID`]s of the newly created regular constraints in
     /// insertion order: Big-M upper/lower pairs per non-binary variable (sorted by
@@ -64,10 +67,10 @@ impl Instance {
     ///
     /// See [`Self::convert_sos1_to_constraints`] for the conversion rule.
     ///
-    /// This is atomic: every active SOS1 is validated up front, and only once all
-    /// validations succeed are the conversions applied. If any SOS1 fails
-    /// validation (unsupported kind, non-finite bound, domain excludes 0, etc.),
-    /// no mutation happens and the instance is left untouched.
+    /// Every active SOS1 is validated for its mathematical preconditions up front. If
+    /// that validation fails, no mutation happens. Applying the validated plans is not
+    /// family-wide atomic: earlier SOS1 conversions and earlier auxiliary-variable
+    /// allocations remain if a later ID allocation fails.
     ///
     /// Returns a map from each original [`Sos1ConstraintID`] to the IDs of the
     /// regular constraints it produced.
@@ -80,8 +83,8 @@ impl Instance {
             .keys()
             .copied()
             .collect();
-        // Phase 1: plan every SOS1 up front. Bail on the first validation failure
-        // before any mutation has happened.
+        // Phase 1: plan every SOS1 up front. Bail on the first mathematical
+        // validation failure before any mutation has happened.
         let mut all_plans: Vec<(Sos1ConstraintID, Vec<(VariableID, IndicatorPlan)>)> =
             Vec::with_capacity(ids.len());
         for id in ids {
@@ -89,9 +92,8 @@ impl Instance {
             all_plans.push((id, plans));
         }
         // Phase 2: apply. Planned state only references variables that existed at
-        // plan time; `apply_sos1_conversion` only adds fresh variables / constraints
-        // and relaxes its own SOS1, so earlier applications cannot invalidate later
-        // plans.
+        // plan time. Applying can still fail on auxiliary-ID allocation, leaving
+        // earlier allocations or completed conversions in place.
         let mut result = BTreeMap::new();
         for (id, plans) in all_plans {
             result.insert(id, self.apply_sos1_conversion(id, plans)?);

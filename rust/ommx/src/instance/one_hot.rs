@@ -23,6 +23,8 @@ impl Instance {
     /// original one-hot constraint into `removed_one_hot_constraints` with
     /// `reason = "ommx.Instance.convert_one_hot_to_constraint"` and a
     /// `constraint_id` parameter pointing to the new regular constraint.
+    /// The generated constraint preserves the original one-hot context and
+    /// appends [`Provenance::OneHotConstraint`] naming the original ID.
     ///
     /// Returns the [`ConstraintID`] of the newly created regular constraint.
     pub fn convert_one_hot_to_constraint(
@@ -75,6 +77,10 @@ impl Instance {
     /// See [`Self::convert_one_hot_to_constraint`] for the conversion rule.
     /// Returns the IDs of the newly created regular constraints in ascending
     /// order of the original one-hot constraint IDs.
+    ///
+    /// Conversions are applied one at a time in that order. This method does not
+    /// provide family-wide rollback if a later conversion fails; conversions
+    /// already completed remain in the instance.
     pub fn convert_all_one_hots_to_constraints(&mut self) -> Result<Vec<ConstraintID>> {
         let ids: Vec<_> = self
             .one_hot_constraint_collection

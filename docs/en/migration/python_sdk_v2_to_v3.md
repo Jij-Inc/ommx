@@ -449,6 +449,13 @@ a later failure. `OMMXOpenJijSAAdapter.require_applicable(source)` can then
 check the remaining OpenJij-specific signed-ID and finite-coefficient
 preconditions.
 
+See [Adapter exact inputs](../user_guide/adapter_input_class.md) for the
+membership/applicability boundary,
+[Instance Preparation and PreparationPolicy](../user_guide/preparation_policy.md)
+for caller ownership, and
+[Removed constraints and feasibility](../user_guide/removed_constraints.md)
+for evaluation after preparation.
+
 ```python
 # v2.5.1
 from ommx.artifact import ArtifactArchive, ArtifactDir

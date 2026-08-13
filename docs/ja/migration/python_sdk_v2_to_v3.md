@@ -245,6 +245,8 @@ v3では呼び出し側がこれらの選択を所有します。Adapterが返�
 `PreparationPolicy` を出発点に、application固有のfieldを編集し、厳格なAdapter APIを
 呼ぶ前に `Instance.prepare()` でin-placeに適用します。
 
+`INPUT_CLASS` の exact な意味は [Adapter の exact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)、推奨 Policy と呼び出し側の責任境界は [Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md) を参照してください。
+
 OpenJijの推奨Policyでは、特殊制約lowering、minimizationへのsense正規化、Integer slack、
 使用中Integer変数のlog encodingを有効にします。Integer slackはrange 32でexactな
 equality変換を最初に試し、そのoperationが利用できない場合には、上限32のslackを
@@ -281,6 +283,8 @@ OMMX operationの既存exception typeを使います。instanceをin-placeで変
 `OMMXOpenJijSAAdapter.require_applicable(source)` で、signed IDとfinite coefficientという
 OpenJij固有の残りのpreconditionを検査できます。
 
+Preparation 中に removed へ移った制約と、`feasible` / `feasible_relaxed` の違いは [Removed constraints と実行可能性](../user_guide/removed_constraints.md) を参照してください。
+
 ## 8. DataFrame accessor
 
 `*_df` は property ではなく method です。
@@ -293,10 +297,10 @@ df = instance.constraints_df
 df = instance.constraints_df()
 ```
 
-kind 別や removed / active 別の DataFrame accessor は、`constraints_df(kind=..., removed=...)` に統合されています。
+kind 別や removed / active 別の DataFrame accessor は、`constraints_df(kind=..., removed=...)` に統合されています。removed lifecycle と評価時の扱いは [Removed constraints と実行可能性](../user_guide/removed_constraints.md) を参照してください。
 
 ```python
-instance.constraints_df(kind="normal")
+instance.constraints_df(kind="regular")
 instance.constraints_df(kind="one_hot")
 instance.constraints_df(kind="sos1", removed=True)
 solution.constraints_df(kind="indicator")

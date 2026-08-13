@@ -11,71 +11,64 @@ kernelspec:
   name: python3
 ---
 
-Solve with multiple adapters and compare the results
-======================================================
+Solve with Multiple Adapters and Compare the Results
+=====================================================
 
-Since the OMMX Adapter provides a unified API, you can solve the same problem using multiple solvers and compare the results. Let's consider a simple knapsack problem as an example:
+OMMX Adapters share a common API, so you can solve the same problem with multiple solvers and compare their results. In [Solve Special Constraints Directly with the PySCIPOpt Adapter](./solve_special_constraints_with_pyscipopt_adapter.md) and [Prepare an Instance for an Adapter](./prepare_instance_for_adapter.md), we saw that different Adapters may accept different Instances directly. On this page, we use a simple model that both HiGHS and PySCIPOpt accept without conversion.
+
+Each Adapter describes the inputs it accepts directly without conversion through its `INPUT_CLASS`. You can reuse the same `Instance` for a comparison only when it belongs to every Adapter's `INPUT_CLASS`. Otherwise, make a copy and prepare it separately for each Adapter.
+
+Consider the following knapsack problem, which both HiGHS and SCIP accept directly:
 
 $$
 \begin{aligned}
 \mathrm{maximize} \quad & \sum_{i=0}^{N-1} v_i x_i \\
 \mathrm{s.t.} \quad & \sum_{i=0}^{n-1} w_i x_i - W \leq 0, \\
-& x_{i} \in \{ 0, 1\} 
+& x_{i} \in \{ 0, 1\}
 \end{aligned}
 $$
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable
+from ommx import Instance
 
 v = [10, 13, 18, 31, 7, 15]
 w = [11, 25, 20, 35, 10, 33]
 W = 47
 N = len(v)
 
-x = [
-    DecisionVariable.binary(
-        id=i,
-        name="x",
-        subscripts=[i],
-    )
-    for i in range(N)
-]
-instance = Instance.from_components(
-    decision_variables=x,
-    objective=sum(v[i] * x[i] for i in range(N)),
-    constraints={0: sum(w[i] * x[i] for i in range(N)) - W <= 0},
-    sense=Instance.MAXIMIZE,
+instance = Instance.maximize()
+x = [instance.new_binary("x", subscripts=[i]) for i in range(N)]
+instance.objective = sum(v[i] * x[i] for i in range(N))
+instance.add_constraint(
+    sum(w[i] * x[i] for i in range(N)) <= W,
+    "weight limit",
 )
 ```
 
-## Solve with multiple adapters
+## Solve with Multiple Solvers
 
-Here, we will use OSS adapters developed as a part of OMMX Python SDK.
-For non-OSS solvers, adapters are also available and can be used with the same interface.
-A complete list of supported adapters for each solver can be found in [Supported Adapters](../user_guide/supported_ommx_adapters.md).
-
-Here, let's solve the knapsack problem with OSS solvers, Highs, SCIP.
+Here we use the open-source HiGHS and SCIP Adapters developed alongside the OMMX Python SDK. Adapters for other solvers use the same interface. See [Supported Adapters](../user_guide/supported_ommx_adapters.md) for the complete list.
 
 ```{code-cell} ipython3
 from ommx_highs_adapter import OMMXHighsAdapter
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
-# List of adapters to use
+# Adapters to compare
 adapters = {
     "highs": OMMXHighsAdapter,
     "scip": OMMXPySCIPOptAdapter,
 }
 
-# Solve the problem using each adapter
+# Solve the same exact input through each Adapter.
 solutions = {
     name: adapter.solve(instance) for name, adapter in adapters.items()
 }
 ```
 
-## Compare the results
+## Compare the Results
 
-Since this knapsack problem is simple, all solvers will find the optimal solution.
+This knapsack problem is small, so both solvers find an optimal solution.
 
 ```{code-cell} ipython3
 from matplotlib import pyplot as plt
@@ -93,7 +86,7 @@ for name, solution in solutions.items():
 plt.legend()
 ```
 
-It would be convenient to concatenate the `pandas.DataFrame` obtained with `decision_variables_df` when analyzing the results of multiple solvers.
+For some analyses, it is useful to concatenate the pandas `DataFrame` values returned by `decision_variables_df()`.
 
 ```{code-cell} ipython3
 import pandas
