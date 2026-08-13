@@ -328,8 +328,10 @@ impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
     /// Convert every active regular constraint to a penalty term with one fixed weight.
     ///
-    /// `weight` is a penalty magnitude: it must be finite and at least `-atol`.
-    /// A value in `[-atol, 0)` is normalized to zero. Each constraint body
+    /// When at least one active regular constraint is converted, `weight` is a
+    /// penalty magnitude that must be finite and at least `-atol`. With no active
+    /// regular constraints this operation is an identity and does not inspect
+    /// `weight`. A validated value in `[-atol, 0)` is normalized to zero. Each constraint body
     /// $f_i(x)$ contributes $+w f_i(x)^2$ to a minimization objective and
     /// $-w f_i(x)^2$ to a maximization objective, where $w$ is the normalized
     /// nonnegative magnitude. OMMX does not decide whether the weight is large
@@ -353,7 +355,8 @@ impl Instance {
     /// # Errors
     ///
     /// Returns an error if an unsupported active special constraint is present,
-    /// if `weight` is invalid, or if constructing or adding the penalty term
+    /// if a weight used for at least one active regular constraint is invalid,
+    /// or if constructing or adding the penalty term
     /// fails. Invalid weights retain [`InvalidPenaltyWeight`] in the error
     /// chain. Any error leaves the instance unchanged.
     pub fn uniform_penalty_method_with_fixed_weight(

@@ -129,16 +129,27 @@ class SolverAdapter(ABC):
     """
     An abstract interface for OMMX Solver Adapters, defining how solvers should be used with OMMX.
 
-    See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
+    Subclasses declare ``INPUT_CLASS`` as the OMMX-defined structural class of
+    exact inputs they can encode without changing the mathematical model.
+    ``check_applicability`` does not mutate the input and combines class
+    membership with the adapter's ``_check_preconditions`` hook. A subclass
+    should call ``require_applicable`` before constructing backend input.
 
-    Subclasses declare ``INPUT_CLASS`` as the OMMX-defined structural class used
-    by the first applicability condition. ``check_applicability`` does not mutate
-    the input and combines class membership with the adapter's
-    ``_check_preconditions`` hook.
+    Preparation is caller-owned. A subclass may override
+    ``recommended_preparation_policy`` to return a fresh, editable
+    recommendation, but the adapter must not apply that policy or otherwise
+    transform its input implicitly.
 
-    ``INPUT_CLASS`` describes only which exact inputs an adapter accepts; it does
-    not prescribe how the subclass processes them. The base class never lowers
-    or otherwise mutates the input instance.
+    When encoding OMMX decision variables, use
+    ``ommx_instance.used_decision_variables`` rather than the complete decision
+    variable table. Backend-only auxiliary variables may be added separately.
+    Preserve the correspondence between each used OMMX variable ID and its
+    backend representation. Decoding must recover a value for every used OMMX
+    variable, construct a :class:`ommx.State`, and evaluate it against an
+    unchanged :class:`ommx.Instance` snapshot that is mathematically identical
+    to the exact input encoded for the backend. The Instance owns population of
+    fixed, dependent, and irrelevant variables and construction of the final
+    :class:`ommx.Solution`.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass | None] = None
@@ -251,7 +262,16 @@ class SamplerAdapter(SolverAdapter):
     """
     An abstract interface for OMMX Sampler Adapters, defining how samplers should be used with OMMX.
 
-    See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
+    The exact-input, caller-owned preparation, and used-variable contracts of
+    :class:`SolverAdapter` also apply to sampler adapters. A sampler whose
+    backend labels are the OMMX variable IDs may preserve that identity directly;
+    other representations need an explicit correspondence. In either case, each
+    decoded sample must contain a value for every variable in
+    ``ommx_instance.used_decision_variables`` before ``evaluate_samples`` is
+    called against an unchanged :class:`ommx.Instance` snapshot mathematically
+    identical to the encoded exact input. Backend formats that omit a
+    zero-interaction variable therefore need an adapter-owned decoding default
+    consistent with that format.
     """
 
     @classmethod

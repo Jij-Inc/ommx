@@ -2,6 +2,28 @@
 
 OMMX（Open Mathematical prograMming eXchange; オミキス）とは、数理最適化を実務に応用する過程で必要となる、ソフトウェア間や人間同士のデータ交換を実現するためのオープンなデータ形式と、それを操作するためのSDKの総称です。
 
+## 目的から選ぶ
+
+Adapterを利用する人と実装する人で、必要な知識と読む順序は異なります。各Tutorialでは新しいワークフローを1つずつ導入します。数学的な概念、ユーザーとAdapterの責任境界、Instanceの状態モデルはUser Guideで説明し、変換式、前提条件、生成物、例外、atomicityなどの正確な契約はAPI Referenceで説明します。
+
+### Adapterを使って問題を解く
+
+| 順序 | 読むページ | ここで覚えること | この段階では扱わないこと |
+|---|---|---|---|
+| 1 | [PySCIPOpt Adapterで0-1ナップサック問題を解く](./tutorial/solve_with_ommx_adapter) | Instanceをそのまま`solve()`へ渡し、pandasで結果を読む | 特殊制約、`INPUT_CLASS`、Preparation |
+| 2 | [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter) | IndicatorとSOS1、対応Adapterなら変換不要であること | exact inputの定義、loweringの変換式と前提条件 |
+| 3 | [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter) | `INPUT_CLASS`の確認、推奨Policyの取得、ユーザーがcopyを`prepare()`する流れ | phase順序と責任境界、失敗時の状態、各変換APIの正確な契約 |
+| 4 | [OpenJij Adapterでサンプリングする](./tutorial/tsp_sampling_with_openjij_adapter) | QUBO向け変換もPreparationであること、penaltyの選択とfeasibility確認 | Policyの全field、penaltyの展開式、個々の変換API |
+| 5 | [複数のAdapterで結果を比較する](./tutorial/switching_adapters) | 共通のexact inputは同じInstanceで比較し、必要ならAdapterごとにcopyを準備する | diagnostics、initial stateなどAdapter固有の機能 |
+
+### OMMX Adapterを実装する
+
+Adapter実装者は、Tutorialを最後まで通読する必要はありません。[Developer Guide: OMMX Adapterを実装する](./developer_guide/adapter)から、次の3つの共通契約とAPI Referenceを確認し、PySCIPOpt Adapterの実装をSolver Adapterの参照実装として読んでください。
+
+1. [Adapterのexact input（INPUT_CLASS）](./user_guide/adapter_input_class)
+2. [Instance PreparationとPreparationPolicy](./user_guide/preparation_policy)
+3. [Removed constraintsと実行可能性](./user_guide/removed_constraints)
+
 ## 数理最適化におけるデータの交換
 
 数理最適化の技術を実務に応用する過程では、多くのデータが生成され、それらのデータを適切に管理・共有することが求められます。数理最適化そのものの研究プロセスとは異なり、実務への応用のプロセスは次の図のように複数のフェーズからなり、それぞれのフェーズにおいてそれぞれの作業に応じたソフトウェアを使う必要があります。
@@ -76,7 +98,7 @@ OCI Artifactでは、パッケージの中身をレイヤーという単位で�
 
 OMMXでは、OMMX Messageのそれぞれに対して `application/org.ommx.v1.instance` などのMedia Typeを定義し、OMMX MessageをProtocol Buffersでシリアライズしたバイナリを含むOCI ArtifactをOMMX Artifactと呼称しています。厳密に言えば、OMMXはOCI Artifactを何も拡張していないので、OMMX ArtifactをOCI Artifactの一種として扱うことができます。
 
-OCI Artifactをパッケージ形式として利用する利点は、これが全く正規のコンテナとして扱えることです。つまり、[DockerHub](https://hub.docker.com/) や [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) をそのまま利用してデータの管理・配布を行うことができます。これにより、例えば、多くのコンテナと同様に、数GBに及ぶベンチマークセットを不特定多数に対して配布することが容易になります。OMMXではこの機能を利用して、代表的なデータセットである [MIPLIB 2017](https://miplib.zib.de/) のデータを[GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017)で配布しています。詳しくは [MIPLIBインスタンスをダウンロードする](./tutorial/download_miplib_instance.md) を参照してください。
+OCI Artifactをパッケージ形式として利用する利点は、これが全く正規のコンテナとして扱えることです。つまり、[DockerHub](https://hub.docker.com/) や [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) をそのまま利用してデータの管理・配布を行うことができます。これにより、例えば、多くのコンテナと同様に、数GBに及ぶベンチマークセットを不特定多数に対して配布することが容易になります。OMMXではこの機能を利用して、代表的なデータセットである [MIPLIB 2017](https://miplib.zib.de/) と [QPLIB](https://qplib.zib.de/) を[GitHub Container Registry](https://github.com/orgs/Jij-Inc/packages?repo_name=ommx)で配布しています。詳しくは [ベンチマークInstanceをダウンロードする](./tutorial/download_benchmark_instance.md) を参照してください。
 
 ```{figure} ./assets/introduction_03.png
 :alt: OMMX MessageとOMMX Artifactの関係を表す図
@@ -90,13 +112,13 @@ OMMXが実現する人間同士のデータ交換。
 :hidden:
 
 tutorial/solve_with_ommx_adapter
+tutorial/solve_special_constraints_with_pyscipopt_adapter
 tutorial/prepare_instance_for_adapter
 tutorial/tsp_sampling_with_openjij_adapter
 tutorial/switching_adapters
 tutorial/experiment_management
 tutorial/share_in_ommx_artifact
-tutorial/download_miplib_instance
-tutorial/download_qplib_instance
+tutorial/download_benchmark_instance
 ```
 
 ```{toctree}
@@ -105,25 +127,27 @@ tutorial/download_qplib_instance
 :hidden:
 
 user_guide/supported_ommx_adapters
-user_guide/capability_model
+user_guide/adapter_input_class
+user_guide/preparation_policy
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
 user_guide/function
 user_guide/instance
 user_guide/parametric_instance
+user_guide/special_constraints
+user_guide/removed_constraints
 user_guide/solution
 user_guide/sample_set
-user_guide/special_constraints
 user_guide/experiment
 user_guide/tracing
 ```
 
 ```{toctree}
-:caption: 開発者ガイド
+:caption: Developer Guide
 :maxdepth: 1
 :hidden:
 
-tutorial/implement_adapter
+developer_guide/adapter
 ```
 
 ```{toctree}

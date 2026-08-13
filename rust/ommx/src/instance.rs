@@ -504,10 +504,13 @@ impl Instance {
     /// through `pyo3-tracing-opentelemetry` on the Python side.
     ///
     /// Errors if any underlying conversion fails (e.g. SOS1 / indicator with
-    /// non-finite bounds). Each per-type conversion is atomic, but this method
-    /// is **not** atomic across types: earlier conversions are not rolled back
-    /// if a later one fails. Callers that need cross-type atomicity should
-    /// validate / clone up front.
+    /// non-finite bounds). Indicator validates its complete family before
+    /// mutation. One-hot constraints are converted in ascending original ID
+    /// order without a family-wide rollback guarantee. SOS1 validates its
+    /// mathematical preconditions first, but auxiliary-ID exhaustion may leave
+    /// earlier allocations or conversions in place. This method is **not**
+    /// atomic across types either: earlier conversions are not rolled back if a
+    /// later one fails. Callers that need atomicity should clone up front.
     #[tracing::instrument(skip_all)]
     pub fn lower_special_constraints(
         &mut self,

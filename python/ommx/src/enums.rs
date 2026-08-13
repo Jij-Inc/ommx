@@ -2,8 +2,8 @@ use pyo3::prelude::*;
 
 /// Kind of active special constraint in an instance.
 ///
-/// Use these values with :attr:`Instance.active_special_constraint_kinds` to
-/// inspect an instance and :meth:`Instance.lower_special_constraints` to select
+/// Use these values with {attr}`~ommx.Instance.active_special_constraint_kinds` to
+/// inspect an instance and {meth}`~ommx.Instance.lower_special_constraints` to select
 /// special constraint families for explicit lowering to regular constraints.
 /// This is a transformation selector, not an adapter input declaration or an
 /// ``ommx.v2.Feature`` wire-format requirement.

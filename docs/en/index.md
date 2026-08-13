@@ -2,6 +2,28 @@
 
 OMMX (Open Mathematical prograMming eXchange) is an open data format and SDK designed to simplify data exchange between software and people when applying mathematical optimization to real-world problems.
 
+## Choose a Path by Goal
+
+Adapter users and Adapter authors need different knowledge and should follow different paths through the documentation. Each Tutorial introduces one new workflow at a time. The User Guide explains mathematical concepts, the responsibility boundary between users and Adapters, and the `Instance` state model. Precise contracts for conversion formulas, preconditions, generated artifacts, errors, and atomicity belong in the API Reference.
+
+### Solve Problems with OMMX Adapters
+
+| Step | Read | What you learn | Deferred until later |
+|---|---|---|---|
+| 1 | [Solve a 0-1 Knapsack Problem with the PySCIPOpt Adapter](./tutorial/solve_with_ommx_adapter) | Pass an `Instance` directly to `solve()` and inspect the result with pandas | Special constraints, `INPUT_CLASS`, and Preparation |
+| 2 | [Solve Special Constraints Directly with the PySCIPOpt Adapter](./tutorial/solve_special_constraints_with_pyscipopt_adapter) | What Indicator and SOS1 constraints mean, and that a supporting Adapter needs no conversion | The exact-input definition and the formulas and preconditions for lowering |
+| 3 | [Prepare an Instance for an Adapter](./tutorial/prepare_instance_for_adapter) | Check `INPUT_CLASS`, obtain the recommended Policy, copy the model, and call `prepare()` yourself | Phase ordering, responsibility boundaries, failure state, and exact conversion contracts |
+| 4 | [Sample with the OpenJij Adapter](./tutorial/tsp_sampling_with_openjij_adapter) | Treat QUBO conversion as Preparation, choose a penalty, and check feasibility | Every Policy field, the expanded penalty formula, and individual conversion APIs |
+| 5 | [Compare Results Across Adapters](./tutorial/switching_adapters) | Reuse the same `Instance` when it is an exact input for every Adapter; otherwise prepare a copy per Adapter | Adapter-specific features such as diagnostics and initial states |
+
+### Implement an OMMX Adapter
+
+Adapter authors do not need to read every Tutorial first. Start with [Developer Guide: Implement an OMMX Adapter](./developer_guide/adapter), review the following three shared contracts and their API references, and use the PySCIPOpt Adapter as the reference implementation for Solver Adapters.
+
+1. [Adapter Exact Inputs (`INPUT_CLASS`)](./user_guide/adapter_input_class)
+2. [Instance Preparation and `PreparationPolicy`](./user_guide/preparation_policy)
+3. [Removed Constraints and Feasibility](./user_guide/removed_constraints)
+
 ## Data Exchange in Mathematical Optimization
 
 When applying mathematical optimization to practical use cases, a large amount of data is often generated, requiring both effective management and sharing. Unlike the research phase of optimization, the application phase is divided into multiple stages, each necessitating specialized tools. Consequently, data must be converted to formats appropriate for each tool, making the overall process increasingly complex. By establishing one common format, it becomes easier to integrate multiple tools through a single conversion path to and from that format.
@@ -65,7 +87,7 @@ OMMX Artifact is a metadata-rich package format based on the [OCI (Open Containe
 
 In OCI Artifact, the contents of the package are managed in units called layers. A single container contains multiple layers and metadata called a Manifest. When reading a container, the Manifest is first checked, and the necessary data is extracted by reading the layers based on that information. Each layer is saved as binary data (BLOB) with metadata called [Media Type](https://www.iana.org/assignments/media-types/media-types.xhtml). For example, when saving a PDF file, the Media Type `application/pdf` is attached, so software reading OCI Artifacts can recognize it as a PDF file by looking at the Media Type.
 
-One major benefit of OCI Artifact compatibility is that standard container registries, such as [DockerHub](https://hub.docker.com/) or [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry), can be used to store and distribute data. OMMX uses this mechanism to share large datasets like [MIPLIB 2017](https://miplib.zib.de/), made available at [GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017). For additional details, see [Download MIPLIB Instances](./tutorial/download_miplib_instance.md).
+One major benefit of OCI Artifact compatibility is that standard container registries, such as [DockerHub](https://hub.docker.com/) or [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry), can be used to store and distribute data. OMMX uses this mechanism to distribute representative benchmark sets such as [MIPLIB 2017](https://miplib.zib.de/) and [QPLIB](https://qplib.zib.de/) through [GitHub Container Registry](https://github.com/orgs/Jij-Inc/packages?repo_name=ommx). For details, see [Download Benchmark Instances](./tutorial/download_benchmark_instance.md).
 
 ```{figure} ./assets/introduction_03.png
 :alt: Diagram showing the relationship between OMMX Message and OMMX Artifact
@@ -79,13 +101,13 @@ Data exchange between humans realized by OMMX.
 :hidden:
 
 tutorial/solve_with_ommx_adapter
+tutorial/solve_special_constraints_with_pyscipopt_adapter
 tutorial/prepare_instance_for_adapter
 tutorial/tsp_sampling_with_openjij_adapter
 tutorial/switching_adapters
 tutorial/experiment_management
 tutorial/share_in_ommx_artifact
-tutorial/download_miplib_instance
-tutorial/download_qplib_instance
+tutorial/download_benchmark_instance
 ```
 
 ```{toctree}
@@ -94,15 +116,17 @@ tutorial/download_qplib_instance
 :hidden:
 
 user_guide/supported_ommx_adapters
-user_guide/capability_model
+user_guide/adapter_input_class
+user_guide/preparation_policy
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
 user_guide/function
 user_guide/instance
 user_guide/parametric_instance
+user_guide/special_constraints
+user_guide/removed_constraints
 user_guide/solution
 user_guide/sample_set
-user_guide/special_constraints
 user_guide/experiment
 user_guide/tracing
 ```
@@ -112,7 +136,7 @@ user_guide/tracing
 :maxdepth: 1
 :hidden:
 
-tutorial/implement_adapter
+developer_guide/adapter
 ```
 
 ```{toctree}

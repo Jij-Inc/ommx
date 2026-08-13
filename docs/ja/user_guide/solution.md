@@ -72,6 +72,8 @@ print(f"{solution.objective=}, {solution.feasible=}")
 
 $x = 1, y = 0$ の時 $xy = 0$ なので制約条件は全て守られているので `feasible` は `True` になります。また目的関数の値は $x + y = 1$ になります。
 
+`feasible` は removed constraint を含む変換前の制約も検査します。現在 active な制約だけで判定する `feasible_relaxed` との違いは [Removed constraints と実行可能性](./removed_constraints.md) を参照してください。
+
 では実行可能解でないケース、$x = 1, y = 1$ の時はどうなるでしょうか？
 
 ```{code-cell} ipython3

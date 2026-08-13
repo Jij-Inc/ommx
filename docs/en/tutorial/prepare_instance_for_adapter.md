@@ -13,68 +13,53 @@ kernelspec:
 
 # Prepare an Instance for an Adapter
 
-When an adapter can handle a model as-is, pass the {class}`~ommx.Instance` directly to `solve()`. Only when the model needs conversion, copy the original Instance and prepare that copy as the user, using the adapter's recommendation as a starting point.
+In [Solve Special Constraints Directly with the PySCIPOpt Adapter](./solve_special_constraints_with_pyscipopt_adapter.md), we passed Indicator and SOS1 constraints directly to SCIP. Not every Adapter accepts the same kinds of Instance directly.
 
-First, we solve an Instance with Indicator and SOS1 constraints directly with the PySCIPOpt Adapter. Then, we prepare a copy of the same Instance for the HiGHS Adapter, which does not accept those special constraints directly.
+In this tutorial, we prepare the same model for the HiGHS Adapter and solve it. Remember these three steps:
+
+1. Check the Adapter's `INPUT_CLASS` to determine whether the Instance can be passed directly.
+2. Obtain the Adapter's recommended Policy, and choose the Instance to prepare.
+3. Call `Instance.prepare()` yourself, then pass the prepared Instance to the Adapter.
 
 ## Installing the Required Library
 
 ```
-pip install ommx-pyscipopt-adapter ommx-highs-adapter
+pip install ommx-highs-adapter
 ```
 
-## Solving Indicator and SOS1 Constraints Directly
+## Create the Same Model
 
-An Indicator constraint is active only when its binary indicator variable is 1. An SOS1 constraint requires at most one of its variables to be nonzero. The PySCIPOpt Adapter can handle linear Indicator constraints and SOS1 constraints directly.
-
-In the following model, the Indicator constraint `production <= 5` is active when `enabled = 1`. The SOS1 constraint prevents `option_a` and `option_b` from both being nonzero.
+To make this page runnable on its own, we recreate the model from the previous tutorial.
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Instance, Sos1Constraint
+from ommx import Instance, Sos1Constraint
 
-enabled = DecisionVariable.binary(0, name="enabled")
-production = DecisionVariable.continuous(
-    1, lower=0, upper=10, name="production"
+source = Instance.maximize()
+enabled = source.new_binary("enabled")
+option_a = source.new_binary("option_a")
+option_b = source.new_binary("option_b")
+option_c = source.new_binary("option_c")
+
+source.objective = (
+    10 * enabled
+    + 6 * option_a
+    + 5 * option_b
+    + 4 * option_c
 )
-option_a = DecisionVariable.continuous(2, lower=0, upper=4, name="option_a")
-option_b = DecisionVariable.continuous(3, lower=0, upper=6, name="option_b")
-
-source = Instance.from_components(
-    decision_variables=[enabled, production, option_a, option_b],
-    objective=production + option_a + option_b,
-    constraints={0: enabled == 1},
-    indicator_constraints={
-        0: (production <= 5).with_indicator(enabled),
-    },
-    sos1_constraints={
-        0: Sos1Constraint(variables=[option_a, option_b]),
-    },
-    sense=Instance.MAXIMIZE,
+source.add_indicator_constraint(
+    (option_a + option_b <= 1).with_indicator(enabled)
+)
+source.add_sos1_constraint(
+    Sos1Constraint(
+        variables=[option_b, option_c],
+        name="exclusive_options",
+    )
 )
 ```
 
-This Instance can be solved as-is, without preparation.
+## Check the Input Accepted Directly by the Adapter
 
-```{code-cell} ipython3
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
-
-direct_solution = OMMXPySCIPOptAdapter.solve(source)
-
-# production = 5, option_a = 0, option_b = 6
-assert abs(direct_solution.objective - 11.0) < 1e-6
-```
-
-## Inputs Accepted Directly by an Adapter
-
-Each adapter's `INPUT_CLASS` is the **set of exact Instance values that the adapter accepts directly**. The PySCIPOpt Adapter's input class includes the linear Indicator and SOS1 constraints used above.
-
-```{code-cell} ipython3
-scip_input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
-assert scip_input_class is not None
-assert scip_input_class.contains(source)
-```
-
-The HiGHS Adapter accepts regular linear constraints, but not Indicator or SOS1 constraints directly. The same source Instance therefore does not belong to its input class.
+Each Adapter's `INPUT_CLASS` is the **set of Instance values that it accepts directly without conversion**. Use `contains()` to check whether an Instance belongs to that set.
 
 ```{code-cell} ipython3
 from ommx_highs_adapter import OMMXHighsAdapter
@@ -84,41 +69,43 @@ assert highs_input_class is not None
 assert not highs_input_class.contains(source)
 ```
 
-## Preparing with the Recommended Policy
+The HiGHS Adapter accepts regular linear constraints, but it does not accept Indicator or SOS1 constraints directly. Therefore, `source` is not yet an input for the HiGHS Adapter.
 
-An adapter's `recommended_preparation_policy()` returns a {class}`~ommx.PreparationPolicy` recommended for moving toward its input class. The HiGHS recommendation lowers Indicator and SOS1 constraints to regular constraints. Each call returns a fresh policy, so the user can edit it when needed.
+## Prepare with the Recommended Policy
 
-Obtaining the recommendation does not change an Instance. The user chooses which Instance to prepare and calls {meth}`Instance.prepare() <ommx.Instance.prepare>`. To keep the original model, we prepare a copy made with `copy.copy()`.
+An Adapter's `recommended_preparation_policy()` proposes conversions that are generally useful for reaching its `INPUT_CLASS`. The HiGHS Adapter's recommendation converts Indicator and SOS1 constraints to regular linear constraints.
+
+Obtaining a recommended Policy does not change an Instance. The user chooses which Instance to convert and calls `prepare()`. To preserve the original model, we prepare a copy made with `copy.copy()`.
 
 ```{code-cell} ipython3
 import copy
 
-prepared = copy.copy(source)
 policy = OMMXHighsAdapter.recommended_preparation_policy()
 
+prepared = copy.copy(source)
 prepared.prepare(highs_input_class, policy)
 
+# The prepared Instance can now be passed directly to the HiGHS Adapter.
 assert highs_input_class.contains(prepared)
-assert source.indicator_constraints and source.sos1_constraints
+
+# source remains unchanged; only prepared has been converted.
+assert source.indicator_constraints
+assert source.sos1_constraints
 assert not prepared.indicator_constraints
 assert not prepared.sos1_constraints
-```
 
-The source Instance remains unchanged; only `prepared` has been lowered. Pass that prepared input to the HiGHS Adapter and solve it.
-
-```{code-cell} ipython3
 prepared_solution = OMMXHighsAdapter.solve(prepared)
-
-# Both exact inputs represent the same source problem.
-assert abs(prepared_solution.objective - direct_solution.objective) < 1e-6
+assert prepared_solution.feasible
+assert abs(prepared_solution.objective - 20.0) < 1e-8
+prepared_solution.decision_variables_df()
 ```
 
 ## Summary
 
-- Pass an Instance directly to `solve()` when the adapter accepts it as-is.
-- `INPUT_CLASS` is the set of exact inputs accepted directly by an adapter.
-- A recommended policy proposes conversions; it does not execute preparation.
-- The user is responsible for choosing the Instance and policy and calling `Instance.prepare()`.
-- The same source model can have different exact inputs for different adapters.
+- If an Adapter accepts an Instance directly, pass it to `solve()` as-is.
+- `INPUT_CLASS` is the set of inputs an Adapter accepts directly without conversion.
+- A recommended Policy proposes conversions; it does not perform Preparation.
+- The user chooses which Instance to convert and calls `Instance.prepare()`.
+- To preserve the original model, prepare a copy before passing it to the Adapter.
 
-See [Adapter Exact Inputs and Instance Preparation](../user_guide/capability_model.md) for the detailed meaning of exact inputs and preparation steps. See [Special Constraint Types](../user_guide/special_constraints.md) for the mathematical definitions of Indicator, OneHot, and SOS1 constraints and their individual conversion APIs.
+For more details, see [Adapter Exact Inputs (`INPUT_CLASS`)](../user_guide/adapter_input_class.md), [Instance Preparation and `PreparationPolicy`](../user_guide/preparation_policy.md), [Special Constraint Types](../user_guide/special_constraints.md), and [Removed Constraints and Feasibility](../user_guide/removed_constraints.md).
