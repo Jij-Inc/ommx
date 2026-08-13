@@ -19,7 +19,7 @@ OMMX は通常の制約（{class}`~ommx.Constraint`、等式・不等式を持�
 - {class}`~ommx.OneHotConstraint`: バイナリ変数集合のうち丁度1つが1
 - {class}`~ommx.Sos1Constraint`: 変数集合のうち高々1つが非ゼロ
 
-以下の例では [PySCIPOpt Adapterで0-1ナップサック問題を解く](../tutorial/solve_with_ommx_adapter.md) と同様に PySCIPOpt Adapter を使うので、事前にインストールしてください。
+以下の例では [PySCIPOpt Adapterで0-1ナップサック問題を解く](../tutorial/solve_with_ommx_adapter) と同様に PySCIPOpt Adapter を使うので、事前にインストールしてください。
 
 ```
 pip install ommx-pyscipopt-adapter
