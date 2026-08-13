@@ -14,7 +14,9 @@ kernelspec:
 複数のAdapterで最適化問題を解いて結果を比較する
 =========================================
 
-OMMX Adapterは共通化されたAPIを持っているので、複数のソルバーを使って同じ問題を解いて結果を比較することができます。まず例として簡単なナップザック問題を考えましょう：
+OMMX Adapterは共通化されたAPIを持っているので、複数のソルバーを使って同じ問題を解いて結果を比較することができます。ただし、各Adapterはそれぞれexactな `INPUT_CLASS` を持ちます。同じ `Instance` を直接渡せるのは、そのモデルがすべてのAdapterのexact inputに入る場合です。そうでない場合は、[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md) と同様に、Adapterごとにコピーを作ってPreparationします。
+
+ここでは、HiGHSとSCIPのどちらも直接受け取れる簡単なナップザック問題を考えましょう：
 
 $$
 \begin{aligned}

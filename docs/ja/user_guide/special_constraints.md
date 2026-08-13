@@ -19,13 +19,15 @@ OMMX は通常の制約（{class}`~ommx.Constraint`、等式・不等式を持�
 - {class}`~ommx.OneHotConstraint`: バイナリ変数集合のうち丁度1つが1
 - {class}`~ommx.Sos1Constraint`: 変数集合のうち高々1つが非ゼロ
 
-以下の例では [OMMX Adapterで最適化問題を解く](../tutorial/solve_with_ommx_adapter.md) と同様に PySCIPOpt Adapter を使うので、事前にインストールしてください。
+以下の例では [PySCIPOpt Adapterで0-1ナップサック問題を解く](../tutorial/solve_with_ommx_adapter.md) と同様に PySCIPOpt Adapter を使うので、事前にインストールしてください。
 
 ```
 pip install ommx-pyscipopt-adapter
 ```
 
-PySCIPOpt Adapter は Indicator と SOS1 を SCIP の `addConsIndicator` / `addConsSOS1` にそのまま渡します（等式 Indicator は上下2本の不等式 Indicator に分解されます）。OneHot は直接受け入れないため、呼び出し側が通常の等式制約へ明示的に lowering してから、得られた入力を Adapter に渡す必要があります。この preparation は `INPUT_CLASS` の membership や Adapter applicability とは別です。詳しくは [Adapter の入力 class と明示的な特殊制約 lowering](./capability_model.md) を参照してください。
+PySCIPOpt Adapter は線形 Indicator と SOS1 を SCIP の `addConsIndicator` / `addConsSOS1` にそのまま渡します（等式 Indicator は上下2本の不等式 Indicator に分解されます）。OneHot は直接受け入れないため、標準 workflow では PySCIPOpt Adapter の推奨 Policy を取得し、呼び出し側が `Instance.prepare()` で通常の等式制約へ lowering します。詳しくは [Adapter の exact input と Instance preparation](./capability_model.md) を参照してください。
+
+以下では各特殊制約の first-class な表現に加えて、個別の lowering API も説明します。Adapter 向けの標準 workflow では推奨 Policy と `Instance.prepare()` を使い、個々の変換を明示的に選択したい場合や変換結果を詳しく調べたい場合に、これらの API を直接使います。
 
 ## IndicatorConstraint
 
@@ -58,7 +60,7 @@ instance = Instance.from_components(
 assert set(instance.indicator_constraints.keys()) == {0}
 ```
 
-PySCIPOpt Adapter は Indicator 制約を受け取り、そのまま SCIP に渡します。
+PySCIPOpt Adapter はこの線形 Indicator 制約を受け取り、そのまま SCIP に渡します。
 
 ```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -67,6 +69,28 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 # z = 1 で x <= 5 が効くので x の最大値 5 が目的関数値
 assert abs(solution.objective - 5.0) < 1e-6
 ```
+
+### Indicator を Big-M 制約へ lowering する
+
+{meth}`Instance.convert_indicator_to_constraint(indicator_id) <ommx.Instance.convert_indicator_to_constraint>` は、Indicator 制約 $y = 1 \Rightarrow f(x) \leq 0$ を、$f(x)$ の上下限から計算した Big-M を使って通常制約へ書き換えます。SOS1 の lowering と異なり、新しい indicator 変数は導入せず、`IndicatorConstraint` が保持する変数を $y$ として使います。
+
+$$
+f(x) + u y - u \leq 0, \qquad -f(x) - l y + l \leq 0
+$$
+
+ここで $u \geq \sup f(x)$、$l \leq \inf f(x)$ です。
+
+- 不等式（$\leq$）の Indicator では上側だけを考慮し、$u > 0$ の場合だけ追加します。$u \leq 0$ なら変数境界だけで元の制約が成り立つため、通常制約は追加しません。
+- 等式（$= 0$）の Indicator では上下を独立に判定し、$u > 0$ なら上側、$l < 0$ なら下側を追加します。
+
+```{code-cell} ipython3
+indicator_constraint_ids = instance.convert_indicator_to_constraint(0)
+assert len(indicator_constraint_ids) == 1
+assert instance.indicator_constraints == {}
+assert set(instance.removed_indicator_constraints.keys()) == {0}
+```
+
+すべての active な Indicator 制約を一括変換するには {meth}`~ommx.Instance.convert_all_indicators_to_constraints` を使います。必要な $f(x)$ の境界が非有限、または $f(x)$ が semi-continuous / semi-integer 変数を参照する場合、変換は mutation の前に失敗します。一括 API はすべての対象を先に検証するため、どれか1つでも変換できなければ `Instance` 全体を変更しません。
 
 ## OneHotConstraint
 
@@ -94,17 +118,20 @@ instance_oh = Instance.from_components(
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
 ```
 
-PySCIPOpt Adapter に渡す前に、OneHot を通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ へ明示的に lowering します。変換後は別の入力値になるため、solve の前にその applicability を確認します。
+### OneHot を通常の等式制約へ lowering する
+
+{meth}`Instance.convert_one_hot_to_constraint(one_hot_id) <ommx.Instance.convert_one_hot_to_constraint>` は、指定した OneHot を数学的に等価な通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ へ書き換え、新しく生成した通常制約の ID を返します。ここでは個別 API の挙動を示すため、PySCIPOpt Adapter に渡す前にこの API を直接呼びます。変換後は別の exact input になるため、solve の前に applicability を確認します。
 
 ```{code-cell} ipython3
-instance_oh.convert_all_one_hots_to_constraints()
+one_hot_constraint_id = instance_oh.convert_one_hot_to_constraint(0)
+assert isinstance(one_hot_constraint_id, int)
 assert OMMXPySCIPOptAdapter.check_applicability(instance_oh).is_applicable
 solution = OMMXPySCIPOptAdapter.solve(instance_oh)
 # 3 つのうち丁度 1 つを選ぶので、最大値 10 をもつ x_1 が選ばれる
 assert abs(solution.objective - 10.0) < 1e-6
 ```
 
-`convert_all_one_hots_to_constraints()` は `instance_oh` を in-place に変更します。明示的な preparation の後は OneHot 制約が除去され、通常制約へ変換された痕跡が `removed_one_hot_constraints` に残ります。`solve` はこの変換を行いません。
+変換は `instance_oh` を in-place に変更します。明示的な lowering の後は OneHot 制約が除去され、変換履歴が `removed_one_hot_constraints` に残ります。`solve` はこの変換を行いません。すべての active な OneHot 制約を一括変換するには {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` を使います。
 
 ```{code-cell} ipython3
 assert instance_oh.one_hot_constraints == {}
@@ -149,6 +176,24 @@ solution = OMMXPySCIPOptAdapter.solve(instance_s1)
 assert abs(solution.objective - 10.0) < 1e-6
 ```
 
+### SOS1 を Big-M 制約へ lowering する
+
+{meth}`Instance.convert_sos1_to_constraints(sos1_id) <ommx.Instance.convert_sos1_to_constraints>` は、SOS1 を Big-M 法で通常制約へ変換します。各変数 $x_i \in [l_i, u_i]$ に対して次の規則を適用します。
+
+1. $x_i$ が境界 $[0, 1]$ の Binary 変数なら、その変数自体を indicator として再利用します。
+2. それ以外では新しい Binary 変数 $y_i$ を導入し、$x_i - u_i y_i \leq 0$ と $l_i y_i - x_i \leq 0$ を追加します。$u_i = 0$ または $l_i = 0$ の自明な側は省略します。
+3. 最後に cardinality 制約 $\sum_i y_i - 1 \leq 0$ を追加します。
+
+```{code-cell} ipython3
+sos1_constraint_ids = instance_s1.convert_sos1_to_constraints(0)
+# 3本の上側 Big-M 制約と1本の cardinality 制約
+assert len(sos1_constraint_ids) == 4
+assert instance_s1.sos1_constraints == {}
+assert set(instance_s1.removed_sos1_constraints.keys()) == {0}
+```
+
+すべての active な SOS1 制約を一括変換するには {meth}`~ommx.Instance.convert_all_sos1_to_constraints` を使います。非 Binary 変数の境界が非有限、domain が $0$ を含まない、または kind が semi-continuous / semi-integer の場合、変換は mutation の前に失敗します。一括 API はすべての対象を先に検証するため、どれか1つでも変換できなければ `Instance` 全体を変更しません。
+
 ## 制約種別ごとに独立したID空間
 
 OMMX では、通常制約・Indicator・OneHot・SOS1 の4つはそれぞれ**独立したID空間**を持ちます。{meth}`Instance.from_components <ommx.Instance.from_components>` に渡す4つの dict はそれぞれ独立したキー空間として扱われるため、異なる制約型同士で同じ整数 ID を使っても衝突しません。
@@ -176,7 +221,43 @@ assert set(instance_mix.one_hot_constraints.keys()) == {1}
 assert set(instance_mix.sos1_constraints.keys()) == {1}
 ```
 
-ただし、特殊制約型を通常制約に変換する（[明示的な特殊制約 lowering](./capability_model.md) 参照）と、新たに生成される通常制約は **`Constraint` 側の ID 空間**から割り当てられます。変換後に衝突する可能性があるのは通常制約の ID のみです。
+ただし、特殊制約型を通常制約に lowering すると、新たに生成される通常制約は **`Constraint` 側の ID 空間**から割り当てられます。変換後に衝突する可能性があるのは通常制約の ID のみです。
+
+## Lowering 結果を監査する
+
+変換元の特殊制約は破棄されず、次の `removed_*_constraints` dict に removed entry として保持されます。
+
+| 元の制約型 | Removed dict | DataFrame |
+|---|---|---|
+| OneHotConstraint | {attr}`~ommx.Instance.removed_one_hot_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
+| Sos1Constraint | {attr}`~ommx.Instance.removed_sos1_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
+| IndicatorConstraint | {attr}`~ommx.Instance.removed_indicator_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
+
+`removed=True` を指定すると、active と removed の行を同じ DataFrame で取得できます。`removed_reason` と `removed_reason.{key}` の列も自動的に追加されるため、変換された制約と active な制約を区別できます。
+
+各 removed entry（{class}`~ommx.RemovedOneHotConstraint` / {class}`~ommx.RemovedSos1Constraint` / {class}`~ommx.RemovedIndicatorConstraint`）は、`removed_reason` と、生成した通常制約 ID を格納する `removed_reason_parameters` を保持します。
+
+- **OneHot**: `constraint_id` に単一の ID
+- **SOS1**: `constraint_ids` にカンマ区切りの ID リスト
+- **Indicator**: `constraint_ids` にカンマ区切りの ID リスト。Big-M の両側が自明なら空文字列
+
+```{code-cell} ipython3
+removed = instance_oh.removed_one_hot_constraints
+assert set(removed.keys()) == {0}
+assert removed[0].removed_reason == "ommx.Instance.convert_one_hot_to_constraint"
+```
+
+生成された通常制約は、{attr}`Constraint.provenance <ommx.Constraint.provenance>` にも変換元への参照を保持します。各 {class}`~ommx.Provenance` は変換元の {attr}`~ommx.Provenance.kind` と {attr}`~ommx.Provenance.original_id` を記録するため、通常制約から元の特殊制約型と ID を辿れます。
+
+```{code-cell} ipython3
+from ommx import ProvenanceKind
+
+generated = instance_oh.constraints[one_hot_constraint_id]
+assert any(
+    p.kind == ProvenanceKind.OneHotConstraint and p.original_id == 0
+    for p in generated.provenance
+)
+```
 
 ## 評価結果の参照
 
@@ -218,4 +299,4 @@ Indicator / OneHot / SOS1 でも同じく、対応する `kind=` と一緒に `"
 - {meth}`Instance.relax_indicator_constraint() <ommx.Instance.relax_indicator_constraint>`: Indicator 制約を「緩和」（無効化）し、理由文字列を記録します。緩和された制約は `removed_indicator_constraints` に移動します。
 - {meth}`Instance.restore_indicator_constraint() <ommx.Instance.restore_indicator_constraint>`: 緩和した Indicator 制約を元に戻します。インジケータ変数が既に値を代入されている・固定されている場合は失敗します。
 
-OneHot / SOS1 については、`removed_one_hot_constraints` / `removed_sos1_constraints` への移動は [明示的な特殊制約 lowering](./capability_model.md) で扱う変換 API によって行われます。
+OneHot / SOS1 については、`removed_one_hot_constraints` / `removed_sos1_constraints` への移動は本ページで扱った個別の lowering API によって行われます。

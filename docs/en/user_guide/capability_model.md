@@ -11,198 +11,121 @@ kernelspec:
   name: python3
 ---
 
-# Adapter Input Classes and Explicit Constraint Lowering
+# Adapter Exact Inputs and Instance Preparation
 
-OMMX separates two concepts that were previously described together as adapter capabilities:
+The standard Adapter workflow starts from the exact `INPUT_CLASS` declared by the Adapter and its recommended policy. The caller edits that policy when application-specific choices are needed, applies it to the caller-owned {class}`~ommx.Instance`, and passes that same `Instance` to a strict Adapter API that never prepares input implicitly.
 
-- An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
-- {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` explicitly lowers selected special-constraint families on an instance. It does not declare an input class or establish adapter applicability.
-
-This page covers:
-
-- `InstanceClass` membership and adapter applicability
-- {class}`~ommx.SpecialConstraintKind` and {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` as special-constraint family selectors
-- {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` for explicit lowering
-- Manual conversion APIs per constraint type
-- Auditing conversion results
-
-## Instance classes and adapter applicability
-
-An `InstanceClass` is a finite union of complete, conjunctive {class}`~ommx.InstanceClassClause` values. Membership is evaluated against the exact input without mutating or preparing it.
-
-```{code-cell} ipython3
-from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
-
-binary_linear_with_one_hot = InstanceClass(
-    [
-        InstanceClassClause(
-            label="binary-linear-with-one-hot",
-            allowed_variable_kinds={Kind.Binary},
-            objective_degree_bound=DegreeBound.at_most(1),
-            allowed_senses={Sense.Maximize},
-            allows_one_hot=True,
-        )
-    ]
-)
+```{important}
+There is one fact to remember: **Adapters never transform an input implicitly to make it acceptable. The caller chooses and executes preparation.**
 ```
 
-Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured result or `require_applicable()` to raise when membership or an adapter-owned precondition fails. Explicit preparation produces another input value, whose applicability must be checked again.
+## Standard workflow
 
-## SpecialConstraintKind and active_special_constraint_kinds
-
-{class}`~ommx.SpecialConstraintKind` enumerates the active special-constraint families that can be selected for explicit lowering to regular constraints. It is not an Adapter input declaration or a serialization feature.
-
-| Kind | Constraint type |
-|---|---|
-| `SpecialConstraintKind.Indicator` | {class}`~ommx.IndicatorConstraint` |
-| `SpecialConstraintKind.OneHot` | {class}`~ommx.OneHotConstraint` |
-| `SpecialConstraintKind.Sos1` | {class}`~ommx.Sos1Constraint` |
-
-{attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` returns the set of `SpecialConstraintKind` values corresponding to the **active special constraints the instance currently holds**. When the instance uses only regular constraints the set is empty.
+The following example prepares a model with a OneHot constraint for the HiGHS Adapter.
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, OneHotConstraint, SpecialConstraintKind
+from ommx import DecisionVariable, Instance, OneHotConstraint
+from ommx_highs_adapter import OMMXHighsAdapter
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-
 instance = Instance.from_components(
     decision_variables=xs,
-    objective=sum(xs),
+    objective=sum((i + 1) * x for i, x in enumerate(xs)),
     constraints={},
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
     sense=Instance.MAXIMIZE,
 )
-assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
-assert binary_linear_with_one_hot.contains(instance)
+
+input_class = OMMXHighsAdapter.INPUT_CLASS
+assert input_class is not None
+
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Edit public policy fields here when the application needs different choices.
+instance.prepare(input_class, policy)
+
+# Successful preparation guarantees INPUT_CLASS membership.
+assert input_class.contains(instance)
+# Check Adapter-owned preconditions through the normal applicability path.
+OMMXHighsAdapter.require_applicable(instance)
+solution = OMMXHighsAdapter.solve(instance)
+assert abs(solution.objective - 3.0) < 1e-8
 ```
 
-## Explicit lowering via lower_special_constraints
+{meth}`~ommx.Instance.prepare` mutates `instance` in place and returns `None`. See [Prepare an Instance for an Adapter](../tutorial/prepare_instance_for_adapter.md) for a complete example.
 
-{meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` is an explicit, mutating operation. For each family selected in `kinds_to_lower`, the corresponding conversion API (see below) is invoked when that family is active. Families omitted from the set remain active, and an empty set is a no-op.
+## Exact INPUT_CLASS and Adapter applicability
 
-```{code-cell} ipython3
-lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
-assert lowered == {SpecialConstraintKind.OneHot}
-```
+An {class}`~ommx.InstanceClass` is the **set of exact `Instance` values an Adapter can receive without transformation**. Each {class}`~ommx.InstanceClassClause` is a conjunction of conditions, and an `InstanceClass` is their finite union. Membership examines the value as supplied, including facts such as used variable kinds, objective and constraint degrees, constraint relations, active special-constraint families, and optimization sense.
 
-```{code-cell} ipython3
-assert instance.active_special_constraint_kinds == set()
-assert instance.one_hot_constraints == {}
-assert len(instance.constraints) == 1
-```
+- `input_class.contains(instance)` returns membership as a `bool`.
+- `input_class.check_membership(instance)` returns structured mismatches for every clause.
+- Neither operation mutates `instance` or performs preparation such as lowering or encoding.
 
-The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `lower_special_constraints` mutates the instance in place and returns only the selected families that were active and actually lowered. The method returns an empty set when no selected family was active. Recheck `INPUT_CLASS` membership or adapter applicability on this resulting value.
+`INPUT_CLASS` membership and Adapter applicability are separate conditions.
 
-## Manual conversion APIs
-
-`lower_special_constraints` is implemented by composing the per-type conversion APIs below. You can call these directly as well.
-
-### One-hot → equality constraint
-
-{meth}`Instance.convert_one_hot_to_constraint(one_hot_id) <ommx.Instance.convert_one_hot_to_constraint>` rewrites a OneHot constraint as the mathematically equivalent linear equality $x_1 + \ldots + x_n - 1 = 0$.
-
-```{code-cell} ipython3
-instance2 = Instance.from_components(
-    decision_variables=xs,
-    objective=sum(xs),
-    constraints={},
-    one_hot_constraints={1: OneHotConstraint(variables=xs)},
-    sense=Instance.MAXIMIZE,
-)
-new_id = instance2.convert_one_hot_to_constraint(1)
-assert isinstance(new_id, int)
-assert set(instance2.constraints.keys()) == {new_id}
-assert instance2.one_hot_constraints == {}
-```
-
-Use {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` to convert every active OneHot constraint in one call.
-
-### SOS1 → Big-M constraints
-
-{meth}`Instance.convert_sos1_to_constraints(sos1_id) <ommx.Instance.convert_sos1_to_constraints>` rewrites an SOS1 constraint into regular constraints via the Big-M method. For each variable $x_i \in [l_i, u_i]$:
-
-1. If $x_i$ is binary with bounds $[0, 1]$, it is reused directly as its own indicator.
-2. Otherwise a fresh binary indicator $y_i$ is introduced, and the pair $x_i - u_i y_i \leq 0$ and $l_i y_i - x_i \leq 0$ is emitted (trivial sides with $u_i = 0$ or $l_i = 0$ are skipped).
-3. Finally, the cardinality constraint $\sum_i y_i - 1 \leq 0$ is added.
-
-```{code-cell} ipython3
-from ommx import Sos1Constraint
-
-ys = [DecisionVariable.binary(i, name="y", subscripts=[i]) for i in range(3)]
-instance3 = Instance.from_components(
-    decision_variables=ys,
-    objective=sum(ys),
-    constraints={},
-    sos1_constraints={1: Sos1Constraint(variables=ys)},
-    sense=Instance.MAXIMIZE,
-)
-new_ids = instance3.convert_sos1_to_constraints(1)
-# An all-binary SOS1 collapses to a single cardinality constraint sum(x_i) - 1 <= 0
-assert len(new_ids) == 1
-assert set(instance3.constraints.keys()) == set(new_ids)
-assert instance3.sos1_constraints == {}
-```
-
-Use {meth}`~ommx.Instance.convert_all_sos1_to_constraints` to convert every SOS1 constraint in one call. If a variable has a non-finite bound or a domain that excludes 0, conversion fails before any mutation occurs and the instance is left unchanged.
-
-### Indicator → Big-M constraints
-
-{meth}`Instance.convert_indicator_to_constraint(indicator_id) <ommx.Instance.convert_indicator_to_constraint>` rewrites an indicator constraint $y = 1 \Rightarrow f(x) \leq 0$ using the upper and lower bounds of $f(x)$ as the Big-M values. Unlike SOS1, no new indicator variable is introduced; the `IndicatorConstraint`'s existing indicator variable is used as $y$.
-
-$$
-f(x) + u y - u \leq 0, \qquad -f(x) - l y + l \leq 0
-$$
-
-where $u \geq \sup f(x)$ and $l \leq \inf f(x)$.
-
-- For inequality ($\leq$) indicators, only the upper side is considered and is emitted only when $u > 0$ (when $u \leq 0$, the constraint is already implied by the variable bounds, so nothing is emitted).
-- For equality ($= 0$) indicators, the upper and lower sides are considered independently: the upper is emitted if $u > 0$, and the lower is emitted if $l < 0$.
-
-Use {meth}`~ommx.Instance.convert_all_indicators_to_constraints` to convert every indicator constraint in one call. If a required bound on $f(x)$ is non-finite, or if $f(x)$ references a semi-continuous / semi-integer variable, conversion fails before any mutation occurs.
-
-## Auditing conversion results
-
-The original special constraints are not discarded; they are kept as "removed" entries in the following `removed_*_constraints` dicts.
-
-| Original type | Removed dict | DataFrame |
+| Condition | Owner | Inspection API |
 |---|---|---|
-| OneHotConstraint | {attr}`~ommx.Instance.removed_one_hot_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
-| Sos1Constraint | {attr}`~ommx.Instance.removed_sos1_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
-| IndicatorConstraint | {attr}`~ommx.Instance.removed_indicator_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
+| Exact input structure defined by OMMX | `InstanceClass` | `contains()` / `check_membership()` |
+| Backend-specific limits and conversion preconditions | Adapter | `check_applicability()` / `require_applicable()` |
 
-`removed=True` returns active + removed rows in the same DataFrame and auto-adds the `removed_reason` / `removed_reason.{key}` columns so removed rows are distinguishable from active ones.
+{meth}`~ommx.adapter.SolverAdapter.check_applicability` checks `INPUT_CLASS` membership first and evaluates Adapter-owned preconditions only for a member. For example, limits on Backend IDs or finiteness after converting coefficients to a Backend format are Adapter preconditions. {meth}`~ommx.adapter.SolverAdapter.require_applicable` uses the same report and raises {class}`~ommx.adapter.AdapterNotApplicableError` when the input is not applicable.
 
-Each entry ({class}`~ommx.RemovedOneHotConstraint` / {class}`~ommx.RemovedSos1Constraint` / {class}`~ommx.RemovedIndicatorConstraint`) records a `removed_reason` string (for example, `"ommx.Instance.convert_one_hot_to_constraint"`) and stores the generated regular-constraint IDs in `removed_reason_parameters`. The key name and shape differ by constraint type:
+Direct `solve()` / `sample()` calls and Adapter constructors are strict. They do not transform an input to make it applicable and do not mutate the caller's `Instance`.
 
-- **OneHot**: a single ID under the `constraint_id` key
-- **SOS1**: a comma-separated list of IDs under the `constraint_ids` key
-- **Indicator**: a comma-separated list of IDs under the `constraint_ids` key (empty when both Big-M sides are redundant)
+## Recommendation and execution are separate
 
-```{code-cell} ipython3
-removed = instance2.removed_one_hot_constraints
-assert set(removed.keys()) == {1}
+{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy` returns a {class}`~ommx.PreparationPolicy` containing transformations that are commonly useful for reaching that Adapter's `INPUT_CLASS`.
+
+- Every call returns a fresh policy that the caller can safely edit.
+- It does not inspect or mutate an `Instance`.
+- It does not execute preparation.
+- It does not guarantee that a particular `Instance` can be prepared or that Adapter-owned preconditions will hold.
+
+`INPUT_CLASS` and the policy are independent values. The caller passes both to `instance.prepare(input_class, policy)`. `prepare()` is target-directed. On success, the following postcondition holds:
+
+```python
+assert input_class.contains(instance)
 ```
 
-In addition, each generated regular constraint retains a reference back to its origin via the {attr}`Constraint.provenance <ommx.Constraint.provenance>` property. Each {class}`~ommx.Provenance` entry records the origin kind ({attr}`~ommx.Provenance.kind`, a {class}`~ommx.ProvenanceKind`) and the original ID ({attr}`~ommx.Provenance.original_id`), letting you trace which regular constraint was generated from which specific special constraint.
+This postcondition does not include Adapter-owned preconditions. Follow it with `require_applicable()` or the normal applicability check performed by `solve()` / `sample()`.
 
-```{code-cell} ipython3
-from ommx import ProvenanceKind
+## Native input and prepared input
 
-# Walk the regular constraints generated earlier by convert_one_hot_to_constraint(1)
-for cid, c in instance2.constraints.items():
-    for p in c.provenance:
-        assert p.kind == ProvenanceKind.OneHotConstraint
-        assert p.original_id == 1
-```
+Different Adapters can choose different exact input forms for the same special constraint.
+
+| Adapter | Exact input | Example recommended preparation |
+|---|---|---|
+| PySCIPOpt | Accepts linear Indicator and SOS1 natively | Lower only OneHot to a regular constraint |
+| HiGHS / Python-MIP | Accept regular linear constraints | Lower Indicator, OneHot, and SOS1 to regular constraints |
+| OpenJij | Accepts unconstrained Binary minimization | Lower special constraints, normalize sense, introduce Integer slack, and encode used Integers. The caller chooses fixed penalty magnitudes |
+
+A linear Indicator or SOS1 that PySCIPOpt accepts natively therefore does not need to be transformed merely for uniformity. The same source model can instead be prepared as a different exact input using the HiGHS `INPUT_CLASS` and recommended policy. See [Special Constraints](./special_constraints.md) for their mathematical definitions, native support, and individual conversion APIs.
+
+If the pre-transformation model must remain available, copy it explicitly before calling `prepare()`. The same prepared `Instance` retains variable dependencies and removed constraints and becomes the evaluation owner for the {class}`~ommx.Solution` or {class}`~ommx.SampleSet` returned by the Adapter.
+
+## Advanced: phase order and failure state
+
+Each `PreparationPolicy` field selects an optional phase backed by an existing `Instance` owner operation. `Instance.prepare()` applies each selected phase at most once in this fixed order:
+
+1. Special-constraint lowering
+2. Optimization-sense normalization
+3. Integer slack introduction
+4. Used-Integer encoding
+5. Fixed-weight penalty
+
+`prepare()` evaluates target `InstanceClass` membership before the first phase and after every selected phase, stopping as soon as the target contains the instance. If the instance is already a member, preparation is an exact identity and no policy phase runs.
+
+There is no global transaction around preparation. Each delegated owner operation retains its own validation and mutation contract, but a failure in a later phase does not roll back changes committed by earlier phases. Some owner operations also mutate multiple targets sequentially within one phase and can therefore fail after changing only part of that phase. Existing owner-operation exceptions propagate unchanged.
+
+If all configured phases finish without reaching the target, {class}`~ommx.PreparationTargetNotReachedError` is raised. Its `report` attribute contains the {class}`~ommx.InstanceClassMembershipReport` for the final, partially prepared state.
 
 ## Summary
 
-| What you want to do | API |
+| Goal | API |
 |---|---|
-| Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
-| Declare the first adapter applicability condition | `INPUT_CLASS` |
-| Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
-| Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
-| Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
-| Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
-| Audit conversion history | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |
+| Declare the exact input accepted directly by an Adapter | `INPUT_CLASS` / {class}`~ommx.InstanceClass` |
+| Inspect exact membership | `contains()` / `check_membership()` |
+| Include Adapter-owned preconditions in the check | `check_applicability()` / `require_applicable()` |
+| Get the Adapter's preparation recommendation | `recommended_preparation_policy()` |
+| Apply a caller-owned policy toward a target | {meth}`~ommx.Instance.prepare` |
+| Pass prepared input to a strict Adapter | `solve()` / `sample()` / Adapter constructor |

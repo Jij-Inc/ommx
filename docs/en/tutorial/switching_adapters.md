@@ -14,7 +14,9 @@ kernelspec:
 Solve with multiple adapters and compare the results
 ======================================================
 
-Since the OMMX Adapter provides a unified API, you can solve the same problem using multiple solvers and compare the results. Let's consider a simple knapsack problem as an example:
+OMMX Adapters share a unified API, so you can solve the same problem with multiple solvers and compare the results. However, each Adapter has its own exact `INPUT_CLASS`. The same `Instance` can be passed directly only when it belongs to every Adapter's exact input. Otherwise, prepare a separate copy for each Adapter as shown in [Prepare an Instance for an Adapter](./prepare_instance_for_adapter.md).
+
+Here we use a simple knapsack problem that both HiGHS and SCIP accept directly:
 
 $$
 \begin{aligned}

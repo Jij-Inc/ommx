@@ -11,11 +11,11 @@ kernelspec:
   name: python3
 ---
 
-# OMMX Adapterで最適化問題を解く
+# PySCIPOpt Adapterで0-1ナップサック問題を解く
 
-OMMXでは、既存の数理最適化ツールと相互連携するためのソフトウェアとしてOMMX Adapterを提供しています。OMMX Adapterを使うことで、OMMXが規定するスキーマで表現された最適化問題を既存の数理最適化ツールに入力可能にしたり、既存の数理最適化ツールから得られた情報をOMMXが規定するスキーマに変換したりすることができます。
+OMMX Adapterは、{class}`~ommx.Instance` を既存の数理最適化ソルバーに渡し、結果を {class}`~ommx.Solution` として取得するための接続層です。
 
-ここでは、0-1ナップサック問題をOMMX PySCIPOpt Adapterを介して解く方法を紹介します。
+最初に覚えることは、**Adapterがそのまま受け取れるモデルなら、`Instance` を `solve()` に渡すだけでよい**ということです。このチュートリアルでは、0-1ナップサック問題をPySCIPOpt Adapterで解きます。
 
 
 ## 必要なライブラリのインストール
@@ -30,18 +30,12 @@ pip install ommx-pyscipopt-adapter
 
 ## 最適化計算を実行するための2つのステップ
 
-```{figure} ./assets/solve_with_ommx_adapter_01.png
-:alt: 0-1ナップサック問題をOMMX PySCIPOpt Adapterで解くフロー
-
-0-1ナップサック問題をOMMX PySCIPOpt Adapterで解くフロー。
-```
-
 OMMX PySCIPOpt Adapterを介して0-1ナップサック問題を解くためには、次の2つのステップを踏む必要があります：
 
 1. 0-1ナップサック問題のインスタンスを用意する
 2. OMMX Adapterを介して最適化計算を実行する
 
-ステップ1.では、OMMX MessageのInstanceスキーマで定義された `ommx.Instance` オブジェクトを作成します。このオブジェクトを作成する方法は複数ありますが、ここではOMMX Python SDKを使用して直接記述する方法を採用します。
+ステップ1.では、OMMX Python SDKを使って `ommx.Instance` オブジェクトを直接作成します。
 
 ```{tip}
 `ommx.Instance` オブジェクトを用意する方法は4つあります：
@@ -52,7 +46,7 @@ OMMX PySCIPOpt Adapterを介して0-1ナップサック問題を解くために�
 4. JijModelingを使って `ommx.Instance` を出力する
 ```
 
-ステップ2.では、 `ommx.Instance` オブジェクトをPySCIPOptの `Model` オブジェクトに変換し、SCIPによる最適化計算を実行します。計算結果は、OMMX MessageのSolutionスキーマで定義された `ommx.Solution` オブジェクトとして取得できます。
+ステップ2.では、その `Instance` をPySCIPOpt Adapterに直接渡します。AdapterがSCIP向けの表現と実行を受け持ち、計算結果を `ommx.Solution` として返します。
 
 ### ステップ1: 0-1ナップサック問題のインスタンスを用意する
 
@@ -124,11 +118,13 @@ instance = Instance.from_components(
 ```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-# PySCIPOptのModelを介してommx.Solutionを取得する
+# PySCIPOpt Adapterでommx.Solutionを取得する
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
 ここで得られた変数 `solution` は、SCIPによる最適化計算の結果が格納された `ommx.Solution` オブジェクトになっています。
+
+このナップサックモデルはPySCIPOpt Adapterが直接受け取れるため、`solve()` の前にユーザーがモデルを変更する必要はありません。Adapterの入力に合わせてモデルを準備する例は、[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md) で扱います。
 
 +++
 

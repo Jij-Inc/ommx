@@ -11,11 +11,11 @@ kernelspec:
   name: python3
 ---
 
-# Solving Optimization Problems with OMMX Adapter
+# Solve a 0-1 Knapsack Problem with the PySCIPOpt Adapter
 
-OMMX provides OMMX Adapter software to enable interoperability with existing mathematical optimization tools. By using OMMX Adapter, you can convert optimization problems expressed in OMMX schemas into formats acceptable to other optimization tools, and convert the resulting data from those tools back into OMMX schemas.
+An OMMX Adapter connects an {class}`~ommx.Instance` to an existing optimization solver and returns the result as an {class}`~ommx.Solution`.
 
-Here, we introduce how to solve a 0-1 Knapsack Problem via OMMX PySCIPOpt Adapter.
+The first fact to remember is: **when an Adapter can receive a model as-is, pass the `Instance` directly to `solve()`**. In this tutorial, we solve a 0-1 knapsack problem with the PySCIPOpt Adapter.
 
 ## Installing the Required Libraries
 
@@ -29,21 +29,15 @@ pip install ommx-pyscipopt-adapter
 
 ## Two Steps for Running the Optimization
 
-```{figure} ./assets/solve_with_ommx_adapter_01.png
-:alt: Flow for solving 0-1 Knapsack Problem via OMMX PySCIPOpt Adapter
-
-Flow for solving 0-1 Knapsack Problem with OMMX PySCIPOpt Adapter.
-```
-
 To solve the 0-1 Knapsack Problem through the OMMX PySCIPOpt Adapter, follow these two steps:
 
-1. Prepare the 0-1 Knapsack problem instance.
+1. Create the 0-1 Knapsack problem instance.
 2. Run the optimization via OMMX Adapter.
 
-In Step 1, we create an `ommx.Instance` object defined in the OMMX Message Instance schema. There are several ways to generate this object, but in this guide, we'll illustrate how to write it directly using the OMMX Python SDK.
+In Step 1, we create an `ommx.Instance` object directly with the OMMX Python SDK.
 
 ```{tip}
-There are four ways to prepare an `ommx.Instance` object:
+There are four ways to obtain an `ommx.Instance` object:
 
 1. Write `ommx.Instance` directly with the OMMX Python SDK.
 2. Convert an MPS file to `ommx.Instance` using the OMMX Python SDK.
@@ -51,9 +45,9 @@ There are four ways to prepare an `ommx.Instance` object:
 4. Export `ommx.Instance` from JijModeling.
 ```
 
-In Step 2, we convert `ommx.Instance` into a PySCIPOpt `Model` object and run optimization with SCIP. The result is obtained as an `ommx.Solution` object defined by the OMMX Message Solution schema.
+In Step 2, we pass that `Instance` directly to the PySCIPOpt Adapter. The Adapter owns the SCIP representation and execution and returns the result as an `ommx.Solution`.
 
-### Step 1: Preparing a 0-1 Knapsack Problem Instance
+### Step 1: Creating a 0-1 Knapsack Problem Instance
 
 The 0-1 Knapsack problem is formulated as:
 
@@ -93,7 +87,7 @@ x = [
         # Specify the subscript of the decision variable
         subscripts=[i],
     )
-    # Prepare binary variables for the number of items
+    # Create one binary variable for each item
     for i in range(N)
 ]
 
@@ -118,16 +112,18 @@ instance = Instance.from_components(
 
 ### Step 2: Running Optimization with OMMX Adapter
 
-To optimize the instance prepared in Step 1, we run the optimization calculation via the OMMX PySCIPOpt Adapter as follows:
+To optimize the instance created in Step 1, pass it to the OMMX PySCIPOpt Adapter:
 
 ```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-# Obtain an ommx.Solution object through a PySCIPOpt model.
+# Obtain an ommx.Solution with the PySCIPOpt Adapter.
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
 The variable `solution` here is an `ommx.Solution` object that contains the results of the optimization calculation by SCIP.
+
+The PySCIPOpt Adapter accepts this knapsack model directly, so the user does not need to change the model before calling `solve()`. The next tutorial, [Prepare an Instance for an Adapter](./prepare_instance_for_adapter.md), shows what to do when a model must be prepared for an Adapter's input.
 
 +++
 

@@ -73,7 +73,7 @@ def set_decision_variables(
     Add decision variables to the model and create a mapping from variable names to variables
     """
     # Create PySCIPOpt variables from OMMX decision variable information
-    for var in instance.decision_variables:
+    for var in instance.used_decision_variables:
         if var.kind == DecisionVariable.BINARY:
             model.addVar(name=str(var.id), vtype="B")
         elif var.kind == DecisionVariable.INTEGER:
@@ -267,7 +267,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
         return State(
             entries={
                 var.id: sol[varname_map[str(var.id)]]
-                for var in instance.decision_variables
+                for var in instance.used_decision_variables
             }
         )
     except Exception:
@@ -316,23 +316,14 @@ This abstract base class assumes the following two use cases:
 
 The `solve` class method may define additional adapter-specific keyword options in concrete adapters. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When `Run.log_solve(..., store_diagnostics=True)` is used, adapters may record adapter-defined diagnostic reports into that sink; `None` means diagnostics are disabled.
 
-#### Input Class and Recommended Preparation
+#### Declare the Exact Input
 
-An adapter declares the structural set of exact `Instance` values it can receive with `INPUT_CLASS`. `check_applicability()` evaluates membership first and then adapter-owned preconditions without mutating the caller's instance; `require_applicable()` raises with the same structured report when either condition fails.
+[Adapter Exact Inputs and Instance Preparation](../user_guide/capability_model.md) explains `INPUT_CLASS` and Preparation from the user's perspective. An Adapter implementer owns four contracts:
 
-Direct adapter APIs are strict: they do not transform an input to make it applicable. Instead, an adapter may override `recommended_preparation_policy()` to return a fresh, caller-editable {class}`~ommx.PreparationPolicy` for its `INPUT_CLASS`. The recommendation does not inspect or mutate an instance, run preparation, or guarantee applicability. `INPUT_CLASS` and the policy remain independent inputs to {meth}`~ommx.Instance.prepare`.
-
-A recommendation can enable special-constraint lowering with these family selectors:
-
-- `SpecialConstraintKind.Indicator`: Indicator constraints (`binvar = 1 → f(x) <= 0`)
-- `SpecialConstraintKind.OneHot`: Exactly one of a set of binary variables is 1
-- `SpecialConstraintKind.Sos1`: At most one of a set of variables is non-zero
-
-Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. The selected Preparation phase delegates to {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`, which converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot). The owner operation still defines its validation and mathematical meaning.
-
-```{important}
-`INPUT_CLASS` describes the exact value received by the adapter. Preparation is owned by the caller and changes that value in place. Successful preparation guarantees `INPUT_CLASS` membership only; the adapter must still run its normal applicability check for adapter-owned preconditions.
-```
+1. Declare `INPUT_CLASS` so that it contains only the `Instance` values that the implemented encoder can receive without losing semantics.
+2. When common model changes are useful, return a fresh caller-editable policy from `recommended_preparation_policy()`. The Adapter itself must not run Preparation.
+3. Call `require_applicable()` before constructing backend input so both exact-input membership and Adapter-specific preconditions are checked.
+4. Encode only that exact input and evaluate the returned `Solution` or `SampleSet` with the same `Instance`.
 
 Using the functions prepared so far, you can implement it as follows:
 
@@ -361,11 +352,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     Equality.EqualToZero: DegreeBound.at_most(2),
                     Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
                 },
-                indicator_constraint_degree_bounds={
-                    Equality.EqualToZero: DegreeBound.at_most(1),
-                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
-                },
-                allows_sos1=True,
                 allowed_senses={Sense.Minimize, Sense.Maximize},
             )
         ]
@@ -375,7 +361,11 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
     def recommended_preparation_policy(cls) -> PreparationPolicy:
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
-                kinds={SpecialConstraintKind.OneHot}
+                kinds={
+                    SpecialConstraintKind.Indicator,
+                    SpecialConstraintKind.OneHot,
+                    SpecialConstraintKind.Sos1,
+                }
             )
         )
 
@@ -437,18 +427,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         return solution
 ```
 
-The caller decides whether to use and modify the recommendation before invoking the strict adapter API:
-
-```python
-input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
-assert input_class is not None
-policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
-# Edit public policy fields here when the application needs different choices.
-instance.prepare(input_class, policy)
-OMMXPySCIPOptAdapter.require_applicable(instance)
-solution = OMMXPySCIPOptAdapter.solve(instance)
-```
-
 This completes the Solver Adapter 🎉
 
 ```{note}
@@ -497,7 +475,7 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 
 Next, let's create a Sampler Adapter using OpenJij. OpenJij includes [`openjij.SASampler`](https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.SASampler) for Simulated Annealing (SA) and [`openjij.SQASampler`](https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.SQASampler) for Simulated Quantum Annealing (SQA). In this tutorial, we will use `SASampler` as an example.
 
-For simplicity, this tutorial omits the parameters passed to OpenJij. For more details, refer to the implementation of [`ommx-openjij-adapter`](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-openjij-adapter). For how to use the OpenJij Adapter, refer to [Sampling from QUBO with OMMX Adapter](../tutorial/tsp_sampling_with_openjij_adapter).
+For simplicity, this tutorial omits the parameters passed to OpenJij. For more details, refer to the implementation of [`ommx-openjij-adapter`](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-openjij-adapter). For how to use the OpenJij Adapter, refer to [Sampling an OMMX TSP Model with the OpenJij Adapter](../tutorial/tsp_sampling_with_openjij_adapter).
 
 ### Converting `openjij.Response` to `ommx.Samples`
 
@@ -559,29 +537,97 @@ class SamplerAdapter(SolverAdapter):
 
 `SamplerAdapter` inherits from `SolverAdapter`, so you might think you need to implement `solve` and other `@abstractmethod`. However, since `SamplerAdapter` has a function to return the best sample using `sample`, it is sufficient to implement only `sample`. If you want to implement a more efficient implementation yourself, override `solve`.
 
-As with `solve`, the reserved `diagnostics` keyword is owned by `Run.log_sample`. A sampler may record adapter-defined reports into the sink when it is not `None`.
+As with `solve`, the reserved `diagnostics` keyword is owned by `Run.log_sample`. A sampler may record adapter-defined reports into the sink when it is not `None`. The simplified Adapter below declares unconstrained Binary minimization QUBOs as its exact input. It does not transform a model into QUBO; it only encodes that exact input into OpenJij's dictionary format.
 
 ```{code-cell} ipython3
-from ommx.adapter import DiagnosticsSink, SamplerAdapter
+from collections.abc import Iterable
+from math import isfinite
+
+from ommx.adapter import (
+    AdapterPreconditionViolation,
+    DiagnosticsSink,
+    SamplerAdapter,
+)
+from ommx import (
+    DegreeBound,
+    InstanceClass,
+    InstanceClassClause,
+    InstanceClassMembershipReport,
+    Kind,
+    Sense,
+)
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
     """
     Sampling QUBO with Simulated Annealing (SA) by `openjij.SASampler`
     """
 
+    INPUT_CLASS = InstanceClass(
+        [
+            InstanceClassClause(
+                label="tutorial-openjij-qubo",
+                allowed_variable_kinds={Kind.Binary},
+                objective_degree_bound=DegreeBound.at_most(2),
+                allowed_senses={Sense.Minimize},
+            )
+        ]
+    )
+    MAX_OPENJIJ_VARIABLE_ID = 2**63 - 1
+
+    @classmethod
+    def _check_preconditions(
+        cls,
+        ommx_instance: Instance,
+        input_membership: InstanceClassMembershipReport,
+    ) -> Iterable[AdapterPreconditionViolation]:
+        _ = input_membership
+        out_of_range_ids = frozenset(
+            variable.id
+            for variable in ommx_instance.used_decision_variables
+            if variable.id > cls.MAX_OPENJIJ_VARIABLE_ID
+        )
+        if out_of_range_ids:
+            return (
+                AdapterPreconditionViolation(
+                    condition="openjij.variable_id.signed_64_bit",
+                    description="OpenJij variable IDs must fit signed 64-bit integers.",
+                    variable_ids=out_of_range_ids,
+                    actual=max(out_of_range_ids),
+                    limit=cls.MAX_OPENJIJ_VARIABLE_ID,
+                ),
+            )
+
+        qubo, _ = ommx_instance.as_qubo_format()
+        nonfinite = {
+            key: coefficient
+            for key, coefficient in qubo.items()
+            if not isfinite(coefficient)
+        }
+        if not nonfinite:
+            return ()
+        return (
+            AdapterPreconditionViolation(
+                condition="openjij.interactions.coefficient_finite",
+                description="QUBO coefficients passed to OpenJij must be finite.",
+                variable_ids=frozenset(
+                    variable_id for key in nonfinite for variable_id in key
+                ),
+                actual=len(nonfinite),
+                limit="all interaction coefficients finite",
+            ),
+        )
+
     # Retain the Instance because it is required to convert to SampleSet
     ommx_instance: Instance
     
     def __init__(self, ommx_instance: Instance):
+        self.require_applicable(ommx_instance)
         self.ommx_instance = ommx_instance
 
     # Perform sampling
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
-        # Convert to QUBO dictionary format
-        # If the Instance is not in QUBO format, an error will be raised here
-        qubo, _offset = self.ommx_instance.to_qubo()
-        return sampler.sample_qubo(qubo)
+        return sampler.sample_qubo(self.sampler_input)
 
     # Common method for performing sampling
     @classmethod
@@ -599,7 +645,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     # In this adapter, `SamplerInput` uses a QUBO dictionary
     @property
     def sampler_input(self) -> dict[tuple[int, int], float]:
-        qubo, _offset = self.ommx_instance.to_qubo()
+        qubo, _offset = self.ommx_instance.as_qubo_format()
         return qubo
    
     # Convert OpenJij Response to a SampleSet
@@ -626,7 +672,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         _ = diagnostics
-        sample_set = cls.sample( ommx_instance,)
+        sample_set = cls.sample(ommx_instance)
         return sample_set.best_feasible
 ```
 
@@ -636,8 +682,7 @@ Let's sample from the following optimization problem using our Adapter:
 
 $$
 \begin{aligned}
-\max & \quad x_0 + x_1 \\
-\text{s.t.} & \quad x_0 \cdot x_1 = 1 \\
+\min & \quad -x_0 - x_1 + 2x_0x_1 \\
 & \quad x_0, x_1 \in \{0, 1\}
 \end{aligned}
 $$
@@ -646,9 +691,9 @@ $$
 x = [DecisionVariable.binary(id, name="x", subscripts=[id]) for id in range(2)]
 instance = Instance.from_components(
     decision_variables=x,
-    objective=x[0] + x[1],
-    constraints={0: x[0] * x[1] == 1},
-    sense=Instance.MAXIMIZE,
+    objective=-x[0] - x[1] + 2 * x[0] * x[1],
+    constraints={},
+    sense=Instance.MINIMIZE,
 )
 
 sample_set = OMMXOpenJijSAAdapter.sample(instance)

@@ -79,13 +79,13 @@ Data exchange between humans realized by OMMX.
 :hidden:
 
 tutorial/solve_with_ommx_adapter
+tutorial/prepare_instance_for_adapter
 tutorial/tsp_sampling_with_openjij_adapter
 tutorial/switching_adapters
 tutorial/experiment_management
 tutorial/share_in_ommx_artifact
 tutorial/download_miplib_instance
 tutorial/download_qplib_instance
-tutorial/implement_adapter
 ```
 
 ```{toctree}
@@ -94,6 +94,7 @@ tutorial/implement_adapter
 :hidden:
 
 user_guide/supported_ommx_adapters
+user_guide/capability_model
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
 user_guide/function
@@ -102,9 +103,16 @@ user_guide/parametric_instance
 user_guide/solution
 user_guide/sample_set
 user_guide/special_constraints
-user_guide/capability_model
 user_guide/experiment
 user_guide/tracing
+```
+
+```{toctree}
+:caption: Developer Guide
+:maxdepth: 1
+:hidden:
+
+tutorial/implement_adapter
 ```
 
 ```{toctree}

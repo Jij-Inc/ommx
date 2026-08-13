@@ -11,198 +11,121 @@ kernelspec:
   name: python3
 ---
 
-# Adapter の入力 class と明示的な特殊制約 lowering
+# Adapter の exact input と Instance preparation
 
-OMMX では、従来 Adapter Capability として一緒に説明されていた次の2つの概念を分けて扱います。
+Adapter を使う標準的な流れは、Adapter が宣言する exact な `INPUT_CLASS` と推奨 Policy を取得し、必要に応じて Policy を編集してから、呼び出し側が所有する {class}`~ommx.Instance` に適用することです。その同じ `Instance` を、準備を暗黙には行わない厳格な Adapter API に渡します。
 
-- {class}`~ommx.InstanceClass` は、具体的な `Instance` 値の集合です。Adapter は構造的な入力条件を `INPUT_CLASS` で宣言し、その後に Adapter 固有の precondition を評価して applicability を判定します。
-- {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` は、Instance 上で選択した特殊制約 family を明示的に lowering します。入力 class の宣言でも、Adapter applicability の証明でもありません。
-
-本ページでは以下を説明します。
-
-- `InstanceClass` の membership と Adapter applicability
-- 特殊制約 family selector としての {class}`~ommx.SpecialConstraintKind` と {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>`
-- {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` による明示的な lowering
-- 手動で通常制約に変換するための API
-- 変換結果の監査
-
-## Instance class と Adapter applicability
-
-`InstanceClass` は、条件を論理積でまとめた完全な {class}`~ommx.InstanceClassClause` の有限和です。membership は入力値そのものに対して評価され、入力の変更や preparation は行いません。
-
-```{code-cell} ipython3
-from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
-
-binary_linear_with_one_hot = InstanceClass(
-    [
-        InstanceClassClause(
-            label="binary-linear-with-one-hot",
-            allowed_variable_kinds={Kind.Binary},
-            objective_degree_bound=DegreeBound.at_most(1),
-            allowed_senses={Sense.Maximize},
-            allows_one_hot=True,
-        )
-    ]
-)
+```{important}
+覚えることは1つです。**Adapter は入力を受け入れ可能な形へ暗黙に変換しません。どの preparation を行うかを選び、実行するのは呼び出し側です。**
 ```
 
-Adapter は applicability の最初の条件を `INPUT_CLASS` として宣言します。構造化された結果を得るには `check_applicability()`、membership または Adapter 固有の precondition が満たされない場合に例外を送出するには `require_applicable()` を使います。明示的な preparation で別の入力値を作った場合は、その値で applicability を再評価します。
+## 標準 workflow
 
-## SpecialConstraintKind と active_special_constraint_kinds
-
-{class}`~ommx.SpecialConstraintKind` は、通常制約への明示的な lowering 対象として選択できる active な特殊制約 family を列挙します。Adapter の入力宣言でも serialization feature でもありません。
-
-| Kind | 対応する制約型 |
-|---|---|
-| `SpecialConstraintKind.Indicator` | {class}`~ommx.IndicatorConstraint` |
-| `SpecialConstraintKind.OneHot` | {class}`~ommx.OneHotConstraint` |
-| `SpecialConstraintKind.Sos1` | {class}`~ommx.Sos1Constraint` |
-
-{attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` は、その {class}`~ommx.Instance` が **現在保持している active な特殊制約** に対応する `SpecialConstraintKind` の集合を返します。通常制約しか使っていない場合は空集合です。
+次の例では、OneHot 制約を含むモデルを HiGHS Adapter 向けに準備します。
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, OneHotConstraint, SpecialConstraintKind
+from ommx import DecisionVariable, Instance, OneHotConstraint
+from ommx_highs_adapter import OMMXHighsAdapter
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-
 instance = Instance.from_components(
     decision_variables=xs,
-    objective=sum(xs),
+    objective=sum((i + 1) * x for i, x in enumerate(xs)),
     constraints={},
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
     sense=Instance.MAXIMIZE,
 )
-assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
-assert binary_linear_with_one_hot.contains(instance)
+
+input_class = OMMXHighsAdapter.INPUT_CLASS
+assert input_class is not None
+
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Application 固有の選択が必要なら、ここで policy の public field を編集します。
+instance.prepare(input_class, policy)
+
+# Preparation の成功が保証するのは INPUT_CLASS membership です。
+assert input_class.contains(instance)
+# Adapter 固有の precondition は通常の applicability check で確認します。
+OMMXHighsAdapter.require_applicable(instance)
+solution = OMMXHighsAdapter.solve(instance)
+assert abs(solution.objective - 3.0) < 1e-8
 ```
 
-## lower_special_constraints による明示的な lowering
+{meth}`~ommx.Instance.prepare` は `instance` を in-place に変更し、`None` を返します。完全な例は [Adapter 向けに Instance を準備する](../tutorial/prepare_instance_for_adapter.md) を参照してください。
 
-{meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` は、明示的に呼び出す mutating operation です。このメソッドは `kinds_to_lower` として選択された特殊制約 family が active な場合に、対応する変換 API（後述）を使って通常制約に変換します。集合に含めなかった family は active なまま残り、空集合は no-op です。
+## Exact な INPUT_CLASS と Adapter applicability
 
-```{code-cell} ipython3
-lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
-assert lowered == {SpecialConstraintKind.OneHot}
-```
+{class}`~ommx.InstanceClass` は、Adapter が**変換なしで直接受け取れる具体的な `Instance` 値の集合**です。各 {class}`~ommx.InstanceClassClause` は条件の論理積であり、`InstanceClass` はそれらの有限和です。現在使用されている変数 kind、目的関数と制約の次数、制約 relation、active な特殊制約 family、optimization sense などを、渡された値そのものについて判定します。
 
-```{code-cell} ipython3
-assert instance.active_special_constraint_kinds == set()
-assert instance.one_hot_constraints == {}
-assert len(instance.constraints) == 1
-```
+- `input_class.contains(instance)` は membership を `bool` で返します。
+- `input_class.check_membership(instance)` は clause ごとの構造化された mismatch を返します。
+- どちらも `instance` を変更せず、lowering や encoding などの preparation を行いません。
 
-One-hot 制約が除去され、その代わりに通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ が1つ追加されたことが分かります。`lower_special_constraints` はインスタンスを in-place に変更し、選択され、active で、実際に lowering された family だけを返します。選択した family が active でなければ空集合を返します。得られた値に対して `INPUT_CLASS` の membership または Adapter applicability を再評価してください。
+`INPUT_CLASS` membership と Adapter applicability は別の条件です。
 
-## 手動変換 API
-
-`lower_special_constraints` は内部的に、制約型別の以下の変換 API を組み合わせて実装されています。ユーザーがこれらを直接呼ぶことも可能です。
-
-### One-hot → 等式制約
-
-{meth}`Instance.convert_one_hot_to_constraint(one_hot_id) <ommx.Instance.convert_one_hot_to_constraint>` は、OneHot 制約を数学的に等価な等式制約 $x_1 + \ldots + x_n - 1 = 0$ に書き換えます。
-
-```{code-cell} ipython3
-instance2 = Instance.from_components(
-    decision_variables=xs,
-    objective=sum(xs),
-    constraints={},
-    one_hot_constraints={1: OneHotConstraint(variables=xs)},
-    sense=Instance.MAXIMIZE,
-)
-new_id = instance2.convert_one_hot_to_constraint(1)
-assert isinstance(new_id, int)
-assert set(instance2.constraints.keys()) == {new_id}
-assert instance2.one_hot_constraints == {}
-```
-
-全ての OneHot 制約を一括変換するには {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` を使います。
-
-### SOS1 → Big-M 制約
-
-{meth}`Instance.convert_sos1_to_constraints(sos1_id) <ommx.Instance.convert_sos1_to_constraints>` は、SOS1 制約を Big-M 法による通常制約に変換します。各変数 $x_i \in [l_i, u_i]$ に対して、以下のルールで変換されます。
-
-1. $x_i$ が $[0, 1]$ のバイナリ変数ならそのままインジケータとして再利用する。
-2. そうでなければ新たなバイナリ変数 $y_i$ を導入し、$x_i - u_i y_i \leq 0$ および $l_i y_i - x_i \leq 0$ を追加する（$u_i = 0$ や $l_i = 0$ の自明側は省略）。
-3. 最後に濃度制約 $\sum_i y_i - 1 \leq 0$ を追加する。
-
-```{code-cell} ipython3
-from ommx import Sos1Constraint
-
-ys = [DecisionVariable.binary(i, name="y", subscripts=[i]) for i in range(3)]
-instance3 = Instance.from_components(
-    decision_variables=ys,
-    objective=sum(ys),
-    constraints={},
-    sos1_constraints={1: Sos1Constraint(variables=ys)},
-    sense=Instance.MAXIMIZE,
-)
-new_ids = instance3.convert_sos1_to_constraints(1)
-# バイナリ変数のみの SOS1 は濃度制約 sum(x_i) - 1 <= 0 1本に変換される
-assert len(new_ids) == 1
-assert set(instance3.constraints.keys()) == set(new_ids)
-assert instance3.sos1_constraints == {}
-```
-
-全 SOS1 の一括変換は {meth}`~ommx.Instance.convert_all_sos1_to_constraints` です。変数の境界が非有限だったり、$0$ を含まない場合は変換前にエラーを返し、インスタンスは変更されません。
-
-### Indicator → Big-M 制約
-
-{meth}`Instance.convert_indicator_to_constraint(indicator_id) <ommx.Instance.convert_indicator_to_constraint>` は、Indicator 制約 $y = 1 \Rightarrow f(x) \leq 0$ を、$f(x)$ の上下限から計算した Big-M を用いて書き換えます。SOS1 と違い新しいインジケータ変数は導入されず、`IndicatorConstraint` が元々持っているインジケータ変数がそのまま $y$ として使われます。
-
-$$
-f(x) + u y - u \leq 0, \qquad -f(x) - l y + l \leq 0
-$$
-
-ここで $u \geq \sup f(x)$, $l \leq \inf f(x)$ です。
-
-- 不等式 $\leq$ のみの Indicator では上側だけを考慮し、$u > 0$ の時のみ追加します（$u \leq 0$ なら変数境界だけで自明に満たされるため省略）。
-- 等式 $= 0$ の Indicator では上下両側を独立に判定し、$u > 0$ なら上側、$l < 0$ なら下側を追加します。
-
-全 Indicator の一括変換は {meth}`~ommx.Instance.convert_all_indicators_to_constraints` です。$f(x)$ の必要な側の境界が非有限だったり、semi-continuous / semi-integer 変数を含む場合は変換前にエラーを返し、インスタンスは変更されません。
-
-## 変換結果の監査
-
-変換元の特殊制約は破棄されず、以下の `removed_*_constraints` に「除去済」として保持されます。
-
-| 元の制約型 | 除去先 | DataFrame |
+| 条件 | 所有者 | 検査 API |
 |---|---|---|
-| OneHotConstraint | {attr}`~ommx.Instance.removed_one_hot_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
-| Sos1Constraint | {attr}`~ommx.Instance.removed_sos1_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
-| IndicatorConstraint | {attr}`~ommx.Instance.removed_indicator_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
+| OMMX で記述できる exact な入力構造 | `InstanceClass` | `contains()` / `check_membership()` |
+| Backend 固有の制限や変換可能性 | Adapter | `check_applicability()` / `require_applicable()` |
 
-`removed=True` を付けると、active と removed が同じ DataFrame に並び、`removed_reason` / `removed_reason.{key}` カラムが自動的に追加されるので、active 行と removed 行を見分けることができます。
+{meth}`~ommx.adapter.SolverAdapter.check_applicability` は最初に `INPUT_CLASS` membership を調べ、member の場合だけ Adapter 固有の precondition を評価します。例えば、Backend が扱える ID の範囲や、Backend 形式へ変換した係数が有限であることは Adapter precondition です。{meth}`~ommx.adapter.SolverAdapter.require_applicable` は同じ report を使い、適用不能なら {class}`~ommx.adapter.AdapterNotApplicableError` を送出します。
 
-それぞれのエントリ（{class}`~ommx.RemovedOneHotConstraint` / {class}`~ommx.RemovedSos1Constraint` / {class}`~ommx.RemovedIndicatorConstraint`）には `removed_reason` 文字列（例: `"ommx.Instance.convert_one_hot_to_constraint"`）が記録され、`removed_reason_parameters` に変換で新しく生成された通常制約の ID が格納されます。ID のキー名と形式は制約型ごとに異なります:
+直接の `solve()` / `sample()` / Adapter constructor は厳格です。入力を applicable にするための変換を実行せず、呼び出し側の `Instance` を変更しません。
 
-- **OneHot**: `constraint_id` キーに単一の ID
-- **SOS1**: `constraint_ids` キーにカンマ区切りの ID リスト
-- **Indicator**: `constraint_ids` キーにカンマ区切りの ID リスト（Big-M 両側が省略された場合は空）
+## 推奨 Policy と preparation の実行は別
 
-```{code-cell} ipython3
-removed = instance2.removed_one_hot_constraints
-assert set(removed.keys()) == {1}
+{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy` は、その Adapter の `INPUT_CLASS` へ到達する際に一般的に有用な {class}`~ommx.PreparationPolicy` を返します。
+
+- 呼び出すたびに新しい Policy を返すため、呼び出し側が安全に編集できます。
+- `Instance` を参照または変更しません。
+- preparation を実行しません。
+- 特定の `Instance` が必ず準備できることや、Adapter 固有の precondition を満たすことを保証しません。
+
+`INPUT_CLASS` と Policy は独立した値であり、呼び出し側が `instance.prepare(input_class, policy)` に渡します。`prepare()` は target-directed です。成功時には次が成り立ちます。
+
+```python
+assert input_class.contains(instance)
 ```
 
-さらに、各変換で生成された通常制約は {attr}`Constraint.provenance <ommx.Constraint.provenance>` プロパティで変換元の情報を保持します。各 {class}`~ommx.Provenance` エントリは変換元の種別を表す {attr}`~ommx.Provenance.kind`（{class}`~ommx.ProvenanceKind`）と元の ID {attr}`~ommx.Provenance.original_id` を持つので、得られた通常制約がどの特殊制約型の何番から変換されたかを後から辿ることができます。
+この postcondition に Adapter 固有の precondition は含まれません。続けて `require_applicable()` または `solve()` / `sample()` の通常の applicability check を使ってください。
 
-```{code-cell} ipython3
-from ommx import ProvenanceKind
+## Native input と preparation 後の input
 
-# 先ほど convert_one_hot_to_constraint(1) で生成された通常制約
-for cid, c in instance2.constraints.items():
-    for p in c.provenance:
-        assert p.kind == ProvenanceKind.OneHotConstraint
-        assert p.original_id == 1
-```
+同じ特殊制約でも、どの形を exact input として受け入れるかは Adapter ごとに異なります。
+
+| Adapter | Exact input | 推奨 preparation の例 |
+|---|---|---|
+| PySCIPOpt | 線形 Indicator と SOS1 を native に受け入れる | OneHot だけを通常制約へ lowering |
+| HiGHS / Python-MIP | 通常の線形制約を受け入れる | Indicator、OneHot、SOS1 を通常制約へ lowering |
+| OpenJij | 制約なし Binary 最小化問題を受け入れる | 特殊制約 lowering、sense 正規化、Integer slack、使用中 Integer の encoding。固定 penalty の大きさは呼び出し側が選択 |
+
+したがって、PySCIPOpt がnativeに受け入れる線形 Indicator や SOS1 を、共通化のためだけに事前変換する必要はありません。一方、同じ source model を HiGHS に渡す場合は、HiGHS の `INPUT_CLASS` と推奨 Policy を使って別の exact input に準備できます。特殊制約の数学的定義、native support、および個別の変換 API は [特殊制約型](./special_constraints.md) を参照してください。
+
+変換前の model も必要なら、`prepare()` の前に明示的にコピーしてください。Preparation 後の同じ `Instance` は、変数 dependency と removed constraint を保持し、Adapter が返した {class}`~ommx.Solution` や {class}`~ommx.SampleSet` を評価する owner になります。
+
+## Advanced: phase 順序と失敗時の状態
+
+`PreparationPolicy` の各 field は、既存の `Instance` owner operation を選択する optional phase です。`Instance.prepare()` は、選択された phase を高々1回ずつ次の固定順序で適用します。
+
+1. 特殊制約 lowering
+2. optimization sense の正規化
+3. Integer slack の導入
+4. 使用中 Integer 変数の encoding
+5. 固定 weight penalty
+
+`prepare()` は最初と各 selected phase の完了後に target `InstanceClass` の membership を再評価し、member になった時点で停止します。最初から member なら exact identity であり、Policy の phase は実行されません。
+
+Preparation 全体を囲む global transaction はありません。各 phase が委譲する owner operation はそれぞれの validation と mutation contract を保ちますが、後の phase が失敗しても、それより前に完了した変更は rollback されません。Owner operation によっては、同じ phase の中でも複数の対象を順に変更するため、途中まで変更された状態で失敗することがあります。Owner operation の既存の exception はそのまま伝播します。
+
+すべての configured phase を適用しても target に到達しなかった場合、{class}`~ommx.PreparationTargetNotReachedError` が送出されます。その `report` 属性には、partially prepared な最終状態についての {class}`~ommx.InstanceClassMembershipReport` が入っています。
 
 ## まとめ
 
-| やりたいこと | 使う API |
+| やりたいこと | API |
 |---|---|
-| Adapter 入力の構造的な集合を記述する | {class}`~ommx.InstanceClass` |
-| Adapter applicability の最初の条件を宣言する | `INPUT_CLASS` |
-| membership と Adapter 固有の precondition を検査する | `check_applicability()` / `require_applicable()` |
-| active な特殊制約 family を調べる | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
-| 選択した特殊制約を明示的に lowering する | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
-| 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
-| 変換履歴を確認する | `instance.constraints_df(kind=..., removed=True)` / `solution.constraints_df(kind=..., include=("...","removed_reason"))` |
+| Adapter が直接受け取れる exact input を宣言する | `INPUT_CLASS` / {class}`~ommx.InstanceClass` |
+| Exact membership を調べる | `contains()` / `check_membership()` |
+| Adapter 固有の precondition も含めて検査する | `check_applicability()` / `require_applicable()` |
+| Adapter の推奨 preparation を取得する | `recommended_preparation_policy()` |
+| Caller-owned な Policy を target へ適用する | {meth}`~ommx.Instance.prepare` |
+| Prepared input を厳格な Adapter へ渡す | `solve()` / `sample()` / Adapter constructor |
