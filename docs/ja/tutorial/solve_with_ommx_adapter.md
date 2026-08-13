@@ -11,12 +11,11 @@ kernelspec:
   name: python3
 ---
 
-# PySCIPOpt Adapterで0-1ナップサック問題を解く
+# OMMX Adapterで最適化問題を解く
 
-OMMX Adapterは、{class}`~ommx.Instance` を既存の数理最適化ソルバーに渡し、結果を {class}`~ommx.Solution` として取得するための接続層です。
+OMMXはあくまで数理最適化のためのデータ交換形式なのでソルバーを提供せず、既存のソルバーと相互連携するためのOMMX Adapterを提供しています。OMMX Adapterを使うことで、OMMX形式の最適化問題を既存のソルバーで解き、解をOMMX形式で出力することができます。
 
-最初に覚えることは、**Adapterがそのまま受け取れるモデルなら、`Instance` を `solve()` に渡すだけでよい**ということです。このチュートリアルでは、0-1ナップサック問題をPySCIPOpt Adapterで解きます。
-
+ここでは、0-1ナップサック問題をOMMX PySCIPOpt Adapterを介して解く方法を紹介します。
 
 ## 必要なライブラリのインストール
 
@@ -35,18 +34,15 @@ OMMX PySCIPOpt Adapterを介して0-1ナップサック問題を解くために�
 1. 0-1ナップサック問題のインスタンスを用意する
 2. OMMX Adapterを介して最適化計算を実行する
 
-ステップ1.では、OMMX Python SDKを使って `ommx.Instance` オブジェクトを直接作成します。
+ステップ1.では、OMMX MessageのInstanceスキーマで定義された `ommx.Instance` オブジェクトを作成します。このオブジェクトを作成する方法は複数ありますが、ここではOMMX Python SDKを使用して直接記述する方法を採用します。
 
 ```{tip}
-`ommx.Instance` オブジェクトを用意する方法は4つあります：
+他にも `ommx.Instance` オブジェクトを用意する方法があります
 
-1. OMMX Python SDKを使って `ommx.Instance` を直接記述する
-2. OMMX Python SDKを使ってMPSファイルを `ommx.Instance` に変換する
-3. 数理最適化ツールで記述した問題インスタンスをOMMX Adapterで `ommx.Instance` に変換する
-4. JijModelingを使って `ommx.Instance` を出力する
+- OMMX Python SDKを使って他の形式で保存されたファイル、例えばMPSファイルを `ommx.Instance` に変換する
+- JijModelingを使って `ommx.Instance` にコンパイルする
+- 他の人が作った `ommx.Instance` を OMMX Artifact として取得する。例えばOMMXプロジェクトでは MIPLIB や QPLIB のInstanceをOMMX Artifactとして配布しています。
 ```
-
-ステップ2.では、その `Instance` をPySCIPOpt Adapterに直接渡します。AdapterがSCIP向けの表現と実行を受け持ち、計算結果を `ommx.Solution` として返します。
 
 ### ステップ1: 0-1ナップサック問題のインスタンスを用意する
 
@@ -75,39 +71,21 @@ N = len(v)  # アイテムの総数
 この数理モデルとデータに基づいて、OMMX Python SDKを使用して問題インスタンスを記述するコードは次のようになります：
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable
+from ommx import Instance
 
-# 決定変数を定義する
-x = [
-    # バイナリ変数 x_i を定義する
-    DecisionVariable.binary(
-        # 決定変数のIDを指定する
-        id=i,
-        # 決定変数の名前を指定する
-        name="x",
-        # 決定変数の添え字を指定する
-        subscripts=[i],
-    )
-    # バイナリ変数をアイテムの個数だけ用意する
-    for i in range(N)
-]
+# 最大化問題の空のInstanceを作成する
+instance = Instance.maximize()
 
-# 目的関数を定義する
-objective = sum(v[i] * x[i] for i in range(N))
+# バイナリ変数 x_i を追加する
+x = [instance.new_binary("x", subscripts=[i]) for i in range(N)]
 
-# 制約条件を定義する
-constraint = (sum(w[i] * x[i] for i in range(N)) <= W).set_name("重量制限")
+# 目的関数を設定する
+instance.objective = sum(v[i] * x[i] for i in range(N))
 
-# インスタンスを作成する
-instance = Instance.from_components(
-    # インスタンスに含まれる全ての決定変数を登録する
-    decision_variables=x,
-    # 目的関数を登録する
-    objective=objective,
-    # 制約条件を登録する (キーは制約ID)
-    constraints={0: constraint},
-    # 最大化問題であることを指定する
-    sense=Instance.MAXIMIZE,
+# 重量制約を追加する
+instance.add_constraint(
+    sum(w[i] * x[i] for i in range(N)) <= W,
+    "重量制限",
 )
 ```
 
@@ -118,13 +96,10 @@ instance = Instance.from_components(
 ```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-# PySCIPOpt Adapterでommx.Solutionを取得する
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
 ここで得られた変数 `solution` は、SCIPによる最適化計算の結果が格納された `ommx.Solution` オブジェクトになっています。
-
-このナップサックモデルはPySCIPOpt Adapterが直接受け取れるため、`solve()` の前にユーザーがモデルを変更する必要はありません。Adapterの入力に合わせてモデルを準備する例は、[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md) で扱います。
 
 +++
 
