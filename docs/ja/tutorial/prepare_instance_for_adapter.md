@@ -17,11 +17,11 @@ OMMX Instanceは広い範囲の数理最適化問題を記述できますが、�
 
 - 特定の条件を満たした場合だけ制約条件を課したい（Indicator制約）
 - 複数の選択肢の中から一つだけ選ぶ必要がある（OneHot制約）
-- 複数の変数のうち一つの変数だけ０でない必要がある（SOS1制約）
+- 複数の変数のうち、非ゼロになるものは高々一つ（SOS1制約）
 
 これらは特定のソルバーでは効率的に扱える一方、例えば純粋なMILPソルバーで扱うにはMILPの範囲でこれを表現する変換が必要になります。
 
-OMMXではこのような一部のソルバーでは効率的に扱える制約条件を「特殊制約」と呼んでInstanceに保持し、対応しているソルバーに対してはAdapterを通して専用のAPIを使ってソルバーの性能を限界まで引き出す方針を取ります。一方特殊制約を直接扱えないソルバーに対しては、OMMXがそのソルバーが扱える形に変換します。このAdapterが扱えるように変換する操作のことをOMMXでは "Preparation" と呼びます。OMMX Adapterは自分が扱える問題の範囲を宣言し、OMMXのAPIがその範囲に治るようにInstanceを変換します。変換方法は一般には一意には定まらないので、変換Policyによって制御します。Adapterは推奨Policyを提示し、ユーザーが必要に応じてPolicyを修正します。
+OMMXではこのような一部のソルバーでは効率的に扱える制約条件を「特殊制約」と呼んでInstanceに保持し、対応しているソルバーに対してはAdapterを通してソルバー固有のAPIへ直接渡します。一方特殊制約を直接扱えないソルバーに対しては、OMMXがそのソルバーが扱える形に変換します。このAdapterが扱えるように変換する操作のことをOMMXでは "Preparation" と呼びます。OMMX Adapterは自分が扱える問題の範囲を宣言し、ユーザーはOMMXのAPIを使ってその範囲に収まるようにInstanceを変換します。変換方法は一般には一意には定まらないので、変換Policyによって制御します。Adapterは推奨Policyを提示し、ユーザーが必要に応じてPolicyを修正します。
 
 ここではまずIndicator制約とSOS1制約を含むInstanceを直接サポートしているPySCIPOpt Adapterで解く場合と、直接対応していないHiGHS Adapterで解く場合をそれぞれ解説します。
 
@@ -87,7 +87,7 @@ assert not highs_input_class.contains(source)
 
 ### 推奨PolicyでPreparationする
 
-Adapterの {meth}`~ommx.SolverAdapter.recommended_preparation_policy` は、その入力classへ近づけるためにAdapterが推奨する {class}`~ommx.PreparationPolicy` を返します。HiGHSの推奨PolicyはIndicator制約とSOS1制約を通常制約へBig-Mでloweringします。
+Adapterの {meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy` は、その入力classへ近づけるためにAdapterが推奨する {class}`~ommx.PreparationPolicy` を返します。HiGHSの推奨PolicyはIndicator制約とSOS1制約を通常の線形制約へloweringします。
 
 推奨Policyを取得しただけではInstanceは変わりません。どのInstanceをPreparationするかを決めて {meth}`Instance.prepare() <ommx.Instance.prepare>` を呼ぶのはユーザーです。元のモデルを残すため、ここでは `copy.copy()` で作ったコピーをPreparationします。
 
@@ -102,11 +102,11 @@ prepared.prepare(highs_input_class, policy)
 # 変換後のInstanceは INPUT_CLASS に入る
 assert highs_input_class.contains(prepared)
 
-# 特殊制約はloweringされてなくなっている
+# activeな特殊制約はloweringされている
 assert not prepared.indicator_constraints
 assert not prepared.sos1_constraints
 
-# 特殊制約がBig-MでMILPで表現されているのでHiGHSは扱える
+# 特殊制約が通常の線形制約へloweringされているのでHiGHSは扱える
 prepared_solution = OMMXHighsAdapter.solve(prepared)
 ```
 
