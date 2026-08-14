@@ -13,7 +13,6 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
         sense=Sense.Maximize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-    assert input_class is not None
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
     policy.fixed_penalty = (
         FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=2.0)

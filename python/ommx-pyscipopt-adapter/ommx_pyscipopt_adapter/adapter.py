@@ -503,7 +503,7 @@ def _dataframe(
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
                 label="pyscipopt-quadratic-mip",

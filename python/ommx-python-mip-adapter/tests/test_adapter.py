@@ -18,7 +18,6 @@ from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
 def test_declares_linear_mip_input_class() -> None:
     input_class = OMMXPythonMIPAdapter.INPUT_CLASS
-    assert input_class is not None
     [clause] = input_class.clauses
 
     assert clause.label == "python-mip-linear-mip"
@@ -192,7 +191,6 @@ def test_recommended_preparation_reaches_the_python_mip_input_class() -> None:
         sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     input_class = OMMXPythonMIPAdapter.INPUT_CLASS
-    assert input_class is not None
     assert not input_class.contains(instance)
 
     policy = OMMXPythonMIPAdapter.recommended_preparation_policy()

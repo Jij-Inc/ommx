@@ -281,9 +281,11 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 Finally, create a class that inherits `ommx.adapter.SolverAdapter` to standardize the API for each adapter. This is an abstract base class with `@abstractmethod` as follows:
 
 ```python
+from typing import ClassVar
+
 class SolverAdapter(ABC):
     # OMMX-defined structural condition for adapter applicability.
-    INPUT_CLASS: InstanceClass | None = None
+    INPUT_CLASS: ClassVar[InstanceClass]
 
     @classmethod
     def recommended_preparation_policy(cls) -> PreparationPolicy:
@@ -441,7 +443,6 @@ The caller decides whether to use and modify the recommendation before invoking 
 
 ```python
 input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
-assert input_class is not None
 policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
 # Edit public policy fields here when the application needs different choices.
 instance.prepare(input_class, policy)
@@ -569,10 +570,22 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     Sampling QUBO with Simulated Annealing (SA) by `openjij.SASampler`
     """
 
+    INPUT_CLASS = InstanceClass(
+        [
+            InstanceClassClause(
+                label="tutorial-binary-qubo",
+                allowed_variable_kinds={Kind.Binary},
+                objective_degree_bound=DegreeBound.at_most(2),
+                allowed_senses={Sense.Minimize},
+            )
+        ]
+    )
+
     # Retain the Instance because it is required to convert to SampleSet
     ommx_instance: Instance
     
     def __init__(self, ommx_instance: Instance):
+        self.require_applicable(ommx_instance)
         self.ommx_instance = ommx_instance
 
     # Perform sampling
@@ -580,7 +593,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         sampler = oj.SASampler()
         # Convert to QUBO dictionary format
         # If the Instance is not in QUBO format, an error will be raised here
-        qubo, _offset = self.ommx_instance.to_qubo()
+        qubo, _offset = self.ommx_instance.as_qubo_format()
         return sampler.sample_qubo(qubo)
 
     # Common method for performing sampling
@@ -599,7 +612,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     # In this adapter, `SamplerInput` uses a QUBO dictionary
     @property
     def sampler_input(self) -> dict[tuple[int, int], float]:
-        qubo, _offset = self.ommx_instance.to_qubo()
+        qubo, _offset = self.ommx_instance.as_qubo_format()
         return qubo
    
     # Convert OpenJij Response to a SampleSet
@@ -632,12 +645,11 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
 ### Sampling using our Adapter
 
-Let's sample from the following optimization problem using our Adapter:
+Let's sample from the following QUBO using our Adapter:
 
 $$
 \begin{aligned}
-\max & \quad x_0 + x_1 \\
-\text{s.t.} & \quad x_0 \cdot x_1 = 1 \\
+\min & \quad -x_0 - x_1 + 2 x_0 x_1 \\
 & \quad x_0, x_1 \in \{0, 1\}
 \end{aligned}
 $$
@@ -646,9 +658,9 @@ $$
 x = [DecisionVariable.binary(id, name="x", subscripts=[id]) for id in range(2)]
 instance = Instance.from_components(
     decision_variables=x,
-    objective=x[0] + x[1],
-    constraints={0: x[0] * x[1] == 1},
-    sense=Instance.MAXIMIZE,
+    objective=-x[0] - x[1] + 2 * x[0] * x[1],
+    constraints={},
+    sense=Instance.MINIMIZE,
 )
 
 sample_set = OMMXOpenJijSAAdapter.sample(instance)

@@ -27,7 +27,6 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
 
     prepared = copy.copy(instance)
     input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
-    assert input_class is not None
     prepared.prepare(
         input_class,
         OMMXPySCIPOptAdapter.recommended_preparation_policy(),

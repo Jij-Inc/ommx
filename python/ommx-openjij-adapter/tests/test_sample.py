@@ -164,7 +164,6 @@ def hubo_binary_inequality():
 def _openjij_input(instance):
     if not OMMXOpenJijSAAdapter.check_applicability(instance).is_applicable:
         input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-        assert input_class is not None
         policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
         policy.fixed_penalty = (
             FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=3.1)
@@ -339,7 +338,6 @@ def test_prepared_instance_evaluation_populates_variable_removed_with_trivial_in
         sense=Instance.MINIMIZE,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-    assert input_class is not None
     instance.prepare(
         input_class,
         OMMXOpenJijSAAdapter.recommended_preparation_policy(),
@@ -368,7 +366,6 @@ def test_prepared_instance_evaluation_restores_integer_sos1():
     )
 
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-    assert input_class is not None
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
     policy.fixed_penalty = (
         FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=4.0)

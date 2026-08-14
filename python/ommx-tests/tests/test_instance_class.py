@@ -332,7 +332,8 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
     assert prepared_input_class.contains(instance)
 
 
-def test_solver_adapter_has_no_implicit_input_transformation_hook() -> None:
+def test_solver_adapter_base_owns_no_input_class_or_transformation_hook() -> None:
+    assert "INPUT_CLASS" not in SolverAdapter.__dict__
     assert "__init__" not in SolverAdapter.__dict__
 
 
@@ -385,7 +386,7 @@ def test_solver_adapter_layers_preconditions_and_preserves_the_caller() -> None:
     assert exc_info.value.report.precondition_violations == (violation,)
 
 
-def test_membership_failure_skips_preconditions_and_missing_declaration_is_error() -> (
+def test_membership_failure_skips_preconditions_and_invalid_declarations_are_errors() -> (
     None
 ):
     y = DecisionVariable.continuous(1)
@@ -410,8 +411,12 @@ def test_membership_failure_skips_preconditions_and_missing_declaration_is_error
     class MissingDeclaration(SolverAdapter):
         pass
 
-    with pytest.raises(TypeError, match="must declare INPUT_CLASS"):
-        MissingDeclaration.check_applicability(outside_input_class)
+    class NoneDeclaration(SolverAdapter):
+        INPUT_CLASS = cast(InstanceClass, None)
+
+    for adapter in (MissingDeclaration, NoneDeclaration):
+        with pytest.raises(TypeError, match="must declare INPUT_CLASS"):
+            adapter.check_applicability(outside_input_class)
 
 
 def test_applicability_report_rejects_inconsistent_states() -> None:
