@@ -57,7 +57,6 @@ def _assert_direct_rejection_does_not_mutate(
 
 def test_declares_binary_polynomial_input_class() -> None:
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-    assert input_class is not None
 
     [clause] = input_class.clauses
     assert clause.label == "openjij-binary-hubo"
@@ -219,7 +218,6 @@ def test_recommended_policy_keeps_fixed_penalty_caller_owned() -> None:
         sense=Sense.Minimize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-    assert input_class is not None
 
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
     assert policy.fixed_penalty is None
@@ -255,7 +253,6 @@ def test_recommended_preparation_reaches_the_openjij_input_class() -> None:
     )
     alias = instance
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-    assert input_class is not None
     assert not input_class.contains(instance)
 
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
@@ -278,7 +275,6 @@ def test_adapter_specific_preconditions_still_follow_preparation() -> None:
         sense=Sense.Maximize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-    assert input_class is not None
 
     instance.prepare(
         input_class,

@@ -8,6 +8,16 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
+
+具体的な `SolverAdapter` / `SamplerAdapter` 実装では、`INPUT_CLASS` を
+非 Optional の `ClassVar[InstanceClass]` として宣言する必要があり、`None` は
+有効な宣言ではありません。リポジトリ内の Adapter も `InstanceClass` を直接公開するため、
+呼び出し側は `is not None` の確認なしで `Adapter.INPUT_CLASS` を
+{meth}`~ommx.Instance.prepare` に渡せます。宣言がない場合は、applicability の確認時に
+引き続き明確な `TypeError` を送出します。契約の全体像は
+[Adapter 実装チュートリアル](../tutorial/implement_adapter.md)を参照してください。
+
 ## 3.0.0 Beta 3
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)

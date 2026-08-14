@@ -24,7 +24,6 @@ from ommx import (
 
 def test_declares_quadratic_mip_input_class():
     input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
-    assert input_class is not None
     [clause] = input_class.clauses
     assert clause.label == "pyscipopt-quadratic-mip"
     assert clause.allowed_variable_kinds == {

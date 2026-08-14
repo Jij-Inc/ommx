@@ -141,7 +141,7 @@ class SolverAdapter(ABC):
     or otherwise mutates the input instance.
     """
 
-    INPUT_CLASS: ClassVar[InstanceClass | None] = None
+    INPUT_CLASS: ClassVar[InstanceClass]
 
     @classmethod
     def recommended_preparation_policy(cls) -> PreparationPolicy:
@@ -167,7 +167,7 @@ class SolverAdapter(ABC):
         copy so it cannot mutate the caller's instance. Any explicitly
         transformed value is a different input and must be checked separately.
         """
-        input_class = cls.INPUT_CLASS
+        input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
         if input_class is None:
             raise TypeError(
                 f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"

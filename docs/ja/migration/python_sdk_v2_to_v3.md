@@ -262,7 +262,6 @@ from ommx import FixedPenaltyPreparation, IntegerSlackPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-assert input_class is not None
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.integer_slack = IntegerSlackPreparation(
     max_integer_range=32,

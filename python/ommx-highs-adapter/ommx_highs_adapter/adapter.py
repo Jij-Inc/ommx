@@ -577,7 +577,7 @@ class OMMXHighsAdapter(SolverAdapter):
 
     """
 
-    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
                 label="highs-linear-mip",

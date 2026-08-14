@@ -54,7 +54,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     fixed penalty magnitudes, and apply the policy with :meth:`Instance.prepare`.
     """
 
-    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
                 label="openjij-binary-hubo",

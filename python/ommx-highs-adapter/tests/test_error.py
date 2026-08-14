@@ -20,7 +20,6 @@ from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError
 
 def test_declares_linear_mip_input_class():
     input_class = OMMXHighsAdapter.INPUT_CLASS
-    assert input_class is not None
     [clause] = input_class.clauses
     assert clause.label == "highs-linear-mip"
     assert clause.allowed_variable_kinds == {
@@ -196,7 +195,6 @@ def test_recommended_preparation_reaches_the_highs_input_class():
         sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     input_class = OMMXHighsAdapter.INPUT_CLASS
-    assert input_class is not None
     assert not input_class.contains(instance)
 
     policy = OMMXHighsAdapter.recommended_preparation_policy()

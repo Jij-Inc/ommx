@@ -27,7 +27,6 @@ instance = Instance.from_components(
 )
 
 input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-assert input_class is not None
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.fixed_penalty = FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
     weight=2.0
