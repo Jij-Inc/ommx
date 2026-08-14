@@ -6347,7 +6347,7 @@
         {
           "kind": "Class",
           "name": "FixedPenaltyPreparation",
-          "doc": "Selection of a fixed-weight penalty transformation for\n{meth}`~ommx.Instance.prepare`.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -6378,7 +6378,7 @@
             },
             {
               "name": "penalty_method_with_fixed_weights",
-              "doc": "Select {meth}`~ommx.Instance.penalty_method_with_fixed_weights`.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [
@@ -6433,7 +6433,7 @@
             },
             {
               "name": "uniform_penalty_method_with_fixed_weight",
-              "doc": "Select {meth}`~ommx.Instance.uniform_penalty_method_with_fixed_weight`.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [
@@ -10654,7 +10654,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\nThe caller owns policy selection; the instance owns the transformations\nand their application. Success guarantees membership only, not Adapter\napplicability. This operation is not transactional, so an error may leave\nthe instance changed.\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final membership\nreport when the selections do not reach ``input_class``.",
+              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\nSelected phases are applied at most once in this order, stopping as soon\nas membership is reached:\n\n1. ``special_constraints``:\n   {meth}`~ommx.Instance.lower_special_constraints`\n2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`\n3. ``integer_slack``:\n   {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,\n   followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only\n   when exact conversion is unavailable and ``slack_upper_bound`` is set\n4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`\n5. ``fixed_penalty``\n\nSuccess guarantees membership only, not Adapter applicability. This\noperation is not transactional, so an error may leave the instance changed.\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final membership\nreport when the selections do not reach ``input_class``.",
               "signatures": [
                 {
                   "parameters": [
@@ -12606,7 +12606,7 @@
         {
           "kind": "Class",
           "name": "IntegerEncodingPreparation",
-          "doc": "Selection of a used-Integer transformation for\n{meth}`~ommx.Instance.prepare`.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -12637,7 +12637,7 @@
             },
             {
               "name": "log_encode_all_used_integers",
-              "doc": "Select {meth}`~ommx.Instance.log_encode_all_used_integers`.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [
@@ -12677,7 +12677,7 @@
         {
           "kind": "Class",
           "name": "IntegerSlackPreparation",
-          "doc": "Selection of Integer-slack transformations for\n{meth}`~ommx.Instance.prepare`.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -12772,7 +12772,7 @@
           "attributes": [
             {
               "name": "atol",
-              "doc": "Absolute tolerance used to normalize bounds to integers.",
+              "doc": "",
               "type_": {
                 "display": "float",
                 "link_target": null,
@@ -12783,7 +12783,7 @@
             },
             {
               "name": "max_integer_range",
-              "doc": "Maximum finite range accepted for exact Integer slack.",
+              "doc": "",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -12794,7 +12794,7 @@
             },
             {
               "name": "slack_upper_bound",
-              "doc": "Optional upper bound for inequality-preserving Integer slack.\n\n``None`` selects only\n{meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`.\nAn integer also selects {meth}`~ommx.Instance.add_integer_slack_to_inequality`\nas a fallback when exact conversion is unavailable.",
+              "doc": "",
               "type_": {
                 "display": "Optional[int]",
                 "link_target": null,
@@ -19289,7 +19289,7 @@
         {
           "kind": "Class",
           "name": "PreparationPolicy",
-          "doc": "Caller-owned selection of optional transformations for\n{meth}`~ommx.Instance.prepare`.\n\n{class}`~ommx.Instance` owns their application. All selections are disabled\nby default.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -23875,7 +23875,7 @@
         {
           "kind": "Class",
           "name": "SensePreparation",
-          "doc": "Selection of an optimization-sense transformation for\n{meth}`~ommx.Instance.prepare`.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -23906,7 +23906,7 @@
             },
             {
               "name": "as_minimization_problem",
-              "doc": "Select {meth}`~ommx.Instance.as_minimization_problem`.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [],
@@ -25810,7 +25810,7 @@
         {
           "kind": "Class",
           "name": "SpecialConstraintPreparation",
-          "doc": "Selection of a special-constraint transformation for\n{meth}`~ommx.Instance.prepare`.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -25841,7 +25841,7 @@
             },
             {
               "name": "lower_special_constraints",
-              "doc": "Select {meth}`~ommx.Instance.lower_special_constraints`.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [

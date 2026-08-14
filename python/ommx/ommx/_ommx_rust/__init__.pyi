@@ -2468,27 +2468,17 @@ class ExperimentRef:
 
 @typing.final
 class FixedPenaltyPreparation:
-    r"""
-    Selection of a fixed-weight penalty transformation for
-    {meth}`~ommx.Instance.prepare`.
-    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def penalty_method_with_fixed_weights(
         *,
         weights: typing.Mapping[builtins.int, builtins.float],
         atol: typing.Optional[builtins.float] = None,
-    ) -> FixedPenaltyPreparation:
-        r"""
-        Select {meth}`~ommx.Instance.penalty_method_with_fixed_weights`.
-        """
+    ) -> FixedPenaltyPreparation: ...
     @staticmethod
     def uniform_penalty_method_with_fixed_weight(
         *, weight: builtins.float, atol: typing.Optional[builtins.float] = None
-    ) -> FixedPenaltyPreparation:
-        r"""
-        Select {meth}`~ommx.Instance.uniform_penalty_method_with_fixed_weight`.
-        """
+    ) -> FixedPenaltyPreparation: ...
 
 @typing.final
 class Function:
@@ -4756,10 +4746,21 @@ class Instance:
         Apply the caller's ``policy`` to this instance in place to reach
         ``input_class`` membership.
 
-        The caller owns policy selection; the instance owns the transformations
-        and their application. Success guarantees membership only, not Adapter
-        applicability. This operation is not transactional, so an error may leave
-        the instance changed.
+        Selected phases are applied at most once in this order, stopping as soon
+        as membership is reached:
+
+        1. ``special_constraints``:
+           {meth}`~ommx.Instance.lower_special_constraints`
+        2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`
+        3. ``integer_slack``:
+           {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
+           followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
+           when exact conversion is unavailable and ``slack_upper_bound`` is set
+        4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+        5. ``fixed_penalty``
+
+        Success guarantees membership only, not Adapter applicability. This
+        operation is not transactional, so an error may leave the instance changed.
         {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership
         report when the selections do not reach ``input_class``.
         """
@@ -5069,45 +5070,20 @@ class InstanceDescription:
 
 @typing.final
 class IntegerEncodingPreparation:
-    r"""
-    Selection of a used-Integer transformation for
-    {meth}`~ommx.Instance.prepare`.
-    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def log_encode_all_used_integers(
         *, atol: typing.Optional[builtins.float] = None
-    ) -> IntegerEncodingPreparation:
-        r"""
-        Select {meth}`~ommx.Instance.log_encode_all_used_integers`.
-        """
+    ) -> IntegerEncodingPreparation: ...
 
 @typing.final
 class IntegerSlackPreparation:
-    r"""
-    Selection of Integer-slack transformations for
-    {meth}`~ommx.Instance.prepare`.
-    """
     @property
-    def max_integer_range(self) -> builtins.int:
-        r"""
-        Maximum finite range accepted for exact Integer slack.
-        """
+    def max_integer_range(self) -> builtins.int: ...
     @property
-    def atol(self) -> builtins.float:
-        r"""
-        Absolute tolerance used to normalize bounds to integers.
-        """
+    def atol(self) -> builtins.float: ...
     @property
-    def slack_upper_bound(self) -> typing.Optional[builtins.int]:
-        r"""
-        Optional upper bound for inequality-preserving Integer slack.
-
-        ``None`` selects only
-        {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`.
-        An integer also selects {meth}`~ommx.Instance.add_integer_slack_to_inequality`
-        as a fallback when exact conversion is unavailable.
-        """
+    def slack_upper_bound(self) -> typing.Optional[builtins.int]: ...
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __new__(
         cls,
@@ -6178,13 +6154,6 @@ class Polynomial:
 
 @typing.final
 class PreparationPolicy:
-    r"""
-    Caller-owned selection of optional transformations for
-    {meth}`~ommx.Instance.prepare`.
-
-    {class}`~ommx.Instance` owns their application. All selections are disabled
-    by default.
-    """
     @property
     def special_constraints(self) -> typing.Optional[SpecialConstraintPreparation]: ...
     @special_constraints.setter
@@ -7557,16 +7526,9 @@ class SealedRun:
 
 @typing.final
 class SensePreparation:
-    r"""
-    Selection of an optimization-sense transformation for
-    {meth}`~ommx.Instance.prepare`.
-    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
-    def as_minimization_problem() -> SensePreparation:
-        r"""
-        Select {meth}`~ommx.Instance.as_minimization_problem`.
-        """
+    def as_minimization_problem() -> SensePreparation: ...
 
 @typing.final
 class Solution:
@@ -8099,18 +8061,11 @@ class Sos1Constraint:
 
 @typing.final
 class SpecialConstraintPreparation:
-    r"""
-    Selection of a special-constraint transformation for
-    {meth}`~ommx.Instance.prepare`.
-    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def lower_special_constraints(
         *, kinds: builtins.set[SpecialConstraintKind]
-    ) -> SpecialConstraintPreparation:
-        r"""
-        Select {meth}`~ommx.Instance.lower_special_constraints`.
-        """
+    ) -> SpecialConstraintPreparation: ...
 
 @typing.final
 class State:

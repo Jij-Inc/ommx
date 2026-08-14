@@ -10,8 +10,6 @@ fn resolve_atol(value: Option<f64>) -> OmmxPyResult<ommx::ATol> {
     })
 }
 
-/// Selection of a special-constraint transformation for
-/// {meth}`~ommx.Instance.prepare`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,7 +20,6 @@ pub struct SpecialConstraintPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SpecialConstraintPreparation {
-    /// Select {meth}`~ommx.Instance.lower_special_constraints`.
     #[staticmethod]
     #[pyo3(signature = (*, kinds))]
     pub fn lower_special_constraints(kinds: HashSet<SpecialConstraintKind>) -> Self {
@@ -46,8 +43,6 @@ impl From<ommx::SpecialConstraintPreparation> for SpecialConstraintPreparation {
     }
 }
 
-/// Selection of an optimization-sense transformation for
-/// {meth}`~ommx.Instance.prepare`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,7 +53,6 @@ pub struct SensePreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SensePreparation {
-    /// Select {meth}`~ommx.Instance.as_minimization_problem`.
     #[staticmethod]
     pub fn as_minimization_problem() -> Self {
         Self {
@@ -79,8 +73,6 @@ impl From<ommx::SensePreparation> for SensePreparation {
     }
 }
 
-/// Selection of Integer-slack transformations for
-/// {meth}`~ommx.Instance.prepare`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,24 +99,16 @@ impl IntegerSlackPreparation {
         })
     }
 
-    /// Maximum finite range accepted for exact Integer slack.
     #[getter]
     pub fn max_integer_range(&self) -> u64 {
         self.inner.max_integer_range
     }
 
-    /// Absolute tolerance used to normalize bounds to integers.
     #[getter]
     pub fn atol(&self) -> f64 {
         self.inner.atol.into_inner()
     }
 
-    /// Optional upper bound for inequality-preserving Integer slack.
-    ///
-    /// ``None`` selects only
-    /// {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`.
-    /// An integer also selects {meth}`~ommx.Instance.add_integer_slack_to_inequality`
-    /// as a fallback when exact conversion is unavailable.
     #[getter]
     pub fn slack_upper_bound(&self) -> Option<u64> {
         self.inner.slack_upper_bound
@@ -143,8 +127,6 @@ impl From<ommx::IntegerSlackPreparation> for IntegerSlackPreparation {
     }
 }
 
-/// Selection of a used-Integer transformation for
-/// {meth}`~ommx.Instance.prepare`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -155,7 +137,6 @@ pub struct IntegerEncodingPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl IntegerEncodingPreparation {
-    /// Select {meth}`~ommx.Instance.log_encode_all_used_integers`.
     #[staticmethod]
     #[pyo3(signature = (*, atol=None))]
     pub fn log_encode_all_used_integers(atol: Option<f64>) -> OmmxPyResult<Self> {
@@ -179,8 +160,6 @@ impl From<ommx::IntegerEncodingPreparation> for IntegerEncodingPreparation {
     }
 }
 
-/// Selection of a fixed-weight penalty transformation for
-/// {meth}`~ommx.Instance.prepare`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq)]
@@ -191,7 +170,6 @@ pub struct FixedPenaltyPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl FixedPenaltyPreparation {
-    /// Select {meth}`~ommx.Instance.penalty_method_with_fixed_weights`.
     #[staticmethod]
     #[pyo3(signature = (*, weights, atol=None))]
     pub fn penalty_method_with_fixed_weights(
@@ -209,7 +187,6 @@ impl FixedPenaltyPreparation {
         })
     }
 
-    /// Select {meth}`~ommx.Instance.uniform_penalty_method_with_fixed_weight`.
     #[staticmethod]
     #[pyo3(signature = (*, weight, atol=None))]
     pub fn uniform_penalty_method_with_fixed_weight(
@@ -237,11 +214,6 @@ impl From<ommx::FixedPenaltyPreparation> for FixedPenaltyPreparation {
     }
 }
 
-/// Caller-owned selection of optional transformations for
-/// {meth}`~ommx.Instance.prepare`.
-///
-/// {class}`~ommx.Instance` owns their application. All selections are disabled
-/// by default.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq)]
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -327,10 +299,21 @@ impl Instance {
     /// Apply the caller's ``policy`` to this instance in place to reach
     /// ``input_class`` membership.
     ///
-    /// The caller owns policy selection; the instance owns the transformations
-    /// and their application. Success guarantees membership only, not Adapter
-    /// applicability. This operation is not transactional, so an error may leave
-    /// the instance changed.
+    /// Selected phases are applied at most once in this order, stopping as soon
+    /// as membership is reached:
+    ///
+    /// 1. ``special_constraints``:
+    ///    {meth}`~ommx.Instance.lower_special_constraints`
+    /// 2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`
+    /// 3. ``integer_slack``:
+    ///    {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
+    ///    followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
+    ///    when exact conversion is unavailable and ``slack_upper_bound`` is set
+    /// 4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+    /// 5. ``fixed_penalty``
+    ///
+    /// Success guarantees membership only, not Adapter applicability. This
+    /// operation is not transactional, so an error may leave the instance changed.
     /// {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership
     /// report when the selections do not reach ``input_class``.
     pub fn prepare(
