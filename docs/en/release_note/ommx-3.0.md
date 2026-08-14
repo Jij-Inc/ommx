@@ -8,6 +8,16 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### Adapter input classes are required ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
+
+Concrete `SolverAdapter` and `SamplerAdapter` implementations must declare
+`INPUT_CLASS` as a non-optional `ClassVar[InstanceClass]`; `None` is not a valid
+declaration. In-repository adapters now expose `InstanceClass` directly, so
+callers can pass `Adapter.INPUT_CLASS` to {meth}`~ommx.Instance.prepare` without
+an `is not None` guard. A missing declaration still produces a clear `TypeError`
+when applicability is checked. See the [Adapter implementation tutorial](../tutorial/implement_adapter.md)
+for the complete contract.
+
 ## 3.0.0 Beta 3
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)
