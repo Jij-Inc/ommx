@@ -6347,7 +6347,7 @@
         {
           "kind": "Class",
           "name": "FixedPenaltyPreparation",
-          "doc": "Selection for the fixed-weight penalty Preparation phase.\n\nExactly one fixed-weight owner operation is selected. Weight and\nconstraint-ID validation remains owned by that operation.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -6378,7 +6378,7 @@
             },
             {
               "name": "penalty_method_with_fixed_weights",
-              "doc": "Select the keyed fixed-weight penalty owner operation.\n\n``atol`` is used by the owner operation to accept a decision-rule weight\ndown to ``-atol`` and normalize a tolerated negative value to zero.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [
@@ -6433,7 +6433,7 @@
             },
             {
               "name": "uniform_penalty_method_with_fixed_weight",
-              "doc": "Select the uniform fixed-weight penalty owner operation.\n\n``atol`` is used by the owner operation to accept a decision-rule weight\ndown to ``-atol`` and normalize a tolerated negative value to zero.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [
@@ -10654,7 +10654,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Prepare this instance in place for membership in ``input_class``.\n\n``policy`` selects existing :class:`Instance` owner operations. The\nmethod stops once ``input_class`` contains this instance and returns\n``None``. Success guarantees only that membership; Adapter-specific\napplicability remains a separate check.\n\nPreparation is not globally transactional. Changes committed by an\nearlier owner operation remain if a later operation raises an error.\nExisting Rust owner signals retain their Python exception mappings.\nWhen configured phases are exhausted without reaching ``input_class``,\n:class:`PreparationTargetNotReachedError` exposes the final membership\nreport through its ``report`` attribute.",
+              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\nSelected phases are applied at most once in this order, stopping as soon\nas membership is reached:\n\n1. ``special_constraints``:\n   {meth}`~ommx.Instance.lower_special_constraints`\n2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`\n3. ``integer_slack``:\n   {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,\n   followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only\n   when exact conversion is unavailable and ``slack_upper_bound`` is set\n4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`\n5. ``fixed_penalty``\n\nSuccess guarantees membership only, not Adapter applicability. This\noperation is not transactional, so an error may leave the instance changed.\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final membership\nreport when the selections do not reach ``input_class``.",
               "signatures": [
                 {
                   "parameters": [
@@ -12606,7 +12606,7 @@
         {
           "kind": "Class",
           "name": "IntegerEncodingPreparation",
-          "doc": "Selection for the used-Integer encoding Preparation phase.\n\nExactly one encoding owner operation is selected. Validation and mutation\nsemantics remain owned by that operation.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -12637,7 +12637,7 @@
             },
             {
               "name": "log_encode_all_used_integers",
-              "doc": "Select the underlying Rust ``log_encode_all_used_integers`` owner\noperation. On success, no used Integer decision variables remain.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [
@@ -12677,7 +12677,7 @@
         {
           "kind": "Class",
           "name": "IntegerSlackPreparation",
-          "doc": "Integer-slack Preparation for active regular inequalities.\n\nPreparation first attempts exact conversion to equality using\n``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the\nconstraint to become an equality or be removed as trivially satisfied, so\n:class:`ExactIntegerSlackError` is propagated. An integer value permits the\nconstraint to remain an inequality: only that signal selects the\ninequality-preserving owner operation with this upper bound. The latter is\nnot an approximation of the original feasible set. Every other owner error\nis propagated unchanged.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -12772,7 +12772,7 @@
           "attributes": [
             {
               "name": "atol",
-              "doc": "Absolute tolerance used to normalize bounds to integers.",
+              "doc": "",
               "type_": {
                 "display": "float",
                 "link_target": null,
@@ -12783,7 +12783,7 @@
             },
             {
               "name": "max_integer_range",
-              "doc": "Maximum finite range accepted for exact Integer slack.",
+              "doc": "",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -12794,7 +12794,7 @@
             },
             {
               "name": "slack_upper_bound",
-              "doc": "Optional upper bound for inequality-preserving Integer slack.\n\n``None`` requires equality. An integer permits the inequality-preserving\nowner operation only after :class:`ExactIntegerSlackError`.",
+              "doc": "",
               "type_": {
                 "display": "Optional[int]",
                 "link_target": null,
@@ -19289,7 +19289,7 @@
         {
           "kind": "Class",
           "name": "PreparationPolicy",
-          "doc": "Optional phases interpreted by :meth:`Instance.prepare`.\n\nEach property independently selects at most one well-formed phase. Fields\nmay be combined freely, although owner validation and target membership can\nstill make a combination fail for a particular :class:`Instance`.\n\n``Instance.prepare`` applies selected phases at most once in the canonical\nRust-owned order: special constraints, optimization sense, Integer slack,\nInteger encoding, then fixed penalty. All phases are disabled by default.\nFuture phases will also default to disabled.\n\nConstruct the table with keyword arguments or assign its public properties:\n\n```python\nfrom ommx import PreparationPolicy, SensePreparation\n\npolicy = PreparationPolicy()\npolicy.sense = SensePreparation.as_minimization_problem()\n```",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -23875,7 +23875,7 @@
         {
           "kind": "Class",
           "name": "SensePreparation",
-          "doc": "Selection for the optimization-sense Preparation phase.\n\nConstruct a value with an owner-operation factory. Validation and mutation\nsemantics remain owned by that :class:`Instance` operation.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -23906,7 +23906,7 @@
             },
             {
               "name": "as_minimization_problem",
-              "doc": "Select :meth:`Instance.as_minimization_problem`.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [],
@@ -25810,7 +25810,7 @@
         {
           "kind": "Class",
           "name": "SpecialConstraintPreparation",
-          "doc": "Selection for the special-constraint Preparation phase.\n\nConstruct a value with an owner-operation factory. Validation and mutation\nsemantics remain owned by that :class:`Instance` operation.",
+          "doc": "",
           "bases": [],
           "methods": [
             {
@@ -25841,7 +25841,7 @@
             },
             {
               "name": "lower_special_constraints",
-              "doc": "Select :meth:`Instance.lower_special_constraints`.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [

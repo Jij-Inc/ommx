@@ -2468,35 +2468,17 @@ class ExperimentRef:
 
 @typing.final
 class FixedPenaltyPreparation:
-    r"""
-    Selection for the fixed-weight penalty Preparation phase.
-
-    Exactly one fixed-weight owner operation is selected. Weight and
-    constraint-ID validation remains owned by that operation.
-    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def penalty_method_with_fixed_weights(
         *,
         weights: typing.Mapping[builtins.int, builtins.float],
         atol: typing.Optional[builtins.float] = None,
-    ) -> FixedPenaltyPreparation:
-        r"""
-        Select the keyed fixed-weight penalty owner operation.
-
-        ``atol`` is used by the owner operation to accept a decision-rule weight
-        down to ``-atol`` and normalize a tolerated negative value to zero.
-        """
+    ) -> FixedPenaltyPreparation: ...
     @staticmethod
     def uniform_penalty_method_with_fixed_weight(
         *, weight: builtins.float, atol: typing.Optional[builtins.float] = None
-    ) -> FixedPenaltyPreparation:
-        r"""
-        Select the uniform fixed-weight penalty owner operation.
-
-        ``atol`` is used by the owner operation to accept a decision-rule weight
-        down to ``-atol`` and normalize a tolerated negative value to zero.
-        """
+    ) -> FixedPenaltyPreparation: ...
 
 @typing.final
 class Function:
@@ -4761,19 +4743,26 @@ class Instance:
         """
     def prepare(self, input_class: InstanceClass, policy: PreparationPolicy) -> None:
         r"""
-        Prepare this instance in place for membership in ``input_class``.
+        Apply the caller's ``policy`` to this instance in place to reach
+        ``input_class`` membership.
 
-        ``policy`` selects existing :class:`Instance` owner operations. The
-        method stops once ``input_class`` contains this instance and returns
-        ``None``. Success guarantees only that membership; Adapter-specific
-        applicability remains a separate check.
+        Selected phases are applied at most once in this order, stopping as soon
+        as membership is reached:
 
-        Preparation is not globally transactional. Changes committed by an
-        earlier owner operation remain if a later operation raises an error.
-        Existing Rust owner signals retain their Python exception mappings.
-        When configured phases are exhausted without reaching ``input_class``,
-        :class:`PreparationTargetNotReachedError` exposes the final membership
-        report through its ``report`` attribute.
+        1. ``special_constraints``:
+           {meth}`~ommx.Instance.lower_special_constraints`
+        2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`
+        3. ``integer_slack``:
+           {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
+           followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
+           when exact conversion is unavailable and ``slack_upper_bound`` is set
+        4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+        5. ``fixed_penalty``
+
+        Success guarantees membership only, not Adapter applicability. This
+        operation is not transactional, so an error may leave the instance changed.
+        {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership
+        report when the selections do not reach ``input_class``.
         """
 
 @typing.final
@@ -5081,54 +5070,20 @@ class InstanceDescription:
 
 @typing.final
 class IntegerEncodingPreparation:
-    r"""
-    Selection for the used-Integer encoding Preparation phase.
-
-    Exactly one encoding owner operation is selected. Validation and mutation
-    semantics remain owned by that operation.
-    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def log_encode_all_used_integers(
         *, atol: typing.Optional[builtins.float] = None
-    ) -> IntegerEncodingPreparation:
-        r"""
-        Select the underlying Rust ``log_encode_all_used_integers`` owner
-        operation. On success, no used Integer decision variables remain.
-        """
+    ) -> IntegerEncodingPreparation: ...
 
 @typing.final
 class IntegerSlackPreparation:
-    r"""
-    Integer-slack Preparation for active regular inequalities.
-
-    Preparation first attempts exact conversion to equality using
-    ``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the
-    constraint to become an equality or be removed as trivially satisfied, so
-    :class:`ExactIntegerSlackError` is propagated. An integer value permits the
-    constraint to remain an inequality: only that signal selects the
-    inequality-preserving owner operation with this upper bound. The latter is
-    not an approximation of the original feasible set. Every other owner error
-    is propagated unchanged.
-    """
     @property
-    def max_integer_range(self) -> builtins.int:
-        r"""
-        Maximum finite range accepted for exact Integer slack.
-        """
+    def max_integer_range(self) -> builtins.int: ...
     @property
-    def atol(self) -> builtins.float:
-        r"""
-        Absolute tolerance used to normalize bounds to integers.
-        """
+    def atol(self) -> builtins.float: ...
     @property
-    def slack_upper_bound(self) -> typing.Optional[builtins.int]:
-        r"""
-        Optional upper bound for inequality-preserving Integer slack.
-
-        ``None`` requires equality. An integer permits the inequality-preserving
-        owner operation only after :class:`ExactIntegerSlackError`.
-        """
+    def slack_upper_bound(self) -> typing.Optional[builtins.int]: ...
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __new__(
         cls,
@@ -6199,27 +6154,6 @@ class Polynomial:
 
 @typing.final
 class PreparationPolicy:
-    r"""
-    Optional phases interpreted by :meth:`Instance.prepare`.
-
-    Each property independently selects at most one well-formed phase. Fields
-    may be combined freely, although owner validation and target membership can
-    still make a combination fail for a particular :class:`Instance`.
-
-    ``Instance.prepare`` applies selected phases at most once in the canonical
-    Rust-owned order: special constraints, optimization sense, Integer slack,
-    Integer encoding, then fixed penalty. All phases are disabled by default.
-    Future phases will also default to disabled.
-
-    Construct the table with keyword arguments or assign its public properties:
-
-    ```python
-    from ommx import PreparationPolicy, SensePreparation
-
-    policy = PreparationPolicy()
-    policy.sense = SensePreparation.as_minimization_problem()
-    ```
-    """
     @property
     def special_constraints(self) -> typing.Optional[SpecialConstraintPreparation]: ...
     @special_constraints.setter
@@ -7592,18 +7526,9 @@ class SealedRun:
 
 @typing.final
 class SensePreparation:
-    r"""
-    Selection for the optimization-sense Preparation phase.
-
-    Construct a value with an owner-operation factory. Validation and mutation
-    semantics remain owned by that :class:`Instance` operation.
-    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
-    def as_minimization_problem() -> SensePreparation:
-        r"""
-        Select :meth:`Instance.as_minimization_problem`.
-        """
+    def as_minimization_problem() -> SensePreparation: ...
 
 @typing.final
 class Solution:
@@ -8136,20 +8061,11 @@ class Sos1Constraint:
 
 @typing.final
 class SpecialConstraintPreparation:
-    r"""
-    Selection for the special-constraint Preparation phase.
-
-    Construct a value with an owner-operation factory. Validation and mutation
-    semantics remain owned by that :class:`Instance` operation.
-    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def lower_special_constraints(
         *, kinds: builtins.set[SpecialConstraintKind]
-    ) -> SpecialConstraintPreparation:
-        r"""
-        Select :meth:`Instance.lower_special_constraints`.
-        """
+    ) -> SpecialConstraintPreparation: ...
 
 @typing.final
 class State:

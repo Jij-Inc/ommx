@@ -10,10 +10,6 @@ fn resolve_atol(value: Option<f64>) -> OmmxPyResult<ommx::ATol> {
     })
 }
 
-/// Selection for the special-constraint Preparation phase.
-///
-/// Construct a value with an owner-operation factory. Validation and mutation
-/// semantics remain owned by that :class:`Instance` operation.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,7 +20,6 @@ pub struct SpecialConstraintPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SpecialConstraintPreparation {
-    /// Select :meth:`Instance.lower_special_constraints`.
     #[staticmethod]
     #[pyo3(signature = (*, kinds))]
     pub fn lower_special_constraints(kinds: HashSet<SpecialConstraintKind>) -> Self {
@@ -48,10 +43,6 @@ impl From<ommx::SpecialConstraintPreparation> for SpecialConstraintPreparation {
     }
 }
 
-/// Selection for the optimization-sense Preparation phase.
-///
-/// Construct a value with an owner-operation factory. Validation and mutation
-/// semantics remain owned by that :class:`Instance` operation.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,7 +53,6 @@ pub struct SensePreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SensePreparation {
-    /// Select :meth:`Instance.as_minimization_problem`.
     #[staticmethod]
     pub fn as_minimization_problem() -> Self {
         Self {
@@ -83,16 +73,6 @@ impl From<ommx::SensePreparation> for SensePreparation {
     }
 }
 
-/// Integer-slack Preparation for active regular inequalities.
-///
-/// Preparation first attempts exact conversion to equality using
-/// ``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the
-/// constraint to become an equality or be removed as trivially satisfied, so
-/// :class:`ExactIntegerSlackError` is propagated. An integer value permits the
-/// constraint to remain an inequality: only that signal selects the
-/// inequality-preserving owner operation with this upper bound. The latter is
-/// not an approximation of the original feasible set. Every other owner error
-/// is propagated unchanged.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,22 +99,16 @@ impl IntegerSlackPreparation {
         })
     }
 
-    /// Maximum finite range accepted for exact Integer slack.
     #[getter]
     pub fn max_integer_range(&self) -> u64 {
         self.inner.max_integer_range
     }
 
-    /// Absolute tolerance used to normalize bounds to integers.
     #[getter]
     pub fn atol(&self) -> f64 {
         self.inner.atol.into_inner()
     }
 
-    /// Optional upper bound for inequality-preserving Integer slack.
-    ///
-    /// ``None`` requires equality. An integer permits the inequality-preserving
-    /// owner operation only after :class:`ExactIntegerSlackError`.
     #[getter]
     pub fn slack_upper_bound(&self) -> Option<u64> {
         self.inner.slack_upper_bound
@@ -153,10 +127,6 @@ impl From<ommx::IntegerSlackPreparation> for IntegerSlackPreparation {
     }
 }
 
-/// Selection for the used-Integer encoding Preparation phase.
-///
-/// Exactly one encoding owner operation is selected. Validation and mutation
-/// semantics remain owned by that operation.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,8 +137,6 @@ pub struct IntegerEncodingPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl IntegerEncodingPreparation {
-    /// Select the underlying Rust ``log_encode_all_used_integers`` owner
-    /// operation. On success, no used Integer decision variables remain.
     #[staticmethod]
     #[pyo3(signature = (*, atol=None))]
     pub fn log_encode_all_used_integers(atol: Option<f64>) -> OmmxPyResult<Self> {
@@ -192,10 +160,6 @@ impl From<ommx::IntegerEncodingPreparation> for IntegerEncodingPreparation {
     }
 }
 
-/// Selection for the fixed-weight penalty Preparation phase.
-///
-/// Exactly one fixed-weight owner operation is selected. Weight and
-/// constraint-ID validation remains owned by that operation.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq)]
@@ -206,10 +170,6 @@ pub struct FixedPenaltyPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl FixedPenaltyPreparation {
-    /// Select the keyed fixed-weight penalty owner operation.
-    ///
-    /// ``atol`` is used by the owner operation to accept a decision-rule weight
-    /// down to ``-atol`` and normalize a tolerated negative value to zero.
     #[staticmethod]
     #[pyo3(signature = (*, weights, atol=None))]
     pub fn penalty_method_with_fixed_weights(
@@ -227,10 +187,6 @@ impl FixedPenaltyPreparation {
         })
     }
 
-    /// Select the uniform fixed-weight penalty owner operation.
-    ///
-    /// ``atol`` is used by the owner operation to accept a decision-rule weight
-    /// down to ``-atol`` and normalize a tolerated negative value to zero.
     #[staticmethod]
     #[pyo3(signature = (*, weight, atol=None))]
     pub fn uniform_penalty_method_with_fixed_weight(
@@ -258,25 +214,6 @@ impl From<ommx::FixedPenaltyPreparation> for FixedPenaltyPreparation {
     }
 }
 
-/// Optional phases interpreted by :meth:`Instance.prepare`.
-///
-/// Each property independently selects at most one well-formed phase. Fields
-/// may be combined freely, although owner validation and target membership can
-/// still make a combination fail for a particular :class:`Instance`.
-///
-/// ``Instance.prepare`` applies selected phases at most once in the canonical
-/// Rust-owned order: special constraints, optimization sense, Integer slack,
-/// Integer encoding, then fixed penalty. All phases are disabled by default.
-/// Future phases will also default to disabled.
-///
-/// Construct the table with keyword arguments or assign its public properties:
-///
-/// ```python
-/// from ommx import PreparationPolicy, SensePreparation
-///
-/// policy = PreparationPolicy()
-/// policy.sense = SensePreparation.as_minimization_problem()
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq)]
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -359,19 +296,26 @@ impl PreparationPolicy {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
-    /// Prepare this instance in place for membership in ``input_class``.
+    /// Apply the caller's ``policy`` to this instance in place to reach
+    /// ``input_class`` membership.
     ///
-    /// ``policy`` selects existing :class:`Instance` owner operations. The
-    /// method stops once ``input_class`` contains this instance and returns
-    /// ``None``. Success guarantees only that membership; Adapter-specific
-    /// applicability remains a separate check.
+    /// Selected phases are applied at most once in this order, stopping as soon
+    /// as membership is reached:
     ///
-    /// Preparation is not globally transactional. Changes committed by an
-    /// earlier owner operation remain if a later operation raises an error.
-    /// Existing Rust owner signals retain their Python exception mappings.
-    /// When configured phases are exhausted without reaching ``input_class``,
-    /// :class:`PreparationTargetNotReachedError` exposes the final membership
-    /// report through its ``report`` attribute.
+    /// 1. ``special_constraints``:
+    ///    {meth}`~ommx.Instance.lower_special_constraints`
+    /// 2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`
+    /// 3. ``integer_slack``:
+    ///    {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
+    ///    followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
+    ///    when exact conversion is unavailable and ``slack_upper_bound`` is set
+    /// 4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+    /// 5. ``fixed_penalty``
+    ///
+    /// Success guarantees membership only, not Adapter applicability. This
+    /// operation is not transactional, so an error may leave the instance changed.
+    /// {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership
+    /// report when the selections do not reach ``input_class``.
     pub fn prepare(
         &mut self,
         py: Python<'_>,

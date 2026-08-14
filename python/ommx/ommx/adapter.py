@@ -131,42 +131,29 @@ class SolverAdapter(ABC):
 
     See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
 
-    Subclasses declare ``INPUT_CLASS`` as the OMMX-defined structural class used
-    by the first applicability condition. ``check_applicability`` does not mutate
-    the input and combines class membership with the adapter's
-    ``_check_preconditions`` hook.
-
-    ``INPUT_CLASS`` describes only which exact inputs an adapter accepts; it does
-    not prescribe how the subclass processes them. The base class never lowers
-    or otherwise mutates the input instance.
+    Concrete subclasses own ``INPUT_CLASS`` and additional applicability
+    preconditions; callers own applying any recommended policy with
+    :meth:`ommx.Instance.prepare`.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass]
+    """Required structural condition for an exact Adapter input.
+
+    Membership does not include adapter-owned preconditions.
+    """
 
     @classmethod
     def recommended_preparation_policy(cls) -> PreparationPolicy:
-        """Return a fresh, caller-editable policy recommended by this adapter.
+        """Return a fresh policy recommended for this Adapter's ``INPUT_CLASS``.
 
-        The recommendation and :attr:`INPUT_CLASS` are independent inputs to
-        :meth:`ommx.Instance.prepare`. This method does not inspect or mutate an
-        instance, execute preparation, or guarantee adapter applicability.
-        Concrete adapters may override it when they can recommend model changes
-        for reaching their input class.
-
-        The default recommendation enables no preparation phases. A new policy
-        is returned on every call so callers may edit it without sharing state.
+        The caller owns editing and applying it. This method neither prepares an
+        instance nor guarantees applicability. The default policy is empty.
         """
         return PreparationPolicy()
 
     @classmethod
     def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
-        """Inspect applicability without mutating or preparing ``ommx_instance``.
-
-        Adapter-specific preconditions run only after at least one complete
-        input-class clause contains the instance. The hook receives an isolated
-        copy so it cannot mutate the caller's instance. Any explicitly
-        transformed value is a different input and must be checked separately.
-        """
+        """Check ``INPUT_CLASS`` and adapter-owned preconditions without mutation."""
         input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
         if input_class is None:
             raise TypeError(
