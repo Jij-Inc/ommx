@@ -20,8 +20,15 @@ impl Function {
                 let (rebuilt, reduced) = match owned {
                     Function::Unary(operation) => {
                         let (operator, mut operand) = operation.into_parts();
-                        let reduced = operand.reduce_binary_power(binary_ids)?;
-                        (Function::unary_operation(operator, operand), reduced)
+                        let mut reduced = operand.reduce_binary_power(binary_ids)?;
+                        if matches!(operator, UnaryOperator::Powi(exponent) if exponent >= 1)
+                            && is_binary_variable(&operand, binary_ids)
+                        {
+                            reduced = true;
+                            (operand, reduced)
+                        } else {
+                            (Function::unary_expression(operator, operand), reduced)
+                        }
                     }
                     Function::Nary(operation) => {
                         let (operator, mut operands) = operation.into_parts();
@@ -33,19 +40,9 @@ impl Function {
                     }
                     Function::Binary(operation) => {
                         let (operator, mut lhs, mut rhs) = operation.into_parts();
-                        let mut reduced = lhs.reduce_binary_power(binary_ids)?
+                        let reduced = lhs.reduce_binary_power(binary_ids)?
                             | rhs.reduce_binary_power(binary_ids)?;
-                        if operator == BinaryOperator::Pow
-                            && is_binary_variable(&lhs, binary_ids)
-                            && rhs
-                                .as_constant()
-                                .is_some_and(|exponent| exponent >= 1.0 && exponent.fract() == 0.0)
-                        {
-                            reduced = true;
-                            (lhs, reduced)
-                        } else {
-                            (Function::binary_expression(operator, lhs, rhs), reduced)
-                        }
+                        (Function::binary_expression(operator, lhs, rhs), reduced)
                     }
                     _ => unreachable!("composite variants matched above"),
                 };
@@ -120,9 +117,9 @@ mod tests {
     }
 
     #[test]
-    fn binary_power_node_reduces_for_a_binary_variable() {
+    fn integer_power_node_reduces_for_a_binary_variable() {
         let binary_ids = crate::variable_ids!(1);
-        let mut function = Function::from(crate::linear!(1)).pow(Function::try_from(2.0).unwrap());
+        let mut function = Function::from(crate::linear!(1)).powi(2);
 
         assert!(function.reduce_binary_power(&binary_ids).unwrap());
         assert!(function == Function::from(crate::linear!(1)));

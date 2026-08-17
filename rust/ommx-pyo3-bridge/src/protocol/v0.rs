@@ -161,7 +161,7 @@ mod tests {
                 (inner.clone(), inner.clone()).prop_map(|(lhs, rhs)| lhs.max(rhs)),
                 (inner.clone(), inner.clone())
                     .prop_map(|(lhs, rhs)| (lhs / rhs).expect("expression division is valid")),
-                (inner.clone(), inner).prop_map(|(base, exponent)| base.pow(exponent)),
+                (inner, -4_i32..=4_i32).prop_map(|(base, exponent)| base.powi(exponent)),
             ]
         })
     }

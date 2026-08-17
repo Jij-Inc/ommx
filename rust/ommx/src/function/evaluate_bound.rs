@@ -259,84 +259,43 @@ fn positive_integer_power_bound(base: Bound, exponent: u64) -> crate::Result<Bou
     }
 }
 
-fn powf_endpoint_enclosure(value: f64, exponent: f64) -> crate::Result<(f64, f64)> {
-    let powered = value.powf(exponent);
-    if powered.is_nan() {
-        anyhow::bail!("real power is undefined for base {value} and exponent {exponent}")
-    }
-    if powered.is_infinite() {
-        Ok((powered, powered))
-    } else {
-        Ok((round_down(powered), round_up(powered)))
-    }
-}
-
-fn large_even_integer_power_bound(base: Bound, exponent: f64) -> crate::Result<Bound> {
-    let lower_endpoint = powf_endpoint_enclosure(base.lower(), exponent)?;
-    let upper_endpoint = powf_endpoint_enclosure(base.upper(), exponent)?;
-    // Every representable binary64 integer whose magnitude is at least 2^53
-    // is even.
-    if exponent > 0.0 && base.lower() <= 0.0 && base.upper() >= 0.0 {
-        Ok(Bound::new(0.0, lower_endpoint.1.max(upper_endpoint.1))?)
-    } else {
-        Ok(Bound::new(
-            lower_endpoint.0.min(upper_endpoint.0),
-            lower_endpoint.1.max(upper_endpoint.1),
-        )?)
-    }
-}
-
-fn integer_power_bound(base: Bound, exponent: f64) -> crate::Result<Bound> {
-    debug_assert!(exponent.is_finite() && exponent.fract() == 0.0);
-    if exponent == 0.0 {
+fn integer_power_bound(
+    base: Bound,
+    exponent: i32,
+    base_may_evaluate_to_zero: bool,
+) -> crate::Result<Bound> {
+    if exponent == 0 {
         return Ok(Bound::new(1.0, 1.0).unwrap());
     }
-    if exponent < 0.0 && base.lower() <= 0.0 && base.upper() >= 0.0 {
+    if exponent < 0 && base_may_evaluate_to_zero {
         anyhow::bail!("cannot bound a negative power when the base interval contains zero")
     }
 
-    let magnitude = exponent.abs();
-    const TWO_TO_53: f64 = 9_007_199_254_740_992.0;
-    if magnitude < TWO_TO_53 {
-        let magnitude = magnitude as u64;
-        let base = if exponent < 0.0 {
-            // Invert first. Computing the positive power before the reciprocal
-            // can overflow even when the final negative power is finite.
-            reciprocal_bound(base)?
-        } else {
-            base
-        };
-        positive_integer_power_bound(base, magnitude)
-    } else {
-        large_even_integer_power_bound(base, exponent)
+    let scalar_endpoints = [base.lower().powi(exponent), base.upper().powi(exponent)];
+    if scalar_endpoints.iter().any(|value| value.is_nan()) {
+        anyhow::bail!("integer power is undefined at an endpoint of the base interval")
     }
-}
 
-fn power_bound(base: Bound, exponent: Bound) -> crate::Result<Bound> {
-    if exponent.lower() != exponent.upper() {
-        anyhow::bail!("interval bounds for a function-valued exponent are unsupported")
-    }
-    let exponent = exponent.lower();
-    if !exponent.is_finite() {
-        anyhow::bail!("cannot bound a non-finite exponent")
-    }
-    if exponent.fract() == 0.0 {
-        return integer_power_bound(base, exponent);
-    }
-    if base.lower() < 0.0 {
-        anyhow::bail!("a non-integer real power is undefined for a negative base")
-    }
-    if exponent < 0.0 && base.lower() == 0.0 {
-        anyhow::bail!("a negative power is undefined at zero")
-    }
-    let lhs = base.lower().powf(exponent);
-    let rhs = base.upper().powf(exponent);
-    let (lower, upper) = if exponent >= 0.0 {
-        (lhs, rhs)
+    let powered_base = if exponent < 0 {
+        // Invert first. Computing the positive power before the reciprocal can
+        // overflow even when the mathematical negative power is finite. The
+        // scalar `powi` endpoint values are included separately below because
+        // its implementation is allowed to take that overflowing route.
+        reciprocal_bound(base)?
     } else {
-        (rhs, lhs)
+        base
     };
-    outward_bound(lower, upper)
+    let mathematical =
+        positive_integer_power_bound(powered_base, u64::from(exponent.unsigned_abs()))?;
+    let lower = scalar_endpoints
+        .iter()
+        .copied()
+        .fold(mathematical.lower(), f64::min);
+    let upper = scalar_endpoints
+        .iter()
+        .copied()
+        .fold(mathematical.upper(), f64::max);
+    Ok(Bound::new(lower, upper)?)
 }
 
 fn bound_contains_zero(bound: Bound) -> bool {
@@ -375,7 +334,35 @@ impl Function {
         match self {
             Function::Zero => Ok(true),
             Function::Constant(value) => Ok(value.into_inner() == 0.0),
-            Function::Unary(operation) => operation.operand().may_evaluate_to_zero(bounds),
+            Function::Unary(operation) => match operation.operator() {
+                UnaryOperator::Powi(0) => {
+                    // The operand is still evaluated by the strict expression
+                    // semantics, but every defined result is one.
+                    operation.operand().evaluate_bound(bounds)?;
+                    Ok(false)
+                }
+                UnaryOperator::Powi(exponent) => {
+                    let operand = operation.operand().evaluate_bound(bounds)?;
+                    let operand_may_be_zero = operation.operand().may_evaluate_to_zero(bounds)?;
+                    if exponent < 0 && operand_may_be_zero {
+                        anyhow::bail!(
+                            "cannot bound a negative power when the base interval contains zero"
+                        )
+                    }
+                    if operand_may_be_zero {
+                        return Ok(true);
+                    }
+                    let value = if exponent < 0 {
+                        maximum_finite_absolute_value(operand)
+                    } else {
+                        minimum_absolute_value(operand)
+                    };
+                    Ok(value.powi(exponent) == 0.0)
+                }
+                UnaryOperator::Neg | UnaryOperator::Abs | UnaryOperator::Signum => {
+                    operation.operand().may_evaluate_to_zero(bounds)
+                }
+            },
             Function::Binary(operation) if operation.operator() == BinaryOperator::Div => {
                 let lhs = operation.lhs().evaluate_bound(bounds)?;
                 let rhs = operation.rhs().evaluate_bound(bounds)?;
@@ -419,8 +406,8 @@ impl Function {
     /// # Errors
     ///
     /// Returns an error when an interval crosses an undefined division or
-    /// real-power domain, when a function-valued exponent is not a point
-    /// interval, or when finite interval endpoints cannot be represented.
+    /// negative-integer-power domain, or when finite interval endpoints cannot
+    /// be represented.
     pub fn evaluate_bound(&self, bounds: &Bounds) -> crate::Result<Bound> {
         if let Function::Unary(operation) = self {
             let operand = operation.operand().evaluate_bound(bounds)?;
@@ -446,6 +433,11 @@ impl Function {
                     };
                     Ok(Bound::new(sign(operand.lower()), sign(operand.upper()))?)
                 }
+                UnaryOperator::Powi(exponent) => integer_power_bound(
+                    operand,
+                    exponent,
+                    operation.operand().may_evaluate_to_zero(bounds)?,
+                ),
             };
         }
         if let Function::Nary(operation) = self {
@@ -482,7 +474,6 @@ impl Function {
                     }
                     div_bounds(lhs, rhs)
                 }
-                BinaryOperator::Pow => power_bound(lhs, rhs),
             };
         }
 
@@ -594,8 +585,8 @@ mod tests {
     fn negative_integer_power_handles_unbounded_endpoints_and_zero_domain() {
         let id = VariableID::from(1);
         let x = Function::from(linear!(id));
-        let inverse_square = x.clone().pow(Function::try_from(-2.0).unwrap());
-        let inverse_cube = x.pow(Function::try_from(-3.0).unwrap());
+        let inverse_square = x.clone().powi(-2);
+        let inverse_cube = x.powi(-3);
 
         let positive_half_line = Bounds::from([(id, Bound::new(1.0, f64::INFINITY).unwrap())]);
         let positive_bound = inverse_square.evaluate_bound(&positive_half_line).unwrap();
@@ -647,10 +638,7 @@ mod tests {
         assert_contains(minimum, -2.0);
         assert_contains(minimum, 1.0);
 
-        let square = x
-            .pow(Function::try_from(2.0).unwrap())
-            .evaluate_bound(&bounds)
-            .unwrap();
+        let square = x.powi(2).evaluate_bound(&bounds).unwrap();
         assert_contains(square, 0.0);
         assert_contains(square, 9.0);
     }
@@ -663,8 +651,8 @@ mod tests {
         bounds.insert(VariableID::from(1), Bound::new(-1.0, 1.0).unwrap());
         assert!(reciprocal.evaluate_bound(&bounds).is_err());
 
-        let square_root = x.pow(Function::try_from(0.5).unwrap());
-        assert!(square_root.evaluate_bound(&bounds).is_err());
+        let inverse = x.powi(-1);
+        assert!(inverse.evaluate_bound(&bounds).is_err());
     }
 
     #[test]
@@ -708,9 +696,9 @@ mod tests {
     }
 
     #[test]
-    fn integer_binary_power_bound_contains_powf_scalar_evaluation() {
+    fn integer_power_bound_contains_powi_scalar_evaluation() {
         let id = VariableID::from(1);
-        let function = Function::from(linear!(id)).pow(Function::try_from(4.0).unwrap());
+        let function = Function::from(linear!(id)).powi(4);
         let state = crate::v1::State::from_iter([(1, 0.1)]);
         let bounds = Bounds::from([(id, Bound::new(0.1, 0.1).unwrap())]);
 
@@ -719,10 +707,9 @@ mod tests {
     }
 
     #[test]
-    fn integer_power_beyond_i32_range_keeps_integer_domain() {
+    fn integer_power_handles_i32_min_without_overflowing_the_magnitude() {
         let id = VariableID::from(1);
-        let function =
-            Function::from(linear!(id)).pow(Function::try_from(2_147_483_648.0).unwrap());
+        let function = Function::from(linear!(id)).powi(i32::MIN);
         let state = crate::v1::State::from_iter([(1, -1.0)]);
         let bounds = Bounds::from([(id, Bound::new(-1.0, -1.0).unwrap())]);
 
@@ -732,24 +719,10 @@ mod tests {
     }
 
     #[test]
-    fn integer_power_beyond_i64_range_keeps_integer_domain() {
-        let id = VariableID::from(1);
-        let state = crate::v1::State::from_iter([(1, -1.0)]);
-        let bounds = Bounds::from([(id, Bound::new(-1.0, -1.0).unwrap())]);
-
-        for exponent in [9_223_372_036_854_775_808.0, -9_223_372_036_854_775_808.0] {
-            let function = Function::from(linear!(id)).pow(Function::try_from(exponent).unwrap());
-            let evaluated = function.evaluate(&state, ATol::default()).unwrap();
-            assert_eq!(evaluated, 1.0);
-            assert_contains(function.evaluate_bound(&bounds).unwrap(), evaluated);
-        }
-    }
-
-    #[test]
     fn negative_integer_power_inverts_before_exponentiation() {
         let id = VariableID::from(1);
-        for (base, exponent) in [(1e200, -2.0), (2.0, -1024.0)] {
-            let function = Function::from(linear!(id)).pow(Function::try_from(exponent).unwrap());
+        for (base, exponent) in [(1e200, -2), (2.0, -1024)] {
+            let function = Function::from(linear!(id)).powi(exponent);
             let state = crate::v1::State::from_iter([(1, base)]);
             let bounds = Bounds::from([(id, Bound::new(base, base).unwrap())]);
             let evaluated = function.evaluate(&state, ATol::default()).unwrap();
@@ -776,26 +749,26 @@ mod tests {
     }
 
     #[test]
-    fn nested_operations_do_not_invent_a_zero_or_negative_domain() {
+    fn nested_operations_do_not_invent_a_zero_domain() {
         let id = VariableID::from(1);
         let x = Function::from(linear!(id));
         let bounds = Bounds::from([(id, Bound::new(1.0, f64::INFINITY).unwrap())]);
 
         let reciprocal = (Function::one() / x.clone()).unwrap();
-        let reciprocal_sqrt = reciprocal.clone().pow(Function::try_from(0.5).unwrap());
-        assert!(reciprocal_sqrt.evaluate_bound(&bounds).is_ok());
+        let inverse_reciprocal = reciprocal.clone().powi(-1);
+        assert!(inverse_reciprocal.evaluate_bound(&bounds).is_ok());
+
+        let zero_power = reciprocal.clone().powi(0);
+        assert_eq!(
+            zero_power.evaluate_bound(&bounds).unwrap(),
+            Bound::new(1.0, 1.0).unwrap()
+        );
 
         let reciprocal_of_reciprocal = (Function::one() / reciprocal).unwrap();
         assert!(reciprocal_of_reciprocal.evaluate_bound(&bounds).is_ok());
 
         let zero_to_one = Bounds::from([(id, Bound::new(0.0, 1.0).unwrap())]);
-        let nested_sqrt = x
-            .clone()
-            .pow(Function::try_from(0.5).unwrap())
-            .pow(Function::try_from(0.5).unwrap());
-        assert!(nested_sqrt.evaluate_bound(&zero_to_one).is_ok());
-
-        let undefined_reciprocal = (Function::one() / x).unwrap();
+        let undefined_reciprocal = x.powi(-1);
         assert!(undefined_reciprocal.evaluate_bound(&zero_to_one).is_err());
     }
 
@@ -823,21 +796,5 @@ mod tests {
 
         assert!(bound.lower() <= rounded);
         assert!(bound.upper() >= rounded.next_up());
-    }
-
-    #[test]
-    fn exact_normal_multiplication_remains_a_point_exponent() {
-        let base_id = VariableID::from(1);
-        let exponent_lhs = VariableID::from(2);
-        let exponent_rhs = VariableID::from(3);
-        let exponent = Function::from(linear!(exponent_lhs) * linear!(exponent_rhs));
-        let function = Function::from(linear!(base_id)).pow(exponent);
-        let bounds = Bounds::from([
-            (base_id, Bound::new(3.0, 3.0).unwrap()),
-            (exponent_lhs, Bound::new(2.0, 2.0).unwrap()),
-            (exponent_rhs, Bound::new(2.0, 2.0).unwrap()),
-        ]);
-
-        assert_contains(function.evaluate_bound(&bounds).unwrap(), 81.0);
     }
 }

@@ -132,7 +132,7 @@ impl<'de> serde::Deserialize<'de> for Function {
         match Repr::deserialize(deserializer)? {
             Repr::Polynomial(polynomial) => Ok(Function::Polynomial(polynomial).normalize()),
             Repr::Expression(ExpressionOwned::Unary { operator, operand }) => {
-                Ok(Function::unary_operation(operator, operand))
+                Ok(Function::unary_expression(operator, operand))
             }
             Repr::Expression(ExpressionOwned::Nary { operator, operands }) => {
                 if operands.len() < 2 {
@@ -405,5 +405,14 @@ mod serde_tests {
         };
         assert_eq!(operation.operator(), NaryOperator::Mul);
         assert_eq!(operation.operands().len(), 2);
+    }
+
+    #[test]
+    fn parameterized_unary_operator_json_roundtrip() {
+        let function = Function::zero().powi(-2);
+        let serialized = serde_json::to_string(&function).unwrap();
+        let deserialized = serde_json::from_str::<Function>(&serialized).unwrap();
+
+        assert_eq!(deserialized, function);
     }
 }

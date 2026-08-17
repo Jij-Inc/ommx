@@ -11,28 +11,33 @@ pub enum FunctionEvaluationError {
     NonFiniteOperand { operation: &'static str, value: f64 },
     #[error("{operation} produced a non-finite value")]
     NonFiniteResult { operation: &'static str },
-    #[error("real power is undefined for base {base} and exponent {exponent}")]
-    PowerOutsideRealDomain { base: f64, exponent: f64 },
+    #[error("zero cannot be raised to the negative integer exponent {exponent}")]
+    ZeroToNegativeIntegerPower { exponent: i32 },
 }
 
 /// Operator for a function with one operand.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    serde::Serialize,
-    serde::Deserialize,
-    crate::logical_memory::LogicalMemoryProfile,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 #[serde(rename_all = "snake_case")]
 pub enum UnaryOperator {
     Neg,
     Abs,
     Signum,
+    /// Integer power with the exponent stored as an operation parameter.
+    Powi(i32),
+}
+
+// This data-carrying enum is entirely inline and has no nested allocations, so
+// it is a logical-memory leaf. The derive intentionally supports only
+// fieldless enums; keep this manual dispatch local to the exceptional shape.
+impl crate::logical_memory::LogicalMemoryProfile for UnaryOperator {
+    fn visit_logical_memory<V: crate::logical_memory::LogicalMemoryVisitor>(
+        &self,
+        path: &mut crate::logical_memory::Path,
+        visitor: &mut V,
+    ) {
+        visitor.visit_leaf(path, std::mem::size_of::<Self>());
+    }
 }
 
 /// A validated unary operation.
@@ -118,7 +123,6 @@ impl NaryOperation {
 #[serde(rename_all = "snake_case")]
 pub enum BinaryOperator {
     Div,
-    Pow,
 }
 
 /// A validated ordered binary operation.
@@ -148,6 +152,14 @@ impl BinaryOperation {
 }
 
 impl Function {
+    /// Construct an exact unary expression without algebraic folding.
+    pub(crate) fn unary_expression(operator: UnaryOperator, operand: Function) -> Self {
+        Function::Unary(UnaryOperation {
+            operator,
+            operand: Box::new(operand),
+        })
+    }
+
     /// Construct the exact validated expression shape used at deserialization
     /// boundaries. In particular, do not eagerly expand polynomial products
     /// supplied by an untrusted wire payload.
@@ -171,6 +183,10 @@ impl Function {
     }
 
     pub(crate) fn unary_operation(operator: UnaryOperator, operand: Function) -> Self {
+        if operator == UnaryOperator::Powi(1) {
+            return operand;
+        }
+
         if let Function::Unary(inner) = operand {
             if operator == UnaryOperator::Neg && inner.operator == UnaryOperator::Neg {
                 return *inner.operand;
@@ -188,23 +204,24 @@ impl Function {
 
         if let Some(value) = operand.as_constant() {
             let value = match operator {
-                UnaryOperator::Neg => -value,
-                UnaryOperator::Abs => value.abs(),
-                UnaryOperator::Signum if value < 0.0 => -1.0,
-                UnaryOperator::Signum if value > 0.0 => 1.0,
-                UnaryOperator::Signum => 0.0,
+                UnaryOperator::Neg => Some(-value),
+                UnaryOperator::Abs => Some(value.abs()),
+                UnaryOperator::Signum if value < 0.0 => Some(-1.0),
+                UnaryOperator::Signum if value > 0.0 => Some(1.0),
+                UnaryOperator::Signum => Some(0.0),
+                UnaryOperator::Powi(exponent) if value == 0.0 && exponent < 0 => None,
+                UnaryOperator::Powi(exponent) => Some(value.powi(exponent)),
             };
-            return Function::try_from(value).expect("operations on finite constants stay finite");
+            if let Some(value) = value.filter(|value| value.is_finite()) {
+                return Function::try_from(value).expect("value was checked as finite");
+            }
         }
 
         if operator == UnaryOperator::Neg && operand.is_polynomial() {
             return -operand;
         }
 
-        Function::Unary(UnaryOperation {
-            operator,
-            operand: Box::new(operand),
-        })
+        Function::unary_expression(operator, operand)
     }
 
     pub(crate) fn nary_operation(operator: NaryOperator, operands: Vec<Function>) -> Self {
@@ -284,7 +301,6 @@ impl Function {
             let value = match operator {
                 BinaryOperator::Div if rhs_value != 0.0 => Some(lhs_value / rhs_value),
                 BinaryOperator::Div => None,
-                BinaryOperator::Pow => Some(lhs_value.powf(rhs_value)),
             };
             if let Some(value) = value.filter(|value| value.is_finite()) {
                 return Function::try_from(value).expect("value was checked as finite");
@@ -313,9 +329,14 @@ impl Function {
         Self::nary_operation(NaryOperator::Max, vec![self, rhs])
     }
 
-    /// Raise this function to a function-valued exponent using real-valued semantics.
-    pub fn pow(self, exponent: Self) -> Self {
-        Self::binary_operation(BinaryOperator::Pow, self, exponent)
+    /// Raise this function to an integer power.
+    ///
+    /// The exponent is an operation parameter rather than another [`Function`].
+    /// Apart from identity and constant folding, the resulting expression
+    /// remains composed and therefore has no compact polynomial degree, even
+    /// for non-negative exponents.
+    pub fn powi(self, exponent: i32) -> Self {
+        Self::unary_operation(UnaryOperator::Powi(exponent), self)
     }
 
     pub(crate) fn as_constant(&self) -> Option<f64> {
@@ -453,7 +474,7 @@ mod tests {
     }
 
     #[test]
-    fn division_and_power_report_undefined_real_values() {
+    fn division_and_integer_power_report_undefined_values() {
         let x = Function::from(linear!(1));
         let reciprocal = (Function::one() / x.clone()).unwrap();
         assert_eq!(
@@ -468,25 +489,36 @@ mod tests {
             Some(FunctionEvaluationError::DivisionByZero)
         ));
 
-        let square_root = x.pow(constant(0.5));
+        let square = x.clone().powi(2);
+        assert!(matches!(square, Function::Unary(_)));
+        assert_eq!(square.degree(), None);
+        assert_eq!(square.evaluate(&state(-3.0), ATol::default()).unwrap(), 9.0);
+
+        let inverse_square = x.powi(-2);
         assert_eq!(
-            square_root.evaluate(&state(4.0), ATol::default()).unwrap(),
-            2.0
+            inverse_square
+                .evaluate(&state(2.0), ATol::default())
+                .unwrap(),
+            0.25
         );
-        let error = square_root
-            .evaluate(&state(-1.0), ATol::default())
+        let error = inverse_square
+            .evaluate(&state(0.0), ATol::default())
             .unwrap_err();
         assert!(matches!(
             error.downcast_ref::<FunctionEvaluationError>(),
-            Some(FunctionEvaluationError::PowerOutsideRealDomain { .. })
+            Some(FunctionEvaluationError::ZeroToNegativeIntegerPower { exponent: -2 })
         ));
+
         assert_eq!(
             constant(0.0)
-                .pow(constant(0.0))
+                .powi(0)
                 .evaluate(&crate::v1::State::default(), ATol::default())
                 .unwrap(),
             1.0
         );
+
+        let identity = Function::from(linear!(1)).powi(1);
+        assert!(identity.is_polynomial());
     }
 
     #[test]
@@ -501,9 +533,13 @@ mod tests {
     fn simplification_does_not_remove_a_partial_domain() {
         let x = Function::from(linear!(1));
         let reciprocal = (Function::one() / x).unwrap();
-        let expression = (Function::zero() * reciprocal).unwrap();
+        let expression = (Function::zero() * reciprocal.clone()).unwrap();
         assert!(matches!(expression, Function::Nary(_)));
         assert!(expression.evaluate(&state(0.0), ATol::default()).is_err());
+
+        let zero_power = reciprocal.powi(0);
+        assert!(matches!(zero_power, Function::Unary(_)));
+        assert!(zero_power.evaluate(&state(0.0), ATol::default()).is_err());
     }
 
     #[test]

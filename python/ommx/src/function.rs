@@ -17,8 +17,8 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 /// Function is a unified type that can represent constant, linear, quadratic,
 /// and polynomial functions as well as composed expressions such as absolute
-/// values, minima, divisions, and powers. It is used as the objective function
-/// and constraint functions in optimization problems.
+/// values, minima, divisions, and integer powers. It is used as the objective
+/// function and constraint functions in optimization problems.
 ///
 /// # Examples
 ///
@@ -259,8 +259,7 @@ pyo3_stub_gen::inventory::submit! {
         r#"
         class Function:
             def __iadd__(self, rhs: ToFunction) -> Function: ...
-            def __pow__(self, exponent: ToFunction, modulo: None = None) -> Function: ...
-            def __rpow__(self, base: ToFunction, modulo: None = None) -> Function: ...
+            def __pow__(self, exponent: int, modulo: None = None) -> Function: ...
         "#
     }
 }
@@ -444,34 +443,20 @@ impl Function {
         Ok(Function((lhs.0 / self.0.clone())?))
     }
 
-    /// Exponentiation
-    #[gen_stub(skip)]
-    pub fn __pow__(
-        &self,
-        exponent: Function,
-        modulo: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Function> {
-        if modulo.is_some() {
-            return Err(PyTypeError::new_err(
-                "modular exponentiation is not supported for Function",
-            ));
-        }
-        Ok(Function(self.0.clone().pow(exponent.0)))
+    /// Raise this function to a signed 32-bit integer power.
+    pub fn powi(&self, exponent: i32) -> Function {
+        Function(self.0.clone().powi(exponent))
     }
 
-    /// Reverse exponentiation (base ** self)
+    /// Integer exponentiation
     #[gen_stub(skip)]
-    pub fn __rpow__(
-        &self,
-        base: Function,
-        modulo: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Function> {
+    pub fn __pow__(&self, exponent: i32, modulo: Option<&Bound<'_, PyAny>>) -> PyResult<Function> {
         if modulo.is_some() {
             return Err(PyTypeError::new_err(
                 "modular exponentiation is not supported for Function",
             ));
         }
-        Ok(Function(base.0.pow(self.0.clone())))
+        Ok(self.powi(exponent))
     }
 
     pub fn add_scalar(&self, scalar: f64) -> crate::error::OmmxPyResult<Function> {
@@ -670,9 +655,9 @@ impl Function {
     /// term-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
     ///
     /// **Raises:** `RuntimeError` when an interval crosses an undefined
-    /// division or real-power domain, or when a function-valued exponent is
-    /// not a point interval. Raises `ValueError` if valid bound endpoints
-    /// cannot be constructed after numeric overflow.
+    /// division or contains zero as the base of a negative integer power.
+    /// Raises `ValueError` if valid bound endpoints cannot be constructed after
+    /// numeric overflow.
     ///
     /// # Examples
     ///

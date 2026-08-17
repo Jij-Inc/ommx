@@ -5,7 +5,7 @@ These types represent mathematical expressions in optimization problems:
 - **[`Linear`](crate::Linear)**: Up to degree 1 polynomials (linear terms + constant)
 - **[`Quadratic`](crate::Quadratic)**: Up to degree 2 polynomials (may contain only linear terms, no quadratic terms required)
 - **[`Polynomial`](crate::Polynomial)**: Polynomials of any finite degree
-- **[`Function`](crate::Function)**: Either a compact polynomial or a composed scalar expression such as an absolute value, minimum, division, or real power
+- **[`Function`](crate::Function)**: Either a compact polynomial or a composed scalar expression such as an absolute value, minimum, division, or signed 32-bit integer power
 
 Use the convenience macros [`linear!`](crate::linear), [`quadratic!`](crate::quadratic), [`coeff!`](crate::coeff), and [`monomial!`](crate::monomial) for easy expression building.
 
@@ -33,10 +33,17 @@ assert_eq!(linear_func.degree(), Some(1.into()));
 let quad_func = Function::from(quad_expr);      // Degree 2
 assert_eq!(quad_func.degree(), Some(2.into()));
 
-// A composed Function is not classified by polynomial degree.
-let absolute = linear_func.abs();
+// Composed Functions are not classified by polynomial degree.
+let absolute = linear_func.clone().abs();
 assert_eq!(absolute.degree(), None);
+let squared = linear_func.powi(2);
+assert_eq!(squared.degree(), None);
 # Ok::<(), ommx::CoefficientError>(())
 ```
+
+Apart from identity and constant folding, `Function::powi` preserves an
+explicit integer-power node even for a non-negative exponent. Use explicit
+multiplication when a compact expanded polynomial is required by a
+polynomial-only solver or exporter.
 
 See also [`PolynomialBase`](crate::PolynomialBase) which is a base for [`Linear`](crate::Linear), [`Quadratic`](crate::Quadratic), and [`Polynomial`](crate::Polynomial).

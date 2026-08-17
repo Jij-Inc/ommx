@@ -17,7 +17,7 @@ fn component_function() -> ommx::Function {
 fn composed_component_function() -> ommx::Function {
     let base = component_function();
     let two = ommx::Function::from(ommx::coeff!(2.0));
-    let numerator = base.clone().abs().pow(two.clone()).min(two.clone());
+    let numerator = base.clone().abs().powi(2).min(two.clone());
     let denominator = (base.signum() + two).expect("the fixture addition is finite");
     (numerator / denominator).expect("the fixture division constructs a formal expression")
 }

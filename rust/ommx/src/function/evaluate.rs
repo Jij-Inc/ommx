@@ -108,6 +108,13 @@ impl Evaluate for Function {
                     UnaryOperator::Signum if operand < 0.0 => -1.0,
                     UnaryOperator::Signum if operand > 0.0 => 1.0,
                     UnaryOperator::Signum => 0.0,
+                    UnaryOperator::Powi(exponent) if operand == 0.0 && exponent < 0 => {
+                        return Err(FunctionEvaluationError::ZeroToNegativeIntegerPower {
+                            exponent,
+                        }
+                        .into());
+                    }
+                    UnaryOperator::Powi(exponent) => operand.powi(exponent),
                 };
                 ensure_finite_result("unary operation", value)
             }
@@ -144,16 +151,6 @@ impl Evaluate for Function {
                         return Err(FunctionEvaluationError::DivisionByZero.into());
                     }
                     BinaryOperator::Div => lhs / rhs,
-                    BinaryOperator::Pow
-                        if (lhs == 0.0 && rhs < 0.0) || (lhs < 0.0 && rhs.fract() != 0.0) =>
-                    {
-                        return Err(FunctionEvaluationError::PowerOutsideRealDomain {
-                            base: lhs,
-                            exponent: rhs,
-                        }
-                        .into());
-                    }
-                    BinaryOperator::Pow => lhs.powf(rhs),
                 };
                 ensure_finite_result("binary operation", value)
             }

@@ -11,18 +11,21 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 ### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))
 
 {class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
-なりました。絶対値、符号関数、最小値、最大値、除算、累乗をPythonから直接構築
-できます。
+なりました。絶対値、符号関数、最小値、最大値、除算、符号付き32 bit整数による
+累乗をPythonから直接構築できます。
 
 ```python
 f = abs(x - 2).maximum(y) / (z + 1)
 g = f**2
+h = f.powi(-2)
 ```
 
 名前付きの演算には {meth}`~ommx.Function.signum`、
 {meth}`~ommx.Function.minimum`、{meth}`~ommx.Function.maximum` を使用します。
-ゼロ除算、実数値として定義されない累乗、非有限なevaluation結果は`ValueError`に
-なります。複合式はOMMX protobuf payloadへserializeできます。一方、現在のHiGHS、
+`f**n` と {meth}`~ommx.Function.powi` は同じ演算です。浮動小数や関数値の指数、
+および反転累乗はサポートしません。ゼロ除算、ゼロを負の整数で累乗する演算、
+非有限なevaluation結果は`ValueError`になります。複合式はOMMX protobuf payloadへ
+serializeできます。一方、現在のHiGHS、
 Python-MIP、PySCIPOpt adapterの入力はpolynomialに限られるため、複合式を含むmodelは
 明示的に拒否されます。
 

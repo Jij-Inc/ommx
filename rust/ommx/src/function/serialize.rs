@@ -98,6 +98,21 @@ mod tests {
         })
     }
 
+    fn raw_powi_identity_at_depth(depth: usize) -> v1::Function {
+        (0..depth).fold(
+            v1::Function::from(Function::from(linear!(1))),
+            |operand, _| v1::Function {
+                function: Some(v1::function::Function::Unary(Box::new(
+                    v1::function::UnaryOperation {
+                        operator: v1::function::unary_operation::Operator::Powi as i32,
+                        operand: Some(Box::new(operand)),
+                        integer_exponent: Some(1),
+                    },
+                ))),
+            },
+        )
+    }
+
     #[test]
     fn protobuf_bytes_enforce_expression_depth_boundary() {
         let boundary = function_at_depth(Function::MAX_WIRE_EXPRESSION_DEPTH);
@@ -117,6 +132,17 @@ mod tests {
         // the managed decoder must not admit a Function that its encoder
         // immediately rejects.
         let raw_bytes = v1::Function::from(too_deep).encode_to_vec();
+        let error = Function::from_bytes(&raw_bytes).unwrap_err();
+        assert!(error.downcast_ref::<crate::ParseError>().is_some());
+        assert!(
+            format!("{error:#}").contains("protobuf serialization limit of 32"),
+            "unexpected error: {error:#}",
+        );
+
+        // Identity powers are normalized by the public constructor, but a
+        // wire payload must be depth-checked before any such simplification.
+        let raw_bytes =
+            raw_powi_identity_at_depth(Function::MAX_WIRE_EXPRESSION_DEPTH + 1).encode_to_vec();
         let error = Function::from_bytes(&raw_bytes).unwrap_err();
         assert!(error.downcast_ref::<crate::ParseError>().is_some());
         assert!(

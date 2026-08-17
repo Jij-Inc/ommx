@@ -89,6 +89,9 @@ pub mod function {
         pub operator: i32,
         #[prost(message, optional, boxed, tag = "2")]
         pub operand: ::core::option::Option<::prost::alloc::boxed::Box<super::Function>>,
+        /// Exact signed integer exponent. Present if and only if operator is OPERATOR_POWI.
+        #[prost(sint32, optional, tag = "3")]
+        pub integer_exponent: ::core::option::Option<i32>,
     }
     /// Nested message and enum types in `UnaryOperation`.
     pub mod unary_operation {
@@ -105,6 +108,8 @@ pub mod function {
             Abs = 2,
             /// Sign of the operand: -1 for negative values, 0 for zero, and 1 for positive values.
             Signum = 3,
+            /// Integer exponentiation: `operand^integer_exponent`.
+            Powi = 4,
         }
         impl Operator {
             /// String value of the enum field names used in the ProtoBuf definition.
@@ -117,6 +122,7 @@ pub mod function {
                     Operator::Neg => "OPERATOR_NEG",
                     Operator::Abs => "OPERATOR_ABS",
                     Operator::Signum => "OPERATOR_SIGNUM",
+                    Operator::Powi => "OPERATOR_POWI",
                 }
             }
             /// Creates an enum from field names used in the ProtoBuf definition.
@@ -126,6 +132,7 @@ pub mod function {
                     "OPERATOR_NEG" => Some(Self::Neg),
                     "OPERATOR_ABS" => Some(Self::Abs),
                     "OPERATOR_SIGNUM" => Some(Self::Signum),
+                    "OPERATOR_POWI" => Some(Self::Powi),
                     _ => None,
                 }
             }
@@ -211,9 +218,6 @@ pub mod function {
             Unspecified = 0,
             /// Division: `lhs / rhs`. Evaluation is undefined when rhs is zero.
             Div = 1,
-            /// Real-valued exponentiation with `lhs` as the base and `rhs` as the exponent.
-            /// Evaluation rejects combinations outside the real domain and defines 0^0 as 1.
-            Pow = 2,
         }
         impl Operator {
             /// String value of the enum field names used in the ProtoBuf definition.
@@ -224,7 +228,6 @@ pub mod function {
                 match self {
                     Operator::Unspecified => "OPERATOR_UNSPECIFIED",
                     Operator::Div => "OPERATOR_DIV",
-                    Operator::Pow => "OPERATOR_POW",
                 }
             }
             /// Creates an enum from field names used in the ProtoBuf definition.
@@ -232,7 +235,6 @@ pub mod function {
                 match value {
                     "OPERATOR_UNSPECIFIED" => Some(Self::Unspecified),
                     "OPERATOR_DIV" => Some(Self::Div),
-                    "OPERATOR_POW" => Some(Self::Pow),
                     _ => None,
                 }
             }
@@ -260,7 +262,7 @@ pub mod function {
         /// Ordered n-ary operation such as `min(f(x), g(x), h(x))`.
         #[prost(message, tag = "6")]
         Nary(NaryOperation),
-        /// Ordered binary operation such as `f(x) / g(x)` or `f(x) ^ g(x)`.
+        /// Ordered binary division such as `f(x) / g(x)`.
         #[prost(message, tag = "7")]
         Binary(::prost::alloc::boxed::Box<BinaryOperation>),
     }

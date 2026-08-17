@@ -52,6 +52,12 @@ impl Parse for v1::function::UnaryOperation {
             Ok(v1::function::unary_operation::Operator::Neg) => UnaryOperator::Neg,
             Ok(v1::function::unary_operation::Operator::Abs) => UnaryOperator::Abs,
             Ok(v1::function::unary_operation::Operator::Signum) => UnaryOperator::Signum,
+            Ok(v1::function::unary_operation::Operator::Powi) => {
+                UnaryOperator::Powi(self.integer_exponent.ok_or(RawParseError::MissingField {
+                    message,
+                    field: "integer_exponent",
+                })?)
+            }
             Ok(v1::function::unary_operation::Operator::Unspecified) | Err(_) => {
                 return Err(RawParseError::UnknownEnumValue {
                     enum_name: "ommx.v1.Function.UnaryOperation.Operator",
@@ -60,12 +66,20 @@ impl Parse for v1::function::UnaryOperation {
                 .context(message, "operator"));
             }
         };
+        if !matches!(operator, UnaryOperator::Powi(_)) && self.integer_exponent.is_some() {
+            return Err(RawParseError::InvalidFunction(
+                "integer_exponent is only valid for UnaryOperation POWI".into(),
+            )
+            .context(message, "integer_exponent"));
+        }
         let operand = *self.operand.ok_or(RawParseError::MissingField {
             message,
             field: "operand",
         })?;
         let operand = operand.parse_as(&(), message, "operand")?;
-        Ok(Function::unary_operation(operator, operand))
+        // Preserve the explicit wire tree so normalizations such as Powi(1)
+        // cannot erase nodes before the managed decoder checks its depth.
+        Ok(Function::unary_expression(operator, operand))
     }
 }
 
@@ -114,7 +128,6 @@ impl Parse for v1::function::BinaryOperation {
         let message = "ommx.v1.Function.BinaryOperation";
         let operator = match v1::function::binary_operation::Operator::try_from(self.operator) {
             Ok(v1::function::binary_operation::Operator::Div) => BinaryOperator::Div,
-            Ok(v1::function::binary_operation::Operator::Pow) => BinaryOperator::Pow,
             Ok(v1::function::binary_operation::Operator::Unspecified) | Err(_) => {
                 return Err(RawParseError::UnknownEnumValue {
                     enum_name: "ommx.v1.Function.BinaryOperation.Operator",
@@ -155,15 +168,25 @@ impl From<Function> for v1::Function {
             Function::Polynomial(p) => Polynomial(p.into()),
             Function::Unary(operation) => {
                 let (operator, operand) = operation.into_parts();
+                let (operator, integer_exponent) = match operator {
+                    UnaryOperator::Neg => {
+                        (v1::function::unary_operation::Operator::Neg as i32, None)
+                    }
+                    UnaryOperator::Abs => {
+                        (v1::function::unary_operation::Operator::Abs as i32, None)
+                    }
+                    UnaryOperator::Signum => {
+                        (v1::function::unary_operation::Operator::Signum as i32, None)
+                    }
+                    UnaryOperator::Powi(exponent) => (
+                        v1::function::unary_operation::Operator::Powi as i32,
+                        Some(exponent),
+                    ),
+                };
                 Unary(Box::new(v1::function::UnaryOperation {
-                    operator: match operator {
-                        UnaryOperator::Neg => v1::function::unary_operation::Operator::Neg as i32,
-                        UnaryOperator::Abs => v1::function::unary_operation::Operator::Abs as i32,
-                        UnaryOperator::Signum => {
-                            v1::function::unary_operation::Operator::Signum as i32
-                        }
-                    },
+                    operator,
                     operand: Some(Box::new(operand.into())),
+                    integer_exponent,
                 }))
             }
             Function::Nary(operation) => {
@@ -183,7 +206,6 @@ impl From<Function> for v1::Function {
                 Binary(Box::new(v1::function::BinaryOperation {
                     operator: match operator {
                         BinaryOperator::Div => v1::function::binary_operation::Operator::Div as i32,
-                        BinaryOperator::Pow => v1::function::binary_operation::Operator::Pow as i32,
                     },
                     lhs: Some(Box::new(lhs.into())),
                     rhs: Some(Box::new(rhs.into())),
@@ -222,11 +244,20 @@ mod tests {
     }
 
     fn unary(operator: i32, operand: Option<v1::Function>) -> v1::Function {
+        unary_with_integer_exponent(operator, operand, None)
+    }
+
+    fn unary_with_integer_exponent(
+        operator: i32,
+        operand: Option<v1::Function>,
+        integer_exponent: Option<i32>,
+    ) -> v1::Function {
         v1::Function {
             function: Some(v1::function::Function::Unary(Box::new(
                 v1::function::UnaryOperation {
                     operator,
                     operand: operand.map(Box::new),
+                    integer_exponent,
                 },
             ))),
         }
@@ -310,6 +341,61 @@ mod tests {
     }
 
     #[test]
+    fn powi_exponent_is_exact_and_roundtrips() {
+        let operator = v1::function::unary_operation::Operator::Powi as i32;
+        for exponent in [i32::MIN, -2, 0, 1, 2, i32::MAX] {
+            let parsed = Function::try_from(unary_with_integer_exponent(
+                operator,
+                Some(variable(1)),
+                Some(exponent),
+            ))
+            .unwrap();
+            assert!(matches!(&parsed, Function::Unary(_)));
+            let encoded = v1::Function::from(parsed.clone());
+            let Some(v1::function::Function::Unary(operation)) = encoded.function.as_ref() else {
+                panic!("powi must serialize as a unary operation");
+            };
+            assert_eq!(operation.operator, operator);
+            assert_eq!(operation.integer_exponent, Some(exponent));
+            assert!(Function::try_from(encoded).unwrap() == parsed);
+        }
+    }
+
+    #[test]
+    fn test_parse_rejects_missing_or_unexpected_powi_exponent() {
+        let result = Function::try_from(unary(
+            v1::function::unary_operation::Operator::Powi as i32,
+            Some(variable(1)),
+        ));
+        let err = match result {
+            Ok(_) => panic!("POWI without an integer exponent unexpectedly parsed"),
+            Err(err) => err,
+        };
+        assert!(matches!(
+            err.error,
+            RawParseError::MissingField {
+                message: "ommx.v1.Function.UnaryOperation",
+                field: "integer_exponent"
+            }
+        ));
+
+        let result = Function::try_from(unary_with_integer_exponent(
+            v1::function::unary_operation::Operator::Abs as i32,
+            Some(variable(1)),
+            Some(2),
+        ));
+        let err = match result {
+            Ok(_) => panic!("non-POWI unary operation accepted an integer exponent"),
+            Err(err) => err,
+        };
+        assert!(matches!(
+            err.error,
+            RawParseError::InvalidFunction(ref message)
+                if message.contains("integer_exponent is only valid")
+        ));
+    }
+
+    #[test]
     fn test_parse_rejects_nary_operation_with_fewer_than_two_operands() {
         let operator = v1::function::nary_operation::Operator::Min as i32;
         for operands in [vec![], vec![constant(1.0)]] {
@@ -381,10 +467,10 @@ mod tests {
                         constant(1.0),
                     ],
                 ),
-                binary(
-                    Binary::Pow as i32,
-                    Some(variable(5)),
+                unary_with_integer_exponent(
+                    Unary::Powi as i32,
                     Some(unary(Unary::Abs as i32, Some(variable(6)))),
+                    Some(-3),
                 ),
             ],
         );

@@ -159,6 +159,9 @@ fn render_function_with_symbols(
                 crate::UnaryOperator::Neg => format!("-({operand})"),
                 crate::UnaryOperator::Abs => format!("abs({operand})"),
                 crate::UnaryOperator::Signum => format!("signum({operand})"),
+                crate::UnaryOperator::Powi(exponent) => {
+                    format!("powi({operand}, {exponent})")
+                }
             }
         }
         Function::Nary(operation) => {
@@ -187,7 +190,6 @@ fn render_function_with_symbols(
             let rhs = render_function_with_symbols(operation.rhs(), symbols)?;
             match operation.operator() {
                 crate::BinaryOperator::Div => format!("({lhs}) / ({rhs})"),
-                crate::BinaryOperator::Pow => format!("pow({lhs}, {rhs})"),
             }
         }
         _ => unreachable!("polynomial variants returned above"),
@@ -364,6 +366,9 @@ impl fmt::Display for crate::Function {
                 crate::UnaryOperator::Neg => write!(f, "-({})", operation.operand()),
                 crate::UnaryOperator::Abs => write!(f, "abs({})", operation.operand()),
                 crate::UnaryOperator::Signum => write!(f, "signum({})", operation.operand()),
+                crate::UnaryOperator::Powi(exponent) => {
+                    write!(f, "powi({}, {exponent})", operation.operand())
+                }
             },
             crate::Function::Nary(operation) => {
                 let mut operands = operation.operands().iter();
@@ -400,9 +405,6 @@ impl fmt::Display for crate::Function {
             crate::Function::Binary(operation) => match operation.operator() {
                 crate::BinaryOperator::Div => {
                     write!(f, "({}) / ({})", operation.lhs(), operation.rhs())
-                }
-                crate::BinaryOperator::Pow => {
-                    write!(f, "pow({}, {})", operation.lhs(), operation.rhs())
                 }
             },
         }

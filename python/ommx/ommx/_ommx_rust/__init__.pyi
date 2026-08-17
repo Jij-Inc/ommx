@@ -2544,8 +2544,7 @@ class Function:
     @property
     def type_name(self) -> builtins.str: ...
     def __iadd__(self, rhs: ToFunction) -> Function: ...
-    def __pow__(self, exponent: ToFunction, modulo: None = None) -> Function: ...
-    def __rpow__(self, base: ToFunction, modulo: None = None) -> Function: ...
+    def __pow__(self, exponent: int, modulo: None = None) -> Function: ...
     def __new__(cls, inner: ToFunction) -> Function:
         r"""
         Create a Function from various types.
@@ -2658,6 +2657,10 @@ class Function:
         r"""
         Reverse division (lhs / self)
         """
+    def powi(self, exponent: builtins.int) -> Function:
+        r"""
+        Raise this function to a signed 32-bit integer power.
+        """
     def add_scalar(self, scalar: builtins.float) -> Function: ...
     def add_linear(self, linear: Linear) -> Function: ...
     def add_quadratic(self, quadratic: Quadratic) -> Function: ...
@@ -2708,9 +2711,9 @@ class Function:
         term-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
 
         **Raises:** `RuntimeError` when an interval crosses an undefined
-        division or real-power domain, or when a function-valued exponent is
-        not a point interval. Raises `ValueError` if valid bound endpoints
-        cannot be constructed after numeric overflow.
+        division or contains zero as the base of a negative integer power.
+        Raises `ValueError` if valid bound endpoints cannot be constructed after
+        numeric overflow.
 
         # Examples
 

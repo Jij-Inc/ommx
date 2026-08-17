@@ -247,11 +247,12 @@ def test_function_non_polynomial_operators():
     assert quotient.evaluate({1: 6, 2: 2}) == 2
     assert reverse_quotient.evaluate({1: 2}) == 4
 
-    power = x**y
-    reverse_power = 2**x
-    assert power.type_name == "Binary"
-    assert power.evaluate({1: 3, 2: 2}) == 9
-    assert reverse_power.evaluate({1: 3}) == 8
+    power = x**2
+    method_power = x.powi(3)
+    assert power.type_name == "Unary"
+    assert method_power.type_name == "Unary"
+    assert power.evaluate({1: 3}) == 9
+    assert method_power.evaluate({1: 2}) == 8
     assert pow(x, 2, None).evaluate({1: 3}) == 9
 
     original_id = id(absolute)
@@ -314,19 +315,34 @@ def test_function_power_rejects_modulo():
 
     with pytest.raises(TypeError, match="modular exponentiation is not supported"):
         pow(x, 2, 3)  # pyright: ignore[reportCallIssue, reportArgumentType]
-    with pytest.raises(TypeError, match="modular exponentiation is not supported"):
-        x.__rpow__(2, 3)  # pyright: ignore[reportArgumentType]
 
 
-def test_function_evaluation_reports_undefined_real_domain():
+def test_function_power_requires_signed_32_bit_integer_exponent():
+    x = Function(DecisionVariable.continuous(1))
+
+    with pytest.raises(TypeError):
+        _ = x ** Function(2)  # pyright: ignore[reportOperatorIssue]
+    with pytest.raises(TypeError):
+        _ = x**2.0  # pyright: ignore[reportOperatorIssue]
+    with pytest.raises(TypeError):
+        _ = 2**x  # pyright: ignore[reportOperatorIssue]
+    with pytest.raises(OverflowError):
+        x.powi(2**31)
+
+
+def test_function_evaluation_reports_undefined_integer_power_domain():
     x = Function(DecisionVariable.continuous(1))
     reciprocal = 1 / x
 
     with pytest.raises(ValueError, match="division by zero"):
         reciprocal.evaluate({1: 0})
 
-    with pytest.raises(ValueError, match="real power is undefined"):
-        (x**0.5).evaluate({1: -1})
+    with pytest.raises(ValueError, match="negative integer exponent"):
+        (x**-1).evaluate({1: 0})
+
+    assert (x**0).evaluate({1: 0}) == 1
+    assert (x**2).evaluate({1: -2}) == 4
+    assert (x**3).evaluate({1: -2}) == -8
 
     # Multiplication by zero must not erase the domain of a partial function.
     with pytest.raises(ValueError, match="division by zero"):

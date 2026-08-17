@@ -13,7 +13,7 @@ kernelspec:
 
 # ommx.Function
 
-In mathematical optimization, functions are used to express objective functions and constraints. OMMX stores polynomials compactly and can compose them with scalar operations such as absolute value, minimum, division, and power.
+In mathematical optimization, functions are used to express objective functions and constraints. OMMX stores polynomials compactly and can compose them with scalar operations such as absolute value, minimum, division, and integer power.
 
 | Data Structure | Description |
 | --- | --- |
@@ -94,14 +94,18 @@ minimum = fx.minimum(fy)
 maximum = fx.maximum(fy)
 quotient = fx / (fy + 1)
 power = fx**2
+same_power = fx.powi(2)
 
 print(absolute)
 print(minimum)
 print(quotient)
 print(power)
+print(same_power)
 ```
 
 The built-in Python functions `min(fx, fy)` and `max(fx, fy)` perform comparisons and therefore do not construct expression nodes. Use `fx.minimum(fy)` and `fx.maximum(fy)` instead.
+
+`fx**n` and `fx.powi(n)` are equivalent, and `n` must fit in a signed 32-bit integer. Floating-point or function-valued exponents and reverse exponentiation such as `2**fx` are not supported.
 
 Within a composed expression, operations with several operands are ordered and evaluated from left to right. A same-operator group on the left is flattened, so `(abs(a) + abs(b)) + abs(c)` becomes one ordered three-operand addition. Explicit grouping on the right remains nested, so `abs(a) + (abs(b) + abs(c))` retains that right-hand group. Overflow and undefined-operation errors therefore occur in the represented evaluation order. Arithmetic containing only polynomials continues to normalize to the compact polynomial representation.
 
@@ -109,10 +113,11 @@ Composed functions follow real-valued evaluation semantics:
 
 - `signum(0)` is `0` (including signed zero).
 - Division is undefined when the denominator is zero.
-- Power is undefined outside the real domain, such as a negative base with a non-integer exponent; `0**0` is defined as `1`.
+- Raising zero to a negative integer power is undefined; `0**0` is defined as `1`.
+- Negative bases are supported because every exponent is an integer.
 - Undefined operations and non-finite intermediate results raise `ValueError` in Python.
 
-Division and power can make a `Function` partial. Algebraic simplification preserves that domain: for example, `0 * (1 / fx)` is still undefined where `fx == 0`.
+Division and negative integer powers can make a `Function` partial. Algebraic simplification preserves that domain: for example, `0 * (1 / fx)` is still undefined where `fx == 0`.
 
 ```{code-cell} ipython3
 try:
@@ -121,7 +126,7 @@ except ValueError as e:
     print(f"Error: {e}")
 ```
 
-Polynomial metadata is available only when the `Function` uses the compact polynomial representation. `degree()` and `num_terms()` return `None` for composed expressions, while coefficient properties such as `terms` raise `TypeError`. Solver adapters also reject a composed expression unless their declared input class supports it.
+Polynomial metadata is available only when the `Function` uses the compact polynomial representation. `degree()` and `num_terms()` return `None` for composed expressions, while coefficient properties such as `terms` raise `TypeError`. Apart from identity and constant folding, an integer-power expression remains composed even when its exponent is non-negative; use explicit multiplication when you need a compact expanded polynomial. Solver adapters also reject a composed expression unless their declared input class supports it.
 
 ## Substitution and Partial Evaluation of Decision Variables
 

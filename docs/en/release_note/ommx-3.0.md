@@ -12,16 +12,19 @@ Changes merged after the most recent release will be appended here as they land,
 
 {class}`~ommx.Function` can now represent composed expressions as well as
 compact polynomials. Python users can construct absolute values, sign
-functions, minima, maxima, divisions, and powers directly:
+functions, minima, maxima, divisions, and signed 32-bit integer powers directly:
 
 ```python
 f = abs(x - 2).maximum(y) / (z + 1)
 g = f**2
+h = f.powi(-2)
 ```
 
 Use {meth}`~ommx.Function.signum`, {meth}`~ommx.Function.minimum`, and
-{meth}`~ommx.Function.maximum` for the named operations. Division by zero,
-powers outside the real-valued domain, and non-finite evaluation results raise
+{meth}`~ommx.Function.maximum` for the named operations. `f**n` and
+{meth}`~ommx.Function.powi` are equivalent; floating-point or function-valued
+exponents and reverse exponentiation are not supported. Division by zero, zero
+raised to a negative integer power, and non-finite evaluation results raise
 `ValueError`. Composed expressions are serialized in OMMX protobuf payloads,
 while HiGHS, Python-MIP, and PySCIPOpt reject them explicitly because their
 current adapter inputs remain polynomial-only.

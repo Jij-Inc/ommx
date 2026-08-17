@@ -18,10 +18,14 @@ message Function {
       OPERATOR_ABS = 2;
       // Sign of the operand: -1 for negative values, 0 for zero, and 1 for positive values.
       OPERATOR_SIGNUM = 3;
+      // Integer exponentiation: `operand^integer_exponent`.
+      OPERATOR_POWI = 4;
     }
 
     Operator operator = 1;
     Function operand = 2;
+    // Exact signed integer exponent. Present if and only if operator is OPERATOR_POWI.
+    optional sint32 integer_exponent = 3;
   }
 
   // An ordered n-ary operation applied to two or more operands.
@@ -50,9 +54,6 @@ message Function {
       OPERATOR_UNSPECIFIED = 0;
       // Division: `lhs / rhs`. Evaluation is undefined when rhs is zero.
       OPERATOR_DIV = 1;
-      // Real-valued exponentiation with `lhs` as the base and `rhs` as the exponent.
-      // Evaluation rejects combinations outside the real domain and defines 0^0 as 1.
-      OPERATOR_POW = 2;
     }
 
     Operator operator = 1;
@@ -73,7 +74,7 @@ message Function {
     UnaryOperation unary = 5;
     // Ordered n-ary operation such as `min(f(x), g(x), h(x))`.
     NaryOperation nary = 6;
-    // Ordered binary operation such as `f(x) / g(x)` or `f(x) ^ g(x)`.
+    // Ordered binary division such as `f(x) / g(x)`.
     BinaryOperation binary = 7;
   }
 }

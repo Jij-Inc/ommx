@@ -29,8 +29,9 @@ returns the typed error directly):
 - [`CoefficientError`](crate::CoefficientError), [`BoundError`](crate::BoundError), [`AtolError`](crate::AtolError),
   [`InvalidPenaltyWeight`](crate::InvalidPenaltyWeight) — numeric-domain validation failures.
 - [`FunctionEvaluationError`](crate::FunctionEvaluationError) — identifies
-  undefined division or real-power inputs and non-finite function results, so
-  a caller can change the state or expression before retrying evaluation.
+  undefined division, zero raised to a negative integer power, and non-finite
+  function results, so a caller can change the state or expression before
+  retrying evaluation.
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
