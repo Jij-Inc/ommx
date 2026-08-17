@@ -55,7 +55,7 @@ class OMMXPySCIPOptAdapterError(Exception):
     pass
 ```
 
-OMMXは広いクラスの最適化問題を保存できるようになっているので、バックエンドソルバーが対応していない問題が入力されるケースがあります。その場合はエラーを投げるようにしてください。
+OMMX は広いクラスの最適化問題を保存できるため、Adapter が受け入れる具体的な集合は、後述する `INPUT_CLASS` で宣言します。以下の converter helper は、自身が受け取る表現を検証し、solver input の構築中に error を返すことがあります。この converter または backend の失敗は追加の applicability 条件ではありません。Adapter applicability は `INPUT_CLASS` membership だけで定義されます。
 
 ### 決定変数を設定する
 
@@ -73,7 +73,7 @@ def set_decision_variables(
     モデルに決定変数を追加し、変数名のマッピングを作成して返す
     """
     # OMMXの決定変数の情報からPySCIPOptの変数を作成
-    for var in instance.decision_variables:
+    for var in instance.used_decision_variables:
         if var.kind == DecisionVariable.BINARY:
             model.addVar(name=str(var.id), vtype="B")
         elif var.kind == DecisionVariable.INTEGER:
@@ -263,7 +263,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
         return State(
             entries={
                 var.id: sol[varname_map[str(var.id)]]
-                for var in instance.decision_variables
+                for var in instance.used_decision_variables
             }
         )
     except Exception:
@@ -280,7 +280,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 from typing import ClassVar
 
 class SolverAdapter(ABC):
-    # Adapter applicability の OMMX 定義の構造条件
+    # Adapter applicability を完全に定義する OMMX の条件
     INPUT_CLASS: ClassVar[InstanceClass]
 
     @classmethod
@@ -316,7 +316,9 @@ class SolverAdapter(ABC):
 
 #### 入力 class と推奨 Preparation
 
-Adapter は、受け取れる具体的な `Instance` 値の構造的な集合を `INPUT_CLASS` で宣言します。`check_applicability()` は membership、続いて Adapter 固有の precondition を呼び出し元の instance を変更せずに評価します。いずれかを満たさない場合に同じ構造化 report で例外を送出するには `require_applicable()` を使います。
+Adapter は、受け取れる具体的な `Instance` 値の集合 `INPUT_CLASS` だけで applicability を定義します。`check_applicability()` は呼び出し元の instance を変更せずに membership を report し、`require_applicable()` は membership が満たされない場合だけ同じ構造化 report で例外を送出します。
+
+Applicability は、その後の全ての変換や backend operation の成功を保証するものではありません。`as_linear()` のような helper が扱う、より狭い表現を converter が検証したり、solver input の構築中に backend が数値や実装上の上限を拒否したりすることがあります。これらは converter または backend の error として扱い、Adapter applicability の別の source of truth にしないでください。
 
 Adapter の直接 API は厳格であり、入力を適用可能にするための変換を内部では行いません。代わりに、Adapter は `recommended_preparation_policy()` を override して、その `INPUT_CLASS` 向けの新しい編集可能な {class}`~ommx.PreparationPolicy` を返せます。推奨 Policy は instance を参照・変更せず、Preparation を実行せず、Adapter applicability も保証しません。`INPUT_CLASS` と Policy は {meth}`~ommx.Instance.prepare` に別々の引数として渡します。
 
@@ -329,7 +331,7 @@ Adapter の直接 API は厳格であり、入力を適用可能にするため�
 `Instance` が現在保持する family は {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` で確認できます。選択された Preparation phase は {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` に委譲し、active な family を通常制約へ変換します（indicator/SOS1 は Big-M、one-hot は線形等式）。Validation と数学的な意味は引き続き owner operation が定義します。
 
 ```{important}
-`INPUT_CLASS` は Adapter が受け取る時点の入力値そのものを記述します。Preparation は呼び出し側が所有し、その値を in-place に変更します。Preparation の成功が保証するのは `INPUT_CLASS` membership だけなので、Adapter は通常どおり Adapter 固有の precondition を含む applicability check を行う必要があります。
+`INPUT_CLASS` は Adapter が受け取る時点の入力値そのものを記述し、その membership が applicability の完全な条件です。Preparation は呼び出し側が所有し、その値を in-place に変更します。Preparation の成功は membership を保証します。その後も solver input の構築時に converter 固有または backend 固有の validation が失敗することはありますが、その失敗によって入力が「not applicable」になるわけではありません。
 ```
 
 ここまでで用意した関数を使って次のように実装することができます：
@@ -445,6 +447,8 @@ instance.prepare(input_class, policy)
 OMMXPySCIPOptAdapter.require_applicable(instance)
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
+
+上の明示的な `require_applicable()` は `INPUT_CLASS` membership だけを検査します。`solve()` も厳格な入口で同じ membership を検査し、その後の PySCIPOpt model の構築・求解時には converter または backend の error を返すことがあります。
 
 これでSolver Adapter完成です 🎉
 
@@ -586,7 +590,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
         # QUBOの辞書形式に変換
-        # InstanceがQUBO形式でなければここでエラーになる
+        # Applicability の成立後でも、QUBO 変換はここで失敗し得る。
+        # これは converter error であり、applicability result ではない。
         qubo, _offset = self.ommx_instance.as_qubo_format()
         return sampler.sample_qubo(qubo)
 
@@ -666,13 +671,13 @@ sample_set.summary
 このチュートリアルでは、PySCIPOptと接続するSolver Adapterの実装とOpenJijと接続するSampler Adapterの実装を通して、OMMX Adapterの実装方法について学びました。以下がOMMX Adapterを実装する際の重要なポイントです：
 
 1. OMMX Adapterは `SolverAdapter` または `SamplerAdapter` の抽象基底クラスを継承することで実装します
-2. `INPUT_CLASS` で厳格な構造的入力条件を宣言します。有用な場合は、`recommended_preparation_policy()` から新しい編集可能な Policy を返します。呼び出し側が `Instance.prepare()` で適用した後、Adapter は通常の applicability check を行います
+2. `INPUT_CLASS` で applicability を定義します。`check_applicability()` と `require_applicable()` が report または強制するのは membership だけです。有用な場合は、`recommended_preparation_policy()` から新しい編集可能な Policy を返し、呼び出し側が厳格な Adapter API を呼ぶ前に `Instance.prepare()` で適用します
 3. 実装の主なステップは以下の通りです：
    - `ommx.Instance` をバックエンドソルバーが理解できる形式に変換する
    - バックエンドソルバーを実行して解を取得する
    - バックエンドソルバーの出力を `ommx.Solution` や `ommx.SampleSet` に変換する
-4. 各バックエンドソルバーの特性や制限を理解し、適切に処理する必要があります
-4. IDの管理や変数の対応付けなど、バックエンドソルバーとOMMXの橋渡しに注意を払う必要があります
+4. Converter 固有または backend 固有の validation は solver input の構築経路に置き、その失敗を applicability failure ではなく conversion または backend error として扱います
+5. IDの管理や変数の対応付けなど、バックエンドソルバーとOMMXの橋渡しに注意を払う必要があります
 
 独自のバックエンドソルバーをOMMXと接続したい場合は、このチュートリアルを参考に実装すると良いでしょう。このチュートリアルに従ってOMMX Adapterを実装することで、様々なバックエンドソルバーでの最適化を共通化されたAPIで利用できるようになります。
 

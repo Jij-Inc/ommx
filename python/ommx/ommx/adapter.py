@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import copy
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
-from dataclasses import dataclass, field
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
@@ -53,76 +50,16 @@ class DiagnosticsSink(Protocol):
         """
 
 
-@dataclass(frozen=True, slots=True)
-class ConstraintRef:
-    """Constraint identity qualified by its independently scoped family."""
-
-    family: str
-    id: int
-
-
-PreconditionValue = str | int | float | bool | None
-
-
-@dataclass(frozen=True, slots=True)
-class AdapterPreconditionViolation:
-    """One adapter-owned condition that an OMMX input class cannot express."""
-
-    condition: str
-    description: str
-    variable_ids: frozenset[int] = field(default_factory=frozenset)
-    constraint_refs: frozenset[ConstraintRef] = field(default_factory=frozenset)
-    actual: PreconditionValue = None
-    limit: PreconditionValue = None
-
-
-@dataclass(frozen=True, slots=True)
-class AdapterApplicabilityReport:
-    """Combined input-class and adapter-specific applicability result."""
-
-    adapter: str
-    input_membership: InstanceClassMembershipReport
-    preconditions_checked: bool
-    precondition_violations: tuple[AdapterPreconditionViolation, ...]
-
-    def __post_init__(self) -> None:
-        if self.preconditions_checked != self.input_membership.is_member:
-            raise ValueError(
-                "preconditions_checked must be true exactly when input membership holds"
-            )
-        if not self.preconditions_checked and self.precondition_violations:
-            raise ValueError(
-                "precondition violations require adapter preconditions to be checked"
-            )
-
-    @property
-    def is_applicable(self) -> bool:
-        return (
-            self.input_membership.is_member
-            and self.preconditions_checked
-            and not self.precondition_violations
-        )
-
-    def __str__(self) -> str:
-        if not self.input_membership.is_member:
-            return f"{self.adapter} is not applicable:\n{self.input_membership}"
-        if self.precondition_violations:
-            details = "\n".join(
-                f"- {violation.condition}: {violation.description}"
-                for violation in self.precondition_violations
-            )
-            return f"{self.adapter} preconditions failed:\n{details}"
-        return f"{self.adapter} is applicable"
-
-
 class AdapterNotApplicableError(ValueError):
     """Raised when an instance is not applicable to an adapter."""
 
-    report: AdapterApplicabilityReport
+    adapter: str
+    report: InstanceClassMembershipReport
 
-    def __init__(self, report: AdapterApplicabilityReport):
+    def __init__(self, adapter: str, report: InstanceClassMembershipReport):
+        self.adapter = adapter
         self.report = report
-        super().__init__(str(report))
+        super().__init__(f"{adapter} is not applicable:\n{report}")
 
 
 class SolverAdapter(ABC):
@@ -131,16 +68,12 @@ class SolverAdapter(ABC):
 
     See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
 
-    Concrete subclasses own ``INPUT_CLASS`` and additional applicability
-    preconditions; callers own applying any recommended policy with
-    :meth:`ommx.Instance.prepare`.
+    Concrete subclasses define applicability with ``INPUT_CLASS``; callers own
+    applying any recommended policy with :meth:`ommx.Instance.prepare`.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass]
-    """Required structural condition for an exact Adapter input.
-
-    Membership does not include adapter-owned preconditions.
-    """
+    """Required condition for an exact Adapter input."""
 
     @classmethod
     def recommended_preparation_policy(cls) -> PreparationPolicy:
@@ -152,58 +85,28 @@ class SolverAdapter(ABC):
         return PreparationPolicy()
 
     @classmethod
-    def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
-        """Check ``INPUT_CLASS`` and adapter-owned preconditions without mutation."""
+    def check_applicability(
+        cls, ommx_instance: Instance
+    ) -> InstanceClassMembershipReport:
+        """Check ``INPUT_CLASS`` membership without mutation."""
         input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
         if input_class is None:
             raise TypeError(
                 f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
             )
 
-        input_membership = input_class.check_membership(ommx_instance)
-        adapter = f"{cls.__module__}.{cls.__qualname__}"
-        if not input_membership.is_member:
-            return AdapterApplicabilityReport(
-                adapter=adapter,
-                input_membership=input_membership,
-                preconditions_checked=False,
-                precondition_violations=(),
-            )
-
-        violations = tuple(
-            cls._check_preconditions(copy.copy(ommx_instance), input_membership)
-        )
-        if not all(
-            isinstance(violation, AdapterPreconditionViolation)
-            for violation in violations
-        ):
-            raise TypeError(
-                f"{adapter}._check_preconditions() must return "
-                "AdapterPreconditionViolation values"
-            )
-        return AdapterApplicabilityReport(
-            adapter=adapter,
-            input_membership=input_membership,
-            preconditions_checked=True,
-            precondition_violations=violations,
-        )
+        return input_class.check_membership(ommx_instance)
 
     @classmethod
-    def require_applicable(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
-        """Return the report or raise :class:`AdapterNotApplicableError`."""
+    def require_applicable(
+        cls, ommx_instance: Instance
+    ) -> InstanceClassMembershipReport:
+        """Return the membership report or raise ``AdapterNotApplicableError``."""
         report = cls.check_applicability(ommx_instance)
-        if not report.is_applicable:
-            raise AdapterNotApplicableError(report)
+        if not report.is_member:
+            adapter = f"{cls.__module__}.{cls.__qualname__}"
+            raise AdapterNotApplicableError(adapter, report)
         return report
-
-    @classmethod
-    def _check_preconditions(
-        cls,
-        ommx_instance: Instance,
-        input_membership: InstanceClassMembershipReport,
-    ) -> Iterable[AdapterPreconditionViolation]:
-        """Return adapter-owned violations after input-class membership holds."""
-        return ()
 
     @classmethod
     @abstractmethod

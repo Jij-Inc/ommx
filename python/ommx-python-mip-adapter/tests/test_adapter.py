@@ -51,10 +51,8 @@ def test_input_class_accepts_complete_linear_mip_boundary(sense: Sense) -> None:
 
     report = OMMXPythonMIPAdapter.check_applicability(instance)
 
-    assert report.is_applicable
-    assert report.input_membership.matching_clauses == [(0, "python-mip-linear-mip")]
-    assert report.preconditions_checked
-    assert report.precondition_violations == ()
+    assert report.is_member
+    assert report.matching_clauses == [(0, "python-mip-linear-mip")]
 
 
 def test_error_nonlinear_objective():
@@ -70,7 +68,7 @@ def test_error_nonlinear_objective():
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(ommx_instance)
     assert isinstance(
-        e.value.report.input_membership.clause_reports[0].mismatches[0],
+        e.value.report.clause_reports[0].mismatches[0],
         InstanceClassMismatch.ObjectiveDegreeExceedsBound,
     )
 
@@ -89,7 +87,7 @@ def test_error_nonlinear_constraint():
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(ommx_instance)
     assert isinstance(
-        e.value.report.input_membership.clause_reports[0].mismatches[0],
+        e.value.report.clause_reports[0].mismatches[0],
         InstanceClassMismatch.RegularConstraintDegreeExceedsBound,
     )
 
@@ -117,7 +115,7 @@ def test_rejects_used_unsupported_variable_kinds(
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(instance)
 
-    mismatch = e.value.report.input_membership.clause_reports[0].mismatches[0]
+    mismatch = e.value.report.clause_reports[0].mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.VariableKindNotAllowed)
     assert mismatch.kind == kind
     assert mismatch.variable_ids == {0}
@@ -136,7 +134,7 @@ def test_ignores_unused_unsupported_variable_kind() -> None:
     report = OMMXPythonMIPAdapter.check_applicability(instance)
     adapter = OMMXPythonMIPAdapter(instance)
 
-    assert report.is_applicable
+    assert report.is_member
     assert adapter.instance is instance
     assert [variable.name for variable in adapter.solver_input.vars] == ["0"]
 
@@ -164,7 +162,7 @@ def test_rejects_special_constraints_without_mutating_input() -> None:
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(instance)
 
-    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatches = e.value.report.clause_reports[0].mismatches
     mismatch_types = {type(mismatch) for mismatch in mismatches}
     assert InstanceClassMismatch.IndicatorConstraintsNotAllowed in mismatch_types
     assert InstanceClassMismatch.OneHotConstraintsNotAllowed in mismatch_types
@@ -202,4 +200,4 @@ def test_recommended_preparation_reaches_the_python_mip_input_class() -> None:
 
     assert instance.prepare(input_class, policy) is None
     assert input_class.contains(instance)
-    assert OMMXPythonMIPAdapter.check_applicability(instance).is_applicable
+    assert OMMXPythonMIPAdapter.check_applicability(instance).is_member

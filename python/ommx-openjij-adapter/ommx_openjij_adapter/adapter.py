@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 import copy
 from math import isfinite
 from typing import ClassVar
@@ -15,7 +14,6 @@ from ommx import (
     Instance,
     InstanceClass,
     InstanceClassClause,
-    InstanceClassMembershipReport,
     Kind,
     PreparationPolicy,
     Sense,
@@ -26,11 +24,7 @@ from ommx import (
     SpecialConstraintKind,
     SpecialConstraintPreparation,
 )
-from ommx.adapter import (
-    AdapterPreconditionViolation,
-    DiagnosticsSink,
-    SamplerAdapter,
-)
+from ommx.adapter import DiagnosticsSink, SamplerAdapter
 from opentelemetry import trace
 
 from ._decode import _decode_for_instance, decode_to_samples
@@ -167,69 +161,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         self._qubo = {}
 
     @classmethod
-    def _check_preconditions(
-        cls,
-        ommx_instance: Instance,
-        input_membership: InstanceClassMembershipReport,
-    ) -> Iterable[AdapterPreconditionViolation]:
-        _ = input_membership
-        out_of_range_ids = frozenset(
-            variable.id
-            for variable in ommx_instance.used_decision_variables
-            if variable.id > cls.MAX_OPENJIJ_VARIABLE_ID
-        )
-        if out_of_range_ids:
-            return (
-                AdapterPreconditionViolation(
-                    condition="openjij.variable_id.signed_64_bit",
-                    description=(
-                        "OpenJij/cimod variable labels must fit a signed 64-bit "
-                        f"integer: {sorted(out_of_range_ids)}."
-                    ),
-                    variable_ids=out_of_range_ids,
-                    actual=max(out_of_range_ids),
-                    limit=cls.MAX_OPENJIJ_VARIABLE_ID,
-                ),
-            )
-        try:
-            hubo, _ = ommx_instance.as_hubo_format()
-            if any(len(key) > 2 for key in hubo):
-                interactions = hubo
-            else:
-                interactions, _ = ommx_instance.as_qubo_format()
-        except Exception as error:
-            return (
-                AdapterPreconditionViolation(
-                    condition="openjij.interactions.format",
-                    description=f"OpenJij interaction conversion failed: {error}",
-                    actual=str(error),
-                    limit="valid Binary QUBO or HUBO interactions",
-                ),
-            )
-
-        nonfinite = {
-            key: coefficient
-            for key, coefficient in interactions.items()
-            if not isfinite(coefficient)
-        }
-        if not nonfinite:
-            return ()
-        return (
-            AdapterPreconditionViolation(
-                condition="openjij.interactions.coefficient_finite",
-                description=(
-                    "OpenJij does not reliably reject non-finite interaction "
-                    f"coefficients: {nonfinite}."
-                ),
-                variable_ids=frozenset(
-                    variable_id for key in nonfinite for variable_id in key
-                ),
-                actual=len(nonfinite),
-                limit="all interaction coefficients finite",
-            ),
-        )
-
-    @classmethod
     def sample(
         cls,
         ommx_instance: Instance,
@@ -364,13 +295,43 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             return
 
         with _tracer.start_as_current_span("convert"):
-            hubo, _ = self._solver_instance.as_hubo_format()
-            if any(len(k) > 2 for k in hubo):
-                self._is_hubo = True
-                self._hubo = hubo
-            else:
-                self._is_hubo = False
-                qubo, _ = self._solver_instance.as_qubo_format()
-                self._qubo = qubo
+            out_of_range_ids = sorted(
+                variable.id
+                for variable in self._solver_instance.used_decision_variables
+                if variable.id > self.MAX_OPENJIJ_VARIABLE_ID
+            )
+            if out_of_range_ids:
+                raise ValueError(
+                    "OpenJij/cimod variable labels must fit a signed 64-bit "
+                    f"integer: {out_of_range_ids}."
+                )
 
+            try:
+                hubo, _ = self._solver_instance.as_hubo_format()
+                is_hubo = any(len(key) > 2 for key in hubo)
+                if is_hubo:
+                    interactions = hubo
+                    qubo = {}
+                else:
+                    qubo, _ = self._solver_instance.as_qubo_format()
+                    interactions = qubo
+            except Exception as error:
+                raise ValueError(
+                    f"OpenJij interaction conversion failed: {error}"
+                ) from error
+
+            nonfinite = {
+                key: coefficient
+                for key, coefficient in interactions.items()
+                if not isfinite(coefficient)
+            }
+            if nonfinite:
+                raise ValueError(
+                    "OpenJij does not reliably reject non-finite interaction "
+                    f"coefficients: {nonfinite}."
+                )
+
+            self._is_hubo = is_hubo
+            self._hubo = hubo if is_hubo else {}
+            self._qubo = qubo
             self._sampler_input_prepared = True

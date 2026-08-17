@@ -55,7 +55,7 @@ class OMMXPySCIPOptAdapterError(Exception):
     pass
 ```
 
-OMMX can store a wide range of optimization problems, so there may be cases where the backend solver does not support the problem. In such cases, throw an error.
+OMMX can store a wide range of optimization problems, so the adapter declares the exact set it accepts with `INPUT_CLASS`, as shown later. The converter helpers below may still validate the representation they consume and raise while building solver input. Such converter or backend failures are not additional applicability conditions: adapter applicability is defined only by `INPUT_CLASS` membership.
 
 ### Setting Decision Variables
 
@@ -73,7 +73,7 @@ def set_decision_variables(
     Add decision variables to the model and create a mapping from variable names to variables
     """
     # Create PySCIPOpt variables from OMMX decision variable information
-    for var in instance.decision_variables:
+    for var in instance.used_decision_variables:
         if var.kind == DecisionVariable.BINARY:
             model.addVar(name=str(var.id), vtype="B")
         elif var.kind == DecisionVariable.INTEGER:
@@ -267,7 +267,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
         return State(
             entries={
                 var.id: sol[varname_map[str(var.id)]]
-                for var in instance.decision_variables
+                for var in instance.used_decision_variables
             }
         )
     except Exception:
@@ -284,7 +284,7 @@ Finally, create a class that inherits `ommx.adapter.SolverAdapter` to standardiz
 from typing import ClassVar
 
 class SolverAdapter(ABC):
-    # OMMX-defined structural condition for adapter applicability.
+    # Complete OMMX-defined condition for adapter applicability.
     INPUT_CLASS: ClassVar[InstanceClass]
 
     @classmethod
@@ -320,7 +320,9 @@ The `solve` class method may define additional adapter-specific keyword options 
 
 #### Input Class and Recommended Preparation
 
-An adapter declares the structural set of exact `Instance` values it can receive with `INPUT_CLASS`. `check_applicability()` evaluates membership first and then adapter-owned preconditions without mutating the caller's instance; `require_applicable()` raises with the same structured report when either condition fails.
+An adapter defines applicability entirely with `INPUT_CLASS`, the set of exact `Instance` values it accepts. `check_applicability()` reports membership without mutating the caller's instance, and `require_applicable()` raises with the same structured report only when membership fails.
+
+Applicability does not promise that every later conversion or backend operation succeeds. A converter may validate the narrower representation handled by a helper such as `as_linear()`, and a backend may reject a numeric value or implementation limit while solver input is being built. Report those as converter or backend errors; do not add them as a second source of adapter applicability semantics.
 
 Direct adapter APIs are strict: they do not transform an input to make it applicable. Instead, an adapter may override `recommended_preparation_policy()` to return a fresh, caller-editable {class}`~ommx.PreparationPolicy` for its `INPUT_CLASS`. The recommendation does not inspect or mutate an instance, run preparation, or guarantee applicability. `INPUT_CLASS` and the policy remain independent inputs to {meth}`~ommx.Instance.prepare`.
 
@@ -333,7 +335,7 @@ A recommendation can enable special-constraint lowering with these family select
 Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. The selected Preparation phase delegates to {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`, which converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot). The owner operation still defines its validation and mathematical meaning.
 
 ```{important}
-`INPUT_CLASS` describes the exact value received by the adapter. Preparation is owned by the caller and changes that value in place. Successful preparation guarantees `INPUT_CLASS` membership only; the adapter must still run its normal applicability check for adapter-owned preconditions.
+`INPUT_CLASS` describes the exact value received by the adapter, and membership is the complete applicability condition. Preparation is owned by the caller and changes that value in place. Successful preparation guarantees membership. Building solver input can still fail during converter-local or backend validation, but that failure does not make the input "not applicable."
 ```
 
 Using the functions prepared so far, you can implement it as follows:
@@ -449,6 +451,8 @@ instance.prepare(input_class, policy)
 OMMXPySCIPOptAdapter.require_applicable(instance)
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
+
+The explicit `require_applicable()` call above checks only `INPUT_CLASS` membership. `solve()` checks the same membership at its strict entry point, then may still raise a converter or backend error while constructing or solving the PySCIPOpt model.
 
 This completes the Solver Adapter 🎉
 
@@ -592,7 +596,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
         # Convert to QUBO dictionary format
-        # If the Instance is not in QUBO format, an error will be raised here
+        # QUBO conversion can fail here even after applicability was established.
+        # This is a converter error, not an applicability result.
         qubo, _offset = self.ommx_instance.as_qubo_format()
         return sampler.sample_qubo(qubo)
 
@@ -672,12 +677,12 @@ sample_set.summary
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. Declare the strict structural input condition with `INPUT_CLASS`. If useful, return a fresh caller-editable policy from `recommended_preparation_policy()`; the caller applies it with `Instance.prepare()` before the adapter performs its normal applicability check.
+2. Define applicability with `INPUT_CLASS`. `check_applicability()` and `require_applicable()` report or enforce only membership. If useful, return a fresh caller-editable policy from `recommended_preparation_policy()`; the caller applies it with `Instance.prepare()` before calling the strict adapter API.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.
    - Convert the backend solver's output into `ommx.Solution` or `ommx.SampleSet`.
-4. Understand the characteristics and limitations of each backend solver and handle them appropriately.
+4. Keep converter-local and backend validation in the solver-input construction path, and report its failures as conversion or backend errors rather than applicability failures.
 5. Pay attention to managing IDs and mapping variables to bridge the backend solver and OMMX.
 
 If you want to connect your own backend solver to OMMX, refer to this tutorial for implementation. By implementing an OMMX Adapter following this tutorial, you can use optimization with various backend solvers through a common API.

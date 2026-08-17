@@ -23,10 +23,7 @@ from ommx import (
     SpecialConstraintKind,
 )
 from ommx.adapter import (
-    AdapterApplicabilityReport,
     AdapterNotApplicableError,
-    AdapterPreconditionViolation,
-    ConstraintRef,
     SolverAdapter,
 )
 
@@ -107,8 +104,6 @@ def test_degree_bound_and_clause_declaration() -> None:
     assert declared.indicator_constraint_degree_bounds == {}
     assert declared.allows_one_hot
     assert not declared.allows_sos1
-
-    assert ConstraintRef("regular", 1) != ConstraintRef("indicator", 1)
 
 
 def test_empty_classes_duplicate_labels_and_membership_is_side_effect_free() -> None:
@@ -332,11 +327,6 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
     assert prepared_input_class.contains(instance)
 
 
-def test_solver_adapter_base_owns_no_input_class_or_transformation_hook() -> None:
-    assert "INPUT_CLASS" not in SolverAdapter.__dict__
-    assert "__init__" not in SolverAdapter.__dict__
-
-
 def test_solver_adapter_returns_a_fresh_empty_preparation_recommendation() -> None:
     first = SolverAdapter.recommended_preparation_policy()
     second = SolverAdapter.recommended_preparation_policy()
@@ -349,64 +339,34 @@ def test_solver_adapter_returns_a_fresh_empty_preparation_recommendation() -> No
     assert second.sense is None
 
 
-def test_solver_adapter_layers_preconditions_and_preserves_the_caller() -> None:
+def test_solver_adapter_applicability_is_input_class_membership() -> None:
     x = DecisionVariable.binary(1)
     instance = instance_with_objective(x, x)
     before = instance.to_v2_bytes()
-    violation = AdapterPreconditionViolation(
-        condition="backend_limit",
-        description="backend accepts no variables in this test",
-        variable_ids=frozenset({1}),
-        actual=1,
-        limit=0,
-    )
 
     class Adapter(SolverAdapter):
         INPUT_CLASS = binary_linear_input_class()
-        calls = 0
-
-        @classmethod
-        def _check_preconditions(cls, ommx_instance, input_membership):
-            cls.calls += 1
-            assert input_membership.is_member
-            assert ommx_instance.to_v2_bytes() == before
-            return (violation,)
 
     report = Adapter.check_applicability(instance)
-    assert not report.is_applicable
-    assert report.input_membership.is_member
-    assert report.preconditions_checked
-    assert report.precondition_violations == (violation,)
-    assert report.adapter.endswith(".Adapter")
-    assert Adapter.calls == 1
+    assert isinstance(report, InstanceClassMembershipReport)
+    assert report.is_member
     assert instance.to_v2_bytes() == before
-
-    with pytest.raises(AdapterNotApplicableError) as exc_info:
-        Adapter.require_applicable(instance)
-    assert exc_info.value.report.precondition_violations == (violation,)
+    assert Adapter.require_applicable(instance) == report
 
 
-def test_membership_failure_skips_preconditions_and_invalid_declarations_are_errors() -> (
-    None
-):
+def test_membership_failure_and_invalid_declarations_are_errors() -> None:
     y = DecisionVariable.continuous(1)
     outside_input_class = instance_with_objective(y, y * y)
 
     class Adapter(SolverAdapter):
         INPUT_CLASS = binary_linear_input_class()
-        calls = 0
-
-        @classmethod
-        def _check_preconditions(cls, ommx_instance, input_membership):
-            cls.calls += 1
-            return ()
 
     report = Adapter.check_applicability(outside_input_class)
-    assert not report.is_applicable
-    assert not report.input_membership.is_member
-    assert not report.preconditions_checked
-    assert report.precondition_violations == ()
-    assert Adapter.calls == 0
+    assert not report.is_member
+    with pytest.raises(AdapterNotApplicableError) as exc_info:
+        Adapter.require_applicable(outside_input_class)
+    assert exc_info.value.report == report
+    assert exc_info.value.adapter.endswith(".Adapter")
 
     class MissingDeclaration(SolverAdapter):
         pass
@@ -417,65 +377,3 @@ def test_membership_failure_skips_preconditions_and_invalid_declarations_are_err
     for adapter in (MissingDeclaration, NoneDeclaration):
         with pytest.raises(TypeError, match="must declare INPUT_CLASS"):
             adapter.check_applicability(outside_input_class)
-
-
-def test_applicability_report_rejects_inconsistent_states() -> None:
-    x = DecisionVariable.binary(1)
-    member = binary_linear_input_class().check_membership(instance_with_objective(x, x))
-    y = DecisionVariable.continuous(2)
-    nonmember = binary_linear_input_class().check_membership(
-        instance_with_objective(y, y)
-    )
-    violation = AdapterPreconditionViolation(
-        condition="backend_limit",
-        description="backend limit was exceeded",
-    )
-
-    with pytest.raises(ValueError, match="exactly when input membership holds"):
-        AdapterApplicabilityReport("Adapter", member, False, ())
-    with pytest.raises(ValueError, match="exactly when input membership holds"):
-        AdapterApplicabilityReport("Adapter", nonmember, True, ())
-    with pytest.raises(ValueError, match="require adapter preconditions"):
-        AdapterApplicabilityReport("Adapter", nonmember, False, (violation,))
-
-
-def test_precondition_hook_is_isolated_and_validated() -> None:
-    x = DecisionVariable.binary(1)
-    instance = Instance.from_components(
-        sense=Sense.Minimize,
-        objective=x,
-        decision_variables=[x],
-        constraints={},
-        one_hot_constraints={30: OneHotConstraint(variables=[x])},
-    )
-    before = instance.to_v2_bytes()
-
-    class MutatingHook(SolverAdapter):
-        INPUT_CLASS = binary_linear_input_class(allows_one_hot=True)
-
-        @classmethod
-        def _check_preconditions(
-            cls,
-            ommx_instance: Instance,
-            input_membership: InstanceClassMembershipReport,
-        ) -> tuple[AdapterPreconditionViolation, ...]:
-            ommx_instance.lower_special_constraints({SpecialConstraintKind.OneHot})
-            return ()
-
-    assert MutatingHook.check_applicability(instance).is_applicable
-    assert instance.to_v2_bytes() == before
-    assert set(instance.one_hot_constraints) == {30}
-
-    class InvalidHook(SolverAdapter):
-        INPUT_CLASS = binary_linear_input_class(allows_one_hot=True)
-
-        @classmethod
-        def _check_preconditions(
-            cls,
-            ommx_instance: Instance,
-            input_membership: InstanceClassMembershipReport,
-        ) -> tuple[AdapterPreconditionViolation, ...]:
-            return cast(tuple[AdapterPreconditionViolation, ...], ("not a violation",))
-
-    with pytest.raises(TypeError, match="AdapterPreconditionViolation"):
-        InvalidHook.check_applicability(instance)

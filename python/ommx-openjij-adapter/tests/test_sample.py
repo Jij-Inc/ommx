@@ -162,7 +162,7 @@ def hubo_binary_inequality():
 
 
 def _openjij_input(instance):
-    if not OMMXOpenJijSAAdapter.check_applicability(instance).is_applicable:
+    if not OMMXOpenJijSAAdapter.check_applicability(instance).is_member:
         input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
         policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
         policy.fixed_penalty = (

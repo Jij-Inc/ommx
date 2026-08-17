@@ -52,7 +52,7 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
 
     assert input_class.contains(prepared)
     report = OMMXPySCIPOptAdapter.check_applicability(prepared)
-    assert report.is_applicable
+    assert report.is_member
     adapter = OMMXPySCIPOptAdapter(prepared)
     assert adapter.instance is prepared
 
