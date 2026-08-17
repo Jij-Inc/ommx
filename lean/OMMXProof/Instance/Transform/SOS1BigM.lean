@@ -1,5 +1,4 @@
-import OMMXProof.Instance.Transform.SOS1BigM.Formulation
-import OMMXProof.Instance.Transform.SOS1BigM.CanonicalRows
+import OMMXProof.Instance.Transform.SOS1BigM.SelectorFormulation
 import OMMXProof.Instance.Transform.SOS1BigM.Lowering
 import OMMXProof.Instance.Transform.SOS1BigM.Promotion
 
@@ -10,17 +9,11 @@ This module collects both directions of the SOS1 Big-M formulation:
 
 ## Shared layers
 
-- `SOS1BigM.Formulation` defines the abstract member-indexed semantics: mixed
-  reused/fresh selectors, optional Big-M links, selector cardinality, and the
-  equivalence with SOS1 under valid bounds and binary reused members.
-- `SOS1BigM.CanonicalRows` realizes that semantics in a concrete retained-prefix
-  and fresh-selector-suffix layout. It constructs the canonical link and
-  cardinality rows and proves that satisfying them is equivalent to satisfying
-  `SOS1BigM.Formulation`, assuming selector binary domains.
-
-Thus `Formulation` owns the mathematical meaning, while `CanonicalRows` owns
-its canonical `LinearConstraint` representation. Neither layer chooses a
-transformation direction.
+- `SOS1BigM.SelectorFormulation` defines the direction-independent selector
+  formulation. It owns the abstract mixed reused/fresh selector semantics, the
+  concrete retained-prefix/fresh-selector-suffix layout, and the canonical
+  Big-M link and cardinality rows. It proves both the relation to SOS1 and the
+  equivalence between the generated rows and the abstract semantics.
 
 ## Transformation directions
 
@@ -33,14 +26,13 @@ transformation direction.
 The primary source-to-target interpretations use the shared layers in opposite
 orders, and the reverse feasibility arguments traverse the same bridge backwards:
 
-- Lowering uses `Formulation` to construct canonical selector semantics from
-  SOS1, then uses `CanonicalRows` to realize those semantics as target rows.
-  For the reverse feasibility implication, target rows are interpreted through
-  `CanonicalRows` and then projected to SOS1 through `Formulation`.
-- Promotion uses `CanonicalRows` to recognize and interpret the source row
-  suffix, then uses `Formulation` to project it to the promoted SOS1 constraint.
-  Its canonical decoding argument proceeds from SOS1 through `Formulation` back
-  to the source rows through `CanonicalRows`.
+- Lowering constructs canonical selector semantics from SOS1 and realizes those
+  semantics as target rows. For the reverse feasibility implication, it
+  interprets the target rows and projects the resulting selector semantics to
+  SOS1.
+- Promotion recognizes and interprets the source row suffix, then projects the
+  resulting selector semantics to the promoted SOS1 constraint. Its canonical
+  decoding argument proceeds from SOS1 back to the source rows.
 
 The promotion checker deliberately accepts a conservative sufficient
 condition. Other valid formulations of SOS1 remain outside this Big-M-specific

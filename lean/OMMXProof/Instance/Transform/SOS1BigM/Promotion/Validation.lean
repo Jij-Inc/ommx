@@ -1,4 +1,4 @@
-import OMMXProof.Instance.Transform.SOS1BigM.CanonicalRows
+import OMMXProof.Instance.Transform.SOS1BigM.SelectorFormulation
 import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target
 import Mathlib.Tactic
 

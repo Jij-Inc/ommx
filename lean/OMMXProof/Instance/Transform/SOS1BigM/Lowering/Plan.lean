@@ -1,5 +1,5 @@
 import OMMXProof.Instance
-import OMMXProof.Instance.Transform.SOS1BigM.CanonicalRows
+import OMMXProof.Instance.Transform.SOS1BigM.SelectorFormulation
 import Mathlib.Tactic
 
 /-!

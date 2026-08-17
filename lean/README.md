@@ -63,8 +63,7 @@ completeness of recognition or presolve algorithms remain outside this model.
 | `OMMXProof.Instance.Transform.IndicatorBigM.Target` | Generated linear rows, target Instance construction, and feasibility equivalence |
 | `OMMXProof.Instance.Transform.IndicatorBigM.Basic` | Partial lowering with identity state maps and transformation correctness |
 | `OMMXProof.Instance.Transform.IndicatorBigM` | Entrypoint for the complete Indicator Big-M lowering |
-| `OMMXProof.Instance.Transform.SOS1BigM.Formulation` | Mixed reused/fresh selector formulation and its exact relation to SOS1 semantics |
-| `OMMXProof.Instance.Transform.SOS1BigM.CanonicalRows` | Shared selector layout, canonical Big-M rows, and their exact formulation semantics |
+| `OMMXProof.Instance.Transform.SOS1BigM.SelectorFormulation` | Shared selector semantics and layout, canonical Big-M rows, and their exact relation to SOS1 |
 | `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Plan` | SOS1 selection, reused/fresh member partitioning, and finite-bound validation |
 | `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Target` | Canonical-row instantiation, target Instance construction, and feasibility equivalence |
 | `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Basic` | Partial lowering, canonical encoding, source projection, and transformation correctness |

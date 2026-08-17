@@ -15,8 +15,8 @@ reference fresh selectors.
 
 The implementation follows a one-way dependency through these submodules:
 
-- `SOS1BigM.CanonicalRows` defines the direction-independent selector layout,
-  canonical Big-M rows, and their exact selector-formulation semantics;
+- `SOS1BigM.SelectorFormulation` defines the direction-independent selector
+  semantics, layout, canonical Big-M rows, and their exact relationship;
 - `Promotion.Witness` defines the untrusted retained/fresh suffix layout;
 - `Promotion.Target` projects retained data and constructs the promoted Instance;
 - `Promotion.Validation` checks the supported source rows directly against the

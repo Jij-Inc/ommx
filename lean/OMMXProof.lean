@@ -14,8 +14,6 @@ import OMMXProof.Instance.Transform.IndicatorBigM.Formulation
 import OMMXProof.Instance.Transform.IndicatorBigM.Plan
 import OMMXProof.Instance.Transform.IndicatorBigM.Target
 import OMMXProof.Instance.Transform.SOS1BigM
-import OMMXProof.Instance.Transform.SOS1BigM.CanonicalRows
-import OMMXProof.Instance.Transform.SOS1BigM.Formulation
 import OMMXProof.Instance.Transform.SOS1BigM.Lowering
 import OMMXProof.Instance.Transform.SOS1BigM.Lowering.Basic
 import OMMXProof.Instance.Transform.SOS1BigM.Lowering.Plan
@@ -26,4 +24,5 @@ import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Semantics
 import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target
 import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Validation
 import OMMXProof.Instance.Transform.SOS1BigM.Promotion.Witness
+import OMMXProof.Instance.Transform.SOS1BigM.SelectorFormulation
 import OMMXProof.State
