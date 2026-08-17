@@ -8,6 +8,22 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
+
+`SolverAdapter.check_applicability()` と `require_applicable()` は、完全な
+applicability 条件として `INPUT_CLASS` membership だけを使うようになりました。
+Adapter が所有していた第2の precondition 層は廃止し、
+`AdapterPreconditionViolation`、`ConstraintRef`、`_check_preconditions()`、report の
+`preconditions_checked` と `precondition_violations` field を削除しました。
+
+Adapter 実装は、受け入れる model の条件をすべて `INPUT_CLASS` で表現する必要があります。
+Converter 固有の表現検査や backend の上限検査は solver input の構築経路に残りますが、
+その失敗は `AdapterNotApplicableError` ではなく conversion または backend の error です。
+特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
+行われるようになりました。責務境界の詳細は
+[Adapter Input Class](../user_guide/capability_model.md) と
+[Adapter 実装チュートリアル](../tutorial/implement_adapter.md)を参照してください。
+
 ### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
 
 具体的な `SolverAdapter` / `SamplerAdapter` 実装では、`INPUT_CLASS` を

@@ -8,6 +8,23 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
+
+`SolverAdapter.check_applicability()` and `require_applicable()` now use
+`INPUT_CLASS` membership as the complete applicability condition. The secondary
+adapter-owned precondition layer has been removed, including
+`AdapterPreconditionViolation`, `ConstraintRef`, `_check_preconditions()`, and
+the `preconditions_checked` and `precondition_violations` report fields.
+
+Adapter implementations must express every accepted-model condition in
+`INPUT_CLASS`. Converter-local representation checks and backend limits remain
+in the solver-input construction path; their failures are conversion or backend
+errors rather than `AdapterNotApplicableError`. In particular, OpenJij signed-ID
+and finite-coefficient validation now occurs when sampler input is built. See
+[Adapter input classes](../user_guide/capability_model.md) and the
+[Adapter implementation tutorial](../tutorial/implement_adapter.md) for the
+responsibility boundary.
+
 ### Adapter input classes are required ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
 
 Concrete `SolverAdapter` and `SamplerAdapter` implementations must declare
