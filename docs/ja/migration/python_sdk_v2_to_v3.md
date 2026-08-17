@@ -276,9 +276,11 @@ samples = OMMXOpenJijSAAdapter.sample(source)
 
 `Instance.prepare()` はtarget class membershipへ到達した場合だけreturnし、選択した
 OMMX operationの既存exception typeを使います。instanceをin-placeで変更し、後のerrorが
-起きても先に完了したoperationをglobalにrollbackしません。その後、
-`OMMXOpenJijSAAdapter.require_applicable(source)` で、signed IDとfinite coefficientという
-OpenJij固有の残りのpreconditionを検査できます。
+起きても先に完了したoperationをglobalにrollbackしません。このmembershipがAdapter
+applicabilityの完全な条件であり、`OMMXOpenJijSAAdapter.require_applicable(source)` が
+reportまたは強制するのもmembershipだけです。OpenJijのsolver inputを構築する際には、
+converterがsigned IDの上限とinteraction coefficientの有限性を別途検証します。これらの
+失敗はconversion errorであり、applicability failureではありません。
 
 ## 8. DataFrame accessor
 

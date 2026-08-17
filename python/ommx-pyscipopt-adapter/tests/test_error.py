@@ -66,7 +66,6 @@ def test_input_class_accepts_complete_quadratic_mip_boundary(sense):
     report = OMMXPySCIPOptAdapter.check_applicability(instance)
     assert report.is_applicable
     assert report.input_membership.matching_clauses == [(0, "pyscipopt-quadratic-mip")]
-    assert report.precondition_violations == ()
     OMMXPySCIPOptAdapter(instance)
     assert instance.to_v2_bytes() == before
 

@@ -53,7 +53,6 @@ def test_input_class_accepts_complete_linear_mip_boundary(sense):
     report = OMMXHighsAdapter.check_applicability(instance)
     assert report.is_applicable
     assert report.input_membership.matching_clauses == [(0, "highs-linear-mip")]
-    assert report.precondition_violations == ()
 
 
 def test_error_nonlinear_objective():

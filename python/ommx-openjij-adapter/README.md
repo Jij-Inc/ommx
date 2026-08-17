@@ -32,7 +32,6 @@ policy.fixed_penalty = FixedPenaltyPreparation.uniform_penalty_method_with_fixed
     weight=2.0
 )
 instance.prepare(input_class, policy)
-OMMXOpenJijSAAdapter.require_applicable(instance)
 
 sample_set = OMMXOpenJijSAAdapter.sample(
     instance,
@@ -59,10 +58,12 @@ accepts directly:
 - no active regular or special constraints
 - minimization
 
-`check_applicability()` and the constructor are strict and never transform an
-input. In addition to input-class membership, they check the OpenJij-specific
-requirements that used variable IDs fit a signed 64-bit integer and converted
-interaction coefficients are finite.
+`INPUT_CLASS` membership is the complete Adapter applicability condition.
+`check_applicability()` reports that membership, while `require_applicable()`
+and the constructor reject non-members without transforming the input. When
+solver input is built, the converter separately validates that used variable
+IDs fit a signed 64-bit integer and converted interaction coefficients are
+finite. Those failures are conversion errors, not applicability results.
 
 `recommended_preparation_policy()` returns a fresh editable
 `ommx.PreparationPolicy`. It recommends:
@@ -81,10 +82,12 @@ regular constraints with generated IDs. OMMX validates the weight domain; the
 caller remains responsible for selecting a sufficient magnitude.
 
 `Instance.prepare()` mutates the same `Instance` that is then passed to the
-adapter. Success guarantees membership in `INPUT_CLASS`; the adapter-specific
-preconditions must still be checked normally. Preparation uses the shared OMMX
-owner operations and their existing exception types. It is not globally
-transactional, so changes completed before a later error remain.
+adapter. Success guarantees membership in `INPUT_CLASS`, so no additional
+applicability check is needed. Preparation uses the shared OMMX owner operations
+and their existing exception types. It is not globally transactional, so changes
+completed before a later error remain. Solver-input conversion can still fail on
+OpenJij-specific representation or backend limits; that failure does not change
+the instance's applicability.
 
 The mutated instance remains the evaluation owner for the returned `SampleSet`.
 It retains the dependency and removed-constraint data needed for evaluation;

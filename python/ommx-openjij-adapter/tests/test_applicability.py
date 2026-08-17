@@ -16,7 +16,7 @@ from ommx import (
     Sense,
     Sos1Constraint,
 )
-from ommx.adapter import AdapterNotApplicableError, AdapterPreconditionViolation
+from ommx.adapter import AdapterNotApplicableError
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 
@@ -41,8 +41,6 @@ def _assert_direct_rejection_does_not_mutate(
     report = OMMXOpenJijSAAdapter.check_applicability(instance)
     assert not report.is_applicable
     assert not report.input_membership.is_member
-    assert not report.preconditions_checked
-    assert report.precondition_violations == ()
     assert instance.to_v2_bytes() == before
 
     with pytest.raises(AdapterNotApplicableError) as error:
@@ -82,15 +80,13 @@ def test_direct_accepts_arbitrary_degree_binary_minimization_without_mutation() 
     report = OMMXOpenJijSAAdapter.check_applicability(instance)
     assert report.is_applicable
     assert report.input_membership.matching_clauses == [(0, "openjij-binary-hubo")]
-    assert report.preconditions_checked
-    assert report.precondition_violations == ()
 
     adapter = OMMXOpenJijSAAdapter(instance)
     assert adapter.ommx_instance.to_v2_bytes() == before
     assert instance.to_v2_bytes() == before
 
 
-def test_direct_rejects_nonfinite_aggregated_interactions() -> None:
+def test_sampler_input_rejects_nonfinite_aggregated_interactions() -> None:
     x = DecisionVariable.binary(0)
     maximum = float.fromhex("0x1.fffffffffffffp+1023")
     instance = Instance.from_components(
@@ -102,14 +98,17 @@ def test_direct_rejects_nonfinite_aggregated_interactions() -> None:
 
     report = OMMXOpenJijSAAdapter.check_applicability(instance)
     assert report.input_membership.is_member
-    assert report.preconditions_checked
-    assert not report.is_applicable
-    [violation] = report.precondition_violations
-    assert violation.condition == "openjij.interactions.coefficient_finite"
-    assert violation.variable_ids == frozenset({0})
+    assert report.is_applicable
+
+    adapter = OMMXOpenJijSAAdapter(instance)
+    with pytest.raises(ValueError, match="non-finite interaction coefficients"):
+        _ = adapter.sampler_input
+    assert not adapter._sampler_input_prepared
+    assert adapter._hubo == {}
+    assert adapter._qubo == {}
 
 
-def test_direct_rejects_variable_id_outside_openjij_signed_range() -> None:
+def test_sampler_input_rejects_variable_id_outside_openjij_signed_range() -> None:
     accepted = _instance_with_variable(DecisionVariable.binary(2**63 - 1))
     assert OMMXOpenJijSAAdapter.check_applicability(accepted).is_applicable
 
@@ -118,11 +117,14 @@ def test_direct_rejects_variable_id_outside_openjij_signed_range() -> None:
 
     report = OMMXOpenJijSAAdapter.check_applicability(instance)
     assert report.input_membership.is_member
-    assert not report.is_applicable
-    [violation] = report.precondition_violations
-    assert violation.condition == "openjij.variable_id.signed_64_bit"
-    assert violation.variable_ids == frozenset({variable_id})
-    assert violation.limit == 2**63 - 1
+    assert report.is_applicable
+
+    adapter = OMMXOpenJijSAAdapter(instance)
+    with pytest.raises(ValueError, match="signed 64-bit integer"):
+        _ = adapter.sampler_input
+    assert not adapter._sampler_input_prepared
+    assert adapter._hubo == {}
+    assert adapter._qubo == {}
 
 
 @pytest.mark.parametrize(
@@ -266,7 +268,7 @@ def test_recommended_preparation_reaches_the_openjij_input_class() -> None:
     assert OMMXOpenJijSAAdapter.check_applicability(alias).is_applicable
 
 
-def test_adapter_specific_preconditions_still_follow_preparation() -> None:
+def test_sampler_input_validation_still_follows_preparation() -> None:
     x = DecisionVariable.binary(2**63)
     instance = Instance.from_components(
         decision_variables=[x],
@@ -283,7 +285,8 @@ def test_adapter_specific_preconditions_still_follow_preparation() -> None:
     assert input_class.contains(instance)
 
     report = OMMXOpenJijSAAdapter.check_applicability(instance)
-    assert not report.is_applicable
-    [violation] = report.precondition_violations
-    assert isinstance(violation, AdapterPreconditionViolation)
-    assert violation.condition == "openjij.variable_id.signed_64_bit"
+    assert report.is_applicable
+
+    adapter = OMMXOpenJijSAAdapter(instance)
+    with pytest.raises(ValueError, match="signed 64-bit integer"):
+        _ = adapter.sampler_input

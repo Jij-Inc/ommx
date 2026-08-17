@@ -6,10 +6,10 @@
 //! that set. An [`InstanceClassClause`] is one conjunctive clause in the
 //! representation; an instance class is the finite union of its clauses.
 //!
-//! Membership describes only the input's OMMX-defined structure. It does not
-//! include preparation or lowering, adapter-specific preconditions,
-//! wire-format `ommx.v2.Feature` handling, or whether the adapter returns an
-//! output successfully. If preparation produces another instance to use as
+//! Membership defines whether the exact input is applicable to an adapter. It
+//! does not perform preparation or lowering, handle wire-format
+//! `ommx.v2.Feature` values, or guarantee that later conversion and backend
+//! operations succeed. If preparation produces another instance to use as
 //! input, membership must be checked on that value.
 
 mod instance_facts;
@@ -576,8 +576,8 @@ impl InstanceClassClauseReport {
 /// Side-effect-free [`InstanceClass`] membership report.
 ///
 /// An instance is a member when at least one complete clause contains it.
-/// Adapter identity and adapter-specific preconditions belong to an adapter
-/// applicability report layered on top of this result.
+/// An adapter applicability report associates this membership result with the
+/// adapter identity; it does not add another applicability condition.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceClassMembershipReport {
     clause_reports: Vec<InstanceClassClauseReport>,

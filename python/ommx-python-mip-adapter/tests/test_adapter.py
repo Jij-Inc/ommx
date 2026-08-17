@@ -53,8 +53,6 @@ def test_input_class_accepts_complete_linear_mip_boundary(sense: Sense) -> None:
 
     assert report.is_applicable
     assert report.input_membership.matching_clauses == [(0, "python-mip-linear-mip")]
-    assert report.preconditions_checked
-    assert report.precondition_violations == ()
 
 
 def test_error_nonlinear_objective():

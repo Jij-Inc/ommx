@@ -444,9 +444,11 @@ samples = OMMXOpenJijSAAdapter.sample(source)
 `Instance.prepare()` returns only after target-class membership is reached and
 uses the existing exception types of the selected OMMX operations. It mutates
 the instance in place and does not globally roll back earlier operations after
-a later failure. `OMMXOpenJijSAAdapter.require_applicable(source)` can then
-check the remaining OpenJij-specific signed-ID and finite-coefficient
-preconditions.
+a later failure. That membership is the complete Adapter applicability
+condition; `OMMXOpenJijSAAdapter.require_applicable(source)` only reports or
+enforces it. When OpenJij solver input is built, the converter separately
+validates signed-ID limits and finite interaction coefficients. Those failures
+are conversion errors, not applicability failures.
 
 ```python
 # v2.5.1
