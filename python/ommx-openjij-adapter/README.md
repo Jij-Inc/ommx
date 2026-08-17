@@ -40,30 +40,27 @@ sample_set = OMMXOpenJijSAAdapter.sample(
 print(sample_set.summary)
 ```
 
-The fixed penalty weight is a nonnegative magnitude in the caller-owned
-preparation policy, not an OpenJij backend sampler parameter. The owner
-operation accepts values down to `-atol` and normalizes tolerated negative
-values to zero. The adapter deliberately does not choose a magnitude: zero
+The fixed penalty weight is part of the preparation policy, not an OpenJij
+sampler parameter. The adapter deliberately does not choose a magnitude: zero
 adds no preference for feasibility, while a sufficiently large positive value
 is application-specific and still does not guarantee that every returned
 sample is feasible.
 
-## Input class and preparation recommendation
+## Accepted models and recommended preparation
 
-`OMMXOpenJijSAAdapter.INPUT_CLASS` describes the instances that the adapter
-accepts directly:
+This adapter directly accepts:
 
 - Binary decision variables
 - a polynomial objective of any degree (QUBO or Binary HUBO)
 - no active regular or special constraints
 - minimization
 
-`INPUT_CLASS` membership is the complete Adapter applicability condition.
-`check_applicability()` reports that membership, while `require_applicable()`
-and the constructor reject non-members without transforming the input. When
-solver input is built, the converter separately validates that used variable
-IDs fit a signed 64-bit integer and converted interaction coefficients are
-finite. Those failures are conversion errors, not applicability results.
+For the shared semantics of adapter input classes and preparation, see
+[Adapter Input Classes and Explicit Constraint Lowering](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/capability_model.html).
+
+When building OpenJij sampler input, used variable IDs must fit a signed 64-bit
+integer and converted interaction coefficients must be finite. Violations are
+reported as conversion errors.
 
 `recommended_preparation_policy()` returns a fresh editable
 `ommx.PreparationPolicy`. It recommends:
@@ -81,22 +78,12 @@ are usually the convenient choice when special-constraint lowering creates
 regular constraints with generated IDs. OMMX validates the weight domain; the
 caller remains responsible for selecting a sufficient magnitude.
 
-`Instance.prepare()` mutates the same `Instance` that is then passed to the
-adapter. Success guarantees membership in `INPUT_CLASS`, so no additional
-applicability check is needed. Preparation uses the shared OMMX owner operations
-and their existing exception types. It is not globally transactional, so changes
-completed before a later error remain. Solver-input conversion can still fail on
-OpenJij-specific representation or backend limits; that failure does not change
-the instance's applicability.
+Pass the same prepared `Instance` to the adapter. It remains the evaluation
+owner for the returned `SampleSet` and retains the data needed to restore
+source-variable values and evaluate removed constraints. If an application
+also needs the pre-transformation model, copy it before calling `prepare()`.
 
-The mutated instance remains the evaluation owner for the returned `SampleSet`.
-It retains the dependency and removed-constraint data needed for evaluation;
-there is no separate OpenJij preparation result or source-reconstruction API.
-If an application separately needs the pre-transformation model, it should
-copy that model before calling `prepare()`.
-
-The exact representability and bit-count limits of Integer log encoding belong
-to the OMMX encoding operation, not to the OpenJij input class or an
-`ommx.v2.Feature`. OMMX does not yet implement `Kind::Spin`; direct OpenJij Spin
-input is tracked separately in
+Integer log encoding follows the representability and bit-count limits of the
+OMMX encoding operation. OMMX does not yet implement `Kind::Spin`; direct
+OpenJij Spin input is tracked separately in
 [OMMX issue #1082](https://github.com/Jij-Inc/ommx/issues/1082).
