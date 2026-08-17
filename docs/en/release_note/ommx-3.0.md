@@ -25,9 +25,10 @@ Use {meth}`~ommx.Function.signum`, {meth}`~ommx.Function.minimum`, and
 {meth}`~ommx.Function.powi` are equivalent; floating-point or function-valued
 exponents and reverse exponentiation are not supported. Division by zero, zero
 raised to a negative integer power, and non-finite evaluation results raise
-`ValueError`. Composed expressions are serialized in OMMX protobuf payloads,
-while HiGHS, Python-MIP, and PySCIPOpt reject them explicitly because their
-current adapter inputs remain polynomial-only.
+`ValueError`. Composed expressions are serialized as flat reverse Polish
+notation (RPN) instruction sequences in OMMX protobuf payloads. HiGHS,
+Python-MIP, and PySCIPOpt still reject composed expressions explicitly because
+their current adapter inputs remain polynomial-only.
 
 Because a `Function` is no longer necessarily a polynomial,
 {meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` return

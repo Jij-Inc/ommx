@@ -2702,7 +2702,7 @@ class Function:
         **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
 
         **Tightness:** Polynomial leaves are bounded **term by term**
-        (monomial-wise), and composed expression nodes combine their operand
+        (monomial-wise), and composed expression operations combine their operand
         bounds with interval arithmetic. The result is a **sound
         over-approximation** of the true range $[\inf f, \sup f]$ but is **not
         guaranteed to be tight**, because it ignores dependencies between terms
@@ -3203,18 +3203,16 @@ class Instance:
         r"""
         Deserialize an instance from v1 protobuf bytes.
 
-        Raises {class}`ValueError` if the protobuf payload is malformed,
-        semantically invalid, or contains a function expression beyond the
-        managed wire-depth limit.
+        Raises {class}`ValueError` if the protobuf payload is malformed or
+        semantically invalid.
         """
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> Instance:
         r"""
         Deserialize an instance from v2 protobuf bytes.
 
-        Raises {class}`ValueError` if the protobuf payload is malformed,
-        semantically invalid, or contains a function expression beyond the
-        managed wire-depth limit.
+        Raises {class}`ValueError` if the protobuf payload is malformed or
+        semantically invalid.
         """
     @staticmethod
     def from_components(
@@ -3419,16 +3417,10 @@ class Instance:
     def to_v1_bytes(self) -> bytes:
         r"""
         Serialize this instance as v1 protobuf bytes.
-
-        Raises {class}`RuntimeError` if a recursive function expression exceeds
-        the protobuf-safe serialization depth.
         """
     def to_v2_bytes(self) -> bytes:
         r"""
         Serialize this instance as v2 protobuf bytes.
-
-        Raises {class}`RuntimeError` if a recursive function expression exceeds
-        the protobuf-safe serialization depth.
         """
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...
@@ -5946,32 +5938,24 @@ class ParametricInstance:
         r"""
         Deserialize a parametric instance from v1 protobuf bytes.
 
-        Raises {class}`ValueError` if the protobuf payload is malformed,
-        semantically invalid, or contains a function expression beyond the
-        managed wire-depth limit.
+        Raises {class}`ValueError` if the protobuf payload is malformed or
+        semantically invalid.
         """
     @staticmethod
     def from_v2_bytes(bytes: bytes) -> ParametricInstance:
         r"""
         Deserialize a parametric instance from v2 protobuf bytes.
 
-        Raises {class}`ValueError` if the protobuf payload is malformed,
-        semantically invalid, or contains a function expression beyond the
-        managed wire-depth limit.
+        Raises {class}`ValueError` if the protobuf payload is malformed or
+        semantically invalid.
         """
     def to_v1_bytes(self) -> bytes:
         r"""
         Serialize this parametric instance as v1 protobuf bytes.
-
-        Raises {class}`RuntimeError` if a recursive function expression exceeds
-        the protobuf-safe serialization depth.
         """
     def to_v2_bytes(self) -> bytes:
         r"""
         Serialize this parametric instance as v2 protobuf bytes.
-
-        Raises {class}`RuntimeError` if a recursive function expression exceeds
-        the protobuf-safe serialization depth.
         """
     def __str__(self) -> builtins.str: ...
     def __repr__(self) -> builtins.str: ...

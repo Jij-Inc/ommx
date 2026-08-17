@@ -37,25 +37,8 @@ impl Function {
                 function.partial_evaluate(state, atol)?;
                 Function::Polynomial(function).normalize()
             }
-            Function::Unary(operation) => {
-                let (operator, operand) = operation.into_parts();
-                Function::unary_operation(operator, operand.partially_evaluated(state, atol)?)
-            }
-            Function::Nary(operation) => {
-                let (operator, operands) = operation.into_parts();
-                let operands = operands
-                    .into_iter()
-                    .map(|operand| operand.partially_evaluated(state, atol))
-                    .collect::<crate::Result<Vec<_>>>()?;
-                Function::nary_expression(operator, operands)
-            }
-            Function::Binary(operation) => {
-                let (operator, lhs, rhs) = operation.into_parts();
-                Function::binary_expression(
-                    operator,
-                    lhs.partially_evaluated(state, atol)?,
-                    rhs.partially_evaluated(state, atol)?,
-                )
+            Function::Expression(expression) => {
+                partially_evaluate_expression(expression, state, atol)?
             }
         };
 
@@ -65,6 +48,172 @@ impl Function {
         }
         Ok(result)
     }
+}
+
+fn evaluate_atom(
+    atom: &Atom,
+    solution: &crate::v1::State,
+    atol: crate::ATol,
+) -> crate::Result<f64> {
+    let value = match atom {
+        Atom::Zero => 0.0,
+        Atom::Constant(c) => c.into_inner(),
+        Atom::Linear(f) => f.evaluate(solution, atol)?,
+        Atom::Quadratic(f) => f.evaluate(solution, atol)?,
+        Atom::Polynomial(f) => f.evaluate(solution, atol)?,
+    };
+    ensure_finite_result("polynomial function", value)
+}
+
+fn evaluate_unary(operator: UnaryOperator, operand: f64) -> crate::Result<f64> {
+    let operand = ensure_finite("unary operation operand", operand)?;
+    let value = match operator {
+        UnaryOperator::Neg => -operand,
+        UnaryOperator::Abs => operand.abs(),
+        UnaryOperator::Signum if operand < 0.0 => -1.0,
+        UnaryOperator::Signum if operand > 0.0 => 1.0,
+        UnaryOperator::Signum => 0.0,
+        UnaryOperator::Powi(exponent) if operand == 0.0 && exponent < 0 => {
+            return Err(FunctionEvaluationError::ZeroToNegativeIntegerPower { exponent }.into());
+        }
+        UnaryOperator::Powi(exponent) => operand.powi(exponent),
+    };
+    ensure_finite_result("unary operation", value)
+}
+
+fn evaluate_associative(operator: AssociativeOperator, lhs: f64, rhs: f64) -> crate::Result<f64> {
+    let lhs = ensure_finite("associative operation operand", lhs)?;
+    let rhs = ensure_finite("associative operation operand", rhs)?;
+    let value = match operator {
+        AssociativeOperator::Add => lhs + rhs,
+        AssociativeOperator::Mul => lhs * rhs,
+        AssociativeOperator::Min => lhs.min(rhs),
+        AssociativeOperator::Max => lhs.max(rhs),
+    };
+    ensure_finite_result("associative operation", value)
+}
+
+fn evaluate_binary(operator: BinaryOperator, lhs: f64, rhs: f64) -> crate::Result<f64> {
+    let lhs = ensure_finite("binary operation left operand", lhs)?;
+    let rhs = ensure_finite("binary operation right operand", rhs)?;
+    let value = match operator {
+        BinaryOperator::Div if rhs == 0.0 => {
+            return Err(FunctionEvaluationError::DivisionByZero.into());
+        }
+        BinaryOperator::Div => lhs / rhs,
+    };
+    ensure_finite_result("binary operation", value)
+}
+
+#[derive(Clone, Copy)]
+struct PartialOperand {
+    start: usize,
+    /// A value is present exactly when this operand no longer requires state.
+    value: Option<f64>,
+}
+
+fn replace_partial_operand_with_value(
+    instructions: &mut Vec<Instruction>,
+    start: usize,
+    value: f64,
+) -> PartialOperand {
+    instructions.truncate(start);
+    let constant = Function::try_from(value)
+        .expect("successful Function evaluation always returns a finite value");
+    instructions.extend(constant.into_instructions());
+    PartialOperand {
+        start,
+        value: Some(value),
+    }
+}
+
+fn partially_evaluate_expression(
+    expression: Expression,
+    state: &crate::v1::State,
+    atol: crate::ATol,
+) -> crate::Result<Function> {
+    let mut instructions = Vec::with_capacity(expression.instructions().len());
+    let mut operands = Vec::new();
+
+    for instruction in expression.into_instructions() {
+        match instruction {
+            Instruction::Push(atom) => {
+                let evaluated = atom.into_function().partially_evaluated(state, atol)?;
+                let value = evaluated.as_constant();
+                debug_assert_eq!(value.is_some(), evaluated.required_ids().is_empty());
+                let start = instructions.len();
+                instructions.extend(evaluated.into_instructions());
+                operands.push(PartialOperand { start, value });
+            }
+            Instruction::Unary(operator) => {
+                let operand = operands
+                    .pop()
+                    .expect("validated unary instruction has an operand");
+                if let Some(value) = operand.value {
+                    let value = evaluate_unary(operator, value)?;
+                    operands.push(replace_partial_operand_with_value(
+                        &mut instructions,
+                        operand.start,
+                        value,
+                    ));
+                } else {
+                    instructions.push(Instruction::Unary(operator));
+                    operands.push(PartialOperand {
+                        start: operand.start,
+                        value: None,
+                    });
+                }
+            }
+            Instruction::Associative(operator) => {
+                let rhs = operands
+                    .pop()
+                    .expect("validated associative instruction has a right operand");
+                let lhs = operands
+                    .pop()
+                    .expect("validated associative instruction has a left operand");
+                if let (Some(lhs_value), Some(rhs_value)) = (lhs.value, rhs.value) {
+                    let value = evaluate_associative(operator, lhs_value, rhs_value)?;
+                    operands.push(replace_partial_operand_with_value(
+                        &mut instructions,
+                        lhs.start,
+                        value,
+                    ));
+                } else {
+                    instructions.push(Instruction::Associative(operator));
+                    operands.push(PartialOperand {
+                        start: lhs.start,
+                        value: None,
+                    });
+                }
+            }
+            Instruction::Binary(operator) => {
+                let rhs = operands
+                    .pop()
+                    .expect("validated binary instruction has a right operand");
+                let lhs = operands
+                    .pop()
+                    .expect("validated binary instruction has a left operand");
+                if let (Some(lhs_value), Some(rhs_value)) = (lhs.value, rhs.value) {
+                    let value = evaluate_binary(operator, lhs_value, rhs_value)?;
+                    operands.push(replace_partial_operand_with_value(
+                        &mut instructions,
+                        lhs.start,
+                        value,
+                    ));
+                } else {
+                    instructions.push(Instruction::Binary(operator));
+                    operands.push(PartialOperand {
+                        start: lhs.start,
+                        value: None,
+                    });
+                }
+            }
+        }
+    }
+
+    debug_assert_eq!(operands.len(), 1);
+    Ok(Function::from_instructions_exact(instructions)
+        .expect("folding closed operands preserves expression validity"))
 }
 
 impl Evaluate for Function {
@@ -97,62 +246,42 @@ impl Evaluate for Function {
             Function::Polynomial(f) => {
                 ensure_finite_result("polynomial function", f.evaluate(solution, atol)?)
             }
-            Function::Unary(operation) => {
-                let operand = ensure_finite(
-                    "unary operation operand",
-                    operation.operand().evaluate(solution, atol)?,
-                )?;
-                let value = match operation.operator() {
-                    UnaryOperator::Neg => -operand,
-                    UnaryOperator::Abs => operand.abs(),
-                    UnaryOperator::Signum if operand < 0.0 => -1.0,
-                    UnaryOperator::Signum if operand > 0.0 => 1.0,
-                    UnaryOperator::Signum => 0.0,
-                    UnaryOperator::Powi(exponent) if operand == 0.0 && exponent < 0 => {
-                        return Err(FunctionEvaluationError::ZeroToNegativeIntegerPower {
-                            exponent,
+            Function::Expression(expression) => {
+                let mut values = Vec::new();
+                for instruction in expression.instructions() {
+                    match instruction {
+                        Instruction::Push(atom) => {
+                            values.push(evaluate_atom(atom, solution, atol)?)
                         }
-                        .into());
+                        Instruction::Unary(operator) => {
+                            let operand = values
+                                .pop()
+                                .expect("validated unary instruction has an operand");
+                            values.push(evaluate_unary(*operator, operand)?);
+                        }
+                        Instruction::Associative(operator) => {
+                            let rhs = values
+                                .pop()
+                                .expect("validated associative instruction has a right operand");
+                            let lhs = values
+                                .pop()
+                                .expect("validated associative instruction has a left operand");
+                            values.push(evaluate_associative(*operator, lhs, rhs)?);
+                        }
+                        Instruction::Binary(operator) => {
+                            let rhs = values
+                                .pop()
+                                .expect("validated binary instruction has a right operand");
+                            let lhs = values
+                                .pop()
+                                .expect("validated binary instruction has a left operand");
+                            values.push(evaluate_binary(*operator, lhs, rhs)?);
+                        }
                     }
-                    UnaryOperator::Powi(exponent) => operand.powi(exponent),
-                };
-                ensure_finite_result("unary operation", value)
-            }
-            Function::Nary(operation) => {
-                let mut values = operation.operands().iter().map(|operand| {
-                    ensure_finite("nary operation operand", operand.evaluate(solution, atol)?)
-                });
-                let first = values
-                    .next()
-                    .expect("nary operation always has at least two operands")?;
-                let value = values.try_fold(first, |acc, value| {
-                    let value = value?;
-                    let result = match operation.operator() {
-                        NaryOperator::Add => acc + value,
-                        NaryOperator::Mul => acc * value,
-                        NaryOperator::Min => acc.min(value),
-                        NaryOperator::Max => acc.max(value),
-                    };
-                    ensure_finite_result("nary operation", result)
-                })?;
-                Ok(value)
-            }
-            Function::Binary(operation) => {
-                let lhs = ensure_finite(
-                    "binary operation left operand",
-                    operation.lhs().evaluate(solution, atol)?,
-                )?;
-                let rhs = ensure_finite(
-                    "binary operation right operand",
-                    operation.rhs().evaluate(solution, atol)?,
-                )?;
-                let value = match operation.operator() {
-                    BinaryOperator::Div if rhs == 0.0 => {
-                        return Err(FunctionEvaluationError::DivisionByZero.into());
-                    }
-                    BinaryOperator::Div => lhs / rhs,
-                };
-                ensure_finite_result("binary operation", value)
+                }
+                Ok(values
+                    .pop()
+                    .expect("validated expression leaves one result"))
             }
         }
     }
@@ -172,17 +301,19 @@ impl Evaluate for Function {
             Function::Linear(f) => f.required_ids(),
             Function::Quadratic(f) => f.required_ids(),
             Function::Polynomial(f) => f.required_ids(),
-            Function::Unary(operation) => operation.operand().required_ids(),
-            Function::Nary(operation) => {
+            Function::Expression(expression) => {
                 let mut ids = VariableIDSet::default();
-                for operand in operation.operands() {
-                    ids.extend(operand.required_ids());
+                for instruction in expression.instructions() {
+                    let Instruction::Push(atom) = instruction else {
+                        continue;
+                    };
+                    match atom {
+                        Atom::Linear(f) => ids.extend(f.required_ids()),
+                        Atom::Quadratic(f) => ids.extend(f.required_ids()),
+                        Atom::Polynomial(f) => ids.extend(f.required_ids()),
+                        Atom::Zero | Atom::Constant(_) => {}
+                    }
                 }
-                ids
-            }
-            Function::Binary(operation) => {
-                let mut ids = operation.lhs().required_ids();
-                ids.extend(operation.rhs().required_ids());
                 ids
             }
             Function::Zero | Function::Constant(_) => VariableIDSet::default(),
@@ -203,9 +334,7 @@ impl Evaluate for Function {
             Function::Linear(_)
             | Function::Quadratic(_)
             | Function::Polynomial(_)
-            | Function::Unary(_)
-            | Function::Nary(_)
-            | Function::Binary(_) => samples.try_map_ref(|state| self.evaluate(state, atol)),
+            | Function::Expression(_) => samples.try_map_ref(|state| self.evaluate(state, atol)),
         }
     }
 }
@@ -287,5 +416,105 @@ mod tests {
             .downcast_ref::<crate::MissingStateEntries>()
             .expect("missing state entries must remain a typed signal");
         assert_eq!(missing.ids, crate::variable_ids!(1, 2));
+    }
+
+    #[test]
+    fn deep_expression_evaluation_and_partial_evaluation_are_iterative() {
+        let mut function = Function::from(linear!(1));
+        for _ in 0..4096 {
+            function = function.powi(2);
+        }
+
+        let state = crate::v1::State::from_iter([(1, 1.0)]);
+        assert_eq!(
+            function.evaluate(&state, crate::ATol::default()).unwrap(),
+            1.0
+        );
+
+        function
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+        assert_eq!(function.as_constant(), Some(1.0));
+    }
+
+    #[test]
+    fn partial_evaluation_reports_a_closed_domain_error_before_later_open_operand() {
+        let reciprocal =
+            (Function::one() / Function::from(linear!(1))).expect("division is representable");
+        let mut function =
+            (reciprocal + Function::from(linear!(2))).expect("addition is representable");
+
+        let error = function
+            .partial_evaluate(
+                &crate::v1::State::from_iter([(1, 0.0)]),
+                crate::ATol::default(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<FunctionEvaluationError>(),
+            Some(FunctionEvaluationError::DivisionByZero)
+        ));
+    }
+
+    #[test]
+    fn partial_evaluation_reports_an_earlier_operation_error_before_later_push_error() {
+        let overflowing_operation = Function::associative_expression(
+            AssociativeOperator::Mul,
+            Function::from(coeff!(f64::MAX)),
+            Function::from(linear!(1)),
+        );
+        let later_overflowing_push = Function::from((coeff!(f64::MAX) * linear!(2)).unwrap());
+        let mut function = Function::associative_expression(
+            AssociativeOperator::Add,
+            overflowing_operation,
+            later_overflowing_push,
+        );
+
+        let error = function
+            .partial_evaluate(
+                &crate::v1::State::from_iter([(1, 2.0), (2, 2.0)]),
+                crate::ATol::default(),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<FunctionEvaluationError>(),
+            Some(FunctionEvaluationError::NonFiniteResult { .. })
+        ));
+    }
+
+    #[test]
+    fn associative_instructions_preserve_grouping() {
+        let large = Function::try_from(1e16).unwrap();
+        let negative_large = Function::try_from(-1e16).unwrap();
+        let one = Function::one();
+
+        let left_grouped = Function::associative_expression(
+            AssociativeOperator::Add,
+            Function::associative_expression(
+                AssociativeOperator::Add,
+                large.clone(),
+                negative_large.clone(),
+            ),
+            one.clone(),
+        );
+        let right_grouped = Function::associative_expression(
+            AssociativeOperator::Add,
+            large,
+            Function::associative_expression(AssociativeOperator::Add, negative_large, one),
+        );
+
+        let state = crate::v1::State::default();
+        assert_eq!(
+            left_grouped
+                .evaluate(&state, crate::ATol::default())
+                .unwrap(),
+            1.0
+        );
+        assert_eq!(
+            right_grouped
+                .evaluate(&state, crate::ATol::default())
+                .unwrap(),
+            0.0
+        );
     }
 }

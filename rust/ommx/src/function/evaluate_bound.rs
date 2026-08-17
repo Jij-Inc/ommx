@@ -321,71 +321,219 @@ fn maximum_finite_absolute_value(bound: Bound) -> f64 {
     finite_abs(bound.lower()).max(finite_abs(bound.upper()))
 }
 
-impl Function {
-    /// Conservatively determine whether floating-point evaluation can produce
-    /// zero for some state in `bounds`.
-    ///
-    /// This is stricter than asking whether the interval enclosure contains
-    /// zero. For example, `1 / x` over `x in [1, +inf)` approaches zero, so its
-    /// closed enclosure starts at zero, but no finite binary64 input in that
-    /// range makes the quotient zero. Preserving that distinction prevents a
-    /// surrounding division from reporting a false domain error.
-    fn may_evaluate_to_zero(&self, bounds: &Bounds) -> crate::Result<bool> {
-        match self {
-            Function::Zero => Ok(true),
-            Function::Constant(value) => Ok(value.into_inner() == 0.0),
-            Function::Unary(operation) => match operation.operator() {
-                UnaryOperator::Powi(0) => {
-                    // The operand is still evaluated by the strict expression
-                    // semantics, but every defined result is one.
-                    operation.operand().evaluate_bound(bounds)?;
-                    Ok(false)
-                }
-                UnaryOperator::Powi(exponent) => {
-                    let operand = operation.operand().evaluate_bound(bounds)?;
-                    let operand_may_be_zero = operation.operand().may_evaluate_to_zero(bounds)?;
-                    if exponent < 0 && operand_may_be_zero {
-                        anyhow::bail!(
-                            "cannot bound a negative power when the base interval contains zero"
-                        )
-                    }
-                    if operand_may_be_zero {
-                        return Ok(true);
-                    }
-                    let value = if exponent < 0 {
-                        maximum_finite_absolute_value(operand)
-                    } else {
-                        minimum_absolute_value(operand)
-                    };
-                    Ok(value.powi(exponent) == 0.0)
-                }
-                UnaryOperator::Neg | UnaryOperator::Abs | UnaryOperator::Signum => {
-                    operation.operand().may_evaluate_to_zero(bounds)
-                }
-            },
-            Function::Binary(operation) if operation.operator() == BinaryOperator::Div => {
-                let lhs = operation.lhs().evaluate_bound(bounds)?;
-                let rhs = operation.rhs().evaluate_bound(bounds)?;
-                if operation.rhs().may_evaluate_to_zero(bounds)? {
-                    anyhow::bail!("cannot bound division when the denominator contains zero")
-                }
-                if operation.lhs().may_evaluate_to_zero(bounds)? {
-                    return Ok(true);
-                }
+#[derive(Clone, Copy)]
+struct BoundAnalysis {
+    bound: Bound,
+    /// Whether a finite binary64 evaluation can equal zero. This is stricter
+    /// than checking whether the closed interval enclosure contains zero.
+    may_evaluate_to_zero: bool,
+}
 
-                // Division of nonzero operands can still round to zero. Test
-                // the smallest possible numerator against the largest finite
-                // denominator admitted by an unbounded endpoint.
-                Ok(minimum_absolute_value(lhs) / maximum_finite_absolute_value(rhs) == 0.0)
+fn evaluate_polynomial_terms_bound<'a, M: crate::Monomial>(
+    terms: impl Iterator<Item = (&'a M, &'a Coefficient)>,
+    bounds: &Bounds,
+) -> crate::Result<Bound> {
+    let mut bound = Bound::zero();
+    for (ids, coefficient) in terms {
+        let ids: MonomialDyn = ids.clone().into();
+        let value = coefficient.into_inner();
+        if ids.is_empty() {
+            bound = add_bounds(bound, Bound::new(value, value)?)?;
+            continue;
+        }
+        let mut cur = Bound::new(1.0, 1.0)?;
+        // Match PolynomialBase::evaluate's left-to-right repeated-ID fold.
+        // The per-variable power still preserves correlation (for example,
+        // an even power across zero has lower bound zero), unlike naively
+        // multiplying the same interval by itself.
+        for (id, exponent) in ids.chunks() {
+            let variable_bound = bounds.get(&id).cloned().unwrap_or_default();
+            let exponent = u64::try_from(exponent).map_err(|_| {
+                anyhow::anyhow!("monomial exponent is outside the supported integer range")
+            })?;
+            cur = mul_bounds(
+                cur,
+                left_fold_positive_integer_power_bound(variable_bound, exponent)?,
+            )?;
+        }
+        let coefficient = Bound::new(value, value)?;
+        bound = add_bounds(bound, mul_bounds(coefficient, cur)?)?;
+    }
+    Ok(bound)
+}
+
+fn analyze_polynomial_bound(bound: Bound) -> BoundAnalysis {
+    BoundAnalysis {
+        bound,
+        may_evaluate_to_zero: bound_contains_zero(bound),
+    }
+}
+
+fn analyze_atom(atom: &Atom, bounds: &Bounds) -> crate::Result<BoundAnalysis> {
+    match atom {
+        Atom::Zero => Ok(BoundAnalysis {
+            bound: Bound::zero(),
+            may_evaluate_to_zero: true,
+        }),
+        Atom::Constant(value) => {
+            let value = value.into_inner();
+            Ok(BoundAnalysis {
+                bound: Bound::new(value, value)?,
+                may_evaluate_to_zero: value == 0.0,
+            })
+        }
+        Atom::Linear(function) => Ok(analyze_polynomial_bound(evaluate_polynomial_terms_bound(
+            function.iter(),
+            bounds,
+        )?)),
+        Atom::Quadratic(function) => Ok(analyze_polynomial_bound(evaluate_polynomial_terms_bound(
+            function.iter(),
+            bounds,
+        )?)),
+        Atom::Polynomial(function) => Ok(analyze_polynomial_bound(
+            evaluate_polynomial_terms_bound(function.iter(), bounds)?,
+        )),
+    }
+}
+
+fn analyze_unary_bound(
+    operator: UnaryOperator,
+    operand: BoundAnalysis,
+) -> crate::Result<BoundAnalysis> {
+    let bound = match operator {
+        UnaryOperator::Neg => Bound::new(-operand.bound.upper(), -operand.bound.lower())?,
+        UnaryOperator::Abs if operand.bound.lower() >= 0.0 => operand.bound,
+        UnaryOperator::Abs if operand.bound.upper() <= 0.0 => {
+            Bound::new(-operand.bound.upper(), -operand.bound.lower())?
+        }
+        UnaryOperator::Abs => Bound::new(
+            0.0,
+            operand.bound.lower().abs().max(operand.bound.upper().abs()),
+        )?,
+        UnaryOperator::Signum => {
+            let sign = |value: f64| {
+                if value < 0.0 {
+                    -1.0
+                } else if value > 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            };
+            Bound::new(sign(operand.bound.lower()), sign(operand.bound.upper()))?
+        }
+        UnaryOperator::Powi(exponent) => {
+            integer_power_bound(operand.bound, exponent, operand.may_evaluate_to_zero)?
+        }
+    };
+
+    let may_evaluate_to_zero = match operator {
+        UnaryOperator::Powi(0) => false,
+        UnaryOperator::Powi(_) if operand.may_evaluate_to_zero => true,
+        UnaryOperator::Powi(exponent) => {
+            let value = if exponent < 0 {
+                maximum_finite_absolute_value(operand.bound)
+            } else {
+                minimum_absolute_value(operand.bound)
+            };
+            value.powi(exponent) == 0.0
+        }
+        UnaryOperator::Neg | UnaryOperator::Abs | UnaryOperator::Signum => {
+            operand.may_evaluate_to_zero
+        }
+    };
+    Ok(BoundAnalysis {
+        bound,
+        may_evaluate_to_zero,
+    })
+}
+
+fn analyze_associative_bound(
+    operator: AssociativeOperator,
+    lhs: BoundAnalysis,
+    rhs: BoundAnalysis,
+) -> crate::Result<BoundAnalysis> {
+    let bound = match operator {
+        AssociativeOperator::Add => add_bounds(lhs.bound, rhs.bound)?,
+        AssociativeOperator::Mul => mul_bounds(lhs.bound, rhs.bound)?,
+        AssociativeOperator::Min => Bound::new(
+            lhs.bound.lower().min(rhs.bound.lower()),
+            lhs.bound.upper().min(rhs.bound.upper()),
+        )?,
+        AssociativeOperator::Max => Bound::new(
+            lhs.bound.lower().max(rhs.bound.lower()),
+            lhs.bound.upper().max(rhs.bound.upper()),
+        )?,
+    };
+    Ok(BoundAnalysis {
+        bound,
+        // This conservatively tracks whether either binary operand may be zero.
+        may_evaluate_to_zero: bound_contains_zero(bound),
+    })
+}
+
+fn analyze_binary_bound(
+    operator: BinaryOperator,
+    lhs: BoundAnalysis,
+    rhs: BoundAnalysis,
+) -> crate::Result<BoundAnalysis> {
+    match operator {
+        BinaryOperator::Div => {
+            if rhs.may_evaluate_to_zero {
+                anyhow::bail!("cannot bound division when the denominator contains zero")
             }
-            Function::Linear(_)
-            | Function::Quadratic(_)
-            | Function::Polynomial(_)
-            | Function::Nary(_)
-            | Function::Binary(_) => Ok(bound_contains_zero(self.evaluate_bound(bounds)?)),
+            let bound = div_bounds(lhs.bound, rhs.bound)?;
+            let may_evaluate_to_zero = lhs.may_evaluate_to_zero
+                || minimum_absolute_value(lhs.bound) / maximum_finite_absolute_value(rhs.bound)
+                    == 0.0;
+            Ok(BoundAnalysis {
+                bound,
+                may_evaluate_to_zero,
+            })
         }
     }
+}
 
+fn analyze_expression_bound(
+    expression: &Expression,
+    bounds: &Bounds,
+) -> crate::Result<BoundAnalysis> {
+    let mut values = Vec::new();
+    for instruction in expression.instructions() {
+        match instruction {
+            Instruction::Push(atom) => values.push(analyze_atom(atom, bounds)?),
+            Instruction::Unary(operator) => {
+                let operand = values
+                    .pop()
+                    .expect("validated unary instruction has an operand");
+                values.push(analyze_unary_bound(*operator, operand)?);
+            }
+            Instruction::Associative(operator) => {
+                let rhs = values
+                    .pop()
+                    .expect("validated associative instruction has a right operand");
+                let lhs = values
+                    .pop()
+                    .expect("validated associative instruction has a left operand");
+                values.push(analyze_associative_bound(*operator, lhs, rhs)?);
+            }
+            Instruction::Binary(operator) => {
+                let rhs = values
+                    .pop()
+                    .expect("validated binary instruction has a right operand");
+                let lhs = values
+                    .pop()
+                    .expect("validated binary instruction has a left operand");
+                values.push(analyze_binary_bound(*operator, lhs, rhs)?);
+            }
+        }
+    }
+    Ok(values
+        .pop()
+        .expect("validated expression leaves one result"))
+}
+
+impl Function {
     #[cfg_attr(doc, katexit::katexit)]
     /// Compute an interval bound of this function given variable bounds.
     ///
@@ -409,100 +557,30 @@ impl Function {
     /// negative-integer-power domain, or when finite interval endpoints cannot
     /// be represented.
     pub fn evaluate_bound(&self, bounds: &Bounds) -> crate::Result<Bound> {
-        if let Function::Unary(operation) = self {
-            let operand = operation.operand().evaluate_bound(bounds)?;
-            return match operation.operator() {
-                UnaryOperator::Neg => Ok(Bound::new(-operand.upper(), -operand.lower())?),
-                UnaryOperator::Abs if operand.lower() >= 0.0 => Ok(operand),
-                UnaryOperator::Abs if operand.upper() <= 0.0 => {
-                    Ok(Bound::new(-operand.upper(), -operand.lower())?)
+        let analysis = match self {
+            Function::Zero => BoundAnalysis {
+                bound: Bound::zero(),
+                may_evaluate_to_zero: true,
+            },
+            Function::Constant(value) => {
+                let value = value.into_inner();
+                BoundAnalysis {
+                    bound: Bound::new(value, value)?,
+                    may_evaluate_to_zero: value == 0.0,
                 }
-                UnaryOperator::Abs => Ok(Bound::new(
-                    0.0,
-                    operand.lower().abs().max(operand.upper().abs()),
-                )?),
-                UnaryOperator::Signum => {
-                    let sign = |value: f64| {
-                        if value < 0.0 {
-                            -1.0
-                        } else if value > 0.0 {
-                            1.0
-                        } else {
-                            0.0
-                        }
-                    };
-                    Ok(Bound::new(sign(operand.lower()), sign(operand.upper()))?)
-                }
-                UnaryOperator::Powi(exponent) => integer_power_bound(
-                    operand,
-                    exponent,
-                    operation.operand().may_evaluate_to_zero(bounds)?,
-                ),
-            };
-        }
-        if let Function::Nary(operation) = self {
-            let mut operands = operation
-                .operands()
-                .iter()
-                .map(|operand| operand.evaluate_bound(bounds));
-            let first = operands
-                .next()
-                .expect("nary operation always has at least two operands")?;
-            return operands.try_fold(first, |acc, operand| {
-                let operand = operand?;
-                match operation.operator() {
-                    NaryOperator::Add => add_bounds(acc, operand),
-                    NaryOperator::Mul => mul_bounds(acc, operand),
-                    NaryOperator::Min => Ok(Bound::new(
-                        acc.lower().min(operand.lower()),
-                        acc.upper().min(operand.upper()),
-                    )?),
-                    NaryOperator::Max => Ok(Bound::new(
-                        acc.lower().max(operand.lower()),
-                        acc.upper().max(operand.upper()),
-                    )?),
-                }
-            });
-        }
-        if let Function::Binary(operation) = self {
-            let lhs = operation.lhs().evaluate_bound(bounds)?;
-            let rhs = operation.rhs().evaluate_bound(bounds)?;
-            return match operation.operator() {
-                BinaryOperator::Div => {
-                    if operation.rhs().may_evaluate_to_zero(bounds)? {
-                        anyhow::bail!("cannot bound division when the denominator contains zero")
-                    }
-                    div_bounds(lhs, rhs)
-                }
-            };
-        }
-
-        let mut bound = Bound::zero();
-        for (ids, coefficient) in self
-            .iter()
-            .expect("all expression variants were handled above")
-        {
-            let value = coefficient.into_inner();
-            if ids.is_empty() {
-                bound = add_bounds(bound, Bound::new(value, value)?)?;
-                continue;
             }
-            let mut cur = Bound::new(1.0, 1.0)?;
-            // Match PolynomialBase::evaluate's left-to-right repeated-ID fold.
-            // The per-variable power still preserves correlation (for example,
-            // an even power across zero has lower bound zero), unlike naively
-            // multiplying the same interval by itself.
-            for (id, exponent) in ids.chunks() {
-                let b = bounds.get(&id).cloned().unwrap_or_default();
-                let exponent = u64::try_from(exponent).map_err(|_| {
-                    anyhow::anyhow!("monomial exponent is outside the supported integer range")
-                })?;
-                cur = mul_bounds(cur, left_fold_positive_integer_power_bound(b, exponent)?)?;
+            Function::Linear(function) => {
+                analyze_polynomial_bound(evaluate_polynomial_terms_bound(function.iter(), bounds)?)
             }
-            let coefficient = Bound::new(value, value)?;
-            bound = add_bounds(bound, mul_bounds(coefficient, cur)?)?;
-        }
-        Ok(bound)
+            Function::Quadratic(function) => {
+                analyze_polynomial_bound(evaluate_polynomial_terms_bound(function.iter(), bounds)?)
+            }
+            Function::Polynomial(function) => {
+                analyze_polynomial_bound(evaluate_polynomial_terms_bound(function.iter(), bounds)?)
+            }
+            Function::Expression(expression) => analyze_expression_bound(expression, bounds)?,
+        };
+        Ok(analysis.bound)
     }
 }
 
@@ -796,5 +874,19 @@ mod tests {
 
         assert!(bound.lower() <= rounded);
         assert!(bound.upper() >= rounded.next_up());
+    }
+
+    #[test]
+    fn deep_expression_bound_evaluation_is_iterative() {
+        let id = VariableID::from(1);
+        let mut function = Function::from(linear!(id));
+        for _ in 0..4096 {
+            function = function.powi(2);
+        }
+        let bounds = Bounds::from([(id, Bound::new(-1.0, 1.0).unwrap())]);
+
+        let bound = function.evaluate_bound(&bounds).unwrap();
+        assert_contains(bound, 0.0);
+        assert_contains(bound, 1.0);
     }
 }

@@ -19,7 +19,7 @@ pub enum FunctionEvaluationError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 #[non_exhaustive]
 #[serde(rename_all = "snake_case")]
-pub enum UnaryOperator {
+pub(crate) enum UnaryOperator {
     Neg,
     Abs,
     Signum,
@@ -40,32 +40,11 @@ impl crate::logical_memory::LogicalMemoryProfile for UnaryOperator {
     }
 }
 
-/// A validated unary operation.
-#[derive(Debug, Clone, PartialEq, crate::logical_memory::LogicalMemoryProfile)]
-pub struct UnaryOperation {
-    operator: UnaryOperator,
-    operand: Box<Function>,
-}
-
-impl UnaryOperation {
-    pub fn operator(&self) -> UnaryOperator {
-        self.operator
-    }
-
-    pub fn operand(&self) -> &Function {
-        &self.operand
-    }
-
-    pub fn into_parts(self) -> (UnaryOperator, Function) {
-        (self.operator, *self.operand)
-    }
-}
-
-/// Operator for an ordered function with two or more operands.
+/// Operator whose two operands may be combined repeatedly.
 ///
-/// Operands are evaluated from left to right. A nested n-ary operation preserves
-/// grouping unless it appears as the first operand of the same operation, where
-/// flattening preserves the left fold.
+/// Each instruction applies the operator to exactly two stack values. Longer
+/// sums, products, minima, and maxima are represented by multiple instructions,
+/// which preserves both grouping and left-to-right evaluation order.
 #[derive(
     Debug,
     Clone,
@@ -79,32 +58,11 @@ impl UnaryOperation {
 )]
 #[non_exhaustive]
 #[serde(rename_all = "snake_case")]
-pub enum NaryOperator {
+pub(crate) enum AssociativeOperator {
     Add,
     Mul,
     Min,
     Max,
-}
-
-/// A validated ordered n-ary operation containing at least two operands.
-#[derive(Debug, Clone, PartialEq, crate::logical_memory::LogicalMemoryProfile)]
-pub struct NaryOperation {
-    operator: NaryOperator,
-    operands: Vec<Function>,
-}
-
-impl NaryOperation {
-    pub fn operator(&self) -> NaryOperator {
-        self.operator
-    }
-
-    pub fn operands(&self) -> &[Function] {
-        &self.operands
-    }
-
-    pub fn into_parts(self) -> (NaryOperator, Vec<Function>) {
-        (self.operator, self.operands)
-    }
 }
 
 /// Operator for an ordered function with a left- and right-hand operand.
@@ -121,51 +79,228 @@ impl NaryOperation {
 )]
 #[non_exhaustive]
 #[serde(rename_all = "snake_case")]
-pub enum BinaryOperator {
+pub(crate) enum BinaryOperator {
     Div,
 }
 
-/// A validated ordered binary operation.
-#[derive(Debug, Clone, PartialEq, crate::logical_memory::LogicalMemoryProfile)]
-pub struct BinaryOperation {
-    operator: BinaryOperator,
-    lhs: Box<Function>,
-    rhs: Box<Function>,
+/// A non-recursive compact-polynomial operand in an expression program.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Atom {
+    Zero,
+    Constant(Coefficient),
+    Linear(crate::Linear),
+    Quadratic(crate::Quadratic),
+    Polynomial(crate::Polynomial),
 }
 
-impl BinaryOperation {
-    pub fn operator(&self) -> BinaryOperator {
-        self.operator
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "snake_case")]
+enum AtomSerde {
+    Zero,
+    Constant(Coefficient),
+    Linear(Vec<(crate::LinearMonomial, Coefficient)>),
+    Quadratic(Vec<(crate::QuadraticMonomial, Coefficient)>),
+    Polynomial(Vec<(crate::MonomialDyn, Coefficient)>),
+}
+
+fn serialize_terms<M: crate::Monomial>(
+    polynomial: &crate::PolynomialBase<M>,
+) -> Vec<(M, Coefficient)> {
+    polynomial
+        .iter()
+        .map(|(monomial, coefficient)| (monomial.clone(), *coefficient))
+        .collect()
+}
+
+impl serde::Serialize for Atom {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let value = match self {
+            Self::Zero => AtomSerde::Zero,
+            Self::Constant(value) => AtomSerde::Constant(*value),
+            Self::Linear(value) => AtomSerde::Linear(serialize_terms(value)),
+            Self::Quadratic(value) => AtomSerde::Quadratic(serialize_terms(value)),
+            Self::Polynomial(value) => AtomSerde::Polynomial(serialize_terms(value)),
+        };
+        value.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Atom {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        match AtomSerde::deserialize(deserializer)? {
+            AtomSerde::Zero => Ok(Self::Zero),
+            AtomSerde::Constant(value) => Ok(Self::Constant(value)),
+            AtomSerde::Linear(terms) => crate::Linear::try_from_terms(terms)
+                .map(Self::Linear)
+                .map_err(serde::de::Error::custom),
+            AtomSerde::Quadratic(terms) => crate::Quadratic::try_from_terms(terms)
+                .map(Self::Quadratic)
+                .map_err(serde::de::Error::custom),
+            AtomSerde::Polynomial(terms) => crate::Polynomial::try_from_terms(terms)
+                .map(Self::Polynomial)
+                .map_err(serde::de::Error::custom),
+        }
+    }
+}
+
+impl Atom {
+    pub(crate) fn into_function(self) -> Function {
+        match self {
+            Self::Zero => Function::Zero,
+            Self::Constant(value) => Function::Constant(value),
+            Self::Linear(value) => Function::Linear(value),
+            Self::Quadratic(value) => Function::Quadratic(value),
+            Self::Polynomial(value) => Function::Polynomial(value),
+        }
     }
 
-    pub fn lhs(&self) -> &Function {
-        &self.lhs
+    pub(crate) fn to_function(&self) -> Function {
+        self.clone().into_function()
     }
 
-    pub fn rhs(&self) -> &Function {
-        &self.rhs
+    fn from_function(function: Function) -> Result<Self, Function> {
+        match function {
+            Function::Zero => Ok(Self::Zero),
+            Function::Constant(value) => Ok(Self::Constant(value)),
+            Function::Linear(value) => Ok(Self::Linear(value)),
+            Function::Quadratic(value) => Ok(Self::Quadratic(value)),
+            Function::Polynomial(value) => Ok(Self::Polynomial(value)),
+            Function::Expression(expression) => Err(Function::Expression(expression)),
+        }
+    }
+}
+
+/// One instruction in a validated reverse-Polish expression program.
+///
+/// This is crate-visible only because formatting and the protobuf conversion
+/// live outside the operation module. SDK callers construct expressions through
+/// [`Function`] operations rather than assembling instructions directly.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "instruction", content = "value", rename_all = "snake_case")]
+pub(crate) enum Instruction {
+    Push(Atom),
+    Unary(UnaryOperator),
+    Associative(AssociativeOperator),
+    Binary(BinaryOperator),
+}
+
+/// A validated non-recursive reverse-Polish expression program.
+///
+/// The instruction sequence never underflows its value stack and leaves exactly
+/// one value. Its fields are private so every construction and deserialization
+/// path must pass through the validator.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Expression {
+    instructions: Vec<Instruction>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum ExpressionValidationError {
+    #[error(
+        "expression instruction {instruction_index} requires {required} stack values, found {available}"
+    )]
+    StackUnderflow {
+        instruction_index: usize,
+        required: usize,
+        available: usize,
+    },
+    #[error("expression program must leave exactly one stack value, found {height}")]
+    InvalidFinalStackHeight { height: usize },
+}
+
+impl Expression {
+    pub(crate) fn try_from_instructions(
+        instructions: Vec<Instruction>,
+    ) -> Result<Self, ExpressionValidationError> {
+        let mut height = 0usize;
+        for (instruction_index, instruction) in instructions.iter().enumerate() {
+            let required = match instruction {
+                Instruction::Push(_) => {
+                    height += 1;
+                    continue;
+                }
+                Instruction::Unary(_) => 1,
+                Instruction::Associative(_) | Instruction::Binary(_) => 2,
+            };
+            if height < required {
+                return Err(ExpressionValidationError::StackUnderflow {
+                    instruction_index,
+                    required,
+                    available: height,
+                });
+            }
+            if required == 2 {
+                height -= 1;
+            }
+        }
+        if height != 1 {
+            return Err(ExpressionValidationError::InvalidFinalStackHeight { height });
+        }
+        Ok(Self { instructions })
     }
 
-    pub fn into_parts(self) -> (BinaryOperator, Function, Function) {
-        (self.operator, *self.lhs, *self.rhs)
+    pub(crate) fn instructions(&self) -> &[Instruction] {
+        &self.instructions
+    }
+
+    pub(crate) fn into_instructions(self) -> Vec<Instruction> {
+        self.instructions
     }
 }
 
 impl Function {
-    /// Construct an exact unary expression without algebraic folding.
-    pub(crate) fn unary_expression(operator: UnaryOperator, operand: Function) -> Self {
-        Function::Unary(UnaryOperation {
-            operator,
-            operand: Box::new(operand),
-        })
+    pub(crate) fn from_instructions_exact(
+        instructions: Vec<Instruction>,
+    ) -> Result<Self, ExpressionValidationError> {
+        let expression = Expression::try_from_instructions(instructions)?;
+        if expression.instructions.len() == 1 {
+            let instruction = expression
+                .instructions
+                .into_iter()
+                .next()
+                .expect("length checked");
+            let Instruction::Push(atom) = instruction else {
+                unreachable!("a valid one-instruction program must push an atom")
+            };
+            return Ok(atom.into_function());
+        }
+        Ok(Function::Expression(expression))
     }
 
-    /// Construct the exact validated expression shape used at deserialization
-    /// boundaries. In particular, do not eagerly expand polynomial products
-    /// supplied by an untrusted wire payload.
-    pub(crate) fn nary_expression(operator: NaryOperator, operands: Vec<Function>) -> Self {
-        debug_assert!(operands.len() >= 2);
-        Function::Nary(NaryOperation { operator, operands })
+    pub(crate) fn into_instructions(self) -> Vec<Instruction> {
+        match self {
+            Function::Expression(expression) => expression.into_instructions(),
+            compact => vec![Instruction::Push(
+                Atom::from_function(compact).expect("non-expression Function is a compact atom"),
+            )],
+        }
+    }
+
+    /// Construct an exact unary expression without algebraic folding.
+    pub(crate) fn unary_expression(operator: UnaryOperator, operand: Function) -> Self {
+        let mut instructions = operand.into_instructions();
+        instructions.push(Instruction::Unary(operator));
+        Function::from_instructions_exact(instructions)
+            .expect("appending a unary instruction preserves expression validity")
+    }
+
+    /// Construct an exact associative binary expression without algebraic folding.
+    pub(crate) fn associative_expression(
+        operator: AssociativeOperator,
+        lhs: Function,
+        rhs: Function,
+    ) -> Self {
+        let mut instructions = lhs.into_instructions();
+        instructions.extend(rhs.into_instructions());
+        instructions.push(Instruction::Associative(operator));
+        Function::from_instructions_exact(instructions)
+            .expect("combining two valid programs preserves expression validity")
     }
 
     /// Construct an ordered binary expression without algebraic folding.
@@ -175,11 +310,11 @@ impl Function {
         lhs: Function,
         rhs: Function,
     ) -> Self {
-        Function::Binary(BinaryOperation {
-            operator,
-            lhs: Box::new(lhs),
-            rhs: Box::new(rhs),
-        })
+        let mut instructions = lhs.into_instructions();
+        instructions.extend(rhs.into_instructions());
+        instructions.push(Instruction::Binary(operator));
+        Function::from_instructions_exact(instructions)
+            .expect("combining two valid programs preserves expression validity")
     }
 
     pub(crate) fn unary_operation(operator: UnaryOperator, operand: Function) -> Self {
@@ -187,19 +322,22 @@ impl Function {
             return operand;
         }
 
-        if let Function::Unary(inner) = operand {
-            if operator == UnaryOperator::Neg && inner.operator == UnaryOperator::Neg {
-                return *inner.operand;
+        if let Function::Expression(mut expression) = operand {
+            if let Some(Instruction::Unary(inner)) = expression.instructions.last() {
+                let inner = *inner;
+                if operator == UnaryOperator::Neg && inner == UnaryOperator::Neg {
+                    expression.instructions.pop();
+                    return Function::from_instructions_exact(expression.instructions)
+                        .expect("removing a trailing double negation preserves validity");
+                }
+                if operator == inner
+                    && matches!(operator, UnaryOperator::Abs | UnaryOperator::Signum)
+                {
+                    return Function::Expression(expression);
+                }
             }
-            if operator == inner.operator
-                && matches!(operator, UnaryOperator::Abs | UnaryOperator::Signum)
-            {
-                return Function::Unary(inner);
-            }
-            return Function::Unary(UnaryOperation {
-                operator,
-                operand: Box::new(Function::Unary(inner)),
-            });
+            expression.instructions.push(Instruction::Unary(operator));
+            return Function::Expression(expression);
         }
 
         if let Some(value) = operand.as_constant() {
@@ -224,67 +362,26 @@ impl Function {
         Function::unary_expression(operator, operand)
     }
 
-    pub(crate) fn nary_operation(operator: NaryOperator, operands: Vec<Function>) -> Self {
-        debug_assert!(operands.len() >= 2);
-        let mut operands = operands.into_iter();
-        let first = operands
-            .next()
-            .expect("n-ary operation always has at least two operands");
-        let (mut flattened, extended_explicit_nary) = match first {
-            Function::Nary(inner) if inner.operator == operator => (inner.operands, true),
-            first => (vec![first], false),
-        };
-        flattened.extend(operands);
-
-        if flattened.len() == 1 {
-            return flattened.pop().expect("length checked");
-        }
-
-        // Once an explicit expression node exists (notably after wire or serde
-        // parsing), appending another operand must not turn it back into a
-        // compact polynomial. Doing so would change its represented
-        // left-to-right floating-point evaluation and can expand a small
-        // product-of-sums payload into exponentially many terms.
-        if extended_explicit_nary {
-            return Function::nary_expression(operator, flattened);
-        }
-
-        if matches!(operator, NaryOperator::Min | NaryOperator::Max)
-            && flattened
-                .iter()
-                .all(|operand| operand.as_constant().is_some())
-        {
-            let mut values = flattened.iter().map(|operand| {
-                operand
-                    .as_constant()
-                    .expect("all operands were checked as constants")
-            });
-            let first = values.next().expect("n-ary operation is non-empty");
-            let value = values.fold(first, |acc, value| match operator {
-                NaryOperator::Min => acc.min(value),
-                NaryOperator::Max => acc.max(value),
-                _ => unreachable!(),
-            });
-            return Function::try_from(value).expect("minimum/maximum of finite values is finite");
-        }
-
-        if matches!(operator, NaryOperator::Add | NaryOperator::Mul)
-            && flattened.iter().all(Function::is_polynomial)
-        {
-            let mut operands = flattened.clone().into_iter();
-            let first = operands
-                .next()
-                .expect("n-ary operation always has at least two operands");
-            let folded = operands.try_fold(first, |acc, operand| match operator {
-                NaryOperator::Add => acc + operand,
-                NaryOperator::Mul => acc * operand,
-                _ => unreachable!(),
-            });
-            if let Ok(folded) = folded {
-                return folded;
+    pub(crate) fn associative_operation(
+        operator: AssociativeOperator,
+        lhs: Function,
+        rhs: Function,
+    ) -> Self {
+        if matches!(
+            operator,
+            AssociativeOperator::Min | AssociativeOperator::Max
+        ) {
+            if let (Some(lhs), Some(rhs)) = (lhs.as_constant(), rhs.as_constant()) {
+                let value = match operator {
+                    AssociativeOperator::Min => lhs.min(rhs),
+                    AssociativeOperator::Max => lhs.max(rhs),
+                    _ => unreachable!(),
+                };
+                return Function::try_from(value)
+                    .expect("minimum/maximum of finite values is finite");
             }
         }
-        Function::nary_expression(operator, flattened)
+        Function::associative_expression(operator, lhs, rhs)
     }
 
     pub(crate) fn binary_operation(operator: BinaryOperator, lhs: Function, rhs: Function) -> Self {
@@ -321,12 +418,12 @@ impl Function {
 
     /// Pointwise minimum of two functions.
     pub fn min(self, rhs: Self) -> Self {
-        Self::nary_operation(NaryOperator::Min, vec![self, rhs])
+        Self::associative_operation(AssociativeOperator::Min, self, rhs)
     }
 
     /// Pointwise maximum of two functions.
     pub fn max(self, rhs: Self) -> Self {
-        Self::nary_operation(NaryOperator::Max, vec![self, rhs])
+        Self::associative_operation(AssociativeOperator::Max, self, rhs)
     }
 
     /// Raise this function to an integer power.
@@ -392,14 +489,21 @@ mod tests {
     }
 
     #[test]
-    fn min_max_flatten_and_preserve_operand_order() {
+    fn min_max_preserve_operand_order_as_binary_instructions() {
         let x = Function::from(linear!(1));
         let expression = x.clone().min(constant(2.0)).min(constant(-1.0));
-        let Function::Nary(operation) = &expression else {
-            panic!("minimum should remain an n-ary expression");
+        let Function::Expression(program) = &expression else {
+            panic!("minimum should remain a composed expression");
         };
-        assert_eq!(operation.operator(), NaryOperator::Min);
-        assert_eq!(operation.operands().len(), 3);
+        assert_eq!(program.instructions().len(), 5);
+        assert!(matches!(
+            program.instructions()[2],
+            Instruction::Associative(AssociativeOperator::Min)
+        ));
+        assert!(matches!(
+            program.instructions()[4],
+            Instruction::Associative(AssociativeOperator::Min)
+        ));
         assert_eq!(
             expression.evaluate(&state(4.0), ATol::default()).unwrap(),
             -1.0
@@ -413,7 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn nary_operations_preserve_right_grouping() {
+    fn associative_operations_preserve_right_grouping() {
         let a = Function::from(linear!(1)).abs();
         let b = Function::from(linear!(2)).abs();
         let c = Function::from(linear!(3)).abs();
@@ -421,16 +525,28 @@ mod tests {
         let left_grouped = ((a.clone() + b.clone()).unwrap() + c.clone()).unwrap();
         let right_grouped = (a + (b + c).unwrap()).unwrap();
 
-        let Function::Nary(left) = &left_grouped else {
-            panic!("composite addition should use an n-ary operation");
+        let Function::Expression(left) = &left_grouped else {
+            panic!("composite addition should use an expression program");
         };
-        assert_eq!(left.operands().len(), 3);
-
-        let Function::Nary(right) = &right_grouped else {
-            panic!("composite addition should use an n-ary operation");
+        let Function::Expression(right) = &right_grouped else {
+            panic!("composite addition should use an expression program");
         };
-        assert_eq!(right.operands().len(), 2);
-        assert!(matches!(right.operands()[1], Function::Nary(_)));
+        assert!(matches!(
+            left.instructions()[4],
+            Instruction::Associative(AssociativeOperator::Add)
+        ));
+        assert!(matches!(
+            *left.instructions().last().unwrap(),
+            Instruction::Associative(AssociativeOperator::Add)
+        ));
+        assert!(matches!(
+            right.instructions()[6],
+            Instruction::Associative(AssociativeOperator::Add)
+        ));
+        assert!(matches!(
+            *right.instructions().last().unwrap(),
+            Instruction::Associative(AssociativeOperator::Add)
+        ));
         assert!(left_grouped != right_grouped);
     }
 
@@ -444,10 +560,13 @@ mod tests {
         ];
 
         for expression in expressions {
-            let Function::Nary(operation) = expression else {
-                panic!("coefficient/composite arithmetic should use an n-ary operation");
+            let Function::Expression(program) = expression else {
+                panic!("coefficient/composite arithmetic should use an expression program");
             };
-            assert_eq!(operation.operands()[0].as_constant(), Some(2.0));
+            assert!(matches!(
+                program.instructions().first(),
+                Some(Instruction::Push(Atom::Constant(value))) if value.into_inner() == 2.0
+            ));
         }
     }
 
@@ -459,9 +578,9 @@ mod tests {
         let product = (x.clone() * absolute.clone()).unwrap();
         let negated = -absolute;
 
-        assert!(matches!(sum, Function::Nary(_)));
-        assert!(matches!(product, Function::Nary(_)));
-        assert!(matches!(negated, Function::Unary(_)));
+        assert!(matches!(sum, Function::Expression(_)));
+        assert!(matches!(product, Function::Expression(_)));
+        assert!(matches!(negated, Function::Expression(_)));
         assert_eq!(sum.evaluate(&state(-2.0), ATol::default()).unwrap(), 3.0);
         assert_eq!(
             product.evaluate(&state(-2.0), ATol::default()).unwrap(),
@@ -490,7 +609,7 @@ mod tests {
         ));
 
         let square = x.clone().powi(2);
-        assert!(matches!(square, Function::Unary(_)));
+        assert!(matches!(square, Function::Expression(_)));
         assert_eq!(square.degree(), None);
         assert_eq!(square.evaluate(&state(-3.0), ATol::default()).unwrap(), 9.0);
 
@@ -534,11 +653,11 @@ mod tests {
         let x = Function::from(linear!(1));
         let reciprocal = (Function::one() / x).unwrap();
         let expression = (Function::zero() * reciprocal.clone()).unwrap();
-        assert!(matches!(expression, Function::Nary(_)));
+        assert!(matches!(expression, Function::Expression(_)));
         assert!(expression.evaluate(&state(0.0), ATol::default()).is_err());
 
         let zero_power = reciprocal.powi(0);
-        assert!(matches!(zero_power, Function::Unary(_)));
+        assert!(matches!(zero_power, Function::Expression(_)));
         assert!(zero_power.evaluate(&state(0.0), ATol::default()).is_err());
     }
 
@@ -599,15 +718,15 @@ mod tests {
     }
 
     #[test]
-    fn appending_to_an_explicit_nary_never_eagerly_expands_it() {
+    fn appending_to_an_explicit_rpn_program_never_eagerly_expands_it() {
         let scaled_x = Function::from((coeff!(1e150) * linear!(1)).unwrap());
         let explicit =
-            Function::nary_expression(NaryOperator::Mul, vec![scaled_x.clone(), scaled_x]);
+            Function::associative_expression(AssociativeOperator::Mul, scaled_x.clone(), scaled_x);
         let appended = (explicit * constant(0.5)).unwrap();
-        let Function::Nary(operation) = &appended else {
-            panic!("appending to an explicit n-ary expression must preserve the AST");
+        let Function::Expression(program) = &appended else {
+            panic!("appending to an explicit expression must preserve the program");
         };
-        assert_eq!(operation.operands().len(), 3);
+        assert_eq!(program.instructions().len(), 5);
         let state = state(1e-200);
         let operand: f64 = 1e150 * 1e-200;
         assert_eq!(
@@ -618,19 +737,16 @@ mod tests {
             (operand * operand * 0.5).to_bits(),
         );
 
-        let product_of_sums = Function::nary_expression(
-            NaryOperator::Mul,
-            (1..=20)
-                .map(|id| {
-                    (Function::from(linear!(id)) + constant(1.0))
-                        .expect("polynomial addition is valid")
-                })
-                .collect(),
-        );
+        let product_of_sums = (1..=20)
+            .map(|id| {
+                (Function::from(linear!(id)) + constant(1.0)).expect("polynomial addition is valid")
+            })
+            .reduce(|lhs, rhs| Function::associative_expression(AssociativeOperator::Mul, lhs, rhs))
+            .unwrap();
         let appended = (product_of_sums * constant(2.0)).unwrap();
-        let Function::Nary(operation) = appended else {
+        let Function::Expression(program) = appended else {
             panic!("explicit product-of-sums must not be expanded");
         };
-        assert_eq!(operation.operands().len(), 21);
+        assert_eq!(program.instructions().len(), 41);
     }
 }

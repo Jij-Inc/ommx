@@ -75,168 +75,214 @@ pub struct Quadratic {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Function {
-    #[prost(oneof = "function::Function", tags = "1, 2, 3, 4, 5, 6, 7")]
+    #[prost(oneof = "function::Function", tags = "1, 2, 3, 4, 5")]
     pub function: ::core::option::Option<function::Function>,
 }
 /// Nested message and enum types in `Function`.
 pub mod function {
-    /// An operation applied to one operand.
+    /// A non-recursive expression encoded as reverse Polish notation (RPN).
+    ///
+    /// Instructions are evaluated in order using a value stack. Atom instructions
+    /// push one value, unary operations replace the top value, and associative and
+    /// binary operations pop `rhs` followed by `lhs` and push `lhs op rhs`.
+    /// A valid expression never underflows its stack and finishes with exactly one
+    /// value. Canonical expression programs contain at least one operation;
+    /// decoders normalize a single atom to a compact Function variant below.
     #[non_exhaustive]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct UnaryOperation {
-        #[prost(enumeration = "unary_operation::Operator", tag = "1")]
-        pub operator: i32,
-        #[prost(message, optional, boxed, tag = "2")]
-        pub operand: ::core::option::Option<::prost::alloc::boxed::Box<super::Function>>,
-        /// Exact signed integer exponent. Present if and only if operator is OPERATOR_POWI.
-        #[prost(sint32, optional, tag = "3")]
-        pub integer_exponent: ::core::option::Option<i32>,
+    pub struct Expression {
+        #[prost(message, repeated, tag = "1")]
+        pub instructions: ::prost::alloc::vec::Vec<expression::Instruction>,
     }
-    /// Nested message and enum types in `UnaryOperation`.
-    pub mod unary_operation {
+    /// Nested message and enum types in `Expression`.
+    pub mod expression {
         #[non_exhaustive]
-        #[derive(
-            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
-        )]
-        #[repr(i32)]
-        pub enum Operator {
-            Unspecified = 0,
-            /// Negation: `-operand`.
-            Neg = 1,
-            /// Absolute value: `|operand|`.
-            Abs = 2,
-            /// Sign of the operand: -1 for negative values, 0 for zero, and 1 for positive values.
-            Signum = 3,
-            /// Integer exponentiation: `operand^integer_exponent`.
-            Powi = 4,
+        #[allow(clippy::derive_partial_eq_without_eq)]
+        #[derive(Clone, PartialEq, ::prost::Message)]
+        pub struct Instruction {
+            #[prost(oneof = "instruction::Instruction", tags = "1, 2, 3, 4, 5, 6, 7")]
+            pub instruction: ::core::option::Option<instruction::Instruction>,
         }
-        impl Operator {
-            /// String value of the enum field names used in the ProtoBuf definition.
-            ///
-            /// The values are not transformed in any way and thus are considered stable
-            /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-            pub fn as_str_name(&self) -> &'static str {
-                match self {
-                    Operator::Unspecified => "OPERATOR_UNSPECIFIED",
-                    Operator::Neg => "OPERATOR_NEG",
-                    Operator::Abs => "OPERATOR_ABS",
-                    Operator::Signum => "OPERATOR_SIGNUM",
-                    Operator::Powi => "OPERATOR_POWI",
+        /// Nested message and enum types in `Instruction`.
+        pub mod instruction {
+            /// An operation applied to the top stack value.
+            #[non_exhaustive]
+            #[allow(clippy::derive_partial_eq_without_eq)]
+            #[derive(Clone, PartialEq, ::prost::Message)]
+            pub struct UnaryOperation {
+                #[prost(enumeration = "unary_operation::Operator", tag = "1")]
+                pub operator: i32,
+                /// Exact signed integer exponent. Present if and only if operator is OPERATOR_POWI.
+                #[prost(sint32, optional, tag = "2")]
+                pub integer_exponent: ::core::option::Option<i32>,
+            }
+            /// Nested message and enum types in `UnaryOperation`.
+            pub mod unary_operation {
+                #[non_exhaustive]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
+                #[repr(i32)]
+                pub enum Operator {
+                    Unspecified = 0,
+                    /// Negation: `-operand`.
+                    Neg = 1,
+                    /// Absolute value: `|operand|`.
+                    Abs = 2,
+                    /// Sign of the operand: -1 for negative values, 0 for zero, and 1 for positive values.
+                    Signum = 3,
+                    /// Integer exponentiation: `operand^integer_exponent`.
+                    Powi = 4,
+                }
+                impl Operator {
+                    /// String value of the enum field names used in the ProtoBuf definition.
+                    ///
+                    /// The values are not transformed in any way and thus are considered stable
+                    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+                    pub fn as_str_name(&self) -> &'static str {
+                        match self {
+                            Operator::Unspecified => "OPERATOR_UNSPECIFIED",
+                            Operator::Neg => "OPERATOR_NEG",
+                            Operator::Abs => "OPERATOR_ABS",
+                            Operator::Signum => "OPERATOR_SIGNUM",
+                            Operator::Powi => "OPERATOR_POWI",
+                        }
+                    }
+                    /// Creates an enum from field names used in the ProtoBuf definition.
+                    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+                        match value {
+                            "OPERATOR_UNSPECIFIED" => Some(Self::Unspecified),
+                            "OPERATOR_NEG" => Some(Self::Neg),
+                            "OPERATOR_ABS" => Some(Self::Abs),
+                            "OPERATOR_SIGNUM" => Some(Self::Signum),
+                            "OPERATOR_POWI" => Some(Self::Powi),
+                            _ => None,
+                        }
+                    }
                 }
             }
-            /// Creates an enum from field names used in the ProtoBuf definition.
-            pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-                match value {
-                    "OPERATOR_UNSPECIFIED" => Some(Self::Unspecified),
-                    "OPERATOR_NEG" => Some(Self::Neg),
-                    "OPERATOR_ABS" => Some(Self::Abs),
-                    "OPERATOR_SIGNUM" => Some(Self::Signum),
-                    "OPERATOR_POWI" => Some(Self::Powi),
-                    _ => None,
+            /// A two-operand operation whose mathematical operation is associative.
+            /// The wire representation nevertheless preserves every binary application
+            /// so evaluation order and grouping remain explicit.
+            #[non_exhaustive]
+            #[allow(clippy::derive_partial_eq_without_eq)]
+            #[derive(Clone, PartialEq, ::prost::Message)]
+            pub struct AssociativeOperation {
+                #[prost(enumeration = "associative_operation::Operator", tag = "1")]
+                pub operator: i32,
+            }
+            /// Nested message and enum types in `AssociativeOperation`.
+            pub mod associative_operation {
+                #[non_exhaustive]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
+                #[repr(i32)]
+                pub enum Operator {
+                    Unspecified = 0,
+                    /// Addition: `lhs + rhs`.
+                    Add = 1,
+                    /// Multiplication: `lhs * rhs`.
+                    Mul = 2,
+                    /// Minimum: `min(lhs, rhs)`.
+                    Min = 3,
+                    /// Maximum: `max(lhs, rhs)`.
+                    Max = 4,
+                }
+                impl Operator {
+                    /// String value of the enum field names used in the ProtoBuf definition.
+                    ///
+                    /// The values are not transformed in any way and thus are considered stable
+                    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+                    pub fn as_str_name(&self) -> &'static str {
+                        match self {
+                            Operator::Unspecified => "OPERATOR_UNSPECIFIED",
+                            Operator::Add => "OPERATOR_ADD",
+                            Operator::Mul => "OPERATOR_MUL",
+                            Operator::Min => "OPERATOR_MIN",
+                            Operator::Max => "OPERATOR_MAX",
+                        }
+                    }
+                    /// Creates an enum from field names used in the ProtoBuf definition.
+                    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+                        match value {
+                            "OPERATOR_UNSPECIFIED" => Some(Self::Unspecified),
+                            "OPERATOR_ADD" => Some(Self::Add),
+                            "OPERATOR_MUL" => Some(Self::Mul),
+                            "OPERATOR_MIN" => Some(Self::Min),
+                            "OPERATOR_MAX" => Some(Self::Max),
+                            _ => None,
+                        }
+                    }
                 }
             }
-        }
-    }
-    /// An ordered n-ary operation applied to two or more operands.
-    /// Operands are evaluated from left to right. Nested operations preserve grouping,
-    /// except that a same-operator first operand may be flattened into the same left fold.
-    #[non_exhaustive]
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct NaryOperation {
-        #[prost(enumeration = "nary_operation::Operator", tag = "1")]
-        pub operator: i32,
-        #[prost(message, repeated, tag = "2")]
-        pub operands: ::prost::alloc::vec::Vec<super::Function>,
-    }
-    /// Nested message and enum types in `NaryOperation`.
-    pub mod nary_operation {
-        #[non_exhaustive]
-        #[derive(
-            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
-        )]
-        #[repr(i32)]
-        pub enum Operator {
-            Unspecified = 0,
-            /// Sum of the operands.
-            Add = 1,
-            /// Product of the operands.
-            Mul = 2,
-            /// Minimum of the operands.
-            Min = 3,
-            /// Maximum of the operands.
-            Max = 4,
-        }
-        impl Operator {
-            /// String value of the enum field names used in the ProtoBuf definition.
-            ///
-            /// The values are not transformed in any way and thus are considered stable
-            /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-            pub fn as_str_name(&self) -> &'static str {
-                match self {
-                    Operator::Unspecified => "OPERATOR_UNSPECIFIED",
-                    Operator::Add => "OPERATOR_ADD",
-                    Operator::Mul => "OPERATOR_MUL",
-                    Operator::Min => "OPERATOR_MIN",
-                    Operator::Max => "OPERATOR_MAX",
+            /// A two-operand operation for which grouping is significant.
+            #[non_exhaustive]
+            #[allow(clippy::derive_partial_eq_without_eq)]
+            #[derive(Clone, PartialEq, ::prost::Message)]
+            pub struct BinaryOperation {
+                #[prost(enumeration = "binary_operation::Operator", tag = "1")]
+                pub operator: i32,
+            }
+            /// Nested message and enum types in `BinaryOperation`.
+            pub mod binary_operation {
+                #[non_exhaustive]
+                #[derive(
+                    Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
+                )]
+                #[repr(i32)]
+                pub enum Operator {
+                    Unspecified = 0,
+                    /// Division: `lhs / rhs`. Evaluation is undefined when rhs is zero.
+                    Div = 1,
+                }
+                impl Operator {
+                    /// String value of the enum field names used in the ProtoBuf definition.
+                    ///
+                    /// The values are not transformed in any way and thus are considered stable
+                    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+                    pub fn as_str_name(&self) -> &'static str {
+                        match self {
+                            Operator::Unspecified => "OPERATOR_UNSPECIFIED",
+                            Operator::Div => "OPERATOR_DIV",
+                        }
+                    }
+                    /// Creates an enum from field names used in the ProtoBuf definition.
+                    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+                        match value {
+                            "OPERATOR_UNSPECIFIED" => Some(Self::Unspecified),
+                            "OPERATOR_DIV" => Some(Self::Div),
+                            _ => None,
+                        }
+                    }
                 }
             }
-            /// Creates an enum from field names used in the ProtoBuf definition.
-            pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-                match value {
-                    "OPERATOR_UNSPECIFIED" => Some(Self::Unspecified),
-                    "OPERATOR_ADD" => Some(Self::Add),
-                    "OPERATOR_MUL" => Some(Self::Mul),
-                    "OPERATOR_MIN" => Some(Self::Min),
-                    "OPERATOR_MAX" => Some(Self::Max),
-                    _ => None,
-                }
-            }
-        }
-    }
-    /// An ordered operation applied to a left-hand side and a right-hand side.
-    #[non_exhaustive]
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct BinaryOperation {
-        #[prost(enumeration = "binary_operation::Operator", tag = "1")]
-        pub operator: i32,
-        #[prost(message, optional, boxed, tag = "2")]
-        pub lhs: ::core::option::Option<::prost::alloc::boxed::Box<super::Function>>,
-        #[prost(message, optional, boxed, tag = "3")]
-        pub rhs: ::core::option::Option<::prost::alloc::boxed::Box<super::Function>>,
-    }
-    /// Nested message and enum types in `BinaryOperation`.
-    pub mod binary_operation {
-        #[non_exhaustive]
-        #[derive(
-            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,
-        )]
-        #[repr(i32)]
-        pub enum Operator {
-            Unspecified = 0,
-            /// Division: `lhs / rhs`. Evaluation is undefined when rhs is zero.
-            Div = 1,
-        }
-        impl Operator {
-            /// String value of the enum field names used in the ProtoBuf definition.
-            ///
-            /// The values are not transformed in any way and thus are considered stable
-            /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-            pub fn as_str_name(&self) -> &'static str {
-                match self {
-                    Operator::Unspecified => "OPERATOR_UNSPECIFIED",
-                    Operator::Div => "OPERATOR_DIV",
-                }
-            }
-            /// Creates an enum from field names used in the ProtoBuf definition.
-            pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-                match value {
-                    "OPERATOR_UNSPECIFIED" => Some(Self::Unspecified),
-                    "OPERATOR_DIV" => Some(Self::Div),
-                    _ => None,
-                }
+            #[non_exhaustive]
+            #[allow(clippy::derive_partial_eq_without_eq)]
+            #[derive(Clone, PartialEq, ::prost::Oneof)]
+            pub enum Instruction {
+                /// Push a constant function. Zero is encoded as the constant 0.
+                #[prost(double, tag = "1")]
+                Constant(f64),
+                /// Push a compact linear function.
+                #[prost(message, tag = "2")]
+                Linear(super::super::super::Linear),
+                /// Push a compact quadratic function.
+                #[prost(message, tag = "3")]
+                Quadratic(super::super::super::Quadratic),
+                /// Push a compact polynomial function.
+                #[prost(message, tag = "4")]
+                Polynomial(super::super::super::Polynomial),
+                /// Apply a unary operation to the top stack value.
+                #[prost(message, tag = "5")]
+                Unary(UnaryOperation),
+                /// Apply an associative operation to the top two stack values.
+                #[prost(message, tag = "6")]
+                Associative(AssociativeOperation),
+                /// Apply a non-associative binary operation to the top two stack values.
+                #[prost(message, tag = "7")]
+                Binary(BinaryOperation),
             }
         }
     }
@@ -256,15 +302,9 @@ pub mod function {
         /// Polynomial like `f(x_1, x_2) = 4 x_1^2 + 5 x_2^3 + 6 x_1 x_2^2 + 7 x_2^2 + 8 x_1 x_2 + 9 x_1 + 10 x_2 + 11`
         #[prost(message, tag = "4")]
         Polynomial(super::Polynomial),
-        /// Unary operation such as `abs(f(x))`.
+        /// A non-polynomial expression encoded as reverse Polish notation.
         #[prost(message, tag = "5")]
-        Unary(::prost::alloc::boxed::Box<UnaryOperation>),
-        /// Ordered n-ary operation such as `min(f(x), g(x), h(x))`.
-        #[prost(message, tag = "6")]
-        Nary(NaryOperation),
-        /// Ordered binary division such as `f(x) / g(x)`.
-        #[prost(message, tag = "7")]
-        Binary(::prost::alloc::boxed::Box<BinaryOperation>),
+        Expression(Expression),
     }
 }
 #[non_exhaustive]

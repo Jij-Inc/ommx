@@ -82,7 +82,7 @@ print(Function(p))
 
 ## Composing Scalar Functions
 
-Convert an arithmetic expression to `Function` before applying the composed operations. Python's `abs` and arithmetic operators build expression nodes; pointwise minimum and maximum use the named `minimum` and `maximum` methods.
+Convert an arithmetic expression to `Function` before applying the composed operations. Python's `abs` and arithmetic operators build composed expressions; pointwise minimum and maximum use the named `minimum` and `maximum` methods.
 
 ```{code-cell} ipython3
 fx = Function(x)
@@ -103,11 +103,11 @@ print(power)
 print(same_power)
 ```
 
-The built-in Python functions `min(fx, fy)` and `max(fx, fy)` perform comparisons and therefore do not construct expression nodes. Use `fx.minimum(fy)` and `fx.maximum(fy)` instead.
+The built-in Python functions `min(fx, fy)` and `max(fx, fy)` perform comparisons and therefore do not construct pointwise expressions. Use `fx.minimum(fy)` and `fx.maximum(fy)` instead.
 
 `fx**n` and `fx.powi(n)` are equivalent, and `n` must fit in a signed 32-bit integer. Floating-point or function-valued exponents and reverse exponentiation such as `2**fx` are not supported.
 
-Within a composed expression, operations with several operands are ordered and evaluated from left to right. A same-operator group on the left is flattened, so `(abs(a) + abs(b)) + abs(c)` becomes one ordered three-operand addition. Explicit grouping on the right remains nested, so `abs(a) + (abs(b) + abs(c))` retains that right-hand group. Overflow and undefined-operation errors therefore occur in the represented evaluation order. Arithmetic containing only polynomials continues to normalize to the compact polynomial representation.
+Within a composed expression, operands are encountered from left to right and every associative application still combines exactly two values. Both `(abs(a) + abs(b)) + abs(c)` and `abs(a) + (abs(b) + abs(c))` therefore retain their grouping and operation order. Overflow and undefined-operation errors occur in that represented order. The protobuf wire format stores the composition as a flat reverse Polish notation (RPN) instruction sequence rather than a recursively nested tree. Arithmetic containing only polynomials continues to normalize to the compact polynomial representation.
 
 Composed functions follow real-valued evaluation semantics:
 
@@ -159,7 +159,7 @@ print(f"{linear2=}")
 
 ## Comparison of Coefficients
 
-`Function` and the polynomial types have an `almost_equal` function. For polynomial functions, it determines whether the coefficients match within a specified error. For composed functions, it compares matching expression structures recursively; it is not a proof of global mathematical equivalence. For example, to confirm that $ (x + 1)^2 = x^2 + 2x + 1 $, write as follows
+`Function` and the polynomial types have an `almost_equal` function. For polynomial functions, it determines whether the coefficients match within a specified error. For composed functions, it compares matching expression structures; it is not a proof of global mathematical equivalence. For example, to confirm that $ (x + 1)^2 = x^2 + 2x + 1 $, write as follows
 
 ```{code-cell} ipython3
 xx = (x + 1) * (x + 1)

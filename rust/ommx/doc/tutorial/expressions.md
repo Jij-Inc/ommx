@@ -42,8 +42,15 @@ assert_eq!(squared.degree(), None);
 ```
 
 Apart from identity and constant folding, `Function::powi` preserves an
-explicit integer-power node even for a non-negative exponent. Use explicit
-multiplication when a compact expanded polynomial is required by a
-polynomial-only solver or exporter.
+explicit composed integer-power expression even for a non-negative exponent.
+Use explicit multiplication when a compact expanded polynomial is required by
+a polynomial-only solver or exporter.
+
+A composed [`Function`](crate::Function) uses a single
+[`Function::Expression`](crate::Function::Expression) variant backed by a
+validated, flat reverse-Polish expression program. Every associative instruction
+combines exactly two stack values, preserving the grouping and evaluation order
+of each operation. Callers construct these programs through `Function` methods
+and arithmetic operators rather than assembling instructions directly.
 
 See also [`PolynomialBase`](crate::PolynomialBase) which is a base for [`Linear`](crate::Linear), [`Quadratic`](crate::Quadratic), and [`Polynomial`](crate::Polynomial).

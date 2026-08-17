@@ -8,57 +8,84 @@ import "ommx/v1/quadratic.proto";
 
 // Real-valued multivariate function used for objective function and constraints.
 message Function {
-  // An operation applied to one operand.
-  message UnaryOperation {
-    enum Operator {
-      OPERATOR_UNSPECIFIED = 0;
-      // Negation: `-operand`.
-      OPERATOR_NEG = 1;
-      // Absolute value: `|operand|`.
-      OPERATOR_ABS = 2;
-      // Sign of the operand: -1 for negative values, 0 for zero, and 1 for positive values.
-      OPERATOR_SIGNUM = 3;
-      // Integer exponentiation: `operand^integer_exponent`.
-      OPERATOR_POWI = 4;
+  // A non-recursive expression encoded as reverse Polish notation (RPN).
+  //
+  // Instructions are evaluated in order using a value stack. Atom instructions
+  // push one value, unary operations replace the top value, and associative and
+  // binary operations pop `rhs` followed by `lhs` and push `lhs op rhs`.
+  // A valid expression never underflows its stack and finishes with exactly one
+  // value. Canonical expression programs contain at least one operation;
+  // decoders normalize a single atom to a compact Function variant below.
+  message Expression {
+    message Instruction {
+      // An operation applied to the top stack value.
+      message UnaryOperation {
+        enum Operator {
+          OPERATOR_UNSPECIFIED = 0;
+          // Negation: `-operand`.
+          OPERATOR_NEG = 1;
+          // Absolute value: `|operand|`.
+          OPERATOR_ABS = 2;
+          // Sign of the operand: -1 for negative values, 0 for zero, and 1 for positive values.
+          OPERATOR_SIGNUM = 3;
+          // Integer exponentiation: `operand^integer_exponent`.
+          OPERATOR_POWI = 4;
+        }
+
+        Operator operator = 1;
+        // Exact signed integer exponent. Present if and only if operator is OPERATOR_POWI.
+        optional sint32 integer_exponent = 2;
+      }
+
+      // A two-operand operation whose mathematical operation is associative.
+      // The wire representation nevertheless preserves every binary application
+      // so evaluation order and grouping remain explicit.
+      message AssociativeOperation {
+        enum Operator {
+          OPERATOR_UNSPECIFIED = 0;
+          // Addition: `lhs + rhs`.
+          OPERATOR_ADD = 1;
+          // Multiplication: `lhs * rhs`.
+          OPERATOR_MUL = 2;
+          // Minimum: `min(lhs, rhs)`.
+          OPERATOR_MIN = 3;
+          // Maximum: `max(lhs, rhs)`.
+          OPERATOR_MAX = 4;
+        }
+
+        Operator operator = 1;
+      }
+
+      // A two-operand operation for which grouping is significant.
+      message BinaryOperation {
+        enum Operator {
+          OPERATOR_UNSPECIFIED = 0;
+          // Division: `lhs / rhs`. Evaluation is undefined when rhs is zero.
+          OPERATOR_DIV = 1;
+        }
+
+        Operator operator = 1;
+      }
+
+      oneof instruction {
+        // Push a constant function. Zero is encoded as the constant 0.
+        double constant = 1;
+        // Push a compact linear function.
+        Linear linear = 2;
+        // Push a compact quadratic function.
+        Quadratic quadratic = 3;
+        // Push a compact polynomial function.
+        Polynomial polynomial = 4;
+        // Apply a unary operation to the top stack value.
+        UnaryOperation unary = 5;
+        // Apply an associative operation to the top two stack values.
+        AssociativeOperation associative = 6;
+        // Apply a non-associative binary operation to the top two stack values.
+        BinaryOperation binary = 7;
+      }
     }
 
-    Operator operator = 1;
-    Function operand = 2;
-    // Exact signed integer exponent. Present if and only if operator is OPERATOR_POWI.
-    optional sint32 integer_exponent = 3;
-  }
-
-  // An ordered n-ary operation applied to two or more operands.
-  // Operands are evaluated from left to right. Nested operations preserve grouping,
-  // except that a same-operator first operand may be flattened into the same left fold.
-  message NaryOperation {
-    enum Operator {
-      OPERATOR_UNSPECIFIED = 0;
-      // Sum of the operands.
-      OPERATOR_ADD = 1;
-      // Product of the operands.
-      OPERATOR_MUL = 2;
-      // Minimum of the operands.
-      OPERATOR_MIN = 3;
-      // Maximum of the operands.
-      OPERATOR_MAX = 4;
-    }
-
-    Operator operator = 1;
-    repeated Function operands = 2;
-  }
-
-  // An ordered operation applied to a left-hand side and a right-hand side.
-  message BinaryOperation {
-    enum Operator {
-      OPERATOR_UNSPECIFIED = 0;
-      // Division: `lhs / rhs`. Evaluation is undefined when rhs is zero.
-      OPERATOR_DIV = 1;
-    }
-
-    Operator operator = 1;
-    Function lhs = 2;
-    Function rhs = 3;
+    repeated Instruction instructions = 1;
   }
 
   oneof function {
@@ -70,11 +97,7 @@ message Function {
     Quadratic quadratic = 3;
     // Polynomial like `f(x_1, x_2) = 4 x_1^2 + 5 x_2^3 + 6 x_1 x_2^2 + 7 x_2^2 + 8 x_1 x_2 + 9 x_1 + 10 x_2 + 11`
     Polynomial polynomial = 4;
-    // Unary operation such as `abs(f(x))`.
-    UnaryOperation unary = 5;
-    // Ordered n-ary operation such as `min(f(x), g(x), h(x))`.
-    NaryOperation nary = 6;
-    // Ordered binary division such as `f(x) / g(x)`.
-    BinaryOperation binary = 7;
+    // A non-polynomial expression encoded as reverse Polish notation.
+    Expression expression = 5;
   }
 }

@@ -19,7 +19,7 @@ impl Div<Coefficient> for Function {
             Function::Linear(l) => l.try_div_assign_in_place(rhs)?,
             Function::Quadratic(q) => q.try_div_assign_in_place(rhs)?,
             Function::Polynomial(p) => p.try_div_assign_in_place(rhs)?,
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => {
+            Function::Expression(_) => {
                 if rhs != Coefficient::one() {
                     let lhs = std::mem::take(&mut self);
                     self = Function::binary_operation(

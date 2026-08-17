@@ -6,7 +6,7 @@
 
 use ommx::Message as _;
 use pyo3::{
-    exceptions::{PyImportError, PyRuntimeError},
+    exceptions::PyImportError,
     prelude::*,
     types::{PyAny, PyBytes},
 };
@@ -25,10 +25,6 @@ fn incompatible_python_ommx(capability: &str, source: PyErr) -> PyErr {
 
 fn incompatible_python_ommx_root(class_name: &str, source: PyErr) -> PyErr {
     incompatible_python_ommx(&format!("ommx.{class_name}.from_v2_bytes"), source)
-}
-
-fn wire_serialization_error(error: ommx::Error) -> PyErr {
-    PyRuntimeError::new_err(format!("{error:#}"))
 }
 
 fn bridge_endpoint<'py>(py: Python<'py>, endpoint: &str) -> PyResult<Bound<'py, PyAny>> {
@@ -52,23 +48,18 @@ fn root_from_v2_bytes<'py>(py: Python<'py>, class_name: &str) -> PyResult<Bound<
         .map_err(|error| incompatible_python_ommx_root(class_name, error))
 }
 
-fn function_payload(function: ommx::Function) -> ommx::Result<Vec<u8>> {
+fn function_payload(function: ommx::Function) -> Vec<u8> {
     function.to_bytes()
 }
 
 fn constraint_payloads(
     constraint: ommx::Constraint,
     context: ommx::ConstraintContext,
-) -> ommx::Result<(Vec<u8>, Vec<u8>)> {
-    // The bridge encodes a RegularConstraint directly instead of going through
-    // an Instance root, so validate its embedded Function before the raw prost
-    // conversion. Discarding these standalone bytes is intentional: the same
-    // depth boundary applies to every supported Function container.
-    constraint.function().to_bytes()?;
-    Ok((
+) -> (Vec<u8>, Vec<u8>) {
+    (
         ommx::v2::RegularConstraint::from(constraint).encode_to_vec(),
         ommx::v2::ConstraintContext::from(context).encode_to_vec(),
-    ))
+    )
 }
 
 fn decision_variable_payloads(
@@ -87,7 +78,7 @@ pub fn function_into_py<'py>(
     function: ommx::Function,
     py: Python<'py>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let bytes = function_payload(function).map_err(wire_serialization_error)?;
+    let bytes = function_payload(function);
     bridge_endpoint(py, FUNCTION_ENDPOINT)?.call1((PyBytes::new(py, &bytes),))
 }
 
@@ -96,8 +87,7 @@ pub fn constraint_into_py<'py>(
     context: ommx::ConstraintContext,
     py: Python<'py>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    let (constraint, context) =
-        constraint_payloads(constraint, context).map_err(wire_serialization_error)?;
+    let (constraint, context) = constraint_payloads(constraint, context);
     bridge_endpoint(py, CONSTRAINT_ENDPOINT)?
         .call1((PyBytes::new(py, &constraint), PyBytes::new(py, &context)))
 }
@@ -130,8 +120,8 @@ mod tests {
     use ommx::Parse as _;
     use proptest::{prelude::*, string::string_regex};
 
-    fn function_at_depth(depth: usize) -> ommx::Function {
-        (0..depth).fold(ommx::Function::from(ommx::linear!(1)), |function, level| {
+    fn deeply_composed_function(operation_count: usize) -> ommx::Function {
+        (0..operation_count).fold(ommx::Function::from(ommx::linear!(1)), |function, level| {
             if level % 2 == 0 {
                 function.abs()
             } else {
@@ -220,7 +210,7 @@ mod tests {
         #[test]
         fn function_payload_preserves_all_function_variants(function in arbitrary_function()) {
             let expected = function.clone();
-            let payload = function_payload(function).unwrap();
+            let payload = function_payload(function);
             let actual = ommx::Function::from_bytes(&payload).unwrap();
             prop_assert_eq!(actual, expected);
         }
@@ -232,7 +222,7 @@ mod tests {
         ) {
             let expected_constraint = constraint.clone();
             let expected_context = context.clone();
-            let (constraint, context) = constraint_payloads(constraint, context).unwrap();
+            let (constraint, context) = constraint_payloads(constraint, context);
             let actual_constraint = ommx::v2::RegularConstraint::decode(constraint.as_slice())
                 .unwrap()
                 .parse(&())
@@ -274,51 +264,29 @@ mod tests {
         #[test]
         fn instance_payload_preserves_owner_complete_root(instance in any::<ommx::Instance>()) {
             let expected = instance.clone();
-            let payload = instance.to_v2_bytes().unwrap();
+            let payload = instance.to_v2_bytes();
             let actual = ommx::Instance::from_v2_bytes(&payload).unwrap();
             prop_assert_eq!(actual, expected);
         }
     }
 
     #[test]
-    fn direct_function_and_constraint_payloads_reject_excessive_expression_depth() {
-        let boundary = function_at_depth(32);
-        let function_bytes = function_payload(boundary.clone()).unwrap();
+    fn deep_function_and_constraint_payloads_roundtrip() {
+        let function = deeply_composed_function(4096);
+        let function_bytes = function_payload(function.clone());
         assert_eq!(
             ommx::Function::from_bytes(&function_bytes).unwrap(),
-            boundary
+            function
         );
 
-        let boundary_constraint = ommx::Constraint::equal_to_zero(boundary);
-        let (constraint_bytes, _) =
-            constraint_payloads(boundary_constraint.clone(), Default::default()).unwrap();
+        let constraint = ommx::Constraint::equal_to_zero(function);
+        let (constraint_bytes, _) = constraint_payloads(constraint.clone(), Default::default());
         assert_eq!(
             ommx::v2::RegularConstraint::decode(constraint_bytes.as_slice())
                 .unwrap()
                 .parse(&())
                 .unwrap(),
-            boundary_constraint,
-        );
-
-        let too_deep = function_at_depth(33);
-        let error = function_payload(too_deep.clone()).unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("protobuf serialization limit of 32"),
-            "unexpected error: {error:#}",
-        );
-
-        let error = constraint_payloads(
-            ommx::Constraint::equal_to_zero(too_deep),
-            Default::default(),
-        )
-        .unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("protobuf serialization limit of 32"),
-            "unexpected error: {error:#}",
+            constraint,
         );
     }
 }

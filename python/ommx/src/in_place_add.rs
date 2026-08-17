@@ -68,10 +68,9 @@ pub fn preflight_function(lhs: &Function, rhs: &Function) -> Result<(), Coeffici
             preflight_polynomial(polynomial, quadratic)
         }
         (Function::Polynomial(lhs), Function::Polynomial(rhs)) => preflight_polynomial(lhs, rhs),
-        // Adding an expression constructs an ordered n-ary Add node instead of
-        // merging polynomial coefficient maps, so there is no coefficient
-        // arithmetic to preflight.
-        (Function::Unary(_) | Function::Nary(_) | Function::Binary(_), _)
-        | (_, Function::Unary(_) | Function::Nary(_) | Function::Binary(_)) => Ok(()),
+        // Adding an expression constructs an ordered composed Add operation
+        // instead of merging polynomial coefficient maps, so there is no
+        // coefficient arithmetic to preflight.
+        (Function::Expression(_), _) | (_, Function::Expression(_)) => Ok(()),
     }
 }

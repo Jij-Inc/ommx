@@ -30,9 +30,8 @@ impl_instance_annotations!(ParametricInstance);
 impl ParametricInstance {
     /// Deserialize a parametric instance from v1 protobuf bytes.
     ///
-    /// Raises {class}`ValueError` if the protobuf payload is malformed,
-    /// semantically invalid, or contains a function expression beyond the
-    /// managed wire-depth limit.
+    /// Raises {class}`ValueError` if the protobuf payload is malformed or
+    /// semantically invalid.
     #[staticmethod]
     pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
@@ -43,9 +42,8 @@ impl ParametricInstance {
 
     /// Deserialize a parametric instance from v2 protobuf bytes.
     ///
-    /// Raises {class}`ValueError` if the protobuf payload is malformed,
-    /// semantically invalid, or contains a function expression beyond the
-    /// managed wire-depth limit.
+    /// Raises {class}`ValueError` if the protobuf payload is malformed or
+    /// semantically invalid.
     #[staticmethod]
     pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
@@ -55,21 +53,15 @@ impl ParametricInstance {
     }
 
     /// Serialize this parametric instance as v1 protobuf bytes.
-    ///
-    /// Raises {class}`RuntimeError` if a recursive function expression exceeds
-    /// the protobuf-safe serialization depth.
     pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
 
     /// Serialize this parametric instance as v2 protobuf bytes.
-    ///
-    /// Raises {class}`RuntimeError` if a recursive function expression exceeds
-    /// the protobuf-safe serialization depth.
     pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        Ok(PyBytes::new(py, &self.inner.to_v2_bytes()?))
+        Ok(PyBytes::new(py, &self.inner.to_v2_bytes()))
     }
 
     pub fn __str__(&self) -> String {

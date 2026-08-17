@@ -135,7 +135,7 @@ class TestNamedFunctionArithmetic:
         assert isinstance(result, Function)
         assert result.evaluate({1: 2.0}) == 9.0
 
-    def test_reverse_nary_operations_preserve_left_operand_order(self):
+    def test_reverse_associative_operations_preserve_left_operand_order(self):
         x = Function(DecisionVariable.continuous(1))
         lhs = Function(Linear(terms={1: sys.float_info.max}))
         rhs = NamedFunction(id=0, function=1 / (x - 2))

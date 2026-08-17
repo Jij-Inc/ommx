@@ -26,7 +26,8 @@ pub use operation::*;
 
 /// A real-valued function of decision variables used for objective and constraint functions.
 ///
-/// Polynomial functions use compact coefficient maps. Other functions are recursive expression trees.
+/// Polynomial functions use compact coefficient maps. Other functions use a
+/// validated, non-recursive reverse-Polish expression program.
 #[derive(Clone, PartialEq, From, Default)]
 pub enum Function {
     #[default]
@@ -36,45 +37,19 @@ pub enum Function {
     Linear(Linear),
     Quadratic(Quadratic),
     Polynomial(Polynomial),
-    Unary(UnaryOperation),
-    Nary(NaryOperation),
-    Binary(BinaryOperation),
+    Expression(Expression),
 }
 
 #[derive(serde::Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ExpressionRef<'a> {
-    Unary {
-        operator: UnaryOperator,
-        operand: &'a Function,
-    },
-    Nary {
-        operator: NaryOperator,
-        operands: &'a [Function],
-    },
-    Binary {
-        operator: BinaryOperator,
-        lhs: &'a Function,
-        rhs: &'a Function,
-    },
+    Expression { instructions: &'a [Instruction] },
 }
 
 #[derive(serde::Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ExpressionOwned {
-    Unary {
-        operator: UnaryOperator,
-        operand: Function,
-    },
-    Nary {
-        operator: NaryOperator,
-        operands: Vec<Function>,
-    },
-    Binary {
-        operator: BinaryOperator,
-        lhs: Function,
-        rhs: Function,
-    },
+    Expression { instructions: Vec<Instruction> },
 }
 
 impl serde::Serialize for Function {
@@ -97,20 +72,8 @@ impl serde::Serialize for Function {
             Function::Linear(l) => l.serialize(serializer),
             Function::Quadratic(q) => q.serialize(serializer),
             Function::Polynomial(p) => p.serialize(serializer),
-            Function::Unary(operation) => ExpressionRef::Unary {
-                operator: operation.operator(),
-                operand: operation.operand(),
-            }
-            .serialize(serializer),
-            Function::Nary(operation) => ExpressionRef::Nary {
-                operator: operation.operator(),
-                operands: operation.operands(),
-            }
-            .serialize(serializer),
-            Function::Binary(operation) => ExpressionRef::Binary {
-                operator: operation.operator(),
-                lhs: operation.lhs(),
-                rhs: operation.rhs(),
+            Function::Expression(expression) => ExpressionRef::Expression {
+                instructions: expression.instructions(),
             }
             .serialize(serializer),
         }
@@ -131,19 +94,8 @@ impl<'de> serde::Deserialize<'de> for Function {
 
         match Repr::deserialize(deserializer)? {
             Repr::Polynomial(polynomial) => Ok(Function::Polynomial(polynomial).normalize()),
-            Repr::Expression(ExpressionOwned::Unary { operator, operand }) => {
-                Ok(Function::unary_expression(operator, operand))
-            }
-            Repr::Expression(ExpressionOwned::Nary { operator, operands }) => {
-                if operands.len() < 2 {
-                    return Err(serde::de::Error::custom(
-                        "nary operation requires at least two operands",
-                    ));
-                }
-                Ok(Function::nary_expression(operator, operands))
-            }
-            Repr::Expression(ExpressionOwned::Binary { operator, lhs, rhs }) => {
-                Ok(Function::binary_expression(operator, lhs, rhs))
+            Repr::Expression(ExpressionOwned::Expression { instructions }) => {
+                Function::from_instructions_exact(instructions).map_err(serde::de::Error::custom)
             }
         }
     }
@@ -211,10 +163,7 @@ impl_into_function_for_macro!(
 impl Function {
     /// Return whether this value uses the compact polynomial representation.
     pub fn is_polynomial(&self) -> bool {
-        !matches!(
-            self,
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_)
-        )
+        !matches!(self, Function::Expression(_))
     }
 
     pub fn as_polynomial(&self) -> Option<Cow<'_, Polynomial>> {
@@ -224,7 +173,7 @@ impl Function {
             Function::Linear(l) => Some(Cow::Owned(l.clone().into())),
             Function::Quadratic(q) => Some(Cow::Owned(q.clone().into())),
             Function::Polynomial(p) => Some(Cow::Borrowed(p)),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => None,
+            Function::Expression(_) => None,
         }
     }
 
@@ -235,7 +184,7 @@ impl Function {
             Function::Linear(l) => Some(l.constant_term()),
             Function::Quadratic(q) => Some(q.constant_term()),
             Function::Polynomial(p) => Some(p.constant_term()),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => None,
+            Function::Expression(_) => None,
         }
     }
 
@@ -245,7 +194,7 @@ impl Function {
             Function::Linear(l) => Box::new(l.linear_terms()),
             Function::Quadratic(q) => Box::new(q.linear_terms()),
             Function::Polynomial(p) => Box::new(p.linear_terms()),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => return None,
+            Function::Expression(_) => return None,
         })
     }
 
@@ -257,7 +206,7 @@ impl Function {
             Function::Linear(l) => Box::new(l.quadratic_terms()),
             Function::Quadratic(q) => Box::new(q.quadratic_terms()),
             Function::Polynomial(p) => Box::new(p.quadratic_terms()),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => return None,
+            Function::Expression(_) => return None,
         })
     }
 
@@ -268,7 +217,7 @@ impl Function {
             Function::Linear(l) => Some(Cow::Borrowed(l)),
             Function::Quadratic(q) => q.try_into().map(Cow::Owned).ok(),
             Function::Polynomial(p) => p.try_into().map(Cow::Owned).ok(),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => None,
+            Function::Expression(_) => None,
         }
     }
 
@@ -279,7 +228,7 @@ impl Function {
             Function::Linear(l) => Some(Cow::Owned(l.clone().into())),
             Function::Quadratic(q) => Some(Cow::Borrowed(q)),
             Function::Polynomial(p) => p.try_into().map(Cow::Owned).ok(),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => None,
+            Function::Expression(_) => None,
         }
     }
 
@@ -290,7 +239,7 @@ impl Function {
             Function::Linear(l) => Some(l.num_terms()),
             Function::Quadratic(q) => Some(q.num_terms()),
             Function::Polynomial(p) => Some(p.num_terms()),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => None,
+            Function::Expression(_) => None,
         }
     }
 
@@ -300,7 +249,7 @@ impl Function {
             Function::Linear(l) => Some(l.degree()),
             Function::Quadratic(q) => Some(q.degree()),
             Function::Polynomial(p) => Some(p.degree()),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => None,
+            Function::Expression(_) => None,
         }
     }
 
@@ -311,7 +260,7 @@ impl Function {
             Function::Linear(l) => Box::new(l.iter().map(|(k, v)| (MonomialDyn::from(*k), v))),
             Function::Quadratic(q) => Box::new(q.iter().map(|(k, v)| (MonomialDyn::from(*k), v))),
             Function::Polynomial(p) => Box::new(p.iter().map(|(k, v)| (k.clone(), v))),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => return None,
+            Function::Expression(_) => return None,
         })
     }
 
@@ -326,7 +275,7 @@ impl Function {
                 Box::new(q.iter_mut().map(|(k, v)| (MonomialDyn::from(*k), v)))
             }
             Function::Polynomial(p) => Box::new(p.iter_mut().map(|(k, v)| (k.clone(), v))),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => return None,
+            Function::Expression(_) => return None,
         })
     }
 
@@ -337,7 +286,7 @@ impl Function {
             Function::Linear(l) => Box::new(l.values()),
             Function::Quadratic(q) => Box::new(q.values()),
             Function::Polynomial(p) => Box::new(p.values()),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => return None,
+            Function::Expression(_) => return None,
         })
     }
 
@@ -348,7 +297,7 @@ impl Function {
             Function::Linear(l) => Box::new(l.values_mut()),
             Function::Quadratic(q) => Box::new(q.values_mut()),
             Function::Polynomial(p) => Box::new(p.values_mut()),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => return None,
+            Function::Expression(_) => return None,
         })
     }
 
@@ -359,7 +308,7 @@ impl Function {
             Function::Linear(l) => Box::new(l.keys().map(|k| MonomialDyn::from(*k))),
             Function::Quadratic(q) => Box::new(q.keys().map(|k| MonomialDyn::from(*k))),
             Function::Polynomial(p) => Box::new(p.keys().cloned()),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => return None,
+            Function::Expression(_) => return None,
         })
     }
 
@@ -376,7 +325,7 @@ impl Function {
             Function::Linear(l) => l.content_factor(),
             Function::Quadratic(q) => q.content_factor(),
             Function::Polynomial(p) => p.content_factor(),
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => {
+            Function::Expression(_) => {
                 anyhow::bail!("content_factor is only defined for polynomial functions")
             }
         }
@@ -388,28 +337,46 @@ mod serde_tests {
     use super::*;
 
     #[test]
-    fn composed_function_json_rejects_invalid_nary_arity() {
-        let serialized = r#"{"type":"nary","operator":"min","operands":[]}"#;
+    fn composed_function_json_rejects_stack_underflow() {
+        let serialized =
+            r#"{"type":"expression","instructions":[{"instruction":"unary","value":"abs"}]}"#;
         let error = serde_json::from_str::<Function>(serialized).unwrap_err();
         assert!(error
             .to_string()
-            .contains("nary operation requires at least two operands"));
+            .contains("requires 1 stack values, found 0"));
     }
 
     #[test]
-    fn composed_function_deserialization_preserves_nary_expression_shape() {
-        let serialized = r#"{"type":"nary","operator":"mul","operands":[{},{}]}"#;
+    fn composed_function_deserialization_preserves_rpn_order() {
+        let serialized = r#"{"type":"expression","instructions":[{"instruction":"push","value":{"type":"zero"}},{"instruction":"push","value":{"type":"zero"}},{"instruction":"associative","value":"mul"}]}"#;
         let function = serde_json::from_str::<Function>(serialized).unwrap();
-        let Function::Nary(operation) = function else {
-            panic!("deserialization must not eagerly fold n-ary polynomial operands");
+        let Function::Expression(expression) = function else {
+            panic!("deserialization must preserve an explicit expression program");
         };
-        assert_eq!(operation.operator(), NaryOperator::Mul);
-        assert_eq!(operation.operands().len(), 2);
+        assert_eq!(
+            expression.instructions(),
+            &[
+                Instruction::Push(Atom::Zero),
+                Instruction::Push(Atom::Zero),
+                Instruction::Associative(AssociativeOperator::Mul),
+            ]
+        );
     }
 
     #[test]
     fn parameterized_unary_operator_json_roundtrip() {
         let function = Function::zero().powi(-2);
+        let serialized = serde_json::to_string(&function).unwrap();
+        let deserialized = serde_json::from_str::<Function>(&serialized).unwrap();
+
+        assert_eq!(deserialized, function);
+    }
+
+    #[test]
+    fn composed_function_with_polynomial_and_constant_json_roundtrip() {
+        let numerator = Function::from(crate::linear!(1)).abs();
+        let function = (numerator / Function::try_from(2.0).unwrap()).unwrap();
+
         let serialized = serde_json::to_string(&function).unwrap();
         let deserialized = serde_json::from_str::<Function>(&serialized).unwrap();
 

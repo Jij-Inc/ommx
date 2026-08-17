@@ -646,7 +646,7 @@ impl Function {
     /// **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
     ///
     /// **Tightness:** Polynomial leaves are bounded **term by term**
-    /// (monomial-wise), and composed expression nodes combine their operand
+    /// (monomial-wise), and composed expression operations combine their operand
     /// bounds with interval arithmetic. The result is a **sound
     /// over-approximation** of the true range $[\inf f, \sup f]$ but is **not
     /// guaranteed to be tight**, because it ignores dependencies between terms
@@ -698,9 +698,7 @@ impl Function {
             ommx::Function::Linear(_) => "Linear",
             ommx::Function::Quadratic(_) => "Quadratic",
             ommx::Function::Polynomial(_) => "Polynomial",
-            ommx::Function::Unary(_) => "Unary",
-            ommx::Function::Nary(_) => "Nary",
-            ommx::Function::Binary(_) => "Binary",
+            ommx::Function::Expression(_) => "Expression",
         }
     }
 

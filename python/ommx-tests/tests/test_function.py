@@ -226,7 +226,7 @@ def test_function_non_polynomial_operators():
     y = Function(DecisionVariable.continuous(2))
 
     absolute = abs(x - 3)
-    assert absolute.type_name == "Unary"
+    assert absolute.type_name == "Expression"
     assert absolute.evaluate({1: 1}) == 2
 
     sign = (x - 3).signum()
@@ -236,21 +236,21 @@ def test_function_non_polynomial_operators():
 
     minimum = x.minimum(y)
     maximum = x.maximum(y)
-    assert minimum.type_name == "Nary"
-    assert maximum.type_name == "Nary"
+    assert minimum.type_name == "Expression"
+    assert maximum.type_name == "Expression"
     assert minimum.evaluate({1: 2, 2: 5}) == 2
     assert maximum.evaluate({1: 2, 2: 5}) == 5
 
     quotient = x / (y + 1)
     reverse_quotient = 12 / (x + 1)
-    assert quotient.type_name == "Binary"
+    assert quotient.type_name == "Expression"
     assert quotient.evaluate({1: 6, 2: 2}) == 2
     assert reverse_quotient.evaluate({1: 2}) == 4
 
     power = x**2
     method_power = x.powi(3)
-    assert power.type_name == "Unary"
-    assert method_power.type_name == "Unary"
+    assert power.type_name == "Expression"
+    assert method_power.type_name == "Expression"
     assert power.evaluate({1: 3}) == 9
     assert method_power.evaluate({1: 2}) == 8
     assert pow(x, 2, None).evaluate({1: 3}) == 9
@@ -261,14 +261,14 @@ def test_function_non_polynomial_operators():
     assert absolute.evaluate({1: 1, 2: 5}) == 7
 
 
-def test_function_reverse_nary_operators_preserve_left_operand_order():
+def test_function_reverse_associative_operators_preserve_left_operand_order():
     x = Function(DecisionVariable.continuous(1))
     overflow = Function(Linear(terms={1: sys.float_info.max}))
     reciprocal_at_two = 1 / (x - 2)
 
     # The left polynomial overflows at x=2, while the right operand is also
-    # undefined there. Ordered n-ary evaluation must report the left failure
-    # first even when Python dispatches through the reverse operator.
+    # undefined there. Ordered associative evaluation must report the left
+    # failure first even when Python dispatches through the reverse operator.
     for expression in (
         reciprocal_at_two.__radd__(overflow),
         reciprocal_at_two.__rmul__(overflow),

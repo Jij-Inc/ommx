@@ -25,9 +25,9 @@ h = f.powi(-2)
 `f**n` と {meth}`~ommx.Function.powi` は同じ演算です。浮動小数や関数値の指数、
 および反転累乗はサポートしません。ゼロ除算、ゼロを負の整数で累乗する演算、
 非有限なevaluation結果は`ValueError`になります。複合式はOMMX protobuf payloadへ
-serializeできます。一方、現在のHiGHS、
-Python-MIP、PySCIPOpt adapterの入力はpolynomialに限られるため、複合式を含むmodelは
-明示的に拒否されます。
+flat な逆ポーランド記法（RPN）の命令列としてserializeされます。一方、現在の
+HiGHS、Python-MIP、PySCIPOpt adapterの入力はpolynomialに限られるため、複合式を
+含むmodelは明示的に拒否されます。
 
 `Function`が常にpolynomialとは限らなくなったため、複合式に対する
 {meth}`~ommx.Function.degree` と {meth}`~ommx.Function.num_terms` は`None`を返します。

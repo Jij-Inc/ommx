@@ -851,7 +851,7 @@ mod tests {
 
         // Compare serialized bytes to make the side-effect-free contract
         // observable across the complete instance.
-        let before = instance.to_v2_bytes().unwrap();
+        let before = instance.to_v2_bytes();
         let limited = InstanceClassClause::new(
             "limited",
             BTreeSet::from([Kind::Binary]),
@@ -907,7 +907,7 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(instance.to_v2_bytes().unwrap(), before);
+        assert_eq!(instance.to_v2_bytes(), before);
     }
 
     #[test]

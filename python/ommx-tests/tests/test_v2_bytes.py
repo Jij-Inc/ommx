@@ -2,20 +2,12 @@ import pytest
 
 from ommx import (
     DecisionVariable,
-    Function,
     Instance,
     OneHotConstraint,
     Parameter,
     ParametricInstance,
     Sense,
 )
-
-
-def _function_at_depth(depth: int) -> Function:
-    function = Function(DecisionVariable.continuous(0))
-    for level in range(depth):
-        function = abs(function) if level % 2 == 0 else function.signum()
-    return function
 
 
 def _special_instance() -> Instance:
@@ -39,18 +31,6 @@ def test_instance_v2_bytes_roundtrip_special_constraints():
 
     assert restored.one_hot_constraints[10].variables == [0, 1, 2]
     assert restored.to_v2_bytes() == instance.to_v2_bytes()
-
-
-def test_instance_v2_bytes_rejects_excessive_expression_depth():
-    instance = Instance.from_components(
-        sense=Instance.MINIMIZE,
-        objective=_function_at_depth(33),
-        decision_variables=[DecisionVariable.continuous(0)],
-        constraints={},
-    )
-
-    with pytest.raises(RuntimeError, match="protobuf serialization limit of 32"):
-        instance.to_v2_bytes()
 
 
 def test_parametric_instance_v2_bytes_roundtrip():

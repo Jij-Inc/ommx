@@ -25,8 +25,8 @@ impl Substitute for Function {
         assigned: VariableID,
         f: &Function,
     ) -> Result<Self, crate::substitute::SubstitutionError> {
-        match self {
-            Function::Zero => Ok(Function::Zero),
+        let substituted = match self {
+            Function::Zero => Ok::<_, crate::SubstitutionError>(Function::Zero),
             Function::Constant(c) => Ok(Function::Constant(c)),
             Function::Linear(l) => {
                 let substituted = l.substitute_one(assigned, f)?;
@@ -40,29 +40,64 @@ impl Substitute for Function {
                 let substituted = p.substitute_one(assigned, f)?;
                 Ok(substituted)
             }
-            Function::Unary(operation) => {
-                let (operator, operand) = operation.into_parts();
-                Ok(Function::unary_operation(
-                    operator,
-                    operand.substitute_one(assigned, f)?,
-                ))
+            Function::Expression(expression) => {
+                let mut instructions = Vec::with_capacity(expression.instructions().len());
+                for instruction in expression.into_instructions() {
+                    match instruction {
+                        Instruction::Push(atom) => {
+                            let substituted = atom.into_function().substitute_one(assigned, f)?;
+                            instructions.extend(substituted.into_instructions());
+                        }
+                        operation => instructions.push(operation),
+                    }
+                }
+                Ok(Function::from_instructions_exact(instructions)
+                    .expect("replacing pushes with valid programs preserves expression validity"))
             }
-            Function::Nary(operation) => {
-                let (operator, operands) = operation.into_parts();
-                let operands = operands
-                    .into_iter()
-                    .map(|operand| operand.substitute_one(assigned, f))
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(Function::nary_expression(operator, operands))
-            }
-            Function::Binary(operation) => {
-                let (operator, lhs, rhs) = operation.into_parts();
-                Ok(Function::binary_expression(
-                    operator,
-                    lhs.substitute_one(assigned, f)?,
-                    rhs.substitute_one(assigned, f)?,
-                ))
+        }?;
+
+        // Preserve the eager constant folding previously performed while
+        // rebuilding unary expression nodes. Undefined closed expressions
+        // remain represented, just as division-by-zero and negative powers
+        // did before the RPN migration.
+        if substituted.required_ids().is_empty() && !substituted.is_polynomial() {
+            if let Ok(value) =
+                substituted.evaluate(&crate::v1::State::default(), crate::ATol::default())
+            {
+                return Ok(Function::try_from(value)
+                    .expect("successful Function evaluation always returns a finite value"));
             }
         }
+        Ok(substituted)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::linear;
+
+    #[test]
+    fn deep_expression_substitution_is_iterative() {
+        let mut function = Function::from(linear!(1));
+        for _ in 0..4096 {
+            function = function.powi(2);
+        }
+
+        let substituted = function.substitute_one(1.into(), &Function::one()).unwrap();
+        assert_eq!(substituted.as_constant(), Some(1.0));
+    }
+
+    #[test]
+    fn substitution_preserves_undefined_closed_expression() {
+        let function = (Function::one() / Function::from(linear!(1))).unwrap();
+        let substituted = function
+            .substitute_one(1.into(), &Function::zero())
+            .unwrap();
+
+        assert!(matches!(substituted, Function::Expression(_)));
+        assert!(substituted
+            .evaluate(&crate::v1::State::default(), crate::ATol::default())
+            .is_err());
     }
 }

@@ -27,12 +27,13 @@ impl Function {
             Function::Linear(l) => l.try_scale_assign_in_place(rhs)?,
             Function::Quadratic(q) => q.try_scale_assign_in_place(rhs)?,
             Function::Polynomial(p) => p.try_scale_assign_in_place(rhs)?,
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => {
+            Function::Expression(_) => {
                 if rhs != Coefficient::one() {
                     let lhs = std::mem::take(self);
-                    *self = Function::nary_operation(
-                        NaryOperator::Mul,
-                        vec![lhs, Function::Constant(rhs)],
+                    *self = Function::associative_operation(
+                        AssociativeOperator::Mul,
+                        lhs,
+                        Function::Constant(rhs),
                     );
                 }
             }
@@ -53,7 +54,7 @@ impl Function {
             *self = match (&lhs, rhs) {
                 (_, Function::Constant(c)) if *c == Coefficient::one() => lhs,
                 (Function::Constant(c), _) if *c == Coefficient::one() => rhs.clone(),
-                _ => Function::nary_operation(NaryOperator::Mul, vec![lhs, rhs.clone()]),
+                _ => Function::associative_operation(AssociativeOperator::Mul, lhs, rhs.clone()),
             };
             return Ok(());
         }
@@ -63,7 +64,7 @@ impl Function {
             Function::Linear(l) => self.try_mul_linear_assign_in_place(l)?,
             Function::Quadratic(q) => self.try_mul_quadratic_assign_in_place(q)?,
             Function::Polynomial(p) => self.try_mul_polynomial_ref_assign_in_place(p)?,
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => {
+            Function::Expression(_) => {
                 unreachable!("composite functions were handled above")
             }
         }
@@ -81,9 +82,11 @@ impl Function {
             Function::Linear(l) => Function::Polynomial((&l * &rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * &rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * &rhs)?),
-            lhs @ (Function::Unary(_) | Function::Nary(_) | Function::Binary(_)) => {
-                Function::nary_operation(NaryOperator::Mul, vec![lhs, Function::Polynomial(rhs)])
-            }
+            lhs @ Function::Expression(_) => Function::associative_operation(
+                AssociativeOperator::Mul,
+                lhs,
+                Function::Polynomial(rhs),
+            ),
         };
         Ok(())
     }
@@ -96,12 +99,11 @@ impl Function {
             Function::Linear(l) => Function::Quadratic((&l * rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
-            lhs @ (Function::Unary(_) | Function::Nary(_) | Function::Binary(_)) => {
-                Function::nary_operation(
-                    NaryOperator::Mul,
-                    vec![lhs, Function::Linear(rhs.clone())],
-                )
-            }
+            lhs @ Function::Expression(_) => Function::associative_operation(
+                AssociativeOperator::Mul,
+                lhs,
+                Function::Linear(rhs.clone()),
+            ),
         };
         Ok(())
     }
@@ -117,12 +119,11 @@ impl Function {
             Function::Linear(l) => Function::Polynomial((&l * rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
-            lhs @ (Function::Unary(_) | Function::Nary(_) | Function::Binary(_)) => {
-                Function::nary_operation(
-                    NaryOperator::Mul,
-                    vec![lhs, Function::Quadratic(rhs.clone())],
-                )
-            }
+            lhs @ Function::Expression(_) => Function::associative_operation(
+                AssociativeOperator::Mul,
+                lhs,
+                Function::Quadratic(rhs.clone()),
+            ),
         };
         Ok(())
     }
@@ -138,12 +139,11 @@ impl Function {
             Function::Linear(l) => Function::Polynomial((&l * rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
-            lhs @ (Function::Unary(_) | Function::Nary(_) | Function::Binary(_)) => {
-                Function::nary_operation(
-                    NaryOperator::Mul,
-                    vec![lhs, Function::Polynomial(rhs.clone())],
-                )
-            }
+            lhs @ Function::Expression(_) => Function::associative_operation(
+                AssociativeOperator::Mul,
+                lhs,
+                Function::Polynomial(rhs.clone()),
+            ),
         };
         Ok(())
     }

@@ -1,4 +1,4 @@
-use crate::{Function, Monomial, MonomialDyn, VariableID};
+use crate::{Atom, Expression, Function, Instruction, Monomial, MonomialDyn, VariableID};
 use std::{collections::BTreeMap, fmt};
 
 /// Options for formatting a [`Function`] with an instance-provided modeling context.
@@ -128,16 +128,76 @@ fn total_polynomial_terms(function: &Function) -> usize {
         Function::Linear(value) => value.num_terms(),
         Function::Quadratic(value) => value.num_terms(),
         Function::Polynomial(value) => value.num_terms(),
-        Function::Unary(operation) => total_polynomial_terms(operation.operand()),
-        Function::Nary(operation) => operation
-            .operands()
+        Function::Expression(expression) => expression
+            .instructions()
             .iter()
-            .map(total_polynomial_terms)
+            .filter_map(|instruction| match instruction {
+                Instruction::Push(atom) => Some(match atom {
+                    Atom::Zero => 0,
+                    Atom::Constant(_) => 1,
+                    Atom::Linear(value) => value.num_terms(),
+                    Atom::Quadratic(value) => value.num_terms(),
+                    Atom::Polynomial(value) => value.num_terms(),
+                }),
+                Instruction::Unary(_) | Instruction::Associative(_) | Instruction::Binary(_) => {
+                    None
+                }
+            })
             .sum(),
-        Function::Binary(operation) => {
-            total_polynomial_terms(operation.lhs()) + total_polynomial_terms(operation.rhs())
+    }
+}
+
+fn render_expression(
+    expression: &Expression,
+    mut render_atom: impl FnMut(&Atom) -> crate::Result<String>,
+) -> crate::Result<String> {
+    let mut stack = Vec::new();
+    for instruction in expression.instructions() {
+        match instruction {
+            Instruction::Push(atom) => stack.push(render_atom(atom)?),
+            Instruction::Unary(operator) => {
+                let operand = stack
+                    .pop()
+                    .expect("validated expression has a unary operand");
+                stack.push(match operator {
+                    crate::UnaryOperator::Neg => format!("-({operand})"),
+                    crate::UnaryOperator::Abs => format!("abs({operand})"),
+                    crate::UnaryOperator::Signum => format!("signum({operand})"),
+                    crate::UnaryOperator::Powi(exponent) => {
+                        format!("powi({operand}, {exponent})")
+                    }
+                });
+            }
+            Instruction::Associative(operator) => {
+                let rhs = stack
+                    .pop()
+                    .expect("validated expression has a right operand");
+                let lhs = stack
+                    .pop()
+                    .expect("validated expression has a left operand");
+                stack.push(match operator {
+                    crate::AssociativeOperator::Add => format!("({lhs}) + ({rhs})"),
+                    crate::AssociativeOperator::Mul => format!("({lhs}) * ({rhs})"),
+                    crate::AssociativeOperator::Min => format!("min({lhs}, {rhs})"),
+                    crate::AssociativeOperator::Max => format!("max({lhs}, {rhs})"),
+                });
+            }
+            Instruction::Binary(operator) => {
+                let rhs = stack
+                    .pop()
+                    .expect("validated expression has a right operand");
+                let lhs = stack
+                    .pop()
+                    .expect("validated expression has a left operand");
+                stack.push(match operator {
+                    crate::BinaryOperator::Div => format!("({lhs}) / ({rhs})"),
+                });
+            }
         }
     }
+    Ok(stack
+        .pop()
+        .expect("validated expression leaves one rendered value"))
 }
 
 fn render_function_with_symbols(
@@ -152,47 +212,15 @@ fn render_function_with_symbols(
         )?
         .text);
     }
-    Ok(match function {
-        Function::Unary(operation) => {
-            let operand = render_function_with_symbols(operation.operand(), symbols)?;
-            match operation.operator() {
-                crate::UnaryOperator::Neg => format!("-({operand})"),
-                crate::UnaryOperator::Abs => format!("abs({operand})"),
-                crate::UnaryOperator::Signum => format!("signum({operand})"),
-                crate::UnaryOperator::Powi(exponent) => {
-                    format!("powi({operand}, {exponent})")
-                }
-            }
-        }
-        Function::Nary(operation) => {
-            let operands = operation
-                .operands()
-                .iter()
-                .map(|operand| render_function_with_symbols(operand, symbols))
-                .collect::<crate::Result<Vec<_>>>()?;
-            match operation.operator() {
-                crate::NaryOperator::Add => operands
-                    .into_iter()
-                    .map(|operand| format!("({operand})"))
-                    .collect::<Vec<_>>()
-                    .join(" + "),
-                crate::NaryOperator::Mul => operands
-                    .into_iter()
-                    .map(|operand| format!("({operand})"))
-                    .collect::<Vec<_>>()
-                    .join(" * "),
-                crate::NaryOperator::Min => format!("min({})", operands.join(", ")),
-                crate::NaryOperator::Max => format!("max({})", operands.join(", ")),
-            }
-        }
-        Function::Binary(operation) => {
-            let lhs = render_function_with_symbols(operation.lhs(), symbols)?;
-            let rhs = render_function_with_symbols(operation.rhs(), symbols)?;
-            match operation.operator() {
-                crate::BinaryOperator::Div => format!("({lhs}) / ({rhs})"),
-            }
-        }
-        _ => unreachable!("polynomial variants returned above"),
+    let Function::Expression(expression) = function else {
+        unreachable!("polynomial variants returned above")
+    };
+    render_expression(expression, |atom| {
+        let function = atom.to_function();
+        Ok(
+            format_function_with_symbols(&function, symbols, FunctionFormatOptions::default())?
+                .text,
+        )
     })
 }
 
@@ -362,51 +390,19 @@ impl fmt::Display for crate::Function {
             crate::Function::Linear(linear) => write!(f, "{linear}"),
             crate::Function::Quadratic(quadratic) => write!(f, "{quadratic}"),
             crate::Function::Polynomial(polynomial) => write!(f, "{polynomial}"),
-            crate::Function::Unary(operation) => match operation.operator() {
-                crate::UnaryOperator::Neg => write!(f, "-({})", operation.operand()),
-                crate::UnaryOperator::Abs => write!(f, "abs({})", operation.operand()),
-                crate::UnaryOperator::Signum => write!(f, "signum({})", operation.operand()),
-                crate::UnaryOperator::Powi(exponent) => {
-                    write!(f, "powi({}, {exponent})", operation.operand())
-                }
-            },
-            crate::Function::Nary(operation) => {
-                let mut operands = operation.operands().iter();
-                let first = operands
-                    .next()
-                    .expect("nary operation always has at least two operands");
-                match operation.operator() {
-                    crate::NaryOperator::Min | crate::NaryOperator::Max => {
-                        let name = match operation.operator() {
-                            crate::NaryOperator::Min => "min",
-                            crate::NaryOperator::Max => "max",
-                            _ => unreachable!(),
-                        };
-                        write!(f, "{name}({first}")?;
-                        for operand in operands {
-                            write!(f, ", {operand}")?;
-                        }
-                        write!(f, ")")
-                    }
-                    crate::NaryOperator::Add | crate::NaryOperator::Mul => {
-                        let separator = match operation.operator() {
-                            crate::NaryOperator::Add => " + ",
-                            crate::NaryOperator::Mul => " * ",
-                            _ => unreachable!(),
-                        };
-                        write!(f, "({first})")?;
-                        for operand in operands {
-                            write!(f, "{separator}({operand})")?;
-                        }
-                        Ok(())
-                    }
-                }
+            crate::Function::Expression(expression) => {
+                let rendered = render_expression(expression, |atom| {
+                    Ok(match atom {
+                        Atom::Zero => "0".to_string(),
+                        Atom::Constant(value) => value.into_inner().to_string(),
+                        Atom::Linear(value) => value.to_string(),
+                        Atom::Quadratic(value) => value.to_string(),
+                        Atom::Polynomial(value) => value.to_string(),
+                    })
+                })
+                .map_err(|_| fmt::Error)?;
+                write!(f, "{rendered}")
             }
-            crate::Function::Binary(operation) => match operation.operator() {
-                crate::BinaryOperator::Div => {
-                    write!(f, "({}) / ({})", operation.lhs(), operation.rhs())
-                }
-            },
         }
     }
 }
@@ -419,29 +415,9 @@ impl fmt::Debug for crate::Function {
             crate::Function::Linear(linear) => write!(f, "Linear({linear})"),
             crate::Function::Quadratic(quadratic) => write!(f, "Quadratic({quadratic})"),
             crate::Function::Polynomial(polynomial) => write!(f, "Polynomial({polynomial})"),
-            crate::Function::Unary(operation) => write!(
-                f,
-                "Unary({:?}, {:?})",
-                operation.operator(),
-                operation.operand()
-            ),
-            crate::Function::Nary(operation) => {
-                write!(f, "Nary({:?}, [", operation.operator())?;
-                for (index, operand) in operation.operands().iter().enumerate() {
-                    if index > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{operand:?}")?;
-                }
-                write!(f, "])")
+            crate::Function::Expression(expression) => {
+                write!(f, "Expression({:?})", expression.instructions())
             }
-            crate::Function::Binary(operation) => write!(
-                f,
-                "Binary({:?}, {:?}, {:?})",
-                operation.operator(),
-                operation.lhs(),
-                operation.rhs()
-            ),
         }
     }
 }

@@ -7407,7 +7407,7 @@
             },
             {
               "name": "evaluate_bound",
-              "doc": "Compute an interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.\n\n**Returns:** A {class}`~ommx.Bound` that contains $[\\inf f, \\sup f]$ over the given variable bounds.\n\n**Tightness:** Polynomial leaves are bounded **term by term**\n(monomial-wise), and composed expression nodes combine their operand\nbounds with interval arithmetic. The result is a **sound\nover-approximation** of the true range $[\\inf f, \\sup f]$ but is **not\nguaranteed to be tight**, because it ignores dependencies between terms\nor operands that share variables. For example, $f = x^2 - x$ with\n$x \\in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but\nterm-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.\n\n**Raises:** `RuntimeError` when an interval crosses an undefined\ndivision or contains zero as the base of a negative integer power.\nRaises `ValueError` if valid bound endpoints cannot be constructed after\nnumeric overflow.\n\n# Examples\n\n```python\n>>> from ommx import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> b.lower <= 3.0 and b.upper >= 7.0\nTrue\n```",
+              "doc": "Compute an interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.\n\n**Returns:** A {class}`~ommx.Bound` that contains $[\\inf f, \\sup f]$ over the given variable bounds.\n\n**Tightness:** Polynomial leaves are bounded **term by term**\n(monomial-wise), and composed expression operations combine their operand\nbounds with interval arithmetic. The result is a **sound\nover-approximation** of the true range $[\\inf f, \\sup f]$ but is **not\nguaranteed to be tight**, because it ignores dependencies between terms\nor operands that share variables. For example, $f = x^2 - x$ with\n$x \\in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but\nterm-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.\n\n**Raises:** `RuntimeError` when an interval crosses an undefined\ndivision or contains zero as the base of a negative integer power.\nRaises `ValueError` if valid bound endpoints cannot be constructed after\nnumeric overflow.\n\n# Examples\n\n```python\n>>> from ommx import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> b.lower <= 3.0 and b.upper >= 7.0\nTrue\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -10220,7 +10220,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "Deserialize an instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed,\nsemantically invalid, or contains a function expression beyond the\nmanaged wire-depth limit.",
+              "doc": "Deserialize an instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
               "signatures": [
                 {
                   "parameters": [
@@ -10246,7 +10246,7 @@
             },
             {
               "name": "from_v2_bytes",
-              "doc": "Deserialize an instance from v2 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed,\nsemantically invalid, or contains a function expression beyond the\nmanaged wire-depth limit.",
+              "doc": "Deserialize an instance from v2 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
               "signatures": [
                 {
                   "parameters": [
@@ -11545,7 +11545,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "Serialize this instance as v1 protobuf bytes.\n\nRaises {class}`RuntimeError` if a recursive function expression exceeds\nthe protobuf-safe serialization depth.",
+              "doc": "Serialize this instance as v1 protobuf bytes.",
               "signatures": [
                 {
                   "parameters": [],
@@ -11561,7 +11561,7 @@
             },
             {
               "name": "to_v2_bytes",
-              "doc": "Serialize this instance as v2 protobuf bytes.\n\nRaises {class}`RuntimeError` if a recursive function expression exceeds\nthe protobuf-safe serialization depth.",
+              "doc": "Serialize this instance as v2 protobuf bytes.",
               "signatures": [
                 {
                   "parameters": [],
@@ -17525,7 +17525,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "Deserialize a parametric instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed,\nsemantically invalid, or contains a function expression beyond the\nmanaged wire-depth limit.",
+              "doc": "Deserialize a parametric instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
               "signatures": [
                 {
                   "parameters": [
@@ -17551,7 +17551,7 @@
             },
             {
               "name": "from_v2_bytes",
-              "doc": "Deserialize a parametric instance from v2 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed,\nsemantically invalid, or contains a function expression beyond the\nmanaged wire-depth limit.",
+              "doc": "Deserialize a parametric instance from v2 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
               "signatures": [
                 {
                   "parameters": [
@@ -17946,7 +17946,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "Serialize this parametric instance as v1 protobuf bytes.\n\nRaises {class}`RuntimeError` if a recursive function expression exceeds\nthe protobuf-safe serialization depth.",
+              "doc": "Serialize this parametric instance as v1 protobuf bytes.",
               "signatures": [
                 {
                   "parameters": [],
@@ -17962,7 +17962,7 @@
             },
             {
               "name": "to_v2_bytes",
-              "doc": "Serialize this parametric instance as v2 protobuf bytes.\n\nRaises {class}`RuntimeError` if a recursive function expression exceeds\nthe protobuf-safe serialization depth.",
+              "doc": "Serialize this parametric instance as v2 protobuf bytes.",
               "signatures": [
                 {
                   "parameters": [],

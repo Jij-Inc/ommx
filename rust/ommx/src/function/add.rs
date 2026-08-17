@@ -72,7 +72,7 @@ impl Function {
                     _ => Function::Constant(constant_term(&p)),
                 }
             }
-            Function::Unary(_) | Function::Nary(_) | Function::Binary(_) => self,
+            Function::Expression(_) => self,
         }
     }
 
@@ -122,7 +122,7 @@ impl Function {
             (Function::Polynomial(lhs), Function::Polynomial(rhs)) => {
                 Function::Polynomial((lhs + rhs)?)
             }
-            (lhs, rhs) => Function::nary_operation(NaryOperator::Add, vec![lhs, rhs]),
+            (lhs, rhs) => Function::associative_operation(AssociativeOperator::Add, lhs, rhs),
         };
         Ok(())
     }
