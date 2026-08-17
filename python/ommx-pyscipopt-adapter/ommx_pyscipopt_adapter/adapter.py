@@ -25,8 +25,11 @@ from ommx import (
     InstanceClass,
     InstanceClassClause,
     Kind,
+    PreparationPolicy,
     Sense,
     Solution,
+    SpecialConstraintKind,
+    SpecialConstraintPreparation,
     State,
     ToState,
 )
@@ -500,7 +503,7 @@ def _dataframe(
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
                 label="pyscipopt-quadratic-mip",
@@ -517,6 +520,21 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
         ]
     )
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Recommend lowering OneHot constraints before using PySCIPOpt.
+
+        PySCIPOpt accepts Indicator and SOS1 constraints directly, so this
+        recommendation preserves those families and lowers only OneHot
+        constraints. The returned policy is fresh and may be edited by the
+        caller before :meth:`Instance.prepare` is invoked.
+        """
+        return PreparationPolicy(
+            special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+                kinds={SpecialConstraintKind.OneHot}
+            )
+        )
 
     def __init__(
         self,
@@ -803,11 +821,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         # Check if objective is quadratic to add auxiliary variable
         degree = self.instance.objective.degree()
-        if degree > 2:
-            raise OMMXPySCIPOptAdapterError(
-                f"Objective function degree {degree} is not supported. "
-                "Only constant, linear, and quadratic objectives are supported."
-            )
         if degree == 2:
             # If objective function is quadratic, add the auxiliary variable for the linearized objective function,
             # because the setObjective method in PySCIPOpt does not support quadratic objective functions.

@@ -178,6 +178,43 @@ create_core_exception!(
     PyRuntimeError,
     "The mathematical model was proven infeasible."
 );
+pyo3::create_exception!(
+    ommx,
+    PreparationTargetNotReachedError,
+    PyRuntimeError,
+    "Configured Preparation phases were exhausted without reaching the target InstanceClass. The final membership report is available as ``report``."
+);
+impl pyo3_stub_gen::PyStubType for PreparationTargetNotReachedError {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::builtin("PreparationTargetNotReachedError")
+    }
+}
+pyo3_stub_gen::impl_py_runtime_type!(PreparationTargetNotReachedError);
+
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::type_info::PyClassInfo {
+        pyclass_name: "PreparationTargetNotReachedError",
+        struct_id: std::any::TypeId::of::<PreparationTargetNotReachedError>,
+        getters: &[
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "report",
+                r#type: <crate::InstanceClassMembershipReport as pyo3_stub_gen::PyStubType>::type_output,
+                doc: "Final membership report for the partially prepared Instance.",
+                default: None,
+                deprecated: None,
+            },
+        ],
+        setters: &[],
+        module: Some("ommx._ommx_rust"),
+        doc: "Configured Preparation phases were exhausted without reaching the target InstanceClass.",
+        bases: &[|| <PyRuntimeError as pyo3_stub_gen::PyStubType>::type_output()],
+        has_eq: false,
+        has_ord: false,
+        has_hash: false,
+        has_str: false,
+        subclass: true,
+    }
+}
 
 /// Binding-internal wrapper around an already classified Python exception.
 ///
@@ -394,6 +431,22 @@ fn infeasible_detected_to_pyerr(_: &ommx::InfeasibleDetected, message: String) -
     InfeasibleDetected::new_err(message)
 }
 
+fn preparation_target_not_reached_to_pyerr(
+    error: &ommx::PreparationTargetNotReached,
+    message: String,
+) -> PyErr {
+    let pyerr = PreparationTargetNotReachedError::new_err(message);
+    Python::attach(|py| {
+        let report = Py::new(
+            py,
+            crate::InstanceClassMembershipReport(error.report().clone()),
+        )?;
+        pyerr.value(py).setattr("report", report)
+    })
+    .expect("PreparationTargetNotReachedError supports a report attribute");
+    pyerr
+}
+
 define_ommx_error_mappings!(
     ommx::ParseError => parse_error_to_pyerr,
     ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
@@ -404,11 +457,13 @@ define_ommx_error_mappings!(
     ommx::LogEncodingUnavailable => log_encoding_unavailable_to_pyerr,
     ommx::ExactIntegerSlackUnavailable => exact_integer_slack_unavailable_to_pyerr,
     ommx::InfeasibleDetected => infeasible_detected_to_pyerr,
+    ommx::PreparationTargetNotReached => preparation_target_not_reached_to_pyerr,
     #[cfg(feature = "remote-artifact")]
     ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
     ommx::artifact::ImageRefParseError => image_ref_parse_error_to_pyerr,
     ommx::ParameterIDCollision => value_error,
     ommx::AtolError => value_error,
+    ommx::InvalidPenaltyWeight => value_error,
     ommx::BoundError => value_error,
     ommx::SubstitutionError => value_error,
     ommx::CoefficientError => value_error,
@@ -476,6 +531,10 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
         py.get_type::<ExactIntegerSlackError>(),
     )?;
     module.add("InfeasibleDetected", py.get_type::<InfeasibleDetected>())?;
+    module.add(
+        "PreparationTargetNotReachedError",
+        py.get_type::<PreparationTargetNotReachedError>(),
+    )?;
     module.add("RemoteArtifactError", py.get_type::<RemoteArtifactError>())?;
     module.add(
         "RemoteArtifactNotFoundError",

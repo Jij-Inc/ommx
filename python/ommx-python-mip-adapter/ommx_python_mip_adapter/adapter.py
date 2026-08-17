@@ -22,8 +22,11 @@ from ommx import (
     InstanceClass,
     InstanceClassClause,
     Kind,
+    PreparationPolicy,
     Sense,
     Solution,
+    SpecialConstraintKind,
+    SpecialConstraintPreparation,
     State,
 )
 
@@ -38,7 +41,7 @@ _LINEAR_CONSTRAINT_DEGREE_BOUNDS = {
 
 
 class OMMXPythonMIPAdapter(SolverAdapter):
-    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
                 label="python-mip-linear-mip",
@@ -49,6 +52,25 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             )
         ]
     )
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Recommend lowering special constraints before using Python-MIP.
+
+        Python-MIP currently accepts only regular constraints through this
+        adapter. The recommendation therefore lowers the special-constraint
+        families currently understood by OMMX. The returned policy is fresh and
+        may be edited by the caller before :meth:`Instance.prepare` is invoked.
+        """
+        return PreparationPolicy(
+            special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+                kinds={
+                    SpecialConstraintKind.Indicator,
+                    SpecialConstraintKind.OneHot,
+                    SpecialConstraintKind.Sos1,
+                }
+            )
+        )
 
     def __init__(
         self,

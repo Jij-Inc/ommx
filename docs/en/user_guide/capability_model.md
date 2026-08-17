@@ -15,7 +15,7 @@ kernelspec:
 
 OMMX separates two concepts that were previously described together as adapter capabilities:
 
-- An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
+- An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter defines applicability by declaring that set as `INPUT_CLASS`.
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` explicitly lowers selected special-constraint families on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
@@ -46,7 +46,9 @@ binary_linear_with_one_hot = InstanceClass(
 )
 ```
 
-Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured result or `require_applicable()` to raise when membership or an adapter-owned precondition fails. Explicit preparation produces another input value, whose applicability must be checked again.
+Adapters declare their complete applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured membership result or `require_applicable()` to raise when membership fails. Explicit preparation produces another input value, whose membership must be checked again.
+
+Applicability and solver-input construction are separate boundaries. Membership does not guarantee that every converter or backend operation succeeds. A converter may validate the representation consumed by a local helper, and a backend may reject a numeric value or implementation limit while solver input is built. Those failures are conversion or backend errors, not additional applicability conditions, and must not be reported as `AdapterNotApplicableError`.
 
 ## SpecialConstraintKind and active_special_constraint_kinds
 
@@ -91,7 +93,7 @@ assert instance.one_hot_constraints == {}
 assert len(instance.constraints) == 1
 ```
 
-The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `lower_special_constraints` mutates the instance in place and returns only the selected families that were active and actually lowered. The method returns an empty set when no selected family was active. Recheck `INPUT_CLASS` membership or adapter applicability on this resulting value.
+The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `lower_special_constraints` mutates the instance in place and returns only the selected families that were active and actually lowered. The method returns an empty set when no selected family was active. Recheck Adapter applicability, equivalently `INPUT_CLASS` membership, on this resulting value.
 
 ## Manual conversion APIs
 
@@ -200,8 +202,8 @@ for cid, c in instance2.constraints.items():
 | What you want to do | API |
 |---|---|
 | Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
-| Declare the first adapter applicability condition | `INPUT_CLASS` |
-| Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
+| Define adapter applicability | `INPUT_CLASS` |
+| Report or enforce `INPUT_CLASS` membership | `check_applicability()` / `require_applicable()` |
 | Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |

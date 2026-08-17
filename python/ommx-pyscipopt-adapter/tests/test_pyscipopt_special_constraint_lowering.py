@@ -11,7 +11,7 @@ from ommx import (
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
-def test_adapter_accepts_an_explicitly_prepared_input() -> None:
+def test_recommended_preparation_lowers_only_one_hot() -> None:
     indicator = DecisionVariable.binary(0)
     x = [DecisionVariable.binary(i) for i in range(1, 3)]
     value = DecisionVariable.continuous(3, lower=0, upper=2)
@@ -26,7 +26,11 @@ def test_adapter_accepts_an_explicitly_prepared_input() -> None:
     )
 
     prepared = copy.copy(instance)
-    prepared.lower_special_constraints({SpecialConstraintKind.OneHot})
+    input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
+    prepared.prepare(
+        input_class,
+        OMMXPySCIPOptAdapter.recommended_preparation_policy(),
+    )
 
     assert set(instance.one_hot_constraints) == {10}
     assert prepared.active_special_constraint_kinds == {
@@ -46,8 +50,9 @@ def test_adapter_accepts_an_explicitly_prepared_input() -> None:
     assert len(lowered) == 1
     assert lowered[0].provenance[-1].original_id == 10
 
+    assert input_class.contains(prepared)
     report = OMMXPySCIPOptAdapter.check_applicability(prepared)
-    assert report.is_applicable
+    assert report.is_member
     adapter = OMMXPySCIPOptAdapter(prepared)
     assert adapter.instance is prepared
 

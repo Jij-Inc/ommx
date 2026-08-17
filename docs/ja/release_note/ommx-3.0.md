@@ -8,6 +8,42 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
+
+`SolverAdapter.check_applicability()` と `require_applicable()` は、完全な
+applicability 条件として `INPUT_CLASS` membership だけを使うようになりました。
+Adapter が所有していた第2の precondition 層は廃止し、
+`AdapterPreconditionViolation`、`ConstraintRef`、`_check_preconditions()`、report の
+`preconditions_checked` と `precondition_violations` field を削除しました。
+
+両 method は `InstanceClassMembershipReport` を直接返すようになり、
+`AdapterApplicabilityReport` wrapper は削除されました。`report.is_applicable` は
+`report.is_member`、`report.input_membership` は `report` に置き換えてください。
+`AdapterNotApplicableError` では、`error.report` が membership report そのものであり、
+Adapter identity は `error.adapter` から取得できます。
+
+Adapter 実装は、受け入れる model の条件をすべて `INPUT_CLASS` で表現する必要があります。
+Converter 固有の表現検査や backend の上限検査は solver input の構築経路に残りますが、
+その失敗は `AdapterNotApplicableError` ではなく conversion または backend の error です。
+特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
+行われるようになりました。責務境界の詳細は
+[Adapter Input Class](../user_guide/capability_model.md) と
+[Adapter 実装チュートリアル](../tutorial/implement_adapter.md)を参照してください。
+
+### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
+
+具体的な `SolverAdapter` / `SamplerAdapter` 実装では、`INPUT_CLASS` を
+非 Optional の `ClassVar[InstanceClass]` として宣言する必要があり、`None` は
+有効な宣言ではありません。リポジトリ内の Adapter も `InstanceClass` を直接公開するため、
+呼び出し側は `is not None` の確認なしで `Adapter.INPUT_CLASS` を
+{meth}`~ommx.Instance.prepare` に渡せます。宣言がない場合は、applicability の確認時に
+引き続き明確な `TypeError` を送出します。契約の全体像は
+[Adapter 実装チュートリアル](../tutorial/implement_adapter.md)を参照してください。
+
+## 3.0.0 Beta 3
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)
+
 ### 🛠 Model / sample error を呼び出し側の回復方法に応じて通知 ([#1104](https://github.com/Jij-Inc/ommx/pull/1104)、[#1105](https://github.com/Jij-Inc/ommx/pull/1105)、[#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
 Function、polynomial、constraint、named function、`Instance` のevaluation APIは、
@@ -28,6 +64,42 @@ invariant failureは、引き続き`RuntimeError`にfallbackします。
 state group数とsample数の不整合、およびinclusiveなsample ID rangeの容量不足を
 `ValueError`として通知します。`u64`全域のID rangeと正しい正数partitionは、
 integer overflowやstrategy panicなしで生成できます。
+
+### 🆕 Solver Adapter 共通のモデル準備フロー ([#1147](https://github.com/Jij-Inc/ommx/pull/1147)、[#1152](https://github.com/Jij-Inc/ommx/pull/1152)、[#1153](https://github.com/Jij-Inc/ommx/pull/1153)、[#1154](https://github.com/Jij-Inc/ommx/pull/1154))
+
+Solverごとに受け付けるモデルの形は異なります。Beta 3では、使いたいSolverに合わせて
+{class}`~ommx.Instance` を変換する操作を、共通のフローで行えるようになりました。
+Adapterの推奨Policyを取得し、application固有の選択を必要に応じて変更して、
+{meth}`~ommx.Instance.prepare` を呼び出します。その同じinstanceをAdapterへ渡します。
+Adapterの直接呼び出しは引き続き厳格であり、受け付けられる形にするためのpreparationや
+instanceの変更を暗黙には行いません。
+
+```python
+from ommx_highs_adapter import OMMXHighsAdapter
+
+input_class = OMMXHighsAdapter.INPUT_CLASS
+assert input_class is not None
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Applicationに異なる選択が必要なら、ここでPolicyを調整します。
+
+instance.prepare(input_class, policy)
+solution = OMMXHighsAdapter.solve(instance)
+```
+
+HiGHS、Python-MIP、PySCIPOpt、OpenJijはいずれもこのフローを利用できます。各Adapterの
+推奨Policyには、そのSolverで一般的に必要となるモデル変換が設定されています。一方、
+安全な共通defaultを決められない選択はユーザーが制御します。例えばBeta 3では、制約付き
+モデルをOpenJij向けに準備する際、最小化・最大化に適した向きで固定penaltyを適用しますが、
+その大きさはユーザーが選択します。
+
+`prepare()` はinstanceをin-placeで更新します。Solverが返したsolutionやsampleを評価する
+ときは、変換前の変数値を復元し、preparation中に取り除かれた制約を検査できます。後の
+preparation stepが失敗した場合、それより前に完了した変更はinstanceに残ります。v2または
+Beta 2から移行する場合は、OpenJijのモデル変換optionとpre-release版の
+`OpenJijPreparation*` APIを、この共通フローに置き換えてください。完全な利用例は
+[OpenJijによるサンプリング](../tutorial/tsp_sampling_with_openjij_adapter)、対応するAPIの
+置き換えは[Python SDK v2からv3へのマイグレーションガイド](../migration/python_sdk_v2_to_v3.md)
+を参照してください。
 
 ## 3.0.0 Beta 2
 
@@ -83,7 +155,7 @@ source_samples = preparation.evaluate_source(prepared_samples)
 別の {class}`~ommx.Instance` なので、sourceから推論せず `preparation.input` 自体の
 applicabilityを確認してください。受け入れるmodel classとpreparationの詳細は
 [Adapter Input Class](../user_guide/capability_model.md) と
-[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter.md) を参照してください。
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) を参照してください。
 
 2.6.1から移行する場合、非対応入力にはAdapter固有exceptionではなく
 `AdapterNotApplicableError`をcatchしてください。infeasibilityのcanonicalな型は

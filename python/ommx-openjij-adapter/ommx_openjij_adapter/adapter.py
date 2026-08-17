@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 import copy
 from math import isfinite
 from typing import ClassVar
@@ -10,33 +9,25 @@ from typing import ClassVar
 import openjij as oj
 from ommx import (
     DegreeBound,
+    IntegerEncodingPreparation,
+    IntegerSlackPreparation,
     Instance,
     InstanceClass,
     InstanceClassClause,
-    InstanceClassMembershipReport,
     Kind,
+    PreparationPolicy,
     Sense,
+    SensePreparation,
     Samples,
     SampleSet,
     Solution,
+    SpecialConstraintKind,
+    SpecialConstraintPreparation,
 )
-from ommx.adapter import (
-    AdapterPreconditionViolation,
-    DiagnosticsSink,
-    SamplerAdapter,
-)
+from ommx.adapter import DiagnosticsSink, SamplerAdapter
 from opentelemetry import trace
 
 from ._decode import _decode_for_instance, decode_to_samples
-from ._preparation import (
-    OpenJijPreparation,
-    OpenJijPreparationConfig,
-    OpenJijPreparationReport,
-)
-from ._preparation_pipeline import (
-    check_preparation as _check_preparation,
-    prepare as _prepare,
-)
 
 _tracer = trace.get_tracer("ommx.adapter.openjij")
 
@@ -50,13 +41,14 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     Arbitrary polynomial objective degree is supported through OpenJij's QUBO
     and Binary-HUBO paths.
 
-    Integer encoding, sense reversal, slack introduction, and finite constraint
-    penalties are explicit preparation operations, not part of the declared
-    input class. Pass :attr:`OpenJijPreparation.input` back to this Adapter
-    as a separate :class:`ommx.Instance` value.
+    Integer encoding, sense normalization, slack introduction, and fixed
+    constraint penalties are explicit preparation operations, not part of the
+    declared input class. Start from
+    :meth:`recommended_preparation_policy`, edit caller-owned choices such as
+    fixed penalty magnitudes, and apply the policy with :meth:`Instance.prepare`.
     """
 
-    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
                 label="openjij-binary-hubo",
@@ -68,6 +60,38 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     )
 
     MAX_OPENJIJ_VARIABLE_ID: ClassVar[int] = 2**63 - 1
+
+    @classmethod
+    def recommended_preparation_policy(cls) -> PreparationPolicy:
+        """Recommend the model changes commonly needed by OpenJij.
+
+        The recommendation lowers every special-constraint family, normalizes
+        maximization to minimization, adds Integer slack while permitting an
+        inequality to remain when exact equality conversion is unavailable,
+        and log-encodes every used Integer variable. Both Integer slack ranges
+        use 32.
+
+        Fixed penalty magnitudes remain explicit caller parameters because
+        sufficient values depend on the application. The shared ``Instance``
+        owner operation validates their nonnegative-with-tolerance domain. Set
+        ``fixed_penalty`` on the fresh returned policy when active constraints
+        must be removed.
+        """
+        return PreparationPolicy(
+            special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+                kinds={
+                    SpecialConstraintKind.Indicator,
+                    SpecialConstraintKind.OneHot,
+                    SpecialConstraintKind.Sos1,
+                }
+            ),
+            sense=SensePreparation.as_minimization_problem(),
+            integer_slack=IntegerSlackPreparation(
+                max_integer_range=32,
+                slack_upper_bound=32,
+            ),
+            integer_encoding=IntegerEncodingPreparation.log_encode_all_used_integers(),
+        )
 
     ommx_instance: Instance
     """
@@ -135,115 +159,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         self._is_hubo = False
         self._hubo = {}
         self._qubo = {}
-
-    @classmethod
-    def _check_preconditions(
-        cls,
-        ommx_instance: Instance,
-        input_membership: InstanceClassMembershipReport,
-    ) -> Iterable[AdapterPreconditionViolation]:
-        _ = input_membership
-        out_of_range_ids = frozenset(
-            variable.id
-            for variable in ommx_instance.used_decision_variables
-            if variable.id > cls.MAX_OPENJIJ_VARIABLE_ID
-        )
-        if out_of_range_ids:
-            return (
-                AdapterPreconditionViolation(
-                    condition="openjij.variable_id.signed_64_bit",
-                    description=(
-                        "OpenJij/cimod variable labels must fit a signed 64-bit "
-                        f"integer: {sorted(out_of_range_ids)}."
-                    ),
-                    variable_ids=out_of_range_ids,
-                    actual=max(out_of_range_ids),
-                    limit=cls.MAX_OPENJIJ_VARIABLE_ID,
-                ),
-            )
-        try:
-            hubo, _ = ommx_instance.as_hubo_format()
-            if any(len(key) > 2 for key in hubo):
-                interactions = hubo
-            else:
-                interactions, _ = ommx_instance.as_qubo_format()
-        except Exception as error:
-            return (
-                AdapterPreconditionViolation(
-                    condition="openjij.interactions.format",
-                    description=f"OpenJij interaction conversion failed: {error}",
-                    actual=str(error),
-                    limit="valid Binary QUBO or HUBO interactions",
-                ),
-            )
-
-        nonfinite = {
-            key: coefficient
-            for key, coefficient in interactions.items()
-            if not isfinite(coefficient)
-        }
-        if not nonfinite:
-            return ()
-        return (
-            AdapterPreconditionViolation(
-                condition="openjij.interactions.coefficient_finite",
-                description=(
-                    "OpenJij does not reliably reject non-finite interaction "
-                    f"coefficients: {nonfinite}."
-                ),
-                variable_ids=frozenset(
-                    variable_id for key in nonfinite for variable_id in key
-                ),
-                actual=len(nonfinite),
-                limit="all interaction coefficients finite",
-            ),
-        )
-
-    @classmethod
-    def check_preparation(
-        cls,
-        ommx_instance: Instance,
-        *,
-        config: OpenJijPreparationConfig | None = None,
-    ) -> OpenJijPreparationReport:
-        """Dry-run the complete explicit preparation without mutating the input.
-
-        This is intentionally separate from :meth:`check_applicability`, which
-        checks only the Binary, unconstrained minimization Adapter input. The
-        53-bit log-encoding limit describes availability of that preparation
-        operation, not an OpenJij input-class condition and not an
-        ``ommx.v2.Feature``. A model proven infeasible while preparing integer
-        slack raises :class:`~ommx.InfeasibleDetected`. Approximate integer
-        slack is disabled unless the supplied
-        :class:`OpenJijPreparationConfig` enables it.
-        """
-        return _check_preparation(
-            ommx_instance,
-            check_input_applicability=cls.check_applicability,
-            config=config,
-        )
-
-    @classmethod
-    def prepare(
-        cls,
-        ommx_instance: Instance,
-        *,
-        config: OpenJijPreparationConfig | None = None,
-    ) -> OpenJijPreparation:
-        """Produce a separate Adapter input and an auditable preparation report.
-
-        Raises :class:`~ommx.InfeasibleDetected` when variable bounds
-        prove an inequality infeasible. Other preparation failures raise
-        :class:`OpenJijPreparationError`. Approximate integer slack is used only
-        when the supplied :class:`OpenJijPreparationConfig` enables it.
-        """
-        with _tracer.start_as_current_span("prepare") as span:
-            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
-            return _prepare(
-                ommx_instance,
-                check_input_applicability=cls.check_applicability,
-                config=config,
-            )
 
     @classmethod
     def sample(
@@ -380,13 +295,43 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             return
 
         with _tracer.start_as_current_span("convert"):
-            hubo, _ = self._solver_instance.as_hubo_format()
-            if any(len(k) > 2 for k in hubo):
-                self._is_hubo = True
-                self._hubo = hubo
-            else:
-                self._is_hubo = False
-                qubo, _ = self._solver_instance.as_qubo_format()
-                self._qubo = qubo
+            out_of_range_ids = sorted(
+                variable.id
+                for variable in self._solver_instance.used_decision_variables
+                if variable.id > self.MAX_OPENJIJ_VARIABLE_ID
+            )
+            if out_of_range_ids:
+                raise ValueError(
+                    "OpenJij/cimod variable labels must fit a signed 64-bit "
+                    f"integer: {out_of_range_ids}."
+                )
 
+            try:
+                hubo, _ = self._solver_instance.as_hubo_format()
+                is_hubo = any(len(key) > 2 for key in hubo)
+                if is_hubo:
+                    interactions = hubo
+                    qubo = {}
+                else:
+                    qubo, _ = self._solver_instance.as_qubo_format()
+                    interactions = qubo
+            except Exception as error:
+                raise ValueError(
+                    f"OpenJij interaction conversion failed: {error}"
+                ) from error
+
+            nonfinite = {
+                key: coefficient
+                for key, coefficient in interactions.items()
+                if not isfinite(coefficient)
+            }
+            if nonfinite:
+                raise ValueError(
+                    "OpenJij does not reliably reject non-finite interaction "
+                    f"coefficients: {nonfinite}."
+                )
+
+            self._is_hubo = is_hubo
+            self._hubo = hubo if is_hubo else {}
+            self._qubo = qubo
             self._sampler_input_prepared = True

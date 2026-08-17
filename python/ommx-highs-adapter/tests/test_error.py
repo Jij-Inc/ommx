@@ -20,7 +20,6 @@ from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError
 
 def test_declares_linear_mip_input_class():
     input_class = OMMXHighsAdapter.INPUT_CLASS
-    assert input_class is not None
     [clause] = input_class.clauses
     assert clause.label == "highs-linear-mip"
     assert clause.allowed_variable_kinds == {
@@ -52,9 +51,8 @@ def test_input_class_accepts_complete_linear_mip_boundary(sense):
     )
 
     report = OMMXHighsAdapter.check_applicability(instance)
-    assert report.is_applicable
-    assert report.input_membership.matching_clauses == [(0, "highs-linear-mip")]
-    assert report.precondition_violations == ()
+    assert report.is_member
+    assert report.matching_clauses == [(0, "highs-linear-mip")]
 
 
 def test_error_nonlinear_objective():
@@ -69,7 +67,7 @@ def test_error_nonlinear_objective():
 
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXHighsAdapter(ommx_instance)
-    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatches = e.value.report.clause_reports[0].mismatches
     assert len(mismatches) == 1
     assert isinstance(
         mismatches[0],
@@ -90,7 +88,7 @@ def test_error_nonlinear_constraint():
 
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXHighsAdapter(ommx_instance)
-    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatches = e.value.report.clause_reports[0].mismatches
     assert len(mismatches) == 1
     assert isinstance(
         mismatches[0],
@@ -118,7 +116,7 @@ def test_rejects_unsupported_variable_kinds(variable, kind):
 
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXHighsAdapter(instance)
-    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatches = e.value.report.clause_reports[0].mismatches
     assert len(mismatches) == 1
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.VariableKindNotAllowed)
@@ -138,8 +136,8 @@ def test_accepts_unused_unsupported_variable_kind_without_mutating_input():
     before = instance.to_v2_bytes()
 
     report = OMMXHighsAdapter.check_applicability(instance)
-    assert report.is_applicable
-    assert report.input_membership.matching_clauses == [(0, "highs-linear-mip")]
+    assert report.is_member
+    assert report.matching_clauses == [(0, "highs-linear-mip")]
     OMMXHighsAdapter(instance)
     assert instance.to_v2_bytes() == before
 
@@ -168,13 +166,45 @@ def test_rejects_special_constraints_without_mutating_input():
         OMMXHighsAdapter(instance)
 
     mismatch_types = {
-        type(mismatch)
-        for mismatch in e.value.report.input_membership.clause_reports[0].mismatches
+        type(mismatch) for mismatch in e.value.report.clause_reports[0].mismatches
     }
     assert InstanceClassMismatch.IndicatorConstraintsNotAllowed in mismatch_types
     assert InstanceClassMismatch.OneHotConstraintsNotAllowed in mismatch_types
     assert InstanceClassMismatch.Sos1ConstraintsNotAllowed in mismatch_types
     assert instance.to_v2_bytes() == before
+
+
+def test_recommended_preparation_reaches_the_highs_input_class():
+    x = DecisionVariable.binary(0)
+    y = DecisionVariable.continuous(1, lower=0, upper=2)
+    instance = Instance.from_components(
+        decision_variables=[x, y],
+        objective=x + y,
+        constraints={},
+        sense=Sense.Minimize,
+        indicator_constraints={
+            10: IndicatorConstraint(
+                indicator_variable=x,
+                function=y - 1,
+                equality=Equality.LessThanOrEqualToZero,
+            )
+        },
+        one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        sos1_constraints={30: Sos1Constraint(variables=[y])},
+    )
+    input_class = OMMXHighsAdapter.INPUT_CLASS
+    assert not input_class.contains(instance)
+
+    policy = OMMXHighsAdapter.recommended_preparation_policy()
+    assert policy.special_constraints is not None
+    assert policy.sense is None
+    assert policy.integer_slack is None
+    assert policy.integer_encoding is None
+    assert policy.fixed_penalty is None
+
+    assert instance.prepare(input_class, policy) is None
+    assert input_class.contains(instance)
+    assert OMMXHighsAdapter.check_applicability(instance).is_member
 
 
 def test_error_infeasible_constant_equality_constraint():

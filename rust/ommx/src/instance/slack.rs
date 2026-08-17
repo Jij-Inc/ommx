@@ -9,9 +9,10 @@ use num::traits::Inv;
 /// Signal returned when exact integer-slack conversion is structurally valid
 /// but cannot construct an exact finite encoding.
 ///
-/// Callers may recover by selecting an explicitly approximate transformation.
-/// Missing constraints, unsupported variable kinds, and other contract or
-/// materialization failures are not classified as this signal.
+/// Callers may recover by changing the exact-conversion parameters or by
+/// selecting a different operation whose postcondition does not require an
+/// equality. Missing constraints, unsupported variable kinds, and other
+/// contract or materialization failures are not classified as this signal.
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub struct ExactIntegerSlackUnavailable(ExactIntegerSlackFailure);
@@ -159,6 +160,13 @@ impl Instance {
 
     /// Convert an inequality $f(x) \leq 0$ to $f(x) + b s \leq 0$ with an integer
     /// slack variable $s \in [0, \text{slack\_upper\_bound}]$.
+    ///
+    /// This preserves the feasible assignments of the original decision
+    /// variables exactly: every original feasible assignment remains feasible
+    /// by choosing $s = 0$, while $b \geq 0$ and $s \geq 0$ ensure that every
+    /// augmented feasible assignment still satisfies $f(x) \leq 0$. The
+    /// relation remains an inequality; this operation is not an approximation
+    /// of the original feasible set.
     ///
     /// Returns the coefficient $b = -\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
     /// Returns `None` if the constraint was trivially satisfied and was moved to
@@ -341,13 +349,14 @@ mod tests {
             ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(constraint_fn),
         };
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
+        let before = instance.clone();
 
         let err = instance
             .convert_inequality_to_equality_with_integer_slack(0, 1, ATol::default())
             .unwrap_err();
 
         assert!(err.is::<ExactIntegerSlackUnavailable>());
-        assert!(instance.constraints().contains_key(&ConstraintID::from(0)));
+        assert_eq!(instance, before);
     }
 
     #[test]

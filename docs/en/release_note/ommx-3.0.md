@@ -8,6 +8,43 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
+
+`SolverAdapter.check_applicability()` and `require_applicable()` now use
+`INPUT_CLASS` membership as the complete applicability condition. The secondary
+adapter-owned precondition layer has been removed, including
+`AdapterPreconditionViolation`, `ConstraintRef`, `_check_preconditions()`, and
+the `preconditions_checked` and `precondition_violations` report fields.
+
+Both methods now return `InstanceClassMembershipReport` directly, and the
+`AdapterApplicabilityReport` wrapper has been removed. Replace
+`report.is_applicable` with `report.is_member` and `report.input_membership`
+with `report`. For `AdapterNotApplicableError`, `error.report` is the membership
+report itself and the Adapter identity is available as `error.adapter`.
+
+Adapter implementations must express every accepted-model condition in
+`INPUT_CLASS`. Converter-local representation checks and backend limits remain
+in the solver-input construction path; their failures are conversion or backend
+errors rather than `AdapterNotApplicableError`. In particular, OpenJij signed-ID
+and finite-coefficient validation now occurs when sampler input is built. See
+[Adapter input classes](../user_guide/capability_model.md) and the
+[Adapter implementation tutorial](../tutorial/implement_adapter.md) for the
+responsibility boundary.
+
+### Adapter input classes are required ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
+
+Concrete `SolverAdapter` and `SamplerAdapter` implementations must declare
+`INPUT_CLASS` as a non-optional `ClassVar[InstanceClass]`; `None` is not a valid
+declaration. In-repository adapters now expose `InstanceClass` directly, so
+callers can pass `Adapter.INPUT_CLASS` to {meth}`~ommx.Instance.prepare` without
+an `is not None` guard. A missing declaration still produces a clear `TypeError`
+when applicability is checked. See the [Adapter implementation tutorial](../tutorial/implement_adapter.md)
+for the complete contract.
+
+## 3.0.0 Beta 3
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)
+
 ### 🛠 Model and sample errors follow caller ownership ([#1104](https://github.com/Jij-Inc/ommx/pull/1104), [#1105](https://github.com/Jij-Inc/ommx/pull/1105), [#1107](https://github.com/Jij-Inc/ommx/pull/1107))
 
 Function, polynomial, constraint, named-function, and `Instance` evaluation
@@ -31,6 +68,45 @@ collection unchanged. `Instance.random_samples` reports inconsistent state
 group counts and an undersized inclusive sample-ID range as `ValueError`.
 Full `u64` ID ranges and valid positive partitions are generated without
 integer overflow or a strategy panic.
+
+### 🆕 One preparation workflow across solver adapters ([#1147](https://github.com/Jij-Inc/ommx/pull/1147), [#1152](https://github.com/Jij-Inc/ommx/pull/1152), [#1153](https://github.com/Jij-Inc/ommx/pull/1153), [#1154](https://github.com/Jij-Inc/ommx/pull/1154))
+
+Different solvers accept different kinds of models. Beta 3 adds one explicit
+workflow for adapting an {class}`~ommx.Instance` to the solver you want to use:
+start from the adapter's recommendation, adjust choices that depend on your
+application, call {meth}`~ommx.Instance.prepare`, and pass that same instance to
+the adapter. Direct adapter calls remain strict: they do not prepare or mutate
+the supplied instance to make it applicable.
+
+```python
+from ommx_highs_adapter import OMMXHighsAdapter
+
+input_class = OMMXHighsAdapter.INPUT_CLASS
+assert input_class is not None
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Adjust the policy here if your application needs different choices.
+
+instance.prepare(input_class, policy)
+solution = OMMXHighsAdapter.solve(instance)
+```
+
+HiGHS, Python-MIP, PySCIPOpt, and OpenJij all support this workflow. Each
+recommendation covers the model changes commonly needed by that solver, while
+choices without a safe universal default stay under your control. For example,
+Beta 3 applies fixed penalties in the direction appropriate to minimization or
+maximization when preparing a constrained model for OpenJij; you still choose
+the magnitude.
+
+`prepare()` updates the instance in place. When you evaluate returned solutions
+and samples, OMMX can restore source-variable values and check constraints that
+were removed during preparation. If a later preparation step fails, changes
+from earlier completed steps remain. If you are migrating from v2 or Beta 2,
+replace OpenJij's model-conversion options and the prerelease
+`OpenJijPreparation*` APIs with this common workflow. See
+[Sampling with OpenJij](../tutorial/tsp_sampling_with_openjij_adapter) for a
+complete example and the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the corresponding API replacements.
 
 ## 3.0.0 Beta 2
 
@@ -89,7 +165,7 @@ Finite penalties and approximate integer slack now require explicit opt-in.
 Every prepared value is a new {class}`~ommx.Instance`, so applicability must be
 checked on `preparation.input`, not inferred from the source. See
 [Adapter input classes](../user_guide/capability_model.md) and the
-[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter.md) for the
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) for the
 accepted model classes and preparation details.
 
 When migrating from 2.6.1, catch `AdapterNotApplicableError` instead of an

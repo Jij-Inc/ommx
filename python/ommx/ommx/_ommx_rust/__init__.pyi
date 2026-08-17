@@ -46,6 +46,7 @@ __all__ = [
     "Experiment",
     "ExperimentCheckpointRef",
     "ExperimentRef",
+    "FixedPenaltyPreparation",
     "Function",
     "GcBlob",
     "GcInvalidManifest",
@@ -61,6 +62,8 @@ __all__ = [
     "InstanceClassMembershipReport",
     "InstanceClassMismatch",
     "InstanceDescription",
+    "IntegerEncodingPreparation",
+    "IntegerSlackPreparation",
     "InvalidRemoteArtifactError",
     "Kind",
     "Linear",
@@ -74,6 +77,8 @@ __all__ = [
     "Parameters",
     "ParametricInstance",
     "Polynomial",
+    "PreparationPolicy",
+    "PreparationTargetNotReachedError",
     "Provenance",
     "ProvenanceKind",
     "PruneAnonymousReport",
@@ -99,10 +104,12 @@ __all__ = [
     "ScalarLike",
     "SealedRun",
     "Sense",
+    "SensePreparation",
     "Solution",
     "Solve",
     "Sos1Constraint",
     "SpecialConstraintKind",
+    "SpecialConstraintPreparation",
     "State",
     "ToFunction",
     "ToSamples",
@@ -2460,6 +2467,20 @@ class ExperimentRef:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class FixedPenaltyPreparation:
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def penalty_method_with_fixed_weights(
+        *,
+        weights: typing.Mapping[builtins.int, builtins.float],
+        atol: typing.Optional[builtins.float] = None,
+    ) -> FixedPenaltyPreparation: ...
+    @staticmethod
+    def uniform_penalty_method_with_fixed_weight(
+        *, weight: builtins.float, atol: typing.Optional[builtins.float] = None
+    ) -> FixedPenaltyPreparation: ...
+
+@typing.final
 class Function:
     r"""
     General mathematical function of decision variables.
@@ -4720,6 +4741,29 @@ class Instance:
         True
         ```
         """
+    def prepare(self, input_class: InstanceClass, policy: PreparationPolicy) -> None:
+        r"""
+        Apply the caller's ``policy`` to this instance in place to reach
+        ``input_class`` membership.
+
+        Selected phases are applied at most once in this order, stopping as soon
+        as membership is reached:
+
+        1. ``special_constraints``:
+           {meth}`~ommx.Instance.lower_special_constraints`
+        2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`
+        3. ``integer_slack``:
+           {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
+           followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
+           when exact conversion is unavailable and ``slack_upper_bound`` is set
+        4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+        5. ``fixed_penalty``
+
+        Success guarantees membership only, not Adapter applicability. This
+        operation is not transactional, so an error may leave the instance changed.
+        {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership
+        report when the selections do not reach ``input_class``.
+        """
 
 @typing.final
 class InstanceClass:
@@ -5023,6 +5067,31 @@ class InstanceDescription:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> InstanceDescription: ...
     def __deepcopy__(self, _memo: typing.Any) -> InstanceDescription: ...
+
+@typing.final
+class IntegerEncodingPreparation:
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def log_encode_all_used_integers(
+        *, atol: typing.Optional[builtins.float] = None
+    ) -> IntegerEncodingPreparation: ...
+
+@typing.final
+class IntegerSlackPreparation:
+    @property
+    def max_integer_range(self) -> builtins.int: ...
+    @property
+    def atol(self) -> builtins.float: ...
+    @property
+    def slack_upper_bound(self) -> typing.Optional[builtins.int]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        *,
+        max_integer_range: builtins.int,
+        atol: typing.Optional[builtins.float] = None,
+        slack_upper_bound: typing.Optional[builtins.int] = None,
+    ) -> IntegerSlackPreparation: ...
 
 class InvalidRemoteArtifactError(RemoteArtifactError):
     r"""
@@ -6081,6 +6150,57 @@ class Polynomial:
     def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
+        """
+
+@typing.final
+class PreparationPolicy:
+    @property
+    def special_constraints(self) -> typing.Optional[SpecialConstraintPreparation]: ...
+    @special_constraints.setter
+    def special_constraints(
+        self, value: typing.Optional[SpecialConstraintPreparation]
+    ) -> None: ...
+    @property
+    def sense(self) -> typing.Optional[SensePreparation]: ...
+    @sense.setter
+    def sense(self, value: typing.Optional[SensePreparation]) -> None: ...
+    @property
+    def integer_slack(self) -> typing.Optional[IntegerSlackPreparation]: ...
+    @integer_slack.setter
+    def integer_slack(
+        self, value: typing.Optional[IntegerSlackPreparation]
+    ) -> None: ...
+    @property
+    def integer_encoding(self) -> typing.Optional[IntegerEncodingPreparation]: ...
+    @integer_encoding.setter
+    def integer_encoding(
+        self, value: typing.Optional[IntegerEncodingPreparation]
+    ) -> None: ...
+    @property
+    def fixed_penalty(self) -> typing.Optional[FixedPenaltyPreparation]: ...
+    @fixed_penalty.setter
+    def fixed_penalty(
+        self, value: typing.Optional[FixedPenaltyPreparation]
+    ) -> None: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        *,
+        special_constraints: typing.Optional[SpecialConstraintPreparation] = None,
+        sense: typing.Optional[SensePreparation] = None,
+        integer_slack: typing.Optional[IntegerSlackPreparation] = None,
+        integer_encoding: typing.Optional[IntegerEncodingPreparation] = None,
+        fixed_penalty: typing.Optional[FixedPenaltyPreparation] = None,
+    ) -> PreparationPolicy: ...
+
+class PreparationTargetNotReachedError(builtins.RuntimeError):
+    r"""
+    Configured Preparation phases were exhausted without reaching the target InstanceClass.
+    """
+    @property
+    def report(self) -> InstanceClassMembershipReport:
+        r"""
+        Final membership report for the partially prepared Instance.
         """
 
 @typing.final
@@ -7405,6 +7525,12 @@ class SealedRun:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class SensePreparation:
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def as_minimization_problem() -> SensePreparation: ...
+
+@typing.final
 class Solution:
     r"""
     Python SDK domain type for evaluated optimization results.
@@ -7932,6 +8058,14 @@ class Sos1Constraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Sos1Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Sos1Constraint: ...
+
+@typing.final
+class SpecialConstraintPreparation:
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def lower_special_constraints(
+        *, kinds: builtins.set[SpecialConstraintKind]
+    ) -> SpecialConstraintPreparation: ...
 
 @typing.final
 class State:
