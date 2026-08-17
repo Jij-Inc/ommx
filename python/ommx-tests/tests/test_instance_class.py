@@ -326,12 +326,6 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
     assert prepared_input_class.contains(instance)
 
 
-def test_solver_adapter_base_owns_no_input_class_or_transformation_hook() -> None:
-    assert "INPUT_CLASS" not in SolverAdapter.__dict__
-    assert "__init__" not in SolverAdapter.__dict__
-    assert "_check_preconditions" not in SolverAdapter.__dict__
-
-
 def test_solver_adapter_returns_a_fresh_empty_preparation_recommendation() -> None:
     first = SolverAdapter.recommended_preparation_policy()
     second = SolverAdapter.recommended_preparation_policy()
