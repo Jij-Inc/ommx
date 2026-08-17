@@ -111,6 +111,7 @@ def test_sampler_input_rejects_nonfinite_aggregated_interactions() -> None:
 def test_sampler_input_rejects_variable_id_outside_openjij_signed_range() -> None:
     accepted = _instance_with_variable(DecisionVariable.binary(2**63 - 1))
     assert OMMXOpenJijSAAdapter.check_applicability(accepted).is_applicable
+    _ = OMMXOpenJijSAAdapter(accepted).sampler_input
 
     variable_id = 2**63
     instance = _instance_with_variable(DecisionVariable.binary(variable_id))
