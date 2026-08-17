@@ -16,6 +16,12 @@ Adapter が所有していた第2の precondition 層は廃止し、
 `AdapterPreconditionViolation`、`ConstraintRef`、`_check_preconditions()`、report の
 `preconditions_checked` と `precondition_violations` field を削除しました。
 
+両 method は `InstanceClassMembershipReport` を直接返すようになり、
+`AdapterApplicabilityReport` wrapper は削除されました。`report.is_applicable` は
+`report.is_member`、`report.input_membership` は `report` に置き換えてください。
+`AdapterNotApplicableError` では、`error.report` が membership report そのものであり、
+Adapter identity は `error.adapter` から取得できます。
+
 Adapter 実装は、受け入れる model の条件をすべて `INPUT_CLASS` で表現する必要があります。
 Converter 固有の表現検査や backend の上限検査は solver input の構築経路に残りますが、
 その失敗は `AdapterNotApplicableError` ではなく conversion または backend の error です。

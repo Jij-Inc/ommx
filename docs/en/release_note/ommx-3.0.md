@@ -16,6 +16,12 @@ adapter-owned precondition layer has been removed, including
 `AdapterPreconditionViolation`, `ConstraintRef`, `_check_preconditions()`, and
 the `preconditions_checked` and `precondition_violations` report fields.
 
+Both methods now return `InstanceClassMembershipReport` directly, and the
+`AdapterApplicabilityReport` wrapper has been removed. Replace
+`report.is_applicable` with `report.is_member` and `report.input_membership`
+with `report`. For `AdapterNotApplicableError`, `error.report` is the membership
+report itself and the Adapter identity is available as `error.adapter`.
+
 Adapter implementations must express every accepted-model condition in
 `INPUT_CLASS`. Converter-local representation checks and backend limits remain
 in the solver-input construction path; their failures are conversion or backend

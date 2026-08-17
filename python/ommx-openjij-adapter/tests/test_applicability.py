@@ -39,17 +39,15 @@ def _assert_direct_rejection_does_not_mutate(
     before = instance.to_v2_bytes()
 
     report = OMMXOpenJijSAAdapter.check_applicability(instance)
-    assert not report.is_applicable
-    assert not report.input_membership.is_member
+    assert not report.is_member
     assert instance.to_v2_bytes() == before
 
     with pytest.raises(AdapterNotApplicableError) as error:
         OMMXOpenJijSAAdapter(instance)
-    assert error.value.report.adapter == report.adapter
-    assert not error.value.report.is_applicable
+    assert error.value.report == report
     assert instance.to_v2_bytes() == before
 
-    [clause_report] = report.input_membership.clause_reports
+    [clause_report] = report.clause_reports
     return tuple(clause_report.mismatches)
 
 
@@ -78,8 +76,8 @@ def test_direct_accepts_arbitrary_degree_binary_minimization_without_mutation() 
     before = instance.to_v2_bytes()
 
     report = OMMXOpenJijSAAdapter.check_applicability(instance)
-    assert report.is_applicable
-    assert report.input_membership.matching_clauses == [(0, "openjij-binary-hubo")]
+    assert report.is_member
+    assert report.matching_clauses == [(0, "openjij-binary-hubo")]
 
     adapter = OMMXOpenJijSAAdapter(instance)
     assert adapter.ommx_instance.to_v2_bytes() == before
@@ -97,8 +95,7 @@ def test_sampler_input_rejects_nonfinite_aggregated_interactions() -> None:
     )
 
     report = OMMXOpenJijSAAdapter.check_applicability(instance)
-    assert report.input_membership.is_member
-    assert report.is_applicable
+    assert report.is_member
 
     adapter = OMMXOpenJijSAAdapter(instance)
     with pytest.raises(ValueError, match="non-finite interaction coefficients"):
@@ -110,15 +107,14 @@ def test_sampler_input_rejects_nonfinite_aggregated_interactions() -> None:
 
 def test_sampler_input_rejects_variable_id_outside_openjij_signed_range() -> None:
     accepted = _instance_with_variable(DecisionVariable.binary(2**63 - 1))
-    assert OMMXOpenJijSAAdapter.check_applicability(accepted).is_applicable
+    assert OMMXOpenJijSAAdapter.check_applicability(accepted).is_member
     _ = OMMXOpenJijSAAdapter(accepted).sampler_input
 
     variable_id = 2**63
     instance = _instance_with_variable(DecisionVariable.binary(variable_id))
 
     report = OMMXOpenJijSAAdapter.check_applicability(instance)
-    assert report.input_membership.is_member
-    assert report.is_applicable
+    assert report.is_member
 
     adapter = OMMXOpenJijSAAdapter(instance)
     with pytest.raises(ValueError, match="signed 64-bit integer"):
@@ -266,7 +262,7 @@ def test_recommended_preparation_reaches_the_openjij_input_class() -> None:
     assert instance.prepare(input_class, policy) is None
     assert alias is instance
     assert input_class.contains(alias)
-    assert OMMXOpenJijSAAdapter.check_applicability(alias).is_applicable
+    assert OMMXOpenJijSAAdapter.check_applicability(alias).is_member
 
 
 def test_sampler_input_validation_still_follows_preparation() -> None:
@@ -286,7 +282,7 @@ def test_sampler_input_validation_still_follows_preparation() -> None:
     assert input_class.contains(instance)
 
     report = OMMXOpenJijSAAdapter.check_applicability(instance)
-    assert report.is_applicable
+    assert report.is_member
 
     adapter = OMMXOpenJijSAAdapter(instance)
     with pytest.raises(ValueError, match="signed 64-bit integer"):

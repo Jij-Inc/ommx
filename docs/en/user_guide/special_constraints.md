@@ -98,7 +98,7 @@ Explicitly lower OneHot before passing the instance to the PySCIPOpt Adapter. Th
 
 ```{code-cell} ipython3
 instance_oh.convert_all_one_hots_to_constraints()
-assert OMMXPySCIPOptAdapter.check_applicability(instance_oh).is_applicable
+assert OMMXPySCIPOptAdapter.check_applicability(instance_oh).is_member
 solution = OMMXPySCIPOptAdapter.solve(instance_oh)
 # Exactly one of the three is chosen, so x_1 with the largest value 10 is selected
 assert abs(solution.objective - 10.0) < 1e-6

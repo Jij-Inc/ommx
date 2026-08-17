@@ -12,6 +12,7 @@ from ommx import (
     Instance,
     InstanceClass,
     InstanceClassClause,
+    InstanceClassMembershipReport,
     InstanceClassMismatch,
     Kind,
     OneHotConstraint,
@@ -347,11 +348,10 @@ def test_solver_adapter_applicability_is_input_class_membership() -> None:
         INPUT_CLASS = binary_linear_input_class()
 
     report = Adapter.check_applicability(instance)
-    assert report.is_applicable
-    assert report.input_membership.is_member
-    assert report.adapter.endswith(".Adapter")
+    assert isinstance(report, InstanceClassMembershipReport)
+    assert report.is_member
     assert instance.to_v2_bytes() == before
-    assert Adapter.require_applicable(instance).is_applicable
+    assert Adapter.require_applicable(instance) == report
 
 
 def test_membership_failure_and_invalid_declarations_are_errors() -> None:
@@ -362,11 +362,11 @@ def test_membership_failure_and_invalid_declarations_are_errors() -> None:
         INPUT_CLASS = binary_linear_input_class()
 
     report = Adapter.check_applicability(outside_input_class)
-    assert not report.is_applicable
-    assert not report.input_membership.is_member
+    assert not report.is_member
     with pytest.raises(AdapterNotApplicableError) as exc_info:
         Adapter.require_applicable(outside_input_class)
-    assert exc_info.value.report.input_membership == report.input_membership
+    assert exc_info.value.report == report
+    assert exc_info.value.adapter.endswith(".Adapter")
 
     class MissingDeclaration(SolverAdapter):
         pass

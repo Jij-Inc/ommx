@@ -98,7 +98,7 @@ PySCIPOpt Adapter に渡す前に、OneHot を通常の等式制約 $x_0 + x_1 +
 
 ```{code-cell} ipython3
 instance_oh.convert_all_one_hots_to_constraints()
-assert OMMXPySCIPOptAdapter.check_applicability(instance_oh).is_applicable
+assert OMMXPySCIPOptAdapter.check_applicability(instance_oh).is_member
 solution = OMMXPySCIPOptAdapter.solve(instance_oh)
 # 3 つのうち丁度 1 つを選ぶので、最大値 10 をもつ x_1 が選ばれる
 assert abs(solution.objective - 10.0) < 1e-6

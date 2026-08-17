@@ -576,8 +576,8 @@ impl InstanceClassClauseReport {
 /// Side-effect-free [`InstanceClass`] membership report.
 ///
 /// An instance is a member when at least one complete clause contains it.
-/// An adapter applicability report associates this membership result with the
-/// adapter identity; it does not add another applicability condition.
+/// Adapters use this membership report directly when checking applicability;
+/// they do not add another applicability condition.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceClassMembershipReport {
     clause_reports: Vec<InstanceClassClauseReport>,

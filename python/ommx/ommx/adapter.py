@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
 from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
@@ -51,31 +50,16 @@ class DiagnosticsSink(Protocol):
         """
 
 
-@dataclass(frozen=True, slots=True)
-class AdapterApplicabilityReport:
-    """Applicability result defined by an Adapter's input class."""
-
-    adapter: str
-    input_membership: InstanceClassMembershipReport
-
-    @property
-    def is_applicable(self) -> bool:
-        return self.input_membership.is_member
-
-    def __str__(self) -> str:
-        if not self.input_membership.is_member:
-            return f"{self.adapter} is not applicable:\n{self.input_membership}"
-        return f"{self.adapter} is applicable"
-
-
 class AdapterNotApplicableError(ValueError):
     """Raised when an instance is not applicable to an adapter."""
 
-    report: AdapterApplicabilityReport
+    adapter: str
+    report: InstanceClassMembershipReport
 
-    def __init__(self, report: AdapterApplicabilityReport):
+    def __init__(self, adapter: str, report: InstanceClassMembershipReport):
+        self.adapter = adapter
         self.report = report
-        super().__init__(str(report))
+        super().__init__(f"{adapter} is not applicable:\n{report}")
 
 
 class SolverAdapter(ABC):
@@ -101,7 +85,9 @@ class SolverAdapter(ABC):
         return PreparationPolicy()
 
     @classmethod
-    def check_applicability(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
+    def check_applicability(
+        cls, ommx_instance: Instance
+    ) -> InstanceClassMembershipReport:
         """Check ``INPUT_CLASS`` membership without mutation."""
         input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
         if input_class is None:
@@ -109,19 +95,17 @@ class SolverAdapter(ABC):
                 f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
             )
 
-        input_membership = input_class.check_membership(ommx_instance)
-        adapter = f"{cls.__module__}.{cls.__qualname__}"
-        return AdapterApplicabilityReport(
-            adapter=adapter,
-            input_membership=input_membership,
-        )
+        return input_class.check_membership(ommx_instance)
 
     @classmethod
-    def require_applicable(cls, ommx_instance: Instance) -> AdapterApplicabilityReport:
-        """Return the report or raise :class:`AdapterNotApplicableError`."""
+    def require_applicable(
+        cls, ommx_instance: Instance
+    ) -> InstanceClassMembershipReport:
+        """Return the membership report or raise ``AdapterNotApplicableError``."""
         report = cls.check_applicability(ommx_instance)
-        if not report.is_applicable:
-            raise AdapterNotApplicableError(report)
+        if not report.is_member:
+            adapter = f"{cls.__module__}.{cls.__qualname__}"
+            raise AdapterNotApplicableError(adapter, report)
         return report
 
     @classmethod
