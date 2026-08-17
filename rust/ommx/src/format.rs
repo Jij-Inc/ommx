@@ -1,4 +1,9 @@
-use crate::{Atom, Expression, Function, Instruction, Monomial, MonomialDyn, VariableID};
+use crate::{
+    function::operation::{
+        instructions, AssociativeOperator, Atom, BinaryOperator, Instruction, UnaryOperator,
+    },
+    Expression, Function, Monomial, MonomialDyn, VariableID,
+};
 use std::{collections::BTreeMap, fmt};
 
 /// Options for formatting a [`Function`] with an instance-provided modeling context.
@@ -128,8 +133,7 @@ fn total_polynomial_terms(function: &Function) -> usize {
         Function::Linear(value) => value.num_terms(),
         Function::Quadratic(value) => value.num_terms(),
         Function::Polynomial(value) => value.num_terms(),
-        Function::Expression(expression) => expression
-            .instructions()
+        Function::Expression(expression) => instructions(expression)
             .iter()
             .filter_map(|instruction| match instruction {
                 Instruction::Push(atom) => Some(match atom {
@@ -152,7 +156,7 @@ fn render_expression(
     mut render_atom: impl FnMut(&Atom) -> crate::Result<String>,
 ) -> crate::Result<String> {
     let mut stack = Vec::new();
-    for instruction in expression.instructions() {
+    for instruction in instructions(expression) {
         match instruction {
             Instruction::Push(atom) => stack.push(render_atom(atom)?),
             Instruction::Unary(operator) => {
@@ -160,10 +164,10 @@ fn render_expression(
                     .pop()
                     .expect("validated expression has a unary operand");
                 stack.push(match operator {
-                    crate::UnaryOperator::Neg => format!("-({operand})"),
-                    crate::UnaryOperator::Abs => format!("abs({operand})"),
-                    crate::UnaryOperator::Signum => format!("signum({operand})"),
-                    crate::UnaryOperator::Powi(exponent) => {
+                    UnaryOperator::Neg => format!("-({operand})"),
+                    UnaryOperator::Abs => format!("abs({operand})"),
+                    UnaryOperator::Signum => format!("signum({operand})"),
+                    UnaryOperator::Powi(exponent) => {
                         format!("powi({operand}, {exponent})")
                     }
                 });
@@ -176,10 +180,10 @@ fn render_expression(
                     .pop()
                     .expect("validated expression has a left operand");
                 stack.push(match operator {
-                    crate::AssociativeOperator::Add => format!("({lhs}) + ({rhs})"),
-                    crate::AssociativeOperator::Mul => format!("({lhs}) * ({rhs})"),
-                    crate::AssociativeOperator::Min => format!("min({lhs}, {rhs})"),
-                    crate::AssociativeOperator::Max => format!("max({lhs}, {rhs})"),
+                    AssociativeOperator::Add => format!("({lhs}) + ({rhs})"),
+                    AssociativeOperator::Mul => format!("({lhs}) * ({rhs})"),
+                    AssociativeOperator::Min => format!("min({lhs}, {rhs})"),
+                    AssociativeOperator::Max => format!("max({lhs}, {rhs})"),
                 });
             }
             Instruction::Binary(operator) => {
@@ -190,7 +194,7 @@ fn render_expression(
                     .pop()
                     .expect("validated expression has a left operand");
                 stack.push(match operator {
-                    crate::BinaryOperator::Div => format!("({lhs}) / ({rhs})"),
+                    BinaryOperator::Div => format!("({lhs}) / ({rhs})"),
                 });
             }
         }
@@ -416,7 +420,7 @@ impl fmt::Debug for crate::Function {
             crate::Function::Quadratic(quadratic) => write!(f, "Quadratic({quadratic})"),
             crate::Function::Polynomial(polynomial) => write!(f, "Polynomial({polynomial})"),
             crate::Function::Expression(expression) => {
-                write!(f, "Expression({:?})", expression.instructions())
+                write!(f, "Expression({:?})", instructions(expression))
             }
         }
     }

@@ -1,3 +1,6 @@
+use super::operation::{
+    instructions, AssociativeOperator, Atom, BinaryOperator, Instruction, UnaryOperator,
+};
 use super::*;
 use crate::{Bound, Bounds};
 use num::Zero;
@@ -499,7 +502,7 @@ fn analyze_expression_bound(
     bounds: &Bounds,
 ) -> crate::Result<BoundAnalysis> {
     let mut values = Vec::new();
-    for instruction in expression.instructions() {
+    for instruction in instructions(expression) {
         match instruction {
             Instruction::Push(atom) => values.push(analyze_atom(atom, bounds)?),
             Instruction::Unary(operator) => {

@@ -1,3 +1,7 @@
+use super::operation::{
+    from_instructions_exact, into_expression_instructions, AssociativeOperator, Atom,
+    BinaryOperator, Instruction, UnaryOperator,
+};
 use super::*;
 use crate::{
     parse::{Parse, ParseError, RawParseError},
@@ -63,7 +67,7 @@ impl Parse for v1::function::Expression {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Function::from_instructions_exact(instructions).map_err(|error| {
+        from_instructions_exact(instructions).map_err(|error| {
             RawParseError::InvalidFunction(error.to_string())
                 .context(EXPRESSION_MESSAGE, "instructions")
         })
@@ -206,8 +210,7 @@ impl From<Function> for v1::Function {
             Function::Polynomial(value) => WireFunction::Polynomial(value.into()),
             Function::Expression(expression) => {
                 WireFunction::Expression(v1::function::Expression {
-                    instructions: expression
-                        .into_instructions()
+                    instructions: into_expression_instructions(expression)
                         .into_iter()
                         .map(Into::into)
                         .collect(),
@@ -372,23 +375,48 @@ mod tests {
 
     #[test]
     fn expression_rejects_stack_underflow_and_invalid_final_height() {
-        for malformed in [
-            expression(vec![]),
-            expression(vec![unary(unary_operation::Operator::Abs)]),
-            expression(vec![
+        insta::assert_snapshot!(parse_error(expression(vec![])), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+        expression program must leave exactly one stack value, found 0
+        "###);
+
+        insta::assert_snapshot!(
+            parse_error(expression(vec![unary(unary_operation::Operator::Abs)])),
+            @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+        expression instruction 0 requires 1 stack values, found 0
+        "###
+        );
+
+        insta::assert_snapshot!(
+            parse_error(expression(vec![
                 WireInstruction::Constant(1.0),
                 associative(associative_operation::Operator::Add),
-            ]),
-            expression(vec![
+            ])),
+            @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+        expression instruction 1 requires 2 stack values, found 1
+        "###
+        );
+
+        insta::assert_snapshot!(
+            parse_error(expression(vec![
                 WireInstruction::Constant(1.0),
                 WireInstruction::Constant(2.0),
-            ]),
-        ] {
-            assert!(matches!(
-                parse_error(malformed).error,
-                RawParseError::InvalidFunction(_)
-            ));
-        }
+            ])),
+            @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+        expression program must leave exactly one stack value, found 2
+        "###
+        );
     }
 
     #[test]
@@ -400,58 +428,103 @@ mod tests {
                 },
             )),
         };
-        assert!(matches!(
-            parse_error(malformed).error,
-            RawParseError::MissingField {
-                message: INSTRUCTION_MESSAGE,
-                field: "instruction"
-            }
-        ));
+        insta::assert_snapshot!(parse_error(malformed), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+        Field instruction in ommx.v1.Function.Expression.Instruction is missing.
+        "###);
     }
 
     #[test]
     fn expression_rejects_unknown_and_unspecified_operators() {
-        for value in [0, 99] {
-            let cases = [
-                expression(vec![
-                    WireInstruction::Constant(1.0),
-                    WireInstruction::Unary(UnaryOperation {
-                        operator: value,
-                        integer_exponent: None,
-                    }),
-                ]),
-                expression(vec![
-                    WireInstruction::Constant(1.0),
-                    WireInstruction::Constant(2.0),
-                    WireInstruction::Associative(AssociativeOperation { operator: value }),
-                ]),
-                expression(vec![
-                    WireInstruction::Constant(1.0),
-                    WireInstruction::Constant(2.0),
-                    WireInstruction::Binary(BinaryOperation { operator: value }),
-                ]),
-            ];
-            for malformed in cases {
-                assert!(matches!(
-                    parse_error(malformed).error,
-                    RawParseError::UnknownEnumValue { value: actual, .. } if actual == value
-                ));
-            }
-        }
+        let unary_error = |value| {
+            parse_error(expression(vec![
+                WireInstruction::Constant(1.0),
+                WireInstruction::Unary(UnaryOperation {
+                    operator: value,
+                    integer_exponent: None,
+                }),
+            ]))
+        };
+        insta::assert_snapshot!(unary_error(0), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+            └─ommx.v1.Function.Expression.Instruction[unary]
+              └─ommx.v1.Function.Expression.Instruction.UnaryOperation[operator]
+        Unknown or unsupported enum value 0 for ommx.v1.Function.Expression.Instruction.UnaryOperation.Operator. This may be due to an unspecified value or a newer version of the protocol.
+        "###);
+        insta::assert_snapshot!(unary_error(99), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+            └─ommx.v1.Function.Expression.Instruction[unary]
+              └─ommx.v1.Function.Expression.Instruction.UnaryOperation[operator]
+        Unknown or unsupported enum value 99 for ommx.v1.Function.Expression.Instruction.UnaryOperation.Operator. This may be due to an unspecified value or a newer version of the protocol.
+        "###);
+
+        let associative_error = |value| {
+            parse_error(expression(vec![
+                WireInstruction::Constant(1.0),
+                WireInstruction::Constant(2.0),
+                WireInstruction::Associative(AssociativeOperation { operator: value }),
+            ]))
+        };
+        insta::assert_snapshot!(associative_error(0), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+            └─ommx.v1.Function.Expression.Instruction[associative]
+              └─ommx.v1.Function.Expression.Instruction.AssociativeOperation[operator]
+        Unknown or unsupported enum value 0 for ommx.v1.Function.Expression.Instruction.AssociativeOperation.Operator. This may be due to an unspecified value or a newer version of the protocol.
+        "###);
+        insta::assert_snapshot!(associative_error(99), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+            └─ommx.v1.Function.Expression.Instruction[associative]
+              └─ommx.v1.Function.Expression.Instruction.AssociativeOperation[operator]
+        Unknown or unsupported enum value 99 for ommx.v1.Function.Expression.Instruction.AssociativeOperation.Operator. This may be due to an unspecified value or a newer version of the protocol.
+        "###);
+
+        let binary_error = |value| {
+            parse_error(expression(vec![
+                WireInstruction::Constant(1.0),
+                WireInstruction::Constant(2.0),
+                WireInstruction::Binary(BinaryOperation { operator: value }),
+            ]))
+        };
+        insta::assert_snapshot!(binary_error(0), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+            └─ommx.v1.Function.Expression.Instruction[binary]
+              └─ommx.v1.Function.Expression.Instruction.BinaryOperation[operator]
+        Unknown or unsupported enum value 0 for ommx.v1.Function.Expression.Instruction.BinaryOperation.Operator. This may be due to an unspecified value or a newer version of the protocol.
+        "###);
+        insta::assert_snapshot!(binary_error(99), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+            └─ommx.v1.Function.Expression.Instruction[binary]
+              └─ommx.v1.Function.Expression.Instruction.BinaryOperation[operator]
+        Unknown or unsupported enum value 99 for ommx.v1.Function.Expression.Instruction.BinaryOperation.Operator. This may be due to an unspecified value or a newer version of the protocol.
+        "###);
     }
 
     #[test]
     fn powi_requires_exponent_and_other_unary_operators_reject_it() {
-        assert!(matches!(
-            parse_error(expression(
-                vec![WireInstruction::Constant(2.0), powi(None),]
-            ))
-            .error,
-            RawParseError::MissingField {
-                message: UNARY_MESSAGE,
-                field: "integer_exponent"
-            }
-        ));
+        insta::assert_snapshot!(
+            parse_error(expression(vec![WireInstruction::Constant(2.0), powi(None)])),
+            @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+            └─ommx.v1.Function.Expression.Instruction[unary]
+        Field integer_exponent in ommx.v1.Function.Expression.Instruction.UnaryOperation is missing.
+        "###
+        );
 
         let malformed = expression(vec![
             WireInstruction::Constant(2.0),
@@ -460,11 +533,14 @@ mod tests {
                 integer_exponent: Some(2),
             }),
         ]);
-        assert!(matches!(
-            parse_error(malformed).error,
-            RawParseError::InvalidFunction(message)
-                if message.contains("only valid for unary POWI")
-        ));
+        insta::assert_snapshot!(parse_error(malformed), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Function[expression]
+          └─ommx.v1.Function.Expression[instructions]
+            └─ommx.v1.Function.Expression.Instruction[unary]
+              └─ommx.v1.Function.Expression.Instruction.UnaryOperation[integer_exponent]
+        integer_exponent is only valid for unary POWI instructions
+        "###);
     }
 
     #[test]

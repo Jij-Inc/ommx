@@ -1,4 +1,11 @@
-use crate::function::{Atom, Expression, Function, Instruction};
+#[cfg(test)]
+use crate::function::operation::{
+    associative_expression, binary_expression, AssociativeOperator, BinaryOperator,
+};
+use crate::function::{
+    operation::{instructions, Atom, Instruction},
+    Expression, Function,
+};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
@@ -42,7 +49,7 @@ impl LogicalMemoryProfile for Instruction {
 impl LogicalMemoryProfile for Expression {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         visitor.visit_leaf(&path.with("Vec[stack]"), size_of::<Vec<Instruction>>());
-        for instruction in self.instructions() {
+        for instruction in instructions(self) {
             instruction.visit_logical_memory(path, visitor);
         }
     }
@@ -116,10 +123,10 @@ mod tests {
 
     #[test]
     fn expression_profile_visits_program_and_instruction_payloads() {
-        let expression = Function::binary_expression(
-            crate::BinaryOperator::Div,
-            Function::associative_expression(
-                crate::AssociativeOperator::Min,
+        let expression = binary_expression(
+            BinaryOperator::Div,
+            associative_expression(
+                AssociativeOperator::Min,
                 Function::from(linear!(1)).abs(),
                 Function::one(),
             ),

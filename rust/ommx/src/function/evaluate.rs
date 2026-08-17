@@ -1,3 +1,7 @@
+use super::operation::{
+    as_constant, from_instructions_exact, instructions, into_expression_instructions,
+    into_instructions, AssociativeOperator, Atom, BinaryOperator, Instruction, UnaryOperator,
+};
 use super::*;
 use crate::{Evaluate, Sampled, VariableIDSet};
 
@@ -120,7 +124,7 @@ fn replace_partial_operand_with_value(
     instructions.truncate(start);
     let constant = Function::try_from(value)
         .expect("successful Function evaluation always returns a finite value");
-    instructions.extend(constant.into_instructions());
+    instructions.extend(into_instructions(constant));
     PartialOperand {
         start,
         value: Some(value),
@@ -132,17 +136,17 @@ fn partially_evaluate_expression(
     state: &crate::v1::State,
     atol: crate::ATol,
 ) -> crate::Result<Function> {
-    let mut instructions = Vec::with_capacity(expression.instructions().len());
+    let mut instructions = Vec::with_capacity(instructions(&expression).len());
     let mut operands = Vec::new();
 
-    for instruction in expression.into_instructions() {
+    for instruction in into_expression_instructions(expression) {
         match instruction {
             Instruction::Push(atom) => {
                 let evaluated = atom.into_function().partially_evaluated(state, atol)?;
-                let value = evaluated.as_constant();
+                let value = as_constant(&evaluated);
                 debug_assert_eq!(value.is_some(), evaluated.required_ids().is_empty());
                 let start = instructions.len();
-                instructions.extend(evaluated.into_instructions());
+                instructions.extend(into_instructions(evaluated));
                 operands.push(PartialOperand { start, value });
             }
             Instruction::Unary(operator) => {
@@ -212,7 +216,7 @@ fn partially_evaluate_expression(
     }
 
     debug_assert_eq!(operands.len(), 1);
-    Ok(Function::from_instructions_exact(instructions)
+    Ok(from_instructions_exact(instructions)
         .expect("folding closed operands preserves expression validity"))
 }
 
@@ -248,7 +252,7 @@ impl Evaluate for Function {
             }
             Function::Expression(expression) => {
                 let mut values = Vec::new();
-                for instruction in expression.instructions() {
+                for instruction in instructions(expression) {
                     match instruction {
                         Instruction::Push(atom) => {
                             values.push(evaluate_atom(atom, solution, atol)?)
@@ -303,7 +307,7 @@ impl Evaluate for Function {
             Function::Polynomial(f) => f.required_ids(),
             Function::Expression(expression) => {
                 let mut ids = VariableIDSet::default();
-                for instruction in expression.instructions() {
+                for instruction in instructions(expression) {
                     let Instruction::Push(atom) = instruction else {
                         continue;
                     };
@@ -434,7 +438,7 @@ mod tests {
         function
             .partial_evaluate(&state, crate::ATol::default())
             .unwrap();
-        assert_eq!(function.as_constant(), Some(1.0));
+        assert_eq!(as_constant(&function), Some(1.0));
     }
 
     #[test]
@@ -458,13 +462,13 @@ mod tests {
 
     #[test]
     fn partial_evaluation_reports_an_earlier_operation_error_before_later_push_error() {
-        let overflowing_operation = Function::associative_expression(
+        let overflowing_operation = super::operation::associative_expression(
             AssociativeOperator::Mul,
             Function::from(coeff!(f64::MAX)),
             Function::from(linear!(1)),
         );
         let later_overflowing_push = Function::from((coeff!(f64::MAX) * linear!(2)).unwrap());
-        let mut function = Function::associative_expression(
+        let mut function = super::operation::associative_expression(
             AssociativeOperator::Add,
             overflowing_operation,
             later_overflowing_push,
@@ -488,19 +492,19 @@ mod tests {
         let negative_large = Function::try_from(-1e16).unwrap();
         let one = Function::one();
 
-        let left_grouped = Function::associative_expression(
+        let left_grouped = super::operation::associative_expression(
             AssociativeOperator::Add,
-            Function::associative_expression(
+            super::operation::associative_expression(
                 AssociativeOperator::Add,
                 large.clone(),
                 negative_large.clone(),
             ),
             one.clone(),
         );
-        let right_grouped = Function::associative_expression(
+        let right_grouped = super::operation::associative_expression(
             AssociativeOperator::Add,
             large,
-            Function::associative_expression(AssociativeOperator::Add, negative_large, one),
+            super::operation::associative_expression(AssociativeOperator::Add, negative_large, one),
         );
 
         let state = crate::v1::State::default();

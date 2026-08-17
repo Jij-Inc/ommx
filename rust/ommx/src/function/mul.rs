@@ -1,3 +1,4 @@
+use super::operation::{associative_operation, AssociativeOperator};
 use super::*;
 use crate::CoefficientError;
 use std::ops::Mul;
@@ -30,7 +31,7 @@ impl Function {
             Function::Expression(_) => {
                 if rhs != Coefficient::one() {
                     let lhs = std::mem::take(self);
-                    *self = Function::associative_operation(
+                    *self = associative_operation(
                         AssociativeOperator::Mul,
                         lhs,
                         Function::Constant(rhs),
@@ -54,7 +55,7 @@ impl Function {
             *self = match (&lhs, rhs) {
                 (_, Function::Constant(c)) if *c == Coefficient::one() => lhs,
                 (Function::Constant(c), _) if *c == Coefficient::one() => rhs.clone(),
-                _ => Function::associative_operation(AssociativeOperator::Mul, lhs, rhs.clone()),
+                _ => associative_operation(AssociativeOperator::Mul, lhs, rhs.clone()),
             };
             return Ok(());
         }
@@ -82,11 +83,9 @@ impl Function {
             Function::Linear(l) => Function::Polynomial((&l * &rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * &rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * &rhs)?),
-            lhs @ Function::Expression(_) => Function::associative_operation(
-                AssociativeOperator::Mul,
-                lhs,
-                Function::Polynomial(rhs),
-            ),
+            lhs @ Function::Expression(_) => {
+                associative_operation(AssociativeOperator::Mul, lhs, Function::Polynomial(rhs))
+            }
         };
         Ok(())
     }
@@ -99,11 +98,9 @@ impl Function {
             Function::Linear(l) => Function::Quadratic((&l * rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
-            lhs @ Function::Expression(_) => Function::associative_operation(
-                AssociativeOperator::Mul,
-                lhs,
-                Function::Linear(rhs.clone()),
-            ),
+            lhs @ Function::Expression(_) => {
+                associative_operation(AssociativeOperator::Mul, lhs, Function::Linear(rhs.clone()))
+            }
         };
         Ok(())
     }
@@ -119,7 +116,7 @@ impl Function {
             Function::Linear(l) => Function::Polynomial((&l * rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
-            lhs @ Function::Expression(_) => Function::associative_operation(
+            lhs @ Function::Expression(_) => associative_operation(
                 AssociativeOperator::Mul,
                 lhs,
                 Function::Quadratic(rhs.clone()),
@@ -139,7 +136,7 @@ impl Function {
             Function::Linear(l) => Function::Polynomial((&l * rhs)?),
             Function::Quadratic(q) => Function::Polynomial((&q * rhs)?),
             Function::Polynomial(p) => Function::Polynomial((&p * rhs)?),
-            lhs @ Function::Expression(_) => Function::associative_operation(
+            lhs @ Function::Expression(_) => associative_operation(
                 AssociativeOperator::Mul,
                 lhs,
                 Function::Polynomial(rhs.clone()),

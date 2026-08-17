@@ -15,14 +15,14 @@ mod evaluate;
 mod evaluate_bound;
 mod logical_memory;
 mod mul;
-mod operation;
+pub(crate) mod operation;
 mod parse;
 mod reduce_binary_power;
 mod serialize;
 mod sub;
 mod substitute;
 
-pub use operation::*;
+pub use operation::{Expression, FunctionEvaluationError};
 
 /// A real-valued function of decision variables used for objective and constraint functions.
 ///
@@ -43,13 +43,17 @@ pub enum Function {
 #[derive(serde::Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ExpressionRef<'a> {
-    Expression { instructions: &'a [Instruction] },
+    Expression {
+        instructions: &'a [operation::Instruction],
+    },
 }
 
 #[derive(serde::Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ExpressionOwned {
-    Expression { instructions: Vec<Instruction> },
+    Expression {
+        instructions: Vec<operation::Instruction>,
+    },
 }
 
 impl serde::Serialize for Function {
@@ -73,7 +77,7 @@ impl serde::Serialize for Function {
             Function::Quadratic(q) => q.serialize(serializer),
             Function::Polynomial(p) => p.serialize(serializer),
             Function::Expression(expression) => ExpressionRef::Expression {
-                instructions: expression.instructions(),
+                instructions: operation::instructions(expression),
             }
             .serialize(serializer),
         }
@@ -95,7 +99,7 @@ impl<'de> serde::Deserialize<'de> for Function {
         match Repr::deserialize(deserializer)? {
             Repr::Polynomial(polynomial) => Ok(Function::Polynomial(polynomial).normalize()),
             Repr::Expression(ExpressionOwned::Expression { instructions }) => {
-                Function::from_instructions_exact(instructions).map_err(serde::de::Error::custom)
+                operation::from_instructions_exact(instructions).map_err(serde::de::Error::custom)
             }
         }
     }
@@ -354,11 +358,11 @@ mod serde_tests {
             panic!("deserialization must preserve an explicit expression program");
         };
         assert_eq!(
-            expression.instructions(),
+            operation::instructions(&expression),
             &[
-                Instruction::Push(Atom::Zero),
-                Instruction::Push(Atom::Zero),
-                Instruction::Associative(AssociativeOperator::Mul),
+                operation::Instruction::Push(operation::Atom::Zero),
+                operation::Instruction::Push(operation::Atom::Zero),
+                operation::Instruction::Associative(operation::AssociativeOperator::Mul),
             ]
         );
     }

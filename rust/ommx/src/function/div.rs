@@ -1,5 +1,6 @@
 use std::ops::Div;
 
+use super::operation::{binary_operation, BinaryOperator};
 use super::*;
 use crate::CoefficientError;
 
@@ -22,11 +23,7 @@ impl Div<Coefficient> for Function {
             Function::Expression(_) => {
                 if rhs != Coefficient::one() {
                     let lhs = std::mem::take(&mut self);
-                    self = Function::binary_operation(
-                        BinaryOperator::Div,
-                        lhs,
-                        Function::Constant(rhs),
-                    );
+                    self = binary_operation(BinaryOperator::Div, lhs, Function::Constant(rhs));
                 }
             }
         }
@@ -42,7 +39,7 @@ impl Div for Function {
     fn div(self, rhs: Self) -> Self::Output {
         match rhs {
             Function::Constant(coefficient) => self / coefficient,
-            rhs => Ok(Function::binary_operation(BinaryOperator::Div, self, rhs)),
+            rhs => Ok(binary_operation(BinaryOperator::Div, self, rhs)),
         }
     }
 }

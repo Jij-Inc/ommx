@@ -1,3 +1,4 @@
+use super::operation::{instructions, Instruction};
 use super::*;
 use crate::ATol;
 use ::approx::AbsDiffEq;
@@ -25,11 +26,10 @@ impl AbsDiffEq for Function {
         let (Function::Expression(lhs), Function::Expression(rhs)) = (self, other) else {
             return false;
         };
-        lhs.instructions().len() == rhs.instructions().len()
-            && lhs
-                .instructions()
+        instructions(lhs).len() == instructions(rhs).len()
+            && instructions(lhs)
                 .iter()
-                .zip(rhs.instructions())
+                .zip(instructions(rhs))
                 .all(|(lhs, rhs)| instruction_abs_diff_eq(lhs, rhs, epsilon))
     }
 }

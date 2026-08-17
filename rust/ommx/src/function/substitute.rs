@@ -1,3 +1,9 @@
+#[cfg(test)]
+use super::operation::as_constant;
+use super::operation::{
+    from_instructions_exact, instructions, into_expression_instructions, into_instructions,
+    Instruction,
+};
 use super::*;
 use crate::{substitute_acyclic_via_one, Evaluate, Substitute, VariableID, VariableIDSet};
 
@@ -41,17 +47,17 @@ impl Substitute for Function {
                 Ok(substituted)
             }
             Function::Expression(expression) => {
-                let mut instructions = Vec::with_capacity(expression.instructions().len());
-                for instruction in expression.into_instructions() {
+                let mut instructions = Vec::with_capacity(instructions(&expression).len());
+                for instruction in into_expression_instructions(expression) {
                     match instruction {
                         Instruction::Push(atom) => {
                             let substituted = atom.into_function().substitute_one(assigned, f)?;
-                            instructions.extend(substituted.into_instructions());
+                            instructions.extend(into_instructions(substituted));
                         }
                         operation => instructions.push(operation),
                     }
                 }
-                Ok(Function::from_instructions_exact(instructions)
+                Ok(from_instructions_exact(instructions)
                     .expect("replacing pushes with valid programs preserves expression validity"))
             }
         }?;
@@ -85,7 +91,7 @@ mod tests {
         }
 
         let substituted = function.substitute_one(1.into(), &Function::one()).unwrap();
-        assert_eq!(substituted.as_constant(), Some(1.0));
+        assert_eq!(as_constant(&substituted), Some(1.0));
     }
 
     #[test]

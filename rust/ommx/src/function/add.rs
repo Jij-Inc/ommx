@@ -1,3 +1,6 @@
+use super::operation::{
+    associative_operation, unary_operation, AssociativeOperator, UnaryOperator,
+};
 use super::*;
 use crate::{CoefficientError, LinearMonomial, Monomial, MonomialDyn, QuadraticMonomial};
 use std::ops::{Add, Neg};
@@ -122,7 +125,7 @@ impl Function {
             (Function::Polynomial(lhs), Function::Polynomial(rhs)) => {
                 Function::Polynomial((lhs + rhs)?)
             }
-            (lhs, rhs) => Function::associative_operation(AssociativeOperator::Add, lhs, rhs),
+            (lhs, rhs) => associative_operation(AssociativeOperator::Add, lhs, rhs),
         };
         Ok(())
     }
@@ -267,7 +270,7 @@ impl Neg for Function {
                 .for_each(|v| *v = -(*v));
             return self;
         }
-        Function::unary_operation(UnaryOperator::Neg, self)
+        unary_operation(UnaryOperator::Neg, self)
     }
 }
 

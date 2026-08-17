@@ -1,3 +1,11 @@
+#[cfg(test)]
+use super::operation::{
+    associative_expression, binary_expression, AssociativeOperator, BinaryOperator,
+};
+use super::operation::{
+    from_instructions_exact, instructions, into_expression_instructions, into_instructions,
+    Instruction, UnaryOperator,
+};
 use super::*;
 use crate::{CoefficientError, VariableIDSet};
 
@@ -21,18 +29,18 @@ impl Function {
                 let Function::Expression(expression) = self.clone() else {
                     unreachable!("expression variant matched above")
                 };
-                let mut instructions = Vec::with_capacity(expression.instructions().len());
+                let mut instructions = Vec::with_capacity(instructions(&expression).len());
                 let mut operands = Vec::new();
                 let mut reduced = false;
 
-                for instruction in expression.into_instructions() {
+                for instruction in into_expression_instructions(expression) {
                     match instruction {
                         Instruction::Push(atom) => {
                             let mut function = atom.into_function();
                             reduced |= function.reduce_binary_power(binary_ids)?;
                             let is_binary_variable = is_binary_variable(&function, binary_ids);
                             let start = instructions.len();
-                            instructions.extend(function.into_instructions());
+                            instructions.extend(into_instructions(function));
                             operands.push(OperandShape {
                                 start,
                                 is_binary_variable,
@@ -71,7 +79,7 @@ impl Function {
                 }
 
                 debug_assert_eq!(operands.len(), 1);
-                let rebuilt = Function::from_instructions_exact(instructions)
+                let rebuilt = from_instructions_exact(instructions)
                     .expect("removing unary operations preserves expression validity");
                 *self = rebuilt;
                 Ok(reduced)
@@ -147,16 +155,13 @@ mod tests {
     #[test]
     fn no_op_reduction_preserves_composite_expression_shape() {
         let operand = Function::from((coeff!(1e150) * crate::linear!(1)).unwrap());
-        let mut product = Function::associative_expression(
-            AssociativeOperator::Mul,
-            operand.clone(),
-            operand.clone(),
-        );
+        let mut product =
+            associative_expression(AssociativeOperator::Mul, operand.clone(), operand.clone());
         let original_product = product.clone();
         assert!(!product.reduce_binary_power(&VariableIDSet::new()).unwrap());
         assert!(product == original_product);
 
-        let mut quotient = Function::binary_expression(
+        let mut quotient = binary_expression(
             BinaryOperator::Div,
             operand,
             Function::try_from(2.0).unwrap(),
