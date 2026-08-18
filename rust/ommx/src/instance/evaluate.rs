@@ -858,6 +858,17 @@ mod tests {
     use proptest::prelude::*;
     use std::collections::HashMap;
 
+    fn polynomial_regular_parameters() -> crate::InstanceParameters {
+        let function =
+            crate::FunctionParameters::polynomial_only(crate::PolynomialParameters::default());
+        crate::InstanceParameters {
+            objective: function,
+            constraint: function,
+            named_function: function,
+            ..crate::InstanceParameters::regular_only()
+        }
+    }
+
     proptest! {
         #[test]
         fn test_evaluate_instance(
@@ -867,16 +878,31 @@ mod tests {
                     (Just(instance), state)
                 })
         ) {
-            let solution = instance.evaluate(&state, ATol::default()).unwrap();
-            // Must be populated
-            let ids: VariableIDSet = solution.state().entries.keys().map(|id| VariableID::from(*id)).collect();
-            let all: VariableIDSet = instance.decision_variables().keys().copied().collect();
-            prop_assert_eq!(ids, all);
+            match instance.evaluate(&state, ATol::default()) {
+                Ok(solution) => {
+                    // A successfully evaluated solution must contain the fully populated state.
+                    let ids: VariableIDSet = solution
+                        .state()
+                        .entries
+                        .keys()
+                        .map(|id| VariableID::from(*id))
+                        .collect();
+                    let all: VariableIDSet =
+                        instance.decision_variables().keys().copied().collect();
+                    prop_assert_eq!(ids, all);
+                }
+                Err(error) => {
+                    prop_assert!(
+                        error.is::<crate::FunctionEvaluationError>(),
+                        "arbitrary valid state produced a non-function evaluation error: {error:#}",
+                    );
+                }
+            }
         }
 
         #[test]
         fn partial_evaluate(
-            (instance, state, (u, v)) in Instance::arbitrary_with(crate::InstanceParameters::regular_only())
+            (instance, state, (u, v)) in Instance::arbitrary_with(polynomial_regular_parameters())
                 .prop_flat_map(|instance| {
                     let state = instance.arbitrary_state();
                     (Just(instance), state).prop_flat_map(|(instance, state)| {

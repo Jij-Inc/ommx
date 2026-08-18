@@ -131,29 +131,7 @@ mod tests {
     }
 
     fn arbitrary_function() -> impl Strategy<Value = ommx::Function> {
-        let polynomial = prop_oneof![
-            Just(ommx::Function::Zero),
-            any::<ommx::Coefficient>().prop_map(ommx::Function::Constant),
-            any::<ommx::Linear>().prop_map(ommx::Function::Linear),
-            any::<ommx::Quadratic>().prop_map(ommx::Function::Quadratic),
-            any::<ommx::Polynomial>().prop_map(ommx::Function::Polynomial),
-        ];
-        polynomial.prop_recursive(3, 32, 4, |inner| {
-            prop_oneof![
-                inner.clone().prop_map(|operand| operand.abs()),
-                inner.clone().prop_map(|operand| operand.signum()),
-                inner.clone().prop_map(|operand| -operand),
-                (inner.clone(), inner.clone())
-                    .prop_map(|(lhs, rhs)| (lhs + rhs).expect("expression addition is valid")),
-                (inner.clone(), inner.clone())
-                    .prop_map(|(lhs, rhs)| (lhs * rhs).expect("expression multiplication is valid")),
-                (inner.clone(), inner.clone()).prop_map(|(lhs, rhs)| lhs.min(rhs)),
-                (inner.clone(), inner.clone()).prop_map(|(lhs, rhs)| lhs.max(rhs)),
-                (inner.clone(), inner.clone())
-                    .prop_map(|(lhs, rhs)| (lhs / rhs).expect("expression division is valid")),
-                (inner, -4_i32..=4_i32).prop_map(|(base, exponent)| base.powi(exponent)),
-            ]
-        })
+        ommx::Function::arbitrary()
     }
 
     fn arbitrary_constraint() -> impl Strategy<Value = ommx::Constraint> {
@@ -208,7 +186,7 @@ mod tests {
         #![proptest_config(ProptestConfig::with_cases(64))]
 
         #[test]
-        fn function_payload_preserves_all_function_variants(function in arbitrary_function()) {
+        fn function_payload_roundtrips_arbitrary_functions(function in arbitrary_function()) {
             let expected = function.clone();
             let payload = function_payload(function);
             let actual = ommx::Function::from_bytes(&payload).unwrap();

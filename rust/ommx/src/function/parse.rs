@@ -273,7 +273,7 @@ impl From<Instruction> for v1::function::expression::Instruction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Message, PolynomialParameters};
+    use crate::{FunctionParameters, Message, PolynomialParameters};
     use proptest::prelude::*;
     use v1::function::expression::instruction::{
         associative_operation, binary_operation, unary_operation, AssociativeOperation,
@@ -565,7 +565,7 @@ mod tests {
 
     proptest! {
         #[test]
-        fn polynomial_function_roundtrip(original in Function::arbitrary()) {
+        fn function_roundtrip(original in Function::arbitrary()) {
             let v1_function = v1::Function::from(original.clone());
             let parsed = Function::try_from(v1_function).unwrap();
             prop_assert_eq!(original, parsed);
@@ -574,7 +574,7 @@ mod tests {
         #[test]
         fn polynomial_strategy_respects_parameters(
             (parameters, function) in PolynomialParameters::arbitrary().prop_flat_map(|parameters| {
-                Function::arbitrary_with(parameters)
+                Function::arbitrary_with(FunctionParameters::polynomial_only(parameters))
                     .prop_map(move |function| (parameters, function))
             }),
         ) {

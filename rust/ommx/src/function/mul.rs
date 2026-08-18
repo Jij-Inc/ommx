@@ -262,8 +262,15 @@ impl_mul_polynomial_rhs!(&Polynomial);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{FunctionParameters, PolynomialParameters};
     use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
+
+    fn polynomial_function() -> BoxedStrategy<Function> {
+        Function::arbitrary_with(FunctionParameters::polynomial_only(
+            PolynomialParameters::default(),
+        ))
+    }
 
     proptest! {
         #[test]
@@ -275,18 +282,22 @@ mod tests {
         }
 
         #[test]
-        fn zero(a in any::<Function>()) {
+        fn zero(a in polynomial_function()) {
             assert_abs_diff_eq!((&a * Function::zero()).unwrap(), Function::zero());
             assert_abs_diff_eq!((Function::zero() * &a).unwrap(), Function::zero());
         }
 
         #[test]
-        fn mul_commutative(a in any::<Function>(), b in any::<Function>()) {
+        fn mul_commutative(a in polynomial_function(), b in polynomial_function()) {
             assert_abs_diff_eq!((&a * &b).unwrap(), (&b * &a).unwrap());
         }
 
         #[test]
-        fn mul_nary(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
+        fn mul_nary(
+            a in polynomial_function(),
+            b in polynomial_function(),
+            c in polynomial_function(),
+        ) {
             assert_abs_diff_eq!((&a * (&b * &c).unwrap()).unwrap(), ((&a * &b).unwrap() * &c).unwrap());
         }
     }

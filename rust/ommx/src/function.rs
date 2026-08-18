@@ -22,6 +22,7 @@ mod serialize;
 mod sub;
 mod substitute;
 
+pub use arbitrary::FunctionParameters;
 pub use operation::{Expression, FunctionEvaluationError};
 
 /// A real-valued function of decision variables used for objective and constraint functions.

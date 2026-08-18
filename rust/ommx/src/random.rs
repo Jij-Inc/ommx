@@ -6,13 +6,24 @@
 //! the [`Arbitrary`] trait using [`random`] and [`random_deterministic`] functions.
 //!
 //! ```rust
-//! use ommx::{Instance, InstanceParameters, Linear, LinearParameters, random::random_deterministic};
+//! use ommx::{
+//!     Function, FunctionParameters, Instance, InstanceParameters, Linear, LinearParameters,
+//!     PolynomialParameters, random::random_deterministic,
+//! };
 //!
 //! // Linear function with random coefficients
 //! let linear: Linear = random_deterministic(LinearParameters::new(5, 10.into()).unwrap());
 //!
 //! // LP instance
 //! let instance: Instance = random_deterministic(InstanceParameters::default_lp());
+//!
+//! // Default Function strategy, including every composed operation kind
+//! let function: Function = random_deterministic(FunctionParameters::default());
+//!
+//! // Explicit polynomial-only subspace
+//! let polynomial: Function = random_deterministic(FunctionParameters::polynomial_only(
+//!     PolynomialParameters::default(),
+//! ));
 //! ```
 //!
 //! Proptest Support

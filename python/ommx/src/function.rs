@@ -605,7 +605,11 @@ impl Function {
         let mut rng = rng.lock()?;
         let inner: ommx::Function = ommx::random::random(
             &mut rng,
-            ommx::PolynomialParameters::new(num_terms, max_degree.into(), max_id.into())?,
+            ommx::FunctionParameters::polynomial_only(ommx::PolynomialParameters::new(
+                num_terms,
+                max_degree.into(),
+                max_id.into(),
+            )?),
         );
         Ok(Self(inner))
     }

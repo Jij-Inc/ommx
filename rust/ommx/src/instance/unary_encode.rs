@@ -177,6 +177,17 @@ mod tests {
     const EVALUATION_EQ_ABS_TOL: f64 = 1e-8;
     const EVALUATION_EQ_REL_TOL: f64 = 1e-12;
 
+    fn polynomial_full_v3_parameters() -> crate::InstanceParameters {
+        let function =
+            crate::FunctionParameters::polynomial_only(crate::PolynomialParameters::default());
+        crate::InstanceParameters {
+            objective: function,
+            constraint: function,
+            named_function: function,
+            ..crate::InstanceParameters::full_v3()
+        }
+    }
+
     fn aux_variable_count(instance: &Instance, label: &str) -> usize {
         let store = instance.variable_labels();
         instance
@@ -265,7 +276,7 @@ mod tests {
     }
 
     fn arbitrary_unary_encode_case() -> BoxedStrategy<(Instance, UnaryEncodeTarget, State)> {
-        Instance::arbitrary()
+        Instance::arbitrary_with(polynomial_full_v3_parameters())
             .prop_filter_map(
                 "instance must contain an encodable used integer variable",
                 |instance| {

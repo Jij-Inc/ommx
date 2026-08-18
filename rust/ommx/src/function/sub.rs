@@ -135,8 +135,15 @@ impl_sub_polynomial_rhs!(&Polynomial);
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{FunctionParameters, PolynomialParameters};
     use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
+
+    fn polynomial_function() -> BoxedStrategy<Function> {
+        Function::arbitrary_with(FunctionParameters::polynomial_only(
+            PolynomialParameters::default(),
+        ))
+    }
 
     proptest! {
         #[test]
@@ -159,7 +166,7 @@ mod tests {
         }
 
         #[test]
-        fn neg_sub(a in any::<Function>(), b in any::<Function>()) {
+        fn neg_sub(a in polynomial_function(), b in polynomial_function()) {
             assert_abs_diff_eq!(-(a.clone() - b.clone()).unwrap(), (b - a).unwrap());
         }
     }

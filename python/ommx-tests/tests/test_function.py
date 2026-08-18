@@ -15,11 +15,18 @@ from ommx import (
     Parameter,
     Polynomial,
     Quadratic,
+    Rng,
 )
 
 
 def assert_eq(lhs, rhs):
     assert lhs.almost_equal(rhs), f"{lhs} != {rhs}"
+
+
+def test_function_random_uses_polynomial_parameter_space():
+    function = Function.random(Rng(), num_terms=5, max_degree=3, max_id=10)
+    assert function.degree() is not None
+    assert function.num_terms() == 5
 
 
 def test_decision_variable():

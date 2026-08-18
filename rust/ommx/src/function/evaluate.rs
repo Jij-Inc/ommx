@@ -362,17 +362,68 @@ mod tests {
             .boxed()
     }
 
+    fn functions_and_state() -> impl Strategy<Value = (Function, Function, crate::v1::State)> {
+        (any::<Function>(), any::<Function>())
+            .prop_flat_map(|(lhs, rhs)| {
+                let mut ids = lhs.required_ids();
+                ids.extend(rhs.required_ids());
+                (Just(lhs), Just(rhs), arbitrary_state(ids))
+            })
+            .boxed()
+    }
+
     proptest! {
         #[test]
         fn test_evaluate_samples((f, samples) in function_and_samples()) {
-            let evaluated = f.evaluate_samples(&samples, crate::ATol::default()).unwrap();
-            for (sample_id, state) in samples.iter() {
-                let expected = f.evaluate(state, crate::ATol::default()).unwrap();
-                let actual = *evaluated.get(*sample_id).unwrap();
-                prop_assert!(
-                    actual.abs_diff_eq(&expected, 1e-9),
-                    "sample_id = {sample_id:?}, expected = {expected}, actual = {actual}"
-                );
+            let atol = crate::ATol::default();
+            match f.evaluate_samples(&samples, atol) {
+                Ok(evaluated) => {
+                    for (sample_id, state) in samples.iter() {
+                        let expected = f.evaluate(state, atol).unwrap();
+                        let actual = *evaluated.get(*sample_id).unwrap();
+                        prop_assert!(
+                            actual.abs_diff_eq(&expected, 1e-9),
+                            "sample_id = {sample_id:?}, expected = {expected}, actual = {actual}"
+                        );
+                    }
+                }
+                Err(_) => {
+                    prop_assert!(
+                        samples
+                            .iter()
+                            .any(|(_, state)| f.evaluate(state, atol).is_err()),
+                        "sample evaluation failed although every scalar evaluation succeeded",
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn addition_evaluation_matches_operand_sum(
+            (lhs, rhs, state) in functions_and_state(),
+        ) {
+            let atol = crate::ATol::default();
+            let lhs_value = lhs.evaluate(&state, atol);
+            let rhs_value = rhs.evaluate(&state, atol);
+            let sum = (lhs + rhs).expect("generated finite coefficients can be added");
+            let actual = sum.evaluate(&state, atol);
+
+            match (lhs_value, rhs_value) {
+                (Ok(lhs), Ok(rhs)) if (lhs + rhs).is_finite() => {
+                    let expected = lhs + rhs;
+                    let actual = actual.expect("defined operands have a defined sum");
+                    let scale = 1.0_f64.max(lhs.abs() + rhs.abs());
+                    prop_assert!(
+                        (actual - expected).abs() <= 1e-9 * scale,
+                        "expected {expected}, actual {actual}, lhs {lhs}, rhs {rhs}",
+                    );
+                }
+                _ => {
+                    prop_assert!(
+                        actual.is_err(),
+                        "a sum must preserve operand domain and finite-result failures",
+                    );
+                }
             }
         }
     }
