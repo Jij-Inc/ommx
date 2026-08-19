@@ -26,6 +26,7 @@ mod linear;
 mod message_io;
 mod named_function;
 mod one_hot_constraint;
+mod output_objective;
 mod pandas;
 mod parameter;
 mod parameters;
@@ -68,6 +69,7 @@ pub use instance_class::*;
 pub use linear::*;
 pub use named_function::*;
 pub use one_hot_constraint::*;
+pub use output_objective::*;
 pub use parameter::*;
 pub use parameters::*;
 pub use parametric_instance::*;
@@ -189,6 +191,7 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Quadratic>()?;
     m.add_class::<Polynomial>()?;
     m.add_class::<Function>()?;
+    m.add_class::<OutputObjective>()?;
     m.add_class::<VariableBound>()?;
     m.add_class::<Instance>()?;
     m.add_class::<InstanceDescription>()?;
@@ -294,6 +297,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "Quadratic",
     "Polynomial",
     "Function",
+    "OutputObjective",
     // Decision variable and parameter
     "DecisionVariable",
     "AttachedDecisionVariable",

@@ -75,6 +75,7 @@ impl Instance {
     ///
     /// where $\lambda_1$ and $\lambda_2$ are penalty parameters.
     pub fn penalty_method(self) -> Result<ParametricInstance> {
+        self.ensure_no_output_objective("penalty_method")?;
         self.ensure_penalty_method_supported("penalty_method")?;
 
         let mut max_id = 0;
@@ -244,6 +245,7 @@ impl Instance {
     ///
     /// where $\lambda$ is the single penalty parameter.
     pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
+        self.ensure_no_output_objective("uniform_penalty_method")?;
         self.ensure_penalty_method_supported("uniform_penalty_method")?;
 
         // Early return if no active constraints (preserve any existing removed constraints)
@@ -456,6 +458,9 @@ impl Instance {
         let mut constraint_collection = self.constraint_collection.clone();
         constraint_collection.move_active_rows_to_removed(removals)?;
 
+        if objective != self.objective {
+            self.capture_output_objective();
+        }
         self.objective = objective;
         self.constraint_collection = constraint_collection;
         Ok(())
@@ -916,6 +921,39 @@ mod tests {
             keyed.objective().evaluate(&state, ATol::default()).unwrap(),
             -8.0
         );
+    }
+
+    #[test]
+    fn fixed_penalty_preserves_first_output_objective() {
+        let mut instance = create_test_instance_with_constraints();
+        instance.sense = Sense::Maximize;
+        let original_objective = instance.objective().clone();
+        assert!(instance.as_minimization_problem());
+
+        instance
+            .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
+            .unwrap();
+
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), &original_objective);
+        let solution = instance
+            .evaluate(&State::from_iter([(1, 2.0), (2, 1.0)]), ATol::default())
+            .unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 3.0);
+    }
+
+    #[test]
+    fn parametric_penalty_methods_reject_existing_output_objective() {
+        let mut instance = create_test_instance_with_constraints();
+        assert!(instance.as_maximization_problem());
+
+        let penalty_error = instance.clone().penalty_method().unwrap_err();
+        assert!(penalty_error.to_string().contains("output_objective"));
+
+        let uniform_error = instance.uniform_penalty_method().unwrap_err();
+        assert!(uniform_error.to_string().contains("output_objective"));
     }
 
     #[test]

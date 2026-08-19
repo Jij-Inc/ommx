@@ -141,7 +141,7 @@ def test_ignores_unused_unsupported_variable_kind() -> None:
 
 def test_rejects_special_constraints_without_mutating_input() -> None:
     x = DecisionVariable.binary(0)
-    y = DecisionVariable.continuous(1)
+    y = DecisionVariable.continuous(1, lower=0, upper=2)
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
@@ -167,6 +167,14 @@ def test_rejects_special_constraints_without_mutating_input() -> None:
     assert InstanceClassMismatch.IndicatorConstraintsNotAllowed in mismatch_types
     assert InstanceClassMismatch.OneHotConstraintsNotAllowed in mismatch_types
     assert InstanceClassMismatch.Sos1ConstraintsNotAllowed in mismatch_types
+    assert instance.to_v2_bytes() == before
+
+    with pytest.raises(AdapterNotApplicableError):
+        OMMXPythonMIPAdapter.solve_strict(instance)
+    assert instance.to_v2_bytes() == before
+
+    solution = OMMXPythonMIPAdapter.solve(instance)
+    assert solution.feasible
     assert instance.to_v2_bytes() == before
 
 

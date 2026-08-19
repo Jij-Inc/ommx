@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 from math import isfinite
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import openjij as oj
 from ommx import (
@@ -41,11 +41,10 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     Arbitrary polynomial objective degree is supported through OpenJij's QUBO
     and Binary-HUBO paths.
 
-    Integer encoding, sense normalization, slack introduction, and fixed
-    constraint penalties are explicit preparation operations, not part of the
-    declared input class. Start from
-    :meth:`recommended_preparation_policy`, edit caller-owned choices such as
-    fixed penalty magnitudes, and apply the policy with :meth:`Instance.prepare`.
+    :meth:`sample` and :meth:`solve` prepare an isolated copy with
+    :meth:`recommended_preparation_policy`. Use :meth:`sample_strict` or
+    :meth:`solve_strict` after explicitly preparing an instance when
+    caller-owned choices such as fixed penalty magnitudes are required.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
@@ -176,8 +175,45 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         reinitialize_state: bool | None = None,
         seed: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> SampleSet:
-        """Sample the exact applicable ``ommx_instance`` passed to the Adapter."""
+        """Prepare and sample an isolated copy of ``ommx_instance``."""
+        prepared = cls._prepare_for_execution(ommx_instance)
+        return cls.sample_strict(
+            prepared,
+            beta_min=beta_min,
+            beta_max=beta_max,
+            num_sweeps=num_sweeps,
+            num_reads=num_reads,
+            schedule=schedule,
+            initial_state=initial_state,
+            updater=updater,
+            sparse=sparse,
+            reinitialize_state=reinitialize_state,
+            seed=seed,
+            diagnostics=diagnostics,
+            **kwargs,
+        )
+
+    @classmethod
+    def sample_strict(
+        cls,
+        ommx_instance: Instance,
+        *,
+        beta_min: float | None = None,
+        beta_max: float | None = None,
+        num_sweeps: int | None = None,
+        num_reads: int | None = None,
+        schedule: list | None = None,
+        initial_state: list | dict | None = None,
+        updater: str | None = None,
+        sparse: bool | None = None,
+        reinitialize_state: bool | None = None,
+        seed: int | None = None,
+        diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
+    ) -> SampleSet:
+        """Sample an exact OpenJij Adapter input without preparing it."""
         _ = diagnostics
         with _tracer.start_as_current_span("sample") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
@@ -193,6 +229,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 sparse=sparse,
                 reinitialize_state=reinitialize_state,
                 seed=seed,
+                **kwargs,
             )
             response = sampler._sample()
             return sampler.decode_to_sampleset(response)
@@ -213,10 +250,46 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         reinitialize_state: bool | None = None,
         seed: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> Solution:
-        """Return the best feasible sample from :meth:`sample`."""
-        _ = diagnostics
-        sample_set = cls.sample(
+        """Prepare, sample, and return the best feasible result."""
+        prepared = cls._prepare_for_execution(ommx_instance)
+        return cls.solve_strict(
+            prepared,
+            beta_min=beta_min,
+            beta_max=beta_max,
+            num_sweeps=num_sweeps,
+            num_reads=num_reads,
+            schedule=schedule,
+            initial_state=initial_state,
+            updater=updater,
+            sparse=sparse,
+            reinitialize_state=reinitialize_state,
+            seed=seed,
+            diagnostics=diagnostics,
+            **kwargs,
+        )
+
+    @classmethod
+    def solve_strict(
+        cls,
+        ommx_instance: Instance,
+        *,
+        beta_min: float | None = None,
+        beta_max: float | None = None,
+        num_sweeps: int | None = None,
+        num_reads: int | None = None,
+        schedule: list | None = None,
+        initial_state: list | dict | None = None,
+        updater: str | None = None,
+        sparse: bool | None = None,
+        reinitialize_state: bool | None = None,
+        seed: int | None = None,
+        diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
+    ) -> Solution:
+        """Return the best feasible result from :meth:`sample_strict`."""
+        return cls.sample_strict(
             ommx_instance,
             beta_min=beta_min,
             beta_max=beta_max,
@@ -229,8 +302,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             reinitialize_state=reinitialize_state,
             seed=seed,
             diagnostics=diagnostics,
-        )
-        return sample_set.best_feasible
+            **kwargs,
+        ).best_feasible
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
         with _tracer.start_as_current_span("decode"):

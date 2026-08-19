@@ -1,6 +1,6 @@
 import pytest
 
-from ommx import Instance, DecisionVariable, Solution
+from ommx import DecisionVariable, Instance, Optimality, Sense, Solution
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 from ommx_highs_adapter import OMMXHighsAdapter
@@ -60,6 +60,23 @@ def test_solution_optimality():
 
     solution = OMMXHighsAdapter.solve(ommx_instance)
     assert solution.optimality == Solution.OPTIMAL
+
+
+def test_output_objective_does_not_transport_backend_optimality_claim():
+    x = DecisionVariable.binary(1)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Sense.Maximize,
+    )
+    assert instance.as_minimization_problem()
+
+    solution = OMMXHighsAdapter.solve_strict(instance)
+
+    assert solution.sense == Sense.Maximize
+    assert solution.objective == pytest.approx(1.0)
+    assert solution.optimality == Optimality.Unspecified
 
 
 @pytest.mark.parametrize(

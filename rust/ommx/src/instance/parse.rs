@@ -75,6 +75,31 @@ fn parse_v2_decision_variable_dependency(
         .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))
 }
 
+fn parse_v2_output_objective(
+    value: v2::OutputObjective,
+    decision_variable_ids: &VariableIDSet,
+    message: &'static str,
+) -> Result<OutputObjective, ParseError> {
+    let sense = crate::v2_io::parse_v2_required_sense(value.sense, message)
+        .map_err(|error| error.context(message, "output_objective"))?;
+    let function = value
+        .function
+        .ok_or(RawParseError::MissingField {
+            message,
+            field: "output_objective.function",
+        })?
+        .parse_as(&(), message, "output_objective.function")?;
+    for id in function.required_ids() {
+        if !decision_variable_ids.contains(&id) {
+            return Err(RawParseError::InvalidInstance(format!(
+                "Undefined variable ID is used: {id:?}"
+            ))
+            .context(message, "output_objective.function"));
+        }
+    }
+    Ok(OutputObjective::new(sense, function))
+}
+
 fn created_collection_has_payload<T: crate::ConstraintType>(
     collection: &ConstraintCollection<T>,
 ) -> bool {
@@ -345,7 +370,6 @@ impl Parse for v1::Instance {
                 .context(message, "objective"));
             }
         }
-
         let (constraints, mut constraint_context): (
             BTreeMap<ConstraintID, Constraint>,
             crate::ConstraintContextStore<ConstraintID>,
@@ -429,6 +453,7 @@ impl Parse for v1::Instance {
         Ok(Instance {
             sense,
             objective,
+            output_objective: None,
             decision_variables,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
@@ -495,6 +520,17 @@ impl Parse for v2::Instance {
                 .context(message, "objective"));
             }
         }
+        let output_objective = self
+            .output_objective
+            .map(|value| parse_v2_output_objective(value, &decision_variable_ids, message))
+            .transpose()?;
+        crate::v2_io::validate_feature_payload(
+            &required_features,
+            v2::Feature::InstanceOutputObjective,
+            output_objective.is_some(),
+            message,
+            "output_objective",
+        )?;
 
         let constraint_collection = self
             .regular_constraints
@@ -616,6 +652,7 @@ impl Parse for v2::Instance {
         Ok(Instance {
             sense,
             objective,
+            output_objective,
             decision_variables,
             constraint_collection,
             indicator_constraint_collection,
@@ -642,6 +679,7 @@ impl TryFrom<Instance> for v1::Instance {
     type Error = crate::Error;
 
     fn try_from(value: Instance) -> crate::Result<Self> {
+        value.ensure_no_output_objective("serialization to ommx.v1.Instance")?;
         let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
         let (constraints, removed_constraints): (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) =
             value.constraint_collection.into();
@@ -862,6 +900,7 @@ impl Parse for v2::ParametricInstance {
         let message = "ommx.v2.ParametricInstance";
         let required_features =
             crate::v2_io::parse_required_features(self.required_features, message)?;
+        crate::v2_io::reject_instance_output_objective_feature(&required_features, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
         let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
@@ -1556,7 +1595,7 @@ mod tests {
 
     #[test]
     fn test_parametric_instance_to_v1_bytes_filters_reserved_annotation_key() {
-        let mut instance: crate::ParametricInstance = Instance::default().into();
+        let mut instance = crate::ParametricInstance::try_from(Instance::default()).unwrap();
         let reserved_key = format!(
             "{}.title",
             crate::annotation_keys::PARAMETRIC_INSTANCE_NAMESPACE

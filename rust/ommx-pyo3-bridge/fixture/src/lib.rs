@@ -90,7 +90,9 @@ fn instance() -> PyInstance {
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn parametric_instance() -> PyParametricInstance {
-    ParametricInstance::from(component_instance()).into()
+    ParametricInstance::try_from(component_instance())
+        .expect("component instance has no preserved output objective")
+        .into()
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]

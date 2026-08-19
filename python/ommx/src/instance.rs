@@ -9,12 +9,12 @@ use crate::{
         apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
         raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
     },
-    Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
+    Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction, OutputObjective,
     ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
 };
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
-    exceptions::{PyKeyError, PyRuntimeError, PyValueError},
+    exceptions::{PyKeyError, PyValueError},
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -313,6 +313,22 @@ impl Instance {
         Function(self.inner.objective().clone())
     }
 
+    /// Objective semantics used by {meth}`evaluate` and {meth}`evaluate_samples`.
+    ///
+    /// This is `None` until preparation rewrites the active objective or sense.
+    /// When present, {attr}`objective` and {attr}`sense` remain the formulation
+    /// used by an adapter, while this value determines the objective and sense
+    /// exposed by the resulting {class}`Solution` or {class}`SampleSet`.
+    #[getter]
+    pub fn output_objective(&self) -> Option<OutputObjective> {
+        self.inner.output_objective().cloned().map(OutputObjective)
+    }
+
+    /// Set a new active objective and clear any preserved output objective.
+    ///
+    /// Assignment explicitly redefines the model, so subsequent evaluation
+    /// uses the current active sense and this objective until another
+    /// transformation establishes new output semantics.
     #[setter]
     pub fn set_objective(&mut self, objective: Function) -> OmmxPyResult<()> {
         self.inner.set_objective(objective.0)?;
@@ -1046,10 +1062,15 @@ impl Instance {
         Ok(result)
     }
 
-    pub fn as_parametric_instance(&self) -> ParametricInstance {
-        ParametricInstance {
-            inner: self.inner.clone().into(),
-        }
+    /// Convert this instance to a parameter-free ParametricInstance.
+    ///
+    /// Raises {class}`RuntimeError` when preparation has installed an
+    /// {attr}`output_objective`, because ParametricInstance cannot represent
+    /// that distinct output semantics without losing information.
+    pub fn as_parametric_instance(&self) -> OmmxPyResult<ParametricInstance> {
+        Ok(ParametricInstance {
+            inner: ommx::ParametricInstance::try_from(self.inner.clone())?,
+        })
     }
 
     /// Convert to a parametric unconstrained instance by penalty method.
@@ -2878,37 +2899,28 @@ impl Instance {
                 ).into());
             }
             if let Some(pw) = penalty_weights {
-                let pi = self.inner.clone().penalty_method()?;
-                // Map constraint IDs (from parameter subscripts) to penalty weights
-                let mut weights = HashMap::new();
-                for p in pi.parameters().to_v1_parameters() {
-                    let constraint_id = p.subscripts.first().copied().ok_or_else(|| {
-                        PyRuntimeError::new_err(format!(
-                            "Penalty parameter {} has no subscripts",
-                            p.id
-                        ))
-                    })? as u64;
-                    let w = pw.get(&constraint_id).ok_or_else(|| {
-                        PyValueError::new_err(format!(
-                            "No penalty weight provided for constraint ID {}",
-                            constraint_id
-                        ))
-                    })?;
-                    weights.insert(VariableID::from(p.id).into_inner(), *w);
-                }
-                let mut v1_params = ommx::v1::Parameters::default();
-                v1_params.entries = weights;
-                self.inner = pi.with_parameters(v1_params)?;
+                let weights = self
+                    .inner
+                    .constraints()
+                    .keys()
+                    .map(|&id| {
+                        let id_u64 = id.into_inner();
+                        pw.get(&id_u64)
+                            .copied()
+                            .map(|weight| (id, weight))
+                            .ok_or_else(|| {
+                                PyValueError::new_err(format!(
+                                    "No penalty weight provided for constraint ID {id_u64}"
+                                ))
+                            })
+                    })
+                    .collect::<PyResult<BTreeMap<_, _>>>()?;
+                self.inner
+                    .penalty_method_with_fixed_weights(&weights, ommx::ATol::default())?;
             } else {
                 let weight = uniform_penalty_weight.unwrap_or(1.0);
-                let pi = self.inner.clone().uniform_penalty_method()?;
-                let param_id =
-                    pi.parameters().keys().next().ok_or_else(|| {
-                        PyRuntimeError::new_err("No penalty weight parameter found")
-                    })?;
-                let mut v1_params = ommx::v1::Parameters::default();
-                v1_params.entries.insert(param_id.into_inner(), weight);
-                self.inner = pi.with_parameters(v1_params)?;
+                self.inner
+                    .uniform_penalty_method_with_fixed_weight(weight, ommx::ATol::default())?;
             }
         }
 

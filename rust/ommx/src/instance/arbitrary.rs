@@ -147,8 +147,9 @@ impl InstanceParameters {
     /// variables are sampled from strategies. The V3-specific structure —
     /// fixed and dependent variables, removed constraints, indicator,
     /// one-hot, and SOS1 families, parameters, description, and annotations
-    /// — is injected deterministically, so each of those dimensions is
-    /// exercised at a single representative point (smoke coverage) rather
+    /// plus a preserved output objective — is injected deterministically, so
+    /// each of those dimensions is exercised at a single representative point
+    /// (smoke coverage) rather
     /// than sampled. Every generated instance contains all V3 features;
     /// feature-absent combinations are covered by the narrower spaces such
     /// as [`Self::regular_only`].
@@ -560,6 +561,14 @@ impl Arbitrary for Instance {
                                         "org.ommx.user.arbitrary".to_string(),
                                         "true".to_string(),
                                     );
+                                    match instance.sense() {
+                                        Sense::Minimize => {
+                                            instance.as_maximization_problem();
+                                        }
+                                        Sense::Maximize => {
+                                            instance.as_minimization_problem();
+                                        }
+                                    }
                                 }
 
                                 instance
@@ -580,6 +589,11 @@ mod tests {
         fn test_variable_id_is_defined(instance in Instance::arbitrary()) {
             for ids in instance.objective.keys() {
                 for id in ids {
+                    prop_assert!(instance.decision_variables.contains_key(&id));
+                }
+            }
+            if let Some(output) = instance.output_objective() {
+                for id in output.function().required_ids() {
                     prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
@@ -655,6 +669,7 @@ mod tests {
             prop_assert!(instance.parameters.is_some());
             prop_assert!(instance.description.is_some());
             prop_assert!(!instance.annotations.is_empty());
+            prop_assert!(instance.output_objective().is_some());
             prop_assert!(
                 instance
                     .indicator_constraints()

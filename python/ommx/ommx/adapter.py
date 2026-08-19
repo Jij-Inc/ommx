@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from abc import ABC, abstractmethod
 from typing import Any, ClassVar, Protocol, runtime_checkable
 
@@ -68,8 +69,10 @@ class SolverAdapter(ABC):
 
     See the `implementation guide <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html>`_ for more details.
 
-    Concrete subclasses define applicability with ``INPUT_CLASS``; callers own
-    applying any recommended policy with :meth:`ommx.Instance.prepare`.
+    Concrete subclasses define applicability with ``INPUT_CLASS``. The easy
+    :meth:`solve` API prepares an isolated copy with the Adapter's recommended
+    policy. Use :meth:`solve_strict` when the caller owns preparation and wants
+    the Adapter to require an exact input without modifying it.
     """
 
     INPUT_CLASS: ClassVar[InstanceClass]
@@ -79,10 +82,25 @@ class SolverAdapter(ABC):
     def recommended_preparation_policy(cls) -> PreparationPolicy:
         """Return a fresh policy recommended for this Adapter's ``INPUT_CLASS``.
 
-        The caller owns editing and applying it. This method neither prepares an
-        instance nor guarantees applicability. The default policy is empty.
+        The easy APIs apply it to an isolated copy. Advanced callers may edit
+        and apply it explicitly before using a strict API. This method itself
+        neither prepares an instance nor guarantees applicability. The default
+        policy is empty.
         """
         return PreparationPolicy()
+
+    @classmethod
+    def _prepare_for_execution(cls, ommx_instance: Instance) -> Instance:
+        """Prepare an isolated copy for an easy Adapter API call."""
+        input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
+        if input_class is None:
+            raise TypeError(
+                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
+            )
+
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(input_class, cls.recommended_preparation_policy())
+        return prepared
 
     @classmethod
     def check_applicability(
@@ -109,14 +127,18 @@ class SolverAdapter(ABC):
         return report
 
     @classmethod
-    @abstractmethod
     def solve(
         cls,
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> Solution:
-        """Solve an OMMX instance.
+        """Prepare and solve an isolated copy of an OMMX instance.
+
+        The input ``ommx_instance`` is never modified. The copy is prepared for
+        ``INPUT_CLASS`` with :meth:`recommended_preparation_policy`, then passed
+        to :meth:`solve_strict`.
 
         ``Run.log_solve`` owns the reserved ``diagnostics`` keyword. When
         called with ``store_diagnostics=True``, it passes a sink to the adapter
@@ -124,6 +146,24 @@ class SolverAdapter(ABC):
         record adapter-defined dataclass diagnostics into the sink during the
         solve; ``None`` means diagnostics are disabled. Adapters do not need to
         catch exceptions raised by a non-conforming diagnostics sink.
+        """
+        prepared = cls._prepare_for_execution(ommx_instance)
+        return cls.solve_strict(prepared, diagnostics=diagnostics, **kwargs)
+
+    @classmethod
+    @abstractmethod
+    def solve_strict(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
+    ) -> Solution:
+        """Solve an exact Adapter input without running ``Instance.prepare``.
+
+        ``ommx_instance`` must belong to ``INPUT_CLASS``. Implementations must
+        reject non-members with :class:`AdapterNotApplicableError` and must not
+        prepare or otherwise modify the input instance.
         """
         pass
 
@@ -145,20 +185,66 @@ class SamplerAdapter(SolverAdapter):
     """
 
     @classmethod
-    @abstractmethod
     def sample(
         cls,
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> SampleSet:
-        """Sample an OMMX instance.
+        """Prepare and sample an isolated copy of an OMMX instance.
+
+        The input ``ommx_instance`` is never modified. The copy is prepared for
+        ``INPUT_CLASS`` with :meth:`recommended_preparation_policy`, then passed
+        to :meth:`sample_strict`.
 
         ``Run.log_sample`` owns the reserved ``diagnostics`` keyword and uses
         it the same way as ``Run.log_solve``. ``None`` means diagnostics are
         disabled.
         """
+        prepared = cls._prepare_for_execution(ommx_instance)
+        return cls.sample_strict(prepared, diagnostics=diagnostics, **kwargs)
+
+    @classmethod
+    @abstractmethod
+    def sample_strict(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
+    ) -> SampleSet:
+        """Sample an exact Adapter input without running ``Instance.prepare``.
+
+        ``ommx_instance`` must belong to ``INPUT_CLASS``. Implementations must
+        reject non-members with :class:`AdapterNotApplicableError` and must not
+        prepare or otherwise modify the input instance.
+        """
         pass
+
+    @classmethod
+    def solve_strict(
+        cls,
+        ommx_instance: Instance,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
+    ) -> Solution:
+        """Return the best feasible result from :meth:`sample_strict`."""
+        return cls.sample_strict(
+            ommx_instance,
+            diagnostics=diagnostics,
+            **kwargs,
+        ).best_feasible
+
+    @property
+    def solver_input(self) -> SolverInput:
+        """Expose :attr:`sampler_input` through the SolverAdapter interface."""
+        return self.sampler_input
+
+    def decode(self, data: SolverOutput) -> Solution:
+        """Decode sampler output and return its best feasible solution."""
+        return self.decode_to_sampleset(data).best_feasible
 
     @property
     @abstractmethod

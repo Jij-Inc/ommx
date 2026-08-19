@@ -481,6 +481,9 @@ impl Instance {
             } => {
                 self.decision_variables
                     .merge_validated_fixed_values(fixed_values, atol);
+                if objective != self.objective {
+                    self.capture_output_objective();
+                }
                 self.objective = objective;
                 self.constraint_collection
                     .replace_active_rows(active_constraint_replacements)
@@ -529,7 +532,11 @@ impl Instance {
 
         // Phase 3: Regular partial evaluation with normalized fixed values.
         // Special constraint collections are already handled by propagation — not called again.
+        let objective_before = self.objective.clone();
         self.objective.partial_evaluate(&normalized_state, atol)?;
+        if self.objective != objective_before {
+            self.capture_output_objective_from(self.sense, objective_before);
+        }
         self.constraint_collection
             .partial_evaluate(&normalized_state, atol)?;
         self.named_functions
@@ -601,7 +608,8 @@ impl Evaluate for Instance {
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
         let state = self.populate_state(state.clone(), atol)?;
 
-        let objective = self.objective.evaluate(&state, atol)?;
+        let (sense, output_objective) = self.objective_for_output();
+        let objective = output_objective.evaluate(&state, atol)?;
         let evaluated_constraints = self.constraint_collection.evaluate(&state, atol)?;
         let evaluated_indicator_constraints = self
             .indicator_constraint_collection
@@ -617,8 +625,6 @@ impl Evaluate for Instance {
         }
 
         let evaluated_named_functions = self.named_functions.evaluate(&state, atol)?;
-
-        let sense = self.sense();
 
         // SAFETY: Instance invariants guarantee Solution invariants
         let solution = unsafe {
@@ -676,7 +682,8 @@ impl Evaluate for Instance {
             .evaluate_samples(&samples, atol)?;
 
         // Objective
-        let objectives = self.objective().evaluate_samples(&samples, atol)?;
+        let (sense, output_objective) = self.objective_for_output();
+        let objectives = output_objective.evaluate_samples(&samples, atol)?;
 
         // Reconstruct decision variable values
         let mut decision_variables = std::collections::BTreeMap::new();
@@ -696,7 +703,7 @@ impl Evaluate for Instance {
             .one_hot_constraints_collection(sampled_one_hot_constraints)
             .sos1_constraints_collection(sampled_sos1_constraints)
             .named_function_table(named_functions)
-            .sense(self.sense)
+            .sense(sense)
             .feasibility_atol(atol)
             .build()?)
     }
@@ -1223,6 +1230,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(borrowed, consumed);
+        let output = borrowed.output_objective().unwrap();
+        assert_eq!(output.sense(), instance.sense());
+        assert_eq!(output.function(), instance.objective());
         assert_eq!(
             borrowed.fixed_decision_variable_values(),
             &BTreeMap::from([(VariableID::from(1), 2.0), (VariableID::from(2), 3.0)])

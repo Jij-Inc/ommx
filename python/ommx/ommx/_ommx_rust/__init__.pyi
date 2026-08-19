@@ -73,6 +73,7 @@ __all__ = [
     "OneHotConstraint",
     "OpenSolve",
     "Optimality",
+    "OutputObjective",
     "Parameter",
     "Parameters",
     "ParametricInstance",
@@ -2993,7 +2994,24 @@ class Instance:
     @property
     def objective(self) -> Function: ...
     @objective.setter
-    def objective(self, value: ToFunction) -> None: ...
+    def objective(self, value: ToFunction) -> None:
+        r"""
+        Set a new active objective and clear any preserved output objective.
+
+        Assignment explicitly redefines the model, so subsequent evaluation
+        uses the current active sense and this objective until another
+        transformation establishes new output semantics.
+        """
+    @property
+    def output_objective(self) -> typing.Optional[OutputObjective]:
+        r"""
+        Objective semantics used by {meth}`evaluate` and {meth}`evaluate_samples`.
+
+        This is `None` until preparation rewrites the active objective or sense.
+        When present, {attr}`objective` and {attr}`sense` remain the formulation
+        used by an adapter, while this value determines the objective and sense
+        exposed by the resulting {class}`Solution` or {class}`SampleSet`.
+        """
     @property
     def decision_variable_names(self) -> builtins.set[builtins.str]:
         r"""
@@ -3488,7 +3506,14 @@ class Instance:
         restricted to quadratic or linear problems. If you want to customize the
         conversion, use the individual methods above manually.
         """
-    def as_parametric_instance(self) -> ParametricInstance: ...
+    def as_parametric_instance(self) -> ParametricInstance:
+        r"""
+        Convert this instance to a parameter-free ParametricInstance.
+
+        Raises {class}`RuntimeError` when preparation has installed an
+        {attr}`output_objective`, because ParametricInstance cannot represent
+        that distinct output semantics without losing information.
+        """
     def penalty_method(self) -> ParametricInstance:
         r"""
         Convert to a parametric unconstrained instance by penalty method.
@@ -5514,6 +5539,29 @@ class OpenSolve:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class OutputObjective:
+    r"""
+    Objective semantics used when an Instance produces a Solution or SampleSet.
+
+    Preparation may rewrite an instance's active objective and sense to satisfy
+    an adapter's input requirements.  This value preserves the objective
+    semantics exposed by {meth}`Instance.evaluate` and
+    {meth}`Instance.evaluate_samples` while the rewritten active objective
+    remains available through {attr}`Instance.objective` and
+    {attr}`Instance.sense`.
+    """
+    @property
+    def sense(self) -> Sense:
+        r"""
+        Optimization sense exposed on Solution and SampleSet outputs.
+        """
+    @property
+    def function(self) -> Function:
+        r"""
+        Objective function evaluated for Solution and SampleSet outputs.
+        """
+
+@typing.final
 class Parameter:
     r"""
     Parameter in an optimization problem.
@@ -6696,9 +6744,10 @@ class Run:
         r"""
         Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
 
-        The input Instance is cloned before calling the adapter, so adapter-side
-        capability reductions do not mutate the caller's object. The original
-        input is always stored as the Solve input.
+        `SolverAdapter.solve` owns copying and preparing its working Instance,
+        so this method does not mutate the caller's object. The original input
+        is always stored as the Solve input; the temporary prepared Instance is
+        not stored separately.
 
         `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
         arguments are passed to `adapter.solve(...)` and recorded as
@@ -6732,9 +6781,11 @@ class Run:
         r"""
         Sample an Instance with an OMMX SamplerAdapter and log a Sampling entry.
 
-        The original input is stored together with the returned `SampleSet`.
-        A successful sampler call is recorded as finished even when none of its
-        samples are feasible.
+        `SamplerAdapter.sample` owns copying and preparing its working Instance,
+        so this method does not mutate the caller's object. The original input
+        is stored together with the returned `SampleSet`; the temporary prepared
+        Instance is not stored separately. A successful sampler call is recorded
+        as finished even when none of its samples are feasible.
 
         `adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword
         arguments are passed to `adapter.sample(...)` and recorded as
@@ -6755,12 +6806,14 @@ class Run:
         r"""
         Open a manual Solve scope for direct backend solver model access.
 
-        This returns a manual Solve context. Entering the context reserves a
-        Solve ID, constructs the adapter with a cloned input Instance, and
-        exposes the adapter's `solver_input`. The caller can run backend-specific
-        APIs, record adapter options that are set directly on the backend model,
-        decode the backend output, and continue recording diagnostics until the
-        context exits. The Solve entry is finalized on context exit. If adapter
+        This is a strict, preparation-free workflow. The caller must prepare the
+        Instance for the adapter's `INPUT_CLASS` before opening the context.
+        Entering the context reserves a Solve ID, constructs the adapter with a
+        cloned input Instance, and exposes the adapter's `solver_input`; it does
+        not call `SolverAdapter.solve`. The caller can run backend-specific APIs,
+        record adapter options that are set directly on the backend model, decode
+        the backend output, and continue recording diagnostics until the context
+        exits. The Solve entry is finalized on context exit. If adapter
         construction or the context body fails before `decode` succeeds, a failed
         or interrupted Solve is recorded when possible and the exception is
         re-raised.

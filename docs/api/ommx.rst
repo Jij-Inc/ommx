@@ -23,6 +23,7 @@ ommx
    _items/ommx.Quadratic
    _items/ommx.Polynomial
    _items/ommx.Function
+   _items/ommx.OutputObjective
    _items/ommx.DecisionVariable
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter

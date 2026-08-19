@@ -11,11 +11,10 @@ class OMMXOpenJijSAAdapter(_OMMXOpenJijSAAdapter):
     Arbitrary polynomial objective degree is supported through OpenJij's QUBO
     and Binary-HUBO paths.
 
-    Integer encoding, sense normalization, slack introduction, and fixed
-    constraint penalties are explicit preparation operations, not part of the
-    declared input class. Start from
-    :meth:`recommended_preparation_policy`, edit caller-owned choices such as
-    fixed penalty magnitudes, and apply the policy with :meth:`Instance.prepare`.
+    :meth:`sample` and :meth:`solve` prepare an isolated copy with
+    :meth:`recommended_preparation_policy`. Use :meth:`sample_strict` or
+    :meth:`solve_strict` after explicitly preparing an instance when
+    caller-owned choices such as fixed penalty magnitudes are required.
     """
 
 

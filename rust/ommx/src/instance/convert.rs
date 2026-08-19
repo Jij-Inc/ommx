@@ -16,6 +16,7 @@ impl Instance {
         if self.sense == Sense::Minimize {
             false
         } else {
+            self.capture_output_objective();
             self.sense = Sense::Minimize;
             self.objective = std::mem::take(&mut self.objective).neg();
             true
@@ -32,6 +33,7 @@ impl Instance {
         if self.sense == Sense::Maximize {
             false
         } else {
+            self.capture_output_objective();
             self.sense = Sense::Maximize;
             self.objective = std::mem::take(&mut self.objective).neg();
             true
@@ -39,11 +41,15 @@ impl Instance {
     }
 }
 
-impl From<Instance> for ParametricInstance {
-    fn from(
-        Instance {
+impl TryFrom<Instance> for ParametricInstance {
+    type Error = crate::Error;
+
+    fn try_from(value: Instance) -> crate::Result<Self> {
+        value.ensure_no_output_objective("conversion to ParametricInstance")?;
+        let Instance {
             sense,
             objective,
+            output_objective: _,
             decision_variables,
             constraint_collection,
             indicator_constraint_collection,
@@ -54,9 +60,8 @@ impl From<Instance> for ParametricInstance {
             annotations,
             named_functions,
             ..
-        }: Instance,
-    ) -> Self {
-        ParametricInstance {
+        } = value;
+        Ok(ParametricInstance {
             sense,
             objective,
             decision_variables,
@@ -69,7 +74,7 @@ impl From<Instance> for ParametricInstance {
             description,
             annotations,
             named_functions,
-        }
+        })
     }
 }
 
@@ -163,6 +168,7 @@ impl ParametricInstance {
         Ok(Instance {
             sense: self.sense,
             objective,
+            output_objective: None,
             decision_variables: self.decision_variables,
             constraint_collection,
             indicator_constraint_collection,
@@ -179,6 +185,79 @@ impl ParametricInstance {
             description: self.description,
             annotations: self.annotations,
         })
+    }
+}
+
+#[cfg(test)]
+mod output_objective_tests {
+    use super::*;
+    use crate::{linear, v1::State, ATol, DecisionVariable, Evaluate, Sampled};
+    use std::collections::{BTreeMap, HashMap};
+
+    fn maximizing_binary_instance() -> Instance {
+        Instance::builder()
+            .sense(Sense::Maximize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                DecisionVariable::binary(),
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn sense_conversion_preserves_first_output_pair_for_evaluation() {
+        let mut instance = maximizing_binary_instance();
+        let original_objective = instance.objective().clone();
+
+        assert!(instance.as_minimization_problem());
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), &original_objective);
+        assert_eq!(instance.sense(), Sense::Minimize);
+        assert_eq!(instance.objective(), &original_objective.clone().neg());
+
+        // A later transformation only changes the active formulation. The
+        // first pair remains the stable user-facing objective semantics.
+        assert!(instance.as_maximization_problem());
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), &original_objective);
+
+        let state = State::from(HashMap::from([(1, 1.0)]));
+        let solution = instance.evaluate(&state, ATol::default()).unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 1.0);
+
+        let sample_set = instance
+            .evaluate_samples(&Sampled::from(state), ATol::default())
+            .unwrap();
+        assert_eq!(*sample_set.sense(), Sense::Maximize);
+        let sample_id = sample_set.sample_ids().into_iter().next().unwrap();
+        assert_eq!(sample_set.objectives().get(sample_id), Some(&1.0));
+    }
+
+    #[test]
+    fn no_op_sense_conversion_does_not_create_output_objective() {
+        let mut instance = maximizing_binary_instance();
+
+        assert!(!instance.as_maximization_problem());
+        assert!(instance.output_objective().is_none());
+    }
+
+    #[test]
+    fn conversion_to_parametric_rejects_output_objective() {
+        let mut instance = maximizing_binary_instance();
+        assert!(instance.as_minimization_problem());
+
+        let err = ParametricInstance::try_from(instance).unwrap_err();
+
+        assert!(
+            err.to_string().contains("output_objective"),
+            "unexpected error: {err}"
+        );
     }
 }
 

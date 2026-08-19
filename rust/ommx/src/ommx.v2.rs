@@ -45,6 +45,9 @@ pub enum Feature {
     ConstraintOneHot = 2,
     /// The payload contains first-class SOS1 constraints.
     ConstraintSos1 = 3,
+    /// The Instance payload contains an output objective distinct from the
+    /// active formulation objective.
+    InstanceOutputObjective = 4,
 }
 impl Feature {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -57,6 +60,7 @@ impl Feature {
             Feature::ConstraintIndicator => "FEATURE_CONSTRAINT_INDICATOR",
             Feature::ConstraintOneHot => "FEATURE_CONSTRAINT_ONE_HOT",
             Feature::ConstraintSos1 => "FEATURE_CONSTRAINT_SOS1",
+            Feature::InstanceOutputObjective => "FEATURE_INSTANCE_OUTPUT_OBJECTIVE",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -66,6 +70,7 @@ impl Feature {
             "FEATURE_CONSTRAINT_INDICATOR" => Some(Self::ConstraintIndicator),
             "FEATURE_CONSTRAINT_ONE_HOT" => Some(Self::ConstraintOneHot),
             "FEATURE_CONSTRAINT_SOS1" => Some(Self::ConstraintSos1),
+            "FEATURE_INSTANCE_OUTPUT_OBJECTIVE" => Some(Self::InstanceOutputObjective),
             _ => None,
         }
     }
@@ -578,6 +583,21 @@ pub struct SampledNamedFunctionTable {
     #[prost(btree_map = "uint64, message", tag = "2")]
     pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
 }
+/// Objective semantics used when evaluating solver output.
+///
+/// `sense` and `function` form one inseparable pair: together they describe
+/// how Solution and SampleSet objective values are presented to users, while
+/// Instance.objective and Instance.sense describe the active formulation sent
+/// to a solver.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OutputObjective {
+    #[prost(enumeration = "super::v1::instance::Sense", tag = "1")]
+    pub sense: i32,
+    #[prost(message, optional, tag = "2")]
+    pub function: ::core::option::Option<super::v1::Function>,
+}
 /// Validated optimization problem serialization root.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -613,6 +633,8 @@ pub struct Instance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
+    #[prost(message, optional, tag = "14")]
+    pub output_objective: ::core::option::Option<OutputObjective>,
 }
 /// Parameter IDs and labels owned by ParametricInstance.
 ///
