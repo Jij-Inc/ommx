@@ -8,6 +8,53 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ `solve()` and `sample()` prepare a private copy ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()` and `SamplerAdapter.sample()` are now convenience APIs.
+They copy the supplied {class}`~ommx.Instance`, prepare the copy for the
+Adapter's `INPUT_CLASS` with its recommended policy, and delegate to the new
+preparation-free `solve_strict()` / `sample_strict()` APIs. The caller's
+Instance remains unchanged.
+
+Custom Adapters must move exact-input execution to `solve_strict()` or
+`sample_strict()`. These strict APIs never call {meth}`~ommx.Instance.prepare`
+and require the supplied Instance to belong to `INPUT_CLASS`. Use them when the
+application owns the preparation choices:
+
+```python
+import copy
+
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)  # `instance` is unchanged
+
+working = copy.copy(instance)
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Customize policy here.
+working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_strict(working)
+```
+
+When preparation rewrites the objective or optimization sense, the first
+rewrite records the output meaning as the read-only
+{attr}`~ommx.Instance.output_objective`. Evaluation uses this objective and
+sense, so results from a transformed model retain the source objective meaning
+while keeping prepared decision variables, constraints, and provenance. The
+pair round-trips through the v2 Instance format; v1 serialization and
+conversion to roots that cannot represent it fail instead of discarding it.
+Explicitly assigning a new objective rebases the output meaning.
+
+Backend optimality and dual metadata are not copied into a result while an
+output-objective projection is active unless the Adapter can justify that
+certificate for the output semantics.
+
+{meth}`~ommx.experiment.Run.log_solve` and
+{meth}`~ommx.experiment.Run.log_sample` continue to record the original input
+and returned output; the temporary prepared copy is not stored. See
+[Adapter input classes](../user_guide/capability_model.md) and the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the full execution and migration contracts.
+
 ### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 
 `SolverAdapter.check_applicability()` and `require_applicable()` now use
