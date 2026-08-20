@@ -37,8 +37,8 @@ pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
 pub use preparation::{
-    FixedPenaltyPreparation, IntegerEncodingPreparation, IntegerSlackPreparation,
-    ObjectivePreparation, PreparationPolicy, PreparationTargetNotReached,
+    BinaryPowerPreparation, FixedPenaltyPreparation, IntegerEncodingPreparation,
+    IntegerSlackPreparation, ObjectivePreparation, PreparationPolicy, PreparationTargetNotReached,
     SpecialConstraintPreparation,
 };
 pub use stats::*;
@@ -388,6 +388,45 @@ impl Instance {
         if is_redundant {
             self.output_objective = None;
         }
+    }
+
+    /// Run one Preparation operation while retaining the entry output
+    /// semantics across every return path.
+    ///
+    /// Preparation may rewrite only the active formulation, so its output must
+    /// continue to mean the effective objective observed at entry. Optimality
+    /// transport is monotone: an unavailable guarantee at entry or after an
+    /// applied phase remains unavailable. A redundant preserved sidecar is
+    /// canonicalized away after the operation completes, including on error.
+    fn preserve_output_objective_during_preparation<R>(
+        &mut self,
+        operation: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let (entry_sense, entry_function, entry_preserves_optimality) = self
+            .output_objective
+            .as_ref()
+            .map(|output| {
+                (
+                    output.sense,
+                    output.function.clone(),
+                    output.preserves_optimality,
+                )
+            })
+            .unwrap_or_else(|| (self.sense, self.objective.clone(), true));
+
+        let result = operation(self);
+
+        let preparation_preserves_optimality = self
+            .output_objective
+            .as_ref()
+            .is_none_or(|output| output.preserves_optimality);
+        self.output_objective = Some(OutputObjective::new(
+            entry_sense,
+            entry_function,
+            entry_preserves_optimality && preparation_preserves_optimality,
+        ));
+        self.canonicalize_output_objective();
+        result
     }
 
     /// Record that the active formulation no longer provides an optimality

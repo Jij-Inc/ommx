@@ -230,7 +230,7 @@ The dict shape itself landed in 3.0.0a2 with snapshot `Constraint` values. In 3.
 
 `SampleSet.constraints` / `.decision_variables` / `.named_functions` remain `list`.
 
-## 5. Renames and signature changes
+## 5. Renames, signature changes, and behavior changes
 
 ### 5.1 `write_mps` → `save_mps` (`3.0.0a1`, [#775](https://github.com/Jij-Inc/ommx/pull/775))
 
@@ -299,26 +299,16 @@ from ommx import Linear
 Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
 ```
 
-### 5.6 `to_qubo()` / `to_hubo()` are deprecated (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+### 5.6 `to_qubo()` / `to_hubo()` preserve the input objective in evaluated output (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
-The driver methods mixed in-place model preparation with QUBO/HUBO value
-extraction. Replace them with an explicit target class and
-`PreparationPolicy`, then call the preparation-free format extractor. This
-example prepares a constrained Binary model for QUBO:
+The driver methods remain available, but the meaning of the mutated
+`Instance` changes in v3. The active objective is the minimization energy sent
+to a QUBO or HUBO solver, while `evaluate()` and `evaluate_samples()` report
+the sense and exact objective function that the input instance exposed when
+the driver was called:
 
 ```python
-from ommx import (
-    DecisionVariable,
-    DegreeBound,
-    FixedPenaltyPreparation,
-    Instance,
-    InstanceClass,
-    InstanceClassClause,
-    Kind,
-    ObjectivePreparation,
-    PreparationPolicy,
-    Sense,
-)
+from ommx import DecisionVariable, Instance, Sense
 
 x = DecisionVariable.binary(0)
 instance = Instance.from_components(
@@ -328,36 +318,57 @@ instance = Instance.from_components(
     constraints={0: x == 1},
 )
 
-qubo_class = InstanceClass(
-    [
-        InstanceClassClause(
-            label="qubo",
-            allowed_variable_kinds={Kind.Binary},
-            objective_degree_bound=DegreeBound.at_most(2),
-            allowed_senses={Sense.Minimize},
-        )
-    ]
-)
-policy = PreparationPolicy(
-    objective=ObjectivePreparation(target=Sense.Minimize),
-    fixed_penalty=(
-        FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
-            weight=2.0
-        )
-    ),
-)
+qubo, offset = instance.to_qubo(uniform_penalty_weight=2.0)
+state = {0: 0.0}
 
-instance.prepare(qubo_class, policy)
-qubo, offset = instance.as_qubo_format()
+# Solver-facing energy: minimize -x + 2 (x - 1)^2.
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == 2.0
+
+# User-facing output: the input Maximize / x objective.
+solution = instance.evaluate(state)
+sample_set = instance.evaluate_samples({0: state})
+assert solution.sense == Sense.Maximize
+assert solution.objective == 0.0
+assert sample_set.sense == Sense.Maximize
+assert sample_set.objectives[0] == 0.0
 ```
 
-Add Integer slack, Integer encoding, or special-constraint phases when the
-source model requires them. During the deprecation period, `to_qubo()` and
-`to_hubo()` continue to leave their mutated instance with Python SDK v2
-evaluation semantics: `evaluate()` uses the final active penalty objective.
-The explicit Preparation workflow instead preserves the pre-penalty output
-objective. The deprecated drivers reject an instance that already carries
-separate output semantics.
+Python SDK v2 instead restored the active sense after conversion and evaluated
+the final penalized energy. Code that reads `Instance.objective` continues to
+see the solver energy. Code that consumes `Solution` or `SampleSet` now gets
+the mathematical objective supplied to the driver, fixing the previous
+mixture of solver input and user-facing output semantics.
+
+The same pipeline can be run explicitly when its policy must be inspected or
+edited. The class and policy helpers are the exact configuration used by the
+driver:
+
+```python
+from ommx import InstanceClass, PreparationPolicy
+
+prepared = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
+prepared.prepare(InstanceClass.qubo(), policy)
+qubo, offset = prepared.as_qubo_format()
+```
+
+Use `InstanceClass.hubo()`, `PreparationPolicy.for_hubo(...)`, and
+`as_hubo_format()` for HUBO. Both Policy factories select special-constraint
+lowering, active-objective conversion, Integer slack, fixed penalty, and
+Integer encoding with the established driver defaults. The QUBO policy
+additionally canonicalizes powers of Binary variables, such as $x^n = x$,
+before enforcing the quadratic target; HUBO does not need that phase. Both
+paths establish an output-objective envelope before the first in-place phase.
+It preserves the entry objective pair even when a later phase fails and earlier
+mutations remain. If penalty conversion removes constraints, the envelope also
+records that optimality for the penalized energy does not prove optimality for
+the reported objective.
 
 ## 6. Return-type changes
 

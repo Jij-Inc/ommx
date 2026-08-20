@@ -73,6 +73,41 @@ def binary_linear_input_class(*, allows_one_hot: bool = False) -> InstanceClass:
     )
 
 
+def test_qubo_and_hubo_class_factories_match_format_domains() -> None:
+    x = DecisionVariable.binary(1)
+    y = DecisionVariable.binary(2)
+    z = DecisionVariable.binary(3)
+    linear = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x,
+        decision_variables=[x, y, z],
+        constraints={},
+    )
+    cubic = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=x * y * z,
+        decision_variables=[x, y, z],
+        constraints={},
+    )
+    maximization = Instance.from_components(
+        sense=Sense.Maximize,
+        objective=x,
+        decision_variables=[x],
+        constraints={},
+    )
+
+    qubo = InstanceClass.qubo()
+    hubo = InstanceClass.hubo()
+    assert qubo.contains(linear)
+    assert hubo.contains(linear)
+    assert not qubo.contains(cubic)
+    assert hubo.contains(cubic)
+    assert not qubo.contains(maximization)
+    assert not hubo.contains(maximization)
+    assert qubo.clauses[0].label == "qubo"
+    assert hubo.clauses[0].label == "hubo"
+
+
 def test_degree_bound_and_clause_declaration() -> None:
     linear = DegreeBound.at_most(1)
     assert linear.maximum == 1

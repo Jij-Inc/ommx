@@ -382,6 +382,38 @@ impl InstanceClass {
         Self { clauses }
     }
 
+    /// Return the canonical class of QUBO solver inputs.
+    ///
+    /// Members are minimization instances whose active formulation is
+    /// unconstrained, uses only Binary decision variables, and has an active
+    /// objective of cumulative degree at most two. Output-objective semantics
+    /// do not participate in membership.
+    pub fn qubo() -> Self {
+        InstanceClassClause::new(
+            "qubo",
+            BTreeSet::from([Kind::Binary]),
+            DegreeBound::at_most(2),
+            BTreeSet::from([Sense::Minimize]),
+        )
+        .into()
+    }
+
+    /// Return the canonical class of Binary HUBO solver inputs.
+    ///
+    /// Members are minimization instances whose active formulation is
+    /// unconstrained and uses only Binary decision variables. The active
+    /// objective may have any polynomial degree representable by OMMX.
+    /// Output-objective semantics do not participate in membership.
+    pub fn hubo() -> Self {
+        InstanceClassClause::new(
+            "hubo",
+            BTreeSet::from([Kind::Binary]),
+            DegreeBound::Unbounded,
+            BTreeSet::from([Sense::Minimize]),
+        )
+        .into()
+    }
+
     /// Return the clauses representing this class.
     pub fn clauses(&self) -> &[InstanceClassClause] {
         &self.clauses
@@ -700,6 +732,32 @@ mod tests {
         assert_eq!(linear.maximum(), Some(1.into()));
         assert!(DegreeBound::Unbounded.includes(10_000.into()));
         assert_eq!(DegreeBound::Unbounded.maximum(), None);
+    }
+
+    #[test]
+    fn qubo_and_hubo_are_canonical_binary_unconstrained_classes() {
+        let qubo = InstanceClass::qubo();
+        let hubo = InstanceClass::hubo();
+
+        for (class, label, degree_bound) in [
+            (&qubo, "qubo", DegreeBound::at_most(2)),
+            (&hubo, "hubo", DegreeBound::Unbounded),
+        ] {
+            let [clause] = class.clauses() else {
+                panic!("canonical format class must contain exactly one clause");
+            };
+            assert_eq!(clause.label(), label);
+            assert_eq!(
+                clause.allowed_variable_kinds(),
+                &BTreeSet::from([Kind::Binary])
+            );
+            assert_eq!(clause.objective_degree_bound(), degree_bound);
+            assert_eq!(clause.allowed_senses(), &BTreeSet::from([Sense::Minimize]));
+            assert!(clause.regular_constraint_degree_bounds().next().is_none());
+            assert!(clause.indicator_constraint_degree_bounds().next().is_none());
+            assert!(!clause.allows_one_hot());
+            assert!(!clause.allows_sos1());
+        }
     }
 
     #[test]

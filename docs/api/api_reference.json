@@ -2972,6 +2972,58 @@
         },
         {
           "kind": "Class",
+          "name": "BinaryPowerPreparation",
+          "doc": "Reduce powers of active Binary variables during Preparation.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "BinaryPowerPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Bound",
           "doc": "Variable bound wrapper for Python\n\nNote: This struct is named `VariableBound` in Rust code to avoid conflicts with PyO3's `Bound` type,\nbut is exposed as `Bound` in Python through the `#[pyclass(name = \"Bound\")]` attribute.",
           "bases": [],
@@ -10680,7 +10732,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\nSelected phases are applied at most once in this order, stopping as soon\nas membership is reached:\n\n1. ``special_constraints``:\n   {meth}`~ommx.Instance.lower_special_constraints`\n2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`\n3. ``integer_slack``:\n   {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,\n   followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only\n   when exact conversion is unavailable and ``slack_upper_bound`` is set\n4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`\n5. ``fixed_penalty``\n\nSuccess guarantees membership only, not Adapter applicability. This\noperation is not transactional, so an error may leave the instance changed.\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final membership\nreport when the selections do not reach ``input_class``.",
+              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\nSelected phases are applied at most once in this order, stopping as soon\nas membership is reached:\n\n1. ``special_constraints``:\n   {meth}`~ommx.Instance.lower_special_constraints`\n2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`\n3. ``integer_slack``:\n   {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,\n   followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only\n   when exact conversion is unavailable and ``slack_upper_bound`` is set\n4. ``fixed_penalty``\n5. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`\n6. ``binary_power_reduction``:\n   {meth}`~ommx.Instance.reduce_binary_power`\n\nSuccess guarantees membership only, not Adapter applicability. This\noperation is not transactional, so an error may leave the instance changed.\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final membership\nreport when the selections do not reach ``input_class``.",
               "signatures": [
                 {
                   "parameters": [
@@ -11130,7 +11182,7 @@
             },
             {
               "name": "to_hubo",
-              "doc": "Convert the instance to a HUBO format.\n\n.. deprecated:: 3.0\n   Use {meth}`~ommx.Instance.prepare` followed by\n   {meth}`~ommx.Instance.as_hubo_format` instead.\n\nThis is a **Driver API** for HUBO conversion calling single-purpose methods in order:\n\n1. Convert the complete objective semantics to minimization.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to HUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.\n\nPlease see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the\ndocumentation for each individual method for additional details. The\ndifference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't\nrestricted to quadratic or linear problems. If you want to customize the\nconversion, use the individual methods above manually.",
+              "doc": "Convert the instance to a HUBO format.\n\nThis is the higher-order counterpart of\n{meth}`~ommx.Instance.to_qubo`. It prepares the instance in place with\n{meth}`~ommx.InstanceClass.hubo` and\n{meth}`~ommx.PreparationPolicy.for_hubo`, then returns\n{meth}`~ommx.Instance.as_hubo_format`. The prepared active formulation\nremains on this instance, while evaluation retains the input output\nobjective semantics.",
               "signatures": [
                 {
                   "parameters": [
@@ -11213,14 +11265,11 @@
                 }
               ],
               "is_async": false,
-              "deprecated": {
-                "since": null,
-                "note": "Use Instance.prepare(...) followed by Instance.as_hubo_format() instead."
-              }
+              "deprecated": null
             },
             {
               "name": "to_qubo",
-              "doc": "Convert the instance to a QUBO format.\n\n.. deprecated:: 3.0\n   Use {meth}`~ommx.Instance.prepare` followed by\n   {meth}`~ommx.Instance.as_qubo_format` instead.\n\nThis is a **Driver API** for QUBO conversion calling single-purpose methods in order:\n\n1. Convert the complete objective semantics to minimization.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to QUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to QUBO format by {meth}`~ommx.Instance.as_qubo_format`.\n\nPlease see the document of each method for details.\nIf you want to customize the conversion, use the methods above manually.\n\n# Examples\n\nLet's consider a maximization problem with two integer variables $x_0, x_1 \\in [0, 2]$ subject to an inequality:\n\n$$\\max \\; x_0 + x_1 \\quad \\text{s.t.} \\quad x_0 + 2 x_1 \\leq 3$$\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.integer(i, lower=0, upper=2, name=\"x\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nConvert into QUBO format\n\n```python\n>>> qubo, offset = instance.to_qubo()\n>>> qubo\n{(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}\n>>> offset\n9.0\n```\n\nFor the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.\n\n```python\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n```",
+              "doc": "Convert the instance to a QUBO format.\n\nThis is an in-place driver over {meth}`~ommx.Instance.prepare` using\n{meth}`~ommx.InstanceClass.qubo` and\n{meth}`~ommx.PreparationPolicy.for_qubo`, followed by\n{meth}`~ommx.Instance.as_qubo_format`. The active formulation remains\nthe prepared minimization problem represented by the returned QUBO.\nEvaluation preserves the objective sense and function presented by the\ninput instance, including an already separated output objective.\n\n``penalty_weights`` selects constraint-ID-keyed fixed penalties;\n``uniform_penalty_weight`` selects one weight for every active regular\nconstraint. If neither is supplied, the policy uses uniform weight 1.0.\nSupplying both raises ``ValueError`` before the instance is mutated.\nPreparation itself is not transactional, so any earlier completed phase\nremains visible if a later phase fails.\n\n# Examples\n\nLet's consider a maximization problem with two integer variables $x_0, x_1 \\in [0, 2]$ subject to an inequality:\n\n$$\\max \\; x_0 + x_1 \\quad \\text{s.t.} \\quad x_0 + 2 x_1 \\leq 3$$\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.integer(i, lower=0, upper=2, name=\"x\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: x[0] + 2*x[1] <= 3},\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nConvert into QUBO format\n\n```python\n>>> qubo, offset = instance.to_qubo()\n>>> qubo\n{(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}\n>>> offset\n9.0\n```\n\nThe active formulation remains minimization, while evaluation retains\nthe input maximization semantics.\n\n```python\n>>> instance.sense == Instance.MINIMIZE\nTrue\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -11303,10 +11352,7 @@
                 }
               ],
               "is_async": false,
-              "deprecated": {
-                "since": null,
-                "note": "Use Instance.prepare(...) followed by Instance.as_qubo_format() instead."
-              }
+              "deprecated": null
             },
             {
               "name": "to_v1_bytes",
@@ -12046,6 +12092,38 @@
                   ],
                   "return_type": {
                     "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "hubo",
+              "doc": "Class of minimization HUBO formulations accepted by\n{meth}`~ommx.Instance.as_hubo_format` after Preparation.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "InstanceClass",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "qubo",
+              "doc": "Class of minimization QUBO formulations accepted by\n{meth}`~ommx.Instance.as_qubo_format` after Preparation.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "InstanceClass",
                     "link_target": null,
                     "children": []
                   }
@@ -19519,6 +19597,176 @@
                         "kind": "Simple",
                         "value": "None"
                       }
+                    },
+                    {
+                      "name": "binary_power_reduction",
+                      "type_": {
+                        "display": "Optional[BinaryPowerPreparation]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "BinaryPowerPreparation",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PreparationPolicy",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "for_hubo",
+              "doc": "Return a fresh policy for preparing an instance for HUBO formatting.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "uniform_penalty_weight",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "penalty_weights",
+                      "type_": {
+                        "display": "Optional[Mapping[int, float]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, float]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "float",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "inequality_integer_slack_max_range",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "31"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PreparationPolicy",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "for_qubo",
+              "doc": "Return a fresh policy for preparing an instance for QUBO formatting.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "uniform_penalty_weight",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "penalty_weights",
+                      "type_": {
+                        "display": "Optional[Mapping[int, float]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, float]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "float",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "inequality_integer_slack_max_range",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "31"
+                      }
                     }
                   ],
                   "return_type": {
@@ -19533,6 +19781,22 @@
             }
           ],
           "attributes": [
+            {
+              "name": "binary_power_reduction",
+              "doc": "",
+              "type_": {
+                "display": "Optional[BinaryPowerPreparation]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "BinaryPowerPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true
+            },
             {
               "name": "fixed_penalty",
               "doc": "",
@@ -33726,6 +33990,7 @@
     "ommx.AttachedIndicatorConstraint": "ommx",
     "ommx.AttachedOneHotConstraint": "ommx",
     "ommx.AttachedSos1Constraint": "ommx",
+    "ommx.BinaryPowerPreparation": "ommx",
     "ommx.Bound": "ommx",
     "ommx.Constraint": "ommx",
     "ommx.DecisionVariable": "ommx",

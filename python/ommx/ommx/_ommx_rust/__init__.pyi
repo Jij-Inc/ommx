@@ -31,6 +31,7 @@ __all__ = [
     "AttachedOneHotConstraint",
     "AttachedSos1Constraint",
     "AutosavePolicy",
+    "BinaryPowerPreparation",
     "Bound",
     "Constraint",
     "DecisionVariable",
@@ -1302,6 +1303,14 @@ class AutosavePolicy:
         Disable rolling draft checkpoints after Run close.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class BinaryPowerPreparation:
+    r"""
+    Reduce powers of active Binary variables during Preparation.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(cls) -> BinaryPowerPreparation: ...
 
 @typing.final
 class Bound:
@@ -3385,9 +3394,6 @@ class Instance:
         """
     def as_qubo_format(self) -> tuple[dict, builtins.float]: ...
     def as_hubo_format(self) -> tuple[dict, builtins.float]: ...
-    @typing_extensions.deprecated(
-        "Use Instance.prepare(...) followed by Instance.as_qubo_format() instead."
-    )
     def to_qubo(
         self,
         *,
@@ -3400,30 +3406,20 @@ class Instance:
         r"""
         Convert the instance to a QUBO format.
 
-        .. deprecated:: 3.0
-           Use {meth}`~ommx.Instance.prepare` followed by
-           {meth}`~ommx.Instance.as_qubo_format` instead.
+        This is an in-place driver over {meth}`~ommx.Instance.prepare` using
+        {meth}`~ommx.InstanceClass.qubo` and
+        {meth}`~ommx.PreparationPolicy.for_qubo`, followed by
+        {meth}`~ommx.Instance.as_qubo_format`. The active formulation remains
+        the prepared minimization problem represented by the returned QUBO.
+        Evaluation preserves the objective sense and function presented by the
+        input instance, including an already separated output objective.
 
-        This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
-
-        1. Convert the complete objective semantics to minimization.
-        2. Check continuous variables and raise error if exists.
-        3. Convert inequality constraints
-
-          * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
-
-        4. Convert to QUBO with (uniform) penalty method
-
-          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.
-          * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.
-          * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
-
-        5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.
-        6. Finally convert to QUBO format by {meth}`~ommx.Instance.as_qubo_format`.
-
-        Please see the document of each method for details.
-        If you want to customize the conversion, use the methods above manually.
+        ``penalty_weights`` selects constraint-ID-keyed fixed penalties;
+        ``uniform_penalty_weight`` selects one weight for every active regular
+        constraint. If neither is supplied, the policy uses uniform weight 1.0.
+        Supplying both raises ``ValueError`` before the instance is mutated.
+        Preparation itself is not transactional, so any earlier completed phase
+        remains visible if a later phase fails.
 
         # Examples
 
@@ -3437,7 +3433,7 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],
+        ...     constraints={0: x[0] + 2*x[1] <= 3},
         ...     sense=Instance.MAXIMIZE,
         ... )
         ```
@@ -3452,16 +3448,14 @@ class Instance:
         9.0
         ```
 
-        For the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.
+        The active formulation remains minimization, while evaluation retains
+        the input maximization semantics.
 
         ```python
-        >>> instance.sense == Instance.MAXIMIZE
+        >>> instance.sense == Instance.MINIMIZE
         True
         ```
         """
-    @typing_extensions.deprecated(
-        "Use Instance.prepare(...) followed by Instance.as_hubo_format() instead."
-    )
     def to_hubo(
         self,
         *,
@@ -3474,33 +3468,13 @@ class Instance:
         r"""
         Convert the instance to a HUBO format.
 
-        .. deprecated:: 3.0
-           Use {meth}`~ommx.Instance.prepare` followed by
-           {meth}`~ommx.Instance.as_hubo_format` instead.
-
-        This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
-
-        1. Convert the complete objective semantics to minimization.
-        2. Check continuous variables and raise error if exists.
-        3. Convert inequality constraints
-
-          * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
-
-        4. Convert to HUBO with (uniform) penalty method
-
-          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.
-          * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.
-          * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
-
-        5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.
-        6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.
-
-        Please see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the
-        documentation for each individual method for additional details. The
-        difference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't
-        restricted to quadratic or linear problems. If you want to customize the
-        conversion, use the individual methods above manually.
+        This is the higher-order counterpart of
+        {meth}`~ommx.Instance.to_qubo`. It prepares the instance in place with
+        {meth}`~ommx.InstanceClass.hubo` and
+        {meth}`~ommx.PreparationPolicy.for_hubo`, then returns
+        {meth}`~ommx.Instance.as_hubo_format`. The prepared active formulation
+        remains on this instance, while evaluation retains the input output
+        objective semantics.
         """
     def as_parametric_instance(self) -> ParametricInstance: ...
     def penalty_method(self) -> ParametricInstance:
@@ -4790,8 +4764,10 @@ class Instance:
            {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
            followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
            when exact conversion is unavailable and ``slack_upper_bound`` is set
-        4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
-        5. ``fixed_penalty``
+        4. ``fixed_penalty``
+        5. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+        6. ``binary_power_reduction``:
+           {meth}`~ommx.Instance.reduce_binary_power`
 
         Success guarantees membership only, not Adapter applicability. This
         operation is not transactional, so an error may leave the instance changed.
@@ -4809,6 +4785,18 @@ class InstanceClass:
     def __new__(
         cls, clauses: typing.Sequence[InstanceClassClause]
     ) -> InstanceClass: ...
+    @staticmethod
+    def qubo() -> InstanceClass:
+        r"""
+        Class of minimization QUBO formulations accepted by
+        {meth}`~ommx.Instance.as_qubo_format` after Preparation.
+        """
+    @staticmethod
+    def hubo() -> InstanceClass:
+        r"""
+        Class of minimization HUBO formulations accepted by
+        {meth}`~ommx.Instance.as_hubo_format` after Preparation.
+        """
     def union(self, other: InstanceClass) -> InstanceClass:
         r"""
         Return the finite union of two instance classes.
@@ -6226,6 +6214,12 @@ class PreparationPolicy:
     def fixed_penalty(
         self, value: typing.Optional[FixedPenaltyPreparation]
     ) -> None: ...
+    @property
+    def binary_power_reduction(self) -> typing.Optional[BinaryPowerPreparation]: ...
+    @binary_power_reduction.setter
+    def binary_power_reduction(
+        self, value: typing.Optional[BinaryPowerPreparation]
+    ) -> None: ...
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __new__(
         cls,
@@ -6235,7 +6229,32 @@ class PreparationPolicy:
         integer_slack: typing.Optional[IntegerSlackPreparation] = None,
         integer_encoding: typing.Optional[IntegerEncodingPreparation] = None,
         fixed_penalty: typing.Optional[FixedPenaltyPreparation] = None,
+        binary_power_reduction: typing.Optional[BinaryPowerPreparation] = None,
     ) -> PreparationPolicy: ...
+    @staticmethod
+    def for_qubo(
+        *,
+        uniform_penalty_weight: typing.Optional[builtins.float] = None,
+        penalty_weights: typing.Optional[
+            typing.Mapping[builtins.int, builtins.float]
+        ] = None,
+        inequality_integer_slack_max_range: builtins.int = 31,
+    ) -> PreparationPolicy:
+        r"""
+        Return a fresh policy for preparing an instance for QUBO formatting.
+        """
+    @staticmethod
+    def for_hubo(
+        *,
+        uniform_penalty_weight: typing.Optional[builtins.float] = None,
+        penalty_weights: typing.Optional[
+            typing.Mapping[builtins.int, builtins.float]
+        ] = None,
+        inequality_integer_slack_max_range: builtins.int = 31,
+    ) -> PreparationPolicy:
+        r"""
+        Return a fresh policy for preparing an instance for HUBO formatting.
+        """
 
 class PreparationTargetNotReachedError(builtins.RuntimeError):
     r"""

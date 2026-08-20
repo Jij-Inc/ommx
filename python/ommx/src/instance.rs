@@ -14,7 +14,7 @@ use crate::{
 };
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
-    exceptions::{PyKeyError, PyRuntimeError, PyValueError},
+    exceptions::{PyKeyError, PyValueError},
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -919,30 +919,20 @@ impl Instance {
 
     /// Convert the instance to a QUBO format.
     ///
-    /// .. deprecated:: 3.0
-    ///    Use {meth}`~ommx.Instance.prepare` followed by
-    ///    {meth}`~ommx.Instance.as_qubo_format` instead.
+    /// This is an in-place driver over {meth}`~ommx.Instance.prepare` using
+    /// {meth}`~ommx.InstanceClass.qubo` and
+    /// {meth}`~ommx.PreparationPolicy.for_qubo`, followed by
+    /// {meth}`~ommx.Instance.as_qubo_format`. The active formulation remains
+    /// the prepared minimization problem represented by the returned QUBO.
+    /// Evaluation preserves the objective sense and function presented by the
+    /// input instance, including an already separated output objective.
     ///
-    /// This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
-    ///
-    /// 1. Convert the complete objective semantics to minimization.
-    /// 2. Check continuous variables and raise error if exists.
-    /// 3. Convert inequality constraints
-    ///
-    ///   * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-    ///   * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
-    ///
-    /// 4. Convert to QUBO with (uniform) penalty method
-    ///
-    ///   * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.
-    ///   * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.
-    ///   * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
-    ///
-    /// 5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.
-    /// 6. Finally convert to QUBO format by {meth}`~ommx.Instance.as_qubo_format`.
-    ///
-    /// Please see the document of each method for details.
-    /// If you want to customize the conversion, use the methods above manually.
+    /// ``penalty_weights`` selects constraint-ID-keyed fixed penalties;
+    /// ``uniform_penalty_weight`` selects one weight for every active regular
+    /// constraint. If neither is supplied, the policy uses uniform weight 1.0.
+    /// Supplying both raises ``ValueError`` before the instance is mutated.
+    /// Preparation itself is not transactional, so any earlier completed phase
+    /// remains visible if a later phase fails.
     ///
     /// # Examples
     ///
@@ -956,7 +946,7 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],
+    /// ...     constraints={0: x[0] + 2*x[1] <= 3},
     /// ...     sense=Instance.MAXIMIZE,
     /// ... )
     /// ```
@@ -971,13 +961,13 @@ impl Instance {
     /// 9.0
     /// ```
     ///
-    /// For the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.
+    /// The active formulation remains minimization, while evaluation retains
+    /// the input maximization semantics.
     ///
     /// ```python
-    /// >>> instance.sense == Instance.MAXIMIZE
+    /// >>> instance.sense == Instance.MINIMIZE
     /// True
     /// ```
-    #[deprecated(note = "Use Instance.prepare(...) followed by Instance.as_qubo_format() instead.")]
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
     pub fn to_qubo<'py>(
         &mut self,
@@ -987,53 +977,24 @@ impl Instance {
         inequality_integer_slack_max_range: u64,
     ) -> OmmxPyResult<(Bound<'py, PyDict>, f64)> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.ensure_legacy_driver_has_no_output_objective("to_qubo", "as_qubo_format")?;
-
-        let is_converted = self.as_minimization_problem();
-        let result = (|| {
-            self.check_no_continuous_variables("QUBO")?;
-            self.qubo_hubo_pipeline(
-                uniform_penalty_weight,
-                penalty_weights,
-                inequality_integer_slack_max_range,
-            )?;
-            self.log_encode(py, BTreeSet::new(), None)?;
-            self.as_qubo_format(py)
-        })();
-
-        self.finish_legacy_qubo_hubo_driver(result, is_converted)
+        let policy = crate::PreparationPolicy::for_qubo(
+            uniform_penalty_weight,
+            penalty_weights.map(|weights| weights.into_iter().collect()),
+            inequality_integer_slack_max_range,
+        )?;
+        self.prepare(py, &crate::InstanceClass::qubo(), &policy)?;
+        self.as_qubo_format(py)
     }
 
     /// Convert the instance to a HUBO format.
     ///
-    /// .. deprecated:: 3.0
-    ///    Use {meth}`~ommx.Instance.prepare` followed by
-    ///    {meth}`~ommx.Instance.as_hubo_format` instead.
-    ///
-    /// This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
-    ///
-    /// 1. Convert the complete objective semantics to minimization.
-    /// 2. Check continuous variables and raise error if exists.
-    /// 3. Convert inequality constraints
-    ///
-    ///   * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-    ///   * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`
-    ///
-    /// 4. Convert to HUBO with (uniform) penalty method
-    ///
-    ///   * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.
-    ///   * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.
-    ///   * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
-    ///
-    /// 5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.
-    /// 6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.
-    ///
-    /// Please see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the
-    /// documentation for each individual method for additional details. The
-    /// difference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't
-    /// restricted to quadratic or linear problems. If you want to customize the
-    /// conversion, use the individual methods above manually.
-    #[deprecated(note = "Use Instance.prepare(...) followed by Instance.as_hubo_format() instead.")]
+    /// This is the higher-order counterpart of
+    /// {meth}`~ommx.Instance.to_qubo`. It prepares the instance in place with
+    /// {meth}`~ommx.InstanceClass.hubo` and
+    /// {meth}`~ommx.PreparationPolicy.for_hubo`, then returns
+    /// {meth}`~ommx.Instance.as_hubo_format`. The prepared active formulation
+    /// remains on this instance, while evaluation retains the input output
+    /// objective semantics.
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
     pub fn to_hubo<'py>(
         &mut self,
@@ -1043,21 +1004,13 @@ impl Instance {
         inequality_integer_slack_max_range: u64,
     ) -> OmmxPyResult<(Bound<'py, PyDict>, f64)> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        self.ensure_legacy_driver_has_no_output_objective("to_hubo", "as_hubo_format")?;
-
-        let is_converted = self.as_minimization_problem();
-        let result = (|| {
-            self.check_no_continuous_variables("HUBO")?;
-            self.qubo_hubo_pipeline(
-                uniform_penalty_weight,
-                penalty_weights,
-                inequality_integer_slack_max_range,
-            )?;
-            self.log_encode(py, BTreeSet::new(), None)?;
-            self.as_hubo_format(py)
-        })();
-
-        self.finish_legacy_qubo_hubo_driver(result, is_converted)
+        let policy = crate::PreparationPolicy::for_hubo(
+            uniform_penalty_weight,
+            penalty_weights.map(|weights| weights.into_iter().collect()),
+            inequality_integer_slack_max_range,
+        )?;
+        self.prepare(py, &crate::InstanceClass::hubo(), &policy)?;
+        self.as_hubo_format(py)
     }
 
     pub fn as_parametric_instance(&self) -> ParametricInstance {
@@ -2853,138 +2806,6 @@ impl Instance {
     /// ```
     pub fn logical_memory_profile(&self) -> String {
         self.inner.logical_memory_profile().to_string()
-    }
-}
-
-impl Instance {
-    fn ensure_legacy_driver_has_no_output_objective(
-        &self,
-        driver: &str,
-        format: &str,
-    ) -> OmmxPyResult<()> {
-        if self.inner.output_objective().is_some() {
-            return Err(PyValueError::new_err(format!(
-                "Instance.{driver}() cannot be used after output semantics have been separated from the active objective; use Instance.prepare(...) followed by Instance.{format}() instead."
-            ))
-            .into());
-        }
-        Ok(())
-    }
-
-    fn rebase_output_objective_to_active(&mut self) -> OmmxPyResult<()> {
-        self.inner.set_objective(self.inner.objective().clone())?;
-        Ok(())
-    }
-
-    /// Finish a deprecated QUBO/HUBO driver while retaining its Python SDK v2
-    /// mutation semantics. Successful maximization conversion is restored;
-    /// failures keep the partially prepared sense and model. In either case,
-    /// output semantics are rebased to the active objective so a sidecar
-    /// created by the new penalty implementation cannot change legacy
-    /// `evaluate` behavior.
-    fn finish_legacy_qubo_hubo_driver<T>(
-        &mut self,
-        result: OmmxPyResult<T>,
-        restore_maximization: bool,
-    ) -> OmmxPyResult<T> {
-        if result.is_ok() && restore_maximization {
-            self.as_maximization_problem();
-        }
-        self.rebase_output_objective_to_active()?;
-        result
-    }
-
-    fn check_no_continuous_variables(&self, format_name: &str) -> OmmxPyResult<()> {
-        let continuous_ids: Vec<u64> = self
-            .inner
-            .decision_variable_usage()
-            .used_continuous()
-            .into_keys()
-            .map(|id| id.into_inner())
-            .collect();
-        if !continuous_ids.is_empty() {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Continuous variables are not supported in {} conversion: IDs={:?}",
-                format_name, continuous_ids
-            ))
-            .into());
-        }
-        Ok(())
-    }
-
-    /// Shared pipeline for to_qubo/to_hubo: handle inequality constraints, apply penalty method.
-    #[tracing::instrument(skip_all)]
-    fn qubo_hubo_pipeline(
-        &mut self,
-        uniform_penalty_weight: Option<f64>,
-        penalty_weights: Option<HashMap<u64, f64>>,
-        inequality_integer_slack_max_range: u64,
-    ) -> OmmxPyResult<()> {
-        // Prepare inequality constraints
-        let ineq_ids: Vec<ConstraintID> = self
-            .inner
-            .constraints()
-            .iter()
-            .filter(|(_, c)| c.equality == ommx::Equality::LessThanOrEqualToZero)
-            .map(|(id, _)| *id)
-            .collect();
-        for ineq_id in ineq_ids {
-            let id_u64 = ineq_id.into_inner();
-            // Try exact integer slack first, fall back to approximate
-            if self
-                .convert_inequality_to_equality_with_integer_slack(
-                    id_u64,
-                    inequality_integer_slack_max_range,
-                )
-                .is_err()
-            {
-                self.add_integer_slack_to_inequality(id_u64, inequality_integer_slack_max_range)?;
-            }
-        }
-
-        // Penalty method
-        if !self.inner.constraints().is_empty() {
-            if uniform_penalty_weight.is_some() && penalty_weights.is_some() {
-                return Err(pyo3::exceptions::PyValueError::new_err(
-                    "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
-                ).into());
-            }
-            if let Some(pw) = penalty_weights {
-                let pi = self.inner.clone().penalty_method()?;
-                // Map constraint IDs (from parameter subscripts) to penalty weights
-                let mut weights = HashMap::new();
-                for p in pi.parameters().to_v1_parameters() {
-                    let constraint_id = p.subscripts.first().copied().ok_or_else(|| {
-                        PyRuntimeError::new_err(format!(
-                            "Penalty parameter {} has no subscripts",
-                            p.id
-                        ))
-                    })? as u64;
-                    let w = pw.get(&constraint_id).ok_or_else(|| {
-                        PyValueError::new_err(format!(
-                            "No penalty weight provided for constraint ID {}",
-                            constraint_id
-                        ))
-                    })?;
-                    weights.insert(VariableID::from(p.id).into_inner(), *w);
-                }
-                let mut v1_params = ommx::v1::Parameters::default();
-                v1_params.entries = weights;
-                self.inner = pi.with_parameters(v1_params)?;
-            } else {
-                let weight = uniform_penalty_weight.unwrap_or(1.0);
-                let pi = self.inner.clone().uniform_penalty_method()?;
-                let param_id =
-                    pi.parameters().keys().next().ok_or_else(|| {
-                        PyRuntimeError::new_err("No penalty weight parameter found")
-                    })?;
-                let mut v1_params = ommx::v1::Parameters::default();
-                v1_params.entries.insert(param_id.into_inner(), weight);
-                self.inner = pi.with_parameters(v1_params)?;
-            }
-        }
-
-        Ok(())
     }
 }
 

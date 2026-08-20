@@ -1,5 +1,6 @@
 use crate::error::OmmxPyResult;
 use crate::{Instance, InstanceClass, Sense, SpecialConstraintKind};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, HashSet};
 
@@ -169,6 +170,35 @@ impl From<ommx::IntegerEncodingPreparation> for IntegerEncodingPreparation {
     }
 }
 
+/// Reduce powers of active Binary variables during Preparation.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(eq, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BinaryPowerPreparation {
+    inner: ommx::BinaryPowerPreparation,
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl BinaryPowerPreparation {
+    #[new]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl From<BinaryPowerPreparation> for ommx::BinaryPowerPreparation {
+    fn from(value: BinaryPowerPreparation) -> Self {
+        value.inner
+    }
+}
+
+impl From<ommx::BinaryPowerPreparation> for BinaryPowerPreparation {
+    fn from(inner: ommx::BinaryPowerPreparation) -> Self {
+        Self { inner }
+    }
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq)]
@@ -230,17 +260,58 @@ pub struct PreparationPolicy {
     inner: ommx::PreparationPolicy,
 }
 
+fn configure_qubo_hubo_policy(
+    mut inner: ommx::PreparationPolicy,
+    uniform_penalty_weight: Option<f64>,
+    penalty_weights: Option<BTreeMap<u64, f64>>,
+    inequality_integer_slack_max_range: u64,
+) -> OmmxPyResult<PreparationPolicy> {
+    if uniform_penalty_weight.is_some() && penalty_weights.is_some() {
+        return Err(PyValueError::new_err(
+            "Both uniform_penalty_weight and penalty_weights are specified. Please choose one.",
+        )
+        .into());
+    }
+
+    inner.integer_slack = Some(ommx::IntegerSlackPreparation {
+        max_integer_range: inequality_integer_slack_max_range,
+        atol: ommx::ATol::default(),
+        slack_upper_bound: Some(inequality_integer_slack_max_range),
+    });
+    if let Some(weights) = penalty_weights {
+        inner.fixed_penalty = Some(
+            ommx::FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
+                weights: weights
+                    .into_iter()
+                    .map(|(id, weight)| (ommx::ConstraintID::from(id), weight))
+                    .collect(),
+                atol: ommx::ATol::default(),
+            },
+        );
+    } else if let Some(weight) = uniform_penalty_weight {
+        inner.fixed_penalty = Some(
+            ommx::FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight {
+                weight,
+                atol: ommx::ATol::default(),
+            },
+        );
+    }
+
+    Ok(PreparationPolicy { inner })
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PreparationPolicy {
     #[new]
-    #[pyo3(signature = (*, special_constraints=None, objective=None, integer_slack=None, integer_encoding=None, fixed_penalty=None))]
+    #[pyo3(signature = (*, special_constraints=None, objective=None, integer_slack=None, integer_encoding=None, fixed_penalty=None, binary_power_reduction=None))]
     pub fn new(
         special_constraints: Option<SpecialConstraintPreparation>,
         objective: Option<ObjectivePreparation>,
         integer_slack: Option<IntegerSlackPreparation>,
         integer_encoding: Option<IntegerEncodingPreparation>,
         fixed_penalty: Option<FixedPenaltyPreparation>,
+        binary_power_reduction: Option<BinaryPowerPreparation>,
     ) -> Self {
         let mut inner = ommx::PreparationPolicy::default();
         inner.special_constraints = special_constraints.map(Into::into);
@@ -248,7 +319,40 @@ impl PreparationPolicy {
         inner.integer_slack = integer_slack.map(Into::into);
         inner.integer_encoding = integer_encoding.map(Into::into);
         inner.fixed_penalty = fixed_penalty.map(Into::into);
+        inner.binary_power_reduction = binary_power_reduction.map(Into::into);
         Self { inner }
+    }
+
+    /// Return a fresh policy for preparing an instance for QUBO formatting.
+    #[staticmethod]
+    #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
+    pub fn for_qubo(
+        uniform_penalty_weight: Option<f64>,
+        penalty_weights: Option<BTreeMap<u64, f64>>,
+        inequality_integer_slack_max_range: u64,
+    ) -> OmmxPyResult<Self> {
+        configure_qubo_hubo_policy(
+            ommx::PreparationPolicy::for_qubo(),
+            uniform_penalty_weight,
+            penalty_weights,
+            inequality_integer_slack_max_range,
+        )
+    }
+
+    /// Return a fresh policy for preparing an instance for HUBO formatting.
+    #[staticmethod]
+    #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
+    pub fn for_hubo(
+        uniform_penalty_weight: Option<f64>,
+        penalty_weights: Option<BTreeMap<u64, f64>>,
+        inequality_integer_slack_max_range: u64,
+    ) -> OmmxPyResult<Self> {
+        configure_qubo_hubo_policy(
+            ommx::PreparationPolicy::for_hubo(),
+            uniform_penalty_weight,
+            penalty_weights,
+            inequality_integer_slack_max_range,
+        )
     }
 
     #[getter]
@@ -300,6 +404,16 @@ impl PreparationPolicy {
     pub fn set_fixed_penalty(&mut self, value: Option<FixedPenaltyPreparation>) {
         self.inner.fixed_penalty = value.map(Into::into);
     }
+
+    #[getter]
+    pub fn binary_power_reduction(&self) -> Option<BinaryPowerPreparation> {
+        self.inner.binary_power_reduction.map(Into::into)
+    }
+
+    #[setter]
+    pub fn set_binary_power_reduction(&mut self, value: Option<BinaryPowerPreparation>) {
+        self.inner.binary_power_reduction = value.map(Into::into);
+    }
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -318,8 +432,10 @@ impl Instance {
     ///    {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
     ///    followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
     ///    when exact conversion is unavailable and ``slack_upper_bound`` is set
-    /// 4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
-    /// 5. ``fixed_penalty``
+    /// 4. ``fixed_penalty``
+    /// 5. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+    /// 6. ``binary_power_reduction``:
+    ///    {meth}`~ommx.Instance.reduce_binary_power`
     ///
     /// Success guarantees membership only, not Adapter applicability. This
     /// operation is not transactional, so an error may leave the instance changed.

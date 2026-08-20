@@ -8,93 +8,95 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### Preserve output objective semantics during solver preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+### ⚠ Preserve input objectives across solver Preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
-`Instance` now distinguishes its active objective, which is presented to a
-solver, from an optional output objective used by `evaluate()` and
-`evaluate_samples()`. Use `convert_active_objective(target)` when adapting only
-the active sense and function for a backend. The method preserves the current
-output semantics before changing the active pair:
+QUBO and HUBO conversion now leaves the active `Instance` as the minimization
+energy used by a solver while `Solution` and `SampleSet` report the exact sense
+and objective function supplied to the driver:
 
 ```python
 from ommx import DecisionVariable, Instance, Sense
 
 x = DecisionVariable.binary(0)
-state = {0: 1.0}
 instance = Instance.from_components(
     sense=Sense.Maximize,
     objective=x,
     decision_variables=[x],
-    constraints={},
+    constraints={0: x == 1},
 )
 
-assert instance.convert_active_objective(Sense.Minimize)
-assert instance.sense == Sense.Minimize
-assert instance.objective.evaluate(state) == -1.0
+qubo, offset = instance.to_qubo(uniform_penalty_weight=2.0)
+state = {0: 0.0}
 
+# Solver-facing energy: minimize -x + 2 (x - 1)^2.
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == 2.0
+
+# User-facing output: the input Maximize / x objective.
 solution = instance.evaluate(state)
 sample_set = instance.evaluate_samples({0: state})
-
 assert solution.sense == Sense.Maximize
-assert solution.objective == 1.0
+assert solution.objective == 0.0
 assert sample_set.sense == Sense.Maximize
-assert sample_set.objectives[0] == 1.0
+assert sample_set.objectives[0] == 0.0
 ```
 
-The active formulation is therefore `Minimize / -f`, while the resulting
-`Solution` and `SampleSet` retain the source `Maximize / f` meaning.
-`ObjectivePreparation(target=...)` exposes the same operation as the
-`PreparationPolicy.objective` phase. Fixed and parameterized penalty methods
-likewise preserve the existing output meaning (or capture the pre-penalty
-active objective when none exists), and record that optimality of the penalized
-active formulation does not prove optimality for that output objective.
+This is a breaking correction from the latest stable Python SDK. The previous
+drivers restored the active sense and then used the penalized solver energy as
+the evaluated objective, mixing solver input with user-facing output.
+`to_qubo()` and `to_hubo()` remain supported convenience APIs; their returned
+QUBO/HUBO coefficients keep the same meaning.
 
-The existing `as_minimization_problem()` and `as_maximization_problem()`
-methods remain whole-problem conversions: they convert both active and output
-semantics and do not create an output objective when one is absent.
-
-Penalty methods now keep the pre-penalty objective as the evaluated output,
-while `Instance.objective` remains the active penalized function. This is an
-observable change from Python SDK v2:
+The drivers are now exactly an `InstanceClass`, a matching
+`PreparationPolicy`, in-place `prepare(...)`, and a preparation-free format
+extractor. The same pipeline can be run explicitly when its policy must be
+inspected or edited:
 
 ```python
-from ommx import DecisionVariable, Instance, Sense
+from ommx import InstanceClass, PreparationPolicy
 
-x = DecisionVariable.binary(0)
-source = Instance.from_components(
-    sense=Sense.Minimize,
+prepared = Instance.from_components(
+    sense=Sense.Maximize,
     objective=x,
     decision_variables=[x],
     constraints={0: x == 1},
 )
-parametric = source.uniform_penalty_method()
-weight = parametric.parameters[0]
-penalized = parametric.with_parameters({weight.id: 2.0})
-
-state = {0: 0.0}
-assert penalized.objective.evaluate(state) == 2.0
-assert penalized.evaluate(state).objective == 0.0
+policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
+prepared.prepare(InstanceClass.qubo(), policy)
+qubo, offset = prepared.as_qubo_format()
 ```
 
-`to_qubo()` and `to_hubo()` are deprecated in favor of explicit
-`prepare(...)` followed by `as_qubo_format()` or `as_hubo_format()`. During
-their deprecation period they retain their Python SDK v2 mutation semantics:
-after conversion they rebase evaluated output to the active penalized
-objective. They reject an input that already has separate output semantics,
-because no corresponding v2 state exists.
+The HUBO counterparts are `InstanceClass.hubo()`,
+`PreparationPolicy.for_hubo(...)`, and `as_hubo_format()`. Both policies
+select special-constraint lowering, active-objective conversion, Integer slack,
+fixed penalty, and Integer encoding with the legacy driver defaults. The QUBO
+policy additionally selects `BinaryPowerPreparation`, which canonicalizes
+powers of Binary variables such as $x^n = x$ before the quadratic target is
+checked. HUBO permits arbitrary polynomial degree and does not need that phase.
 
-State-reconstructible rewrites such as partial evaluation, substitution, and
-binary power reduction do not create or rewrite this output objective because
-their active objective has the same value on each reconstructed state. Like
-removed constraints, its referenced IDs are not added to the solver-used set.
-It is evaluated only after the full decision-variable state, including fixed,
-irrelevant, and dependent values, has been populated.
+Preparation establishes an output-objective envelope before its first in-place
+phase. The envelope snapshots the entry instance's effective output sense and
+exact function pair, rather than a transformation history. It survives both
+successful Preparation and a later-phase failure that leaves earlier mutations
+in place. A penalty conversion that removes constraints sets its
+optimality-transport flag to false because optimality for a finite-penalty
+energy does not prove optimality for the reported objective.
 
-`ParametricInstance` carries the same output semantics and specializes any
-parameter references in `with_parameters()`, so
-`Instance.as_parametric_instance()` remains lossless after active-objective
-Preparation. An instance carrying distinct output semantics requires v2
-serialization because v1 has no field for this information.
+`Instance` now exposes the same separation to custom workflows through
+`convert_active_objective(target)` and `ObjectivePreparation(target=...)`.
+Fixed and parameterized penalty methods also retain an existing output pair or
+capture the pre-penalty active pair, while `Instance.objective` remains the
+penalized active function. The existing `as_minimization_problem()` and
+`as_maximization_problem()` methods remain whole-problem conversions: they
+convert both active and output semantics and do not create an output pair when
+one is absent.
+
+State-reconstructible rewrites such as partial evaluation, substitution,
+Integer encoding, and Binary-power reduction do not rewrite the output pair.
+It is evaluated only after fixed, irrelevant, and dependent decision-variable
+values have been populated. `ParametricInstance.with_parameters()` specializes
+parameter references in both functions. An instance with distinct output
+semantics requires v2 serialization because v1 has no field for the pair.
 
 ### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 

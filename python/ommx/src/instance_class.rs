@@ -167,6 +167,20 @@ impl InstanceClass {
         ))
     }
 
+    /// Class of minimization QUBO formulations accepted by
+    /// {meth}`~ommx.Instance.as_qubo_format` after Preparation.
+    #[staticmethod]
+    pub fn qubo() -> Self {
+        Self(ommx::InstanceClass::qubo())
+    }
+
+    /// Class of minimization HUBO formulations accepted by
+    /// {meth}`~ommx.Instance.as_hubo_format` after Preparation.
+    #[staticmethod]
+    pub fn hubo() -> Self {
+        Self(ommx::InstanceClass::hubo())
+    }
+
     #[getter]
     pub fn clauses(&self) -> Vec<InstanceClassClause> {
         self.0

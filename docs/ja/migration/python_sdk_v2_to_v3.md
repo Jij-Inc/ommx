@@ -175,7 +175,7 @@ for cid, c in instance.constraints.items():
 
 `Instance` / `ParametricInstance` の制約 dict は、v3 final では `AttachedX` handle を返します。`Solution.constraints` は評価結果の snapshot なので `EvaluatedConstraint` のままです。`SampleSet.constraints` / `.decision_variables` / `.named_functions` は `list` のままです。
 
-## 5. rename と signature 変更
+## 5. rename、signature、挙動の変更
 
 主な rename / signature 変更は次の通りです。
 
@@ -200,23 +200,15 @@ p = Parameter(3, name="w")
 pi.with_parameters({p.id: 1.0})
 ```
 
-`to_qubo()`と`to_hubo()`はdeprecatedです。これらのdriver methodは、in-placeなmodel
-PreparationとQUBO/HUBO値の抽出を一つのAPIに混在させていました。明示的なtarget classと
-`PreparationPolicy`を使い、その後にpreparation-freeなformat extractorを呼びます。
+### 5.6 `to_qubo()` / `to_hubo()`は入力objectiveを評価結果に保持 (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+Driver method自体は引き続き利用できますが、変更後`Instance`の意味論がv3で変わります。
+Active objectiveはQUBO/HUBO solverへ渡すminimization energyであり、`evaluate()`と
+`evaluate_samples()`はdriver呼び出し時の入力instanceが公開していたsenseとobjective
+functionをそのまま返します。
 
 ```python
-from ommx import (
-    DecisionVariable,
-    DegreeBound,
-    FixedPenaltyPreparation,
-    Instance,
-    InstanceClass,
-    InstanceClassClause,
-    Kind,
-    ObjectivePreparation,
-    PreparationPolicy,
-    Sense,
-)
+from ommx import DecisionVariable, Instance, Sense
 
 x = DecisionVariable.binary(0)
 instance = Instance.from_components(
@@ -226,34 +218,53 @@ instance = Instance.from_components(
     constraints={0: x == 1},
 )
 
-qubo_class = InstanceClass(
-    [
-        InstanceClassClause(
-            label="qubo",
-            allowed_variable_kinds={Kind.Binary},
-            objective_degree_bound=DegreeBound.at_most(2),
-            allowed_senses={Sense.Minimize},
-        )
-    ]
-)
-policy = PreparationPolicy(
-    objective=ObjectivePreparation(target=Sense.Minimize),
-    fixed_penalty=(
-        FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
-            weight=2.0
-        )
-    ),
-)
+qubo, offset = instance.to_qubo(uniform_penalty_weight=2.0)
+state = {0: 0.0}
 
-instance.prepare(qubo_class, policy)
-qubo, offset = instance.as_qubo_format()
+# Solver-facing energy: minimize -x + 2 (x - 1)^2.
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == 2.0
+
+# User-facing output: 入力時の Maximize / x objective。
+solution = instance.evaluate(state)
+sample_set = instance.evaluate_samples({0: state})
+assert solution.sense == Sense.Maximize
+assert solution.objective == 0.0
+assert sample_set.sense == Sense.Maximize
+assert sample_set.objectives[0] == 0.0
 ```
 
-Source modelに応じてInteger slack、Integer encoding、特殊制約のphaseも追加します。
-Deprecated期間中の`to_qubo()`と`to_hubo()`は、変更後instanceの`evaluate()`が最終的な
-active penalty objectiveを使うPython SDK v2の挙動を維持します。明示的なPreparation
-workflowでは、代わりにpenalty前のoutput objectiveを保持します。すでに異なるoutput
-semanticsを持つinstanceはdeprecated driverでは受け付けません。
+Python SDK v2では変換後にactive senseを戻し、最終的なpenalty energyを評価結果として
+返していました。`Instance.objective`を読むcodeは引き続きsolver energyを取得しますが、
+`Solution`または`SampleSet`を使うcodeはdriverへ渡した数理目的関数を取得します。これにより、
+solver inputとuser-facing outputを混在させていた従来の挙動を修正します。
+
+Policyを確認・編集したい場合は、同じpipelineを明示的に実行できます。次のclass helperと
+policy helperはdriverが使うものと同じ設定です。
+
+```python
+from ommx import InstanceClass, PreparationPolicy
+
+prepared = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
+prepared.prepare(InstanceClass.qubo(), policy)
+qubo, offset = prepared.as_qubo_format()
+```
+
+HUBOでは`InstanceClass.hubo()`、`PreparationPolicy.for_hubo(...)`、
+`as_hubo_format()`を使います。どちらのPolicy factoryも従来のdriver defaultで、特殊制約
+lowering、active-objective変換、Integer slack、fixed penalty、Integer encodingを選択します。
+QUBO policyはquadratic targetを検査する前に、$x^n = x$のようなBinary変数の冪を
+canonicalizeするphaseも実行します。HUBOではこのphaseは不要です。どちらの経路も最初の
+in-place phaseより前にoutput-objective envelopeを確立し、後続phaseが失敗してそれ以前の
+変更が残る場合にも、entry時のobjective pairを保持します。Penalty変換で制約を除去した
+場合は、penalized energyのoptimalityが出力objectiveのoptimalityを証明しないことも
+envelopeへ記録します。
 
 ## 6. return type の変更
 
