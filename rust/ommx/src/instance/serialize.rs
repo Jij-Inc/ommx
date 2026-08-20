@@ -101,6 +101,7 @@ impl From<OutputObjective> for v2::OutputObjective {
         Self {
             sense: value.sense.into(),
             function: Some(value.function.into()),
+            preserves_optimality: value.preserves_optimality,
         }
     }
 }
@@ -347,6 +348,7 @@ mod tests {
             i32::from(crate::v1::instance::Sense::Maximize)
         );
         assert!(output.function.is_some());
+        assert!(output.preserves_optimality);
 
         let restored = Instance::try_from(proto).unwrap();
         assert_eq!(restored, instance);

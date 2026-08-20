@@ -597,6 +597,13 @@ pub struct OutputObjective {
     pub sense: i32,
     #[prost(message, optional, tag = "2")]
     pub function: ::core::option::Option<super::v1::Function>,
+    /// Whether backend optimality for the active formulation also proves
+    /// optimality for this output objective after state reconstruction.
+    ///
+    /// `false` is conservative: it means that such a proof is not available,
+    /// not that the reconstructed state is known to be suboptimal.
+    #[prost(bool, tag = "3")]
+    pub preserves_optimality: bool,
 }
 /// Validated optimization problem serialization root.
 #[non_exhaustive]

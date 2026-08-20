@@ -66,6 +66,15 @@ impl AbsDiffEq for Instance {
         ) {
             return false;
         }
+        let self_preserves_optimality = self
+            .output_objective()
+            .is_none_or(OutputObjective::preserves_optimality);
+        let other_preserves_optimality = other
+            .output_objective()
+            .is_none_or(OutputObjective::preserves_optimality);
+        if self_preserves_optimality != other_preserves_optimality {
+            return false;
+        }
 
         // Compare constraints
         // Note that `removed_constraints` are not considered in the comparison
@@ -115,6 +124,20 @@ mod tests {
         right.output_objective = Some(OutputObjective::new(
             Sense::Maximize,
             Function::from(coeff!(2.0) * linear!(1)),
+            true,
+        ));
+
+        assert!(!left.abs_diff_eq(&right, crate::ATol::default()));
+    }
+
+    #[test]
+    fn different_output_optimality_guarantees_are_not_equivalent() {
+        let left = instance();
+        let mut right = left.clone();
+        right.output_objective = Some(OutputObjective::new(
+            right.sense,
+            right.objective.clone(),
+            false,
         ));
 
         assert!(!left.abs_diff_eq(&right, crate::ATol::default()));

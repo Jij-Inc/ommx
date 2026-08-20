@@ -97,7 +97,11 @@ fn parse_v2_output_objective(
             .context(message, "output_objective.function"));
         }
     }
-    Ok(OutputObjective::new(sense, function))
+    Ok(OutputObjective::new(
+        sense,
+        function,
+        value.preserves_optimality,
+    ))
 }
 
 fn created_collection_has_payload<T: crate::ConstraintType>(

@@ -1233,6 +1233,7 @@ mod tests {
         let output = borrowed.output_objective().unwrap();
         assert_eq!(output.sense(), instance.sense());
         assert_eq!(output.function(), instance.objective());
+        assert!(output.preserves_optimality());
         assert_eq!(
             borrowed.fixed_decision_variable_values(),
             &BTreeMap::from([(VariableID::from(1), 2.0), (VariableID::from(2), 3.0)])

@@ -116,23 +116,33 @@ pub enum Sense {
 
 /// Objective semantics used when evaluating solver output.
 ///
-/// This pair is captured by the first transformation that changes an
-/// [`Instance`]'s active objective or sense. Later preparation steps continue
-/// rewriting the active formulation, while [`Instance::evaluate`] and
-/// [`Instance::evaluate_samples`] use this pair to present results in the
-/// input model's objective semantics.
+/// This value is normally captured by the first transformation that changes
+/// an [`Instance`]'s active objective or sense. A transformation may also
+/// install an equal pair when it needs to record that active-formulation
+/// optimality does not transport to the output semantics. Later preparation
+/// steps continue rewriting the active formulation, while
+/// [`Instance::evaluate`] and [`Instance::evaluate_samples`] use this pair to
+/// present results in the input model's objective semantics.
 ///
 /// The sense and function are intentionally immutable outside [`Instance`]:
 /// they are one semantic value and must never be updated independently.
+/// [`Self::preserves_optimality`] records whether a backend optimality proof
+/// for the active formulation also applies to this output objective after
+/// state reconstruction.
 #[derive(Debug, Clone, PartialEq, crate::logical_memory::LogicalMemoryProfile)]
 pub struct OutputObjective {
     sense: Sense,
     function: Function,
+    preserves_optimality: bool,
 }
 
 impl OutputObjective {
-    pub(crate) fn new(sense: Sense, function: Function) -> Self {
-        Self { sense, function }
+    pub(crate) fn new(sense: Sense, function: Function, preserves_optimality: bool) -> Self {
+        Self {
+            sense,
+            function,
+            preserves_optimality,
+        }
     }
 
     /// Optimization sense used for output objective values.
@@ -143,6 +153,14 @@ impl OutputObjective {
     /// Function evaluated to produce output objective values.
     pub fn function(&self) -> &Function {
         &self.function
+    }
+
+    /// Whether active-formulation optimality transports to this output objective.
+    ///
+    /// `false` means that no such proof is available. It does not assert that
+    /// a reconstructed state is suboptimal.
+    pub fn preserves_optimality(&self) -> bool {
+        self.preserves_optimality
     }
 }
 
@@ -208,7 +226,9 @@ impl OutputObjective {
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the objective function or constraints.
 ///   These are "dependent variables" whose values are computed from other variables.
-/// - [`Self::output_objective`] is an atomic sense/function pair. Its function
+/// - [`Self::output_objective`] is an atomic sense/function pair together with
+///   a fact recording whether active-formulation optimality transports to the
+///   reconstructed output semantics. Its function
 ///   may reference used, fixed, dependent, or otherwise inactive variables,
 ///   but every referenced ID remains owned by [`Self::decision_variables`] so
 ///   state population can evaluate it.
@@ -281,8 +301,10 @@ pub struct Instance {
     objective: Function,
     /// Objective semantics presented by Solution and SampleSet evaluation.
     ///
-    /// `None` means that the active [`Self::sense`] / [`Self::objective`] pair
-    /// is also the output pair.
+    /// `None` means that evaluation directly uses the active [`Self::sense`] /
+    /// [`Self::objective`] pair and active optimality implicitly transports.
+    /// A present output pair may equal the active pair when its optimality
+    /// guarantee still needs to be recorded explicitly.
     output_objective: Option<OutputObjective>,
     /// Created decision-variable rows, modeling labels, and fixed values.
     decision_variables: DecisionVariableTable,
@@ -328,7 +350,11 @@ impl Instance {
     /// transformation has already established the output semantics.
     fn capture_output_objective(&mut self) {
         if self.output_objective.is_none() {
-            self.output_objective = Some(OutputObjective::new(self.sense, self.objective.clone()));
+            self.output_objective = Some(OutputObjective::new(
+                self.sense,
+                self.objective.clone(),
+                true,
+            ));
         }
     }
 
@@ -336,8 +362,19 @@ impl Instance {
     /// rewrite has already committed.
     fn capture_output_objective_from(&mut self, sense: Sense, function: Function) {
         if self.output_objective.is_none() {
-            self.output_objective = Some(OutputObjective::new(sense, function));
+            self.output_objective = Some(OutputObjective::new(sense, function, true));
         }
+    }
+
+    /// Record that the active formulation no longer provides an optimality
+    /// proof for the reconstructed output semantics. Once lost, later rewrites
+    /// cannot infer that guarantee again.
+    fn invalidate_output_objective_optimality(&mut self) {
+        self.capture_output_objective();
+        self.output_objective
+            .as_mut()
+            .expect("capture_output_objective installs the output objective")
+            .preserves_optimality = false;
     }
 
     /// Objective pair that Solution and SampleSet evaluation must expose.
