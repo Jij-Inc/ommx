@@ -919,9 +919,13 @@ impl Instance {
 
     /// Convert the instance to a QUBO format.
     ///
+    /// .. deprecated:: 3.0
+    ///    Use {meth}`~ommx.Instance.prepare` followed by
+    ///    {meth}`~ommx.Instance.as_qubo_format` instead.
+    ///
     /// This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
     ///
-    /// 1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.
+    /// 1. Convert the complete objective semantics to minimization.
     /// 2. Check continuous variables and raise error if exists.
     /// 3. Convert inequality constraints
     ///
@@ -973,6 +977,7 @@ impl Instance {
     /// >>> instance.sense == Instance.MAXIMIZE
     /// True
     /// ```
+    #[deprecated(note = "Use Instance.prepare(...) followed by Instance.as_qubo_format() instead.")]
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
     pub fn to_qubo<'py>(
         &mut self,
@@ -982,26 +987,32 @@ impl Instance {
         inequality_integer_slack_max_range: u64,
     ) -> OmmxPyResult<(Bound<'py, PyDict>, f64)> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_legacy_driver_has_no_output_objective("to_qubo", "as_qubo_format")?;
+
         let is_converted = self.as_minimization_problem();
-        self.check_no_continuous_variables("QUBO")?;
-        self.qubo_hubo_pipeline(
-            uniform_penalty_weight,
-            penalty_weights,
-            inequality_integer_slack_max_range,
-        )?;
-        self.log_encode(py, BTreeSet::new(), None)?;
-        let result = self.as_qubo_format(py)?;
-        if is_converted {
-            self.as_maximization_problem();
-        }
-        Ok(result)
+        let result = (|| {
+            self.check_no_continuous_variables("QUBO")?;
+            self.qubo_hubo_pipeline(
+                uniform_penalty_weight,
+                penalty_weights,
+                inequality_integer_slack_max_range,
+            )?;
+            self.log_encode(py, BTreeSet::new(), None)?;
+            self.as_qubo_format(py)
+        })();
+
+        self.finish_legacy_qubo_hubo_driver(result, is_converted)
     }
 
     /// Convert the instance to a HUBO format.
     ///
+    /// .. deprecated:: 3.0
+    ///    Use {meth}`~ommx.Instance.prepare` followed by
+    ///    {meth}`~ommx.Instance.as_hubo_format` instead.
+    ///
     /// This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
     ///
-    /// 1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.
+    /// 1. Convert the complete objective semantics to minimization.
     /// 2. Check continuous variables and raise error if exists.
     /// 3. Convert inequality constraints
     ///
@@ -1022,6 +1033,7 @@ impl Instance {
     /// difference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't
     /// restricted to quadratic or linear problems. If you want to customize the
     /// conversion, use the individual methods above manually.
+    #[deprecated(note = "Use Instance.prepare(...) followed by Instance.as_hubo_format() instead.")]
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
     pub fn to_hubo<'py>(
         &mut self,
@@ -1031,19 +1043,21 @@ impl Instance {
         inequality_integer_slack_max_range: u64,
     ) -> OmmxPyResult<(Bound<'py, PyDict>, f64)> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        self.ensure_legacy_driver_has_no_output_objective("to_hubo", "as_hubo_format")?;
+
         let is_converted = self.as_minimization_problem();
-        self.check_no_continuous_variables("HUBO")?;
-        self.qubo_hubo_pipeline(
-            uniform_penalty_weight,
-            penalty_weights,
-            inequality_integer_slack_max_range,
-        )?;
-        self.log_encode(py, BTreeSet::new(), None)?;
-        let result = self.as_hubo_format(py)?;
-        if is_converted {
-            self.as_maximization_problem();
-        }
-        Ok(result)
+        let result = (|| {
+            self.check_no_continuous_variables("HUBO")?;
+            self.qubo_hubo_pipeline(
+                uniform_penalty_weight,
+                penalty_weights,
+                inequality_integer_slack_max_range,
+            )?;
+            self.log_encode(py, BTreeSet::new(), None)?;
+            self.as_hubo_format(py)
+        })();
+
+        self.finish_legacy_qubo_hubo_driver(result, is_converted)
     }
 
     pub fn as_parametric_instance(&self) -> ParametricInstance {
@@ -2562,10 +2576,12 @@ impl Instance {
 
     /// Convert the instance to a minimization problem.
     ///
-    /// If the instance is already a minimization problem, this does nothing.
+    /// If both the active objective and the output objective already use
+    /// minimization, this does nothing.
     ///
     /// **Returns:**
-    /// ``True`` if the instance is converted, ``False`` if already a minimization problem.
+    /// ``True`` if either objective is converted, ``False`` if both already
+    /// use minimization.
     ///
     /// # Examples
     ///
@@ -2607,10 +2623,12 @@ impl Instance {
 
     /// Convert the instance to a maximization problem.
     ///
-    /// If the instance is already a maximization problem, this does nothing.
+    /// If both the active objective and the output objective already use
+    /// maximization, this does nothing.
     ///
     /// **Returns:**
-    /// ``True`` if the instance is converted, ``False`` if already a maximization problem.
+    /// ``True`` if either objective is converted, ``False`` if both already
+    /// use maximization.
     ///
     /// # Examples
     ///
@@ -2648,6 +2666,23 @@ impl Instance {
     /// ```
     pub fn as_maximization_problem(&mut self) -> bool {
         self.inner.as_maximization_problem()
+    }
+
+    /// Convert only the active objective used by a solver-facing formulation.
+    ///
+    /// This changes {attr}`~ommx.Instance.sense` and
+    /// {attr}`~ommx.Instance.objective` to ``target`` while preserving the
+    /// objective semantics returned by {meth}`~ommx.Instance.evaluate` and
+    /// {meth}`~ommx.Instance.evaluate_samples`. Use
+    /// {meth}`~ommx.Instance.as_minimization_problem` or
+    /// {meth}`~ommx.Instance.as_maximization_problem` when the output objective
+    /// should be converted as part of the mathematical problem itself.
+    ///
+    /// **Returns:**
+    /// ``True`` if the active objective is converted, ``False`` if it already
+    /// has ``target``.
+    pub fn convert_active_objective(&mut self, target: Sense) -> bool {
+        self.inner.convert_active_objective(target.into())
     }
 
     /// Get a specific decision variable by ID
@@ -2822,6 +2857,43 @@ impl Instance {
 }
 
 impl Instance {
+    fn ensure_legacy_driver_has_no_output_objective(
+        &self,
+        driver: &str,
+        format: &str,
+    ) -> OmmxPyResult<()> {
+        if self.inner.output_objective().is_some() {
+            return Err(PyValueError::new_err(format!(
+                "Instance.{driver}() cannot be used after output semantics have been separated from the active objective; use Instance.prepare(...) followed by Instance.{format}() instead."
+            ))
+            .into());
+        }
+        Ok(())
+    }
+
+    fn rebase_output_objective_to_active(&mut self) -> OmmxPyResult<()> {
+        self.inner.set_objective(self.inner.objective().clone())?;
+        Ok(())
+    }
+
+    /// Finish a deprecated QUBO/HUBO driver while retaining its Python SDK v2
+    /// mutation semantics. Successful maximization conversion is restored;
+    /// failures keep the partially prepared sense and model. In either case,
+    /// output semantics are rebased to the active objective so a sidecar
+    /// created by the new penalty implementation cannot change legacy
+    /// `evaluate` behavior.
+    fn finish_legacy_qubo_hubo_driver<T>(
+        &mut self,
+        result: OmmxPyResult<T>,
+        restore_maximization: bool,
+    ) -> OmmxPyResult<T> {
+        if result.is_ok() && restore_maximization {
+            self.as_maximization_problem();
+        }
+        self.rebase_output_objective_to_active()?;
+        result
+    }
+
     fn check_no_continuous_variables(&self, format_name: &str) -> OmmxPyResult<()> {
         let continuous_ids: Vec<u64> = self
             .inner

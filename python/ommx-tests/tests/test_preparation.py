@@ -13,11 +13,11 @@ from ommx import (
     IntegerEncodingPreparation,
     IntegerSlackPreparation,
     Kind,
+    ObjectivePreparation,
     OneHotConstraint,
     PreparationPolicy,
     PreparationTargetNotReachedError,
     Sense,
-    SensePreparation,
     SpecialConstraintKind,
     SpecialConstraintPreparation,
 )
@@ -41,6 +41,41 @@ def unconstrained_class(
     )
 
 
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [
+        (Sense.Maximize, Sense.Minimize),
+        (Sense.Minimize, Sense.Maximize),
+    ],
+)
+def test_objective_preparation_converts_to_target_sense(
+    source: Sense,
+    target: Sense,
+) -> None:
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        sense=source,
+        objective=x,
+        decision_variables=[x],
+        constraints={},
+    )
+    input_class = unconstrained_class(
+        allowed_variable_kinds={Kind.Binary},
+        objective_degree=1,
+        sense=target,
+    )
+    objective = ObjectivePreparation(target=target)
+    policy = PreparationPolicy(objective=objective)
+
+    assert objective.target == target
+    assert policy.objective == objective
+    assert instance.prepare(input_class, policy) is None
+    assert instance.sense == target
+    solution = instance.evaluate({0: 1})
+    assert solution.sense == source
+    assert solution.objective == 1
+
+
 def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
     x = DecisionVariable.integer(0, lower=0, upper=3)
     y = DecisionVariable.binary(1)
@@ -60,7 +95,7 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
     policy.special_constraints = SpecialConstraintPreparation.lower_special_constraints(
         kinds={SpecialConstraintKind.OneHot}
     )
-    policy.sense = SensePreparation.as_minimization_problem()
+    policy.objective = ObjectivePreparation(target=Sense.Minimize)
     policy.integer_slack = IntegerSlackPreparation(
         max_integer_range=1,
         slack_upper_bound=2,
@@ -89,7 +124,7 @@ def test_prepare_preserves_owner_signal_and_earlier_commits() -> None:
         objective_degree=1,
     )
     policy = PreparationPolicy(
-        sense=SensePreparation.as_minimization_problem(),
+        objective=ObjectivePreparation(target=Sense.Minimize),
         integer_slack=IntegerSlackPreparation(max_integer_range=1),
     )
 

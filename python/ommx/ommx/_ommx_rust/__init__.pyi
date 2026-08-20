@@ -70,6 +70,7 @@ __all__ = [
     "LinearLike",
     "LogEncodingError",
     "NamedFunction",
+    "ObjectivePreparation",
     "OneHotConstraint",
     "OpenSolve",
     "Optimality",
@@ -104,7 +105,6 @@ __all__ = [
     "ScalarLike",
     "SealedRun",
     "Sense",
-    "SensePreparation",
     "Solution",
     "Solve",
     "Sos1Constraint",
@@ -3385,6 +3385,9 @@ class Instance:
         """
     def as_qubo_format(self) -> tuple[dict, builtins.float]: ...
     def as_hubo_format(self) -> tuple[dict, builtins.float]: ...
+    @typing_extensions.deprecated(
+        "Use Instance.prepare(...) followed by Instance.as_qubo_format() instead."
+    )
     def to_qubo(
         self,
         *,
@@ -3397,9 +3400,13 @@ class Instance:
         r"""
         Convert the instance to a QUBO format.
 
+        .. deprecated:: 3.0
+           Use {meth}`~ommx.Instance.prepare` followed by
+           {meth}`~ommx.Instance.as_qubo_format` instead.
+
         This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
 
-        1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.
+        1. Convert the complete objective semantics to minimization.
         2. Check continuous variables and raise error if exists.
         3. Convert inequality constraints
 
@@ -3452,6 +3459,9 @@ class Instance:
         True
         ```
         """
+    @typing_extensions.deprecated(
+        "Use Instance.prepare(...) followed by Instance.as_hubo_format() instead."
+    )
     def to_hubo(
         self,
         *,
@@ -3464,9 +3474,13 @@ class Instance:
         r"""
         Convert the instance to a HUBO format.
 
+        .. deprecated:: 3.0
+           Use {meth}`~ommx.Instance.prepare` followed by
+           {meth}`~ommx.Instance.as_hubo_format` instead.
+
         This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
 
-        1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.
+        1. Convert the complete objective semantics to minimization.
         2. Check continuous variables and raise error if exists.
         3. Convert inequality constraints
 
@@ -4549,10 +4563,12 @@ class Instance:
         r"""
         Convert the instance to a minimization problem.
 
-        If the instance is already a minimization problem, this does nothing.
+        If both the active objective and the output objective already use
+        minimization, this does nothing.
 
         **Returns:**
-        ``True`` if the instance is converted, ``False`` if already a minimization problem.
+        ``True`` if either objective is converted, ``False`` if both already
+        use minimization.
 
         # Examples
 
@@ -4593,10 +4609,12 @@ class Instance:
         r"""
         Convert the instance to a maximization problem.
 
-        If the instance is already a maximization problem, this does nothing.
+        If both the active objective and the output objective already use
+        maximization, this does nothing.
 
         **Returns:**
-        ``True`` if the instance is converted, ``False`` if already a maximization problem.
+        ``True`` if either objective is converted, ``False`` if both already
+        use maximization.
 
         # Examples
 
@@ -4632,6 +4650,22 @@ class Instance:
         >>> instance.as_maximization_problem()
         False
         ```
+        """
+    def convert_active_objective(self, target: Sense) -> builtins.bool:
+        r"""
+        Convert only the active objective used by a solver-facing formulation.
+
+        This changes {attr}`~ommx.Instance.sense` and
+        {attr}`~ommx.Instance.objective` to ``target`` while preserving the
+        objective semantics returned by {meth}`~ommx.Instance.evaluate` and
+        {meth}`~ommx.Instance.evaluate_samples`. Use
+        {meth}`~ommx.Instance.as_minimization_problem` or
+        {meth}`~ommx.Instance.as_maximization_problem` when the output objective
+        should be converted as part of the mathematical problem itself.
+
+        **Returns:**
+        ``True`` if the active objective is converted, ``False`` if it already
+        has ``target``.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
@@ -4751,7 +4785,7 @@ class Instance:
 
         1. ``special_constraints``:
            {meth}`~ommx.Instance.lower_special_constraints`
-        2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`
+        2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`
         3. ``integer_slack``:
            {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
            followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
@@ -5387,6 +5421,16 @@ class NamedFunction:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> NamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> NamedFunction: ...
+
+@typing.final
+class ObjectivePreparation:
+    r"""
+    Convert the active objective to ``target`` during Preparation.
+    """
+    @property
+    def target(self) -> Sense: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(cls, *, target: Sense) -> ObjectivePreparation: ...
 
 @typing.final
 class OneHotConstraint:
@@ -6161,9 +6205,9 @@ class PreparationPolicy:
         self, value: typing.Optional[SpecialConstraintPreparation]
     ) -> None: ...
     @property
-    def sense(self) -> typing.Optional[SensePreparation]: ...
-    @sense.setter
-    def sense(self, value: typing.Optional[SensePreparation]) -> None: ...
+    def objective(self) -> typing.Optional[ObjectivePreparation]: ...
+    @objective.setter
+    def objective(self, value: typing.Optional[ObjectivePreparation]) -> None: ...
     @property
     def integer_slack(self) -> typing.Optional[IntegerSlackPreparation]: ...
     @integer_slack.setter
@@ -6187,7 +6231,7 @@ class PreparationPolicy:
         cls,
         *,
         special_constraints: typing.Optional[SpecialConstraintPreparation] = None,
-        sense: typing.Optional[SensePreparation] = None,
+        objective: typing.Optional[ObjectivePreparation] = None,
         integer_slack: typing.Optional[IntegerSlackPreparation] = None,
         integer_encoding: typing.Optional[IntegerEncodingPreparation] = None,
         fixed_penalty: typing.Optional[FixedPenaltyPreparation] = None,
@@ -7523,12 +7567,6 @@ class SealedRun:
         type against the codec before decoding.
         """
     def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class SensePreparation:
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-    @staticmethod
-    def as_minimization_problem() -> SensePreparation: ...
 
 @typing.final
 class Solution:

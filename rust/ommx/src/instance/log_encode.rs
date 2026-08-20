@@ -756,7 +756,7 @@ mod tests {
         assert!(without_output.output_objective().is_none());
 
         let mut with_output = make_instance();
-        assert!(with_output.as_minimization_problem());
+        assert!(with_output.convert_active_objective(Sense::Minimize));
         let output = with_output.output_objective().cloned().unwrap();
         with_output.log_encode([id], ATol::default()).unwrap();
 

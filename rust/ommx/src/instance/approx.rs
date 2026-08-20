@@ -112,7 +112,7 @@ mod tests {
     fn transformed_and_input_output_semantics_are_equivalent() {
         let original = instance();
         let mut transformed = original.clone();
-        assert!(transformed.as_minimization_problem());
+        assert!(transformed.convert_active_objective(Sense::Minimize));
 
         assert!(original.abs_diff_eq(&transformed, crate::ATol::default()));
     }

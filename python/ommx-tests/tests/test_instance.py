@@ -1,4 +1,5 @@
 import math
+import warnings
 
 import ommx
 import pytest
@@ -12,6 +13,7 @@ from ommx import (
     LogEncodingError,
     Parameter,
     ParametricInstance,
+    Sense,
 )
 
 
@@ -60,6 +62,39 @@ def test_minimize_creates_empty_minimization_instance():
     assert instance.decision_variables == []
     assert instance.constraints == {}
     assert instance.objective.almost_equal(Function(0))
+
+
+def test_problem_objective_conversion_changes_evaluation_semantics():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        sense=Sense.Maximize,
+        objective=3 * x,
+        decision_variables=[x],
+        constraints={},
+    )
+
+    assert instance.as_minimization_problem()
+
+    solution = instance.evaluate({0: 1})
+    assert solution.sense == Sense.Minimize
+    assert solution.objective == -3
+
+
+def test_active_objective_conversion_preserves_evaluation_semantics():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        sense=Sense.Maximize,
+        objective=3 * x,
+        decision_variables=[x],
+        constraints={},
+    )
+
+    assert instance.convert_active_objective(Sense.Minimize)
+
+    solution = instance.evaluate({0: 1})
+    assert instance.sense == Sense.Minimize
+    assert solution.sense == Sense.Maximize
+    assert solution.objective == 3
 
 
 def test_new_binary_accepts_full_modeling_label():
@@ -299,6 +334,82 @@ def test_to_qubo_penalty_weight():
     assert offset == 2.0
 
 
+@pytest.mark.parametrize("method_name", ["to_qubo", "to_hubo"])
+def test_qubo_hubo_driver_deprecation_is_typing_only(method_name: str):
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        getattr(instance, method_name)()
+
+
+def test_to_qubo_rejects_existing_output_objective_without_mutation():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=3 * x,
+        constraints={},
+        sense=Sense.Maximize,
+    )
+    assert instance.convert_active_objective(Sense.Minimize)
+
+    with pytest.raises(
+        ValueError,
+        match=r"Instance\.to_qubo\(\) cannot be used after output semantics",
+    ):
+        instance.to_qubo()
+
+    assert instance.sense == Sense.Minimize
+    solution = instance.evaluate({0: 1})
+    assert solution.sense == Sense.Maximize
+    assert solution.objective == 3
+
+
+def test_to_qubo_rebases_output_to_v2_driver_semantics():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=3 * x,
+        constraints={0: x == 1},
+        sense=Sense.Maximize,
+    )
+
+    instance.to_qubo()
+
+    solution = instance.evaluate({0: 0})
+    assert solution.sense == Sense.Maximize
+    assert solution.objective == -1
+    assert instance.to_v1_bytes()
+
+
+def test_to_qubo_failure_rebases_output_but_keeps_partial_v2_mutation():
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] * x[1] * x[2],
+        constraints={0: x[0] == 1},
+        sense=Sense.Maximize,
+    )
+
+    with pytest.raises(RuntimeError, match="QUBO"):
+        instance.to_qubo()
+
+    # Python SDK v2 left the partially converted instance in minimization form
+    # after a driver failure. New output-objective state must not leak into that
+    # legacy behavior.
+    assert instance.sense == Sense.Minimize
+    solution = instance.evaluate({0: 0, 1: 0, 2: 0})
+    assert solution.sense == Sense.Minimize
+    assert solution.objective == 1
+    assert instance.to_v1_bytes()
+
+
 def test_to_qubo_continuous():
     x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
     instance = Instance.from_components(
@@ -348,6 +459,28 @@ def test_hubo_3rd_degree():
     assert offset == 0.0
 
 
+def test_to_hubo_rejects_existing_output_objective_without_mutation():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=3 * x,
+        constraints={},
+        sense=Sense.Maximize,
+    )
+    assert instance.convert_active_objective(Sense.Minimize)
+
+    with pytest.raises(
+        ValueError,
+        match=r"Instance\.to_hubo\(\) cannot be used after output semantics",
+    ):
+        instance.to_hubo()
+
+    assert instance.sense == Sense.Minimize
+    solution = instance.evaluate({0: 1})
+    assert solution.sense == Sense.Maximize
+    assert solution.objective == 3
+
+
 def test_to_hubo_penalty_weight():
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
     instance = Instance.from_components(
@@ -360,6 +493,23 @@ def test_to_hubo_penalty_weight():
     hubo, offset = instance.to_hubo(penalty_weights={123: 1.0, 456: 2.0})
     assert hubo == {(0,): 2.0, (1,): -2.0}
     assert offset == 2.0
+
+
+def test_to_hubo_rebases_output_to_v2_driver_semantics():
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=3 * x[0] * x[1] * x[2],
+        constraints={0: x[0] == 1},
+        sense=Sense.Maximize,
+    )
+
+    instance.to_hubo()
+
+    solution = instance.evaluate({0: 0, 1: 0, 2: 0})
+    assert solution.sense == Sense.Maximize
+    assert solution.objective == -1
+    assert instance.to_v1_bytes()
 
 
 def test_to_hubo_continuous():

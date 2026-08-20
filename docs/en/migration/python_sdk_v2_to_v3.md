@@ -299,6 +299,66 @@ from ommx import Linear
 Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
 ```
 
+### 5.6 `to_qubo()` / `to_hubo()` are deprecated (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+The driver methods mixed in-place model preparation with QUBO/HUBO value
+extraction. Replace them with an explicit target class and
+`PreparationPolicy`, then call the preparation-free format extractor. This
+example prepares a constrained Binary model for QUBO:
+
+```python
+from ommx import (
+    DecisionVariable,
+    DegreeBound,
+    FixedPenaltyPreparation,
+    Instance,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    ObjectivePreparation,
+    PreparationPolicy,
+    Sense,
+)
+
+x = DecisionVariable.binary(0)
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+
+qubo_class = InstanceClass(
+    [
+        InstanceClassClause(
+            label="qubo",
+            allowed_variable_kinds={Kind.Binary},
+            objective_degree_bound=DegreeBound.at_most(2),
+            allowed_senses={Sense.Minimize},
+        )
+    ]
+)
+policy = PreparationPolicy(
+    objective=ObjectivePreparation(target=Sense.Minimize),
+    fixed_penalty=(
+        FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
+            weight=2.0
+        )
+    ),
+)
+
+instance.prepare(qubo_class, policy)
+qubo, offset = instance.as_qubo_format()
+```
+
+Add Integer slack, Integer encoding, or special-constraint phases when the
+source model requires them. During the deprecation period, `to_qubo()` and
+`to_hubo()` continue to leave their mutated instance with Python SDK v2
+evaluation semantics: `evaluate()` uses the final active penalty objective.
+The explicit Preparation workflow instead preserves the pre-penalty output
+objective. The deprecated drivers reject an instance that already carries
+separate output semantics.
+
 ## 6. Return-type changes
 
 ### 6.1 `Constraint.name` / `Constraint.description` are `Optional[str]` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
@@ -409,8 +469,8 @@ implicitly. In v3, the caller owns those choices. Start with the adapter's fresh
 recommended `PreparationPolicy`, edit application-specific fields, and apply it
 in place with `Instance.prepare()` before calling the strict adapter API.
 
-The OpenJij recommendation enables special-constraint lowering, minimization
-sense normalization, Integer slack, and used-Integer log encoding. Integer
+The OpenJij recommendation enables special-constraint lowering, active-objective
+conversion to minimization, Integer slack, and used-Integer log encoding. Integer
 slack first attempts exact equality conversion with range 32 and, when that
 exact operation is unavailable, permits inequality-preserving slack with upper
 bound 32. Set `slack_upper_bound=None` on a replacement

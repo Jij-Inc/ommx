@@ -563,10 +563,10 @@ impl Arbitrary for Instance {
                                     );
                                     match instance.sense() {
                                         Sense::Minimize => {
-                                            instance.as_maximization_problem();
+                                            instance.convert_active_objective(Sense::Maximize);
                                         }
                                         Sense::Maximize => {
-                                            instance.as_minimization_problem();
+                                            instance.convert_active_objective(Sense::Minimize);
                                         }
                                     }
                                 }

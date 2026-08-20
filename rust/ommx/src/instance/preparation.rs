@@ -1,5 +1,5 @@
 use super::{ExactIntegerSlackUnavailable, Instance, SpecialConstraintKinds};
-use crate::{ATol, ConstraintID, Equality, InstanceClass, InstanceClassMembershipReport};
+use crate::{ATol, ConstraintID, Equality, InstanceClass, InstanceClassMembershipReport, Sense};
 use std::collections::BTreeMap;
 
 /// Preparation of active special constraints.
@@ -16,14 +16,13 @@ pub enum SpecialConstraintPreparation {
     },
 }
 
-/// Preparation of the optimization sense.
+/// Preparation of the active objective used by the solver-facing formulation.
 ///
-/// Each variant selects one existing [`Instance`] owner operation.
-#[non_exhaustive]
+/// The conversion itself remains owned by [`Instance::convert_active_objective`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SensePreparation {
-    /// Invoke [`Instance::as_minimization_problem`].
-    AsMinimizationProblem,
+pub struct ObjectivePreparation {
+    /// Target optimization sense passed to [`Instance::convert_active_objective`].
+    pub target: Sense,
 }
 
 /// Preparation that introduces Integer slack variables into active regular
@@ -75,7 +74,8 @@ pub enum IntegerEncodingPreparation {
 /// Fixed-weight penalty preparation of active regular constraints.
 ///
 /// Exactly one fixed-weight penalty owner operation is selected. Weight and
-/// constraint-ID validation remains owned by that operation.
+/// constraint-ID validation and output-objective preservation remain owned by
+/// that operation.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum FixedPenaltyPreparation {
@@ -108,7 +108,7 @@ pub enum FixedPenaltyPreparation {
 /// phase is disabled by default, including fields added in future releases.
 ///
 /// [`Instance::prepare`] applies each selected phase at most once in this
-/// canonical order: special constraints, optimization sense, Integer slack,
+/// canonical order: special constraints, active objective, Integer slack,
 /// Integer encoding, then fixed penalty. It checks whole-class membership
 /// before and after each selected phase and stops as soon as the target class
 /// contains the instance.
@@ -118,11 +118,13 @@ pub enum FixedPenaltyPreparation {
 /// ```
 /// use ommx::{
 ///     ATol, FixedPenaltyPreparation, IntegerSlackPreparation, PreparationPolicy,
-///     SensePreparation,
+///     ObjectivePreparation, Sense,
 /// };
 ///
 /// let mut policy = PreparationPolicy::default();
-/// policy.sense = Some(SensePreparation::AsMinimizationProblem);
+/// policy.objective = Some(ObjectivePreparation {
+///     target: Sense::Minimize,
+/// });
 /// policy.integer_slack = Some(IntegerSlackPreparation {
 ///     max_integer_range: 32,
 ///     atol: ATol::default(),
@@ -140,8 +142,8 @@ pub enum FixedPenaltyPreparation {
 pub struct PreparationPolicy {
     /// Optional special-constraint phase.
     pub special_constraints: Option<SpecialConstraintPreparation>,
-    /// Optional optimization-sense phase.
-    pub sense: Option<SensePreparation>,
+    /// Optional active-objective phase.
+    pub objective: Option<ObjectivePreparation>,
     /// Optional Integer slack phase. `None` does not introduce Integer slack.
     pub integer_slack: Option<IntegerSlackPreparation>,
     /// Optional used-Integer encoding phase.
@@ -186,13 +188,9 @@ impl PreparationStep for SpecialConstraintPreparation {
     }
 }
 
-impl PreparationStep for SensePreparation {
+impl PreparationStep for ObjectivePreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
-        match self {
-            Self::AsMinimizationProblem => {
-                instance.as_minimization_problem();
-            }
-        }
+        instance.convert_active_objective(self.target);
         Ok(())
     }
 }
@@ -308,7 +306,7 @@ impl Instance {
             return Ok(());
         }
 
-        if apply_preparation_step(self, input_class, policy.sense.as_ref())? {
+        if apply_preparation_step(self, input_class, policy.objective.as_ref())? {
             return Ok(());
         }
 
@@ -372,6 +370,67 @@ mod tests {
             )]),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn objective_preparation_converts_to_either_target_sense() {
+        for (source, target) in [
+            (Sense::Maximize, Sense::Minimize),
+            (Sense::Minimize, Sense::Maximize),
+        ] {
+            let variable = VariableID::from(1);
+            let mut instance = Instance::new(
+                source,
+                Function::from(linear!(variable)),
+                BTreeMap::from([(variable, DecisionVariable::binary())]),
+                BTreeMap::new(),
+            )
+            .unwrap();
+
+            ObjectivePreparation { target }
+                .apply(&mut instance)
+                .unwrap();
+
+            assert_eq!(instance.sense(), target);
+            assert_eq!(instance.output_objective().unwrap().sense(), source);
+        }
+    }
+
+    #[test]
+    fn fixed_penalty_preparation_preserves_the_input_objective_for_output() {
+        let variable = VariableID::from(1);
+        let objective = Function::from(linear!(variable));
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.clone(),
+            BTreeMap::from([(variable, DecisionVariable::binary())]),
+            BTreeMap::from([(
+                ConstraintID::from(1),
+                Constraint::equal_to_zero(Function::from(linear!(variable))),
+            )]),
+        )
+        .unwrap();
+        let target = unconstrained_class(
+            "unconstrained binary quadratic",
+            [Kind::Binary],
+            DegreeBound::at_most(2),
+        );
+        let policy = PreparationPolicy {
+            fixed_penalty: Some(
+                FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight {
+                    weight: 2.0,
+                    atol: ATol::default(),
+                },
+            ),
+            ..Default::default()
+        };
+
+        instance.prepare(&target, &policy).unwrap();
+
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Minimize);
+        assert_eq!(output.function(), &objective);
+        assert!(!output.preserves_optimality());
     }
 
     #[test]
@@ -573,7 +632,9 @@ mod tests {
             special_constraints: Some(SpecialConstraintPreparation::LowerSpecialConstraints {
                 kinds: BTreeSet::from([SpecialConstraintKind::OneHot]),
             }),
-            sense: Some(SensePreparation::AsMinimizationProblem),
+            objective: Some(ObjectivePreparation {
+                target: Sense::Minimize,
+            }),
             integer_slack: Some(IntegerSlackPreparation {
                 max_integer_range: 32,
                 atol: ATol::default(),
@@ -616,7 +677,9 @@ mod tests {
             DegreeBound::at_most(1),
         );
         let policy = PreparationPolicy {
-            sense: Some(SensePreparation::AsMinimizationProblem),
+            objective: Some(ObjectivePreparation {
+                target: Sense::Minimize,
+            }),
             ..Default::default()
         };
 

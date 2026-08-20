@@ -1029,7 +1029,7 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        assert!(instance.as_minimization_problem());
+        assert!(instance.convert_active_objective(Sense::Minimize));
         assert!(instance.output_objective().is_some());
 
         let replacement = Function::from(coeff!(3.0) * linear!(1));

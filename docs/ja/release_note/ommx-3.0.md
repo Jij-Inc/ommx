@@ -8,17 +8,13 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### Instance変換後のoutput objective semanticsを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+### Solver Preparationで出力目的関数の意味論を保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
-`Instance`のsolver-facing objectiveまたはsenseをそのまま結果表示に使えなくする変換、
-またはactive formulationのoptimality proofを出力へ移せなくする変換は、`evaluate()`と
-`evaluate_samples()`が使う別のoutput objectiveを保持するようになりました。そのため
-active formulationをsolver向けに維持しながら、結果は入力modelのobjective valueとsenseを
-返します。Penalty変換では、optimalityを移せないことだけを記録するために、同一のobjective
-pairを保持する場合もあります。
-
-次の同一の呼び出しコードは、active formulationを変えずに、異なるevaluation結果を
-返すようになります。
+`Instance`は、solverへ渡すactive objectiveと、`evaluate()`および
+`evaluate_samples()`が使う任意のoutput objectiveを区別するようになりました。
+Backendに合わせてactiveなsenseとfunctionだけを変換する場合は
+`convert_active_objective(target)`を使います。このmethodは、activeなpairを変換する前に
+現在の出力意味論を保持します。
 
 ```python
 from ommx import DecisionVariable, Instance, Sense
@@ -32,25 +28,59 @@ instance = Instance.from_components(
     constraints={},
 )
 
-assert instance.as_minimization_problem()
+assert instance.convert_active_objective(Sense.Minimize)
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == -1.0
 
 solution = instance.evaluate(state)
 sample_set = instance.evaluate_samples({0: state})
 
-print("active:", (instance.sense, instance.objective.evaluate(state)))
-print("evaluate:", (solution.sense, solution.objective))
-print("evaluate_samples:", (sample_set.sense, sample_set.objectives))
+assert solution.sense == Sense.Maximize
+assert solution.objective == 1.0
+assert sample_set.sense == Sense.Maximize
+assert sample_set.objectives[0] == 1.0
 ```
 
-同じコードから得られる値は次のように変わります。
+このときactive formulationは`Minimize / -f`ですが、得られる`Solution`と
+`SampleSet`は入力時の`Maximize / f`という意味論を保持します。
+`ObjectivePreparation(target=...)`は、同じ操作を`PreparationPolicy.objective` phaseとして
+公開します。固定およびparameterized penalty methodも既存の出力意味論を保持し、それが
+なければpenalty変換前のactive objectiveを出力用に保存します。また、penaltyを加えた
+active formulationのoptimalityだけでは、そのoutput objectiveのoptimalityを証明できない
+ことも記録します。
 
-| 出力 | #1167より前 | 現在 |
-| --- | --- | --- |
-| `active` | `(Sense.Minimize, -1.0)` | `(Sense.Minimize, -1.0)` |
-| `evaluate` | `(Sense.Minimize, -1.0)` | `(Sense.Maximize, 1.0)` |
-| `evaluate_samples` | `(Sense.Minimize, {0: -1.0})` | `(Sense.Maximize, {0: 1.0})` |
+既存の`as_minimization_problem()`と`as_maximization_problem()`は、引き続き数理問題全体の
+変換です。active側とoutput側の意味論をともに変換し、output objectiveがない場合に新設は
+しません。
 
-現在は両methodが`output_objective`を使い、変換前の`Maximize / f`の意味論を返します。
+Penalty methodは、`Instance.objective`にはactiveなpenalty objectiveを保持したまま、
+penalty前のobjectiveをevaluationの出力として返すようになりました。これはPython SDK v2
+から観測可能な変更です。
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+source = Instance.from_components(
+    sense=Sense.Minimize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+parametric = source.uniform_penalty_method()
+weight = parametric.parameters[0]
+penalized = parametric.with_parameters({weight.id: 2.0})
+
+state = {0: 0.0}
+assert penalized.objective.evaluate(state) == 2.0
+assert penalized.evaluate(state).objective == 0.0
+```
+
+`to_qubo()`と`to_hubo()`はdeprecatedになり、明示的な`prepare(...)`の後に
+`as_qubo_format()`または`as_hubo_format()`を呼ぶworkflowへ移行します。Deprecated期間中は
+Python SDK v2のin-place mutationを維持し、変換後にはevaluationの出力をactiveなpenalty
+objectiveへrebaseします。すでに異なるoutput semanticsを持つ入力には対応するv2状態が
+ないため、これらのdeprecated methodはその入力を拒否します。
 
 Partial evaluation、substitution、binary power reductionのように、復元した各state上で
 active objectiveの値を保つ書き換えは、このoutput objectiveを新設も書き換えもしません。
@@ -58,8 +88,9 @@ Removed constraintと同様に、その参照IDはsolver-used setに追加され
 Fixed・irrelevant・dependentの各値を含む完全なstateを補完した後にだけ評価されます。
 
 `ParametricInstance`も同じoutput semanticsを保持し、`with_parameters()`でparameter
-参照を具体化します。このため、変換後も`Instance.as_parametric_instance()`は情報を
-失わずに変換できます。
+参照を具体化します。このため、active objectiveのPreparation後も
+`Instance.as_parametric_instance()`は情報を失わずに変換できます。異なるoutput semanticsを
+持つinstanceは、v1にこの情報を表すfieldがないため、v2でserializeする必要があります。
 
 ### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 

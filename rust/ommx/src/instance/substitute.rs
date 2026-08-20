@@ -400,7 +400,7 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        assert!(instance.as_minimization_problem());
+        assert!(instance.convert_active_objective(Sense::Minimize));
         let output = instance.output_objective().cloned().unwrap();
 
         let result = instance
@@ -518,13 +518,14 @@ mod tests {
             (VariableID::from(1), DecisionVariable::continuous()),
         ]);
         let constraint = Constraint::equal_to_zero(Function::from(linear!(0) + coeff!(-1.0)));
-        let instance = Instance::new(
+        let mut instance = Instance::new(
             Sense::Minimize,
             Function::from(linear!(0)),
             decision_variables,
             BTreeMap::from([(ConstraintID::from(0), constraint)]),
         )
         .unwrap();
+        assert!(instance.convert_active_objective(Sense::Maximize));
         let parametric = instance.penalty_method().unwrap();
         let output = parametric.output_objective().cloned().unwrap();
 

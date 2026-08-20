@@ -11,6 +11,7 @@ from ommx import (
     Instance,
     InstanceClassMismatch,
     Kind,
+    ObjectivePreparation,
     OneHotConstraint,
     PreparationTargetNotReachedError,
     Sense,
@@ -219,6 +220,7 @@ def test_recommended_policy_keeps_fixed_penalty_caller_owned() -> None:
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
 
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
+    assert policy.objective == ObjectivePreparation(target=Sense.Minimize)
     assert policy.fixed_penalty is None
     with pytest.raises(PreparationTargetNotReachedError):
         instance.prepare(input_class, policy)

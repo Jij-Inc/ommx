@@ -163,7 +163,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(instance.as_maximization_problem());
+        assert!(instance.convert_active_objective(Sense::Maximize));
         let output = instance.output_objective().cloned().unwrap();
         assert!(instance.reduce_binary_power().unwrap());
         assert!(instance.objective().required_ids().is_empty());

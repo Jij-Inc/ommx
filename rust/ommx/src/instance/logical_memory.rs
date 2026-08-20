@@ -693,7 +693,7 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        assert!(instance.as_minimization_problem());
+        assert!(instance.convert_active_objective(crate::Sense::Minimize));
 
         let profile = instance.logical_memory_profile();
         assert!(profile.entries().any(|(path, _)| path

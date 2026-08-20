@@ -5,39 +5,76 @@ use crate::{
 };
 use std::{collections::BTreeMap, ops::Neg};
 
+fn convert_objective_pair(sense: &mut Sense, objective: &mut Function, target: Sense) -> bool {
+    if *sense == target {
+        false
+    } else {
+        *sense = target;
+        *objective = std::mem::take(objective).neg();
+        true
+    }
+}
+
 impl Instance {
-    /// Convert the instance to a minimization problem.
+    /// Convert only the active, solver-facing objective to `target`.
     ///
-    /// If the instance is already a minimization problem, this does nothing.
-    /// Otherwise, it negates the objective function and changes the sense to minimize.
+    /// The objective semantics exposed by [`Self::evaluate`] and
+    /// [`Self::evaluate_samples`] remain unchanged. When no separate output
+    /// objective exists yet, the current active pair is captured before the
+    /// conversion. If the converted active pair becomes identical to an
+    /// existing output pair whose optimality transport is preserved, that
+    /// redundant output pair is removed.
     ///
-    /// Returns `true` if the instance was converted, `false` if it was already a minimization problem.
-    pub fn as_minimization_problem(&mut self) -> bool {
-        if self.sense == Sense::Minimize {
+    /// Returns `true` if the active objective pair was converted, or `false`
+    /// if its sense was already `target`.
+    pub fn convert_active_objective(&mut self, target: Sense) -> bool {
+        let converted = if self.sense == target {
             false
         } else {
             self.capture_output_objective();
-            self.sense = Sense::Minimize;
-            self.objective = std::mem::take(&mut self.objective).neg();
-            true
-        }
+            convert_objective_pair(&mut self.sense, &mut self.objective, target)
+        };
+        self.canonicalize_output_objective();
+        converted
     }
 
-    /// Convert the instance to a maximization problem.
+    /// Convert the complete instance objective semantics to minimization.
     ///
-    /// If the instance is already a maximization problem, this does nothing.
-    /// Otherwise, it negates the objective function and changes the sense to maximize.
+    /// Both the active solver-facing objective and any separate output
+    /// objective are normalized to minimization. As a result,
+    /// [`Self::evaluate`] and [`Self::evaluate_samples`] also expose a
+    /// minimization objective. The output objective's optimality-transport flag
+    /// is preserved.
     ///
-    /// Returns `true` if the instance was converted, `false` if it was already a maximization problem.
+    /// Returns `true` if either the active or output objective pair was
+    /// converted, or `false` if both already used minimization.
+    pub fn as_minimization_problem(&mut self) -> bool {
+        self.convert_problem_objective(Sense::Minimize)
+    }
+
+    /// Convert the complete instance objective semantics to maximization.
+    ///
+    /// Both the active solver-facing objective and any separate output
+    /// objective are normalized to maximization. As a result,
+    /// [`Self::evaluate`] and [`Self::evaluate_samples`] also expose a
+    /// maximization objective. The output objective's optimality-transport flag
+    /// is preserved.
+    ///
+    /// Returns `true` if either the active or output objective pair was
+    /// converted, or `false` if both already used maximization.
     pub fn as_maximization_problem(&mut self) -> bool {
-        if self.sense == Sense::Maximize {
-            false
+        self.convert_problem_objective(Sense::Maximize)
+    }
+
+    fn convert_problem_objective(&mut self, target: Sense) -> bool {
+        let active_converted = convert_objective_pair(&mut self.sense, &mut self.objective, target);
+        let output_converted = if let Some(output) = &mut self.output_objective {
+            convert_objective_pair(&mut output.sense, &mut output.function, target)
         } else {
-            self.capture_output_objective();
-            self.sense = Sense::Maximize;
-            self.objective = std::mem::take(&mut self.objective).neg();
-            true
-        }
+            false
+        };
+        self.canonicalize_output_objective();
+        active_converted || output_converted
     }
 }
 
@@ -177,7 +214,7 @@ impl ParametricInstance {
         let mut decision_variable_dependency = self.decision_variable_dependency;
         decision_variable_dependency.partial_evaluate(&state, atol)?;
 
-        Ok(Instance {
+        let mut instance = Instance {
             sense: self.sense,
             objective,
             output_objective,
@@ -196,7 +233,9 @@ impl ParametricInstance {
             parameters: Some(parameters),
             description: self.description,
             annotations: self.annotations,
-        })
+        };
+        instance.canonicalize_output_objective();
+        Ok(instance)
     }
 }
 
@@ -219,52 +258,135 @@ mod output_objective_tests {
             .unwrap()
     }
 
-    #[test]
-    fn sense_conversion_installs_and_preserves_output_pair_for_evaluation() {
-        let mut instance = maximizing_binary_instance();
-        let original_objective = instance.objective().clone();
-
-        assert!(instance.as_minimization_problem());
-        let output = instance.output_objective().unwrap();
-        assert_eq!(output.sense(), Sense::Maximize);
-        assert_eq!(output.function(), &original_objective);
-        assert!(output.preserves_optimality());
-        assert_eq!(instance.sense(), Sense::Minimize);
-        assert_eq!(instance.objective(), &original_objective.clone().neg());
-
-        // A later transformation only changes the active formulation. The
-        // existing pair remains the stable user-facing objective semantics.
-        assert!(instance.as_maximization_problem());
-        let output = instance.output_objective().unwrap();
-        assert_eq!(output.sense(), Sense::Maximize);
-        assert_eq!(output.function(), &original_objective);
-        assert!(output.preserves_optimality());
-
+    fn assert_evaluation(instance: &Instance, sense: Sense, objective: f64) {
         let state = State::from(HashMap::from([(1, 1.0)]));
         let solution = instance.evaluate(&state, ATol::default()).unwrap();
-        assert_eq!(*solution.sense(), Some(Sense::Maximize));
-        assert_eq!(*solution.objective(), 1.0);
+        assert_eq!(*solution.sense(), Some(sense));
+        assert_eq!(*solution.objective(), objective);
 
         let sample_set = instance
             .evaluate_samples(&Sampled::from(state), ATol::default())
             .unwrap();
-        assert_eq!(*sample_set.sense(), Sense::Maximize);
+        assert_eq!(*sample_set.sense(), sense);
         let sample_id = sample_set.sample_ids().into_iter().next().unwrap();
-        assert_eq!(sample_set.objectives().get(sample_id), Some(&1.0));
+        assert_eq!(sample_set.objectives().get(sample_id), Some(&objective));
     }
 
     #[test]
-    fn no_op_sense_conversion_does_not_create_output_objective() {
+    fn whole_problem_conversion_without_output_rewrites_evaluation_and_round_trips() {
         let mut instance = maximizing_binary_instance();
+        let original = instance.clone();
+        let original_objective = instance.objective().clone();
+
+        assert!(instance.as_minimization_problem());
+        assert_eq!(instance.sense(), Sense::Minimize);
+        assert_eq!(instance.objective(), &original_objective.clone().neg());
+        assert!(instance.output_objective().is_none());
+        assert_evaluation(&instance, Sense::Minimize, -1.0);
+        let restored = Instance::from_v1_bytes(&instance.to_v1_bytes().unwrap()).unwrap();
+        assert_evaluation(&restored, Sense::Minimize, -1.0);
+
+        assert!(instance.as_maximization_problem());
+        assert_eq!(instance, original);
+        assert_evaluation(&instance, Sense::Maximize, 1.0);
 
         assert!(!instance.as_maximization_problem());
         assert!(instance.output_objective().is_none());
     }
 
     #[test]
+    fn active_objective_conversion_preserves_evaluation_and_round_trips() {
+        let mut instance = maximizing_binary_instance();
+        let original = instance.clone();
+        let original_objective = instance.objective().clone();
+
+        assert!(instance.convert_active_objective(Sense::Minimize));
+        assert_eq!(instance.sense(), Sense::Minimize);
+        assert_eq!(instance.objective(), &original_objective.clone().neg());
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), &original_objective);
+        assert!(output.preserves_optimality());
+        assert_evaluation(&instance, Sense::Maximize, 1.0);
+
+        assert!(!instance.convert_active_objective(Sense::Minimize));
+        assert!(instance.convert_active_objective(Sense::Maximize));
+        assert_eq!(instance, original);
+        assert_evaluation(&instance, Sense::Maximize, 1.0);
+    }
+
+    #[test]
+    fn whole_problem_conversion_normalizes_existing_preserved_output() {
+        let mut instance = maximizing_binary_instance();
+        let original = instance.clone();
+
+        assert!(instance.convert_active_objective(Sense::Minimize));
+        assert_eq!(instance.sense(), Sense::Minimize);
+        assert_eq!(
+            instance.output_objective().unwrap().sense(),
+            Sense::Maximize
+        );
+
+        // The active pair is already minimization, but the effective output
+        // pair still changes, so this reports a conversion and collapses the
+        // now-redundant preserved output.
+        assert!(instance.as_minimization_problem());
+        assert!(instance.output_objective().is_none());
+        assert_evaluation(&instance, Sense::Minimize, -1.0);
+
+        assert!(instance.as_maximization_problem());
+        assert_eq!(instance, original);
+        assert_evaluation(&instance, Sense::Maximize, 1.0);
+
+        // A redundant true sidecar is canonicalized even when neither pair
+        // requires conversion.
+        instance.output_objective = Some(OutputObjective::new(
+            instance.sense,
+            instance.objective.clone(),
+            true,
+        ));
+        assert!(!instance.as_maximization_problem());
+        assert!(instance.output_objective().is_none());
+    }
+
+    #[test]
+    fn conversions_preserve_false_optimality_transport() {
+        let mut instance = maximizing_binary_instance();
+        let original_objective = instance.objective().clone();
+        instance.output_objective = Some(OutputObjective::new(
+            Sense::Maximize,
+            original_objective.clone(),
+            false,
+        ));
+
+        assert!(instance.convert_active_objective(Sense::Minimize));
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), &original_objective);
+        assert!(!output.preserves_optimality());
+        assert_evaluation(&instance, Sense::Maximize, 1.0);
+
+        // Only the output pair still needs normalization. Its false flag must
+        // keep the sidecar present even when both pairs become identical.
+        assert!(instance.as_minimization_problem());
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Minimize);
+        assert_eq!(output.function(), instance.objective());
+        assert!(!output.preserves_optimality());
+        assert_evaluation(&instance, Sense::Minimize, -1.0);
+
+        assert!(instance.as_maximization_problem());
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), instance.objective());
+        assert!(!output.preserves_optimality());
+        assert_evaluation(&instance, Sense::Maximize, 1.0);
+    }
+
+    #[test]
     fn conversion_to_parametric_preserves_output_objective() {
         let mut instance = maximizing_binary_instance();
-        assert!(instance.as_minimization_problem());
+        assert!(instance.convert_active_objective(Sense::Minimize));
         let original_output = instance.output_objective().cloned().unwrap();
 
         let parametric = ParametricInstance::from(instance);
@@ -317,6 +439,32 @@ mod output_objective_tests {
             .unwrap();
         assert_eq!(*solution.sense(), Some(Sense::Maximize));
         assert_eq!(*solution.objective(), 5.0);
+    }
+
+    #[test]
+    fn with_parameters_canonicalizes_redundant_output_objective() {
+        let mut parametric = ParametricInstance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            BTreeMap::from([(VariableID::from(1), DecisionVariable::continuous())]),
+            ParameterTable::from_ids([VariableID::from(100)].into_iter().collect()),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        parametric.output_objective = Some(OutputObjective::new(
+            Sense::Minimize,
+            Function::from((linear!(1) + linear!(100)).unwrap()),
+            true,
+        ));
+
+        let materialized = parametric
+            .with_parameters(crate::v1::Parameters {
+                entries: HashMap::from([(100, 0.0)]),
+            })
+            .unwrap();
+
+        assert!(materialized.output_objective().is_none());
+        assert!(materialized.to_v1_bytes().is_ok());
     }
 }
 

@@ -38,7 +38,8 @@ pub use builder::*;
 pub use parametric_builder::*;
 pub use preparation::{
     FixedPenaltyPreparation, IntegerEncodingPreparation, IntegerSlackPreparation,
-    PreparationPolicy, PreparationTargetNotReached, SensePreparation, SpecialConstraintPreparation,
+    ObjectivePreparation, PreparationPolicy, PreparationTargetNotReached,
+    SpecialConstraintPreparation,
 };
 pub use stats::*;
 
@@ -116,18 +117,18 @@ pub enum Sense {
 
 /// Objective semantics used when evaluating solver output.
 ///
-/// This value is installed when the solver-facing active objective or sense
-/// cannot itself be presented as the output semantics, or when
-/// active-formulation optimality no longer proves optimality for those output
-/// semantics. Sense reversal and penalty conversion are representative cases;
-/// a penalty conversion may install an equal sense/function pair solely to
-/// record the loss of optimality transport. State-reconstructible rewrites such
-/// as partial evaluation, substitution, and binary-power reduction do not
-/// create it because the rewritten objective has the same value on each
-/// reconstructed state. Like removed constraints, an existing output objective
-/// is skipped by those rewrites and evaluated only after the full
-/// decision-variable state, including fixed, irrelevant, and dependent values,
-/// has been populated.
+/// This value is installed when a solver-facing rewrite separates the active
+/// objective from the output semantics, or when active-formulation optimality
+/// no longer proves optimality for those output semantics.
+/// [`Instance::convert_active_objective`] and the penalty methods are
+/// representative cases; a zero-weight penalty conversion may install an
+/// equal sense/function pair solely to record the loss of optimality transport.
+/// State-reconstructible rewrites such as partial evaluation, substitution,
+/// and binary-power reduction do not create it because the rewritten objective
+/// has the same value on each reconstructed state. Like removed constraints, an
+/// existing output objective is skipped by those rewrites and evaluated only
+/// after the full decision-variable state, including fixed, irrelevant, and
+/// dependent values, has been populated.
 ///
 /// [`ParametricInstance::with_parameters`] specializes parameter references
 /// and carries this value to the resulting [`Instance`].
@@ -373,6 +374,19 @@ impl Instance {
                 self.objective.clone(),
                 true,
             ));
+        }
+    }
+
+    /// Remove an output sidecar when its complete semantics are already
+    /// represented by the active objective pair.
+    fn canonicalize_output_objective(&mut self) {
+        let is_redundant = self.output_objective.as_ref().is_some_and(|output| {
+            output.preserves_optimality
+                && output.sense == self.sense
+                && output.function == self.objective
+        });
+        if is_redundant {
+            self.output_objective = None;
         }
     }
 
@@ -853,6 +867,19 @@ impl ParametricInstance {
     /// the output semantics directly.
     pub fn output_objective(&self) -> Option<&OutputObjective> {
         self.output_objective.as_ref()
+    }
+
+    /// Remove an output sidecar when its complete semantics are already
+    /// represented by the active objective pair.
+    fn canonicalize_output_objective(&mut self) {
+        let is_redundant = self.output_objective.as_ref().is_some_and(|output| {
+            output.preserves_optimality
+                && output.sense == self.sense
+                && output.function == self.objective
+        });
+        if is_redundant {
+            self.output_objective = None;
+        }
     }
 
     /// Access the decision-variable definition table.

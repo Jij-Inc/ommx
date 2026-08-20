@@ -8749,7 +8749,7 @@
             },
             {
               "name": "as_maximization_problem",
-              "doc": "Convert the instance to a maximization problem.\n\nIf the instance is already a maximization problem, this does nothing.\n\n**Returns:**\n``True`` if the instance is converted, ``False`` if already a maximization problem.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.sense == Instance.MINIMIZE\nTrue\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nConvert to a maximization problem\n\n```python\n>>> instance.as_maximization_problem()\nTrue\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n>>> instance.objective\nFunction(-x0 - x1 - x2)\n```\n\nIf the instance is already a maximization problem, this does nothing\n\n```python\n>>> instance.as_maximization_problem()\nFalse\n```",
+              "doc": "Convert the instance to a maximization problem.\n\nIf both the active objective and the output objective already use\nmaximization, this does nothing.\n\n**Returns:**\n``True`` if either objective is converted, ``False`` if both already\nuse maximization.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.sense == Instance.MINIMIZE\nTrue\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nConvert to a maximization problem\n\n```python\n>>> instance.as_maximization_problem()\nTrue\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n>>> instance.objective\nFunction(-x0 - x1 - x2)\n```\n\nIf the instance is already a maximization problem, this does nothing\n\n```python\n>>> instance.as_maximization_problem()\nFalse\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -8765,7 +8765,7 @@
             },
             {
               "name": "as_minimization_problem",
-              "doc": "Convert the instance to a minimization problem.\n\nIf the instance is already a minimization problem, this does nothing.\n\n**Returns:**\n``True`` if the instance is converted, ``False`` if already a minimization problem.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nConvert to a minimization problem\n\n```python\n>>> instance.as_minimization_problem()\nTrue\n>>> instance.sense == Instance.MINIMIZE\nTrue\n>>> instance.objective\nFunction(-x0 - x1 - x2)\n```\n\nIf the instance is already a minimization problem, this does nothing\n\n```python\n>>> instance.as_minimization_problem()\nFalse\n```",
+              "doc": "Convert the instance to a minimization problem.\n\nIf both the active objective and the output objective already use\nminimization, this does nothing.\n\n**Returns:**\n``True`` if either objective is converted, ``False`` if both already\nuse minimization.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nConvert to a minimization problem\n\n```python\n>>> instance.as_minimization_problem()\nTrue\n>>> instance.sense == Instance.MINIMIZE\nTrue\n>>> instance.objective\nFunction(-x0 - x1 - x2)\n```\n\nIf the instance is already a minimization problem, this does nothing\n\n```python\n>>> instance.as_minimization_problem()\nFalse\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -9126,6 +9126,32 @@
                   ],
                   "return_type": {
                     "display": "DataFrame",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "convert_active_objective",
+              "doc": "Convert only the active objective used by a solver-facing formulation.\n\nThis changes {attr}`~ommx.Instance.sense` and\n{attr}`~ommx.Instance.objective` to ``target`` while preserving the\nobjective semantics returned by {meth}`~ommx.Instance.evaluate` and\n{meth}`~ommx.Instance.evaluate_samples`. Use\n{meth}`~ommx.Instance.as_minimization_problem` or\n{meth}`~ommx.Instance.as_maximization_problem` when the output objective\nshould be converted as part of the mathematical problem itself.\n\n**Returns:**\n``True`` if the active objective is converted, ``False`` if it already\nhas ``target``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "target",
+                      "type_": {
+                        "display": "Sense",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
                     "link_target": null,
                     "children": []
                   }
@@ -10654,7 +10680,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\nSelected phases are applied at most once in this order, stopping as soon\nas membership is reached:\n\n1. ``special_constraints``:\n   {meth}`~ommx.Instance.lower_special_constraints`\n2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`\n3. ``integer_slack``:\n   {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,\n   followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only\n   when exact conversion is unavailable and ``slack_upper_bound`` is set\n4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`\n5. ``fixed_penalty``\n\nSuccess guarantees membership only, not Adapter applicability. This\noperation is not transactional, so an error may leave the instance changed.\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final membership\nreport when the selections do not reach ``input_class``.",
+              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\nSelected phases are applied at most once in this order, stopping as soon\nas membership is reached:\n\n1. ``special_constraints``:\n   {meth}`~ommx.Instance.lower_special_constraints`\n2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`\n3. ``integer_slack``:\n   {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,\n   followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only\n   when exact conversion is unavailable and ``slack_upper_bound`` is set\n4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`\n5. ``fixed_penalty``\n\nSuccess guarantees membership only, not Adapter applicability. This\noperation is not transactional, so an error may leave the instance changed.\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final membership\nreport when the selections do not reach ``input_class``.",
               "signatures": [
                 {
                   "parameters": [
@@ -11104,7 +11130,7 @@
             },
             {
               "name": "to_hubo",
-              "doc": "Convert the instance to a HUBO format.\n\nThis is a **Driver API** for HUBO conversion calling single-purpose methods in order:\n\n1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to HUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.\n\nPlease see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the\ndocumentation for each individual method for additional details. The\ndifference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't\nrestricted to quadratic or linear problems. If you want to customize the\nconversion, use the individual methods above manually.",
+              "doc": "Convert the instance to a HUBO format.\n\n.. deprecated:: 3.0\n   Use {meth}`~ommx.Instance.prepare` followed by\n   {meth}`~ommx.Instance.as_hubo_format` instead.\n\nThis is a **Driver API** for HUBO conversion calling single-purpose methods in order:\n\n1. Convert the complete objective semantics to minimization.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to HUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.\n\nPlease see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the\ndocumentation for each individual method for additional details. The\ndifference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't\nrestricted to quadratic or linear problems. If you want to customize the\nconversion, use the individual methods above manually.",
               "signatures": [
                 {
                   "parameters": [
@@ -11187,11 +11213,14 @@
                 }
               ],
               "is_async": false,
-              "deprecated": null
+              "deprecated": {
+                "since": null,
+                "note": "Use Instance.prepare(...) followed by Instance.as_hubo_format() instead."
+              }
             },
             {
               "name": "to_qubo",
-              "doc": "Convert the instance to a QUBO format.\n\nThis is a **Driver API** for QUBO conversion calling single-purpose methods in order:\n\n1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to QUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to QUBO format by {meth}`~ommx.Instance.as_qubo_format`.\n\nPlease see the document of each method for details.\nIf you want to customize the conversion, use the methods above manually.\n\n# Examples\n\nLet's consider a maximization problem with two integer variables $x_0, x_1 \\in [0, 2]$ subject to an inequality:\n\n$$\\max \\; x_0 + x_1 \\quad \\text{s.t.} \\quad x_0 + 2 x_1 \\leq 3$$\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.integer(i, lower=0, upper=2, name=\"x\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nConvert into QUBO format\n\n```python\n>>> qubo, offset = instance.to_qubo()\n>>> qubo\n{(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}\n>>> offset\n9.0\n```\n\nFor the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.\n\n```python\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n```",
+              "doc": "Convert the instance to a QUBO format.\n\n.. deprecated:: 3.0\n   Use {meth}`~ommx.Instance.prepare` followed by\n   {meth}`~ommx.Instance.as_qubo_format` instead.\n\nThis is a **Driver API** for QUBO conversion calling single-purpose methods in order:\n\n1. Convert the complete objective semantics to minimization.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to QUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to QUBO format by {meth}`~ommx.Instance.as_qubo_format`.\n\nPlease see the document of each method for details.\nIf you want to customize the conversion, use the methods above manually.\n\n# Examples\n\nLet's consider a maximization problem with two integer variables $x_0, x_1 \\in [0, 2]$ subject to an inequality:\n\n$$\\max \\; x_0 + x_1 \\quad \\text{s.t.} \\quad x_0 + 2 x_1 \\leq 3$$\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.integer(i, lower=0, upper=2, name=\"x\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nConvert into QUBO format\n\n```python\n>>> qubo, offset = instance.to_qubo()\n>>> qubo\n{(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}\n>>> offset\n9.0\n```\n\nFor the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.\n\n```python\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -11274,7 +11303,10 @@
                 }
               ],
               "is_async": false,
-              "deprecated": null
+              "deprecated": {
+                "since": null,
+                "note": "Use Instance.prepare(...) followed by Instance.as_qubo_format() instead."
+              }
             },
             {
               "name": "to_v1_bytes",
@@ -14861,6 +14893,80 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ObjectivePreparation",
+          "doc": "Convert the active objective to ``target`` during Preparation.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "target",
+                      "type_": {
+                        "display": "Sense",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ObjectivePreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "target",
+              "doc": "",
+              "type_": {
+                "display": "Sense",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -19343,13 +19449,13 @@
                       }
                     },
                     {
-                      "name": "sense",
+                      "name": "objective",
                       "type_": {
-                        "display": "Optional[SensePreparation]",
+                        "display": "Optional[ObjectivePreparation]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "SensePreparation",
+                            "display": "ObjectivePreparation",
                             "link_target": null,
                             "children": []
                           }
@@ -19476,14 +19582,14 @@
               "is_property": true
             },
             {
-              "name": "sense",
+              "name": "objective",
               "doc": "",
               "type_": {
-                "display": "Optional[SensePreparation]",
+                "display": "Optional[ObjectivePreparation]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "SensePreparation",
+                    "display": "ObjectivePreparation",
                     "link_target": null,
                     "children": []
                   }
@@ -23870,58 +23976,6 @@
               "type_": null
             }
           ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
-          "name": "SensePreparation",
-          "doc": "",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "as_minimization_problem",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "SensePreparation",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [],
           "deprecated": null
         },
         {
@@ -33698,6 +33752,7 @@
     "ommx.Linear": "ommx",
     "ommx.LogEncodingError": "ommx",
     "ommx.NamedFunction": "ommx",
+    "ommx.ObjectivePreparation": "ommx",
     "ommx.OneHotConstraint": "ommx",
     "ommx.Optimality": "ommx",
     "ommx.Parameter": "ommx",
@@ -33720,7 +33775,6 @@
     "ommx.SampledNamedFunction": "ommx",
     "ommx.Samples": "ommx",
     "ommx.Sense": "ommx",
-    "ommx.SensePreparation": "ommx",
     "ommx.Solution": "ommx",
     "ommx.Sos1Constraint": "ommx",
     "ommx.SpecialConstraintKind": "ommx",

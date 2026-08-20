@@ -243,7 +243,7 @@ mod tests {
             .constraints(BTreeMap::new())
             .build()
             .unwrap();
-        assert!(instance.as_minimization_problem());
+        assert!(instance.convert_active_objective(Sense::Minimize));
         instance
     }
 
@@ -396,6 +396,26 @@ mod tests {
     }
 
     #[test]
+    fn v2_instance_parse_canonicalizes_redundant_output_objective() {
+        let instance = Instance::default();
+        let mut proto = v2::Instance::from(instance.clone());
+        proto
+            .required_features
+            .push(v2::Feature::OutputObjective as i32);
+        proto.output_objective = Some(v2::OutputObjective {
+            sense: proto.sense,
+            function: proto.objective.clone(),
+            preserves_optimality: true,
+        });
+
+        let restored = Instance::try_from(proto).unwrap();
+
+        assert_eq!(restored, instance);
+        assert!(restored.output_objective().is_none());
+        assert!(restored.to_v1_bytes().is_ok());
+    }
+
+    #[test]
     fn v2_instance_output_objective_requires_feature() {
         let mut proto = v2::Instance::from(instance_with_output_objective());
         proto.required_features.clear();
@@ -465,6 +485,26 @@ mod tests {
 
         let restored = ParametricInstance::try_from(proto).unwrap();
         assert_eq!(restored, instance);
+    }
+
+    #[test]
+    fn v2_parametric_parse_canonicalizes_redundant_output_objective() {
+        let instance = ParametricInstance::default();
+        let mut proto = v2::ParametricInstance::from(instance.clone());
+        proto
+            .required_features
+            .push(v2::Feature::OutputObjective as i32);
+        proto.output_objective = Some(v2::OutputObjective {
+            sense: proto.sense,
+            function: proto.objective.clone(),
+            preserves_optimality: true,
+        });
+
+        let restored = ParametricInstance::try_from(proto).unwrap();
+
+        assert_eq!(restored, instance);
+        assert!(restored.output_objective().is_none());
+        assert!(restored.to_v1_bytes().is_ok());
     }
 
     #[test]

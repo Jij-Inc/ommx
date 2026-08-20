@@ -200,6 +200,61 @@ p = Parameter(3, name="w")
 pi.with_parameters({p.id: 1.0})
 ```
 
+`to_qubo()`と`to_hubo()`はdeprecatedです。これらのdriver methodは、in-placeなmodel
+PreparationとQUBO/HUBO値の抽出を一つのAPIに混在させていました。明示的なtarget classと
+`PreparationPolicy`を使い、その後にpreparation-freeなformat extractorを呼びます。
+
+```python
+from ommx import (
+    DecisionVariable,
+    DegreeBound,
+    FixedPenaltyPreparation,
+    Instance,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    ObjectivePreparation,
+    PreparationPolicy,
+    Sense,
+)
+
+x = DecisionVariable.binary(0)
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+
+qubo_class = InstanceClass(
+    [
+        InstanceClassClause(
+            label="qubo",
+            allowed_variable_kinds={Kind.Binary},
+            objective_degree_bound=DegreeBound.at_most(2),
+            allowed_senses={Sense.Minimize},
+        )
+    ]
+)
+policy = PreparationPolicy(
+    objective=ObjectivePreparation(target=Sense.Minimize),
+    fixed_penalty=(
+        FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
+            weight=2.0
+        )
+    ),
+)
+
+instance.prepare(qubo_class, policy)
+qubo, offset = instance.as_qubo_format()
+```
+
+Source modelに応じてInteger slack、Integer encoding、特殊制約のphaseも追加します。
+Deprecated期間中の`to_qubo()`と`to_hubo()`は、変更後instanceの`evaluate()`が最終的な
+active penalty objectiveを使うPython SDK v2の挙動を維持します。明示的なPreparation
+workflowでは、代わりにpenalty前のoutput objectiveを保持します。すでに異なるoutput
+semanticsを持つinstanceはdeprecated driverでは受け付けません。
+
 ## 6. return type の変更
 
 `Constraint.name` / `Constraint.description` などは、未設定時に空文字列ではなく `None` を返します。
@@ -245,9 +300,9 @@ v3では呼び出し側がこれらの選択を所有します。Adapterが返�
 `PreparationPolicy` を出発点に、application固有のfieldを編集し、厳格なAdapter APIを
 呼ぶ前に `Instance.prepare()` でin-placeに適用します。
 
-OpenJijの推奨Policyでは、特殊制約lowering、minimizationへのsense正規化、Integer slack、
-使用中Integer変数のlog encodingを有効にします。Integer slackはrange 32でexactな
-equality変換を最初に試し、そのoperationが利用できない場合には、上限32のslackを
+OpenJijの推奨Policyでは、特殊制約lowering、active objectiveのminimizationへの変換、
+Integer slack、使用中Integer変数のlog encodingを有効にします。Integer slackはrange 32で
+exactなequality変換を最初に試し、そのoperationが利用できない場合には、上限32のslackを
 追加してinequalityのまま残すことを許可します。equalityが必須なら、置き換える
 `IntegerSlackPreparation` の `slack_upper_bound=None` を指定します。
 

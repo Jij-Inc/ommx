@@ -1,5 +1,5 @@
 use crate::error::OmmxPyResult;
-use crate::{Instance, InstanceClass, SpecialConstraintKind};
+use crate::{Instance, InstanceClass, Sense, SpecialConstraintKind};
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, HashSet};
 
@@ -46,29 +46,38 @@ impl From<ommx::SpecialConstraintPreparation> for SpecialConstraintPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SensePreparation {
-    inner: ommx::SensePreparation,
+/// Convert the active objective to ``target`` during Preparation.
+pub struct ObjectivePreparation {
+    inner: ommx::ObjectivePreparation,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl SensePreparation {
-    #[staticmethod]
-    pub fn as_minimization_problem() -> Self {
+impl ObjectivePreparation {
+    #[new]
+    #[pyo3(signature = (*, target))]
+    pub fn new(target: Sense) -> Self {
         Self {
-            inner: ommx::SensePreparation::AsMinimizationProblem,
+            inner: ommx::ObjectivePreparation {
+                target: target.into(),
+            },
         }
+    }
+
+    #[getter]
+    pub fn target(&self) -> Sense {
+        self.inner.target.into()
     }
 }
 
-impl From<SensePreparation> for ommx::SensePreparation {
-    fn from(value: SensePreparation) -> Self {
+impl From<ObjectivePreparation> for ommx::ObjectivePreparation {
+    fn from(value: ObjectivePreparation) -> Self {
         value.inner
     }
 }
 
-impl From<ommx::SensePreparation> for SensePreparation {
-    fn from(inner: ommx::SensePreparation) -> Self {
+impl From<ommx::ObjectivePreparation> for ObjectivePreparation {
+    fn from(inner: ommx::ObjectivePreparation) -> Self {
         Self { inner }
     }
 }
@@ -225,17 +234,17 @@ pub struct PreparationPolicy {
 #[pymethods]
 impl PreparationPolicy {
     #[new]
-    #[pyo3(signature = (*, special_constraints=None, sense=None, integer_slack=None, integer_encoding=None, fixed_penalty=None))]
+    #[pyo3(signature = (*, special_constraints=None, objective=None, integer_slack=None, integer_encoding=None, fixed_penalty=None))]
     pub fn new(
         special_constraints: Option<SpecialConstraintPreparation>,
-        sense: Option<SensePreparation>,
+        objective: Option<ObjectivePreparation>,
         integer_slack: Option<IntegerSlackPreparation>,
         integer_encoding: Option<IntegerEncodingPreparation>,
         fixed_penalty: Option<FixedPenaltyPreparation>,
     ) -> Self {
         let mut inner = ommx::PreparationPolicy::default();
         inner.special_constraints = special_constraints.map(Into::into);
-        inner.sense = sense.map(Into::into);
+        inner.objective = objective.map(Into::into);
         inner.integer_slack = integer_slack.map(Into::into);
         inner.integer_encoding = integer_encoding.map(Into::into);
         inner.fixed_penalty = fixed_penalty.map(Into::into);
@@ -253,13 +262,13 @@ impl PreparationPolicy {
     }
 
     #[getter]
-    pub fn sense(&self) -> Option<SensePreparation> {
-        self.inner.sense.map(Into::into)
+    pub fn objective(&self) -> Option<ObjectivePreparation> {
+        self.inner.objective.map(Into::into)
     }
 
     #[setter]
-    pub fn set_sense(&mut self, value: Option<SensePreparation>) {
-        self.inner.sense = value.map(Into::into);
+    pub fn set_objective(&mut self, value: Option<ObjectivePreparation>) {
+        self.inner.objective = value.map(Into::into);
     }
 
     #[getter]
@@ -304,7 +313,7 @@ impl Instance {
     ///
     /// 1. ``special_constraints``:
     ///    {meth}`~ommx.Instance.lower_special_constraints`
-    /// 2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`
+    /// 2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`
     /// 3. ``integer_slack``:
     ///    {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
     ///    followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only

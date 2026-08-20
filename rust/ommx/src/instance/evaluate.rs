@@ -1271,7 +1271,7 @@ mod tests {
     #[test]
     fn partial_evaluate_preserves_existing_output_objective() {
         let mut instance = regular_plan_instance();
-        assert!(instance.as_maximization_problem());
+        assert!(instance.convert_active_objective(Sense::Maximize));
         let output = instance.output_objective().cloned().unwrap();
 
         instance
@@ -1401,7 +1401,7 @@ mod tests {
         );
 
         let mut with_output = instance.clone();
-        assert!(with_output.as_maximization_problem());
+        assert!(with_output.convert_active_objective(Sense::Maximize));
         let output = with_output.output_objective().cloned().unwrap();
 
         let mut borrowed = instance.clone();

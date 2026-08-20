@@ -8,18 +8,13 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### Preserve output objective semantics across Instance transformations ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+### Preserve output objective semantics during solver preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
-Transformations that make an `Instance`'s solver-facing objective or sense
-unsuitable for direct result presentation, or invalidate transport of an
-active-formulation optimality proof, now preserve a separate output objective
-used by `evaluate()` and `evaluate_samples()`. Results therefore retain the
-input model's objective values and sense while the active formulation remains
-available to solvers. A penalty conversion may preserve an equal objective pair
-solely to record that optimality no longer transports.
-
-The following unchanged caller code now produces different evaluation results
-while leaving the active formulation unchanged:
+`Instance` now distinguishes its active objective, which is presented to a
+solver, from an optional output objective used by `evaluate()` and
+`evaluate_samples()`. Use `convert_active_objective(target)` when adapting only
+the active sense and function for a backend. The method preserves the current
+output semantics before changing the active pair:
 
 ```python
 from ommx import DecisionVariable, Instance, Sense
@@ -33,26 +28,60 @@ instance = Instance.from_components(
     constraints={},
 )
 
-assert instance.as_minimization_problem()
+assert instance.convert_active_objective(Sense.Minimize)
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == -1.0
 
 solution = instance.evaluate(state)
 sample_set = instance.evaluate_samples({0: state})
 
-print("active:", (instance.sense, instance.objective.evaluate(state)))
-print("evaluate:", (solution.sense, solution.objective))
-print("evaluate_samples:", (sample_set.sense, sample_set.objectives))
+assert solution.sense == Sense.Maximize
+assert solution.objective == 1.0
+assert sample_set.sense == Sense.Maximize
+assert sample_set.objectives[0] == 1.0
 ```
 
-The same code produces these values:
+The active formulation is therefore `Minimize / -f`, while the resulting
+`Solution` and `SampleSet` retain the source `Maximize / f` meaning.
+`ObjectivePreparation(target=...)` exposes the same operation as the
+`PreparationPolicy.objective` phase. Fixed and parameterized penalty methods
+likewise preserve the existing output meaning (or capture the pre-penalty
+active objective when none exists), and record that optimality of the penalized
+active formulation does not prove optimality for that output objective.
 
-| Output | Before #1167 | Current |
-| --- | --- | --- |
-| `active` | `(Sense.Minimize, -1.0)` | `(Sense.Minimize, -1.0)` |
-| `evaluate` | `(Sense.Minimize, -1.0)` | `(Sense.Maximize, 1.0)` |
-| `evaluate_samples` | `(Sense.Minimize, {0: -1.0})` | `(Sense.Maximize, {0: 1.0})` |
+The existing `as_minimization_problem()` and `as_maximization_problem()`
+methods remain whole-problem conversions: they convert both active and output
+semantics and do not create an output objective when one is absent.
 
-Both evaluation methods now use `output_objective` to return the source
-`Maximize / f` semantics.
+Penalty methods now keep the pre-penalty objective as the evaluated output,
+while `Instance.objective` remains the active penalized function. This is an
+observable change from Python SDK v2:
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+source = Instance.from_components(
+    sense=Sense.Minimize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+parametric = source.uniform_penalty_method()
+weight = parametric.parameters[0]
+penalized = parametric.with_parameters({weight.id: 2.0})
+
+state = {0: 0.0}
+assert penalized.objective.evaluate(state) == 2.0
+assert penalized.evaluate(state).objective == 0.0
+```
+
+`to_qubo()` and `to_hubo()` are deprecated in favor of explicit
+`prepare(...)` followed by `as_qubo_format()` or `as_hubo_format()`. During
+their deprecation period they retain their Python SDK v2 mutation semantics:
+after conversion they rebase evaluated output to the active penalized
+objective. They reject an input that already has separate output semantics,
+because no corresponding v2 state exists.
 
 State-reconstructible rewrites such as partial evaluation, substitution, and
 binary power reduction do not create or rewrite this output objective because
@@ -63,7 +92,9 @@ irrelevant, and dependent values, has been populated.
 
 `ParametricInstance` carries the same output semantics and specializes any
 parameter references in `with_parameters()`, so
-`Instance.as_parametric_instance()` remains lossless after a transformation.
+`Instance.as_parametric_instance()` remains lossless after active-objective
+Preparation. An instance carrying distinct output semantics requires v2
+serialization because v1 has no field for this information.
 
 ### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 

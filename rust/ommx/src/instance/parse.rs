@@ -653,7 +653,7 @@ impl Parse for v2::Instance {
             message,
         )?;
 
-        Ok(Instance {
+        let mut instance = Instance {
             sense,
             objective,
             output_objective,
@@ -667,7 +667,9 @@ impl Parse for v2::Instance {
             description: self.description,
             annotations,
             named_functions,
-        })
+        };
+        instance.canonicalize_output_objective();
+        Ok(instance)
     }
 }
 
@@ -1076,7 +1078,7 @@ impl Parse for v2::ParametricInstance {
             message,
         )?;
 
-        Ok(ParametricInstance {
+        let mut instance = ParametricInstance {
             sense,
             objective,
             output_objective,
@@ -1090,7 +1092,9 @@ impl Parse for v2::ParametricInstance {
             decision_variable_dependency,
             description: self.description,
             annotations,
-        })
+        };
+        instance.canonicalize_output_objective();
+        Ok(instance)
     }
 }
 
