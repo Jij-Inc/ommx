@@ -18,6 +18,17 @@ input model's objective values and sense while the active formulation remains
 available to solvers. A penalty conversion may preserve an equal objective pair
 solely to record that optimality no longer transports.
 
+For example:
+
+```text
+source Instance:                         Maximize / f
+active after as_minimization_problem():  Minimize / -f
+evaluate() and evaluate_samples():       Maximize / f
+```
+
+Previously, both evaluation methods exposed the active `Minimize / -f` pair.
+They now use `output_objective` to return the source `Maximize / f` semantics.
+
 State-reconstructible rewrites such as partial evaluation, substitution, and
 binary power reduction do not create or rewrite this output objective because
 their active objective has the same value on each reconstructed state. Like

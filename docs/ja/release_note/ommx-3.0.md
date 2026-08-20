@@ -17,6 +17,17 @@ active formulationをsolver向けに維持しながら、結果は入力modelの
 返します。Penalty変換では、optimalityを移せないことだけを記録するために、同一のobjective
 pairを保持する場合もあります。
 
+具体例は次の通りです。
+
+```text
+変換前のInstance:                          Maximize / f
+as_minimization_problem()後のactive fields: Minimize / -f
+evaluate()とevaluate_samples()の出力:       Maximize / f
+```
+
+以前は両方の評価methodがactiveな`Minimize / -f`の組をそのまま返していました。
+現在は`output_objective`を使い、変換前の`Maximize / f`の意味論を返します。
+
 Partial evaluation、substitution、binary power reductionのように、復元した各state上で
 active objectiveの値を保つ書き換えは、このoutput objectiveを新設も書き換えもしません。
 Removed constraintと同様に、その参照IDはsolver-used setに追加されません。
