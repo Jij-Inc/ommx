@@ -17,16 +17,40 @@ active formulationをsolver向けに維持しながら、結果は入力modelの
 返します。Penalty変換では、optimalityを移せないことだけを記録するために、同一のobjective
 pairを保持する場合もあります。
 
-具体例は次の通りです。
+次の同一の呼び出しコードは、active formulationを変えずに、異なるevaluation結果を
+返すようになります。
 
-```text
-変換前のInstance:                          Maximize / f
-as_minimization_problem()後のactive fields: Minimize / -f
-evaluate()とevaluate_samples()の出力:       Maximize / f
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+state = {0: 1.0}
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={},
+)
+
+assert instance.as_minimization_problem()
+
+solution = instance.evaluate(state)
+sample_set = instance.evaluate_samples({0: state})
+
+print("active:", (instance.sense, instance.objective.evaluate(state)))
+print("evaluate:", (solution.sense, solution.objective))
+print("evaluate_samples:", (sample_set.sense, sample_set.objectives))
 ```
 
-以前は両方の評価methodがactiveな`Minimize / -f`の組をそのまま返していました。
-現在は`output_objective`を使い、変換前の`Maximize / f`の意味論を返します。
+同じコードから得られる値は次のように変わります。
+
+| 出力 | #1167より前 | 現在 |
+| --- | --- | --- |
+| `active` | `(Sense.Minimize, -1.0)` | `(Sense.Minimize, -1.0)` |
+| `evaluate` | `(Sense.Minimize, -1.0)` | `(Sense.Maximize, 1.0)` |
+| `evaluate_samples` | `(Sense.Minimize, {0: -1.0})` | `(Sense.Maximize, {0: 1.0})` |
+
+現在は両methodが`output_objective`を使い、変換前の`Maximize / f`の意味論を返します。
 
 Partial evaluation、substitution、binary power reductionのように、復元した各state上で
 active objectiveの値を保つ書き換えは、このoutput objectiveを新設も書き換えもしません。

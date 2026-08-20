@@ -18,16 +18,41 @@ input model's objective values and sense while the active formulation remains
 available to solvers. A penalty conversion may preserve an equal objective pair
 solely to record that optimality no longer transports.
 
-For example:
+The following unchanged caller code now produces different evaluation results
+while leaving the active formulation unchanged:
 
-```text
-source Instance:                         Maximize / f
-active after as_minimization_problem():  Minimize / -f
-evaluate() and evaluate_samples():       Maximize / f
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+state = {0: 1.0}
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={},
+)
+
+assert instance.as_minimization_problem()
+
+solution = instance.evaluate(state)
+sample_set = instance.evaluate_samples({0: state})
+
+print("active:", (instance.sense, instance.objective.evaluate(state)))
+print("evaluate:", (solution.sense, solution.objective))
+print("evaluate_samples:", (sample_set.sense, sample_set.objectives))
 ```
 
-Previously, both evaluation methods exposed the active `Minimize / -f` pair.
-They now use `output_objective` to return the source `Maximize / f` semantics.
+The same code produces these values:
+
+| Output | Before #1167 | Current |
+| --- | --- | --- |
+| `active` | `(Sense.Minimize, -1.0)` | `(Sense.Minimize, -1.0)` |
+| `evaluate` | `(Sense.Minimize, -1.0)` | `(Sense.Maximize, 1.0)` |
+| `evaluate_samples` | `(Sense.Minimize, {0: -1.0})` | `(Sense.Maximize, {0: 1.0})` |
+
+Both evaluation methods now use `output_objective` to return the source
+`Maximize / f` semantics.
 
 State-reconstructible rewrites such as partial evaluation, substitution, and
 binary power reduction do not create or rewrite this output objective because
