@@ -575,7 +575,7 @@ impl ParametricInstance {
     /// keyed by their IDs. The removed map can become non-empty when an
     /// `Instance` whose one-hot constraints have been converted (via
     /// `convert_all_one_hots_to_constraints`) is round-tripped back to a
-    /// `ParametricInstance` via `From<Instance>`.
+    /// `ParametricInstance` via `Instance.as_parametric_instance()`.
     #[getter]
     pub fn removed_one_hot_constraints(&self) -> BTreeMap<u64, crate::RemovedOneHotConstraint> {
         let context = self.inner.one_hot_constraint_context();

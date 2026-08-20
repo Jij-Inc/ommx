@@ -36,20 +36,12 @@ working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
 solution = OMMXHighsAdapter.solve_strict(working)
 ```
 
-Preparationが目的関数または最適化senseを書き換えた場合、またはactive optimalityを
-transportできないことを記録する必要がある場合、出力意味論がread-onlyな
-{attr}`~ommx.Instance.output_objective` に記録されます。Evaluationは
-この目的関数とsenseを使うため、変換後の決定変数・制約・provenanceを保持しながら、
-結果の目的関数はsource modelの意味に戻ります。このpairとoptimalityの保証はv2
-Instance形式でround-tripします。表現できないv1 serializationや別のrootへの変換は、情報を
-捨てる代わりにerrorになります。目的関数を明示的に代入すると、出力意味論は
-rebaseされます。
-
-`OutputObjective.preserves_optimality`は、active formulationに対するbackendの
-optimalityが、復元後のoutput semanticsに対するoptimalityも証明するかを記録します。
-exact rewriteはこの保証を維持し、fixed penaltyは無効にします。dual metadataには
-別個のrow/value mappingが必要なため、output-objective projectionがある場合は
-コピーされません。
+Python SDKでは、[#1167](https://github.com/Jij-Inc/ommx/pull/1167)で導入した
+output semanticsをread-onlyな{attr}`~ommx.Instance.output_objective`として
+参照できます。組み込みAdapterは`OutputObjective.preserves_optimality`を使い、
+active formulationに対するbackendのoptimalityが復元後のoutput objectiveに対する
+optimalityも証明する場合だけtransportします。dual metadataには別個のrow/value
+mappingが必要なため、output-objective projectionがある場合はコピーされません。
 
 {meth}`~ommx.experiment.Run.log_solve` と
 {meth}`~ommx.experiment.Run.log_sample` は、引き続き元のinputと返されたoutputを
@@ -57,6 +49,16 @@ exact rewriteはこの保証を維持し、fixed penaltyは無効にします。
 [Adapter Input Class](../user_guide/capability_model.md) と
 [Python SDK v2からv3へのマイグレーションガイド](../migration/python_sdk_v2_to_v3.md)
 を参照してください。
+
+### Instance変換後のoutput objective semanticsを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+`Instance`のactive objectiveまたはsenseを書き換える変換は、`evaluate()`と
+`evaluate_samples()`が使う最初のoutput objectiveを保持するようになりました。
+そのためactive formulationをsolver向けに維持しながら、結果は入力modelのobjective
+valueとsenseを返します。
+
+このoutput semanticsがある場合、`ParametricInstance`では情報を失わずに表現できないため、
+`Instance.as_parametric_instance()`は`RuntimeError`を送出します。
 
 ### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 

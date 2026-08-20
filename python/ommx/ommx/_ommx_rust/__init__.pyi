@@ -3512,9 +3512,9 @@ class Instance:
         r"""
         Convert this instance to a parameter-free ParametricInstance.
 
-        Raises {class}`RuntimeError` when preparation has installed an
-        {attr}`output_objective`, because ParametricInstance cannot represent
-        that distinct output semantics without losing information.
+        Raises {class}`RuntimeError` when an {attr}`output_objective` has been
+        installed, because ParametricInstance cannot represent that distinct output
+        semantics without losing information.
         """
     def penalty_method(self) -> ParametricInstance:
         r"""
@@ -5793,7 +5793,7 @@ class ParametricInstance:
         keyed by their IDs. The removed map can become non-empty when an
         `Instance` whose one-hot constraints have been converted (via
         `convert_all_one_hots_to_constraints`) is round-tripped back to a
-        `ParametricInstance` via `From<Instance>`.
+        `ParametricInstance` via `Instance.as_parametric_instance()`.
         """
     @property
     def sos1_constraints(self) -> builtins.dict[builtins.int, AttachedSos1Constraint]:

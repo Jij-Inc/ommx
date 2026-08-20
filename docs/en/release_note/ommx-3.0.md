@@ -35,22 +35,13 @@ working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
 solution = OMMXHighsAdapter.solve_strict(working)
 ```
 
-When preparation rewrites the objective or optimization sense, or needs to
-record that active optimality does not transport, it records the output
-meaning as the read-only
-{attr}`~ommx.Instance.output_objective`. Evaluation uses this objective and
-sense, so results from a transformed model retain the source objective meaning
-while keeping prepared decision variables, constraints, and provenance. The
-pair and its optimality guarantee round-trip through the v2 Instance format;
-v1 serialization and
-conversion to roots that cannot represent it fail instead of discarding it.
-Explicitly assigning a new objective rebases the output meaning.
-
-`OutputObjective.preserves_optimality` records whether backend optimality for
-the active formulation also proves optimality for the reconstructed output
-semantics. Exact rewrites preserve this guarantee, while fixed-penalty
-conversion invalidates it. Dual metadata requires a separate row/value mapping
-and is not copied while an output-objective projection is active.
+The Python SDK exposes the output semantics introduced in
+[#1167](https://github.com/Jij-Inc/ommx/pull/1167) through the read-only
+{attr}`~ommx.Instance.output_objective`. Built-in Adapters use
+`OutputObjective.preserves_optimality` to transport backend optimality only
+when it also proves optimality for the reconstructed output objective. Dual
+metadata requires a separate row/value mapping and is not copied while an
+output-objective projection is active.
 
 {meth}`~ommx.experiment.Run.log_solve` and
 {meth}`~ommx.experiment.Run.log_sample` continue to record the original input
@@ -58,6 +49,17 @@ and returned output; the temporary prepared copy is not stored. See
 [Adapter input classes](../user_guide/capability_model.md) and the
 [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
 the full execution and migration contracts.
+
+### Preserve output objective semantics across Instance transformations ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+Transformations that rewrite an `Instance`'s active objective or sense now
+preserve the first output objective used by `evaluate()` and
+`evaluate_samples()`. Results therefore retain the input model's objective
+values and sense while the active formulation remains available to solvers.
+
+`Instance.as_parametric_instance()` now raises `RuntimeError` when these output
+semantics are present, because `ParametricInstance` cannot represent them
+without losing information.
 
 ### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 

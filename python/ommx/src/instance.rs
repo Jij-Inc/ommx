@@ -1066,9 +1066,9 @@ impl Instance {
 
     /// Convert this instance to a parameter-free ParametricInstance.
     ///
-    /// Raises {class}`RuntimeError` when preparation has installed an
-    /// {attr}`output_objective`, because ParametricInstance cannot represent
-    /// that distinct output semantics without losing information.
+    /// Raises {class}`RuntimeError` when an {attr}`output_objective` has been
+    /// installed, because ParametricInstance cannot represent that distinct output
+    /// semantics without losing information.
     pub fn as_parametric_instance(&self) -> OmmxPyResult<ParametricInstance> {
         Ok(ParametricInstance {
             inner: ommx::ParametricInstance::try_from(self.inner.clone())?,
