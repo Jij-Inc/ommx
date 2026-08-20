@@ -605,7 +605,7 @@ mod tests {
             Some(&"1".to_string())
         );
 
-        let parametric: crate::ParametricInstance = instance.into();
+        let parametric = crate::ParametricInstance::try_from(instance).unwrap();
         let annotations = parametric.flat_annotations();
         assert_eq!(
             annotations.get(annotation_keys::PARAMETRIC_INSTANCE_CONSTRAINTS),

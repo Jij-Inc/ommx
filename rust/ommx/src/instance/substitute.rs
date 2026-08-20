@@ -122,6 +122,9 @@ impl Instance {
     /// Commit a fully validated substitution plan using table-local effects.
     fn commit_substitution(&mut self, plan: InstanceSubstitutionPlan) {
         if let Some(objective) = plan.objective {
+            if objective != self.objective {
+                self.capture_output_objective();
+            }
             self.objective = objective;
         }
         self.constraint_collection
@@ -349,6 +352,7 @@ mod tests {
         };
         constraints.insert(ConstraintID::from(1), constraint);
 
+        let original_objective = objective.clone();
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         let named_function_id = instance
@@ -373,6 +377,9 @@ mod tests {
             .decision_variable_dependency
             .get(&VariableID::from(1))
             .is_some());
+        let output = result.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Minimize);
+        assert_eq!(output.function(), &original_objective);
 
         let named_function = result.named_functions().get(&named_function_id).unwrap();
         let expected_ids: std::collections::BTreeSet<_> =

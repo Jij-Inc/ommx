@@ -114,6 +114,38 @@ pub enum Sense {
     Maximize,
 }
 
+/// Objective semantics used when evaluating solver output.
+///
+/// This pair is captured by the first transformation that changes an
+/// [`Instance`]'s active objective or sense. Later preparation steps continue
+/// rewriting the active formulation, while [`Instance::evaluate`] and
+/// [`Instance::evaluate_samples`] use this pair to present results in the
+/// input model's objective semantics.
+///
+/// The sense and function are intentionally immutable outside [`Instance`]:
+/// they are one semantic value and must never be updated independently.
+#[derive(Debug, Clone, PartialEq, crate::logical_memory::LogicalMemoryProfile)]
+pub struct OutputObjective {
+    sense: Sense,
+    function: Function,
+}
+
+impl OutputObjective {
+    pub(crate) fn new(sense: Sense, function: Function) -> Self {
+        Self { sense, function }
+    }
+
+    /// Optimization sense used for output objective values.
+    pub fn sense(&self) -> Sense {
+        self.sense
+    }
+
+    /// Function evaluated to produce output objective values.
+    pub fn function(&self) -> &Function {
+        &self.function
+    }
+}
+
 /// Instance, represents a mathematical optimization problem.
 ///
 /// # Multi-type constraint architecture
@@ -176,6 +208,10 @@ pub enum Sense {
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the objective function or constraints.
 ///   These are "dependent variables" whose values are computed from other variables.
+/// - [`Self::output_objective`] is an atomic sense/function pair. Its function
+///   may reference used, fixed, dependent, or otherwise inactive variables,
+///   but every referenced ID remains owned by [`Self::decision_variables`] so
+///   state population can evaluate it.
 /// - Decision variables are classified into mutually exclusive roles:
 ///   - **used**: Variable IDs appearing in the objective function or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
@@ -243,6 +279,11 @@ pub struct Instance {
     sense: Sense,
     #[getset(get = "pub")]
     objective: Function,
+    /// Objective semantics presented by Solution and SampleSet evaluation.
+    ///
+    /// `None` means that the active [`Self::sense`] / [`Self::objective`] pair
+    /// is also the output pair.
+    output_objective: Option<OutputObjective>,
     /// Created decision-variable rows, modeling labels, and fixed values.
     decision_variables: DecisionVariableTable,
 
@@ -275,6 +316,46 @@ pub struct Instance {
 }
 
 impl Instance {
+    /// Return the preserved objective semantics used for solver output.
+    ///
+    /// `None` means evaluation uses the active [`Self::sense`] and
+    /// [`Self::objective`] directly.
+    pub fn output_objective(&self) -> Option<&OutputObjective> {
+        self.output_objective.as_ref()
+    }
+
+    /// Preserve the current active objective pair unless an earlier
+    /// transformation has already established the output semantics.
+    fn capture_output_objective(&mut self) {
+        if self.output_objective.is_none() {
+            self.output_objective = Some(OutputObjective::new(self.sense, self.objective.clone()));
+        }
+    }
+
+    /// Preserve a precomputed active objective after a successful in-place
+    /// rewrite has already committed.
+    fn capture_output_objective_from(&mut self, sense: Sense, function: Function) {
+        if self.output_objective.is_none() {
+            self.output_objective = Some(OutputObjective::new(sense, function));
+        }
+    }
+
+    /// Objective pair that Solution and SampleSet evaluation must expose.
+    fn objective_for_output(&self) -> (Sense, &Function) {
+        self.output_objective
+            .as_ref()
+            .map(|output| (output.sense, &output.function))
+            .unwrap_or((self.sense, &self.objective))
+    }
+
+    /// Reject conversions to roots that cannot represent output semantics.
+    fn ensure_no_output_objective(&self, operation: &str) -> crate::Result<()> {
+        if self.output_objective.is_some() {
+            crate::bail!("{operation} cannot preserve Instance.output_objective");
+        }
+        Ok(())
+    }
+
     /// Access the decision-variable definition table.
     pub fn decision_variable_table(&self) -> &DecisionVariableTable {
         &self.decision_variables

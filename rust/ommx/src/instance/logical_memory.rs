@@ -181,6 +181,7 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -258,6 +259,7 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -348,6 +350,7 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -461,6 +464,7 @@ mod tests {
         Instance.one_hot_constraint_collection;one_hot_constraints;OneHotConstraint.variables;BTreeSet[stack] 24
         Instance.one_hot_constraint_collection;one_hot_constraints;OneHotConstraint.variables;VariableID.0 16
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -570,6 +574,7 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -664,6 +669,7 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Parameters.entries 16
         Instance.parameters;Parameters.entries;HashMap[key] 16
         Instance.parameters;Parameters.entries;HashMap[stack] 48
@@ -676,5 +682,25 @@ mod tests {
         Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
+    }
+
+    #[test]
+    fn output_objective_profile_includes_atomic_pair() {
+        let mut instance = Instance::new(
+            crate::Sense::Maximize,
+            Function::from(linear!(1)),
+            BTreeMap::from([(VariableID::from(1), DecisionVariable::binary())]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        assert!(instance.as_minimization_problem());
+
+        let profile = instance.logical_memory_profile();
+        assert!(profile.entries().any(|(path, _)| path
+            .iter()
+            .any(|segment| *segment == "OutputObjective.sense")));
+        assert!(profile.entries().any(|(path, _)| path
+            .iter()
+            .any(|segment| *segment == "OutputObjective.function")));
     }
 }

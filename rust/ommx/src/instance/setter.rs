@@ -75,11 +75,17 @@ impl Instance {
         )
     }
 
-    /// Set the objective function
+    /// Set the objective function and rebase output semantics.
+    ///
+    /// This is an explicit model redefinition, so any preserved
+    /// [`OutputObjective`] is cleared. Subsequent evaluation uses the current
+    /// sense and this new objective until another transformation establishes a
+    /// new output pair.
     pub fn set_objective(&mut self, objective: Function) -> crate::Result<()> {
         // Validate that all variables in the objective are defined
         self.validate_required_ids(objective.required_ids())?;
         self.objective = objective;
+        self.output_objective = None;
         Ok(())
     }
 
@@ -1009,6 +1015,27 @@ mod tests {
         );
         // Ensure objective was not changed
         assert_eq!(instance.objective, Function::from(linear!(1) + coeff!(1.0)));
+    }
+
+    #[test]
+    fn set_objective_rebases_output_semantics() {
+        let mut instance = Instance::new(
+            Sense::Maximize,
+            Function::from(linear!(1)),
+            btreemap! {
+                VariableID::from(1) => DecisionVariable::binary(),
+            },
+            BTreeMap::new(),
+        )
+        .unwrap();
+        assert!(instance.as_minimization_problem());
+        assert!(instance.output_objective().is_some());
+
+        let replacement = Function::from(coeff!(3.0) * linear!(1));
+        instance.set_objective(replacement.clone()).unwrap();
+
+        assert_eq!(instance.objective(), &replacement);
+        assert!(instance.output_objective().is_none());
     }
 
     #[test]
