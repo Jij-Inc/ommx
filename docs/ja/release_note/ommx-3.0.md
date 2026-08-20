@@ -8,6 +8,48 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### ⚠ `solve()` / `sample()` が private copy を prepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()` と `SamplerAdapter.sample()` はconvenience APIになりました。
+渡された {class}`~ommx.Instance` をcopyし、Adapterの推奨Policyを使って
+`INPUT_CLASS`向けにprepareしてから、新しいpreparation-free APIである
+`solve_strict()` / `sample_strict()`へ処理を委譲します。呼び出し元のInstanceは
+変更されません。
+
+独自Adapterでは、exact inputを実行する処理を`solve_strict()`または
+`sample_strict()`へ移してください。strict APIは
+{meth}`~ommx.Instance.prepare`を呼び出さず、渡されたInstanceが`INPUT_CLASS`に
+属することを要求します。application側でpreparationの選択を管理する場合は、
+次のように利用します。
+
+```python
+import copy
+
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)  # `instance` は変更されない
+
+working = copy.copy(instance)
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# 必要に応じてpolicyを調整する。
+working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_strict(working)
+```
+
+Python SDKでは、[#1167](https://github.com/Jij-Inc/ommx/pull/1167)で導入した
+output semanticsをread-onlyな{attr}`~ommx.Instance.output_objective`として
+参照できます。組み込みAdapterは`OutputObjective.preserves_optimality`を使い、
+active formulationに対するbackendのoptimalityが復元後のoutput objectiveに対する
+optimalityも証明する場合だけtransportします。dual metadataには別個のrow/value
+mappingが必要なため、output-objective projectionがある場合はコピーされません。
+
+{meth}`~ommx.experiment.Run.log_solve` と
+{meth}`~ommx.experiment.Run.log_sample` は、引き続き元のinputと返されたoutputを
+記録し、一時的にprepareしたcopyは保存しません。実行契約と移行方法の詳細は
+[Adapter Input Class](../user_guide/capability_model.md) と
+[Python SDK v2からv3へのマイグレーションガイド](../migration/python_sdk_v2_to_v3.md)
+を参照してください。
+
 ### Instance変換後のoutput objective semanticsを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
 `Instance`のactive objectiveまたはsenseを書き換える変換は、`evaluate()`と

@@ -8781,7 +8781,7 @@
             },
             {
               "name": "as_parametric_instance",
-              "doc": "Convert this instance to a parameter-free ParametricInstance.\n\nRaises {class}`RuntimeError` when an output objective has been installed,\nbecause ParametricInstance cannot represent that distinct output semantics\nwithout losing information.",
+              "doc": "Convert this instance to a parameter-free ParametricInstance.\n\nRaises {class}`RuntimeError` when an {attr}`output_objective` has been\ninstalled, because ParametricInstance cannot represent that distinct output\nsemantics without losing information.",
               "signatures": [
                 {
                   "parameters": [],
@@ -11751,6 +11751,23 @@
                   },
                   {
                     "display": "AttachedOneHotConstraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "output_objective",
+              "doc": "Objective semantics used by {meth}`evaluate` and {meth}`evaluate_samples`.\n\nThis is normally `None` until preparation rewrites the active objective\nor sense. A transformation may also install an equal pair to record\nthat active-formulation optimality does not transport. When present,\n{attr}`objective` and {attr}`sense` remain the formulation used by an\nadapter, while this value determines the objective and sense exposed by\nthe resulting {class}`Solution` or {class}`SampleSet`.",
+              "type_": {
+                "display": "Optional[OutputObjective]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "OutputObjective",
                     "link_target": null,
                     "children": []
                   }
@@ -15283,6 +15300,54 @@
               "name": "Unspecified",
               "doc": "The solver cannot determine whether the solution is optimal",
               "type_": null
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "OutputObjective",
+          "doc": "Objective semantics used when an Instance produces a Solution or SampleSet.\n\nPreparation may rewrite an instance's active formulation to satisfy an\nadapter's input requirements. This value preserves the objective semantics\nexposed by {meth}`Instance.evaluate` and {meth}`Instance.evaluate_samples`\nand records whether active-formulation optimality transports to those\nsemantics. The active objective remains available through\n{attr}`Instance.objective` and {attr}`Instance.sense`.",
+          "bases": [],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "function",
+              "doc": "Objective function evaluated for Solution and SampleSet outputs.",
+              "type_": {
+                "display": "Function",
+                "link_target": {
+                  "fqn": "ommx.Function",
+                  "doc_module": "ommx",
+                  "kind": "Class",
+                  "attribute": null
+                },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "preserves_optimality",
+              "doc": "Whether active-formulation optimality transports to this output objective.\n\n`False` means that no such proof is available. It does not assert that\na reconstructed state is suboptimal.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sense",
+              "doc": "Optimization sense exposed on Solution and SampleSet outputs.",
+              "type_": {
+                "display": "Sense",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             }
           ],
           "deprecated": null
@@ -32382,7 +32447,7 @@
             },
             {
               "name": "log_sample",
-              "doc": "Sample an Instance with an OMMX SamplerAdapter and log a Sampling entry.\n\nThe original input is stored together with the returned `SampleSet`.\nA successful sampler call is recorded as finished even when none of its\nsamples are feasible.\n\n`adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword\narguments are passed to `adapter.sample(...)` and recorded as\n`Sampling.adapter_options`.\n\nSet `store_diagnostics=True` to pass a diagnostics sink to the adapter.\nDiagnostics persistence is best-effort and does not change a successful\nsampler call into a failed Sampling.",
+              "doc": "Sample an Instance with an OMMX SamplerAdapter and log a Sampling entry.\n\n`SamplerAdapter.sample` owns copying and preparing its working Instance,\nso this method does not mutate the caller's object. The original input\nis stored together with the returned `SampleSet`; the temporary prepared\nInstance is not stored separately. A successful sampler call is recorded\nas finished even when none of its samples are feasible.\n\n`adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword\narguments are passed to `adapter.sample(...)` and recorded as\n`Sampling.adapter_options`.\n\nSet `store_diagnostics=True` to pass a diagnostics sink to the adapter.\nDiagnostics persistence is best-effort and does not change a successful\nsampler call into a failed Sampling.",
               "signatures": [
                 {
                   "parameters": [
@@ -32514,7 +32579,7 @@
             },
             {
               "name": "log_solve",
-              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\nThe input Instance is cloned before calling the adapter, so adapter-side\ncapability reductions do not mutate the caller's object. The original\ninput is always stored as the Solve input.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and recorded as\n`Solve.adapter_options`. The adapter class name is stored in\n`Solve.adapter`.\n\nAdapter options are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.\n\nAdapter diagnostics are disabled by default. Set\n`store_diagnostics=True` to pass a diagnostics sink to the adapter and\nstore recorded diagnostics with the Solve entry. Diagnostics persistence\nis best-effort. If diagnostics cannot be serialized or stored after the\nadapter returns a solution, the Solve entry is still recorded without\ndiagnostics. `store_diagnostics` controls Experiment logging and is not\nrecorded in `Solve.adapter_options`.\n\nIf the adapter raises before returning a Solution, this method records\na failed Solve entry when possible, including diagnostics collected\nbefore the failure when `store_diagnostics=True`. Failed Solve entries\nhave `output=None`.",
+              "doc": "Solve an Instance with an OMMX SolverAdapter and log a Solve entry.\n\n`SolverAdapter.solve` owns copying and preparing its working Instance,\nso this method does not mutate the caller's object. The original input\nis always stored as the Solve input; the temporary prepared Instance is\nnot stored separately.\n\n`adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword\narguments are passed to `adapter.solve(...)` and recorded as\n`Solve.adapter_options`. The adapter class name is stored in\n`Solve.adapter`.\n\nAdapter options are solve-scoped metadata, not run parameters. They do\nnot appear in `Experiment.run_parameters_df()`.\n\nAdapter diagnostics are disabled by default. Set\n`store_diagnostics=True` to pass a diagnostics sink to the adapter and\nstore recorded diagnostics with the Solve entry. Diagnostics persistence\nis best-effort. If diagnostics cannot be serialized or stored after the\nadapter returns a solution, the Solve entry is still recorded without\ndiagnostics. `store_diagnostics` controls Experiment logging and is not\nrecorded in `Solve.adapter_options`.\n\nIf the adapter raises before returning a Solution, this method records\na failed Solve entry when possible, including diagnostics collected\nbefore the failure when `store_diagnostics=True`. Failed Solve entries\nhave `output=None`.",
               "signatures": [
                 {
                   "parameters": [
@@ -32655,7 +32720,7 @@
             },
             {
               "name": "open_solve",
-              "doc": "Open a manual Solve scope for direct backend solver model access.\n\nThis returns a manual Solve context. Entering the context reserves a\nSolve ID, constructs the adapter with a cloned input Instance, and\nexposes the adapter's `solver_input`. The caller can run backend-specific\nAPIs, record adapter options that are set directly on the backend model,\ndecode the backend output, and continue recording diagnostics until the\ncontext exits. The Solve entry is finalized on context exit. If adapter\nconstruction or the context body fails before `decode` succeeds, a failed\nor interrupted Solve is recorded when possible and the exception is\nre-raised.",
+              "doc": "Open a manual Solve scope for direct backend solver model access.\n\nThis is a strict, preparation-free workflow. The caller must prepare the\nInstance for the adapter's `INPUT_CLASS` before opening the context.\nEntering the context reserves a Solve ID, constructs the adapter with a\ncloned input Instance, and exposes the adapter's `solver_input`; it does\nnot call `SolverAdapter.solve`. The caller can run backend-specific APIs,\nrecord adapter options that are set directly on the backend model, decode\nthe backend output, and continue recording diagnostics until the context\nexits. The Solve entry is finalized on context exit. If adapter\nconstruction or the context body fails before `decode` succeeds, a failed\nor interrupted Solve is recorded when possible and the exception is\nre-raised.",
               "signatures": [
                 {
                   "parameters": [
@@ -33700,6 +33765,7 @@
     "ommx.NamedFunction": "ommx",
     "ommx.OneHotConstraint": "ommx",
     "ommx.Optimality": "ommx",
+    "ommx.OutputObjective": "ommx",
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",

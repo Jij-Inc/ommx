@@ -8,6 +8,48 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ `solve()` and `sample()` prepare a private copy ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()` and `SamplerAdapter.sample()` are now convenience APIs.
+They copy the supplied {class}`~ommx.Instance`, prepare the copy for the
+Adapter's `INPUT_CLASS` with its recommended policy, and delegate to the new
+preparation-free `solve_strict()` / `sample_strict()` APIs. The caller's
+Instance remains unchanged.
+
+Custom Adapters must move exact-input execution to `solve_strict()` or
+`sample_strict()`. These strict APIs never call {meth}`~ommx.Instance.prepare`
+and require the supplied Instance to belong to `INPUT_CLASS`. Use them when the
+application owns the preparation choices:
+
+```python
+import copy
+
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)  # `instance` is unchanged
+
+working = copy.copy(instance)
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Customize policy here.
+working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_strict(working)
+```
+
+The Python SDK exposes the output semantics introduced in
+[#1167](https://github.com/Jij-Inc/ommx/pull/1167) through the read-only
+{attr}`~ommx.Instance.output_objective`. Built-in Adapters use
+`OutputObjective.preserves_optimality` to transport backend optimality only
+when it also proves optimality for the reconstructed output objective. Dual
+metadata requires a separate row/value mapping and is not copied while an
+output-objective projection is active.
+
+{meth}`~ommx.experiment.Run.log_solve` and
+{meth}`~ommx.experiment.Run.log_sample` continue to record the original input
+and returned output; the temporary prepared copy is not stored. See
+[Adapter input classes](../user_guide/capability_model.md) and the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the full execution and migration contracts.
+
 ### Preserve output objective semantics across Instance transformations ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
 Transformations that rewrite an `Instance`'s active objective or sense now

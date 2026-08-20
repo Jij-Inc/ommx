@@ -33,6 +33,35 @@ def test_instance_v2_bytes_roundtrip_special_constraints():
     assert restored.to_v2_bytes() == instance.to_v2_bytes()
 
 
+def test_instance_v2_bytes_roundtrip_output_objective():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        sense=Sense.Maximize,
+        objective=x,
+        decision_variables=[x],
+        constraints={},
+    )
+    assert instance.as_minimization_problem()
+
+    with pytest.raises(Exception, match="output_objective"):
+        instance.to_v1_bytes()
+
+    restored = Instance.from_v2_bytes(instance.to_v2_bytes())
+
+    assert restored.sense == Sense.Minimize
+    output_objective = restored.output_objective
+    assert output_objective is not None
+    assert output_objective.sense == Sense.Maximize
+    assert output_objective.preserves_optimality
+    source_output_objective = instance.output_objective
+    assert source_output_objective is not None
+    assert output_objective.function.almost_equal(source_output_objective.function)
+    solution = restored.evaluate({0: 1})
+    assert solution.sense == Sense.Maximize
+    assert solution.objective == pytest.approx(1.0)
+    assert restored.to_v2_bytes() == instance.to_v2_bytes()
+
+
 def test_parametric_instance_v2_bytes_roundtrip():
     x = DecisionVariable.binary(0)
     instance = ParametricInstance.from_components(
