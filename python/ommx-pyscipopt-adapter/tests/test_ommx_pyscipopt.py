@@ -163,6 +163,25 @@ def test_solution_optimality():
     assert solution.optimality == Solution.OPTIMAL
 
 
+def test_exact_output_objective_transports_optimality():
+    x = DecisionVariable.binary(1)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    assert instance.as_minimization_problem()
+
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
+    model.optimize()
+    solution = adapter.decode(model)
+
+    assert solution.objective == pytest.approx(1.0)
+    assert solution.optimality == Solution.OPTIMAL
+
+
 def test_direct_solve_records_termination_report():
     x = DecisionVariable.integer(1, lower=0, upper=5)
     instance = Instance.from_components(

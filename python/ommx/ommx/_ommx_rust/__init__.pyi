@@ -3007,10 +3007,12 @@ class Instance:
         r"""
         Objective semantics used by {meth}`evaluate` and {meth}`evaluate_samples`.
 
-        This is `None` until preparation rewrites the active objective or sense.
-        When present, {attr}`objective` and {attr}`sense` remain the formulation
-        used by an adapter, while this value determines the objective and sense
-        exposed by the resulting {class}`Solution` or {class}`SampleSet`.
+        This is normally `None` until preparation rewrites the active objective
+        or sense. A transformation may also install an equal pair to record
+        that active-formulation optimality does not transport. When present,
+        {attr}`objective` and {attr}`sense` remain the formulation used by an
+        adapter, while this value determines the objective and sense exposed by
+        the resulting {class}`Solution` or {class}`SampleSet`.
         """
     @property
     def decision_variable_names(self) -> builtins.set[builtins.str]:
@@ -5543,12 +5545,12 @@ class OutputObjective:
     r"""
     Objective semantics used when an Instance produces a Solution or SampleSet.
 
-    Preparation may rewrite an instance's active objective and sense to satisfy
-    an adapter's input requirements.  This value preserves the objective
-    semantics exposed by {meth}`Instance.evaluate` and
-    {meth}`Instance.evaluate_samples` while the rewritten active objective
-    remains available through {attr}`Instance.objective` and
-    {attr}`Instance.sense`.
+    Preparation may rewrite an instance's active formulation to satisfy an
+    adapter's input requirements. This value preserves the objective semantics
+    exposed by {meth}`Instance.evaluate` and {meth}`Instance.evaluate_samples`
+    and records whether active-formulation optimality transports to those
+    semantics. The active objective remains available through
+    {attr}`Instance.objective` and {attr}`Instance.sense`.
     """
     @property
     def sense(self) -> Sense:
@@ -5559,6 +5561,14 @@ class OutputObjective:
     def function(self) -> Function:
         r"""
         Objective function evaluated for Solution and SampleSet outputs.
+        """
+    @property
+    def preserves_optimality(self) -> builtins.bool:
+        r"""
+        Whether active-formulation optimality transports to this output objective.
+
+        `False` means that no such proof is available. It does not assert that
+        a reconstructed state is suboptimal.
         """
 
 @typing.final

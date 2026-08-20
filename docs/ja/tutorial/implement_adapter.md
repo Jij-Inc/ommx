@@ -456,15 +456,20 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         solution = self.instance.evaluate(state)
 
         # 最適性ステータスを設定
-        if data.getStatus() == "optimal" and self.instance.output_objective is None:
+        output_objective = self.instance.output_objective
+        transports_optimality = (
+            output_objective is None or output_objective.preserves_optimality
+        )
+        if data.getStatus() == "optimal" and transports_optimality:
             solution.optimality = Solution.OPTIMAL
 
         return solution
 ```
 
-backend statusが保証するのはactive formulationに対する最適性です。そのため、Preparationが
-`output_objective`を設定している場合、この汎用例では`solution.optimality`を未指定のままにします。
-変換に対応する証明があるAdapterだけが、この保証を出力側へ移せます。
+backend statusが保証するのはactive formulationに対する最適性です。Instanceが持つ
+`output_objective.preserves_optimality`は、その保証を復元後のoutput semanticsへも
+transportできるかを記録します。exact rewriteはこの保証を維持し、fixed penaltyは
+無効にします。
 
 通常の呼び出しでは、InstanceのcopyとPreparationが自動的に行われます：
 

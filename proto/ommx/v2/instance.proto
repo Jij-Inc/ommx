@@ -18,6 +18,13 @@ import "ommx/v2/named_function.proto";
 message OutputObjective {
   ommx.v1.Instance.Sense sense = 1;
   ommx.v1.Function function = 2;
+
+  // Whether backend optimality for the active formulation also proves
+  // optimality for this output objective after state reconstruction.
+  //
+  // `false` is conservative: it means that such a proof is not available,
+  // not that the reconstructed state is known to be suboptimal.
+  bool preserves_optimality = 3;
 }
 
 // Validated optimization problem serialization root.

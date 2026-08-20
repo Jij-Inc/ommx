@@ -36,16 +36,20 @@ working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
 solution = OMMXHighsAdapter.solve_strict(working)
 ```
 
-Preparationが目的関数または最適化senseを書き換えると、最初の変換前の出力意味論が
-read-onlyな {attr}`~ommx.Instance.output_objective` に記録されます。Evaluationは
+Preparationが目的関数または最適化senseを書き換えた場合、またはactive optimalityを
+transportできないことを記録する必要がある場合、出力意味論がread-onlyな
+{attr}`~ommx.Instance.output_objective` に記録されます。Evaluationは
 この目的関数とsenseを使うため、変換後の決定変数・制約・provenanceを保持しながら、
-結果の目的関数はsource modelの意味に戻ります。このpairはv2 Instance形式で
-round-tripします。表現できないv1 serializationや別のrootへの変換は、情報を
+結果の目的関数はsource modelの意味に戻ります。このpairとoptimalityの保証はv2
+Instance形式でround-tripします。表現できないv1 serializationや別のrootへの変換は、情報を
 捨てる代わりにerrorになります。目的関数を明示的に代入すると、出力意味論は
 rebaseされます。
 
-output-objective projectionがある場合、Adapterが出力意味論に対する証明を
-持たない限り、backendのoptimalityとdual metadataは結果へコピーされません。
+`OutputObjective.preserves_optimality`は、active formulationに対するbackendの
+optimalityが、復元後のoutput semanticsに対するoptimalityも証明するかを記録します。
+exact rewriteはこの保証を維持し、fixed penaltyは無効にします。dual metadataには
+別個のrow/value mappingが必要なため、output-objective projectionがある場合は
+コピーされません。
 
 {meth}`~ommx.experiment.Run.log_solve` と
 {meth}`~ommx.experiment.Run.log_sample` は、引き続き元のinputと返されたoutputを

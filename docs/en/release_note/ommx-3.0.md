@@ -35,18 +35,22 @@ working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
 solution = OMMXHighsAdapter.solve_strict(working)
 ```
 
-When preparation rewrites the objective or optimization sense, the first
-rewrite records the output meaning as the read-only
+When preparation rewrites the objective or optimization sense, or needs to
+record that active optimality does not transport, it records the output
+meaning as the read-only
 {attr}`~ommx.Instance.output_objective`. Evaluation uses this objective and
 sense, so results from a transformed model retain the source objective meaning
 while keeping prepared decision variables, constraints, and provenance. The
-pair round-trips through the v2 Instance format; v1 serialization and
+pair and its optimality guarantee round-trip through the v2 Instance format;
+v1 serialization and
 conversion to roots that cannot represent it fail instead of discarding it.
 Explicitly assigning a new objective rebases the output meaning.
 
-Backend optimality and dual metadata are not copied into a result while an
-output-objective projection is active unless the Adapter can justify that
-certificate for the output semantics.
+`OutputObjective.preserves_optimality` records whether backend optimality for
+the active formulation also proves optimality for the reconstructed output
+semantics. Exact rewrites preserve this guarantee, while fixed-penalty
+conversion invalidates it. Dual metadata requires a separate row/value mapping
+and is not copied while an output-objective projection is active.
 
 {meth}`~ommx.experiment.Run.log_solve` and
 {meth}`~ommx.experiment.Run.log_sample` continue to record the original input

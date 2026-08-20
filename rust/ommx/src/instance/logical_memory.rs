@@ -702,5 +702,8 @@ mod tests {
         assert!(profile.entries().any(|(path, _)| path
             .iter()
             .any(|segment| *segment == "OutputObjective.function")));
+        assert!(profile.entries().any(|(path, _)| path
+            .iter()
+            .any(|segment| *segment == "OutputObjective.preserves_optimality")));
     }
 }

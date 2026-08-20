@@ -71,21 +71,28 @@ objective function and sense presented to users.
 output pair when it is present. For example, a maximization model normalized to
 minimization can be sampled by OpenJij while the returned `SampleSet` still has
 the source maximization sense and objective values. `output_objective` is
-`None` when the active pair is also the output pair.
+normally `None` when evaluation can use the active pair directly.
 
-The first transformation that changes the active objective or sense establishes
-the output pair. Later transformations continue to rewrite only the active
-formulation; they neither replace nor negate an existing output pair. Assigning
-a new `Instance.objective` is an explicit model redefinition and clears the
-preserved pair, making the current active sense and new objective the output
-semantics again.
+The first transformation that changes the active objective or sense normally
+establishes the output pair. A transformation may also establish an equal pair
+solely to record that active-formulation optimality does not transport. Later
+transformations continue to rewrite only the active formulation; they neither
+replace nor negate an existing output pair. Assigning a new
+`Instance.objective` is an explicit model redefinition and clears the preserved
+pair, making the current active sense and new objective the output semantics
+again.
 
 Backend optimality proofs and dual values belong to the active formulation.
-When an output pair is present, a generic Adapter cannot infer that those
-claims remain valid for the projected objective (a fixed penalty is the basic
-counterexample). Built-in solver Adapters therefore leave optimality
-unspecified and omit dual values in that case; an Adapter with a
-transformation-specific proof may transport them explicitly.
+`OutputObjective.preserves_optimality` records whether optimality for that
+formulation also proves optimality for the reconstructed output semantics.
+Exact rewrites such as sense reversal and partial evaluation preserve this
+guarantee. Fixed-penalty conversion invalidates it because a finite penalty
+does not generally prove equivalence to the source problem. Built-in solver
+Adapters report backend optimality only when this guarantee is present.
+
+Dual values require a separate mapping of rows, signs, and scales. Built-in
+solver Adapters therefore continue to omit dual values whenever an output pair
+is present, even when optimality itself transports.
 
 This is output semantics, not a Preparation event log. The easy Adapter APIs
 discard their temporary prepared Instance and return only `Solution` or

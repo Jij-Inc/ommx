@@ -87,6 +87,8 @@ def test_partial_evaluate():
     partial = instance.partial_evaluate({0: 1})
     # x[0] is no longer present in the problem
     assert partial.used_decision_variables == x[1:]
+    assert partial.output_objective is not None
+    assert partial.output_objective.preserves_optimality
 
     solution = OMMXPythonMIPAdapter.solve(partial)
     assert [var.value for var in solution.decision_variables] == [1, 0, 0]

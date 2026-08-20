@@ -52,6 +52,7 @@ def test_instance_v2_bytes_roundtrip_output_objective():
     output_objective = restored.output_objective
     assert output_objective is not None
     assert output_objective.sense == Sense.Maximize
+    assert output_objective.preserves_optimality
     source_output_objective = instance.output_objective
     assert source_output_objective is not None
     assert output_objective.function.almost_equal(source_output_objective.function)

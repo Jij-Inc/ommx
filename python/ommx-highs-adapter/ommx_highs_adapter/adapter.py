@@ -869,13 +869,17 @@ class OMMXHighsAdapter(SolverAdapter):
             state = self.decode_to_state(data)
             solution = self.instance.evaluate(state)
 
-            # A backend proof and duals refer to the active formulation.  When
-            # evaluation projects a distinct output objective, the generic
-            # Adapter cannot prove that those claims transport to that output
-            # objective, so keep them unspecified.
-            projects_output_objective = self.instance.output_objective is not None
+            # Backend optimality can be reported when the Instance records
+            # that it transports to the reconstructed output semantics. Duals
+            # need a separate row/value mapping, so they remain suppressed for
+            # every projected output objective.
+            output_objective = self.instance.output_objective
+            projects_output_objective = output_objective is not None
+            transports_optimality = (
+                output_objective is None or output_objective.preserves_optimality
+            )
             if (
-                not projects_output_objective
+                transports_optimality
                 and data.getModelStatus() == highspy.HighsModelStatus.kOptimal
             ):
                 solution.optimality = Solution.OPTIMAL

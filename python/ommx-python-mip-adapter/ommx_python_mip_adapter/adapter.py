@@ -328,7 +328,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             state = self.decode_to_state(data)
             solution = self.instance.evaluate(state)
 
-            projects_output_objective = self.instance.output_objective is not None
+            output_objective = self.instance.output_objective
+            projects_output_objective = output_objective is not None
             if not projects_output_objective:
                 dual_variables = {}
                 for constraint in data.constrs:
@@ -340,9 +341,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                     solution.set_dual_variable(constraint_id, dual_value)
 
             if (
-                not projects_output_objective
-                and data.status == mip.OptimizationStatus.OPTIMAL
-            ):
+                output_objective is None or output_objective.preserves_optimality
+            ) and data.status == mip.OptimizationStatus.OPTIMAL:
                 solution.optimality = Solution.OPTIMAL
 
             if self._relax:

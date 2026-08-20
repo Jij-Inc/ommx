@@ -68,18 +68,26 @@ read-onlyな{attr}`Instance.output_objective <ommx.Instance.output_objective>`�
 {meth}`Instance.evaluate_samples <ommx.Instance.evaluate_samples>`は、output pairがあれば
 それを使います。例えば最大化modelをOpenJij向けに最小化へ正規化してsampleしても、返る
 `SampleSet`はsource側の最大化senseとobjective valueを持ちます。active pairをそのまま
-出力する場合、`output_objective`は`None`です。
+評価に使える場合、`output_objective`は通常`None`です。
 
-active objectiveまたはsenseを最初に変更した変換がoutput pairを確立します。それ以降の
-変換はactive formulationだけを書き換え、既存のoutput pairを置換したり符号反転したり
-しません。新しい`Instance.objective`の代入はmodelの明示的な再定義なので、保持済みの
-pairをclearし、現在のactive senseと新しいobjectiveを再び出力意味論にします。
+active objectiveまたはsenseを最初に変更した変換が通常output pairを確立します。変換は、
+active formulationのoptimalityをtransportできないことだけを記録するため、active pairと
+同じoutput pairを確立する場合もあります。それ以降の変換はactive formulationだけを
+書き換え、既存のoutput pairを置換したり符号反転したりしません。新しい
+`Instance.objective`の代入はmodelの明示的な再定義なので、保持済みのpairをclearし、
+現在のactive senseと新しいobjectiveを再び出力意味論にします。
 
-backendのoptimality proofとdual valueはactive formulationに属します。output pairがある
-場合、genericなAdapterはそれらの主張がproject後のobjectiveにも有効か推論できません
-（fixed penaltyが基本的な反例です）。そのためbuilt-in solver Adapterはこの場合の
-optimalityをunspecifiedのままにし、dual valueも出力しません。変換固有の証明を持つ
-Adapterは明示的にtransportできます。
+backendのoptimality proofとdual valueはactive formulationに属します。
+`OutputObjective.preserves_optimality`は、そのformulationに対するoptimalityが、復元後の
+output semanticsに対するoptimalityも証明するかを表します。sense反転やpartial
+evaluationのようなexact rewriteはこの保証を維持します。fixed penaltyは、有限の
+penaltyだけではsource problemとの同値性を一般に証明できないため、この保証を無効に
+します。built-in solver Adapterは、この保証がある場合にだけbackendのoptimalityを
+出力します。
+
+dual valueにはrow、sign、scaleの別個のmappingが必要です。そのためbuilt-in solver
+Adapterはoptimalityをtransportできる場合でも、output pairがあればdual valueを引き続き
+省略します。
 
 これは出力意味論であり、Preparationのevent logではありません。easyなAdapter APIは
 一時的なPrepare後Instanceを破棄し、`Solution`または`SampleSet`だけを返します。

@@ -75,6 +75,8 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
     assert not target.contains(instance)
     assert instance.prepare(target, policy) is None
     assert target.contains(alias)
+    assert instance.output_objective is not None
+    assert not instance.output_objective.preserves_optimality
 
 
 def test_prepare_preserves_output_objective_across_later_rewrites() -> None:
@@ -100,6 +102,7 @@ def test_prepare_preserves_output_objective_across_later_rewrites() -> None:
     assert instance.output_objective is not None
     assert instance.output_objective.sense == Sense.Maximize
     assert instance.output_objective.function.almost_equal(Function(x))
+    assert instance.output_objective.preserves_optimality
     assert instance.evaluate({0: 1}).sense == Sense.Maximize
     assert instance.evaluate({0: 1}).objective == pytest.approx(1.0)
 
@@ -108,9 +111,11 @@ def test_prepare_preserves_output_objective_across_later_rewrites() -> None:
     assert instance.as_maximization_problem()
     assert instance.output_objective.sense == Sense.Maximize
     assert instance.output_objective.function.almost_equal(Function(x))
+    assert instance.output_objective.preserves_optimality
     assert instance.as_minimization_problem()
     assert instance.output_objective.sense == Sense.Maximize
     assert instance.output_objective.function.almost_equal(Function(x))
+    assert instance.output_objective.preserves_optimality
 
 
 def test_prepare_noop_does_not_install_output_objective() -> None:

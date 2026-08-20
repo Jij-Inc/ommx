@@ -457,16 +457,20 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         solution = self.instance.evaluate(state)
 
         # Set the optimality status
-        if data.getStatus() == "optimal" and self.instance.output_objective is None:
+        output_objective = self.instance.output_objective
+        transports_optimality = (
+            output_objective is None or output_objective.preserves_optimality
+        )
+        if data.getStatus() == "optimal" and transports_optimality:
             solution.optimality = Solution.OPTIMAL
 
         return solution
 ```
 
-The backend status certifies the active formulation. When Preparation has
-installed an `output_objective`, this generic example therefore leaves
-`solution.optimality` unspecified. An adapter may transport the certificate
-only when its transformation has a corresponding proof.
+The backend status certifies the active formulation. The Instance-owned
+`output_objective.preserves_optimality` flag records whether that certificate
+also applies to the reconstructed output semantics. Exact rewrites preserve
+it; fixed-penalty conversion invalidates it.
 
 The usual call copies and prepares the Instance automatically:
 

@@ -458,8 +458,8 @@ impl Instance {
         let mut constraint_collection = self.constraint_collection.clone();
         constraint_collection.move_active_rows_to_removed(removals)?;
 
-        if objective != self.objective {
-            self.capture_output_objective();
+        if !self.constraint_collection.active().is_empty() || objective != self.objective {
+            self.invalidate_output_objective_optimality();
         }
         self.objective = objective;
         self.constraint_collection = constraint_collection;
@@ -937,11 +937,28 @@ mod tests {
         let output = instance.output_objective().unwrap();
         assert_eq!(output.sense(), Sense::Maximize);
         assert_eq!(output.function(), &original_objective);
+        assert!(!output.preserves_optimality());
+        let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+        assert!(!restored.output_objective().unwrap().preserves_optimality());
         let solution = instance
             .evaluate(&State::from_iter([(1, 2.0), (2, 1.0)]), ATol::default())
             .unwrap();
         assert_eq!(*solution.sense(), Some(Sense::Maximize));
         assert_eq!(*solution.objective(), 3.0);
+    }
+
+    #[test]
+    fn zero_fixed_penalty_still_invalidates_output_optimality() {
+        let mut instance = create_test_instance_with_constraints();
+
+        instance
+            .uniform_penalty_method_with_fixed_weight(0.0, ATol::default())
+            .unwrap();
+
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Minimize);
+        assert_eq!(output.function(), instance.objective());
+        assert!(!output.preserves_optimality());
     }
 
     #[test]

@@ -11761,7 +11761,7 @@
             },
             {
               "name": "output_objective",
-              "doc": "Objective semantics used by {meth}`evaluate` and {meth}`evaluate_samples`.\n\nThis is `None` until preparation rewrites the active objective or sense.\nWhen present, {attr}`objective` and {attr}`sense` remain the formulation\nused by an adapter, while this value determines the objective and sense\nexposed by the resulting {class}`Solution` or {class}`SampleSet`.",
+              "doc": "Objective semantics used by {meth}`evaluate` and {meth}`evaluate_samples`.\n\nThis is normally `None` until preparation rewrites the active objective\nor sense. A transformation may also install an equal pair to record\nthat active-formulation optimality does not transport. When present,\n{attr}`objective` and {attr}`sense` remain the formulation used by an\nadapter, while this value determines the objective and sense exposed by\nthe resulting {class}`Solution` or {class}`SampleSet`.",
               "type_": {
                 "display": "Optional[OutputObjective]",
                 "link_target": null,
@@ -15307,7 +15307,7 @@
         {
           "kind": "Class",
           "name": "OutputObjective",
-          "doc": "Objective semantics used when an Instance produces a Solution or SampleSet.\n\nPreparation may rewrite an instance's active objective and sense to satisfy\nan adapter's input requirements.  This value preserves the objective\nsemantics exposed by {meth}`Instance.evaluate` and\n{meth}`Instance.evaluate_samples` while the rewritten active objective\nremains available through {attr}`Instance.objective` and\n{attr}`Instance.sense`.",
+          "doc": "Objective semantics used when an Instance produces a Solution or SampleSet.\n\nPreparation may rewrite an instance's active formulation to satisfy an\nadapter's input requirements. This value preserves the objective semantics\nexposed by {meth}`Instance.evaluate` and {meth}`Instance.evaluate_samples`\nand records whether active-formulation optimality transports to those\nsemantics. The active objective remains available through\n{attr}`Instance.objective` and {attr}`Instance.sense`.",
           "bases": [],
           "methods": [],
           "attributes": [
@@ -15322,6 +15322,17 @@
                   "kind": "Class",
                   "attribute": null
                 },
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "preserves_optimality",
+              "doc": "Whether active-formulation optimality transports to this output objective.\n\n`False` means that no such proof is available. It does not assert that\na reconstructed state is suboptimal.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
                 "children": []
               },
               "is_property": true,

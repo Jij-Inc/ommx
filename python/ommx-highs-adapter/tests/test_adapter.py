@@ -62,7 +62,7 @@ def test_solution_optimality():
     assert solution.optimality == Solution.OPTIMAL
 
 
-def test_output_objective_does_not_transport_backend_optimality_claim():
+def test_exact_output_objective_transports_backend_optimality_claim():
     x = DecisionVariable.binary(1)
     instance = Instance.from_components(
         decision_variables=[x],
@@ -72,10 +72,36 @@ def test_output_objective_does_not_transport_backend_optimality_claim():
     )
     assert instance.as_minimization_problem()
 
-    solution = OMMXHighsAdapter.solve_strict(instance)
+    adapter = OMMXHighsAdapter(instance)
+    model = adapter.solver_input
+    model.run()
+    solution = adapter.decode(model)
 
     assert solution.sense == Sense.Maximize
     assert solution.objective == pytest.approx(1.0)
+    assert solution.optimality == Optimality.Optimal
+
+
+def test_fixed_penalty_does_not_transport_backend_optimality_claim():
+    x = DecisionVariable.binary(1)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={0: x == 1},
+        sense=Sense.Minimize,
+    )
+    instance.to_qubo(uniform_penalty_weight=0.1)
+    assert instance.reduce_binary_power()
+    assert instance.output_objective is not None
+    assert not instance.output_objective.preserves_optimality
+
+    adapter = OMMXHighsAdapter(instance)
+    model = adapter.solver_input
+    model.run()
+    solution = adapter.decode(model)
+
+    assert solution.objective == pytest.approx(0.0)
+    assert not solution.feasible
     assert solution.optimality == Optimality.Unspecified
 
 

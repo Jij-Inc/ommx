@@ -752,8 +752,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             state = self.decode_to_state(data)
             solution = self.instance.evaluate(state)
 
+            output_objective = self.instance.output_objective
             if (
-                self.instance.output_objective is None and data.getStatus() == "optimal"
+                (output_objective is None or output_objective.preserves_optimality)
+                and data.getStatus() == "optimal"
             ):  # pyscipopt does not appear to have an enum or constant for this
                 solution.optimality = Solution.OPTIMAL
 

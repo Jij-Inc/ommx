@@ -315,10 +315,12 @@ impl Instance {
 
     /// Objective semantics used by {meth}`evaluate` and {meth}`evaluate_samples`.
     ///
-    /// This is `None` until preparation rewrites the active objective or sense.
-    /// When present, {attr}`objective` and {attr}`sense` remain the formulation
-    /// used by an adapter, while this value determines the objective and sense
-    /// exposed by the resulting {class}`Solution` or {class}`SampleSet`.
+    /// This is normally `None` until preparation rewrites the active objective
+    /// or sense. A transformation may also install an equal pair to record
+    /// that active-formulation optimality does not transport. When present,
+    /// {attr}`objective` and {attr}`sense` remain the formulation used by an
+    /// adapter, while this value determines the objective and sense exposed by
+    /// the resulting {class}`Solution` or {class}`SampleSet`.
     #[getter]
     pub fn output_objective(&self) -> Option<OutputObjective> {
         self.inner.output_objective().cloned().map(OutputObjective)

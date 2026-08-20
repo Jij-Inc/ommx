@@ -216,6 +216,7 @@ mod output_objective_tests {
         let output = instance.output_objective().unwrap();
         assert_eq!(output.sense(), Sense::Maximize);
         assert_eq!(output.function(), &original_objective);
+        assert!(output.preserves_optimality());
         assert_eq!(instance.sense(), Sense::Minimize);
         assert_eq!(instance.objective(), &original_objective.clone().neg());
 
@@ -225,6 +226,7 @@ mod output_objective_tests {
         let output = instance.output_objective().unwrap();
         assert_eq!(output.sense(), Sense::Maximize);
         assert_eq!(output.function(), &original_objective);
+        assert!(output.preserves_optimality());
 
         let state = State::from(HashMap::from([(1, 1.0)]));
         let solution = instance.evaluate(&state, ATol::default()).unwrap();
