@@ -8,6 +8,17 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### Preserve output objective semantics across Instance transformations ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+Transformations that rewrite an `Instance`'s active objective or sense now
+preserve the first output objective used by `evaluate()` and
+`evaluate_samples()`. Results therefore retain the input model's objective
+values and sense while the active formulation remains available to solvers.
+
+`Instance.as_parametric_instance()` now raises `RuntimeError` when these output
+semantics are present, because `ParametricInstance` cannot represent them
+without losing information.
+
 ### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 
 `SolverAdapter.check_applicability()` and `require_applicable()` now use

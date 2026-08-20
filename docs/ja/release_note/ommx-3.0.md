@@ -8,6 +8,16 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### Instance変換後のoutput objective semanticsを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+`Instance`のactive objectiveまたはsenseを書き換える変換は、`evaluate()`と
+`evaluate_samples()`が使う最初のoutput objectiveを保持するようになりました。
+そのためactive formulationをsolver向けに維持しながら、結果は入力modelのobjective
+valueとsenseを返します。
+
+このoutput semanticsがある場合、`ParametricInstance`では情報を失わずに表現できないため、
+`Instance.as_parametric_instance()`は`RuntimeError`を送出します。
+
 ### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 
 `SolverAdapter.check_applicability()` と `require_applicable()` は、完全な
