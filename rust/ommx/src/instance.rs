@@ -117,15 +117,18 @@ pub enum Sense {
 /// Objective semantics used when evaluating solver output.
 ///
 /// This value is normally captured by the first transformation that changes
-/// an [`Instance`]'s active objective or sense. A transformation may also
-/// install an equal pair when it needs to record that active-formulation
-/// optimality does not transport to the output semantics. Later preparation
-/// steps continue rewriting the active formulation, while
-/// [`Instance::evaluate`] and [`Instance::evaluate_samples`] use this pair to
-/// present results in the input model's objective semantics.
+/// an [`Instance`]'s or [`ParametricInstance`]'s active objective or sense. A
+/// transformation may also install an equal pair when it needs to record that
+/// active-formulation optimality does not transport to the output semantics.
+/// Later transformations continue rewriting the active formulation, while
+/// [`ParametricInstance::with_parameters`] specializes and carries this value
+/// to the resulting [`Instance`]. [`Instance::evaluate`] and
+/// [`Instance::evaluate_samples`] then use the pair to present results in the
+/// input model's objective semantics.
 ///
-/// The sense and function are intentionally immutable outside [`Instance`]:
-/// they are one semantic value and must never be updated independently.
+/// The sense and function are intentionally immutable outside their enclosing
+/// [`Instance`] or [`ParametricInstance`]: they are one semantic value and must
+/// never be updated independently.
 /// [`Self::preserves_optimality`] records whether a backend optimality proof
 /// for the active formulation also applies to this output objective after
 /// state reconstruction.
@@ -708,8 +711,9 @@ impl Instance {
 ///   algebraic expressions cannot distinguish decision-variable references
 ///   from parameter references without the enclosing root.
 /// - [`Self::decision_variables`] and [`Self::parameters`] together contain
-///   every ID that may appear in the objective, regular/indicator constraint
-///   bodies, named functions, and dependency RHS expressions.
+///   every ID that may appear in the objective, output objective,
+///   regular/indicator constraint bodies, named functions, and dependency RHS
+///   expressions.
 /// - The IDs of [`Self::decision_variables`] and [`Self::parameters`] are
 ///   disjoint sets. This shared-namespace invariant is host-level state and
 ///   is validated by [`ParametricInstance::builder`] / protobuf parsing, not
@@ -721,6 +725,12 @@ impl Instance {
 ///   reference IDs from [`Self::decision_variables`] or [`Self::parameters`],
 ///   and may not reference undefined IDs. Parameter IDs in RHS expressions are
 ///   evaluated by [`Self::with_parameters`].
+/// - [`Self::output_objective`] has the same atomic sense/function/optimality
+///   semantics as [`Instance::output_objective`]. Its function may reference
+///   decision-variable or parameter IDs, including fixed, dependent, or
+///   otherwise inactive decision variables. Parameter references are
+///   specialized by [`Self::with_parameters`] before the pair is installed on
+///   the resulting [`Instance`].
 /// - Decision variables are classified into mutually exclusive roles:
 ///   - **used**: Variable IDs appearing in the objective function or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
@@ -775,13 +785,14 @@ impl Instance {
 ///
 /// [`Self::with_parameters`] partially evaluates parameter IDs out of every
 /// expression that could contain one when materializing a parametric
-/// instance into an [`Instance`]: the objective, active and removed regular
-/// constraint bodies, active and removed indicator constraint function
-/// bodies, named functions, and `decision_variable_dependency` RHS
-/// expressions. OneHot/SOS1 collections (active and removed) pass through
-/// unchanged because their variable sets are required to be real decision
-/// variables at construction time. The resulting [`Instance`] satisfies its
-/// own (stricter) invariants — no parameter IDs survive anywhere.
+/// instance into an [`Instance`]: the active objective, output objective,
+/// active and removed regular constraint bodies, active and removed indicator
+/// constraint function bodies, named functions, and
+/// `decision_variable_dependency` RHS expressions. OneHot/SOS1 collections
+/// (active and removed) pass through unchanged because their variable sets are
+/// required to be real decision variables at construction time. The resulting
+/// [`Instance`] satisfies its own (stricter) invariants — no parameter IDs
+/// survive anywhere.
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {
@@ -789,6 +800,13 @@ pub struct ParametricInstance {
     sense: Sense,
     #[getset(get = "pub")]
     objective: Function,
+    /// Objective semantics presented after parameter specialization and
+    /// evaluation.
+    ///
+    /// `None` means the specialized active [`Self::sense`] /
+    /// [`Self::objective`] pair is also the output pair. A present function may
+    /// reference both decision-variable and parameter IDs owned by this root.
+    output_objective: Option<OutputObjective>,
     /// Created decision-variable rows, modeling labels, and fixed values.
     decision_variables: DecisionVariableTable,
     #[getset(get = "pub")]
@@ -822,6 +840,26 @@ pub struct ParametricInstance {
 }
 
 impl ParametricInstance {
+    /// Return the preserved objective semantics used after specialization.
+    ///
+    /// `None` means the active [`Self::sense`] and [`Self::objective`] define
+    /// the output semantics directly.
+    pub fn output_objective(&self) -> Option<&OutputObjective> {
+        self.output_objective.as_ref()
+    }
+
+    /// Preserve the current active objective pair unless an earlier
+    /// transformation has already established the output semantics.
+    fn capture_output_objective(&mut self) {
+        if self.output_objective.is_none() {
+            self.output_objective = Some(OutputObjective::new(
+                self.sense,
+                self.objective.clone(),
+                true,
+            ));
+        }
+    }
+
     /// Access the decision-variable definition table.
     pub fn decision_variable_table(&self) -> &DecisionVariableTable {
         &self.decision_variables

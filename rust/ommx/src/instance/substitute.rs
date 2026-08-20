@@ -253,7 +253,12 @@ impl Substitute for ParametricInstance {
             }
         }
 
-        substitute_acyclic(&mut self.objective, acyclic)?;
+        let mut objective = self.objective.clone();
+        substitute_acyclic(&mut objective, acyclic)?;
+        if objective != self.objective {
+            self.capture_output_objective();
+        }
+        self.objective = objective;
 
         let mut constraint_replacements = BTreeMap::new();
         for (&constraint_id, constraint) in self.constraint_collection.active() {
@@ -435,6 +440,14 @@ mod tests {
             )
             .unwrap();
 
+        let output = substituted.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Minimize);
+        assert_eq!(
+            output.function(),
+            &Function::from(linear!(0) + linear!(100))
+        );
+        assert!(output.preserves_optimality());
+
         assert_eq!(substituted.decision_variable_dependency.len(), 1);
         assert!(substituted
             .decision_variable_dependency
@@ -444,12 +457,17 @@ mod tests {
         let mut parameter_values = crate::v1::Parameters::default();
         parameter_values.entries.insert(100, 2.0);
         let instance = substituted.with_parameters(parameter_values).unwrap();
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.function(), &Function::from(linear!(0) + coeff!(2.0)));
+        assert!(output.preserves_optimality());
         let state = crate::v1::State::from_iter([(1, 3.0)]);
         let value = instance
             .objective()
             .evaluate(&state, crate::ATol::default())
             .unwrap();
         assert_eq!(value, 7.0);
+        let solution = instance.evaluate(&state, crate::ATol::default()).unwrap();
+        assert_eq!(*solution.objective(), 7.0);
     }
 
     #[test]

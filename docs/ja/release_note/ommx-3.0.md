@@ -15,8 +15,9 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 そのためactive formulationをsolver向けに維持しながら、結果は入力modelのobjective
 valueとsenseを返します。
 
-このoutput semanticsがある場合、`ParametricInstance`では情報を失わずに表現できないため、
-`Instance.as_parametric_instance()`は`RuntimeError`を送出します。
+`ParametricInstance`も同じoutput semanticsを保持し、`with_parameters()`でparameter
+参照を具体化します。このため、変換後も`Instance.as_parametric_instance()`は情報を
+失わずに変換できます。
 
 ### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 

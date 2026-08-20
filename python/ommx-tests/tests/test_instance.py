@@ -62,16 +62,6 @@ def test_minimize_creates_empty_minimization_instance():
     assert instance.objective.almost_equal(Function(0))
 
 
-def test_as_parametric_instance_rejects_output_objective():
-    instance = Instance.maximize()
-    x = instance.new_binary("x")
-    instance.objective = x
-    assert instance.as_minimization_problem()
-
-    with pytest.raises(RuntimeError, match="output_objective"):
-        instance.as_parametric_instance()
-
-
 def test_new_binary_accepts_full_modeling_label():
     instance = Instance.minimize()
     x = instance.new_binary(

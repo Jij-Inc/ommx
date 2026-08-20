@@ -56,7 +56,7 @@ impl From<Instance> for v2::Instance {
             created_collection_has_payload(&value.sos1_constraint_collection),
         );
         if value.output_objective.is_some() {
-            required_features.push(v2::Feature::InstanceOutputObjective as i32);
+            required_features.push(v2::Feature::OutputObjective as i32);
         }
 
         let Instance {
@@ -108,15 +108,19 @@ impl From<OutputObjective> for v2::OutputObjective {
 
 impl From<ParametricInstance> for v2::ParametricInstance {
     fn from(value: ParametricInstance) -> Self {
-        let required_features = crate::v2_io::required_features(
+        let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
         );
+        if value.output_objective.is_some() {
+            required_features.push(v2::Feature::OutputObjective as i32);
+        }
 
         let ParametricInstance {
             sense,
             objective,
+            output_objective,
             decision_variables,
             parameters,
             constraint_collection,
@@ -145,6 +149,7 @@ impl From<ParametricInstance> for v2::ParametricInstance {
             ),
             named_functions: Some(named_functions.into()),
             annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
+            output_objective: output_objective.map(Into::into),
         }
     }
 }
@@ -242,6 +247,29 @@ mod tests {
         instance
     }
 
+    fn parametric_instance_with_output_objective() -> ParametricInstance {
+        let parameter_id = VariableID::from(100);
+        let output_function =
+            Function::from((linear!(1) + linear!(parameter_id.into_inner())).unwrap());
+        let mut instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(output_function.clone())
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                DecisionVariable::binary(),
+            )]))
+            .parameters(ParameterTable::from_ids(BTreeSet::from([parameter_id])))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        instance.output_objective = Some(OutputObjective::new(
+            Sense::Maximize,
+            output_function,
+            false,
+        ));
+        instance
+    }
+
     fn assert_btree_map<K: Ord, V>(_: &BTreeMap<K, V>) {}
 
     #[test]
@@ -269,11 +297,24 @@ mod tests {
 
     #[test]
     fn v1_parametric_instance_serialization_rejects_special_constraints() {
-        let instance = ParametricInstance::try_from(instance_with_special_constraints()).unwrap();
+        let instance: ParametricInstance = instance_with_special_constraints().into();
         let err = instance.to_v1_bytes().unwrap_err();
 
         assert!(
             err.to_string().contains("to_v2_bytes"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn v1_parametric_instance_serialization_rejects_output_objective() {
+        let err = parametric_instance_with_output_objective()
+            .to_v1_bytes()
+            .unwrap_err();
+
+        assert!(
+            err.to_string().contains("output_objective")
+                && err.to_string().contains("ommx.v1.ParametricInstance"),
             "unexpected error: {err}"
         );
     }
@@ -340,7 +381,7 @@ mod tests {
 
         assert_eq!(
             proto.required_features,
-            vec![v2::Feature::InstanceOutputObjective as i32]
+            vec![v2::Feature::OutputObjective as i32]
         );
         let output = proto.output_objective.as_ref().unwrap();
         assert_eq!(
@@ -363,7 +404,7 @@ mod tests {
 
         assert!(
             err.to_string().contains("required_features")
-                && err.to_string().contains("InstanceOutputObjective"),
+                && err.to_string().contains("OutputObjective"),
             "unexpected error: {err}",
         );
     }
@@ -377,7 +418,7 @@ mod tests {
 
         assert!(
             err.to_string().contains("output_objective")
-                && err.to_string().contains("InstanceOutputObjective"),
+                && err.to_string().contains("OutputObjective"),
             "unexpected error: {err}",
         );
     }
@@ -398,20 +439,96 @@ mod tests {
     }
 
     #[test]
-    fn v2_parametric_instance_rejects_instance_output_objective_feature() {
-        let parametric = ParametricInstance::try_from(Instance::default()).unwrap();
-        let mut proto = v2::ParametricInstance::from(parametric);
-        proto
+    fn v2_parametric_instance_round_trip_preserves_parameterized_output_objective() {
+        let instance = parametric_instance_with_output_objective();
+        let proto = v2::ParametricInstance::from(instance.clone());
+
+        assert!(proto
             .required_features
-            .push(v2::Feature::InstanceOutputObjective as i32);
+            .contains(&(v2::Feature::OutputObjective as i32)));
+        let output = proto.output_objective.as_ref().unwrap();
+        assert_eq!(
+            output.sense,
+            i32::from(crate::v1::instance::Sense::Maximize)
+        );
+        assert!(!output.preserves_optimality);
+        let output_function: Function = output
+            .function
+            .as_ref()
+            .unwrap()
+            .clone()
+            .parse(&())
+            .unwrap();
+        assert!(output_function
+            .required_ids()
+            .contains(&VariableID::from(100)));
+
+        let restored = ParametricInstance::try_from(proto).unwrap();
+        assert_eq!(restored, instance);
+    }
+
+    #[test]
+    fn v2_parametric_instance_output_objective_requires_feature() {
+        let mut proto = v2::ParametricInstance::from(parametric_instance_with_output_objective());
+        proto.required_features.clear();
 
         let err = ParametricInstance::try_from(proto).unwrap_err();
-
         assert!(
-            err.to_string().contains("InstanceOutputObjective")
-                && err.to_string().contains("output_objective"),
+            err.to_string().contains("required_features")
+                && err.to_string().contains("OutputObjective"),
             "unexpected error: {err}",
         );
+    }
+
+    #[test]
+    fn v2_parametric_instance_output_objective_feature_requires_payload() {
+        let mut proto = v2::ParametricInstance::from(parametric_instance_with_output_objective());
+        proto.output_objective = None;
+
+        let err = ParametricInstance::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string().contains("output_objective")
+                && err.to_string().contains("OutputObjective"),
+            "unexpected error: {err}",
+        );
+    }
+
+    #[test]
+    fn v2_parametric_instance_rejects_undefined_output_objective_id() {
+        let mut proto = v2::ParametricInstance::from(parametric_instance_with_output_objective());
+        proto.output_objective.as_mut().unwrap().function =
+            Some(Function::from(linear!(999)).into());
+
+        let err = ParametricInstance::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string().contains("output_objective.function")
+                && err.to_string().contains("Undefined variable ID"),
+            "unexpected error: {err}",
+        );
+    }
+
+    #[test]
+    fn v2_solution_and_sample_set_reject_output_objective_feature() {
+        let instance = Instance::default();
+        let state = crate::v1::State::default();
+
+        let mut solution = v2::Solution::from(instance.evaluate(&state, ATol::default()).unwrap());
+        solution
+            .required_features
+            .push(v2::Feature::OutputObjective as i32);
+        let solution_error = crate::Solution::try_from(solution).unwrap_err();
+        assert!(solution_error.to_string().contains("OutputObjective"));
+
+        let mut sample_set = v2::SampleSet::from(
+            instance
+                .evaluate_samples(&Sampled::from(state), ATol::default())
+                .unwrap(),
+        );
+        sample_set
+            .required_features
+            .push(v2::Feature::OutputObjective as i32);
+        let sample_set_error = crate::SampleSet::try_from(sample_set).unwrap_err();
+        assert!(sample_set_error.to_string().contains("OutputObjective"));
     }
 
     #[test]

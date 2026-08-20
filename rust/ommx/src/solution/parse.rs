@@ -324,7 +324,7 @@ impl Parse for v2::Solution {
         let message = "ommx.v2.Solution";
         let required_features =
             crate::v2_io::parse_required_features(self.required_features, message)?;
-        crate::v2_io::reject_instance_output_objective_feature(&required_features, message)?;
+        crate::v2_io::reject_output_objective_feature(&required_features, message)?;
         let feasibility_atol =
             crate::v2_io::parse_feasibility_atol(self.feasibility_atol, message)?;
         let annotations =

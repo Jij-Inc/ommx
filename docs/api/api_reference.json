@@ -8781,7 +8781,7 @@
             },
             {
               "name": "as_parametric_instance",
-              "doc": "Convert this instance to a parameter-free ParametricInstance.\n\nRaises {class}`RuntimeError` when an output objective has been installed,\nbecause ParametricInstance cannot represent that distinct output semantics\nwithout losing information.",
+              "doc": "",
               "signatures": [
                 {
                   "parameters": [],
@@ -18130,7 +18130,7 @@
             },
             {
               "name": "removed_one_hot_constraints",
-              "doc": "Dict of all removed one-hot constraints in the parametric instance\nkeyed by their IDs. The removed map can become non-empty when an\n`Instance` whose one-hot constraints have been converted (via\n`convert_all_one_hots_to_constraints`) is round-tripped back to a\n`ParametricInstance` via `Instance.as_parametric_instance()`.",
+              "doc": "Dict of all removed one-hot constraints in the parametric instance\nkeyed by their IDs. The removed map can become non-empty when an\n`Instance` whose one-hot constraints have been converted (via\n`convert_all_one_hots_to_constraints`) is round-tripped back to a\n`ParametricInstance` via `From<Instance>`.",
               "type_": {
                 "display": "dict[int, RemovedOneHotConstraint]",
                 "link_target": null,

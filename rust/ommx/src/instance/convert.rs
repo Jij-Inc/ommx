@@ -41,15 +41,12 @@ impl Instance {
     }
 }
 
-impl TryFrom<Instance> for ParametricInstance {
-    type Error = crate::Error;
-
-    fn try_from(value: Instance) -> crate::Result<Self> {
-        value.ensure_no_output_objective("conversion to ParametricInstance")?;
-        let Instance {
+impl From<Instance> for ParametricInstance {
+    fn from(
+        Instance {
             sense,
             objective,
-            output_objective: _,
+            output_objective,
             decision_variables,
             constraint_collection,
             indicator_constraint_collection,
@@ -60,10 +57,12 @@ impl TryFrom<Instance> for ParametricInstance {
             annotations,
             named_functions,
             ..
-        } = value;
-        Ok(ParametricInstance {
+        }: Instance,
+    ) -> Self {
+        ParametricInstance {
             sense,
             objective,
+            output_objective,
             decision_variables,
             parameters: ParameterTable::default(),
             constraint_collection,
@@ -74,7 +73,7 @@ impl TryFrom<Instance> for ParametricInstance {
             description,
             annotations,
             named_functions,
-        })
+        }
     }
 }
 
@@ -128,15 +127,28 @@ impl ParametricInstance {
             );
         }
 
-        // Create state from parameters
+        // Materialize only IDs declared by this ParametricInstance. Extra
+        // caller-supplied entries are retained as assignment metadata on the
+        // resulting Instance, but must not accidentally substitute a decision
+        // variable that shares their numeric ID.
         let state = crate::v1::State {
-            entries: parameters.entries.clone(),
+            entries: parameters
+                .entries
+                .iter()
+                .filter(|(id, _)| required_ids.contains(&VariableID::from(**id)))
+                .map(|(&id, &value)| (id, value))
+                .collect(),
         };
         let atol = ATol::default();
 
-        // Partially evaluate the objective, constraints, and named functions
+        // Partially evaluate the active and output objectives, constraints,
+        // and named functions.
         let mut objective = self.objective;
         objective.partial_evaluate(&state, atol)?;
+        let mut output_objective = self.output_objective;
+        if let Some(output_objective) = &mut output_objective {
+            output_objective.function.partial_evaluate(&state, atol)?;
+        }
 
         // Both active and removed regular constraint bodies need the parameter
         // substitution applied — otherwise the resulting `Instance` would
@@ -168,7 +180,7 @@ impl ParametricInstance {
         Ok(Instance {
             sense: self.sense,
             objective,
-            output_objective: None,
+            output_objective,
             decision_variables: self.decision_variables,
             constraint_collection,
             indicator_constraint_collection,
@@ -250,27 +262,69 @@ mod output_objective_tests {
     }
 
     #[test]
-    fn conversion_to_parametric_rejects_output_objective() {
+    fn conversion_to_parametric_preserves_output_objective() {
         let mut instance = maximizing_binary_instance();
         assert!(instance.as_minimization_problem());
+        let original_output = instance.output_objective().cloned().unwrap();
 
-        let err = ParametricInstance::try_from(instance).unwrap_err();
+        let parametric = ParametricInstance::from(instance);
+        assert_eq!(parametric.output_objective(), Some(&original_output));
 
-        assert!(
-            err.to_string().contains("output_objective"),
-            "unexpected error: {err}"
-        );
+        let materialized = parametric
+            .with_parameters(crate::v1::Parameters::default())
+            .unwrap();
+        assert_eq!(materialized.output_objective(), Some(&original_output));
+
+        let solution = materialized
+            .evaluate(&State::from(HashMap::from([(1, 1.0)])), ATol::default())
+            .unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 1.0);
     }
 }
 
 #[cfg(test)]
 mod with_parameters_tests {
     use super::*;
-    use crate::{coeff, linear, Equality, Function};
+    use crate::{coeff, linear, Equality, Evaluate, Function};
     use maplit::btreemap;
 
     fn parameters(ids: impl IntoIterator<Item = VariableID>) -> ParameterTable {
         ParameterTable::from_ids(ids.into_iter().collect())
+    }
+
+    #[test]
+    fn extra_assignment_metadata_does_not_substitute_decision_variables() {
+        let x = VariableID::from(1);
+        let p = VariableID::from(100);
+        let parametric = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1) + linear!(100)))
+            .decision_variables(btreemap! {
+                x => DecisionVariable::continuous(),
+            })
+            .parameters(parameters([p]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+
+        let supplied = crate::v1::Parameters {
+            entries: std::collections::HashMap::from([(100, 2.0), (1, 999.0)]),
+        };
+        let materialized = parametric.with_parameters(supplied.clone()).unwrap();
+
+        assert_eq!(materialized.parameters, Some(supplied));
+        assert!(materialized.objective().required_ids().contains(&x));
+        assert_eq!(
+            materialized
+                .objective()
+                .evaluate(
+                    &crate::v1::State::from_iter([(x.into_inner(), 3.0)]),
+                    ATol::default(),
+                )
+                .unwrap(),
+            5.0,
+        );
     }
 
     /// Parameter substitution must apply to the right-hand-side of

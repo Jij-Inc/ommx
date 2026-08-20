@@ -98,17 +98,17 @@ pub fn validate_feature_payload(
     }
 }
 
-/// Reject the Instance-only output-objective feature on every other v2 root.
+/// Reject the output-objective feature on v2 roots that cannot carry its payload.
 ///
 /// `Feature` is a protobuf-global enum, so merely recognizing its numeric value
 /// is not enough to establish that a particular root can represent it.
-pub fn reject_instance_output_objective_feature(
+pub fn reject_output_objective_feature(
     required_features: &BTreeSet<Feature>,
     message: &'static str,
 ) -> Result<(), ParseError> {
     validate_feature_payload(
         required_features,
-        Feature::InstanceOutputObjective,
+        Feature::OutputObjective,
         false,
         message,
         "output_objective",

@@ -77,7 +77,7 @@ fn parse_v2_decision_variable_dependency(
 
 fn parse_v2_output_objective(
     value: v2::OutputObjective,
-    decision_variable_ids: &VariableIDSet,
+    allowed_ids: &VariableIDSet,
     message: &'static str,
 ) -> Result<OutputObjective, ParseError> {
     let sense = crate::v2_io::parse_v2_required_sense(value.sense, message)
@@ -90,7 +90,7 @@ fn parse_v2_output_objective(
         })?
         .parse_as(&(), message, "output_objective.function")?;
     for id in function.required_ids() {
-        if !decision_variable_ids.contains(&id) {
+        if !allowed_ids.contains(&id) {
             return Err(RawParseError::InvalidInstance(format!(
                 "Undefined variable ID is used: {id:?}"
             ))
@@ -530,7 +530,7 @@ impl Parse for v2::Instance {
             .transpose()?;
         crate::v2_io::validate_feature_payload(
             &required_features,
-            v2::Feature::InstanceOutputObjective,
+            v2::Feature::OutputObjective,
             output_objective.is_some(),
             message,
             "output_objective",
@@ -871,6 +871,7 @@ impl Parse for v1::ParametricInstance {
         Ok(ParametricInstance {
             sense,
             objective,
+            output_objective: None,
             decision_variables,
             parameters,
             constraint_collection: ConstraintCollection::with_context(
@@ -904,7 +905,6 @@ impl Parse for v2::ParametricInstance {
         let message = "ommx.v2.ParametricInstance";
         let required_features =
             crate::v2_io::parse_required_features(self.required_features, message)?;
-        crate::v2_io::reject_instance_output_objective_feature(&required_features, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
         let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
@@ -947,6 +947,17 @@ impl Parse for v2::ParametricInstance {
                 .context(message, "objective"));
             }
         }
+        let output_objective = self
+            .output_objective
+            .map(|value| parse_v2_output_objective(value, &all_variable_ids, message))
+            .transpose()?;
+        crate::v2_io::validate_feature_payload(
+            &required_features,
+            v2::Feature::OutputObjective,
+            output_objective.is_some(),
+            message,
+            "output_objective",
+        )?;
 
         let constraint_collection = self
             .regular_constraints
@@ -1068,6 +1079,7 @@ impl Parse for v2::ParametricInstance {
         Ok(ParametricInstance {
             sense,
             objective,
+            output_objective,
             decision_variables,
             parameters,
             constraint_collection,
@@ -1097,6 +1109,7 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
         ParametricInstance {
             sense,
             objective,
+            output_objective,
             decision_variables,
             parameters,
             constraint_collection,
@@ -1109,6 +1122,11 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
             annotations,
         }: ParametricInstance,
     ) -> crate::Result<Self> {
+        if output_objective.is_some() {
+            crate::bail!(
+                "serialization to ommx.v1.ParametricInstance cannot preserve ParametricInstance.output_objective"
+            );
+        }
         // Special constraint types do not have a v1 proto representation yet.
         if !indicator_constraint_collection.active().is_empty()
             || !indicator_constraint_collection.removed().is_empty()
@@ -1599,7 +1617,7 @@ mod tests {
 
     #[test]
     fn test_parametric_instance_to_v1_bytes_filters_reserved_annotation_key() {
-        let mut instance = crate::ParametricInstance::try_from(Instance::default()).unwrap();
+        let mut instance: crate::ParametricInstance = Instance::default().into();
         let reserved_key = format!(
             "{}.title",
             crate::annotation_keys::PARAMETRIC_INSTANCE_NAMESPACE

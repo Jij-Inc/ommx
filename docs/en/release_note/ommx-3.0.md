@@ -15,9 +15,9 @@ preserve the first output objective used by `evaluate()` and
 `evaluate_samples()`. Results therefore retain the input model's objective
 values and sense while the active formulation remains available to solvers.
 
-`Instance.as_parametric_instance()` now raises `RuntimeError` when these output
-semantics are present, because `ParametricInstance` cannot represent them
-without losing information.
+`ParametricInstance` carries the same output semantics and specializes any
+parameter references in `with_parameters()`, so
+`Instance.as_parametric_instance()` remains lossless after a transformation.
 
 ### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 
