@@ -2,9 +2,6 @@ syntax = "proto3";
 
 package ommx.v2;
 
-import "ommx/v1/function.proto";
-import "ommx/v1/instance.proto";
-
 // Wire-level semantics required to interpret a top-level root exactly.
 //
 // This is OMMX's feature-based forward-compatibility gate. Protobuf itself
@@ -31,35 +28,6 @@ enum Feature {
   // The Instance or ParametricInstance payload explicitly carries inactive
   // output objective semantics alongside the active solver formulation.
   FEATURE_OUTPUT_OBJECTIVE = 4;
-}
-
-// Objective semantics used when evaluating solver output.
-//
-// `sense` and `function` form one inseparable pair: together they describe
-// how Solution and SampleSet objective values are presented to users, while
-// the root's objective and sense describe the active formulation sent to a
-// solver. In a ParametricInstance, `function` may reference parameter IDs;
-// those references are materialized together with the active formulation.
-// Absence means the active sense and objective are also the output semantics.
-// The pair may equal the active pair when this payload exists only to record
-// that active-formulation optimality does not transport.
-// Its referenced IDs are not added to the solver-used set. The function is
-// evaluated only after the full decision-variable state, including fixed,
-// irrelevant, and dependent values, is populated.
-message OutputObjective {
-  ommx.v1.Instance.Sense sense = 1;
-  ommx.v1.Function function = 2;
-
-  // Whether backend optimality for the active formulation also proves
-  // optimality for this output objective after state reconstruction.
-  //
-  // This compares objective orderings over candidate states of the active
-  // formulation. It does not assert feasibility or optimality with respect to
-  // removed constraints.
-  //
-  // `false` is conservative: it means that such a proof is not available,
-  // not that the reconstructed state is known to be suboptimal.
-  bool preserves_optimality = 3;
 }
 
 // Human-authored modeling notation for one table or collection row.
