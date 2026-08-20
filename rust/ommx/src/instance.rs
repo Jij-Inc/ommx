@@ -168,6 +168,11 @@ impl OutputObjective {
 
     /// Whether active-formulation optimality transports to this output objective.
     ///
+    /// This compares the active and output objective orderings over candidate
+    /// states of the active formulation after state reconstruction. It does
+    /// not assert feasibility or optimality with respect to removed
+    /// constraints.
+    ///
     /// `false` means that no such proof is available. It does not assert that
     /// a reconstructed state is suboptimal.
     pub fn preserves_optimality(&self) -> bool {

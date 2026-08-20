@@ -23,6 +23,10 @@ pub struct OutputObjective {
     /// Whether backend optimality for the active formulation also proves
     /// optimality for this output objective after state reconstruction.
     ///
+    /// This compares objective orderings over candidate states of the active
+    /// formulation. It does not assert feasibility or optimality with respect to
+    /// removed constraints.
+    ///
     /// `false` is conservative: it means that such a proof is not available,
     /// not that the reconstructed state is known to be suboptimal.
     #[prost(bool, tag = "3")]
