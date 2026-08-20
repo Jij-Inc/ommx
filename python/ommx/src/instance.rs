@@ -1046,10 +1046,10 @@ impl Instance {
         Ok(result)
     }
 
-    pub fn as_parametric_instance(&self) -> ParametricInstance {
-        ParametricInstance {
-            inner: self.inner.clone().into(),
-        }
+    pub fn as_parametric_instance(&self) -> OmmxPyResult<ParametricInstance> {
+        Ok(ParametricInstance {
+            inner: ommx::ParametricInstance::try_from(self.inner.clone())?,
+        })
     }
 
     /// Convert to a parametric unconstrained instance by penalty method.
