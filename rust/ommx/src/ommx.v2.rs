@@ -6,6 +6,12 @@
 /// the root's objective and sense describe the active formulation sent to a
 /// solver. In a ParametricInstance, `function` may reference parameter IDs;
 /// those references are materialized together with the active formulation.
+/// Absence means the active sense and objective are also the output semantics.
+/// The pair may equal the active pair when this payload exists only to record
+/// that active-formulation optimality does not transport.
+/// Its referenced IDs are not added to the solver-used set. The function is
+/// evaluated only after the full decision-variable state, including fixed,
+/// irrelevant, and dependent values, is populated.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -68,9 +74,9 @@ pub enum Feature {
     ConstraintOneHot = 2,
     /// The payload contains first-class SOS1 constraints.
     ConstraintSos1 = 3,
-    /// The Instance or ParametricInstance payload explicitly carries output
-    /// objective semantics alongside the active formulation objective.
-    OutputObjective = 4,
+    /// The Instance or ParametricInstance payload explicitly carries inactive
+    /// output objective semantics alongside the active solver formulation.
+    OutputObjective = 5,
 }
 impl Feature {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -641,7 +647,9 @@ pub struct Instance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
-    #[prost(message, optional, tag = "14")]
+    /// Inactive objective definition evaluated after full state population.
+    /// When absent, `sense` and `objective` are also the output semantics.
+    #[prost(message, optional, tag = "15")]
     pub output_objective: ::core::option::Option<OutputObjective>,
 }
 /// Parameter IDs and labels owned by ParametricInstance.
@@ -695,7 +703,9 @@ pub struct ParametricInstance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
-    #[prost(message, optional, tag = "14")]
+    /// Inactive objective definition specialized during parameter materialization.
+    /// When absent, `sense` and `objective` are also the output semantics.
+    #[prost(message, optional, tag = "15")]
     pub output_objective: ::core::option::Option<OutputObjective>,
 }
 /// Validated multi-sample solver or sampler output serialization root.

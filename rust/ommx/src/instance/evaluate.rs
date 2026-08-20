@@ -481,9 +481,6 @@ impl Instance {
             } => {
                 self.decision_variables
                     .merge_validated_fixed_values(fixed_values, atol);
-                if objective != self.objective {
-                    self.capture_output_objective();
-                }
                 self.objective = objective;
                 self.constraint_collection
                     .replace_active_rows(active_constraint_replacements)
@@ -532,11 +529,7 @@ impl Instance {
 
         // Phase 3: Regular partial evaluation with normalized fixed values.
         // Special constraint collections are already handled by propagation — not called again.
-        let objective_before = self.objective.clone();
         self.objective.partial_evaluate(&normalized_state, atol)?;
-        if self.objective != objective_before {
-            self.capture_output_objective_from(self.sense, objective_before);
-        }
         self.constraint_collection
             .partial_evaluate(&normalized_state, atol)?;
         self.named_functions
@@ -1230,10 +1223,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(borrowed, consumed);
-        let output = borrowed.output_objective().unwrap();
-        assert_eq!(output.sense(), instance.sense());
-        assert_eq!(output.function(), instance.objective());
-        assert!(output.preserves_optimality());
+        assert!(borrowed.output_objective().is_none());
         assert_eq!(
             borrowed.fixed_decision_variable_values(),
             &BTreeMap::from([(VariableID::from(1), 2.0), (VariableID::from(2), 3.0)])
@@ -1276,6 +1266,41 @@ mod tests {
                 .unwrap()
                 .evaluated_value()
         );
+    }
+
+    #[test]
+    fn partial_evaluate_preserves_existing_output_objective() {
+        let mut instance = regular_plan_instance();
+        assert!(instance.as_maximization_problem());
+        let output = instance.output_objective().cloned().unwrap();
+
+        instance
+            .partial_evaluate(&v1::State::from(HashMap::from([(1, 2.0)])), ATol::default())
+            .unwrap();
+
+        assert_eq!(instance.output_objective(), Some(&output));
+        assert_eq!(
+            instance.used_decision_variable_ids(),
+            VariableIDSet::from([VariableID::from(3)])
+        );
+        let solution = instance
+            .evaluate(&v1::State::from(HashMap::from([(3, 5.0)])), ATol::default())
+            .unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Minimize));
+        assert_eq!(*solution.objective(), 7.0);
+
+        let samples = crate::Sampled::new(
+            [vec![crate::SampleID::from(0)]],
+            [v1::State::from(HashMap::from([(3, 5.0)]))],
+        )
+        .unwrap();
+        let sampled_solution = instance
+            .evaluate_samples(&samples, ATol::default())
+            .unwrap()
+            .get(crate::SampleID::from(0))
+            .unwrap();
+        assert_eq!(*sampled_solution.sense(), Some(Sense::Minimize));
+        assert_eq!(*sampled_solution.objective(), 7.0);
     }
 
     #[test]
@@ -1375,6 +1400,10 @@ mod tests {
                 .is_none()
         );
 
+        let mut with_output = instance.clone();
+        assert!(with_output.as_maximization_problem());
+        let output = with_output.output_objective().cloned().unwrap();
+
         let mut borrowed = instance.clone();
         borrowed.partial_evaluate(&state, ATol::default()).unwrap();
         let consumed = instance
@@ -1382,6 +1411,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(borrowed, consumed);
+        assert!(borrowed.output_objective().is_none());
         assert!(borrowed.one_hot_constraint_collection.active().is_empty());
         assert_eq!(borrowed.one_hot_constraint_collection.removed().len(), 1);
         assert_eq!(
@@ -1392,6 +1422,16 @@ mod tests {
                 (VariableID::from(3), 0.0),
             ])
         );
+
+        with_output
+            .partial_evaluate(&state, ATol::default())
+            .unwrap();
+        assert_eq!(with_output.output_objective(), Some(&output));
+        let solution = with_output
+            .evaluate(&v1::State::default(), ATol::default())
+            .unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Minimize));
+        assert_eq!(*solution.objective(), 1.0);
     }
 
     #[test]

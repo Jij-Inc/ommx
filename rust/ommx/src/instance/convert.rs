@@ -220,7 +220,7 @@ mod output_objective_tests {
     }
 
     #[test]
-    fn sense_conversion_preserves_first_output_pair_for_evaluation() {
+    fn sense_conversion_installs_and_preserves_output_pair_for_evaluation() {
         let mut instance = maximizing_binary_instance();
         let original_objective = instance.objective().clone();
 
@@ -233,7 +233,7 @@ mod output_objective_tests {
         assert_eq!(instance.objective(), &original_objective.clone().neg());
 
         // A later transformation only changes the active formulation. The
-        // first pair remains the stable user-facing objective semantics.
+        // existing pair remains the stable user-facing objective semantics.
         assert!(instance.as_maximization_problem());
         let output = instance.output_objective().unwrap();
         assert_eq!(output.sense(), Sense::Maximize);
@@ -280,6 +280,43 @@ mod output_objective_tests {
             .unwrap();
         assert_eq!(*solution.sense(), Some(Sense::Maximize));
         assert_eq!(*solution.objective(), 1.0);
+    }
+
+    #[test]
+    fn with_parameters_specializes_parameterized_output_objective() {
+        let output_function = Function::from((linear!(1) + linear!(100)).unwrap());
+        let mut parametric = ParametricInstance::new(
+            Sense::Minimize,
+            output_function.clone().neg(),
+            BTreeMap::from([(VariableID::from(1), DecisionVariable::continuous())]),
+            ParameterTable::from_ids([VariableID::from(100)].into_iter().collect()),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        parametric.output_objective =
+            Some(OutputObjective::new(Sense::Maximize, output_function, true));
+
+        let materialized = parametric
+            .with_parameters(crate::v1::Parameters {
+                entries: HashMap::from([(100, 2.0)]),
+            })
+            .unwrap();
+
+        let output = materialized.output_objective().unwrap();
+        assert_eq!(
+            output.function(),
+            &Function::from((linear!(1) + crate::coeff!(2.0)).unwrap())
+        );
+        assert_eq!(
+            output.function().required_ids(),
+            VariableIDSet::from([VariableID::from(1)])
+        );
+        assert!(output.preserves_optimality());
+        let solution = materialized
+            .evaluate(&State::from(HashMap::from([(1, 3.0)])), ATol::default())
+            .unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 5.0);
     }
 }
 

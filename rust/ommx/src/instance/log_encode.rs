@@ -733,6 +733,51 @@ mod tests {
     }
 
     #[test]
+    fn log_encode_does_not_create_or_rewrite_output_objective() {
+        let id = VariableID::from(0);
+        let make_instance = || {
+            let variable = DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap();
+            Instance::builder()
+                .sense(Sense::Maximize)
+                .objective(Function::from(crate::linear!(0)))
+                .decision_variables(BTreeMap::from([(id, variable)]))
+                .constraints(BTreeMap::new())
+                .build()
+                .unwrap()
+        };
+
+        let mut without_output = make_instance();
+        without_output.log_encode([id], ATol::default()).unwrap();
+        assert!(without_output.output_objective().is_none());
+
+        let mut with_output = make_instance();
+        assert!(with_output.as_minimization_problem());
+        let output = with_output.output_objective().cloned().unwrap();
+        with_output.log_encode([id], ATol::default()).unwrap();
+
+        assert_eq!(with_output.output_objective(), Some(&output));
+        assert_eq!(
+            with_output.decision_variable_role(id),
+            Some(DecisionVariableRole::Dependent)
+        );
+        assert!(!with_output.used_decision_variable_ids().contains(&id));
+        let state = State::from_iter(
+            with_output
+                .used_decision_variable_ids()
+                .into_iter()
+                .map(|id| (id.into_inner(), 0.0)),
+        );
+        let solution = with_output.evaluate(&state, ATol::default()).unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 0.0);
+    }
+
+    #[test]
     fn test_log_encoding_coefficients() {
         // 2^3 case
         let bound = Bound::new(0.0, 7.0).unwrap();

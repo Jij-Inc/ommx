@@ -79,8 +79,9 @@ impl Instance {
     ///
     /// This is an explicit model redefinition, so any preserved
     /// [`OutputObjective`] is cleared. Subsequent evaluation uses the current
-    /// sense and this new objective until another transformation establishes a
-    /// new output pair.
+    /// sense and this new objective until a transformation separates either
+    /// the intended output pair or its optimality-transport status from the
+    /// solver-facing formulation.
     pub fn set_objective(&mut self, objective: Function) -> crate::Result<()> {
         // Validate that all variables in the objective are defined
         self.validate_required_ids(objective.required_ids())?;

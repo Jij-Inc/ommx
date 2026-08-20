@@ -122,9 +122,6 @@ impl Instance {
     /// Commit a fully validated substitution plan using table-local effects.
     fn commit_substitution(&mut self, plan: InstanceSubstitutionPlan) {
         if let Some(objective) = plan.objective {
-            if objective != self.objective {
-                self.capture_output_objective();
-            }
             self.objective = objective;
         }
         self.constraint_collection
@@ -255,9 +252,6 @@ impl Substitute for ParametricInstance {
 
         let mut objective = self.objective.clone();
         substitute_acyclic(&mut objective, acyclic)?;
-        if objective != self.objective {
-            self.capture_output_objective();
-        }
         self.objective = objective;
 
         let mut constraint_replacements = BTreeMap::new();
@@ -357,7 +351,6 @@ mod tests {
         };
         constraints.insert(ConstraintID::from(1), constraint);
 
-        let original_objective = objective.clone();
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         let named_function_id = instance
@@ -382,9 +375,7 @@ mod tests {
             .decision_variable_dependency
             .get(&VariableID::from(1))
             .is_some());
-        let output = result.output_objective().unwrap();
-        assert_eq!(output.sense(), Sense::Minimize);
-        assert_eq!(output.function(), &original_objective);
+        assert!(result.output_objective().is_none());
 
         let named_function = result.named_functions().get(&named_function_id).unwrap();
         let expected_ids: std::collections::BTreeSet<_> =
@@ -392,6 +383,64 @@ mod tests {
                 .into_iter()
                 .collect();
         assert_eq!(named_function.required_ids(), expected_ids);
+    }
+
+    #[test]
+    fn substitution_preserves_existing_output_objective() {
+        let decision_variables = BTreeMap::from([
+            (VariableID::from(1), DecisionVariable::continuous()),
+            (VariableID::from(2), DecisionVariable::continuous()),
+            (VariableID::from(3), DecisionVariable::continuous()),
+        ]);
+        let objective = Function::from((linear!(1) + coeff!(2.0) * linear!(2)).unwrap());
+        let mut instance = Instance::new(
+            Sense::Maximize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        assert!(instance.as_minimization_problem());
+        let output = instance.output_objective().cloned().unwrap();
+
+        let result = instance
+            .substitute_one(
+                VariableID::from(1),
+                &Function::from(linear!(3) + coeff!(1.0)),
+            )
+            .unwrap();
+
+        assert_eq!(result.output_objective(), Some(&output));
+        let usage = result.decision_variable_usage();
+        assert_eq!(
+            usage.role(VariableID::from(1)),
+            Some(DecisionVariableRole::Dependent)
+        );
+        assert_eq!(
+            usage.used(),
+            VariableIDSet::from([VariableID::from(2), VariableID::from(3)])
+        );
+        let solution = result
+            .evaluate(
+                &crate::v1::State::from_iter([(2, 2.0), (3, 3.0)]),
+                ATol::default(),
+            )
+            .unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 8.0);
+
+        let samples = crate::Sampled::new(
+            [vec![crate::SampleID::from(0)]],
+            [crate::v1::State::from_iter([(2, 2.0), (3, 3.0)])],
+        )
+        .unwrap();
+        let sampled_solution = result
+            .evaluate_samples(&samples, ATol::default())
+            .unwrap()
+            .get(crate::SampleID::from(0))
+            .unwrap();
+        assert_eq!(*sampled_solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*sampled_solution.objective(), 8.0);
     }
 
     #[test]
@@ -440,13 +489,7 @@ mod tests {
             )
             .unwrap();
 
-        let output = substituted.output_objective().unwrap();
-        assert_eq!(output.sense(), Sense::Minimize);
-        assert_eq!(
-            output.function(),
-            &Function::from(linear!(0) + linear!(100))
-        );
-        assert!(output.preserves_optimality());
+        assert!(substituted.output_objective().is_none());
 
         assert_eq!(substituted.decision_variable_dependency.len(), 1);
         assert!(substituted
@@ -457,9 +500,7 @@ mod tests {
         let mut parameter_values = crate::v1::Parameters::default();
         parameter_values.entries.insert(100, 2.0);
         let instance = substituted.with_parameters(parameter_values).unwrap();
-        let output = instance.output_objective().unwrap();
-        assert_eq!(output.function(), &Function::from(linear!(0) + coeff!(2.0)));
-        assert!(output.preserves_optimality());
+        assert!(instance.output_objective().is_none());
         let state = crate::v1::State::from_iter([(1, 3.0)]);
         let value = instance
             .objective()
@@ -468,6 +509,43 @@ mod tests {
         assert_eq!(value, 7.0);
         let solution = instance.evaluate(&state, crate::ATol::default()).unwrap();
         assert_eq!(*solution.objective(), 7.0);
+    }
+
+    #[test]
+    fn parametric_substitution_preserves_existing_output_objective() {
+        let decision_variables = BTreeMap::from([
+            (VariableID::from(0), DecisionVariable::continuous()),
+            (VariableID::from(1), DecisionVariable::continuous()),
+        ]);
+        let constraint = Constraint::equal_to_zero(Function::from(linear!(0) + coeff!(-1.0)));
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(0)),
+            decision_variables,
+            BTreeMap::from([(ConstraintID::from(0), constraint)]),
+        )
+        .unwrap();
+        let parametric = instance.penalty_method().unwrap();
+        let output = parametric.output_objective().cloned().unwrap();
+
+        let substituted = parametric
+            .substitute_one(VariableID::from(0), &Function::from(linear!(1)))
+            .unwrap();
+
+        assert_eq!(substituted.output_objective(), Some(&output));
+        let parameters = crate::v1::Parameters {
+            entries: substituted
+                .parameters()
+                .keys()
+                .map(|id| (id.into_inner(), 2.0))
+                .collect(),
+        };
+        let materialized = substituted.with_parameters(parameters).unwrap();
+        assert_eq!(materialized.output_objective(), Some(&output));
+        let solution = materialized
+            .evaluate(&crate::v1::State::from_iter([(1, 1.0)]), ATol::default())
+            .unwrap();
+        assert_eq!(*solution.objective(), 1.0);
     }
 
     #[test]

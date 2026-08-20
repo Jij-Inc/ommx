@@ -10,10 +10,17 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### Instance変換後のoutput objective semanticsを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
-`Instance`のactive objectiveまたはsenseを書き換える変換は、`evaluate()`と
-`evaluate_samples()`が使う最初のoutput objectiveを保持するようになりました。
-そのためactive formulationをsolver向けに維持しながら、結果は入力modelのobjective
-valueとsenseを返します。
+`Instance`のsolver-facing objectiveまたはsenseをそのまま結果表示に使えなくする変換、
+またはactive formulationのoptimality proofを出力へ移せなくする変換は、`evaluate()`と
+`evaluate_samples()`が使う別のoutput objectiveを保持するようになりました。そのため
+active formulationをsolver向けに維持しながら、結果は入力modelのobjective valueとsenseを
+返します。Penalty変換では、optimalityを移せないことだけを記録するために、同一のobjective
+pairを保持する場合もあります。
+
+Partial evaluation、substitution、binary power reductionのように、復元した各state上で
+active objectiveの値を保つ書き換えは、このoutput objectiveを新設も書き換えもしません。
+Removed constraintと同様に、その参照IDはsolver-used setに追加されません。
+Fixed・irrelevant・dependentの各値を含む完全なstateを補完した後にだけ評価されます。
 
 `ParametricInstance`も同じoutput semanticsを保持し、`with_parameters()`でparameter
 参照を具体化します。このため、変換後も`Instance.as_parametric_instance()`は情報を

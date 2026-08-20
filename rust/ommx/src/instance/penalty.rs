@@ -959,7 +959,7 @@ mod tests {
     }
 
     #[test]
-    fn fixed_penalty_preserves_first_output_objective() {
+    fn fixed_penalty_preserves_existing_output_objective() {
         let mut instance = create_test_instance_with_constraints();
         instance.sense = Sense::Maximize;
         let original_objective = instance.objective().clone();
@@ -997,7 +997,7 @@ mod tests {
     }
 
     #[test]
-    fn parametric_penalty_methods_preserve_first_output_objective() {
+    fn parametric_penalty_methods_preserve_existing_output_objective() {
         let mut instance = create_test_instance_with_constraints();
         instance.sense = Sense::Maximize;
         let original_objective = instance.objective().clone();

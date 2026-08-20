@@ -116,15 +116,23 @@ pub enum Sense {
 
 /// Objective semantics used when evaluating solver output.
 ///
-/// This value is normally captured by the first transformation that changes
-/// an [`Instance`]'s or [`ParametricInstance`]'s active objective or sense. A
-/// transformation may also install an equal pair when it needs to record that
-/// active-formulation optimality does not transport to the output semantics.
-/// Later transformations continue rewriting the active formulation, while
-/// [`ParametricInstance::with_parameters`] specializes and carries this value
-/// to the resulting [`Instance`]. [`Instance::evaluate`] and
-/// [`Instance::evaluate_samples`] then use the pair to present results in the
-/// input model's objective semantics.
+/// This value is installed when the solver-facing active objective or sense
+/// cannot itself be presented as the output semantics, or when
+/// active-formulation optimality no longer proves optimality for those output
+/// semantics. Sense reversal and penalty conversion are representative cases;
+/// a penalty conversion may install an equal sense/function pair solely to
+/// record the loss of optimality transport. State-reconstructible rewrites such
+/// as partial evaluation, substitution, and binary-power reduction do not
+/// create it because the rewritten objective has the same value on each
+/// reconstructed state. Like removed constraints, an existing output objective
+/// is skipped by those rewrites and evaluated only after the full
+/// decision-variable state, including fixed, irrelevant, and dependent values,
+/// has been populated.
+///
+/// [`ParametricInstance::with_parameters`] specializes parameter references
+/// and carries this value to the resulting [`Instance`].
+/// [`Instance::evaluate`] and [`Instance::evaluate_samples`] then use the pair
+/// to present results in the input model's objective semantics.
 ///
 /// The sense and function are intentionally immutable outside their enclosing
 /// [`Instance`] or [`ParametricInstance`]: they are one semantic value and must
@@ -227,16 +235,17 @@ impl OutputObjective {
 ///   kind/bound.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
-///   but must NOT be used in the objective function or constraints.
+///   but must NOT be used in the active objective or active constraints.
 ///   These are "dependent variables" whose values are computed from other variables.
 /// - [`Self::output_objective`] is an atomic sense/function pair together with
 ///   a fact recording whether active-formulation optimality transports to the
 ///   reconstructed output semantics. Its function
 ///   may reference used, fixed, dependent, or otherwise inactive variables,
 ///   but every referenced ID remains owned by [`Self::decision_variables`] so
-///   state population can evaluate it.
+///   state population can evaluate it. Like removed constraints and named
+///   functions, it does not contribute to the solver-used variable set.
 /// - Decision variables are classified into mutually exclusive roles:
-///   - **used**: Variable IDs appearing in the objective function or active constraints
+///   - **used**: Variable IDs appearing in the active objective or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
@@ -349,8 +358,9 @@ impl Instance {
         self.output_objective.as_ref()
     }
 
-    /// Preserve the current active objective pair unless an earlier
-    /// transformation has already established the output semantics.
+    /// Preserve the current active objective pair before a transformation
+    /// separates either the output pair or its optimality-transport status
+    /// from the solver-facing formulation.
     fn capture_output_objective(&mut self) {
         if self.output_objective.is_none() {
             self.output_objective = Some(OutputObjective::new(
@@ -358,14 +368,6 @@ impl Instance {
                 self.objective.clone(),
                 true,
             ));
-        }
-    }
-
-    /// Preserve a precomputed active objective after a successful in-place
-    /// rewrite has already committed.
-    fn capture_output_objective_from(&mut self, sense: Sense, function: Function) {
-        if self.output_objective.is_none() {
-            self.output_objective = Some(OutputObjective::new(sense, function, true));
         }
     }
 
@@ -720,7 +722,7 @@ impl Instance {
 ///   by [`ParameterTable`] alone.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
-///   but must NOT be used in the objective function or constraints.
+///   but must NOT be used in the active objective or active constraints.
 ///   The RHS expressions of [`Self::decision_variable_dependency`] may
 ///   reference IDs from [`Self::decision_variables`] or [`Self::parameters`],
 ///   and may not reference undefined IDs. Parameter IDs in RHS expressions are
@@ -732,7 +734,7 @@ impl Instance {
 ///   specialized by [`Self::with_parameters`] before the pair is installed on
 ///   the resulting [`Instance`].
 /// - Decision variables are classified into mutually exclusive roles:
-///   - **used**: Variable IDs appearing in the objective function or active constraints
+///   - **used**: Variable IDs appearing in the active objective or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
@@ -846,18 +848,6 @@ impl ParametricInstance {
     /// the output semantics directly.
     pub fn output_objective(&self) -> Option<&OutputObjective> {
         self.output_objective.as_ref()
-    }
-
-    /// Preserve the current active objective pair unless an earlier
-    /// transformation has already established the output semantics.
-    fn capture_output_objective(&mut self) {
-        if self.output_objective.is_none() {
-            self.output_objective = Some(OutputObjective::new(
-                self.sense,
-                self.objective.clone(),
-                true,
-            ));
-        }
     }
 
     /// Access the decision-variable definition table.

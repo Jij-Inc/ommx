@@ -10,10 +10,20 @@ Changes merged after the most recent release will be appended here as they land,
 
 ### Preserve output objective semantics across Instance transformations ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
-Transformations that rewrite an `Instance`'s active objective or sense now
-preserve the first output objective used by `evaluate()` and
-`evaluate_samples()`. Results therefore retain the input model's objective
-values and sense while the active formulation remains available to solvers.
+Transformations that make an `Instance`'s solver-facing objective or sense
+unsuitable for direct result presentation, or invalidate transport of an
+active-formulation optimality proof, now preserve a separate output objective
+used by `evaluate()` and `evaluate_samples()`. Results therefore retain the
+input model's objective values and sense while the active formulation remains
+available to solvers. A penalty conversion may preserve an equal objective pair
+solely to record that optimality no longer transports.
+
+State-reconstructible rewrites such as partial evaluation, substitution, and
+binary power reduction do not create or rewrite this output objective because
+their active objective has the same value on each reconstructed state. Like
+removed constraints, its referenced IDs are not added to the solver-used set.
+It is evaluated only after the full decision-variable state, including fixed,
+irrelevant, and dependent values, has been populated.
 
 `ParametricInstance` carries the same output semantics and specializes any
 parameter references in `with_parameters()`, so

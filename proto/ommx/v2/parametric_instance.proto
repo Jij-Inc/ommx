@@ -25,5 +25,7 @@ message ParametricInstance {
   map<uint64, ommx.v1.Function> decision_variable_dependency = 11;
   NamedFunctionTable named_functions = 12;
   map<string, string> annotations = 13;
-  OutputObjective output_objective = 14;
+  // Inactive objective definition specialized during parameter materialization.
+  // When absent, `sense` and `objective` are also the output semantics.
+  OutputObjective output_objective = 15;
 }
