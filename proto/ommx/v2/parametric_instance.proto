@@ -27,5 +27,5 @@ message ParametricInstance {
   map<string, string> annotations = 13;
   // Inactive objective definition specialized during parameter materialization.
   // When absent, `sense` and `objective` are also the output semantics.
-  OutputObjective output_objective = 15;
+  OutputObjective output_objective = 14;
 }

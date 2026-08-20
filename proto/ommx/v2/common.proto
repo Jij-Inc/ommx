@@ -30,7 +30,7 @@ enum Feature {
   FEATURE_CONSTRAINT_SOS1 = 3;
   // The Instance or ParametricInstance payload explicitly carries inactive
   // output objective semantics alongside the active solver formulation.
-  FEATURE_OUTPUT_OBJECTIVE = 5;
+  FEATURE_OUTPUT_OBJECTIVE = 4;
 }
 
 // Objective semantics used when evaluating solver output.

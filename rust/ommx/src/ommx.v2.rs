@@ -80,7 +80,7 @@ pub enum Feature {
     ConstraintSos1 = 3,
     /// The Instance or ParametricInstance payload explicitly carries inactive
     /// output objective semantics alongside the active solver formulation.
-    OutputObjective = 5,
+    OutputObjective = 4,
 }
 impl Feature {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -653,7 +653,7 @@ pub struct Instance {
     >,
     /// Inactive objective definition evaluated after full state population.
     /// When absent, `sense` and `objective` are also the output semantics.
-    #[prost(message, optional, tag = "15")]
+    #[prost(message, optional, tag = "14")]
     pub output_objective: ::core::option::Option<OutputObjective>,
 }
 /// Parameter IDs and labels owned by ParametricInstance.
@@ -709,7 +709,7 @@ pub struct ParametricInstance {
     >,
     /// Inactive objective definition specialized during parameter materialization.
     /// When absent, `sense` and `objective` are also the output semantics.
-    #[prost(message, optional, tag = "15")]
+    #[prost(message, optional, tag = "14")]
     pub output_objective: ::core::option::Option<OutputObjective>,
 }
 /// Validated multi-sample solver or sampler output serialization root.
