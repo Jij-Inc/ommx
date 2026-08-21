@@ -117,30 +117,33 @@ pub enum Sense {
 
 /// Objective semantics used when evaluating solver output.
 ///
-/// This value is installed when a solver-facing rewrite separates the active
-/// objective from the output semantics, or when active-formulation optimality
-/// no longer proves optimality for those output semantics.
-/// [`Instance::convert_active_objective`] and the penalty methods are
-/// representative cases; a zero-weight penalty conversion may install an
-/// equal sense/function pair solely to record the loss of optimality transport.
-/// State-reconstructible rewrites such as partial evaluation, substitution,
-/// and binary-power reduction do not create it because the rewritten objective
-/// has the same value on each reconstructed state. Like removed constraints, an
-/// existing output objective is skipped by those rewrites and evaluated only
-/// after the full decision-variable state, including fixed, irrelevant, and
-/// dependent values, has been populated.
+/// # Invariants
 ///
-/// [`ParametricInstance::with_parameters`] specializes parameter references
-/// and carries this value to the resulting [`Instance`].
-/// [`Instance::evaluate`] and [`Instance::evaluate_samples`] then use the pair
-/// to present results in the input model's objective semantics.
+/// The sense, function, and optimality-transport flag are installed and
+/// observed as one value owned by an [`Instance`] or [`ParametricInstance`].
 ///
-/// The sense and function are intentionally immutable outside their enclosing
-/// [`Instance`] or [`ParametricInstance`]: they are one semantic value and must
-/// never be updated independently.
-/// [`Self::preserves_optimality`] records whether a backend optimality proof
-/// for the active formulation also applies to this output objective after
-/// state reconstruction.
+/// ```
+/// use ommx::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
+/// use std::collections::BTreeMap;
+///
+/// let original = Function::from(linear!(1));
+/// let mut instance = Instance::builder()
+///     .sense(Sense::Maximize)
+///     .objective(original.clone())
+///     .decision_variables(BTreeMap::from([(
+///         VariableID::from(1),
+///         DecisionVariable::binary(),
+///     )]))
+///     .constraints(BTreeMap::new())
+///     .build()
+///     .unwrap();
+///
+/// assert!(instance.convert_active_objective(Sense::Minimize));
+/// let output = instance.output_objective().unwrap();
+/// assert_eq!(output.sense(), Sense::Maximize);
+/// assert_eq!(output.function(), &original);
+/// assert!(output.preserves_optimality());
+/// ```
 #[derive(Debug, Clone, PartialEq, crate::logical_memory::LogicalMemoryProfile)]
 pub struct OutputObjective {
     sense: Sense,
@@ -245,13 +248,9 @@ impl OutputObjective {
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the active objective or active constraints.
 ///   These are "dependent variables" whose values are computed from other variables.
-/// - [`Self::output_objective`] is an atomic sense/function pair together with
-///   a fact recording whether active-formulation optimality transports to the
-///   reconstructed output semantics. Its function
-///   may reference used, fixed, dependent, or otherwise inactive variables,
-///   but every referenced ID remains owned by [`Self::decision_variables`] so
-///   state population can evaluate it. Like removed constraints and named
-///   functions, it does not contribute to the solver-used variable set.
+/// - Every variable ID in [`Self::output_objective`] belongs to
+///   [`Self::decision_variables`]. The output objective does not contribute to
+///   the solver-used variable set and is evaluated after state population.
 /// - Decision variables are classified into mutually exclusive roles:
 ///   - **used**: Variable IDs appearing in the active objective or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
@@ -272,6 +271,42 @@ impl OutputObjective {
 ///   [`DecisionVariableTable`], not by individual [`DecisionVariable`]
 ///   values. The root [`Instance`] owns the host-level invariant that fixed
 ///   IDs are disjoint from solver-used and dependent variables.
+///
+/// The output objective remains evaluable when one of its variables is removed
+/// from the active formulation by partial evaluation:
+///
+/// ```
+/// use ommx::{
+///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+///     Sense, VariableID,
+/// };
+/// use std::collections::{BTreeMap, HashMap};
+///
+/// let variable = VariableID::from(1);
+/// let mut instance = Instance::builder()
+///     .sense(Sense::Maximize)
+///     .objective(Function::from(linear!(1)))
+///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+///     .constraints(BTreeMap::new())
+///     .build()
+///     .unwrap();
+/// assert!(instance.convert_active_objective(Sense::Minimize));
+///
+/// instance
+///     .partial_evaluate(&State::from(HashMap::from([(1, 1.0)])), ATol::default())
+///     .unwrap();
+/// assert!(instance.required_ids().is_empty());
+/// assert!(instance
+///     .output_objective()
+///     .unwrap()
+///     .function()
+///     .required_ids()
+///     .contains(&variable));
+///
+/// let solution = instance.evaluate(&State::default(), ATol::default()).unwrap();
+/// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+/// assert_eq!(*solution.objective(), 1.0);
+/// ```
 ///
 /// ## Special-constraint invariants
 ///
@@ -360,8 +395,9 @@ pub struct Instance {
 impl Instance {
     /// Return the preserved objective semantics used for solver output.
     ///
-    /// `None` means evaluation uses the active [`Self::sense`] and
-    /// [`Self::objective`] directly.
+    /// [`None`] identifies an instance whose active objective is also its
+    /// output objective. [`Some`] returns the complete root-owned output value.
+    /// See the [`OutputObjective`] invariants for an executable construction.
     pub fn output_objective(&self) -> Option<&OutputObjective> {
         self.output_objective.as_ref()
     }
@@ -369,10 +405,46 @@ impl Instance {
     /// Map an optimality status proved for the active formulation to the
     /// status that is valid for the output objective.
     ///
-    /// The status is preserved when active-formulation optimality transports
-    /// to the output semantics. Otherwise no active status, including
-    /// `Optimality::NotOptimal`, proves the corresponding output status, so
-    /// this returns `Optimality::Unspecified`.
+    /// # Postconditions
+    ///
+    /// Active optimality is retained exactly while its proof transports to the
+    /// output objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::Optimality, ATol, Constraint, ConstraintID,
+    ///     DecisionVariable, Function, Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    /// assert_eq!(
+    ///     instance.map_active_optimality(Optimality::Optimal),
+    ///     Optimality::Optimal,
+    /// );
+    ///
+    /// instance
+    ///     .uniform_penalty_method_with_fixed_weight(1.0, ATol::default())
+    ///     .unwrap();
+    /// assert_eq!(
+    ///     instance.map_active_optimality(Optimality::Optimal),
+    ///     Optimality::Unspecified,
+    /// );
+    /// assert_eq!(
+    ///     instance.map_active_optimality(Optimality::NotOptimal),
+    ///     Optimality::Unspecified,
+    /// );
+    /// ```
     pub fn map_active_optimality(&self, active: crate::v1::Optimality) -> crate::v1::Optimality {
         if self
             .output_objective

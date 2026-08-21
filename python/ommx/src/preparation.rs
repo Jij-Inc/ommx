@@ -48,6 +48,14 @@ impl From<ommx::SpecialConstraintPreparation> for SpecialConstraintPreparation {
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Convert the active objective to ``target`` during Preparation.
+///
+/// # Invariants
+///
+/// The immutable target records the solver-facing sense requested by Preparation.
+///
+/// >>> from ommx import ObjectivePreparation, Sense
+/// >>> preparation = ObjectivePreparation(target=Sense.Minimize)
+/// >>> assert preparation.target == Sense.Minimize
 pub struct ObjectivePreparation {
     inner: ommx::ObjectivePreparation,
 }
@@ -256,6 +264,22 @@ impl From<ommx::FixedPenaltyPreparation> for FixedPenaltyPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq)]
 #[derive(Debug, Clone, PartialEq, Default)]
+/// Select optional transformations applied by {meth}`~ommx.Instance.prepare`.
+///
+/// # Invariants
+///
+/// A default policy selects no Preparation phase.
+///
+/// >>> from ommx import PreparationPolicy
+/// >>> policy = PreparationPolicy()
+/// >>> assert (
+/// ...     policy.special_constraints,
+/// ...     policy.objective,
+/// ...     policy.integer_slack,
+/// ...     policy.integer_encoding,
+/// ...     policy.fixed_penalty,
+/// ...     policy.binary_power_reduction,
+/// ... ) == (None, None, None, None, None, None)
 pub struct PreparationPolicy {
     inner: ommx::PreparationPolicy,
 }
@@ -332,6 +356,51 @@ impl PreparationPolicy {
     /// the exact Integer-slack range and the fallback slack upper bound. This
     /// QUBO policy also reduces powers of Binary variables before checking the
     /// quadratic target.
+    ///
+    /// # Postconditions
+    ///
+    /// Each call returns a fresh complete QUBO policy whose optional weights and slack range are applied exactly.
+    ///
+    /// >>> from ommx import (
+    /// ...     BinaryPowerPreparation, FixedPenaltyPreparation,
+    /// ...     IntegerEncodingPreparation, IntegerSlackPreparation,
+    /// ...     ObjectivePreparation, PreparationPolicy, Sense,
+    /// ...     SpecialConstraintKind, SpecialConstraintPreparation,
+    /// ... )
+    /// >>> expected_special = SpecialConstraintPreparation.lower_special_constraints(
+    /// ...     kinds={
+    /// ...         SpecialConstraintKind.Indicator,
+    /// ...         SpecialConstraintKind.OneHot,
+    /// ...         SpecialConstraintKind.Sos1,
+    /// ...     }
+    /// ... )
+    /// >>> expected_penalty = FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
+    /// >>> first = PreparationPolicy.for_qubo(inequality_integer_slack_max_range=17)
+    /// >>> second = PreparationPolicy.for_qubo(inequality_integer_slack_max_range=17)
+    /// >>> assert first is not second
+    /// >>> assert first.special_constraints == expected_special
+    /// >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
+    /// >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
+    /// >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+    /// >>> assert first.fixed_penalty == expected_penalty
+    /// >>> assert first.binary_power_reduction == BinaryPowerPreparation()
+    /// >>> first.fixed_penalty = None
+    /// >>> first.binary_power_reduction = None
+    /// >>> assert second.fixed_penalty == expected_penalty
+    /// >>> assert second.binary_power_reduction == BinaryPowerPreparation()
+    /// >>> keyed = PreparationPolicy.for_qubo(penalty_weights={3: 2.0})
+    /// >>> assert keyed.fixed_penalty == FixedPenaltyPreparation.penalty_method_with_fixed_weights(weights={3: 2.0})
+    ///
+    /// # Errors
+    ///
+    /// Supplying uniform and keyed penalty weights together raises ``ValueError``.
+    ///
+    /// >>> try:
+    /// ...     PreparationPolicy.for_qubo(uniform_penalty_weight=1.0, penalty_weights={3: 2.0})
+    /// ... except ValueError as error:
+    /// ...     assert "Both uniform_penalty_weight" in str(error)
+    /// ... else:
+    /// ...     raise AssertionError("mutually exclusive penalty options were accepted")
     #[staticmethod]
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
     pub fn for_qubo(
@@ -356,6 +425,48 @@ impl PreparationPolicy {
     /// the exact Integer-slack range and the fallback slack upper bound. Unlike
     /// {meth}`for_qubo`, this policy leaves Binary-power reduction disabled
     /// because HUBO accepts arbitrary polynomial degree.
+    ///
+    /// # Postconditions
+    ///
+    /// Each call returns a fresh complete HUBO policy with no Binary-power reduction and exact overrides.
+    ///
+    /// >>> from ommx import (
+    /// ...     FixedPenaltyPreparation, IntegerEncodingPreparation,
+    /// ...     IntegerSlackPreparation, ObjectivePreparation,
+    /// ...     PreparationPolicy, Sense, SpecialConstraintKind,
+    /// ...     SpecialConstraintPreparation,
+    /// ... )
+    /// >>> expected_special = SpecialConstraintPreparation.lower_special_constraints(
+    /// ...     kinds={
+    /// ...         SpecialConstraintKind.Indicator,
+    /// ...         SpecialConstraintKind.OneHot,
+    /// ...         SpecialConstraintKind.Sos1,
+    /// ...     }
+    /// ... )
+    /// >>> first = PreparationPolicy.for_hubo(inequality_integer_slack_max_range=17)
+    /// >>> second = PreparationPolicy.for_hubo(inequality_integer_slack_max_range=17)
+    /// >>> assert first is not second
+    /// >>> assert first.special_constraints == expected_special
+    /// >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
+    /// >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
+    /// >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+    /// >>> assert first.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
+    /// >>> assert first.binary_power_reduction is None
+    /// >>> first.fixed_penalty = None
+    /// >>> assert second.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
+    /// >>> uniform = PreparationPolicy.for_hubo(uniform_penalty_weight=4.0)
+    /// >>> assert uniform.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=4.0)
+    ///
+    /// # Errors
+    ///
+    /// Supplying uniform and keyed penalty weights together raises ``ValueError``.
+    ///
+    /// >>> try:
+    /// ...     PreparationPolicy.for_hubo(uniform_penalty_weight=1.0, penalty_weights={3: 2.0})
+    /// ... except ValueError as error:
+    /// ...     assert "Both uniform_penalty_weight" in str(error)
+    /// ... else:
+    /// ...     raise AssertionError("mutually exclusive penalty options were accepted")
     #[staticmethod]
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
     pub fn for_hubo(
@@ -457,6 +568,24 @@ impl Instance {
     /// operation is not transactional, so an error may leave the instance changed.
     /// {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership
     /// report when the selections do not reach ``input_class``.
+    ///
+    /// # Postconditions
+    ///
+    /// Successful Preparation mutates the owner into the target class while preserving output evaluation semantics.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+    /// ... )
+    /// >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
+    /// >>> assert instance.prepare(InstanceClass.qubo(), policy) is None
+    /// >>> assert InstanceClass.qubo().contains(instance)
+    /// >>> assert instance.sense == Sense.Minimize
+    /// >>> assert instance.objective.evaluate({0: 0}) == 2.0
+    /// >>> solution = instance.evaluate({0: 0})
+    /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)
+    /// >>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
     pub fn prepare(
         &mut self,
         py: Python<'_>,

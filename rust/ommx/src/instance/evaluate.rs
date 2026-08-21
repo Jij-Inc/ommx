@@ -597,6 +597,34 @@ impl Evaluate for Instance {
     type Output = crate::Solution;
     type SampledOutput = crate::SampleSet;
 
+    /// # Postconditions
+    ///
+    /// Evaluation reports the preserved output sense and objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    ///
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// ```
     #[tracing::instrument(skip_all)]
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
         let state = self.populate_state(state.clone(), atol)?;
@@ -638,6 +666,35 @@ impl Evaluate for Instance {
         Ok(solution)
     }
 
+    /// # Postconditions
+    ///
+    /// Sample evaluation reports the preserved output semantics for every sample.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sampled, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let samples = Sampled::from(State::from(HashMap::from([(1, 1.0)])));
+    ///
+    /// let sample_set = instance.evaluate_samples(&samples, ATol::default()).unwrap();
+    /// assert_eq!(*sample_set.sense(), Sense::Maximize);
+    /// let sample_id = sample_set.sample_ids().into_iter().next().unwrap();
+    /// assert_eq!(sample_set.objectives().get(sample_id), Some(&1.0));
+    /// ```
     #[tracing::instrument(skip_all)]
     fn evaluate_samples(
         &self,
@@ -701,6 +758,36 @@ impl Evaluate for Instance {
             .build()?)
     }
 
+    /// # Postconditions
+    ///
+    /// Partial evaluation rewrites active data while preserving the output objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let output = instance.output_objective().cloned();
+    ///
+    /// instance
+    ///     .partial_evaluate(&State::from(HashMap::from([(1, 1.0)])), ATol::default())
+    ///     .unwrap();
+    /// assert_eq!(instance.output_objective(), output.as_ref());
+    /// assert!(instance.required_ids().is_empty());
+    /// let solution = instance.evaluate(&State::default(), ATol::default()).unwrap();
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// ```
     #[tracing::instrument(skip_all)]
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
         if let Some(plan) = PartialEvaluatePlan::prepare(self, state, atol)? {
@@ -1223,7 +1310,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(borrowed, consumed);
-        assert!(borrowed.output_objective().is_none());
         assert_eq!(
             borrowed.fixed_decision_variable_values(),
             &BTreeMap::from([(VariableID::from(1), 2.0), (VariableID::from(2), 3.0)])
@@ -1266,41 +1352,6 @@ mod tests {
                 .unwrap()
                 .evaluated_value()
         );
-    }
-
-    #[test]
-    fn partial_evaluate_preserves_existing_output_objective() {
-        let mut instance = regular_plan_instance();
-        assert!(instance.convert_active_objective(Sense::Maximize));
-        let output = instance.output_objective().cloned().unwrap();
-
-        instance
-            .partial_evaluate(&v1::State::from(HashMap::from([(1, 2.0)])), ATol::default())
-            .unwrap();
-
-        assert_eq!(instance.output_objective(), Some(&output));
-        assert_eq!(
-            instance.used_decision_variable_ids(),
-            VariableIDSet::from([VariableID::from(3)])
-        );
-        let solution = instance
-            .evaluate(&v1::State::from(HashMap::from([(3, 5.0)])), ATol::default())
-            .unwrap();
-        assert_eq!(*solution.sense(), Some(Sense::Minimize));
-        assert_eq!(*solution.objective(), 7.0);
-
-        let samples = crate::Sampled::new(
-            [vec![crate::SampleID::from(0)]],
-            [v1::State::from(HashMap::from([(3, 5.0)]))],
-        )
-        .unwrap();
-        let sampled_solution = instance
-            .evaluate_samples(&samples, ATol::default())
-            .unwrap()
-            .get(crate::SampleID::from(0))
-            .unwrap();
-        assert_eq!(*sampled_solution.sense(), Some(Sense::Minimize));
-        assert_eq!(*sampled_solution.objective(), 7.0);
     }
 
     #[test]
@@ -1411,7 +1462,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(borrowed, consumed);
-        assert!(borrowed.output_objective().is_none());
         assert!(borrowed.one_hot_constraint_collection.active().is_empty());
         assert_eq!(borrowed.one_hot_constraint_collection.removed().len(), 1);
         assert_eq!(

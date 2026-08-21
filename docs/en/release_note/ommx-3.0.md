@@ -10,9 +10,9 @@ Changes merged after the most recent release will be appended here as they land,
 
 ### ⚠ Preserve input objectives across solver Preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
-QUBO and HUBO conversion now leaves the active `Instance` as the minimization
-energy used by a solver while `Solution` and `SampleSet` retain the input
-instance's existing output semantics:
+`to_qubo()` and `to_hubo()` now leave the active `Instance` as the minimization
+energy used by a solver, while `Solution` and `SampleSet` retain the objective
+semantics exposed by the input instance:
 
 ```python
 from ommx import DecisionVariable, Instance, Sense
@@ -25,37 +25,30 @@ instance = Instance.from_components(
     constraints={0: x == 1},
 )
 
-qubo, offset = instance.to_qubo(uniform_penalty_weight=2.0)
+instance.to_qubo(uniform_penalty_weight=2.0)
 state = {0: 0.0}
 
-# Solver-facing energy: minimize -x + 2 (x - 1)^2.
 assert instance.sense == Sense.Minimize
 assert instance.objective.evaluate(state) == 2.0
-
-# User-facing output: the input Maximize / x objective.
-solution = instance.evaluate(state)
-sample_set = instance.evaluate_samples({0: state})
-assert solution.sense == Sense.Maximize
-assert solution.objective == 0.0
-assert sample_set.sense == Sense.Maximize
-assert sample_set.objectives[0] == 0.0
+assert instance.evaluate(state).sense == Sense.Maximize
+assert instance.evaluate(state).objective == 0.0
+assert instance.evaluate_samples({0: state}).sense == Sense.Maximize
+assert instance.evaluate_samples({0: state}).objectives[0] == 0.0
 ```
 
-This is a breaking correction from the latest stable Python SDK. The previous
-drivers restored the active sense and then used the penalized solver energy as
-the evaluated objective, mixing solver input with user-facing output.
-`to_qubo()` and `to_hubo()` remain supported convenience APIs; their returned
-QUBO/HUBO coefficients keep the same meaning.
+This is a breaking correction from the latest stable Python SDK, whose drivers
+restored the active sense and used
+the penalized solver energy as the evaluated objective. The returned QUBO/HUBO
+coefficients keep the same meaning.
 
-Solver-reported optimality is now mapped to the output objective as well.
-When a penalty rewrite cannot transport an active-formulation optimality proof,
-the returned `Solution.optimality` remains `Optimality.Unspecified`.
-
-See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)
-for the equivalent explicit Preparation workflow. Its public configuration is
-owned by {meth}`~ommx.PreparationPolicy.for_qubo` and
-{meth}`~ommx.PreparationPolicy.for_hubo`; in-place execution semantics are
-documented on {meth}`~ommx.Instance.prepare`.
+Penalty rewrites also map solver-reported optimality conservatively: when an
+active-formulation proof does not transport, evaluated output remains
+`Optimality.Unspecified`. Executable postconditions are documented on
+{meth}`~ommx.Instance.to_qubo`, {meth}`~ommx.Instance.to_hubo`,
+{meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples`. See the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the explicit Preparation workflow.
 
 ### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 

@@ -80,7 +80,7 @@ sample_set = instance.evaluate_samples(samples)
 sample_set.summary
 ```
 
-`summary`属性は各サンプルの目的値と実行可能性をデータフレーム形式で表示します。 `sample_id=2` のサンプルは制約条件を満たしていないので `feasible=False` となっています。このテーブルはFeasibleなものを上に、さらにその中で目的関数の値が良いもの（`Instance.sense`に応じて最大化か最小化かが変わります）を上に表示されます。
+`summary`属性は各サンプルの目的値と実行可能性をデータフレーム形式で表示します。 `sample_id=2` のサンプルは制約条件を満たしていないので `feasible=False` となっています。このテーブルはFeasibleなものを上に、さらにその中で`SampleSet.sense`に応じてより良い目的関数の値を持つものを上に表示します。
 
 ```{note}
 `evaluate_samples` の引数はここでは分かり易いように `to_samples` で変換した `ommx.Samples` を渡していますが、`to_samples` は自動的に呼ばれるので省略することもできます。

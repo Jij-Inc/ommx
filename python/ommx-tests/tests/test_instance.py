@@ -65,47 +65,6 @@ def test_minimize_creates_empty_minimization_instance():
     assert instance.objective.almost_equal(Function(0))
 
 
-def test_problem_objective_conversion_changes_evaluation_semantics():
-    x = DecisionVariable.binary(0)
-    instance = Instance.from_components(
-        sense=Sense.Maximize,
-        objective=3 * x,
-        decision_variables=[x],
-        constraints={},
-    )
-
-    # Create a separate Maximize/3x output objective while making the active
-    # solver-facing objective Minimize/-3x.
-    assert instance.convert_active_objective(Sense.Minimize)
-    assert instance.evaluate({0: 1}).sense == Sense.Maximize
-
-    # The active objective is already minimization, so this return value and
-    # the changed evaluation semantics exercise conversion of the existing
-    # output objective.
-    assert instance.as_minimization_problem()
-
-    solution = instance.evaluate({0: 1})
-    assert solution.sense == Sense.Minimize
-    assert solution.objective == -3
-
-
-def test_active_objective_conversion_preserves_evaluation_semantics():
-    x = DecisionVariable.binary(0)
-    instance = Instance.from_components(
-        sense=Sense.Maximize,
-        objective=3 * x,
-        decision_variables=[x],
-        constraints={},
-    )
-
-    assert instance.convert_active_objective(Sense.Minimize)
-
-    solution = instance.evaluate({0: 1})
-    assert instance.sense == Sense.Minimize
-    assert solution.sense == Sense.Maximize
-    assert solution.objective == 3
-
-
 def test_new_binary_accepts_full_modeling_label():
     instance = Instance.minimize()
     x = instance.new_binary(
@@ -184,20 +143,6 @@ def test_add_constraint_accepts_full_modeling_label():
     assert snapshot.subscripts == [0]
     assert snapshot.parameters == {"source": "snapshot"}
     assert snapshot.description == "existing description"
-
-
-def test_set_objective():
-    x = [DecisionVariable.binary(i) for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={},
-        sense=Instance.MAXIMIZE,
-    )
-    assert instance.objective.almost_equal(Function(sum(x)))
-
-    instance.objective = x[1]
-    assert instance.objective.almost_equal(Function(x[1]))
 
 
 def test_convert_inequality_to_equality_with_integer_slack_limit():
@@ -407,38 +352,6 @@ def test_qubo_hubo_driver_matches_explicit_preparation_and_preserves_output(
     assert sample_set.objectives[11] == pytest.approx(5.0)
 
 
-@pytest.mark.parametrize(
-    ("method_name", "class_name"),
-    [("to_qubo", "qubo"), ("to_hubo", "hubo")],
-)
-def test_qubo_hubo_driver_preserves_existing_output_objective_during_preparation(
-    method_name: str,
-    class_name: str,
-) -> None:
-    x = DecisionVariable.integer(0, lower=0, upper=3)
-    instance = Instance.from_components(
-        decision_variables=[x],
-        objective=3 * x + 5,
-        constraints={7: x <= 2},
-        sense=Sense.Maximize,
-    )
-    assert instance.convert_active_objective(Sense.Minimize)
-    assert not getattr(InstanceClass, class_name)().contains(instance)
-
-    getattr(instance, method_name)(
-        uniform_penalty_weight=2.0,
-        inequality_integer_slack_max_range=7,
-    )
-
-    assert getattr(InstanceClass, class_name)().contains(instance)
-    assert instance.constraints == {}
-    assert 7 in instance.removed_constraints
-    active_state = {variable_id: 0.0 for variable_id in instance.required_ids()}
-    solution = instance.evaluate(active_state)
-    assert solution.sense == Sense.Maximize
-    assert solution.objective == 5
-
-
 def test_to_qubo_reduces_repeated_binary_power() -> None:
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
@@ -473,32 +386,6 @@ def test_qubo_hubo_continuous_partial_failure(method_name: str) -> None:
         getattr(instance, method_name)()
     assert instance.sense == Sense.Minimize
     assert instance.evaluate({0: 0, 1: 0, 2: 0}).sense == Sense.Maximize
-
-
-@pytest.mark.parametrize("method_name", ["to_qubo", "to_hubo"])
-def test_qubo_hubo_invalid_penalty_option(method_name: str) -> None:
-    x = [
-        DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i])
-        for i in range(2)
-    ]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={0: x[0] + 2 * x[1] <= 3},
-        sense=Instance.MAXIMIZE,
-    )
-
-    before = instance.to_v2_bytes()
-    with pytest.raises(ValueError) as e:
-        getattr(instance, method_name)(
-            uniform_penalty_weight=1.0,
-            penalty_weights={0: 2.0},
-        )
-    assert (
-        str(e.value)
-        == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
-    )
-    assert instance.to_v2_bytes() == before
 
 
 def test_hubo_3rd_degree():

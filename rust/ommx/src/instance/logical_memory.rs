@@ -696,14 +696,14 @@ mod tests {
         assert!(instance.convert_active_objective(crate::Sense::Minimize));
 
         let profile = instance.logical_memory_profile();
-        assert!(profile.entries().any(|(path, _)| path
-            .iter()
-            .any(|segment| *segment == "OutputObjective.sense")));
-        assert!(profile.entries().any(|(path, _)| path
-            .iter()
-            .any(|segment| *segment == "OutputObjective.function")));
-        assert!(profile.entries().any(|(path, _)| path
-            .iter()
-            .any(|segment| *segment == "OutputObjective.preserves_optimality")));
+        assert!(profile
+            .entries()
+            .any(|(path, _)| path.contains(&"OutputObjective.sense")));
+        assert!(profile
+            .entries()
+            .any(|(path, _)| path.contains(&"OutputObjective.function")));
+        assert!(profile
+            .entries()
+            .any(|(path, _)| path.contains(&"OutputObjective.preserves_optimality")));
     }
 }

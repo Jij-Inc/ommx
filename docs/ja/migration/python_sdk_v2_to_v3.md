@@ -202,65 +202,23 @@ pi.with_parameters({p.id: 1.0})
 
 ### 5.6 `to_qubo()` / `to_hubo()`は入力objectiveを評価結果に保持 (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
-Driver method自体は引き続き利用できますが、変更後`Instance`の意味論がv3で変わります。
-Active objectiveはQUBO/HUBO solverへ渡すminimization energyであり、`evaluate()`と
-`evaluate_samples()`はdriver呼び出し前の入力instanceが評価結果として公開していた
-objective semanticsをそのまま返します。
+Driver methodは引き続き利用でき、入力をin-placeに変更します。v3では変更後の
+`Instance`がQUBO/HUBO solverへ渡すminimization energyをactive objectiveとして保持し、
+`evaluate()`と`evaluate_samples()`は変換前のinstanceが公開していたobjective semanticsを
+保持します。Python SDK v2はactive senseを戻したうえで最終的なpenalty energyを評価しており、
+solver inputとuser-facing outputを混在させていました。
 
-```python
-from ommx import DecisionVariable, Instance, Sense
+したがって`Instance.objective`はsolver energyを、`Solution`と`SampleSet`は保持された入力
+objectiveを表します。実行可能な事後条件は{meth}`~ommx.Instance.to_qubo`、
+{meth}`~ommx.Instance.to_hubo`、{meth}`~ommx.Instance.evaluate`、
+{meth}`~ommx.Instance.evaluate_samples`に記載されています。
 
-x = DecisionVariable.binary(0)
-instance = Instance.from_components(
-    sense=Sense.Maximize,
-    objective=x,
-    decision_variables=[x],
-    constraints={0: x == 1},
-)
-
-qubo, offset = instance.to_qubo(uniform_penalty_weight=2.0)
-state = {0: 0.0}
-
-# Solver-facing energy: minimize -x + 2 (x - 1)^2.
-assert instance.sense == Sense.Minimize
-assert instance.objective.evaluate(state) == 2.0
-
-# User-facing output: 入力時の Maximize / x objective。
-solution = instance.evaluate(state)
-sample_set = instance.evaluate_samples({0: state})
-assert solution.sense == Sense.Maximize
-assert solution.objective == 0.0
-assert sample_set.sense == Sense.Maximize
-assert sample_set.objectives[0] == 0.0
-```
-
-Python SDK v2では変換後にactive senseを戻し、最終的なpenalty energyを評価結果として
-返していました。`Instance.objective`を読むcodeは引き続きsolver energyを取得しますが、
-`Solution`または`SampleSet`を使うcodeは入力instanceの既存output objectiveを取得します。これにより、
-solver inputとuser-facing outputを混在させていた従来の挙動を修正します。
-
-Policyを確認・編集したい場合は、同じpipelineを明示的に実行できます。次のclass helperと
-policy helperはdriverが使うものと同じ設定です。
-
-```python
-from ommx import InstanceClass, PreparationPolicy
-
-prepared = Instance.from_components(
-    sense=Sense.Maximize,
-    objective=x,
-    decision_variables=[x],
-    constraints={0: x == 1},
-)
-policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
-prepared.prepare(InstanceClass.qubo(), policy)
-qubo, offset = prepared.as_qubo_format()
-```
-
-HUBOでは`InstanceClass.hubo()`、`PreparationPolicy.for_hubo(...)`、
-`as_hubo_format()`を使います。FactoryのoptionとQUBO/HUBOの違いは
-{meth}`~ommx.PreparationPolicy.for_qubo`と
-{meth}`~ommx.PreparationPolicy.for_hubo`、順序付きin-place実行の契約は
-{meth}`~ommx.Instance.prepare`を参照してください。
+同じpipelineは{meth}`~ommx.Instance.prepare`と
+{meth}`~ommx.Instance.as_qubo_format`または
+{meth}`~ommx.Instance.as_hubo_format`で明示的に実行できます。対応するtarget classと
+編集可能なpolicyは{meth}`~ommx.InstanceClass.qubo`、
+{meth}`~ommx.InstanceClass.hubo`、{meth}`~ommx.PreparationPolicy.for_qubo`、
+{meth}`~ommx.PreparationPolicy.for_hubo`が提供します。
 
 ## 6. return type の変更
 

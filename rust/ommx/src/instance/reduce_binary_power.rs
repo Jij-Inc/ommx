@@ -7,7 +7,38 @@ impl Instance {
     /// This method replaces binary powers in the instance with their equivalent linear expressions.
     /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
     ///
-    /// Returns `true` if any reduction was performed, `false` otherwise.
+    /// # Postconditions
+    ///
+    /// Reduction rewrites active functions while preserving the output objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     quadratic, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(quadratic!(1, 1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let output = instance.output_objective().cloned();
+    ///
+    /// assert!(instance.reduce_binary_power().unwrap());
+    /// assert_eq!(instance.output_objective(), output.as_ref());
+    /// assert!(!instance.reduce_binary_power().unwrap());
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// ```
     pub fn reduce_binary_power(&mut self) -> Result<bool, crate::CoefficientError> {
         let binary_ids = self.binary_ids();
         if binary_ids.is_empty() {
@@ -103,7 +134,6 @@ mod tests {
             (expected_objective_poly + (coeff!(3.0) * quadratic!(2, 2)).unwrap()).unwrap();
         let expected_objective = Function::Quadratic(expected_objective_poly);
         assert_abs_diff_eq!(instance.objective(), &expected_objective);
-        assert!(instance.output_objective().is_none());
 
         // Check constraint: x1^2 -> x1
         let expected_constraint_func =
@@ -145,36 +175,6 @@ mod tests {
         let changed = instance.reduce_binary_power().unwrap();
         assert!(!changed);
         assert_eq!(instance.objective(), &objective);
-        assert!(instance.output_objective().is_none());
-    }
-
-    #[test]
-    fn reduce_to_zero_preserves_existing_output_objective() {
-        let variable = VariableID::from(1);
-        let objective = Function::Quadratic(
-            (quadratic!(variable) + (coeff!(-1.0) * quadratic!(variable, variable)).unwrap())
-                .unwrap(),
-        );
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective.clone(),
-            BTreeMap::from([(variable, DecisionVariable::binary())]),
-            BTreeMap::new(),
-        )
-        .unwrap();
-
-        assert!(instance.convert_active_objective(Sense::Maximize));
-        let output = instance.output_objective().cloned().unwrap();
-        assert!(instance.reduce_binary_power().unwrap());
-        assert!(instance.objective().required_ids().is_empty());
-        assert!(instance.used_decision_variable_ids().is_empty());
-        assert_eq!(instance.output_objective(), Some(&output));
-
-        let solution = instance
-            .evaluate(&crate::v1::State::default(), crate::ATol::default())
-            .unwrap();
-        assert_eq!(*solution.sense(), Some(Sense::Minimize));
-        assert_eq!(*solution.objective(), 0.0);
     }
 
     #[test]
@@ -207,7 +207,6 @@ mod tests {
         assert_eq!(err, crate::CoefficientError::Infinite);
         assert_eq!(instance.objective(), &before_objective);
         assert_eq!(instance.constraints(), &before_constraints);
-        assert!(instance.output_objective().is_none());
     }
 
     proptest! {

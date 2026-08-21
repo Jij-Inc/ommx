@@ -583,19 +583,13 @@ pub struct SampledNamedFunctionTable {
     #[prost(btree_map = "uint64, message", tag = "2")]
     pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
 }
-/// Objective semantics used when evaluating solver output.
+/// Serialized output-objective semantics distinct from the root's active objective.
 ///
-/// `sense` and `function` form one inseparable pair: together they describe
-/// how Solution and SampleSet objective values are presented to users, while
-/// the root's objective and sense describe the active formulation sent to a
-/// solver. In a ParametricInstance, `function` may reference parameter IDs;
-/// those references are materialized together with the active formulation.
-/// Absence means the active sense and objective are also the output semantics.
-/// The pair may equal the active pair when this payload exists only to record
-/// that active-formulation optimality does not transport.
-/// Its referenced IDs are not added to the solver-used set. The function is
-/// evaluated only after the full decision-variable state, including fixed,
-/// irrelevant, and dependent values, is populated.
+/// `sense` and `function` form one atomic pair. A validated payload carries
+/// both. When a root omits `output_objective`, its own `sense` and `objective`
+/// are also its output semantics. The pair may equal the active pair when this
+/// payload exists only to record that active-formulation optimality does not
+/// transport.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -604,8 +598,8 @@ pub struct OutputObjective {
     pub sense: i32,
     #[prost(message, optional, tag = "2")]
     pub function: ::core::option::Option<super::v1::Function>,
-    /// Whether backend optimality for the active formulation also proves
-    /// optimality for this output objective after state reconstruction.
+    /// Whether optimality for the active formulation also proves optimality for
+    /// this output objective.
     ///
     /// This compares objective orderings over candidate states of the active
     /// formulation. It does not assert feasibility or optimality with respect to
@@ -651,8 +645,8 @@ pub struct Instance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
-    /// Output objective definition evaluated after full state population.
-    /// When absent, `sense` and `objective` are also the output semantics.
+    /// Optional output-objective pair. Function references must resolve to
+    /// decision variables owned by this root.
     #[prost(message, optional, tag = "14")]
     pub output_objective: ::core::option::Option<OutputObjective>,
 }
@@ -707,8 +701,8 @@ pub struct ParametricInstance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
-    /// Output objective definition specialized during parameter materialization.
-    /// When absent, `sense` and `objective` are also the output semantics.
+    /// Optional output-objective pair. Function references must resolve to
+    /// decision variables or parameters owned by this root.
     #[prost(message, optional, tag = "14")]
     pub output_objective: ::core::option::Option<OutputObjective>,
 }

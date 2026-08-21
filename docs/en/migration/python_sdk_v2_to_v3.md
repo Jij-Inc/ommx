@@ -301,68 +301,26 @@ Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
 
 ### 5.6 `to_qubo()` / `to_hubo()` preserve the input objective in evaluated output (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
-The driver methods remain available, but the meaning of the mutated
-`Instance` changes in v3. The active objective is the minimization energy sent
-to a QUBO or HUBO solver, while `evaluate()` and `evaluate_samples()` report
-the same objective semantics that the input instance reported before the
-driver was called:
+The driver methods remain available and still mutate their input. In v3, the
+mutated `Instance` keeps the minimization energy sent to the QUBO or HUBO
+solver as its active objective, while `evaluate()` and `evaluate_samples()`
+retain the objective semantics that the instance exposed before conversion.
+Python SDK v2 instead restored the active sense and evaluated the final
+penalized energy, mixing solver input with user-facing output.
 
-```python
-from ommx import DecisionVariable, Instance, Sense
+Code that reads `Instance.objective` therefore sees the solver energy; code
+that consumes `Solution` or `SampleSet` sees the preserved input objective.
+The executable postconditions are documented on {meth}`~ommx.Instance.to_qubo`,
+{meth}`~ommx.Instance.to_hubo`, {meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples`.
 
-x = DecisionVariable.binary(0)
-instance = Instance.from_components(
-    sense=Sense.Maximize,
-    objective=x,
-    decision_variables=[x],
-    constraints={0: x == 1},
-)
-
-qubo, offset = instance.to_qubo(uniform_penalty_weight=2.0)
-state = {0: 0.0}
-
-# Solver-facing energy: minimize -x + 2 (x - 1)^2.
-assert instance.sense == Sense.Minimize
-assert instance.objective.evaluate(state) == 2.0
-
-# User-facing output: the input Maximize / x objective.
-solution = instance.evaluate(state)
-sample_set = instance.evaluate_samples({0: state})
-assert solution.sense == Sense.Maximize
-assert solution.objective == 0.0
-assert sample_set.sense == Sense.Maximize
-assert sample_set.objectives[0] == 0.0
-```
-
-Python SDK v2 instead restored the active sense after conversion and evaluated
-the final penalized energy. Code that reads `Instance.objective` continues to
-see the solver energy. Code that consumes `Solution` or `SampleSet` now gets
-the input instance's existing output objective, fixing the previous
-mixture of solver input and user-facing output semantics.
-
-The same pipeline can be run explicitly when its policy must be inspected or
-edited. The class and policy helpers are the exact configuration used by the
-driver:
-
-```python
-from ommx import InstanceClass, PreparationPolicy
-
-prepared = Instance.from_components(
-    sense=Sense.Maximize,
-    objective=x,
-    decision_variables=[x],
-    constraints={0: x == 1},
-)
-policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
-prepared.prepare(InstanceClass.qubo(), policy)
-qubo, offset = prepared.as_qubo_format()
-```
-
-Use `InstanceClass.hubo()`, `PreparationPolicy.for_hubo(...)`, and
-`as_hubo_format()` for HUBO. The factory options and the QUBO/HUBO distinction
-are documented on {meth}`~ommx.PreparationPolicy.for_qubo` and
-{meth}`~ommx.PreparationPolicy.for_hubo`; the ordered, in-place execution
-contract is documented on {meth}`~ommx.Instance.prepare`.
+The same pipeline can be run explicitly with
+{meth}`~ommx.Instance.prepare`, {meth}`~ommx.Instance.as_qubo_format`, or
+{meth}`~ommx.Instance.as_hubo_format`. The matching target classes and editable
+policies are provided by {meth}`~ommx.InstanceClass.qubo`,
+{meth}`~ommx.InstanceClass.hubo`,
+{meth}`~ommx.PreparationPolicy.for_qubo`, and
+{meth}`~ommx.PreparationPolicy.for_hubo`.
 
 ## 6. Return-type changes
 

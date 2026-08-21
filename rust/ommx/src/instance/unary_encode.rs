@@ -70,6 +70,50 @@ impl Instance {
     /// clone, and the result is committed back only if all encodings succeed.
     /// Duplicate IDs are encoded once. Pass a single-element iterator such as
     /// `[id]` to encode exactly one variable.
+    ///
+    /// # Postconditions
+    ///
+    /// Encoding rewrites only the active formulation and preserves evaluation
+    /// in the pre-encoding output semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, Bound, DecisionVariable, Evaluate, Function,
+    ///     Instance, Kind, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(0);
+    /// let integer = DecisionVariable::new(
+    ///     Kind::Integer,
+    ///     Bound::new(2.0, 5.0).unwrap(),
+    ///     ATol::default(),
+    /// )
+    /// .unwrap();
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(0)))
+    ///     .decision_variables(BTreeMap::from([(variable, integer)]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let output = instance.output_objective().cloned();
+    ///
+    /// instance
+    ///     .unary_encode([variable], 3, ATol::default())
+    ///     .unwrap();
+    /// assert_eq!(instance.output_objective(), output.as_ref());
+    /// let encoded_ids = instance.required_ids();
+    /// assert_eq!(encoded_ids.len(), 3);
+    /// let state = State::from(HashMap::from_iter(
+    ///     encoded_ids.into_iter().map(|id| (id.into_inner(), 1.0)),
+    /// ));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -5.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 5.0);
+    /// ```
     #[tracing::instrument(skip(self, ids))]
     pub fn unary_encode(
         &mut self,

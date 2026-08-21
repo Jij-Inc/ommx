@@ -77,11 +77,37 @@ impl Instance {
 
     /// Set the objective function and rebase output semantics.
     ///
-    /// This is an explicit model redefinition, so any preserved
-    /// [`OutputObjective`] is cleared. Subsequent evaluation uses the current
-    /// sense and this new objective until a transformation separates either
-    /// the intended output pair or its optimality-transport status from the
-    /// solver-facing formulation.
+    /// # Postconditions
+    ///
+    /// Setting the objective makes it the new active and output semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     coeff, linear, v1::State, ATol, DecisionVariable, Evaluate, Function,
+    ///     Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    ///
+    /// instance
+    ///     .set_objective(Function::from((coeff!(2.0) * linear!(1)).unwrap()))
+    ///     .unwrap();
+    /// assert_eq!(instance.sense(), Sense::Minimize);
+    /// assert!(instance.output_objective().is_none());
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Minimize));
+    /// assert_eq!(*solution.objective(), 2.0);
+    /// ```
     pub fn set_objective(&mut self, objective: Function) -> crate::Result<()> {
         // Validate that all variables in the objective are defined
         self.validate_required_ids(objective.required_ids())?;
@@ -1016,27 +1042,6 @@ mod tests {
         );
         // Ensure objective was not changed
         assert_eq!(instance.objective, Function::from(linear!(1) + coeff!(1.0)));
-    }
-
-    #[test]
-    fn set_objective_rebases_output_semantics() {
-        let mut instance = Instance::new(
-            Sense::Maximize,
-            Function::from(linear!(1)),
-            btreemap! {
-                VariableID::from(1) => DecisionVariable::binary(),
-            },
-            BTreeMap::new(),
-        )
-        .unwrap();
-        assert!(instance.convert_active_objective(Sense::Minimize));
-        assert!(instance.output_objective().is_some());
-
-        let replacement = Function::from(coeff!(3.0) * linear!(1));
-        instance.set_objective(replacement.clone()).unwrap();
-
-        assert_eq!(instance.objective(), &replacement);
-        assert!(instance.output_objective().is_none());
     }
 
     #[test]

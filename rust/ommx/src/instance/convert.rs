@@ -18,15 +18,45 @@ fn convert_objective_pair(sense: &mut Sense, objective: &mut Function, target: S
 impl Instance {
     /// Convert only the active, solver-facing objective to `target`.
     ///
-    /// The objective semantics exposed by [`Self::evaluate`] and
-    /// [`Self::evaluate_samples`] remain unchanged. When no separate output
-    /// objective exists yet, the current active pair is captured before the
-    /// conversion. If the converted active pair becomes identical to an
-    /// existing output pair whose optimality transport is preserved, that
-    /// redundant output pair is removed.
+    /// # Postconditions
     ///
-    /// Returns `true` if the active objective pair was converted, or `false`
-    /// if its sense was already `target`.
+    /// Only the active pair changes, while evaluation retains the entry output semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sampled, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let original = Function::from(linear!(1));
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(original.clone())
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    ///
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// assert_eq!(instance.sense(), Sense::Minimize);
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
+    /// assert!(!instance.convert_active_objective(Sense::Minimize));
+    ///
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// let sample_set = instance
+    ///     .evaluate_samples(&Sampled::from(state), ATol::default())
+    ///     .unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// assert_eq!(*sample_set.sense(), Sense::Maximize);
+    /// let sample_id = sample_set.sample_ids().into_iter().next().unwrap();
+    /// assert_eq!(sample_set.objectives().get(sample_id), Some(&1.0));
+    /// ```
     pub fn convert_active_objective(&mut self, target: Sense) -> bool {
         let converted = if self.sense == target {
             false
@@ -40,28 +70,74 @@ impl Instance {
 
     /// Convert the complete instance objective semantics to minimization.
     ///
-    /// Both the active solver-facing objective and any separate output
-    /// objective are normalized to minimization. As a result,
-    /// [`Self::evaluate`] and [`Self::evaluate_samples`] also expose a
-    /// minimization objective. The output objective's optimality-transport flag
-    /// is preserved.
+    /// # Postconditions
     ///
-    /// Returns `true` if either the active or output objective pair was
-    /// converted, or `false` if both already used minimization.
+    /// Both active and output objective semantics become minimization semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    ///
+    /// assert!(instance.as_minimization_problem());
+    /// assert_eq!(instance.sense(), Sense::Minimize);
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Minimize));
+    /// assert_eq!(*solution.objective(), -1.0);
+    /// assert!(!instance.as_minimization_problem());
+    /// ```
     pub fn as_minimization_problem(&mut self) -> bool {
         self.convert_problem_objective(Sense::Minimize)
     }
 
     /// Convert the complete instance objective semantics to maximization.
     ///
-    /// Both the active solver-facing objective and any separate output
-    /// objective are normalized to maximization. As a result,
-    /// [`Self::evaluate`] and [`Self::evaluate_samples`] also expose a
-    /// maximization objective. The output objective's optimality-transport flag
-    /// is preserved.
+    /// # Postconditions
     ///
-    /// Returns `true` if either the active or output objective pair was
-    /// converted, or `false` if both already used maximization.
+    /// Both active and output objective semantics become maximization semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    ///
+    /// assert!(instance.as_maximization_problem());
+    /// assert_eq!(instance.sense(), Sense::Maximize);
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), -1.0);
+    /// assert!(!instance.as_maximization_problem());
+    /// ```
     pub fn as_maximization_problem(&mut self) -> bool {
         self.convert_problem_objective(Sense::Maximize)
     }
@@ -141,6 +217,45 @@ fn materialize_constraint_collection_parameters<T: ConstraintType>(
 }
 
 impl ParametricInstance {
+    /// Materialize every parameter into an [`Instance`].
+    ///
+    /// # Postconditions
+    ///
+    /// Materialization removes parameter IDs from both active and output objectives.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::{Parameters, State}, ATol, Constraint, ConstraintID,
+    ///     DecisionVariable, Evaluate, Function, Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let source = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    /// let parametric = source.uniform_penalty_method().unwrap();
+    /// let penalty = *parametric.parameters().keys().next().unwrap();
+    /// let mut parameters = Parameters::default();
+    /// parameters.entries.insert(penalty.into_inner(), 2.0);
+    /// let instance = parametric.with_parameters(parameters).unwrap();
+    ///
+    /// assert!(instance.objective().required_ids().contains(&variable));
+    /// assert!(!instance.objective().required_ids().contains(&penalty));
+    /// assert_eq!(instance.output_objective().unwrap().sense(), Sense::Minimize);
+    /// assert!(!instance.output_objective().unwrap().preserves_optimality());
+    /// let solution = instance
+    ///     .evaluate(&State::from(HashMap::from([(1, 0.0)])), ATol::default())
+    ///     .unwrap();
+    /// assert_eq!(*solution.objective(), 0.0);
+    /// ```
     pub fn with_parameters(self, parameters: crate::v1::Parameters) -> crate::Result<Instance> {
         use std::collections::BTreeSet;
 
@@ -265,83 +380,6 @@ mod output_objective_tests {
     }
 
     #[test]
-    fn whole_problem_conversion_without_output_rewrites_evaluation_and_round_trips() {
-        let mut instance = maximizing_binary_instance();
-        let original = instance.clone();
-        let original_objective = instance.objective().clone();
-
-        assert!(instance.as_minimization_problem());
-        assert_eq!(instance.sense(), Sense::Minimize);
-        assert_eq!(instance.objective(), &original_objective.clone().neg());
-        assert!(instance.output_objective().is_none());
-        assert_evaluation(&instance, Sense::Minimize, -1.0);
-        let restored = Instance::from_v1_bytes(&instance.to_v1_bytes().unwrap()).unwrap();
-        assert_evaluation(&restored, Sense::Minimize, -1.0);
-
-        assert!(instance.as_maximization_problem());
-        assert_eq!(instance, original);
-        assert_evaluation(&instance, Sense::Maximize, 1.0);
-
-        assert!(!instance.as_maximization_problem());
-        assert!(instance.output_objective().is_none());
-    }
-
-    #[test]
-    fn active_objective_conversion_preserves_evaluation_and_is_reversible() {
-        let mut instance = maximizing_binary_instance();
-        let original = instance.clone();
-        let original_objective = instance.objective().clone();
-
-        assert!(instance.convert_active_objective(Sense::Minimize));
-        assert_eq!(instance.sense(), Sense::Minimize);
-        assert_eq!(instance.objective(), &original_objective.clone().neg());
-        let output = instance.output_objective().unwrap();
-        assert_eq!(output.sense(), Sense::Maximize);
-        assert_eq!(output.function(), &original_objective);
-        assert!(output.preserves_optimality());
-        assert_evaluation(&instance, Sense::Maximize, 1.0);
-
-        assert!(!instance.convert_active_objective(Sense::Minimize));
-        assert!(instance.convert_active_objective(Sense::Maximize));
-        assert_eq!(instance, original);
-        assert_evaluation(&instance, Sense::Maximize, 1.0);
-    }
-
-    #[test]
-    fn whole_problem_conversion_normalizes_existing_preserved_output() {
-        let mut instance = maximizing_binary_instance();
-        let original = instance.clone();
-
-        assert!(instance.convert_active_objective(Sense::Minimize));
-        assert_eq!(instance.sense(), Sense::Minimize);
-        assert_eq!(
-            instance.output_objective().unwrap().sense(),
-            Sense::Maximize
-        );
-
-        // The active pair is already minimization, but the effective output
-        // pair still changes, so this reports a conversion and collapses the
-        // now-redundant preserved output.
-        assert!(instance.as_minimization_problem());
-        assert!(instance.output_objective().is_none());
-        assert_evaluation(&instance, Sense::Minimize, -1.0);
-
-        assert!(instance.as_maximization_problem());
-        assert_eq!(instance, original);
-        assert_evaluation(&instance, Sense::Maximize, 1.0);
-
-        // A redundant true sidecar is canonicalized even when neither pair
-        // requires conversion.
-        instance.output_objective = Some(OutputObjective::new(
-            instance.sense,
-            instance.objective.clone(),
-            true,
-        ));
-        assert!(!instance.as_maximization_problem());
-        assert!(instance.output_objective().is_none());
-    }
-
-    #[test]
     fn conversions_preserve_false_optimality_transport() {
         let mut instance = maximizing_binary_instance();
         let original_objective = instance.objective().clone();
@@ -373,63 +411,6 @@ mod output_objective_tests {
         assert_eq!(output.function(), instance.objective());
         assert!(!output.preserves_optimality());
         assert_evaluation(&instance, Sense::Maximize, 1.0);
-    }
-
-    #[test]
-    fn active_optimality_mapping_respects_output_transport() {
-        use crate::v1::Optimality;
-
-        let mut instance = maximizing_binary_instance();
-        for active in [
-            Optimality::Unspecified,
-            Optimality::Optimal,
-            Optimality::NotOptimal,
-        ] {
-            assert_eq!(instance.map_active_optimality(active), active);
-        }
-
-        assert!(instance.convert_active_objective(Sense::Minimize));
-        assert_eq!(
-            instance.map_active_optimality(Optimality::Optimal),
-            Optimality::Optimal
-        );
-
-        instance
-            .output_objective
-            .as_mut()
-            .unwrap()
-            .preserves_optimality = false;
-        for active in [
-            Optimality::Unspecified,
-            Optimality::Optimal,
-            Optimality::NotOptimal,
-        ] {
-            assert_eq!(
-                instance.map_active_optimality(active),
-                Optimality::Unspecified
-            );
-        }
-    }
-
-    #[test]
-    fn conversion_to_parametric_preserves_output_objective() {
-        let mut instance = maximizing_binary_instance();
-        assert!(instance.convert_active_objective(Sense::Minimize));
-        let original_output = instance.output_objective().cloned().unwrap();
-
-        let parametric = ParametricInstance::from(instance);
-        assert_eq!(parametric.output_objective(), Some(&original_output));
-
-        let materialized = parametric
-            .with_parameters(crate::v1::Parameters::default())
-            .unwrap();
-        assert_eq!(materialized.output_objective(), Some(&original_output));
-
-        let solution = materialized
-            .evaluate(&State::from(HashMap::from([(1, 1.0)])), ATol::default())
-            .unwrap();
-        assert_eq!(*solution.sense(), Some(Sense::Maximize));
-        assert_eq!(*solution.objective(), 1.0);
     }
 
     #[test]

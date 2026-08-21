@@ -184,6 +184,40 @@ impl Instance {
     }
 }
 
+/// # Postconditions
+///
+/// Substitution rewrites active functions while preserving the output objective.
+///
+/// ```
+/// use ommx::{
+///     linear, substitute, v1::State, ATol, DecisionVariable, Evaluate, Function,
+///     Instance, Sense, VariableID,
+/// };
+/// use std::collections::{BTreeMap, HashMap};
+///
+/// let original = VariableID::from(0);
+/// let replacement = VariableID::from(1);
+/// let mut instance = Instance::builder()
+///     .sense(Sense::Maximize)
+///     .objective(Function::from(linear!(0)))
+///     .decision_variables(BTreeMap::from([
+///         (original, DecisionVariable::binary()),
+///         (replacement, DecisionVariable::binary()),
+///     ]))
+///     .constraints(BTreeMap::new())
+///     .build()
+///     .unwrap();
+/// assert!(instance.convert_active_objective(Sense::Minimize));
+/// let output = instance.output_objective().cloned();
+///
+/// substitute(&mut instance, [(original, Function::from(linear!(1)))]).unwrap();
+/// assert_eq!(instance.output_objective(), output.as_ref());
+/// let state = State::from(HashMap::from([(1, 1.0)]));
+/// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
+/// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+/// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+/// assert_eq!(*solution.objective(), 1.0);
+/// ```
 impl Substitute for Instance {
     type Output = Self;
 
@@ -373,7 +407,6 @@ mod tests {
             .decision_variable_dependency
             .get(&VariableID::from(1))
             .is_some());
-        assert!(result.output_objective().is_none());
 
         let named_function = result.named_functions().get(&named_function_id).unwrap();
         let expected_ids: std::collections::BTreeSet<_> =
@@ -381,64 +414,6 @@ mod tests {
                 .into_iter()
                 .collect();
         assert_eq!(named_function.required_ids(), expected_ids);
-    }
-
-    #[test]
-    fn substitution_preserves_existing_output_objective() {
-        let decision_variables = BTreeMap::from([
-            (VariableID::from(1), DecisionVariable::continuous()),
-            (VariableID::from(2), DecisionVariable::continuous()),
-            (VariableID::from(3), DecisionVariable::continuous()),
-        ]);
-        let objective = Function::from((linear!(1) + coeff!(2.0) * linear!(2)).unwrap());
-        let mut instance = Instance::new(
-            Sense::Maximize,
-            objective,
-            decision_variables,
-            BTreeMap::new(),
-        )
-        .unwrap();
-        assert!(instance.convert_active_objective(Sense::Minimize));
-        let output = instance.output_objective().cloned().unwrap();
-
-        let result = instance
-            .substitute_one(
-                VariableID::from(1),
-                &Function::from(linear!(3) + coeff!(1.0)),
-            )
-            .unwrap();
-
-        assert_eq!(result.output_objective(), Some(&output));
-        let usage = result.decision_variable_usage();
-        assert_eq!(
-            usage.role(VariableID::from(1)),
-            Some(DecisionVariableRole::Dependent)
-        );
-        assert_eq!(
-            usage.used(),
-            VariableIDSet::from([VariableID::from(2), VariableID::from(3)])
-        );
-        let solution = result
-            .evaluate(
-                &crate::v1::State::from_iter([(2, 2.0), (3, 3.0)]),
-                ATol::default(),
-            )
-            .unwrap();
-        assert_eq!(*solution.sense(), Some(Sense::Maximize));
-        assert_eq!(*solution.objective(), 8.0);
-
-        let samples = crate::Sampled::new(
-            [vec![crate::SampleID::from(0)]],
-            [crate::v1::State::from_iter([(2, 2.0), (3, 3.0)])],
-        )
-        .unwrap();
-        let sampled_solution = result
-            .evaluate_samples(&samples, ATol::default())
-            .unwrap()
-            .get(crate::SampleID::from(0))
-            .unwrap();
-        assert_eq!(*sampled_solution.sense(), Some(Sense::Maximize));
-        assert_eq!(*sampled_solution.objective(), 8.0);
     }
 
     #[test]
@@ -487,8 +462,6 @@ mod tests {
             )
             .unwrap();
 
-        assert!(substituted.output_objective().is_none());
-
         assert_eq!(substituted.decision_variable_dependency.len(), 1);
         assert!(substituted
             .decision_variable_dependency
@@ -498,7 +471,6 @@ mod tests {
         let mut parameter_values = crate::v1::Parameters::default();
         parameter_values.entries.insert(100, 2.0);
         let instance = substituted.with_parameters(parameter_values).unwrap();
-        assert!(instance.output_objective().is_none());
         let state = crate::v1::State::from_iter([(1, 3.0)]);
         let value = instance
             .objective()

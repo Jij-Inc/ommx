@@ -169,6 +169,39 @@ impl InstanceClass {
 
     /// Class of minimization QUBO formulations accepted by
     /// {meth}`~ommx.Instance.as_qubo_format` after Preparation.
+    ///
+    /// # Postconditions
+    ///
+    /// The target accepts unconstrained minimization QUBO formulations and rejects models outside that class.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> linear = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> quadratic = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x * x, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> cubic = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> maximizing = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> continuous = DecisionVariable.continuous(1)
+    /// >>> non_binary = Instance.from_components(
+    /// ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> constrained = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+    /// ... )
+    /// >>> target = InstanceClass.qubo()
+    /// >>> assert target.contains(linear)
+    /// >>> assert target.contains(quadratic)
+    /// >>> assert not target.contains(cubic)
+    /// >>> assert not target.contains(maximizing)
+    /// >>> assert not target.contains(non_binary)
+    /// >>> assert not target.contains(constrained)
     #[staticmethod]
     pub fn qubo() -> Self {
         Self(ommx::InstanceClass::qubo())
@@ -176,6 +209,35 @@ impl InstanceClass {
 
     /// Class of minimization HUBO formulations accepted by
     /// {meth}`~ommx.Instance.as_hubo_format` after Preparation.
+    ///
+    /// # Postconditions
+    ///
+    /// The target accepts unconstrained minimization Binary HUBO formulations and rejects models outside that class.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> linear = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> cubic = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> maximizing = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> continuous = DecisionVariable.continuous(1)
+    /// >>> non_binary = Instance.from_components(
+    /// ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> constrained = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+    /// ... )
+    /// >>> target = InstanceClass.hubo()
+    /// >>> assert target.contains(linear)
+    /// >>> assert target.contains(cubic)
+    /// >>> assert not target.contains(maximizing)
+    /// >>> assert not target.contains(non_binary)
+    /// >>> assert not target.contains(constrained)
     #[staticmethod]
     pub fn hubo() -> Self {
         Self(ommx::InstanceClass::hubo())

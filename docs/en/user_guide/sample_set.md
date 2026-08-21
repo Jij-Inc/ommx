@@ -80,7 +80,7 @@ sample_set = instance.evaluate_samples(samples)
 sample_set.summary
 ```
 
-The `summary` attribute displays each sample's objective value and feasibility in a DataFrame format. For example, the sample with `sample_id=2` is infeasible and shows `feasible=False`. The table is sorted with feasible samples appearing first, and within them, those with better bjective values (depending on whether `Instance.sense` is maximization or minimization) appear at the top.
+The `summary` attribute displays each sample's objective value and feasibility in a DataFrame format. For example, the sample with `sample_id=2` is infeasible and shows `feasible=False`. The table is sorted with feasible samples appearing first, and within them, those with better objective values according to `SampleSet.sense` appear at the top.
 
 ```{note}
 For clarity, we explicitly pass `ommx.Samples` created by `to_samples` to `evaluate_samples`, but you can omit it because `to_samples` would be called automatically.

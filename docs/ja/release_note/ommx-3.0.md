@@ -10,9 +10,9 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### ⚠ Solver Preparationで入力objectiveを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
-QUBO/HUBO変換後のactive `Instance`はsolverが使うminimization energyを保持し、
-`Solution`と`SampleSet`は入力instanceが既に持つoutput semanticsを保持するように
-なりました。
+`to_qubo()`と`to_hubo()`は、変換後のactive `Instance`にsolverが使う
+minimization energyを保持しつつ、`Solution`と`SampleSet`には入力instanceが
+公開していたobjective semanticsを保持するようになりました。
 
 ```python
 from ommx import DecisionVariable, Instance, Sense
@@ -25,36 +25,27 @@ instance = Instance.from_components(
     constraints={0: x == 1},
 )
 
-qubo, offset = instance.to_qubo(uniform_penalty_weight=2.0)
+instance.to_qubo(uniform_penalty_weight=2.0)
 state = {0: 0.0}
 
-# Solver-facing energy: minimize -x + 2 (x - 1)^2.
 assert instance.sense == Sense.Minimize
 assert instance.objective.evaluate(state) == 2.0
-
-# User-facing output: 入力時の Maximize / x objective。
-solution = instance.evaluate(state)
-sample_set = instance.evaluate_samples({0: state})
-assert solution.sense == Sense.Maximize
-assert solution.objective == 0.0
-assert sample_set.sense == Sense.Maximize
-assert sample_set.objectives[0] == 0.0
+assert instance.evaluate(state).sense == Sense.Maximize
+assert instance.evaluate(state).objective == 0.0
+assert instance.evaluate_samples({0: state}).sense == Sense.Maximize
+assert instance.evaluate_samples({0: state}).objectives[0] == 0.0
 ```
 
-これは最新stable Python SDKからのbreakingな修正です。従来のdriverは変換後にactive senseを
-戻し、penalized solver energyを評価結果にも使っていたため、solver inputとuser-facing
-outputが混在していました。`to_qubo()`と`to_hubo()`は引き続きconvenience APIとして
-利用でき、返すQUBO/HUBO係数の意味は変わりません。
+従来のdriverはactive senseを戻し、penalized solver energyを評価結果に使っていたため、
+これは最新stable Python SDKからのbreakingな修正です。返すQUBO/HUBO係数の
+意味は変わりません。
 
-solverが報告したoptimalityもoutput objectiveへ写されます。penalty変換によって
-active formulationのoptimality proofを移せない場合、返る
-`Solution.optimality`は`Optimality.Unspecified`のままになります。
-
-同等の明示的なPreparation workflowは
+Penalty変換後のoptimalityも保守的に変換され、active formulationのproofを
+移せない評価結果は`Optimality.Unspecified`のままです。実行可能な事後条件は
+{meth}`~ommx.Instance.to_qubo`、{meth}`~ommx.Instance.to_hubo`、
+{meth}`~ommx.Instance.evaluate`、{meth}`~ommx.Instance.evaluate_samples`に記載されています。
+明示的なPreparation workflowは
 [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
-公開設定は{meth}`~ommx.PreparationPolicy.for_qubo`と
-{meth}`~ommx.PreparationPolicy.for_hubo`、in-placeな実行意味論は
-{meth}`~ommx.Instance.prepare`が所有します。
 
 ### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 

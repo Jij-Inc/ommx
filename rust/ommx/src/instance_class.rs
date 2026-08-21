@@ -382,12 +382,67 @@ impl InstanceClass {
         Self { clauses }
     }
 
-    /// Return the canonical class of QUBO solver inputs.
+    /// Return the class of QUBO solver inputs.
     ///
-    /// Members are minimization instances whose active formulation is
-    /// unconstrained, uses only Binary decision variables, and has an active
-    /// objective of cumulative degree at most two. Output-objective semantics
-    /// do not participate in membership.
+    /// # Postconditions
+    ///
+    /// The returned class admits only unconstrained minimization models over
+    /// Binary variables whose objective degree is at most two.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, monomial, Constraint, ConstraintID, DecisionVariable, Function,
+    ///     Instance, InstanceClass, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let binary = BTreeMap::from([(variable, DecisionVariable::binary())]);
+    /// let build = |sense, objective, constraints| {
+    ///     Instance::builder()
+    ///         .sense(sense)
+    ///         .objective(objective)
+    ///         .decision_variables(binary.clone())
+    ///         .constraints(constraints)
+    ///         .build()
+    ///         .unwrap()
+    /// };
+    /// let linear = build(Sense::Minimize, Function::from(linear!(1)), BTreeMap::new());
+    /// let quadratic = build(
+    ///     Sense::Minimize,
+    ///     Function::from(monomial!(1, 1)),
+    ///     BTreeMap::new(),
+    /// );
+    /// let cubic = build(
+    ///     Sense::Minimize,
+    ///     Function::from(monomial!(1, 1, 1)),
+    ///     BTreeMap::new(),
+    /// );
+    /// let maximizing = build(Sense::Maximize, Function::from(linear!(1)), BTreeMap::new());
+    /// let constrained = build(
+    ///     Sense::Minimize,
+    ///     Function::from(linear!(1)),
+    ///     BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]),
+    /// );
+    /// let non_binary = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::continuous())]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let class = InstanceClass::qubo();
+    /// assert!(class.contains(&linear));
+    /// assert!(class.contains(&quadratic));
+    /// assert!(!class.contains(&cubic));
+    /// assert!(!class.contains(&maximizing));
+    /// assert!(!class.contains(&constrained));
+    /// assert!(!class.contains(&non_binary));
+    /// ```
     pub fn qubo() -> Self {
         InstanceClassClause::new(
             "qubo",
@@ -398,12 +453,60 @@ impl InstanceClass {
         .into()
     }
 
-    /// Return the canonical class of Binary HUBO solver inputs.
+    /// Return the class of Binary HUBO solver inputs.
     ///
-    /// Members are minimization instances whose active formulation is
-    /// unconstrained and uses only Binary decision variables. The active
-    /// objective may have any polynomial degree representable by OMMX.
-    /// Output-objective semantics do not participate in membership.
+    /// # Postconditions
+    ///
+    /// The returned class admits unconstrained minimization models over Binary
+    /// variables with any polynomial objective degree.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, monomial, Constraint, ConstraintID, DecisionVariable, Function,
+    ///     Instance, InstanceClass, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let build = |sense, objective, decision_variable| {
+    ///     Instance::builder()
+    ///         .sense(sense)
+    ///         .objective(objective)
+    ///         .decision_variables(BTreeMap::from([(variable, decision_variable)]))
+    ///         .constraints(BTreeMap::new())
+    ///         .build()
+    ///         .unwrap()
+    /// };
+    /// let linear = build(Sense::Minimize, Function::from(linear!(1)), DecisionVariable::binary());
+    /// let cubic = build(
+    ///     Sense::Minimize,
+    ///     Function::from(monomial!(1, 1, 1)),
+    ///     DecisionVariable::binary(),
+    /// );
+    /// let maximizing = build(Sense::Maximize, Function::from(linear!(1)), DecisionVariable::binary());
+    /// let non_binary = build(
+    ///     Sense::Minimize,
+    ///     Function::from(linear!(1)),
+    ///     DecisionVariable::continuous(),
+    /// );
+    /// let constrained = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let class = InstanceClass::hubo();
+    /// assert!(class.contains(&linear));
+    /// assert!(class.contains(&cubic));
+    /// assert!(!class.contains(&maximizing));
+    /// assert!(!class.contains(&non_binary));
+    /// assert!(!class.contains(&constrained));
+    /// ```
     pub fn hubo() -> Self {
         InstanceClassClause::new(
             "hubo",
@@ -732,32 +835,6 @@ mod tests {
         assert_eq!(linear.maximum(), Some(1.into()));
         assert!(DegreeBound::Unbounded.includes(10_000.into()));
         assert_eq!(DegreeBound::Unbounded.maximum(), None);
-    }
-
-    #[test]
-    fn qubo_and_hubo_are_canonical_binary_unconstrained_classes() {
-        let qubo = InstanceClass::qubo();
-        let hubo = InstanceClass::hubo();
-
-        for (class, label, degree_bound) in [
-            (&qubo, "qubo", DegreeBound::at_most(2)),
-            (&hubo, "hubo", DegreeBound::Unbounded),
-        ] {
-            let [clause] = class.clauses() else {
-                panic!("canonical format class must contain exactly one clause");
-            };
-            assert_eq!(clause.label(), label);
-            assert_eq!(
-                clause.allowed_variable_kinds(),
-                &BTreeSet::from([Kind::Binary])
-            );
-            assert_eq!(clause.objective_degree_bound(), degree_bound);
-            assert_eq!(clause.allowed_senses(), &BTreeSet::from([Sense::Minimize]));
-            assert!(clause.regular_constraint_degree_bounds().next().is_none());
-            assert!(clause.indicator_constraint_degree_bounds().next().is_none());
-            assert!(!clause.allows_one_hot());
-            assert!(!clause.allows_sos1());
-        }
     }
 
     #[test]

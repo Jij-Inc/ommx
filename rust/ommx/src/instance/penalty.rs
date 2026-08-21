@@ -75,11 +75,38 @@ impl Instance {
     ///
     /// where $\lambda_1$ and $\lambda_2$ are penalty parameters.
     ///
-    /// When at least one constraint is converted, the pre-penalty active
-    /// objective is preserved as the output objective. Because the penalty
-    /// weights determine whether an optimum of the transformed formulation is
-    /// also optimal for that output objective, optimality transport is marked
-    /// as unavailable.
+    /// # Postconditions
+    ///
+    /// The transformed objective contains parameterized penalties and preserves the entry objective for output.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, Constraint, ConstraintID, DecisionVariable, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let original = Function::from(linear!(1));
+    /// let instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(original.clone())
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let parametric = instance.penalty_method().unwrap();
+    /// assert!(parametric.constraints().is_empty());
+    /// assert_eq!(parametric.parameters().len(), 1);
+    /// let output = parametric.output_objective().unwrap();
+    /// assert_eq!(output.sense(), Sense::Minimize);
+    /// assert_eq!(output.function(), &original);
+    /// assert!(!output.preserves_optimality());
+    /// ```
     pub fn penalty_method(mut self) -> Result<ParametricInstance> {
         self.ensure_penalty_method_supported("penalty_method")?;
         if !self.constraints().is_empty() {
@@ -183,9 +210,43 @@ impl Instance {
     /// regular-constraint lifecycle changes are completed on local values and
     /// committed only after both succeed.
     ///
-    /// A successful non-identity conversion preserves the pre-penalty active
-    /// objective as the output objective and marks optimality transport as
-    /// unavailable.
+    /// # Postconditions
+    ///
+    /// Fixed penalties change the active objective while preserving the entry objective for output.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, Constraint, ConstraintID, DecisionVariable,
+    ///     Evaluate, Function, Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let original = Function::from(linear!(1));
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(original.clone())
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// instance
+    ///     .penalty_method_with_fixed_weights(
+    ///         &BTreeMap::from([(ConstraintID::from(1), 2.0)]),
+    ///         ATol::default(),
+    ///     )
+    ///     .unwrap();
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), 3.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// assert_eq!(instance.output_objective().unwrap().function(), &original);
+    /// assert!(!instance.output_objective().unwrap().preserves_optimality());
+    /// ```
     ///
     /// # Errors
     ///
@@ -258,11 +319,38 @@ impl Instance {
     ///
     /// where $\lambda$ is the single penalty parameter.
     ///
-    /// When at least one constraint is converted, the pre-penalty active
-    /// objective is preserved as the output objective. Because the penalty
-    /// weight determines whether an optimum of the transformed formulation is
-    /// also optimal for that output objective, optimality transport is marked
-    /// as unavailable.
+    /// # Postconditions
+    ///
+    /// The transformed objective contains one shared penalty parameter and preserves the entry objective for output.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, Constraint, ConstraintID, DecisionVariable, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let original = Function::from(linear!(1));
+    /// let instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(original.clone())
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let parametric = instance.uniform_penalty_method().unwrap();
+    /// assert!(parametric.constraints().is_empty());
+    /// assert_eq!(parametric.parameters().len(), 1);
+    /// let output = parametric.output_objective().unwrap();
+    /// assert_eq!(output.sense(), Sense::Minimize);
+    /// assert_eq!(output.function(), &original);
+    /// assert!(!output.preserves_optimality());
+    /// ```
     pub fn uniform_penalty_method(mut self) -> Result<ParametricInstance> {
         self.ensure_penalty_method_supported("uniform_penalty_method")?;
 
@@ -374,9 +462,40 @@ impl Instance {
     /// lifecycle changes are completed on local values and committed only after
     /// both succeed.
     ///
-    /// A successful non-identity conversion preserves the pre-penalty active
-    /// objective as the output objective and marks optimality transport as
-    /// unavailable.
+    /// # Postconditions
+    ///
+    /// The uniform fixed penalty changes the active objective while preserving the entry objective for output.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, Constraint, ConstraintID, DecisionVariable,
+    ///     Evaluate, Function, Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let original = Function::from(linear!(1));
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(original.clone())
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// instance
+    ///     .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
+    ///     .unwrap();
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), 3.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// assert_eq!(instance.output_objective().unwrap().function(), &original);
+    /// assert!(!instance.output_objective().unwrap().preserves_optimality());
+    /// ```
     ///
     /// # Errors
     ///
@@ -741,28 +860,6 @@ mod tests {
     }
 
     #[test]
-    fn direct_parametric_penalty_preserves_the_original_objective_for_output() {
-        for parametric in [
-            create_test_instance_with_constraints()
-                .penalty_method()
-                .unwrap(),
-            create_test_instance_with_constraints()
-                .uniform_penalty_method()
-                .unwrap(),
-        ] {
-            let parameters = crate::v1::Parameters {
-                entries: parametric
-                    .parameters()
-                    .keys()
-                    .map(|id| (id.into_inner(), 2.0))
-                    .collect(),
-            };
-            let instance = parametric.with_parameters(parameters).unwrap();
-            assert_penalty_output_semantics(&instance, 13.0, 3.0);
-        }
-    }
-
-    #[test]
     fn test_penalty_methods_with_no_constraints() {
         // Create instance without constraints
         let mut decision_variables = BTreeMap::new();
@@ -785,7 +882,6 @@ mod tests {
         assert_eq!(parametric_instance.constraints().len(), 0);
         assert_eq!(parametric_instance.removed_constraints().len(), 0);
         assert_eq!(parametric_instance.objective, objective);
-        assert!(parametric_instance.output_objective().is_none());
 
         // Test uniform_penalty_method
         let parametric_instance = instance.uniform_penalty_method().unwrap();
@@ -793,7 +889,6 @@ mod tests {
         assert_eq!(parametric_instance.constraints().len(), 0);
         assert_eq!(parametric_instance.removed_constraints().len(), 0);
         assert_eq!(parametric_instance.objective, objective);
-        assert!(parametric_instance.output_objective().is_none());
     }
 
     #[test]
@@ -1082,16 +1177,6 @@ mod tests {
         assert_eq!(output.sense(), Sense::Minimize);
         assert_eq!(output.function(), &original_objective);
         assert!(!output.preserves_optimality());
-    }
-
-    #[test]
-    fn direct_fixed_penalty_preserves_the_original_objective_for_output() {
-        let mut instance = create_test_instance_with_constraints();
-        instance
-            .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
-            .unwrap();
-
-        assert_penalty_output_semantics(&instance, 13.0, 3.0);
     }
 
     #[test]

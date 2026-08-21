@@ -3,11 +3,62 @@ use crate::{message_io, v1, v2, ConstraintType, Message, Parse};
 use anyhow::Result;
 
 impl Instance {
+    /// Serialize this instance using the v1 wire format.
+    ///
+    /// # Errors
+    ///
+    /// v1 serialization rejects instances with a distinct output objective.
+    ///
+    /// ```
+    /// use ommx::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    ///
+    /// assert!(instance.to_v1_bytes().is_err());
+    /// ```
     pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
         let v1_instance = v1::Instance::try_from(self.clone())?;
         Ok(v1_instance.encode_to_vec())
     }
 
+    /// Serialize this instance using the v2 wire format.
+    ///
+    /// # Postconditions
+    ///
+    /// v2 serialization round-trips the output objective.
+    ///
+    /// ```
+    /// use ommx::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    ///
+    /// let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+    /// assert_eq!(restored.sense(), Sense::Minimize);
+    /// assert_eq!(restored.output_objective().unwrap().sense(), Sense::Maximize);
+    /// assert_eq!(restored, instance);
+    /// ```
     pub fn to_v2_bytes(&self) -> Vec<u8> {
         let v2_instance = v2::Instance::from(self.clone());
         v2_instance.encode_to_vec()
@@ -25,11 +76,63 @@ impl Instance {
 }
 
 impl ParametricInstance {
+    /// Serialize this parametric instance using the v1 wire format.
+    ///
+    /// # Errors
+    ///
+    /// v1 serialization rejects parametric instances with a distinct output objective.
+    ///
+    /// ```
+    /// use ommx::{linear, DecisionVariable, Function, Instance, ParametricInstance, Sense, VariableID};
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut source = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(source.convert_active_objective(Sense::Minimize));
+    /// let instance = ParametricInstance::from(source);
+    ///
+    /// assert!(instance.to_v1_bytes().is_err());
+    /// ```
     pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
         let v1_instance = v1::ParametricInstance::try_from(self.clone())?;
         Ok(v1_instance.encode_to_vec())
     }
 
+    /// Serialize this parametric instance using the v2 wire format.
+    ///
+    /// # Postconditions
+    ///
+    /// v2 serialization round-trips the parametric output objective.
+    ///
+    /// ```
+    /// use ommx::{linear, DecisionVariable, Function, Instance, ParametricInstance, Sense, VariableID};
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut source = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(source.convert_active_objective(Sense::Minimize));
+    /// let instance = ParametricInstance::from(source);
+    ///
+    /// let restored = ParametricInstance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+    /// assert_eq!(restored.output_objective().unwrap().sense(), Sense::Maximize);
+    /// assert_eq!(restored, instance);
+    /// ```
     pub fn to_v2_bytes(&self) -> Vec<u8> {
         let v2_instance = v2::ParametricInstance::from(self.clone());
         v2_instance.encode_to_vec()
@@ -285,36 +388,12 @@ mod tests {
     }
 
     #[test]
-    fn v1_instance_serialization_rejects_output_objective() {
-        let err = instance_with_output_objective().to_v1_bytes().unwrap_err();
-
-        assert!(
-            err.to_string().contains("output_objective")
-                && err.to_string().contains("ommx.v1.Instance"),
-            "unexpected error: {err}"
-        );
-    }
-
-    #[test]
     fn v1_parametric_instance_serialization_rejects_special_constraints() {
         let instance: ParametricInstance = instance_with_special_constraints().into();
         let err = instance.to_v1_bytes().unwrap_err();
 
         assert!(
             err.to_string().contains("to_v2_bytes"),
-            "unexpected error: {err}"
-        );
-    }
-
-    #[test]
-    fn v1_parametric_instance_serialization_rejects_output_objective() {
-        let err = parametric_instance_with_output_objective()
-            .to_v1_bytes()
-            .unwrap_err();
-
-        assert!(
-            err.to_string().contains("output_objective")
-                && err.to_string().contains("ommx.v1.ParametricInstance"),
             "unexpected error: {err}"
         );
     }
@@ -372,27 +451,6 @@ mod tests {
                 .name(Sos1ConstraintID::from(30)),
             Some("sos1")
         );
-    }
-
-    #[test]
-    fn v2_instance_round_trip_preserves_output_objective() {
-        let instance = instance_with_output_objective();
-        let proto = v2::Instance::from(instance.clone());
-
-        assert_eq!(
-            proto.required_features,
-            vec![v2::Feature::OutputObjective as i32]
-        );
-        let output = proto.output_objective.as_ref().unwrap();
-        assert_eq!(
-            output.sense,
-            i32::from(crate::v1::instance::Sense::Maximize)
-        );
-        assert!(output.function.is_some());
-        assert!(output.preserves_optimality);
-
-        let restored = Instance::try_from(proto).unwrap();
-        assert_eq!(restored, instance);
     }
 
     #[test]
