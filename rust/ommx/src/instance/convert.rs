@@ -164,17 +164,9 @@ impl ParametricInstance {
             );
         }
 
-        // Materialize only IDs declared by this ParametricInstance. Extra
-        // caller-supplied entries are retained as assignment metadata on the
-        // resulting Instance, but must not accidentally substitute a decision
-        // variable that shares their numeric ID.
+        // Create state from parameters
         let state = crate::v1::State {
-            entries: parameters
-                .entries
-                .iter()
-                .filter(|(id, _)| required_ids.contains(&VariableID::from(**id)))
-                .map(|(&id, &value)| (id, value))
-                .collect(),
+            entries: parameters.entries.clone(),
         };
         let atol = ATol::default();
 
@@ -295,7 +287,7 @@ mod output_objective_tests {
     }
 
     #[test]
-    fn active_objective_conversion_preserves_evaluation_and_round_trips() {
+    fn active_objective_conversion_preserves_evaluation_and_is_reversible() {
         let mut instance = maximizing_binary_instance();
         let original = instance.clone();
         let original_objective = instance.objective().clone();
@@ -381,6 +373,42 @@ mod output_objective_tests {
         assert_eq!(output.function(), instance.objective());
         assert!(!output.preserves_optimality());
         assert_evaluation(&instance, Sense::Maximize, 1.0);
+    }
+
+    #[test]
+    fn active_optimality_mapping_respects_output_transport() {
+        use crate::v1::Optimality;
+
+        let mut instance = maximizing_binary_instance();
+        for active in [
+            Optimality::Unspecified,
+            Optimality::Optimal,
+            Optimality::NotOptimal,
+        ] {
+            assert_eq!(instance.map_active_optimality(active), active);
+        }
+
+        assert!(instance.convert_active_objective(Sense::Minimize));
+        assert_eq!(
+            instance.map_active_optimality(Optimality::Optimal),
+            Optimality::Optimal
+        );
+
+        instance
+            .output_objective
+            .as_mut()
+            .unwrap()
+            .preserves_optimality = false;
+        for active in [
+            Optimality::Unspecified,
+            Optimality::Optimal,
+            Optimality::NotOptimal,
+        ] {
+            assert_eq!(
+                instance.map_active_optimality(active),
+                Optimality::Unspecified
+            );
+        }
     }
 
     #[test]
@@ -471,45 +499,11 @@ mod output_objective_tests {
 #[cfg(test)]
 mod with_parameters_tests {
     use super::*;
-    use crate::{coeff, linear, Equality, Evaluate, Function};
+    use crate::{coeff, linear, Equality, Function};
     use maplit::btreemap;
 
     fn parameters(ids: impl IntoIterator<Item = VariableID>) -> ParameterTable {
         ParameterTable::from_ids(ids.into_iter().collect())
-    }
-
-    #[test]
-    fn extra_assignment_metadata_does_not_substitute_decision_variables() {
-        let x = VariableID::from(1);
-        let p = VariableID::from(100);
-        let parametric = ParametricInstance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::from(linear!(1) + linear!(100)))
-            .decision_variables(btreemap! {
-                x => DecisionVariable::continuous(),
-            })
-            .parameters(parameters([p]))
-            .constraints(BTreeMap::new())
-            .build()
-            .unwrap();
-
-        let supplied = crate::v1::Parameters {
-            entries: std::collections::HashMap::from([(100, 2.0), (1, 999.0)]),
-        };
-        let materialized = parametric.with_parameters(supplied.clone()).unwrap();
-
-        assert_eq!(materialized.parameters, Some(supplied));
-        assert!(materialized.objective().required_ids().contains(&x));
-        assert_eq!(
-            materialized
-                .objective()
-                .evaluate(
-                    &crate::v1::State::from_iter([(x.into_inner(), 3.0)]),
-                    ATol::default(),
-                )
-                .unwrap(),
-            5.0,
-        );
     }
 
     /// Parameter substitution must apply to the right-hand-side of

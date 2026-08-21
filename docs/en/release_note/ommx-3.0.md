@@ -11,8 +11,8 @@ Changes merged after the most recent release will be appended here as they land,
 ### ⚠ Preserve input objectives across solver Preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
 QUBO and HUBO conversion now leaves the active `Instance` as the minimization
-energy used by a solver while `Solution` and `SampleSet` report the exact sense
-and objective function supplied to the driver:
+energy used by a solver while `Solution` and `SampleSet` retain the input
+instance's existing output semantics:
 
 ```python
 from ommx import DecisionVariable, Instance, Sense
@@ -47,56 +47,15 @@ the evaluated objective, mixing solver input with user-facing output.
 `to_qubo()` and `to_hubo()` remain supported convenience APIs; their returned
 QUBO/HUBO coefficients keep the same meaning.
 
-The drivers are now exactly an `InstanceClass`, a matching
-`PreparationPolicy`, in-place `prepare(...)`, and a preparation-free format
-extractor. The same pipeline can be run explicitly when its policy must be
-inspected or edited:
+Solver-reported optimality is now mapped to the output objective as well.
+When a penalty rewrite cannot transport an active-formulation optimality proof,
+the returned `Solution.optimality` remains `Optimality.Unspecified`.
 
-```python
-from ommx import InstanceClass, PreparationPolicy
-
-prepared = Instance.from_components(
-    sense=Sense.Maximize,
-    objective=x,
-    decision_variables=[x],
-    constraints={0: x == 1},
-)
-policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
-prepared.prepare(InstanceClass.qubo(), policy)
-qubo, offset = prepared.as_qubo_format()
-```
-
-The HUBO counterparts are `InstanceClass.hubo()`,
-`PreparationPolicy.for_hubo(...)`, and `as_hubo_format()`. Both policies
-select special-constraint lowering, active-objective conversion, Integer slack,
-fixed penalty, and Integer encoding with the legacy driver defaults. The QUBO
-policy additionally selects `BinaryPowerPreparation`, which canonicalizes
-powers of Binary variables such as $x^n = x$ before the quadratic target is
-checked. HUBO permits arbitrary polynomial degree and does not need that phase.
-
-Preparation establishes an output-objective envelope before its first in-place
-phase. The envelope snapshots the entry instance's effective output sense and
-exact function pair, rather than a transformation history. It survives both
-successful Preparation and a later-phase failure that leaves earlier mutations
-in place. A penalty conversion that removes constraints sets its
-optimality-transport flag to false because optimality for a finite-penalty
-energy does not prove optimality for the reported objective.
-
-`Instance` now exposes the same separation to custom workflows through
-`convert_active_objective(target)` and `ObjectivePreparation(target=...)`.
-Fixed and parameterized penalty methods also retain an existing output pair or
-capture the pre-penalty active pair, while `Instance.objective` remains the
-penalized active function. The existing `as_minimization_problem()` and
-`as_maximization_problem()` methods remain whole-problem conversions: they
-convert both active and output semantics and do not create an output pair when
-one is absent.
-
-State-reconstructible rewrites such as partial evaluation, substitution,
-Integer encoding, and Binary-power reduction do not rewrite the output pair.
-It is evaluated only after fixed, irrelevant, and dependent decision-variable
-values have been populated. `ParametricInstance.with_parameters()` specializes
-parameter references in both functions. An instance with distinct output
-semantics requires v2 serialization because v1 has no field for the pair.
+See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)
+for the equivalent explicit Preparation workflow. Its public configuration is
+owned by {meth}`~ommx.PreparationPolicy.for_qubo` and
+{meth}`~ommx.PreparationPolicy.for_hubo`; in-place execution semantics are
+documented on {meth}`~ommx.Instance.prepare`.
 
 ### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 

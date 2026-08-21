@@ -11,7 +11,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 ### ⚠ Solver Preparationで入力objectiveを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
 QUBO/HUBO変換後のactive `Instance`はsolverが使うminimization energyを保持し、
-`Solution`と`SampleSet`はdriverへ渡したexactなsenseとobjective functionを返すように
+`Solution`と`SampleSet`は入力instanceが既に持つoutput semanticsを保持するように
 なりました。
 
 ```python
@@ -46,50 +46,15 @@ assert sample_set.objectives[0] == 0.0
 outputが混在していました。`to_qubo()`と`to_hubo()`は引き続きconvenience APIとして
 利用でき、返すQUBO/HUBO係数の意味は変わりません。
 
-Driverは`InstanceClass`、対応する`PreparationPolicy`、in-placeな`prepare(...)`、
-preparation-freeなformat extractorだけで構成されます。Policyを確認・編集したい場合は、
-同じpipelineを明示的に実行できます。
+solverが報告したoptimalityもoutput objectiveへ写されます。penalty変換によって
+active formulationのoptimality proofを移せない場合、返る
+`Solution.optimality`は`Optimality.Unspecified`のままになります。
 
-```python
-from ommx import InstanceClass, PreparationPolicy
-
-prepared = Instance.from_components(
-    sense=Sense.Maximize,
-    objective=x,
-    decision_variables=[x],
-    constraints={0: x == 1},
-)
-policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
-prepared.prepare(InstanceClass.qubo(), policy)
-qubo, offset = prepared.as_qubo_format()
-```
-
-HUBOでは`InstanceClass.hubo()`、`PreparationPolicy.for_hubo(...)`、
-`as_hubo_format()`を使います。どちらのPolicyもlegacy driverと同じdefaultで特殊制約
-lowering、active-objective変換、Integer slack、fixed penalty、Integer encodingを選択します。
-QUBO policyだけは`BinaryPowerPreparation`も選択し、quadratic targetを検査する前に
-$x^n = x$のようなBinary変数の冪をcanonicalizeします。HUBOは任意次数を許すため、この
-phaseは不要です。
-
-Preparationは最初のin-place phaseより前にoutput-objective envelopeを確立します。
-Envelopeは変換履歴ではなく、entry instanceのeffective output senseとexactなfunction pairを
-snapshotします。Preparationの成功時だけでなく、後続phaseの失敗によって以前の変更が残る
-場合にもこのpairを保持します。制約を除去するpenalty変換は、有限penalty energyの
-optimalityが出力objectiveのoptimalityを証明しないため、optimality transport flagを
-falseにします。
-
-Custom workflowでは`convert_active_objective(target)`と
-`ObjectivePreparation(target=...)`によって同じ分離を利用できます。固定およびparameterized
-penalty methodも既存のoutput pairを保持し、存在しなければpenalty前のactive pairを保存
-しますが、`Instance.objective`はpenalized active functionのままです。既存の
-`as_minimization_problem()`と`as_maximization_problem()`は数理問題全体の変換であり、active
-とoutputの両方を変換し、output pairがない場合には新設しません。
-
-Partial evaluation、substitution、Integer encoding、Binary-power reductionのようにstateを
-復元できる書き換えはoutput pairを書き換えません。Fixed・irrelevant・dependentの値を
-補完した後にこのpairを評価します。`ParametricInstance.with_parameters()`はactiveとoutputの
-両functionにparameterを代入します。異なるoutput semanticsを持つinstanceは、v1にpairを
-表すfieldがないため、v2でserializeする必要があります。
+同等の明示的なPreparation workflowは
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+公開設定は{meth}`~ommx.PreparationPolicy.for_qubo`と
+{meth}`~ommx.PreparationPolicy.for_hubo`、in-placeな実行意味論は
+{meth}`~ommx.Instance.prepare`が所有します。
 
 ### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 

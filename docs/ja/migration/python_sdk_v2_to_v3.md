@@ -204,8 +204,8 @@ pi.with_parameters({p.id: 1.0})
 
 Driver method自体は引き続き利用できますが、変更後`Instance`の意味論がv3で変わります。
 Active objectiveはQUBO/HUBO solverへ渡すminimization energyであり、`evaluate()`と
-`evaluate_samples()`はdriver呼び出し時の入力instanceが公開していたsenseとobjective
-functionをそのまま返します。
+`evaluate_samples()`はdriver呼び出し前の入力instanceが評価結果として公開していた
+objective semanticsをそのまま返します。
 
 ```python
 from ommx import DecisionVariable, Instance, Sense
@@ -236,7 +236,7 @@ assert sample_set.objectives[0] == 0.0
 
 Python SDK v2では変換後にactive senseを戻し、最終的なpenalty energyを評価結果として
 返していました。`Instance.objective`を読むcodeは引き続きsolver energyを取得しますが、
-`Solution`または`SampleSet`を使うcodeはdriverへ渡した数理目的関数を取得します。これにより、
+`Solution`または`SampleSet`を使うcodeは入力instanceの既存output objectiveを取得します。これにより、
 solver inputとuser-facing outputを混在させていた従来の挙動を修正します。
 
 Policyを確認・編集したい場合は、同じpipelineを明示的に実行できます。次のclass helperと
@@ -257,14 +257,10 @@ qubo, offset = prepared.as_qubo_format()
 ```
 
 HUBOでは`InstanceClass.hubo()`、`PreparationPolicy.for_hubo(...)`、
-`as_hubo_format()`を使います。どちらのPolicy factoryも従来のdriver defaultで、特殊制約
-lowering、active-objective変換、Integer slack、fixed penalty、Integer encodingを選択します。
-QUBO policyはquadratic targetを検査する前に、$x^n = x$のようなBinary変数の冪を
-canonicalizeするphaseも実行します。HUBOではこのphaseは不要です。どちらの経路も最初の
-in-place phaseより前にoutput-objective envelopeを確立し、後続phaseが失敗してそれ以前の
-変更が残る場合にも、entry時のobjective pairを保持します。Penalty変換で制約を除去した
-場合は、penalized energyのoptimalityが出力objectiveのoptimalityを証明しないことも
-envelopeへ記録します。
+`as_hubo_format()`を使います。FactoryのoptionとQUBO/HUBOの違いは
+{meth}`~ommx.PreparationPolicy.for_qubo`と
+{meth}`~ommx.PreparationPolicy.for_hubo`、順序付きin-place実行の契約は
+{meth}`~ommx.Instance.prepare`を参照してください。
 
 ## 6. return type の変更
 

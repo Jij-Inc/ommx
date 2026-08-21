@@ -25,8 +25,8 @@ enum Feature {
   FEATURE_CONSTRAINT_ONE_HOT = 2;
   // The payload contains first-class SOS1 constraints.
   FEATURE_CONSTRAINT_SOS1 = 3;
-  // The Instance or ParametricInstance payload explicitly carries inactive
-  // output objective semantics alongside the active solver formulation.
+  // The Instance or ParametricInstance payload explicitly carries
+  // output-objective semantics separately from the active solver formulation.
   FEATURE_OUTPUT_OBJECTIVE = 4;
 }
 

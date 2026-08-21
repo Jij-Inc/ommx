@@ -3473,8 +3473,8 @@ class Instance:
         {meth}`~ommx.InstanceClass.hubo` and
         {meth}`~ommx.PreparationPolicy.for_hubo`, then returns
         {meth}`~ommx.Instance.as_hubo_format`. The prepared active formulation
-        remains on this instance, while evaluation retains the input output
-        objective semantics.
+        remains on this instance, while evaluation retains the input instance's
+        existing output-objective semantics.
         """
     def as_parametric_instance(self) -> ParametricInstance: ...
     def penalty_method(self) -> ParametricInstance:
@@ -4640,6 +4640,15 @@ class Instance:
         **Returns:**
         ``True`` if the active objective is converted, ``False`` if it already
         has ``target``.
+        """
+    def map_active_optimality(self, active: Optimality) -> Optimality:
+        r"""
+        Map an optimality status for the active solver-facing formulation to
+        the objective semantics returned by evaluation.
+
+        When the instance records that active-formulation optimality does not
+        transport to its output objective, this returns
+        {attr}`~ommx.Optimality.Unspecified`.
         """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
@@ -6242,6 +6251,14 @@ class PreparationPolicy:
     ) -> PreparationPolicy:
         r"""
         Return a fresh policy for preparing an instance for QUBO formatting.
+
+        ``uniform_penalty_weight`` and ``penalty_weights`` override the default
+        uniform penalty weight of 1.0 and are mutually exclusive. The keyed form
+        must cover exactly the active regular constraints at the penalty phase.
+        ``inequality_integer_slack_max_range`` defaults to 31 and configures both
+        the exact Integer-slack range and the fallback slack upper bound. This
+        QUBO policy also reduces powers of Binary variables before checking the
+        quadratic target.
         """
     @staticmethod
     def for_hubo(
@@ -6254,6 +6271,14 @@ class PreparationPolicy:
     ) -> PreparationPolicy:
         r"""
         Return a fresh policy for preparing an instance for HUBO formatting.
+
+        ``uniform_penalty_weight`` and ``penalty_weights`` override the default
+        uniform penalty weight of 1.0 and are mutually exclusive. The keyed form
+        must cover exactly the active regular constraints at the penalty phase.
+        ``inequality_integer_slack_max_range`` defaults to 31 and configures both
+        the exact Integer-slack range and the fallback slack upper bound. Unlike
+        {meth}`for_qubo`, this policy leaves Binary-power reduction disabled
+        because HUBO accepts arbitrary polynomial degree.
         """
 
 class PreparationTargetNotReachedError(builtins.RuntimeError):

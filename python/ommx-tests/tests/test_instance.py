@@ -74,6 +74,14 @@ def test_problem_objective_conversion_changes_evaluation_semantics():
         constraints={},
     )
 
+    # Create a separate Maximize/3x output objective while making the active
+    # solver-facing objective Minimize/-3x.
+    assert instance.convert_active_objective(Sense.Minimize)
+    assert instance.evaluate({0: 1}).sense == Sense.Maximize
+
+    # The active objective is already minimization, so this return value and
+    # the changed evaluation semantics exercise conversion of the existing
+    # output objective.
     assert instance.as_minimization_problem()
 
     solution = instance.evaluate({0: 1})
@@ -398,35 +406,37 @@ def test_qubo_hubo_driver_matches_explicit_preparation_and_preserves_output(
     assert sample_set.sense == Sense.Maximize
     assert sample_set.objectives[11] == pytest.approx(5.0)
 
-    with pytest.raises(RuntimeError, match="output_objective"):
-        driver.to_v1_bytes()
-    restored = Instance.from_v2_bytes(driver.to_v2_bytes())
-    restored_coefficients, restored_offset = getattr(restored, format_name)()
-    assert restored_coefficients == actual_coefficients
-    assert restored_offset == actual_offset
-    assert restored.sense == Sense.Minimize
-    assert restored.evaluate(active_state).sense == Sense.Maximize
-    assert restored.evaluate(active_state).objective == pytest.approx(5.0)
 
-
-@pytest.mark.parametrize("method_name", ["to_qubo", "to_hubo"])
-def test_qubo_hubo_driver_accepts_existing_output_objective(method_name: str) -> None:
-    x = DecisionVariable.binary(0)
+@pytest.mark.parametrize(
+    ("method_name", "class_name"),
+    [("to_qubo", "qubo"), ("to_hubo", "hubo")],
+)
+def test_qubo_hubo_driver_preserves_existing_output_objective_during_preparation(
+    method_name: str,
+    class_name: str,
+) -> None:
+    x = DecisionVariable.integer(0, lower=0, upper=3)
     instance = Instance.from_components(
         decision_variables=[x],
-        objective=3 * x,
-        constraints={},
+        objective=3 * x + 5,
+        constraints={7: x <= 2},
         sense=Sense.Maximize,
     )
     assert instance.convert_active_objective(Sense.Minimize)
-    before = instance.to_v2_bytes()
+    assert not getattr(InstanceClass, class_name)().contains(instance)
 
-    getattr(instance, method_name)()
+    getattr(instance, method_name)(
+        uniform_penalty_weight=2.0,
+        inequality_integer_slack_max_range=7,
+    )
 
-    assert instance.to_v2_bytes() == before
-    solution = instance.evaluate({0: 1})
+    assert getattr(InstanceClass, class_name)().contains(instance)
+    assert instance.constraints == {}
+    assert 7 in instance.removed_constraints
+    active_state = {variable_id: 0.0 for variable_id in instance.required_ids()}
+    solution = instance.evaluate(active_state)
     assert solution.sense == Sense.Maximize
-    assert solution.objective == 3
+    assert solution.objective == 5
 
 
 def test_to_qubo_reduces_repeated_binary_power() -> None:
@@ -446,7 +456,8 @@ def test_to_qubo_reduces_repeated_binary_power() -> None:
     assert instance.evaluate({0: 1}).objective == 1.0
 
 
-def test_to_qubo_continuous():
+@pytest.mark.parametrize("method_name", ["to_qubo", "to_hubo"])
+def test_qubo_hubo_continuous_partial_failure(method_name: str) -> None:
     x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -459,12 +470,13 @@ def test_to_qubo_continuous():
         match=r"The constraint contains continuous decision variables: "
         r"ID=VariableID\(0\)",
     ):
-        instance.to_qubo()
+        getattr(instance, method_name)()
     assert instance.sense == Sense.Minimize
     assert instance.evaluate({0: 0, 1: 0, 2: 0}).sense == Sense.Maximize
 
 
-def test_to_qubo_invalid_penalty_option():
+@pytest.mark.parametrize("method_name", ["to_qubo", "to_hubo"])
+def test_qubo_hubo_invalid_penalty_option(method_name: str) -> None:
     x = [
         DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i])
         for i in range(2)
@@ -478,7 +490,10 @@ def test_to_qubo_invalid_penalty_option():
 
     before = instance.to_v2_bytes()
     with pytest.raises(ValueError) as e:
-        instance.to_qubo(uniform_penalty_weight=1.0, penalty_weights={0: 2.0})
+        getattr(instance, method_name)(
+            uniform_penalty_weight=1.0,
+            penalty_weights={0: 2.0},
+        )
     assert (
         str(e.value)
         == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
@@ -511,46 +526,6 @@ def test_to_hubo_penalty_weight():
     hubo, offset = instance.to_hubo(penalty_weights={123: 1.0, 456: 2.0})
     assert hubo == {(0,): 2.0, (1,): -2.0}
     assert offset == 2.0
-
-
-def test_to_hubo_continuous():
-    x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={0: x[0] + x[1] >= 7.89},
-        sense=Instance.MAXIMIZE,
-    )
-    with pytest.raises(
-        RuntimeError,
-        match=r"The constraint contains continuous decision variables: "
-        r"ID=VariableID\(0\)",
-    ):
-        instance.to_hubo()
-    assert instance.sense == Sense.Minimize
-    assert instance.evaluate({0: 0, 1: 0, 2: 0}).sense == Sense.Maximize
-
-
-def test_to_hubo_invalid_penalty_option():
-    x = [
-        DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i])
-        for i in range(2)
-    ]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={0: x[0] + 2 * x[1] <= 3},
-        sense=Instance.MAXIMIZE,
-    )
-
-    before = instance.to_v2_bytes()
-    with pytest.raises(ValueError) as e:
-        instance.to_hubo(uniform_penalty_weight=1.0, penalty_weights={0: 2.0})
-    assert (
-        str(e.value)
-        == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
-    )
-    assert instance.to_v2_bytes() == before
 
 
 def test_evaluate_irrelevant_binary_variable():

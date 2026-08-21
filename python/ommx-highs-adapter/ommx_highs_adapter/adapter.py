@@ -517,7 +517,10 @@ class OMMXHighsAdapter(SolverAdapter):
     -----------------
     **Variable Values**: Extracted from HiGHS ``solution.col_value`` using maintained ID mapping
 
-    **Optimality Status**: Set to ``OPTIMALITY_OPTIMAL`` when HiGHS returns ``kOptimal``
+    **Optimality Status**:
+
+    - A HiGHS ``kOptimal`` status becomes ``OPTIMALITY_UNSPECIFIED`` when it
+      does not transport to the output objective
 
     **Dual Variables**: Extracted from ``solution.row_dual`` for constraints
 
@@ -792,6 +795,8 @@ class OMMXHighsAdapter(SolverAdapter):
 
         This method translates HiGHS solver results into OMMX format, including
         variable values, optimality status, and dual variable information.
+        Backend optimality is mapped through the instance's output-objective
+        semantics and remains unspecified when it does not transport.
 
         Parameters
         ----------
@@ -805,7 +810,7 @@ class OMMXHighsAdapter(SolverAdapter):
             Complete OMMX solution containing:
             - Variable values mapped back to original OMMX IDs
             - Constraint evaluations and feasibility status
-            - Optimality information from HiGHS
+            - Optimality information from HiGHS when transportable to the output objective
             - Dual variables for linear constraints
 
         Raises
@@ -855,7 +860,9 @@ class OMMXHighsAdapter(SolverAdapter):
 
             # set optimality
             if data.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-                solution.optimality = Solution.OPTIMAL
+                solution.optimality = self.instance.map_active_optimality(
+                    Solution.OPTIMAL
+                )
 
             # dual variables
             solution_info = data.getSolution()

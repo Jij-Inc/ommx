@@ -304,8 +304,8 @@ Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
 The driver methods remain available, but the meaning of the mutated
 `Instance` changes in v3. The active objective is the minimization energy sent
 to a QUBO or HUBO solver, while `evaluate()` and `evaluate_samples()` report
-the sense and exact objective function that the input instance exposed when
-the driver was called:
+the same objective semantics that the input instance reported before the
+driver was called:
 
 ```python
 from ommx import DecisionVariable, Instance, Sense
@@ -337,7 +337,7 @@ assert sample_set.objectives[0] == 0.0
 Python SDK v2 instead restored the active sense after conversion and evaluated
 the final penalized energy. Code that reads `Instance.objective` continues to
 see the solver energy. Code that consumes `Solution` or `SampleSet` now gets
-the mathematical objective supplied to the driver, fixing the previous
+the input instance's existing output objective, fixing the previous
 mixture of solver input and user-facing output semantics.
 
 The same pipeline can be run explicitly when its policy must be inspected or
@@ -359,16 +359,10 @@ qubo, offset = prepared.as_qubo_format()
 ```
 
 Use `InstanceClass.hubo()`, `PreparationPolicy.for_hubo(...)`, and
-`as_hubo_format()` for HUBO. Both Policy factories select special-constraint
-lowering, active-objective conversion, Integer slack, fixed penalty, and
-Integer encoding with the established driver defaults. The QUBO policy
-additionally canonicalizes powers of Binary variables, such as $x^n = x$,
-before enforcing the quadratic target; HUBO does not need that phase. Both
-paths establish an output-objective envelope before the first in-place phase.
-It preserves the entry objective pair even when a later phase fails and earlier
-mutations remain. If penalty conversion removes constraints, the envelope also
-records that optimality for the penalized energy does not prove optimality for
-the reported objective.
+`as_hubo_format()` for HUBO. The factory options and the QUBO/HUBO distinction
+are documented on {meth}`~ommx.PreparationPolicy.for_qubo` and
+{meth}`~ommx.PreparationPolicy.for_hubo`; the ordered, in-place execution
+contract is documented on {meth}`~ommx.Instance.prepare`.
 
 ## 6. Return-type changes
 

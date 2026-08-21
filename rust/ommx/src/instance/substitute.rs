@@ -250,9 +250,7 @@ impl Substitute for ParametricInstance {
             }
         }
 
-        let mut objective = self.objective.clone();
-        substitute_acyclic(&mut objective, acyclic)?;
-        self.objective = objective;
+        substitute_acyclic(&mut self.objective, acyclic)?;
 
         let mut constraint_replacements = BTreeMap::new();
         for (&constraint_id, constraint) in self.constraint_collection.active() {

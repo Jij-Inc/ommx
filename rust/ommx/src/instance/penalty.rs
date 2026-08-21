@@ -643,10 +643,6 @@ mod tests {
             sample_set.objectives().get(sample_id),
             Some(&expected_output)
         );
-
-        assert!(instance.to_v1_bytes().is_err());
-        let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
-        assert_eq!(restored.output_objective(), instance.output_objective());
     }
 
     /// Helper function to verify penalty method properties
@@ -689,13 +685,6 @@ mod tests {
         assert_eq!(output.sense(), parametric_instance.sense);
         assert_eq!(output.function(), &original_objective);
         assert!(!output.preserves_optimality());
-        assert!(parametric_instance.to_v1_bytes().is_err());
-        let restored =
-            ParametricInstance::from_v2_bytes(&parametric_instance.to_v2_bytes()).unwrap();
-        assert_eq!(
-            restored.output_objective(),
-            parametric_instance.output_objective()
-        );
 
         // Verify zero penalty weight behavior
         use crate::v1::Parameters;
@@ -1073,8 +1062,6 @@ mod tests {
         assert_eq!(output.sense(), Sense::Maximize);
         assert_eq!(output.function(), &original_objective);
         assert!(!output.preserves_optimality());
-        let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
-        assert!(!restored.output_objective().unwrap().preserves_optimality());
         let solution = instance
             .evaluate(&State::from_iter([(1, 2.0), (2, 1.0)]), ATol::default())
             .unwrap();

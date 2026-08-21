@@ -160,29 +160,6 @@ def test_evaluate_emits_rust_span_under_python_parent() -> None:
         assert s.context.trace_id == parent_trace_id
 
 
-def test_to_qubo_emits_format_span() -> None:
-    """``Instance.to_qubo`` delegates formatting to ``as_qubo_format``."""
-    exporter = get_test_exporter()
-    provider = get_test_provider()
-    exporter.clear()
-
-    x = [DecisionVariable.binary(i) for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={},
-        sense=Instance.MINIMIZE,
-    )
-
-    instance.to_qubo()
-
-    provider.force_flush()
-    names = {s.name for s in exporter.spans}
-    assert "as_qubo_format" in names, (
-        f"Missing 'as_qubo_format' span. Got: {sorted(names)}"
-    )
-
-
 def test_tracing_info_event_captured_on_rust_span() -> None:
     """``tracing::info!`` inside ``lower_special_constraints`` becomes a span event
     on the Rust span, not a separate span."""

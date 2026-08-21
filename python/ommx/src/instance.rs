@@ -993,8 +993,8 @@ impl Instance {
     /// {meth}`~ommx.InstanceClass.hubo` and
     /// {meth}`~ommx.PreparationPolicy.for_hubo`, then returns
     /// {meth}`~ommx.Instance.as_hubo_format`. The prepared active formulation
-    /// remains on this instance, while evaluation retains the input output
-    /// objective semantics.
+    /// remains on this instance, while evaluation retains the input instance's
+    /// existing output-objective semantics.
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
     pub fn to_hubo<'py>(
         &mut self,
@@ -2636,6 +2636,16 @@ impl Instance {
     /// has ``target``.
     pub fn convert_active_objective(&mut self, target: Sense) -> bool {
         self.inner.convert_active_objective(target.into())
+    }
+
+    /// Map an optimality status for the active solver-facing formulation to
+    /// the objective semantics returned by evaluation.
+    ///
+    /// When the instance records that active-formulation optimality does not
+    /// transport to its output objective, this returns
+    /// {attr}`~ommx.Optimality.Unspecified`.
+    pub fn map_active_optimality(&self, active: crate::Optimality) -> crate::Optimality {
+        self.inner.map_active_optimality(active.into()).into()
     }
 
     /// Get a specific decision variable by ID

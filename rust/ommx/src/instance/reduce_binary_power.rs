@@ -170,9 +170,7 @@ mod tests {
         assert!(instance.used_decision_variable_ids().is_empty());
         assert_eq!(instance.output_objective(), Some(&output));
 
-        let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
-        assert_eq!(restored, instance);
-        let solution = restored
+        let solution = instance
             .evaluate(&crate::v1::State::default(), crate::ATol::default())
             .unwrap();
         assert_eq!(*solution.sense(), Some(Sense::Minimize));

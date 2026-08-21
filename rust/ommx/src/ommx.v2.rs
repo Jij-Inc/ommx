@@ -45,8 +45,8 @@ pub enum Feature {
     ConstraintOneHot = 2,
     /// The payload contains first-class SOS1 constraints.
     ConstraintSos1 = 3,
-    /// The Instance or ParametricInstance payload explicitly carries inactive
-    /// output objective semantics alongside the active solver formulation.
+    /// The Instance or ParametricInstance payload explicitly carries
+    /// output-objective semantics separately from the active solver formulation.
     OutputObjective = 4,
 }
 impl Feature {
@@ -651,7 +651,7 @@ pub struct Instance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
-    /// Inactive objective definition evaluated after full state population.
+    /// Output objective definition evaluated after full state population.
     /// When absent, `sense` and `objective` are also the output semantics.
     #[prost(message, optional, tag = "14")]
     pub output_objective: ::core::option::Option<OutputObjective>,
@@ -707,7 +707,7 @@ pub struct ParametricInstance {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
-    /// Inactive objective definition specialized during parameter materialization.
+    /// Output objective definition specialized during parameter materialization.
     /// When absent, `sense` and `objective` are also the output semantics.
     #[prost(message, optional, tag = "14")]
     pub output_objective: ::core::option::Option<OutputObjective>,

@@ -10445,6 +10445,32 @@
               "deprecated": null
             },
             {
+              "name": "map_active_optimality",
+              "doc": "Map an optimality status for the active solver-facing formulation to\nthe objective semantics returned by evaluation.\n\nWhen the instance records that active-formulation optimality does not\ntransport to its output objective, this returns\n{attr}`~ommx.Optimality.Unspecified`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "active",
+                      "type_": {
+                        "display": "Optimality",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Optimality",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "maximize",
               "doc": "Create an empty maximization instance with a zero objective.\n\nDecision variables and constraints can be added incrementally with\n{meth}`new_binary` and {meth}`add_constraint`.",
               "signatures": [
@@ -11182,7 +11208,7 @@
             },
             {
               "name": "to_hubo",
-              "doc": "Convert the instance to a HUBO format.\n\nThis is the higher-order counterpart of\n{meth}`~ommx.Instance.to_qubo`. It prepares the instance in place with\n{meth}`~ommx.InstanceClass.hubo` and\n{meth}`~ommx.PreparationPolicy.for_hubo`, then returns\n{meth}`~ommx.Instance.as_hubo_format`. The prepared active formulation\nremains on this instance, while evaluation retains the input output\nobjective semantics.",
+              "doc": "Convert the instance to a HUBO format.\n\nThis is the higher-order counterpart of\n{meth}`~ommx.Instance.to_qubo`. It prepares the instance in place with\n{meth}`~ommx.InstanceClass.hubo` and\n{meth}`~ommx.PreparationPolicy.for_hubo`, then returns\n{meth}`~ommx.Instance.as_hubo_format`. The prepared active formulation\nremains on this instance, while evaluation retains the input instance's\nexisting output-objective semantics.",
               "signatures": [
                 {
                   "parameters": [
@@ -19629,7 +19655,7 @@
             },
             {
               "name": "for_hubo",
-              "doc": "Return a fresh policy for preparing an instance for HUBO formatting.",
+              "doc": "Return a fresh policy for preparing an instance for HUBO formatting.\n\n``uniform_penalty_weight`` and ``penalty_weights`` override the default\nuniform penalty weight of 1.0 and are mutually exclusive. The keyed form\nmust cover exactly the active regular constraints at the penalty phase.\n``inequality_integer_slack_max_range`` defaults to 31 and configures both\nthe exact Integer-slack range and the fallback slack upper bound. Unlike\n{meth}`for_qubo`, this policy leaves Binary-power reduction disabled\nbecause HUBO accepts arbitrary polynomial degree.",
               "signatures": [
                 {
                   "parameters": [
@@ -19705,7 +19731,7 @@
             },
             {
               "name": "for_qubo",
-              "doc": "Return a fresh policy for preparing an instance for QUBO formatting.",
+              "doc": "Return a fresh policy for preparing an instance for QUBO formatting.\n\n``uniform_penalty_weight`` and ``penalty_weights`` override the default\nuniform penalty weight of 1.0 and are mutually exclusive. The keyed form\nmust cover exactly the active regular constraints at the penalty phase.\n``inequality_integer_slack_max_range`` defaults to 31 and configures both\nthe exact Integer-slack range and the fallback slack upper bound. This\nQUBO policy also reduces powers of Binary variables before checking the\nquadratic target.",
               "signatures": [
                 {
                   "parameters": [

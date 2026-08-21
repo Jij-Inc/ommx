@@ -149,7 +149,7 @@ pub struct OutputObjective {
 }
 
 impl OutputObjective {
-    pub(crate) fn new(sense: Sense, function: Function, preserves_optimality: bool) -> Self {
+    fn new(sense: Sense, function: Function, preserves_optimality: bool) -> Self {
         Self {
             sense,
             function,
@@ -175,7 +175,9 @@ impl OutputObjective {
     /// constraints.
     ///
     /// `false` means that no such proof is available. It does not assert that
-    /// a reconstructed state is suboptimal.
+    /// a reconstructed state is suboptimal. Use
+    /// [`Instance::map_active_optimality`] when attaching a solver status to
+    /// an evaluated output.
     pub fn preserves_optimality(&self) -> bool {
         self.preserves_optimality
     }
@@ -362,6 +364,25 @@ impl Instance {
     /// [`Self::objective`] directly.
     pub fn output_objective(&self) -> Option<&OutputObjective> {
         self.output_objective.as_ref()
+    }
+
+    /// Map an optimality status proved for the active formulation to the
+    /// status that is valid for the output objective.
+    ///
+    /// The status is preserved when active-formulation optimality transports
+    /// to the output semantics. Otherwise no active status, including
+    /// `Optimality::NotOptimal`, proves the corresponding output status, so
+    /// this returns `Optimality::Unspecified`.
+    pub fn map_active_optimality(&self, active: crate::v1::Optimality) -> crate::v1::Optimality {
+        if self
+            .output_objective
+            .as_ref()
+            .is_none_or(|output| output.preserves_optimality)
+        {
+            active
+        } else {
+            crate::v1::Optimality::Unspecified
+        }
     }
 
     /// Preserve the current active objective pair before a transformation

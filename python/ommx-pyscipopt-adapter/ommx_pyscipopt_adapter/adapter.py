@@ -694,6 +694,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         effectively the same problem as the OMMX instance used to create the
         adapter.
 
+        Backend optimality is mapped through the instance's output-objective
+        semantics. It remains unspecified when active-formulation optimality
+        does not transport to that objective.
+
         Examples
         =========
 
@@ -732,7 +736,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             if (
                 data.getStatus() == "optimal"
             ):  # pyscipopt does not appear to have an enum or constant for this
-                solution.optimality = Solution.OPTIMAL
+                solution.optimality = self.instance.map_active_optimality(
+                    Solution.OPTIMAL
+                )
 
             return solution
 

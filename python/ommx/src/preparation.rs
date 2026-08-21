@@ -324,6 +324,14 @@ impl PreparationPolicy {
     }
 
     /// Return a fresh policy for preparing an instance for QUBO formatting.
+    ///
+    /// ``uniform_penalty_weight`` and ``penalty_weights`` override the default
+    /// uniform penalty weight of 1.0 and are mutually exclusive. The keyed form
+    /// must cover exactly the active regular constraints at the penalty phase.
+    /// ``inequality_integer_slack_max_range`` defaults to 31 and configures both
+    /// the exact Integer-slack range and the fallback slack upper bound. This
+    /// QUBO policy also reduces powers of Binary variables before checking the
+    /// quadratic target.
     #[staticmethod]
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
     pub fn for_qubo(
@@ -340,6 +348,14 @@ impl PreparationPolicy {
     }
 
     /// Return a fresh policy for preparing an instance for HUBO formatting.
+    ///
+    /// ``uniform_penalty_weight`` and ``penalty_weights`` override the default
+    /// uniform penalty weight of 1.0 and are mutually exclusive. The keyed form
+    /// must cover exactly the active regular constraints at the penalty phase.
+    /// ``inequality_integer_slack_max_range`` defaults to 31 and configures both
+    /// the exact Integer-slack range and the fallback slack upper bound. Unlike
+    /// {meth}`for_qubo`, this policy leaves Binary-power reduction disabled
+    /// because HUBO accepts arbitrary polynomial degree.
     #[staticmethod]
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
     pub fn for_hubo(
