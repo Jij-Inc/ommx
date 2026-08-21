@@ -29,12 +29,13 @@ use std::collections::{BTreeMap, BTreeSet};
 /// x_1, x_2, x_3 in {0, 1}
 ///
 /// ```python
+/// >>> from ommx import DecisionVariable, Instance, Sense
 /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
 /// >>> instance = Instance.from_components(
 /// ...     decision_variables=x,
 /// ...     objective=x[0] + 2*x[1] + 3*x[2],
-/// ...     constraints=[sum(x) == 1],
-/// ...     sense=Instance.MAXIMIZE,
+/// ...     constraints={0: sum(x) == 1},
+/// ...     sense=Sense.Maximize,
 /// ... )
 /// ```
 ///
@@ -310,14 +311,14 @@ impl SampleSet {
     /// # Examples
     ///
     /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x + y,
     /// ...     objective=sum(x) + sum(y),
-    /// ...     constraints=[],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
     /// >>> sorted(sample_set.decision_variable_names)
@@ -367,14 +368,14 @@ impl SampleSet {
     /// # Examples
     ///
     /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x + y,
     /// ...     objective=sum(x) + sum(y),
-    /// ...     constraints=[],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
     /// >>> all_vars = sample_set.extract_all_decision_variables(0)

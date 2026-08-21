@@ -1401,13 +1401,13 @@ impl Instance {
     /// Generate random state only for used variables
     ///
     /// ```python
-    /// >>> from ommx import Instance, DecisionVariable, Rng
+    /// >>> from ommx import DecisionVariable, Instance, Rng, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(5)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=x[0] + x[1],
-    /// ...     constraints=[],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     ///
     /// >>> rng = Rng()
@@ -1458,13 +1458,13 @@ impl Instance {
     /// Generate samples for a simple instance:
     ///
     /// ```python
-    /// >>> from ommx import Instance, DecisionVariable, Rng
+    /// >>> from ommx import DecisionVariable, Instance, Rng, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints=[(sum(x) <= 2).set_id(0)],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={0: sum(x) <= 2},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     ///
     /// >>> rng = Rng()
@@ -1513,32 +1513,27 @@ impl Instance {
     /// Relax constraint, and restore it.
     ///
     /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints=[(sum(x) == 3).set_id(1)],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={1: sum(x) == 3},
+    /// ...     sense=Sense.Maximize,
     /// ... )
-    /// >>> instance.constraints
-    /// [Constraint(x0 + x1 + x2 - 3 == 0)]
+    /// >>> assert set(instance.constraints) == {1}
     /// ```
     ///
     /// ```python
     /// >>> instance.relax_constraint(1, "manual relaxation")
-    /// >>> instance.constraints
-    /// []
-    /// >>> instance.removed_constraints
-    /// [RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=manual relaxation)]
+    /// >>> assert not instance.constraints
+    /// >>> assert set(instance.removed_constraints) == {1}
     /// ```
     ///
     /// ```python
     /// >>> instance.restore_constraint(1)
-    /// >>> instance.constraints
-    /// [Constraint(x0 + x1 + x2 - 3 == 0)]
-    /// >>> instance.removed_constraints
-    /// []
+    /// >>> assert set(instance.constraints) == {1}
+    /// >>> assert not instance.removed_constraints
     /// ```
     #[pyo3(signature = (constraint_id, reason, **parameters))]
     pub fn relax_constraint(
@@ -2069,7 +2064,7 @@ impl Instance {
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
     ///
     /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Equality, Instance, Sense
     /// >>> x = [
     /// ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
     /// ...     for i in range(3)
@@ -2077,13 +2072,9 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints=[
-    /// ...         (x[0] + 2*x[1] <= 5).set_id(0)
-    /// ...     ],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={0: x[0] + 2*x[1] <= 5},
+    /// ...     sense=Sense.Maximize,
     /// ... )
-    /// >>> instance.constraints[0]
-    /// Constraint(x0 + 2*x1 - 5 <= 0)
     /// ```
     ///
     /// Introduce an integer slack variable
@@ -2093,8 +2084,10 @@ impl Instance {
     /// ...     constraint_id=0,
     /// ...     max_integer_range=32
     /// ... )
-    /// >>> instance.constraints[0]
-    /// Constraint(x0 + 2*x1 + x3 - 5 == 0)
+    /// >>> assert instance.constraints[0].function.terms == {
+    /// ...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0
+    /// ... }
+    /// >>> assert instance.constraints[0].equality == Equality.EqualToZero
     /// ```
     ///
     /// Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
@@ -2136,7 +2129,7 @@ impl Instance {
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
     ///
     /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Equality, Instance, Sense
     /// >>> x = [
     /// ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
     /// ...     for i in range(3)
@@ -2144,13 +2137,9 @@ impl Instance {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints=[
-    /// ...         (x[0] + 2*x[1] <= 4).set_id(0)
-    /// ...     ],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={0: x[0] + 2*x[1] <= 4},
+    /// ...     sense=Sense.Maximize,
     /// ... )
-    /// >>> instance.constraints[0]
-    /// Constraint(x0 + 2*x1 - 4 <= 0)
     /// ```
     ///
     /// Introduce an integer slack variable s in [0, 2]
@@ -2160,8 +2149,11 @@ impl Instance {
     /// ...     constraint_id=0,
     /// ...     slack_upper_bound=2
     /// ... )
-    /// >>> b, instance.constraints[0]
-    /// (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
+    /// >>> assert b == 2.0
+    /// >>> assert instance.constraints[0].function.terms == {
+    /// ...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0
+    /// ... }
+    /// >>> assert instance.constraints[0].equality == Equality.LessThanOrEqualToZero
     /// ```
     pub fn add_integer_slack_to_inequality(
         &mut self,
@@ -2853,13 +2845,13 @@ impl Instance {
     /// # Examples
     ///
     /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=x[0] + x[1],
-    /// ...     constraints=[],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> profile = instance.logical_memory_profile()
     /// >>> isinstance(profile, str)

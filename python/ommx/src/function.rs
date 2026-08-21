@@ -19,6 +19,8 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Create from various types:
 ///
 /// ```python
+/// >>> x = DecisionVariable.binary(0)
+/// >>> y = DecisionVariable.binary(1)
 /// >>> f = Function(1.0)  # Constant
 /// >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
 /// >>> f = Function(x * y)  # From Quadratic expression

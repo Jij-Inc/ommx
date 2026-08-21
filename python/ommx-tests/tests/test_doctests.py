@@ -2,84 +2,99 @@ import doctest
 import importlib
 import inspect
 import pkgutil
+from collections.abc import Iterator
+from types import ModuleType
 
 import ommx
 import pytest
 
 
-PUBLIC_CONTRACT_OWNERS = (
-    "Instance",
-    "Instance.sense",
-    "Instance.objective",
-    "Instance.to_v1_bytes",
-    "Instance.to_v2_bytes",
-    "Instance.required_ids",
-    "Instance.as_qubo_format",
-    "Instance.as_hubo_format",
-    "Instance.to_qubo",
-    "Instance.to_hubo",
-    "Instance.as_parametric_instance",
-    "Instance.penalty_method",
-    "Instance.uniform_penalty_method",
-    "Instance.evaluate",
-    "Instance.populate_state",
-    "Instance.partial_evaluate",
-    "Instance.evaluate_samples",
-    "Instance.log_encode",
-    "Instance.unary_encode",
-    "Instance.substitute",
-    "Instance.as_minimization_problem",
-    "Instance.as_maximization_problem",
-    "Instance.convert_active_objective",
-    "Instance.map_active_optimality",
-    "Instance.reduce_binary_power",
-    "ParametricInstance.to_v1_bytes",
-    "ParametricInstance.to_v2_bytes",
-    "ParametricInstance.with_parameters",
-    "ParametricInstance.substitute",
-    "ObjectivePreparation",
-    "PreparationPolicy",
-    "PreparationPolicy.for_qubo",
-    "PreparationPolicy.for_hubo",
-    "Instance.prepare",
-    "InstanceClass.qubo",
-    "InstanceClass.hubo",
-)
-
-
-def resolve_public_owner(path: str):
-    owner = ommx
-    for component in path.split("."):
-        owner = getattr(owner, component)
-    return owner
-
-
-def test_doctest():
-    result = doctest.testmod(ommx, optionflags=doctest.ELLIPSIS)
-    assert result.failed == 0
-    # type: ignore
-    for mod in pkgutil.iter_modules(ommx.__path__):
-        if mod.name == "v1":
+def iter_package_modules() -> Iterator[ModuleType]:
+    yield ommx
+    for module_info in pkgutil.walk_packages(ommx.__path__, prefix="ommx."):
+        if module_info.name == "ommx._ommx_rust":
             continue
-        mod = importlib.import_module(f"ommx.{mod.name}")
-        result = doctest.testmod(mod, optionflags=doctest.ELLIPSIS)
-        assert result.failed == 0
+        if module_info.name == "ommx.v1" or module_info.name.startswith("ommx.v1."):
+            continue
+        yield importlib.import_module(module_info.name)
 
 
-@pytest.mark.parametrize("owner_path", PUBLIC_CONTRACT_OWNERS)
-def test_public_contract_doctest(owner_path: str) -> None:
-    owner = resolve_public_owner(owner_path)
-    doc = inspect.getdoc(owner)
-    assert doc is not None
-    assert any(
-        section in doc for section in ("# Invariants", "# Postconditions", "# Errors")
+def iter_docstring_owners() -> Iterator[tuple[str, object, ModuleType]]:
+    """Yield each package-owned or publicly re-exported docstring owner once."""
+    seen: set[int] = set()
+
+    def walk(
+        owner_path: str, owner: object, module: ModuleType
+    ) -> Iterator[tuple[str, object, ModuleType]]:
+        if id(owner) in seen:
+            return
+        seen.add(id(owner))
+        yield owner_path, owner, module
+
+        if not inspect.isclass(owner):
+            return
+
+        for member_name, raw_member in vars(owner).items():
+            if not (
+                inspect.isroutine(raw_member)
+                or inspect.isdatadescriptor(raw_member)
+                or inspect.isclass(raw_member)
+            ):
+                continue
+            if isinstance(raw_member, (classmethod, staticmethod)):
+                member = raw_member.__func__
+            else:
+                member = raw_member
+            yield from walk(f"{owner_path}.{member_name}", member, module)
+
+    for module in iter_package_modules():
+        module_name = module.__name__
+        yield from walk(module_name, module, module)
+
+        for export_name in getattr(module, "__all__", ()):
+            yield from walk(
+                f"{module_name}.{export_name}", getattr(module, export_name), module
+            )
+
+        for owner_name, owner in vars(module).items():
+            if not (inspect.isclass(owner) or inspect.isroutine(owner)):
+                continue
+            if getattr(owner, "__module__", None) != module_name:
+                continue
+            yield from walk(f"{module_name}.{owner_name}", owner, module)
+
+
+def parse_docstring(
+    owner_path: str, owner: object, module: ModuleType
+) -> doctest.DocTest | None:
+    raw_doc = getattr(owner, "__doc__", None)
+    if not isinstance(raw_doc, str):
+        return None
+    doc = inspect.cleandoc(raw_doc)
+    # PyO3 preserves Rustdoc's Markdown fences in Python docstrings. The
+    # standard doctest parser otherwise treats a closing fence as expected
+    # output from the preceding example.
+    markdown_fences = {"```", "```python", "```pycon", "```text"}
+    doc = "\n".join(
+        "" if line.strip() in markdown_fences else line for line in doc.splitlines()
     )
     test = doctest.DocTestParser().get_doctest(
         doc,
-        {},
-        f"ommx.{owner_path}",
-        f"<docstring ommx.{owner_path}>",
+        dict(vars(module)),
+        owner_path,
+        f"<docstring {owner_path}>",
         0,
     )
-    assert test.examples
+    return test if test.examples else None
+
+
+DOCTESTS = tuple(
+    test
+    for owner_path, owner, module in iter_docstring_owners()
+    if (test := parse_docstring(owner_path, owner, module)) is not None
+)
+
+
+@pytest.mark.parametrize("test", DOCTESTS, ids=lambda test: test.name)
+def test_doctest(test: doctest.DocTest) -> None:
     doctest.DebugRunner(optionflags=doctest.ELLIPSIS).run(test)

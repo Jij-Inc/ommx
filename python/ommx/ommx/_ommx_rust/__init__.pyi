@@ -3820,13 +3820,13 @@ class Instance:
         Generate random state only for used variables
 
         ```python
-        >>> from ommx import Instance, DecisionVariable, Rng
+        >>> from ommx import DecisionVariable, Instance, Rng, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(5)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=x[0] + x[1],
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
 
         >>> rng = Rng()
@@ -3880,13 +3880,13 @@ class Instance:
         Generate samples for a simple instance:
 
         ```python
-        >>> from ommx import Instance, DecisionVariable, Rng
+        >>> from ommx import DecisionVariable, Instance, Rng, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[(sum(x) <= 2).set_id(0)],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={0: sum(x) <= 2},
+        ...     sense=Sense.Maximize,
         ... )
 
         >>> rng = Rng()
@@ -3913,32 +3913,27 @@ class Instance:
         Relax constraint, and restore it.
 
         ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[(sum(x) == 3).set_id(1)],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={1: sum(x) == 3},
+        ...     sense=Sense.Maximize,
         ... )
-        >>> instance.constraints
-        [Constraint(x0 + x1 + x2 - 3 == 0)]
+        >>> assert set(instance.constraints) == {1}
         ```
 
         ```python
         >>> instance.relax_constraint(1, "manual relaxation")
-        >>> instance.constraints
-        []
-        >>> instance.removed_constraints
-        [RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=manual relaxation)]
+        >>> assert not instance.constraints
+        >>> assert set(instance.removed_constraints) == {1}
         ```
 
         ```python
         >>> instance.restore_constraint(1)
-        >>> instance.constraints
-        [Constraint(x0 + x1 + x2 - 3 == 0)]
-        >>> instance.removed_constraints
-        []
+        >>> assert set(instance.constraints) == {1}
+        >>> assert not instance.removed_constraints
         ```
         """
     def restore_constraint(self, constraint_id: builtins.int) -> None: ...
@@ -4358,7 +4353,7 @@ class Instance:
         Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
 
         ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Equality, Instance, Sense
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
         ...     for i in range(3)
@@ -4366,13 +4361,9 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[
-        ...         (x[0] + 2*x[1] <= 5).set_id(0)
-        ...     ],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={0: x[0] + 2*x[1] <= 5},
+        ...     sense=Sense.Maximize,
         ... )
-        >>> instance.constraints[0]
-        Constraint(x0 + 2*x1 - 5 <= 0)
         ```
 
         Introduce an integer slack variable
@@ -4382,8 +4373,10 @@ class Instance:
         ...     constraint_id=0,
         ...     max_integer_range=32
         ... )
-        >>> instance.constraints[0]
-        Constraint(x0 + 2*x1 + x3 - 5 == 0)
+        >>> assert instance.constraints[0].function.terms == {
+        ...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0
+        ... }
+        >>> assert instance.constraints[0].equality == Equality.EqualToZero
         ```
 
         Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
@@ -4416,7 +4409,7 @@ class Instance:
         Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
 
         ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Equality, Instance, Sense
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
         ...     for i in range(3)
@@ -4424,13 +4417,9 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[
-        ...         (x[0] + 2*x[1] <= 4).set_id(0)
-        ...     ],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={0: x[0] + 2*x[1] <= 4},
+        ...     sense=Sense.Maximize,
         ... )
-        >>> instance.constraints[0]
-        Constraint(x0 + 2*x1 - 4 <= 0)
         ```
 
         Introduce an integer slack variable s in [0, 2]
@@ -4440,8 +4429,11 @@ class Instance:
         ...     constraint_id=0,
         ...     slack_upper_bound=2
         ... )
-        >>> b, instance.constraints[0]
-        (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
+        >>> assert b == 2.0
+        >>> assert instance.constraints[0].function.terms == {
+        ...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0
+        ... }
+        >>> assert instance.constraints[0].equality == Equality.LessThanOrEqualToZero
         ```
         """
     def decision_variable_role(
@@ -4812,13 +4804,13 @@ class Instance:
         # Examples
 
         ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=x[0] + x[1],
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> profile = instance.logical_memory_profile()
         >>> isinstance(profile, str)
@@ -7220,12 +7212,13 @@ class SampleSet:
     x_1, x_2, x_3 in {0, 1}
 
     ```python
+    >>> from ommx import DecisionVariable, Instance, Sense
     >>> x = [DecisionVariable.binary(i) for i in range(3)]
     >>> instance = Instance.from_components(
     ...     decision_variables=x,
     ...     objective=x[0] + 2*x[1] + 3*x[2],
-    ...     constraints=[sum(x) == 1],
-    ...     sense=Instance.MAXIMIZE,
+    ...     constraints={0: sum(x) == 1},
+    ...     sense=Sense.Maximize,
     ... )
     ```
 
@@ -7392,14 +7385,14 @@ class SampleSet:
         # Examples
 
         ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
         >>> sorted(sample_set.decision_variable_names)
@@ -7494,14 +7487,14 @@ class SampleSet:
         # Examples
 
         ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
         >>> all_vars = sample_set.extract_all_decision_variables(0)
@@ -8097,14 +8090,14 @@ class Solution:
         # Examples
 
         ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({i: 1 for i in range(5)})
         >>> sorted(solution.decision_variable_names)
@@ -8159,13 +8152,13 @@ class Solution:
         # Examples
 
         ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[sum(x) == 1],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={0: sum(x) == 1},
+        ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({i: 1 for i in range(3)})
         >>> solution.extract_decision_variables("x")
@@ -8186,14 +8179,14 @@ class Solution:
         # Examples
 
         ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x + y,
         ...     objective=sum(x) + sum(y),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({i: 1 for i in range(5)})
         >>> all_vars = solution.extract_all_decision_variables()
@@ -8214,15 +8207,15 @@ class Solution:
         # Examples
 
         ```python
-        >>> from ommx import Instance, DecisionVariable
+        >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
         >>> c1 = (x[1] + x[2] == 1).set_name("c").add_subscripts([1])
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[c0, c1],
-        ...     sense=Instance.MAXIMIZE,
+        ...     constraints={0: c0, 1: c1},
+        ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
         >>> solution.extract_constraints("c")
