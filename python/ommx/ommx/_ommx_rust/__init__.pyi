@@ -276,12 +276,9 @@ class Artifact:
     An artifact is an OCI container image that stores OMMX data
     (instances, solutions, sample sets, etc.) as layers.
 
-    ```python
     >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
     >>> print(artifact.image_name)
     ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
-
-    ```
     """
 
     TRACE_OTLP_PROTOBUF_MEDIA_TYPE: builtins.str
@@ -354,12 +351,9 @@ class Artifact:
         archives importable while still making the imported artifact
         addressable in SQLite.
 
-        ```python
         >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
         >>> print(artifact.image_name)
         ghcr.io/jij-inc/ommx/random_lp_instance:...
-
-        ```
         """
     @staticmethod
     def load_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Artifact:
@@ -398,13 +392,10 @@ class Artifact:
         `Artifact.load(image_name)` later), use
         {meth}`Artifact.import_archive`.
 
-        ```python
         >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")
         >>> for layer in manifest.layers:
         ...     print(layer.media_type)
         application/org.ommx.v1.instance
-
-        ```
         """
     @staticmethod
     def load(image_name: builtins.str) -> Artifact:
@@ -413,12 +404,10 @@ class Artifact:
 
         If the image is not found in local registry, it will try to pull from remote registry.
 
-        ```python
         >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
         >>> print(artifact.image_name)
         ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 
-        ```
 
         Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
         exact remote reference does not exist. Other remote access failures
@@ -547,13 +536,10 @@ class ArtifactDraft:
     r"""
     Mutable draft for OMMX Artifacts.
 
-    ```python
     >>> draft = ArtifactDraft.temp()
     >>> artifact = draft.commit()
     >>> print(artifact.image_name)
     ttl.sh/...-...-...-...-...:1h
-
-    ```
     """
     @staticmethod
     def new(image_name: builtins.str) -> ArtifactDraft:
@@ -564,7 +550,6 @@ class ArtifactDraft:
         returned handle if you also want a `.ommx` archive file for
         sharing.
 
-        ```python
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
         >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
         >>> instance = generator.get_v1_instance()
@@ -576,7 +561,6 @@ class ArtifactDraft:
         >>> print(artifact.image_name)
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
-        ```
 
         Raises {class}`ValueError` when `image_name` is not a valid OCI image
         reference. Registry and storage failures raise {class}`RuntimeError`.
@@ -615,7 +599,6 @@ class ArtifactDraft:
         Call {meth}`Artifact.save(path)` on the returned handle to also
         write a `.ommx` archive file for sharing.
 
-        ```python
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
         >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
         >>> instance = generator.get_v1_instance()
@@ -623,8 +606,6 @@ class ArtifactDraft:
         >>> _desc = draft.add_instance(instance)
         >>> artifact = draft.commit()
         >>> assert ".ommx.local/anonymous:" in artifact.image_name
-
-        ```
         """
     @staticmethod
     def temp() -> ArtifactDraft:
@@ -633,13 +614,10 @@ class ArtifactDraft:
         Insecure; for tests only. `ttl.sh` is a public registry that
         expires images after one hour.
 
-        ```python
         >>> draft = ArtifactDraft.temp()
         >>> artifact = draft.commit()
         >>> print(artifact.image_name)
         ttl.sh/...-...-...-...-...:1h
-
-        ```
         """
     @staticmethod
     def for_github(
@@ -656,7 +634,6 @@ class ArtifactDraft:
         r"""
         Add an {class}`~ommx.Instance` to the artifact with annotations.
 
-        ```python
         >>> from ommx import Instance
         >>> instance = Instance.minimize()
         >>> instance.title = "test instance"
@@ -664,8 +641,6 @@ class ArtifactDraft:
         >>> desc = draft.add_instance(instance)
         >>> print(desc.annotations['org.ommx.v1.instance.title'])
         test instance
-
-        ```
         """
     def add_parametric_instance(self, instance: ParametricInstance) -> Descriptor:
         r"""
@@ -689,7 +664,6 @@ class ArtifactDraft:
         r"""
         Add a numpy ndarray to the artifact with npy format.
 
-        ```python
         >>> import numpy as np
         >>> array = np.array([1, 2, 3])
         >>> draft = ArtifactDraft.temp()
@@ -700,8 +674,6 @@ class ArtifactDraft:
         application/vnd.numpy
         >>> print(layer.annotations)
         {'org.ommx.user.title': 'test_array'}
-
-        ```
         """
     def add_dataframe(
         self,
@@ -713,7 +685,6 @@ class ArtifactDraft:
         r"""
         Add a pandas DataFrame to the artifact with parquet format.
 
-        ```python
         >>> import pandas as pd
         >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         >>> draft = ArtifactDraft.temp()
@@ -722,8 +693,6 @@ class ArtifactDraft:
         >>> layer = artifact.layers[0]
         >>> print(layer.media_type)
         application/vnd.apache.parquet
-
-        ```
         """
     def add_json(
         self,
@@ -735,7 +704,6 @@ class ArtifactDraft:
         r"""
         Add a JSON object to the artifact.
 
-        ```python
         >>> obj = {"a": 1, "b": 2}
         >>> draft = ArtifactDraft.temp()
         >>> _desc = draft.add_json(obj, title="test_json")
@@ -743,8 +711,6 @@ class ArtifactDraft:
         >>> layer = artifact.layers[0]
         >>> print(layer.media_type)
         application/json
-
-        ```
         """
     def add_layer(
         self,
@@ -1510,19 +1476,15 @@ class DecisionVariable:
 
     # Examples
 
-    ```python
     >>> x = DecisionVariable.integer(1)
     >>> x == 1  # Returns Constraint, not bool
     Constraint(...)
-    ```
 
     For object equality comparison, use the ``equals_to()`` method or compare IDs:
 
-    ```python
     >>> y = DecisionVariable.integer(2)
     >>> x.id == y.id
     False
-    ```
     """
 
     BINARY: builtins.int = 1
@@ -2658,13 +2620,11 @@ class Function:
 
         # Examples
 
-        ```python
         >>> from ommx import Function, Linear, Bound
         >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
         >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
         >>> (b.lower, b.upper)
         (3.0, 7.0)
-        ```
         """
     def __copy__(self) -> Function: ...
     def __deepcopy__(self, _memo: typing.Any) -> Function: ...
@@ -3197,12 +3157,10 @@ class Instance:
 
         # Examples
 
-        ```python
         >>> from ommx import Instance
         >>> instance = Instance.minimize()
         >>> instance.sense == Instance.MINIMIZE
         True
-        ```
         """
     @staticmethod
     def minimize() -> Instance:
@@ -3819,7 +3777,6 @@ class Instance:
 
         Generate random state only for used variables
 
-        ```python
         >>> from ommx import DecisionVariable, Instance, Rng, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(5)]
         >>> instance = Instance.from_components(
@@ -3831,21 +3788,16 @@ class Instance:
 
         >>> rng = Rng()
         >>> state = instance.random_state(rng)
-        ```
 
         Only used variables have values
 
-        ```python
         >>> set(state.entries.keys())
         {0, 1}
-        ```
 
         Values respect binary bounds
 
-        ```python
         >>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)
         True
-        ```
         """
     def random_samples(
         self,
@@ -3879,7 +3831,6 @@ class Instance:
 
         Generate samples for a simple instance:
 
-        ```python
         >>> from ommx import DecisionVariable, Instance, Rng, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
@@ -3893,7 +3844,6 @@ class Instance:
         >>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)
         >>> samples.num_samples()
         5
-        ```
         """
     def relax_constraint(
         self, constraint_id: builtins.int, reason: builtins.str, **parameters: str
@@ -3912,7 +3862,6 @@ class Instance:
 
         Relax constraint, and restore it.
 
-        ```python
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
@@ -3922,19 +3871,14 @@ class Instance:
         ...     sense=Sense.Maximize,
         ... )
         >>> assert set(instance.constraints) == {1}
-        ```
 
-        ```python
         >>> instance.relax_constraint(1, "manual relaxation")
         >>> assert not instance.constraints
         >>> assert set(instance.removed_constraints) == {1}
-        ```
 
-        ```python
         >>> instance.restore_constraint(1)
         >>> assert set(instance.constraints) == {1}
         >>> assert not instance.removed_constraints
-        ```
         """
     def restore_constraint(self, constraint_id: builtins.int) -> None: ...
     def relax_indicator_constraint(
@@ -3962,7 +3906,6 @@ class Instance:
 
         # Examples
 
-        ```python
         >>> from ommx import Instance, DecisionVariable, OneHotConstraint
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
@@ -3979,7 +3922,6 @@ class Instance:
         {0: Constraint(x0 + x1 + x2 - 1 == 0)}
         >>> instance.removed_one_hot_constraints
         {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
-        ```
         """
     def convert_all_one_hots_to_constraints(self) -> builtins.list[builtins.int]:
         r"""
@@ -3990,7 +3932,6 @@ class Instance:
 
         # Examples
 
-        ```python
         >>> from ommx import Instance, DecisionVariable, OneHotConstraint
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
@@ -4009,7 +3950,6 @@ class Instance:
         {}
         >>> instance.constraints
         {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
-        ```
         """
     def convert_sos1_to_constraints(
         self, sos1_id: builtins.int
@@ -4049,7 +3989,6 @@ class Instance:
 
         All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
 
-        ```python
         >>> from ommx import Instance, DecisionVariable, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
@@ -4067,7 +4006,6 @@ class Instance:
         {0: Constraint(x0 + x1 + x2 - 1 <= 0)}
         >>> instance.removed_sos1_constraints
         {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
-        ```
         """
     def convert_all_sos1_to_constraints(
         self,
@@ -4086,7 +4024,6 @@ class Instance:
 
         # Examples
 
-        ```python
         >>> from ommx import Instance, DecisionVariable, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
@@ -4105,7 +4042,6 @@ class Instance:
         {}
         >>> instance.constraints
         {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
-        ```
         """
     def convert_indicator_to_constraint(
         self, indicator_id: builtins.int
@@ -4152,7 +4088,6 @@ class Instance:
 
         Convert an inequality indicator where the upper side is active:
 
-        ```python
         >>> from ommx import (
         ...     Instance, DecisionVariable, IndicatorConstraint, Equality,
         ... )
@@ -4176,7 +4111,6 @@ class Instance:
         {}
         >>> instance.constraints
         {0: Constraint(x0 + 3*x1 - 5 <= 0)}
-        ```
         """
     def convert_all_indicators_to_constraints(
         self,
@@ -4352,7 +4286,6 @@ class Instance:
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
 
-        ```python
         >>> from ommx import DecisionVariable, Equality, Instance, Sense
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -4364,11 +4297,9 @@ class Instance:
         ...     constraints={0: x[0] + 2*x[1] <= 5},
         ...     sense=Sense.Maximize,
         ... )
-        ```
 
         Introduce an integer slack variable
 
-        ```python
         >>> instance.convert_inequality_to_equality_with_integer_slack(
         ...     constraint_id=0,
         ...     max_integer_range=32
@@ -4377,7 +4308,6 @@ class Instance:
         ...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0
         ... }
         >>> assert instance.constraints[0].equality == Equality.EqualToZero
-        ```
 
         Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
         unavailable because the coefficients cannot be normalized or the slack
@@ -4408,7 +4338,6 @@ class Instance:
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
 
-        ```python
         >>> from ommx import DecisionVariable, Equality, Instance, Sense
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -4420,11 +4349,9 @@ class Instance:
         ...     constraints={0: x[0] + 2*x[1] <= 4},
         ...     sense=Sense.Maximize,
         ... )
-        ```
 
         Introduce an integer slack variable s in [0, 2]
 
-        ```python
         >>> b = instance.add_integer_slack_to_inequality(
         ...     constraint_id=0,
         ...     slack_upper_bound=2
@@ -4434,7 +4361,6 @@ class Instance:
         ...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0
         ... }
         >>> assert instance.constraints[0].equality == Equality.LessThanOrEqualToZero
-        ```
         """
     def decision_variable_role(
         self, id: builtins.int
@@ -4503,7 +4429,6 @@ class Instance:
 
         # Examples
 
-        ```python
         >>> from ommx import Instance
         >>> instance = Instance.minimize()
         >>> stats = instance.stats()
@@ -4511,7 +4436,6 @@ class Instance:
         0
         >>> stats["constraints"]["total"]
         0
-        ```
         """
     def decision_variables_df(
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
@@ -4803,7 +4727,6 @@ class Instance:
 
         # Examples
 
-        ```python
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
@@ -4815,7 +4738,6 @@ class Instance:
         >>> profile = instance.logical_memory_profile()
         >>> isinstance(profile, str)
         True
-        ```
         """
     def prepare(self, input_class: InstanceClass, policy: PreparationPolicy) -> None:
         r"""
@@ -5282,30 +5204,22 @@ class Linear:
 
     Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
 
-    ```python
     >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
-    ```
 
     Or create via DecisionVariable arithmetic:
 
-    ```python
     >>> x1 = DecisionVariable.integer(1)
     >>> x2 = DecisionVariable.integer(2)
     >>> g = 2*x1 + 3*x2 + 1
-    ```
 
     Compare two linear functions with tolerance:
 
-    ```python
     >>> f.almost_equal(g, atol=1e-12)
     True
-    ```
 
     Note that `==` creates an equality Constraint, not a boolean:
 
-    ```python
     >>> constraint = f == g  # Returns Constraint, not bool
-    ```
     """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
@@ -5713,12 +5627,10 @@ class Parameter:
 
     # Examples
 
-    ```python
     >>> p = Parameter(1, name="penalty")
     >>> x = DecisionVariable.integer(2)
     >>> x + p  # Returns Linear expression
     Linear(...)
-    ```
     """
     @property
     def id(self) -> builtins.int: ...
@@ -6321,17 +6233,13 @@ class Polynomial:
 
     Create via DecisionVariable operations:
 
-    ```python
     >>> x = DecisionVariable.integer(1)
     >>> y = DecisionVariable.integer(2)
     >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
-    ```
 
     Note that `==`, `<=`, `>=` create Constraint objects:
 
-    ```python
     >>> constraint = p == 0  # Returns Constraint
-    ```
     """
     @typing.overload
     def __add__(
@@ -6683,17 +6591,13 @@ class Quadratic:
 
     Create via DecisionVariable multiplication:
 
-    ```python
     >>> x = DecisionVariable.integer(1)
     >>> y = DecisionVariable.integer(2)
     >>> q = x * y + 2*x + 3*y + 1
-    ```
 
     Note that `==`, `<=`, `>=` create Constraint objects:
 
-    ```python
     >>> constraint = q <= 10  # Returns Constraint
-    ```
     """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
@@ -7211,7 +7115,6 @@ class SampleSet:
     subject to x_1 + x_2 + x_3 = 1
     x_1, x_2, x_3 in {0, 1}
 
-    ```python
     >>> from ommx import DecisionVariable, Instance, Sense
     >>> x = [DecisionVariable.binary(i) for i in range(3)]
     >>> instance = Instance.from_components(
@@ -7220,22 +7123,18 @@ class SampleSet:
     ...     constraints={0: sum(x) == 1},
     ...     sense=Sense.Maximize,
     ... )
-    ```
 
     with three samples:
 
-    ```python
     >>> samples = {
     ...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
     ...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
     ...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
     ... } # ^ sample ID
-    ```
 
     Note that this will be done by sampling-based solvers, but we do it manually here.
     We can evaluate the samples via `Instance.evaluate_samples`:
 
-    ```python
     >>> sample_set = instance.evaluate_samples(samples)
     >>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE
                objective  feasible
@@ -7243,25 +7142,20 @@ class SampleSet:
     1                3.0      True
     0                1.0      True
     2                3.0     False
-    ```
 
     The `summary` attribute shows the objective value, feasibility of each sample.
     Note that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.
     You can get each sample by `get` as a `Solution` format:
 
-    ```python
     >>> solution = sample_set.get(sample_id=0)
     >>> solution.objective
     1.0
-    ```
 
     `best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
 
-    ```python
     >>> solution = sample_set.best_feasible
     >>> solution.objective
     3.0
-    ```
 
     Of course, the sample of smallest objective value is returned for minimization problems.
     """
@@ -7384,7 +7278,6 @@ class SampleSet:
 
         # Examples
 
-        ```python
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
@@ -7397,7 +7290,6 @@ class SampleSet:
         >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
         >>> sorted(sample_set.decision_variable_names)
         ['x', 'y']
-        ```
         """
     @property
     def named_function_names(self) -> builtins.set[builtins.str]:
@@ -7486,7 +7378,6 @@ class SampleSet:
 
         # Examples
 
-        ```python
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
@@ -7502,7 +7393,6 @@ class SampleSet:
         {(0,): 1.0, (1,): 1.0, (2,): 1.0}
         >>> all_vars["y"]
         {(0,): 1.0, (1,): 1.0}
-        ```
         """
     def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
         r"""
@@ -8089,7 +7979,6 @@ class Solution:
 
         # Examples
 
-        ```python
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
@@ -8102,7 +7991,6 @@ class Solution:
         >>> solution = instance.evaluate({i: 1 for i in range(5)})
         >>> sorted(solution.decision_variable_names)
         ['x', 'y']
-        ```
         """
     @property
     def named_function_ids(self) -> builtins.set[builtins.int]: ...
@@ -8151,7 +8039,6 @@ class Solution:
 
         # Examples
 
-        ```python
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> instance = Instance.from_components(
@@ -8163,7 +8050,6 @@ class Solution:
         >>> solution = instance.evaluate({i: 1 for i in range(3)})
         >>> solution.extract_decision_variables("x")
         {(0,): 1.0, (1,): 1.0, (2,): 1.0}
-        ```
         """
     def extract_all_decision_variables(self) -> dict:
         r"""
@@ -8178,7 +8064,6 @@ class Solution:
 
         # Examples
 
-        ```python
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
@@ -8194,7 +8079,6 @@ class Solution:
         {(0,): 1.0, (1,): 1.0, (2,): 1.0}
         >>> all_vars["y"]
         {(0,): 1.0, (1,): 1.0}
-        ```
         """
     def extract_constraints(self, name: builtins.str) -> dict:
         r"""
@@ -8206,7 +8090,6 @@ class Solution:
 
         # Examples
 
-        ```python
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
@@ -8220,7 +8103,6 @@ class Solution:
         >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
         >>> solution.extract_constraints("c")
         {(0,): 0.0, (1,): 0.0}
-        ```
         """
     def extract_named_functions(self, name: builtins.str) -> dict:
         r"""
@@ -8750,13 +8632,10 @@ def gc(
     An invalid duration raises {class}`ValueError`; registry and storage failures
     raise {class}`RuntimeError`.
 
-    ```python
     >>> from ommx.artifact import gc
     >>> report = gc()
     >>> report.delete_applied
     False
-
-    ```
     """
 
 def get_default_atol() -> builtins.float: ...
@@ -8853,13 +8732,10 @@ def prune_anonymous(
     An invalid duration raises {class}`ValueError`; registry and storage failures
     raise {class}`RuntimeError`.
 
-    ```python
     >>> from ommx.artifact import prune_anonymous
     >>> report = prune_anonymous()
     >>> report.delete_applied
     False
-
-    ```
     """
 
 def qplib_instance_annotations() -> builtins.dict[

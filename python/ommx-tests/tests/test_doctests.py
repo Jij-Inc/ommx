@@ -71,13 +71,6 @@ def parse_docstring(
     if not isinstance(raw_doc, str):
         return None
     doc = inspect.cleandoc(raw_doc)
-    # PyO3 preserves Rustdoc's Markdown fences in Python docstrings. The
-    # standard doctest parser otherwise treats a closing fence as expected
-    # output from the preceding example.
-    markdown_fences = {"```", "```python", "```pycon", "```text"}
-    doc = "\n".join(
-        "" if line.strip() in markdown_fences else line for line in doc.splitlines()
-    )
     test = doctest.DocTestParser().get_doctest(
         doc,
         dict(vars(module)),

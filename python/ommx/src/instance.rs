@@ -232,12 +232,10 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// ```python
     /// >>> from ommx import Instance
     /// >>> instance = Instance.minimize()
     /// >>> instance.sense == Instance.MINIMIZE
     /// True
-    /// ```
     #[deprecated(note = "Use Instance.minimize() instead.")]
     #[staticmethod]
     pub fn empty() -> OmmxPyResult<Self> {
@@ -1400,7 +1398,6 @@ impl Instance {
     ///
     /// Generate random state only for used variables
     ///
-    /// ```python
     /// >>> from ommx import DecisionVariable, Instance, Rng, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(5)]
     /// >>> instance = Instance.from_components(
@@ -1412,21 +1409,16 @@ impl Instance {
     ///
     /// >>> rng = Rng()
     /// >>> state = instance.random_state(rng)
-    /// ```
     ///
     /// Only used variables have values
     ///
-    /// ```python
     /// >>> set(state.entries.keys())
     /// {0, 1}
-    /// ```
     ///
     /// Values respect binary bounds
     ///
-    /// ```python
     /// >>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)
     /// True
-    /// ```
     pub fn random_state(&self, rng: &Rng) -> OmmxPyResult<crate::State> {
         let strategy = self.inner.arbitrary_state();
         let mut rng_guard = rng.lock()?;
@@ -1457,7 +1449,6 @@ impl Instance {
     ///
     /// Generate samples for a simple instance:
     ///
-    /// ```python
     /// >>> from ommx import DecisionVariable, Instance, Rng, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
@@ -1471,7 +1462,6 @@ impl Instance {
     /// >>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)
     /// >>> samples.num_samples()
     /// 5
-    /// ```
     #[pyo3(signature = (
         rng,
         *,
@@ -1512,7 +1502,6 @@ impl Instance {
     ///
     /// Relax constraint, and restore it.
     ///
-    /// ```python
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
@@ -1522,19 +1511,14 @@ impl Instance {
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> assert set(instance.constraints) == {1}
-    /// ```
     ///
-    /// ```python
     /// >>> instance.relax_constraint(1, "manual relaxation")
     /// >>> assert not instance.constraints
     /// >>> assert set(instance.removed_constraints) == {1}
-    /// ```
     ///
-    /// ```python
     /// >>> instance.restore_constraint(1)
     /// >>> assert set(instance.constraints) == {1}
     /// >>> assert not instance.removed_constraints
-    /// ```
     #[pyo3(signature = (constraint_id, reason, **parameters))]
     pub fn relax_constraint(
         &mut self,
@@ -1591,7 +1575,6 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// ```python
     /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
@@ -1608,7 +1591,6 @@ impl Instance {
     /// {0: Constraint(x0 + x1 + x2 - 1 == 0)}
     /// >>> instance.removed_one_hot_constraints
     /// {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
-    /// ```
     pub fn convert_one_hot_to_constraint(&mut self, one_hot_id: u64) -> OmmxPyResult<u64> {
         let new_id = self
             .inner
@@ -1623,7 +1605,6 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// ```python
     /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint
     /// >>> x = [DecisionVariable.binary(i) for i in range(4)]
     /// >>> instance = Instance.from_components(
@@ -1642,7 +1623,6 @@ impl Instance {
     /// {}
     /// >>> instance.constraints
     /// {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
-    /// ```
     pub fn convert_all_one_hots_to_constraints(&mut self) -> OmmxPyResult<Vec<u64>> {
         let ids = self.inner.convert_all_one_hots_to_constraints()?;
         Ok(ids.into_iter().map(|id| id.into_inner()).collect())
@@ -1682,7 +1662,6 @@ impl Instance {
     ///
     /// All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
     ///
-    /// ```python
     /// >>> from ommx import Instance, DecisionVariable, Sos1Constraint
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
@@ -1700,7 +1679,6 @@ impl Instance {
     /// {0: Constraint(x0 + x1 + x2 - 1 <= 0)}
     /// >>> instance.removed_sos1_constraints
     /// {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
-    /// ```
     pub fn convert_sos1_to_constraints(&mut self, sos1_id: u64) -> OmmxPyResult<Vec<u64>> {
         let new_ids = self.inner.convert_sos1_to_constraints(sos1_id.into())?;
         Ok(new_ids.into_iter().map(|id| id.into_inner()).collect())
@@ -1719,7 +1697,6 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// ```python
     /// >>> from ommx import Instance, DecisionVariable, Sos1Constraint
     /// >>> x = [DecisionVariable.binary(i) for i in range(4)]
     /// >>> instance = Instance.from_components(
@@ -1738,7 +1715,6 @@ impl Instance {
     /// {}
     /// >>> instance.constraints
     /// {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
-    /// ```
     pub fn convert_all_sos1_to_constraints(&mut self) -> OmmxPyResult<BTreeMap<u64, Vec<u64>>> {
         let result = self.inner.convert_all_sos1_to_constraints()?;
         Ok(result
@@ -1793,7 +1769,6 @@ impl Instance {
     ///
     /// Convert an inequality indicator where the upper side is active:
     ///
-    /// ```python
     /// >>> from ommx import (
     /// ...     Instance, DecisionVariable, IndicatorConstraint, Equality,
     /// ... )
@@ -1817,7 +1792,6 @@ impl Instance {
     /// {}
     /// >>> instance.constraints
     /// {0: Constraint(x0 + 3*x1 - 5 <= 0)}
-    /// ```
     pub fn convert_indicator_to_constraint(&mut self, indicator_id: u64) -> OmmxPyResult<Vec<u64>> {
         let new_ids = self
             .inner
@@ -2063,7 +2037,6 @@ impl Instance {
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
     ///
-    /// ```python
     /// >>> from ommx import DecisionVariable, Equality, Instance, Sense
     /// >>> x = [
     /// ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -2075,11 +2048,9 @@ impl Instance {
     /// ...     constraints={0: x[0] + 2*x[1] <= 5},
     /// ...     sense=Sense.Maximize,
     /// ... )
-    /// ```
     ///
     /// Introduce an integer slack variable
     ///
-    /// ```python
     /// >>> instance.convert_inequality_to_equality_with_integer_slack(
     /// ...     constraint_id=0,
     /// ...     max_integer_range=32
@@ -2088,7 +2059,6 @@ impl Instance {
     /// ...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0
     /// ... }
     /// >>> assert instance.constraints[0].equality == Equality.EqualToZero
-    /// ```
     ///
     /// Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
     /// unavailable because the coefficients cannot be normalized or the slack
@@ -2128,7 +2098,6 @@ impl Instance {
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
     ///
-    /// ```python
     /// >>> from ommx import DecisionVariable, Equality, Instance, Sense
     /// >>> x = [
     /// ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -2140,11 +2109,9 @@ impl Instance {
     /// ...     constraints={0: x[0] + 2*x[1] <= 4},
     /// ...     sense=Sense.Maximize,
     /// ... )
-    /// ```
     ///
     /// Introduce an integer slack variable s in [0, 2]
     ///
-    /// ```python
     /// >>> b = instance.add_integer_slack_to_inequality(
     /// ...     constraint_id=0,
     /// ...     slack_upper_bound=2
@@ -2154,7 +2121,6 @@ impl Instance {
     /// ...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0
     /// ... }
     /// >>> assert instance.constraints[0].equality == Equality.LessThanOrEqualToZero
-    /// ```
     pub fn add_integer_slack_to_inequality(
         &mut self,
         constraint_id: u64,
@@ -2250,7 +2216,6 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// ```python
     /// >>> from ommx import Instance
     /// >>> instance = Instance.minimize()
     /// >>> stats = instance.stats()
@@ -2258,7 +2223,6 @@ impl Instance {
     /// 0
     /// >>> stats["constraints"]["total"]
     /// 0
-    /// ```
     pub fn stats<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyDict>> {
         let stats = self.inner.stats();
         Ok(serde_pyobject::to_pyobject(py, &stats)?.extract()?)
@@ -2844,7 +2808,6 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// ```python
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
@@ -2856,7 +2819,6 @@ impl Instance {
     /// >>> profile = instance.logical_memory_profile()
     /// >>> isinstance(profile, str)
     /// True
-    /// ```
     pub fn logical_memory_profile(&self) -> String {
         self.inner.logical_memory_profile().to_string()
     }

@@ -28,7 +28,6 @@ use std::collections::{BTreeMap, BTreeSet};
 /// subject to x_1 + x_2 + x_3 = 1
 /// x_1, x_2, x_3 in {0, 1}
 ///
-/// ```python
 /// >>> from ommx import DecisionVariable, Instance, Sense
 /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
 /// >>> instance = Instance.from_components(
@@ -37,22 +36,18 @@ use std::collections::{BTreeMap, BTreeSet};
 /// ...     constraints={0: sum(x) == 1},
 /// ...     sense=Sense.Maximize,
 /// ... )
-/// ```
 ///
 /// with three samples:
 ///
-/// ```python
 /// >>> samples = {
 /// ...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
 /// ...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
 /// ...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
 /// ... } # ^ sample ID
-/// ```
 ///
 /// Note that this will be done by sampling-based solvers, but we do it manually here.
 /// We can evaluate the samples via `Instance.evaluate_samples`:
 ///
-/// ```python
 /// >>> sample_set = instance.evaluate_samples(samples)
 /// >>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE
 ///            objective  feasible
@@ -60,25 +55,20 @@ use std::collections::{BTreeMap, BTreeSet};
 /// 1                3.0      True
 /// 0                1.0      True
 /// 2                3.0     False
-/// ```
 ///
 /// The `summary` attribute shows the objective value, feasibility of each sample.
 /// Note that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.
 /// You can get each sample by `get` as a `Solution` format:
 ///
-/// ```python
 /// >>> solution = sample_set.get(sample_id=0)
 /// >>> solution.objective
 /// 1.0
-/// ```
 ///
 /// `best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
 ///
-/// ```python
 /// >>> solution = sample_set.best_feasible
 /// >>> solution.objective
 /// 3.0
-/// ```
 ///
 /// Of course, the sample of smallest objective value is returned for minimization problems.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -310,7 +300,6 @@ impl SampleSet {
     ///
     /// # Examples
     ///
-    /// ```python
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
@@ -323,7 +312,6 @@ impl SampleSet {
     /// >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
     /// >>> sorted(sample_set.decision_variable_names)
     /// ['x', 'y']
-    /// ```
     #[getter]
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.inner.decision_variable_names()
@@ -367,7 +355,6 @@ impl SampleSet {
     ///
     /// # Examples
     ///
-    /// ```python
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
@@ -383,7 +370,6 @@ impl SampleSet {
     /// {(0,): 1.0, (1,): 1.0, (2,): 1.0}
     /// >>> all_vars["y"]
     /// {(0,): 1.0, (1,): 1.0}
-    /// ```
     pub fn extract_all_decision_variables<'py>(
         &self,
         py: Python<'py>,

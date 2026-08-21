@@ -18,28 +18,22 @@ use std::collections::{BTreeMap, BTreeSet};
 ///
 /// Create from various types:
 ///
-/// ```python
 /// >>> x = DecisionVariable.binary(0)
 /// >>> y = DecisionVariable.binary(1)
 /// >>> f = Function(1.0)  # Constant
 /// >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
 /// >>> f = Function(x * y)  # From Quadratic expression
-/// ```
 ///
 /// Access the terms:
 ///
-/// ```python
 /// >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
 /// >>> f.terms
 /// {(1,): 2.5, (): 1.0}
-/// ```
 ///
 /// Check the degree:
 ///
-/// ```python
 /// >>> f.degree()
 /// 1
-/// ```
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);
@@ -563,13 +557,11 @@ impl Function {
     ///
     /// # Examples
     ///
-    /// ```python
     /// >>> from ommx import Function, Linear, Bound
     /// >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
     /// >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
     /// >>> (b.lower, b.upper)
     /// (3.0, 7.0)
-    /// ```
     pub fn evaluate_bound(&self, bounds: BTreeMap<u64, VariableBound>) -> VariableBound {
         let bounds: ommx::Bounds = bounds
             .into_iter()
