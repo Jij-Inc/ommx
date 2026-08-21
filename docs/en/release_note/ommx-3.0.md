@@ -8,6 +8,48 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Preserve input objectives across solver Preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+`to_qubo()` and `to_hubo()` now leave the active `Instance` as the minimization
+energy used by a solver, while `Solution` and `SampleSet` retain the objective
+semantics exposed by the input instance:
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+
+instance.to_qubo(uniform_penalty_weight=2.0)
+state = {0: 0.0}
+
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == 2.0
+assert instance.evaluate(state).sense == Sense.Maximize
+assert instance.evaluate(state).objective == 0.0
+assert instance.evaluate_samples({0: state}).sense == Sense.Maximize
+assert instance.evaluate_samples({0: state}).objectives[0] == 0.0
+```
+
+This is a breaking correction from the latest stable Python SDK, whose drivers
+restored the active sense and used
+the penalized solver energy as the evaluated objective. The returned QUBO/HUBO
+coefficients keep the same meaning.
+
+Penalty rewrites also map solver-reported optimality conservatively: when an
+active-formulation proof does not transport, evaluated output remains
+`Optimality.Unspecified`. Executable postconditions are documented on
+{meth}`~ommx.Instance.to_qubo`, {meth}`~ommx.Instance.to_hubo`,
+{meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples`. See the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the explicit Preparation workflow.
+
 ### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 
 `SolverAdapter.check_applicability()` and `require_applicable()` now use

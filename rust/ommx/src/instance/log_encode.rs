@@ -172,6 +172,48 @@ impl Instance {
     /// [`Self::MAX_LOG_ENCODING_BITS`] binary variables are rejected instead of
     /// creating an impractically large encoded search space.
     ///
+    /// # Postconditions
+    ///
+    /// Encoding rewrites only the active formulation and preserves evaluation
+    /// in the pre-encoding output semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, Bound, DecisionVariable, Evaluate, Function,
+    ///     Instance, Kind, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(0);
+    /// let integer = DecisionVariable::new(
+    ///     Kind::Integer,
+    ///     Bound::new(0.0, 3.0).unwrap(),
+    ///     ATol::default(),
+    /// )
+    /// .unwrap();
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(0)))
+    ///     .decision_variables(BTreeMap::from([(variable, integer)]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let output = instance.output_objective().cloned();
+    ///
+    /// instance.log_encode([variable], ATol::default()).unwrap();
+    /// assert_eq!(instance.output_objective(), output.as_ref());
+    /// let encoded_ids = instance.required_ids();
+    /// assert_eq!(encoded_ids.len(), 2);
+    /// let state = State::from(HashMap::from_iter(
+    ///     encoded_ids.into_iter().map(|id| (id.into_inner(), 1.0)),
+    /// ));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -3.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 3.0);
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`LogEncodingUnavailable`] when an otherwise valid Integer
@@ -730,6 +772,51 @@ mod tests {
         // Check the encoded linear expression has correct number of terms
         // Should have 3 terms for binary variables + 1 constant term
         assert_eq!(encoded.num_terms(), 4);
+    }
+
+    #[test]
+    fn log_encode_does_not_create_or_rewrite_output_objective() {
+        let id = VariableID::from(0);
+        let make_instance = || {
+            let variable = DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap();
+            Instance::builder()
+                .sense(Sense::Maximize)
+                .objective(Function::from(crate::linear!(0)))
+                .decision_variables(BTreeMap::from([(id, variable)]))
+                .constraints(BTreeMap::new())
+                .build()
+                .unwrap()
+        };
+
+        let mut without_output = make_instance();
+        without_output.log_encode([id], ATol::default()).unwrap();
+        assert!(without_output.output_objective().is_none());
+
+        let mut with_output = make_instance();
+        assert!(with_output.convert_active_objective(Sense::Minimize));
+        let output = with_output.output_objective().cloned().unwrap();
+        with_output.log_encode([id], ATol::default()).unwrap();
+
+        assert_eq!(with_output.output_objective(), Some(&output));
+        assert_eq!(
+            with_output.decision_variable_role(id),
+            Some(DecisionVariableRole::Dependent)
+        );
+        assert!(!with_output.used_decision_variable_ids().contains(&id));
+        let state = State::from_iter(
+            with_output
+                .used_decision_variable_ids()
+                .into_iter()
+                .map(|id| (id.into_inner(), 0.0)),
+        );
+        let solution = with_output.evaluate(&state, ATol::default()).unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 0.0);
     }
 
     #[test]

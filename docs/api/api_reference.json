@@ -2972,6 +2972,58 @@
         },
         {
           "kind": "Class",
+          "name": "BinaryPowerPreparation",
+          "doc": "Reduce powers of active Binary variables during Preparation.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "BinaryPowerPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Bound",
           "doc": "Variable bound wrapper for Python\n\nNote: This struct is named `VariableBound` in Rust code to avoid conflicts with PyO3's `Bound` type,\nbut is exposed as `Bound` in Python through the `#[pyclass(name = \"Bound\")]` attribute.",
           "bases": [],
@@ -3979,7 +4031,7 @@
         {
           "kind": "Class",
           "name": "DecisionVariable",
-          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\nConstruction raises ValueError when the kind discriminator is unknown or\nthe requested bound cannot be normalized for the selected variable kind.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n```\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n```python\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse\n```",
+          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\nConstruction raises ValueError when the kind discriminator is unknown or\nthe requested bound cannot be normalized for the selected variable kind.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse",
           "bases": [],
           "methods": [
             {
@@ -7270,7 +7322,7 @@
             },
             {
               "name": "evaluate_bound",
-              "doc": "Compute an interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.\n\n**Returns:** A {class}`~ommx.Bound` that contains $[\\inf f, \\sup f]$ over the given variable bounds.\n\n**Tightness:** This evaluates the bound **term by term** (monomial-wise)\nand sums the per-term intervals. The result is a **sound\nover-approximation** of the true range $[\\inf f, \\sup f]$ but is **not\nguaranteed to be tight**, because it ignores dependencies between terms\nthat share variables. For example, $f = x^2 - x$ with $x \\in [0, 1]$\nhas true range $[-1/4, 0]$ (minimum at $x = 1/2$), but term-wise\nevaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.\n\n# Examples\n\n```python\n>>> from ommx import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> (b.lower, b.upper)\n(3.0, 7.0)\n```",
+              "doc": "Compute an interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.\n\n**Returns:** A {class}`~ommx.Bound` that contains $[\\inf f, \\sup f]$ over the given variable bounds.\n\n**Tightness:** This evaluates the bound **term by term** (monomial-wise)\nand sums the per-term intervals. The result is a **sound\nover-approximation** of the true range $[\\inf f, \\sup f]$ but is **not\nguaranteed to be tight**, because it ignores dependencies between terms\nthat share variables. For example, $f = x^2 - x$ with $x \\in [0, 1]$\nhas true range $[-1/4, 0]$ (minimum at $x = 1/2$), but term-wise\nevaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.\n\n# Examples\n\n>>> from ommx import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> (b.lower, b.upper)\n(3.0, 7.0)",
               "signatures": [
                 {
                   "parameters": [
@@ -8287,7 +8339,7 @@
         {
           "kind": "Class",
           "name": "Instance",
-          "doc": "Optimization problem instance.\n\nThis class also contains annotations like {attr}`~ommx.Instance.title`.\nOMMX-defined annotations are stored in explicit protobuf fields, while\nuser-defined annotations are stored in the protobuf annotation map and\nmirrored to OMMX Artifact descriptors.\n\n# Examples\n\nCreate an instance for KnapSack Problem\n\n```python\n>>> from ommx import Instance, DecisionVariable\n```\n\nProfit and weight of items\n\n```python\n>>> p = [10, 13, 18, 31, 7, 15]\n>>> w = [11, 15, 20, 35, 10, 33]\n```\n\nDecision variables\n\n```python\n>>> x = [DecisionVariable.binary(i) for i in range(6)]\n```\n\nObjective and constraint\n\n```python\n>>> objective = sum(p[i] * x[i] for i in range(6))\n>>> constraint = sum(w[i] * x[i] for i in range(6)) <= 47\n```\n\nCompose as an instance\n\n```python\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=objective,\n...     constraints=[constraint],\n...     sense=Instance.MAXIMIZE,\n... )\n```",
+          "doc": "Optimization problem instance.\n\n# Invariants\n\nOutput-only variables are excluded from solver input and evaluated after the full state is populated.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x],\n...     objective=3 * x,\n...     constraints={},\n...     sense=Sense.Maximize,\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> fixed = instance.partial_evaluate({0: 1})\n>>> assert fixed.sense == Sense.Minimize\n>>> assert fixed.objective.evaluate({}) == -3.0\n>>> assert fixed.required_ids() == set()\n>>> assert fixed.used_decision_variables == []\n>>> assert fixed.populate_state({}).entries == {0: 1.0}\n>>> solution = fixed.evaluate({})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)",
           "bases": [],
           "methods": [
             {
@@ -8533,7 +8585,7 @@
             },
             {
               "name": "add_integer_slack_to_inequality",
-              "doc": "Convert inequality $f(x) \\leq 0$ to **inequality** $f(x) + b s \\leq 0$ with an integer slack variable $s$.\n\n- This should be used when {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.\n\n- The bound of $s$ will be $[0, \\text{slack\\_upper\\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.\n\n- Since the slack variable is integer, the yielded inequality has residual error $\\min_s f(x) + b s$ at most $b$.\n  And thus $b$ is returned to use scaling the penalty weight or other things.\n\n  - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,\n    but it needs more bits for the slack variable, and thus the problem size becomes larger.\n\n**Returns:**\nThe coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 4.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 4).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 4 <= 0)\n```\n\nIntroduce an integer slack variable s in [0, 2]\n\n```python\n>>> b = instance.add_integer_slack_to_inequality(\n...     constraint_id=0,\n...     slack_upper_bound=2\n... )\n>>> b, instance.constraints[0]\n(2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))\n```",
+              "doc": "Convert inequality $f(x) \\leq 0$ to **inequality** $f(x) + b s \\leq 0$ with an integer slack variable $s$.\n\n- This should be used when {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.\n\n- The bound of $s$ will be $[0, \\text{slack\\_upper\\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.\n\n- Since the slack variable is integer, the yielded inequality has residual error $\\min_s f(x) + b s$ at most $b$.\n  And thus $b$ is returned to use scaling the penalty weight or other things.\n\n  - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,\n    but it needs more bits for the slack variable, and thus the problem size becomes larger.\n\n**Returns:**\nThe coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 4.\n\n>>> from ommx import DecisionVariable, Equality, Instance, Sense\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: x[0] + 2*x[1] <= 4},\n...     sense=Sense.Maximize,\n... )\n\nIntroduce an integer slack variable s in [0, 2]\n\n>>> b = instance.add_integer_slack_to_inequality(\n...     constraint_id=0,\n...     slack_upper_bound=2\n... )\n>>> assert b == 2.0\n>>> assert instance.constraints[0].function.terms == {\n...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0\n... }\n>>> assert instance.constraints[0].equality == Equality.LessThanOrEqualToZero",
               "signatures": [
                 {
                   "parameters": [
@@ -8722,7 +8774,7 @@
             },
             {
               "name": "as_hubo_format",
-              "doc": "",
+              "doc": "Return the active objective in HUBO format without preparing the instance.\n\n# Postconditions\n\nThe returned coefficients represent the active objective rather than preserved output semantics.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x + 5, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> hubo, offset = instance.as_hubo_format()\n>>> assert (hubo, offset) == ({(0,): -3.0}, -5.0)\n>>> assert instance.objective.evaluate({0: 1}) == -8.0\n>>> assert instance.evaluate({0: 1}).objective == 8.0",
               "signatures": [
                 {
                   "parameters": [],
@@ -8749,7 +8801,7 @@
             },
             {
               "name": "as_maximization_problem",
-              "doc": "Convert the instance to a maximization problem.\n\nIf the instance is already a maximization problem, this does nothing.\n\n**Returns:**\n``True`` if the instance is converted, ``False`` if already a maximization problem.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.sense == Instance.MINIMIZE\nTrue\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nConvert to a maximization problem\n\n```python\n>>> instance.as_maximization_problem()\nTrue\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n>>> instance.objective\nFunction(-x0 - x1 - x2)\n```\n\nIf the instance is already a maximization problem, this does nothing\n\n```python\n>>> instance.as_maximization_problem()\nFalse\n```",
+              "doc": "Convert the instance to a maximization problem.\n\nIf both the active objective and the output objective already use\nmaximization, this does nothing.\n\n**Returns:**\n``True`` if either objective is converted, ``False`` if both already\nuse maximization.\n\n# Postconditions\n\nConversion changes both active and output objective semantics and is idempotent at the target sense.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Minimize\n... )\n>>> assert instance.convert_active_objective(Sense.Maximize)\n>>> assert instance.evaluate({0: 1}).objective == 3.0\n>>> assert instance.as_maximization_problem()\n>>> solution = instance.evaluate({0: 1})\n>>> assert instance.objective.evaluate({0: 1}) == -3.0\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, -3.0)\n>>> assert not instance.as_maximization_problem()",
               "signatures": [
                 {
                   "parameters": [],
@@ -8765,7 +8817,7 @@
             },
             {
               "name": "as_minimization_problem",
-              "doc": "Convert the instance to a minimization problem.\n\nIf the instance is already a minimization problem, this does nothing.\n\n**Returns:**\n``True`` if the instance is converted, ``False`` if already a minimization problem.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nConvert to a minimization problem\n\n```python\n>>> instance.as_minimization_problem()\nTrue\n>>> instance.sense == Instance.MINIMIZE\nTrue\n>>> instance.objective\nFunction(-x0 - x1 - x2)\n```\n\nIf the instance is already a minimization problem, this does nothing\n\n```python\n>>> instance.as_minimization_problem()\nFalse\n```",
+              "doc": "Convert the instance to a minimization problem.\n\nIf both the active objective and the output objective already use\nminimization, this does nothing.\n\n**Returns:**\n``True`` if either objective is converted, ``False`` if both already\nuse minimization.\n\n# Postconditions\n\nConversion changes both active and output objective semantics and is idempotent at the target sense.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> assert instance.evaluate({0: 1}).objective == 3.0\n>>> assert instance.as_minimization_problem()\n>>> solution = instance.evaluate({0: 1})\n>>> assert instance.objective.evaluate({0: 1}) == -3.0\n>>> assert (solution.sense, solution.objective) == (Sense.Minimize, -3.0)\n>>> assert not instance.as_minimization_problem()",
               "signatures": [
                 {
                   "parameters": [],
@@ -8781,7 +8833,7 @@
             },
             {
               "name": "as_parametric_instance",
-              "doc": "",
+              "doc": "Convert this instance into a parameter-free parametric instance.\n\n# Postconditions\n\nMaterializing the result without parameters preserves both active and output objective semantics.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> restored = instance.as_parametric_instance().with_parameters({})\n>>> assert restored.sense == Sense.Minimize\n>>> assert restored.objective.evaluate({0: 1}) == -1.0\n>>> solution = restored.evaluate({0: 1})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)",
               "signatures": [
                 {
                   "parameters": [],
@@ -8797,7 +8849,7 @@
             },
             {
               "name": "as_qubo_format",
-              "doc": "",
+              "doc": "Return the active objective in QUBO format without preparing the instance.\n\n# Postconditions\n\nThe returned coefficients represent the active objective rather than preserved output semantics.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x + 5, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> qubo, offset = instance.as_qubo_format()\n>>> assert (qubo, offset) == ({(0, 0): -3.0}, -5.0)\n>>> assert instance.objective.evaluate({0: 1}) == -8.0\n>>> assert instance.evaluate({0: 1}).objective == 8.0",
               "signatures": [
                 {
                   "parameters": [],
@@ -9135,6 +9187,32 @@
               "deprecated": null
             },
             {
+              "name": "convert_active_objective",
+              "doc": "Convert only the active objective used by a solver-facing formulation.\n\nThis changes {attr}`~ommx.Instance.sense` and\n{attr}`~ommx.Instance.objective` to ``target`` while preserving the\nobjective semantics returned by {meth}`~ommx.Instance.evaluate` and\n{meth}`~ommx.Instance.evaluate_samples`. Use\n{meth}`~ommx.Instance.as_minimization_problem` or\n{meth}`~ommx.Instance.as_maximization_problem` when the output objective\nshould be converted as part of the mathematical problem itself.\n\n**Returns:**\n``True`` if the active objective is converted, ``False`` if it already\nhas ``target``.\n\n# Postconditions\n\nConversion negates only the active objective and preserves evaluation semantics in either direction.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> for source, target in ((Sense.Maximize, Sense.Minimize), (Sense.Minimize, Sense.Maximize)):\n...     instance = Instance.from_components(\n...         decision_variables=[x], objective=3 * x, constraints={}, sense=source\n...     )\n...     before = instance.evaluate({0: 1})\n...     assert instance.convert_active_objective(target)\n...     after = instance.evaluate({0: 1})\n...     assert instance.sense == target\n...     assert instance.objective.evaluate({0: 1}) == -3.0\n...     assert (after.sense, after.objective) == (before.sense, before.objective)\n...     assert not instance.convert_active_objective(target)",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "target",
+                      "type_": {
+                        "display": "Sense",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "convert_all_indicators_to_constraints",
               "doc": "Convert every active indicator constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_indicator_to_constraint` for the\nconversion rule. Returns a dict mapping each original indicator ID to the\nlist of regular constraint IDs it produced.\n\nAtomic: every active indicator is validated up front, and only if every\none is convertible are the conversions applied. If any indicator fails\nvalidation (non-finite bound on a required side), no mutation happens and\nthe instance is left untouched.",
               "signatures": [
@@ -9169,7 +9247,7 @@
             },
             {
               "name": "convert_all_one_hots_to_constraints",
-              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=x[:2]),\n...         2: OneHotConstraint(variables=x[2:]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}\n```",
+              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=x[:2]),\n...         2: OneHotConstraint(variables=x[2:]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}",
               "signatures": [
                 {
                   "parameters": [],
@@ -9191,7 +9269,7 @@
             },
             {
               "name": "convert_all_sos1_to_constraints",
-              "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\nAtomic: every active SOS1 is validated up front, and only if every one is\nconvertible are the conversions applied. If any SOS1 fails validation\n(unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation\nhappens and the instance is left untouched.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=x[:2]),\n...         2: Sos1Constraint(variables=x[2:]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}\n```",
+              "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\nAtomic: every active SOS1 is validated up front, and only if every one is\nconvertible are the conversions applied. If any SOS1 fails validation\n(unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation\nhappens and the instance is left untouched.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=x[:2]),\n...         2: Sos1Constraint(variables=x[2:]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}",
               "signatures": [
                 {
                   "parameters": [],
@@ -9224,7 +9302,7 @@
             },
             {
               "name": "convert_indicator_to_constraint",
-              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). The instance is not\nmutated on error.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n```python\n>>> from ommx import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     constraints={},\n...     indicator_constraints={1: ic},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[0]\n>>> instance.indicator_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + 3*x1 - 5 <= 0)}\n```",
+              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). The instance is not\nmutated on error.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n>>> from ommx import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     constraints={},\n...     indicator_constraints={1: ic},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[0]\n>>> instance.indicator_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + 3*x1 - 5 <= 0)}",
               "signatures": [
                 {
                   "parameters": [
@@ -9256,7 +9334,7 @@
             },
             {
               "name": "convert_inequality_to_equality_with_integer_slack",
-              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[\n...         (x[0] + 2*x[1] <= 5).set_id(0)\n...     ],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 - 5 <= 0)\n```\n\nIntroduce an integer slack variable\n\n```python\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> instance.constraints[0]\nConstraint(x0 + 2*x1 + x3 - 5 == 0)\n```\n\nRaises {class}`~ommx.ExactIntegerSlackError` when exact conversion is\nunavailable because the coefficients cannot be normalized or the slack\nrange exceeds ``max_integer_range``. Raises\n{class}`~ommx.InfeasibleDetected` when the bounds prove the inequality\ninfeasible.",
+              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n>>> from ommx import DecisionVariable, Equality, Instance, Sense\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: x[0] + 2*x[1] <= 5},\n...     sense=Sense.Maximize,\n... )\n\nIntroduce an integer slack variable\n\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> assert instance.constraints[0].function.terms == {\n...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0\n... }\n>>> assert instance.constraints[0].equality == Equality.EqualToZero\n\nRaises {class}`~ommx.ExactIntegerSlackError` when exact conversion is\nunavailable because the coefficients cannot be normalized or the slack\nrange exceeds ``max_integer_range``. Raises\n{class}`~ommx.InfeasibleDetected` when the bounds prove the inequality\ninfeasible.",
               "signatures": [
                 {
                   "parameters": [
@@ -9291,7 +9369,7 @@
             },
             {
               "name": "convert_one_hot_to_constraint",
-              "doc": "Convert a one-hot constraint to a regular equality constraint.\n\nA one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the\nlinear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality\nas a new regular constraint and moves the one-hot constraint into\n{attr}`~ommx.Instance.removed_one_hot_constraints` with\n``reason=\"ommx.Instance.convert_one_hot_to_constraint\"`` and a\n``constraint_id`` parameter pointing to the new regular constraint.\n\nReturns the ID of the newly created regular constraint.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={1: OneHotConstraint(variables=x)},\n...     sense=Instance.MINIMIZE,\n... )\n>>> new_id = instance.convert_one_hot_to_constraint(1)\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 == 0)}\n>>> instance.removed_one_hot_constraints\n{1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}\n```",
+              "doc": "Convert a one-hot constraint to a regular equality constraint.\n\nA one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the\nlinear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality\nas a new regular constraint and moves the one-hot constraint into\n{attr}`~ommx.Instance.removed_one_hot_constraints` with\n``reason=\"ommx.Instance.convert_one_hot_to_constraint\"`` and a\n``constraint_id`` parameter pointing to the new regular constraint.\n\nReturns the ID of the newly created regular constraint.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={1: OneHotConstraint(variables=x)},\n...     sense=Instance.MINIMIZE,\n... )\n>>> new_id = instance.convert_one_hot_to_constraint(1)\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 == 0)}\n>>> instance.removed_one_hot_constraints\n{1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}",
               "signatures": [
                 {
                   "parameters": [
@@ -9317,7 +9395,7 @@
             },
             {
               "name": "convert_sos1_to_constraints",
-              "doc": "Convert a SOS1 constraint to regular constraints using the Big-M method.\n\nA SOS1 constraint over $\\{x_1, \\ldots, x_n\\}$ with each $x_i \\in [l_i, u_i]$\nasserts that at most one $x_i$ is non-zero. Per variable, a binary indicator\n$y_i$ is introduced with the Big-M pair\n\n$$\nx_i - u_i y_i \\leq 0, \\qquad l_i y_i - x_i \\leq 0\n$$\n\n(trivial sides $u_i = 0$ or $l_i = 0$ are skipped), together with the single\ncardinality constraint\n\n$$\n\\sum_i y_i - 1 \\leq 0.\n$$\n\nIf $x_i$ is already binary with bound $[0, 1]$, $x_i$ itself is reused as its\nindicator (no new variable, no Big-M pair).\n\nReturns the list of newly created regular constraint IDs in insertion order\n(Big-M upper/lower pairs per non-binary variable, followed by the cardinality\nsum).\n\nRaises if any $x_i$ has a non-binary bound that is not finite, if its domain\nexcludes $0$, or if its kind is semi-continuous / semi-integer (the split\ndomain $\\{0\\} \\cup [l, u]$ is not uniformly implemented across the codebase\nyet, so Big-M conversion of these kinds is not supported).\nThe instance is not mutated on error.\n\n# Examples\n\nAll-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={1: Sos1Constraint(variables=x)},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_sos1_to_constraints(1)\n[0]\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 <= 0)}\n>>> instance.removed_sos1_constraints\n{1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}\n```",
+              "doc": "Convert a SOS1 constraint to regular constraints using the Big-M method.\n\nA SOS1 constraint over $\\{x_1, \\ldots, x_n\\}$ with each $x_i \\in [l_i, u_i]$\nasserts that at most one $x_i$ is non-zero. Per variable, a binary indicator\n$y_i$ is introduced with the Big-M pair\n\n$$\nx_i - u_i y_i \\leq 0, \\qquad l_i y_i - x_i \\leq 0\n$$\n\n(trivial sides $u_i = 0$ or $l_i = 0$ are skipped), together with the single\ncardinality constraint\n\n$$\n\\sum_i y_i - 1 \\leq 0.\n$$\n\nIf $x_i$ is already binary with bound $[0, 1]$, $x_i$ itself is reused as its\nindicator (no new variable, no Big-M pair).\n\nReturns the list of newly created regular constraint IDs in insertion order\n(Big-M upper/lower pairs per non-binary variable, followed by the cardinality\nsum).\n\nRaises if any $x_i$ has a non-binary bound that is not finite, if its domain\nexcludes $0$, or if its kind is semi-continuous / semi-integer (the split\ndomain $\\{0\\} \\cup [l, u]$ is not uniformly implemented across the codebase\nyet, so Big-M conversion of these kinds is not supported).\nThe instance is not mutated on error.\n\n# Examples\n\nAll-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:\n\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={1: Sos1Constraint(variables=x)},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_sos1_to_constraints(1)\n[0]\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 <= 0)}\n>>> instance.removed_sos1_constraints\n{1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}",
               "signatures": [
                 {
                   "parameters": [
@@ -9538,7 +9616,7 @@
             },
             {
               "name": "empty",
-              "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> instance.sense == Instance.MINIMIZE\nTrue\n```",
+              "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> instance.sense == Instance.MINIMIZE\nTrue",
               "signatures": [
                 {
                   "parameters": [],
@@ -9557,7 +9635,7 @@
             },
             {
               "name": "evaluate",
-              "doc": "Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.\n\nThis method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),\nand returns a {class}`~ommx.Solution` object containing objective value, evaluated constraint values, and feasibility information.\n\n# Examples\n\nCreate a simple instance with three binary variables and evaluate a solution:\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + x[1] <= 1).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nEvaluate it with a state x0 = 1, x1 = 0, x2 = 0, and show the objective and constraints:\n\n```python\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 0})\n>>> solution.objective\n1.0\n```\n\nIf the value is out of the range, the solution is infeasible:\n\n```python\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 2})\n>>> solution.feasible\nFalse\n```\n\nIf some of the decision variables are not set, this raises an error:\n\n```python\n>>> instance.evaluate({0: 1, 1: 0})\n```\nTraceback (most recent call last):\n    ...\nValueError: state is missing required variable IDs: {VariableID(2)}",
+              "doc": "Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.\n\n# Postconditions\n\nEvaluation populates the full state before applying preserved output objective semantics.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> fixed = instance.partial_evaluate({0: 1})\n>>> solution = fixed.evaluate({})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)\n\n# Errors\n\nEvaluation raises ``ValueError`` when an active required ID is missing.\n\n>>> required = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize\n... )\n>>> try:\n...     required.evaluate({})\n... except ValueError as error:\n...     assert \"missing required variable IDs\" in str(error)\n... else:\n...     raise AssertionError(\"evaluation accepted a missing active ID\")",
               "signatures": [
                 {
                   "parameters": [
@@ -9606,7 +9684,7 @@
             },
             {
               "name": "evaluate_samples",
-              "doc": "",
+              "doc": "Evaluate samples into a sample set.\n\n# Postconditions\n\nEvery sample restores fixed variables before applying preserved output objective semantics.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> fixed = instance.partial_evaluate({0: 1})\n>>> sample_set = fixed.evaluate_samples({7: {}})\n>>> assert sample_set.sense == Sense.Maximize\n>>> assert sample_set.objectives[7] == 3.0\n>>> assert sample_set.get(7).state.entries == {0: 1.0}",
               "signatures": [
                 {
                   "parameters": [
@@ -10261,7 +10339,7 @@
             },
             {
               "name": "log_encode",
-              "doc": "Log-encode the integer decision variables.\n\nLog encoding of an integer variable $x \\in [l, u]$ is to represent by $m$ bits $b_i \\in \\{0, 1\\}$ by:\n\n$$x = \\sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$\n\nwhere $m = \\lceil \\log_2(u - l + 1) \\rceil$.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to log-encode.\n  If not specified (or empty), all used integer variables are log-encoded.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\nRaises {class}`~ommx.LogEncodingError` when an exact representation is\nunavailable for a requested variable. Allocation and expression-rewrite\nfailures retain their original exception types.\n\n# Examples\n\nLet's consider a simple integer programming problem with three integer variables x0, x1, and x2.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n```\n\nTo log-encode the integer variables x0 and x2 (except x1), call log_encode:\n\n```python\n>>> instance.log_encode({0, 2})\n```\n\nInteger variable in range $[0, 3]$ can be represented by two binary variables:\n\n$$x_0 = b_{0,0} + 2 b_{0,1}, \\quad x_2 = b_{2,0} + 2 b_{2,1}$$\n\nAnd these are substituted into the objective and constraint functions.\n\n```python\n>>> instance.objective\nFunction(x1 + x3 + 2*x4 + x5 + 2*x6)\n```",
+              "doc": "Log-encode the integer decision variables.\n\nLog encoding of an integer variable $x \\in [l, u]$ is to represent by $m$ bits $b_i \\in \\{0, 1\\}$ by:\n\n$$x = \\sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$\n\nwhere $m = \\lceil \\log_2(u - l + 1) \\rceil$.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to log-encode.\n  If not specified (or empty), all used integer variables are log-encoded.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\nRaises {class}`~ommx.LogEncodingError` when an exact representation is\nunavailable for a requested variable. Allocation and expression-rewrite\nfailures retain their original exception types.\n\n# Postconditions\n\nEncoding rewrites the active objective while output evaluation restores the encoded integer value.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.integer(0, lower=0, upper=3)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> instance.log_encode({0})\n>>> encoded_ids = instance.required_ids()\n>>> assert len(encoded_ids) == 2\n>>> state = {variable_id: 1 for variable_id in encoded_ids}\n>>> assert instance.objective.evaluate(state) == -3.0\n>>> solution = instance.evaluate(state)\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)",
               "signatures": [
                 {
                   "parameters": [
@@ -10314,7 +10392,7 @@
             },
             {
               "name": "logical_memory_profile",
-              "doc": "Generate folded stack format for memory profiling of this instance.\n\nThis method generates a format compatible with flamegraph visualization tools\nlike ``flamegraph.pl`` and ``inferno``. Each line has the format:\n\"frame1;frame2;...;frameN bytes\"\n\nThe output shows the hierarchical memory structure of the instance, making it\neasy to identify which components are consuming the most memory.\n\nTo visualize with flamegraph:\n\n1. Save the output to a file: ``profile.txt``\n2. Generate SVG: ``flamegraph.pl profile.txt > memory.svg``\n3. Open memory.svg in a browser\n\n**Returns:**\nFolded stack format string that can be visualized with flamegraph tools\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> profile = instance.logical_memory_profile()\n>>> isinstance(profile, str)\nTrue\n```",
+              "doc": "Generate folded stack format for memory profiling of this instance.\n\nThis method generates a format compatible with flamegraph visualization tools\nlike ``flamegraph.pl`` and ``inferno``. Each line has the format:\n\"frame1;frame2;...;frameN bytes\"\n\nThe output shows the hierarchical memory structure of the instance, making it\neasy to identify which components are consuming the most memory.\n\nTo visualize with flamegraph:\n\n1. Save the output to a file: ``profile.txt``\n2. Generate SVG: ``flamegraph.pl profile.txt > memory.svg``\n3. Open memory.svg in a browser\n\n**Returns:**\nFolded stack format string that can be visualized with flamegraph tools\n\n# Examples\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints={},\n...     sense=Sense.Maximize,\n... )\n>>> profile = instance.logical_memory_profile()\n>>> isinstance(profile, str)\nTrue",
               "signatures": [
                 {
                   "parameters": [],
@@ -10360,6 +10438,32 @@
                         "children": []
                       }
                     ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "map_active_optimality",
+              "doc": "Map an optimality status for the active solver-facing formulation to\nthe objective semantics returned by evaluation.\n\nWhen the instance records that active-formulation optimality does not\ntransport to its output objective, this returns\n{attr}`~ommx.Optimality.Unspecified`.\n\n# Postconditions\n\nOptimality is preserved for equivalent objective conversion and discarded after penalty preparation.\n\n>>> from ommx import DecisionVariable, Instance, Optimality, Sense\n>>> x = DecisionVariable.binary(0)\n>>> equivalent = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert equivalent.convert_active_objective(Sense.Minimize)\n>>> statuses = (Optimality.Unspecified, Optimality.Optimal, Optimality.NotOptimal)\n>>> for status in statuses:\n...     assert equivalent.map_active_optimality(status) == status\n>>> penalized = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize\n... )\n>>> _ = penalized.to_qubo(uniform_penalty_weight=1.0)\n>>> for status in statuses:\n...     assert penalized.map_active_optimality(status) == Optimality.Unspecified",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "active",
+                      "type_": {
+                        "display": "Optimality",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Optimality",
+                    "link_target": null,
+                    "children": []
                   }
                 }
               ],
@@ -10535,7 +10639,7 @@
             },
             {
               "name": "partial_evaluate",
-              "doc": "Creates a new instance with specific decision variables fixed to given values.\n\nThis method substitutes the specified decision variables with their provided values,\ncreating a new problem instance where these variables are fixed. This is useful for\nscenarios such as:\n\n- Creating simplified sub-problems with some variables fixed\n- Incrementally solving a problem by fixing some variables and optimizing the rest\n- Testing specific configurations of a problem\n\n**Args:**\n- `state`: Maps decision variable IDs to their fixed values.\n  Can be a {class}`~ommx.State` object or a dictionary mapping variable IDs to values.\n- `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.\n\n**Returns:**\nA new instance with the specified decision variables fixed to their given values.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = DecisionVariable.binary(1)\n>>> y = DecisionVariable.binary(2)\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x + y,\n...     constraints=[x + y <= 1],\n...     sense=Instance.MINIMIZE\n... )\n>>> new_instance = instance.partial_evaluate({1: 1})\n>>> new_instance.objective\nFunction(x2 + 1)\n```\n\nFixed values are owned by the instance and exposed through the\nattached decision-variable view:\n\n```python\n>>> x = new_instance.attached_decision_variable(1)\n>>> x.substituted_value\n1.0\n```",
+              "doc": "Creates a new instance with specific decision variables fixed to given values.\n\nThis method substitutes the specified decision variables with their provided values,\ncreating a new problem instance where these variables are fixed. This is useful for\nscenarios such as:\n\n- Creating simplified sub-problems with some variables fixed\n- Incrementally solving a problem by fixing some variables and optimizing the rest\n- Testing specific configurations of a problem\n\n**Args:**\n- `state`: Maps decision variable IDs to their fixed values.\n  Can be a {class}`~ommx.State` object or a dictionary mapping variable IDs to values.\n- `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.\n\n**Returns:**\nA new instance with the specified decision variables fixed to their given values.\n\n# Postconditions\n\nThe new instance rewrites only active expressions while retaining fixed values for output evaluation.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> fixed = instance.partial_evaluate({0: 1})\n>>> assert instance.required_ids() == {0}\n>>> assert fixed.required_ids() == set()\n>>> assert fixed.objective.evaluate({}) == -3.0\n>>> assert fixed.attached_decision_variable(0).substituted_value == 1.0\n>>> solution = fixed.evaluate({})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)",
               "signatures": [
                 {
                   "parameters": [
@@ -10584,7 +10688,7 @@
             },
             {
               "name": "penalty_method",
-              "doc": "Convert to a parametric unconstrained instance by penalty method.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with parameters:\n\n$$\\min_x f(x) + \\sum_i \\lambda_i g_i(x)^2 + \\sum_j \\rho_j h_j(x)^2$$\n\nwhere $\\lambda_i$ and $\\rho_j$ are the penalty weight parameters for each constraint.\nIf you want to use single weight parameter, use {meth}`~ommx.Instance.uniform_penalty_method` instead.\n\nThe removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable, Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[x[0] + x[1] == 1, x[1] + x[2] == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n2\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=3)\n>>> pi.removed_constraints[1]\nRemovedConstraint(x1 + x2 - 1 == 0, reason=ommx.Instance.penalty_method, parameter_id=4)\n```",
+              "doc": "Convert to a parametric unconstrained instance by penalty method.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with parameters:\n\n$$\\min_x f(x) + \\sum_i \\lambda_i g_i(x)^2 + \\sum_j \\rho_j h_j(x)^2$$\n\nwhere $\\lambda_i$ and $\\rho_j$ are the penalty weight parameters for each constraint.\nIf you want to use single weight parameter, use {meth}`~ommx.Instance.uniform_penalty_method` instead.\n\nThe removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.Instance.add_integer_slack_to_inequality`.\n\n# Postconditions\n\nMaterialization evaluates penalty energy actively while retaining the pre-penalty objective for output and invalidating optimality transport.\n\n>>> from ommx import DecisionVariable, Instance, Optimality, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize\n... )\n>>> parametric = instance.penalty_method()\n>>> parameters = {parameter.id: 2.0 for parameter in parametric.parameters}\n>>> prepared = parametric.with_parameters(parameters)\n>>> assert parametric.constraints == {}\n>>> assert 7 in parametric.removed_constraints\n>>> assert prepared.objective.evaluate({0: 0}) == 2.0\n>>> solution = prepared.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)\n>>> assert prepared.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified",
               "signatures": [
                 {
                   "parameters": [],
@@ -10600,7 +10704,7 @@
             },
             {
               "name": "populate_state",
-              "doc": "Populate fixed, irrelevant, and dependent decision variables in a state.\n\nThe input state must contain all decision variables that are actually used\nby this instance's objective and active constraints. The returned\n{class}`~ommx.State` contains every decision variable in the instance.",
+              "doc": "Populate fixed, irrelevant, and dependent decision variables in a state.\n\nThe input state must contain all decision variables that are actually used\nby this instance's objective and active constraints. The returned\n{class}`~ommx.State` contains every decision variable in the instance.\n\n# Postconditions\n\nThe returned state restores fixed variables needed only by preserved output semantics.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> fixed = instance.partial_evaluate({0: 1})\n>>> assert fixed.populate_state({}).entries == {0: 1.0}\n>>> assert fixed.evaluate({}).objective == 3.0",
               "signatures": [
                 {
                   "parameters": [
@@ -10654,7 +10758,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\nSelected phases are applied at most once in this order, stopping as soon\nas membership is reached:\n\n1. ``special_constraints``:\n   {meth}`~ommx.Instance.lower_special_constraints`\n2. ``sense``: {meth}`~ommx.Instance.as_minimization_problem`\n3. ``integer_slack``:\n   {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,\n   followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only\n   when exact conversion is unavailable and ``slack_upper_bound`` is set\n4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`\n5. ``fixed_penalty``\n\nSuccess guarantees membership only, not Adapter applicability. This\noperation is not transactional, so an error may leave the instance changed.\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final membership\nreport when the selections do not reach ``input_class``.",
+              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\nSelected phases are applied at most once in this order, stopping as soon\nas membership is reached:\n\n1. ``special_constraints``:\n   {meth}`~ommx.Instance.lower_special_constraints`\n2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`\n3. ``integer_slack``:\n   {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,\n   followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only\n   when exact conversion is unavailable and ``slack_upper_bound`` is set\n4. ``fixed_penalty``\n5. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`\n6. ``binary_power_reduction``:\n   {meth}`~ommx.Instance.reduce_binary_power`\n\nSuccess guarantees membership only, not Adapter applicability. This\noperation is not transactional, so an error may leave the instance changed.\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final membership\nreport when the selections do not reach ``input_class``.\n\n# Postconditions\n\nSuccessful Preparation mutates the owner into the target class while preserving output evaluation semantics.\n\n>>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)\n>>> assert instance.prepare(InstanceClass.qubo(), policy) is None\n>>> assert InstanceClass.qubo().contains(instance)\n>>> assert instance.sense == Sense.Minimize\n>>> assert instance.objective.evaluate({0: 0}) == 2.0\n>>> solution = instance.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)\n>>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified",
               "signatures": [
                 {
                   "parameters": [
@@ -10689,7 +10793,7 @@
             },
             {
               "name": "random_samples",
-              "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\nRaises {class}`ValueError` if the requested state groups cannot\npartition the samples or the inclusive sample-ID range is too small.\n`num_different_samples=0` is valid only when `num_samples=0`.\n\n# Examples\n\nGenerate samples for a simple instance:\n\n```python\n>>> from ommx import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(sum(x) <= 2).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5\n```",
+              "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\nRaises {class}`ValueError` if the requested state groups cannot\npartition the samples or the inclusive sample-ID range is too small.\n`num_different_samples=0` is valid only when `num_samples=0`.\n\n# Examples\n\nGenerate samples for a simple instance:\n\n>>> from ommx import DecisionVariable, Instance, Rng, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: sum(x) <= 2},\n...     sense=Sense.Maximize,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5",
               "signatures": [
                 {
                   "parameters": [
@@ -10762,7 +10866,7 @@
             },
             {
               "name": "random_state",
-              "doc": "Generate a random state for this instance using the provided random number generator.\n\nThis method generates random values only for variables that are actually used in the\nobjective function or constraints, as determined by decision variable usage.\nGenerated values respect the bounds of each variable type.\n\n**Args:**\n- `rng`: Random number generator to use for generating the state.\n\n**Returns:**\nA randomly generated state that satisfies the variable bounds of this instance.\nOnly contains values for variables that are used in the problem.\n\n# Examples\n\nGenerate random state only for used variables\n\n```python\n>>> from ommx import Instance, DecisionVariable, Rng\n>>> x = [DecisionVariable.binary(i) for i in range(5)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n\n>>> rng = Rng()\n>>> state = instance.random_state(rng)\n```\n\nOnly used variables have values\n\n```python\n>>> set(state.entries.keys())\n{0, 1}\n```\n\nValues respect binary bounds\n\n```python\n>>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)\nTrue\n```",
+              "doc": "Generate a random state for this instance using the provided random number generator.\n\nThis method generates random values only for variables that are actually used in the\nobjective function or constraints, as determined by decision variable usage.\nGenerated values respect the bounds of each variable type.\n\n**Args:**\n- `rng`: Random number generator to use for generating the state.\n\n**Returns:**\nA randomly generated state that satisfies the variable bounds of this instance.\nOnly contains values for variables that are used in the problem.\n\n# Examples\n\nGenerate random state only for used variables\n\n>>> from ommx import DecisionVariable, Instance, Rng, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(5)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + x[1],\n...     constraints={},\n...     sense=Sense.Maximize,\n... )\n\n>>> rng = Rng()\n>>> state = instance.random_state(rng)\n\nOnly used variables have values\n\n>>> set(state.entries.keys())\n{0, 1}\n\nValues respect binary bounds\n\n>>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)\nTrue",
               "signatures": [
                 {
                   "parameters": [
@@ -10793,7 +10897,7 @@
             },
             {
               "name": "reduce_binary_power",
-              "doc": "Reduce binary powers in the instance.\n\nThis method replaces binary powers in the instance with their equivalent linear expressions.\nFor binary variables, $x^n = x$ for any $n \\geq 1$, so we can reduce higher powers to linear terms.\n\n**Returns:**\n``True`` if any reduction was performed, ``False`` otherwise.\n\n# Examples\n\nConsider an instance with binary variables and quadratic terms:\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] * x[0] + x[0] * x[1],\n...     constraints=[],\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.objective\nFunction(x0*x0 + x0*x1)\n```\n\nAfter reducing binary powers, x0^2 becomes x0:\n\n```python\n>>> changed = instance.reduce_binary_power()\n>>> changed\nTrue\n>>> instance.objective\nFunction(x0*x1 + x0)\n```\n\nRunning it again should not change anything:\n\n```python\n>>> changed = instance.reduce_binary_power()\n>>> changed\nFalse\n```",
+              "doc": "Reduce binary powers in the instance.\n\nThis method replaces binary powers in the instance with their equivalent linear expressions.\nFor binary variables, $x^n = x$ for any $n \\geq 1$, so we can reduce higher powers to linear terms.\n\n**Returns:**\n``True`` if any reduction was performed, ``False`` otherwise.\n\n# Postconditions\n\nReduction simplifies only active expressions while preserving output evaluation semantics.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> assert instance.reduce_binary_power()\n>>> assert instance.objective.evaluate({0: 1}) == -1.0\n>>> solution = instance.evaluate({0: 1})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)\n>>> assert not instance.reduce_binary_power()",
               "signatures": [
                 {
                   "parameters": [],
@@ -10809,7 +10913,7 @@
             },
             {
               "name": "relax_constraint",
-              "doc": "Remove a constraint from the instance.\n\nThe removed constraint is stored in {attr}`~ommx.Instance.removed_constraints`, and can be restored by {meth}`~ommx.Instance.restore_constraint`.\n\n**Args:**\n- `constraint_id`: The ID of the constraint to remove.\n- `reason`: The reason why the constraint is removed.\n- `parameters`: Additional parameters to describe the reason.\n\n# Examples\n\nRelax constraint, and restore it.\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(sum(x) == 3).set_id(1)],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.constraints\n[Constraint(x0 + x1 + x2 - 3 == 0)]\n```\n\n```python\n>>> instance.relax_constraint(1, \"manual relaxation\")\n>>> instance.constraints\n[]\n>>> instance.removed_constraints\n[RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=manual relaxation)]\n```\n\n```python\n>>> instance.restore_constraint(1)\n>>> instance.constraints\n[Constraint(x0 + x1 + x2 - 3 == 0)]\n>>> instance.removed_constraints\n[]\n```",
+              "doc": "Remove a constraint from the instance.\n\nThe removed constraint is stored in {attr}`~ommx.Instance.removed_constraints`, and can be restored by {meth}`~ommx.Instance.restore_constraint`.\n\n**Args:**\n- `constraint_id`: The ID of the constraint to remove.\n- `reason`: The reason why the constraint is removed.\n- `parameters`: Additional parameters to describe the reason.\n\n# Examples\n\nRelax constraint, and restore it.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={1: sum(x) == 3},\n...     sense=Sense.Maximize,\n... )\n>>> assert set(instance.constraints) == {1}\n\n>>> instance.relax_constraint(1, \"manual relaxation\")\n>>> assert not instance.constraints\n>>> assert set(instance.removed_constraints) == {1}\n\n>>> instance.restore_constraint(1)\n>>> assert set(instance.constraints) == {1}\n>>> assert not instance.removed_constraints",
               "signatures": [
                 {
                   "parameters": [
@@ -10934,7 +11038,7 @@
             },
             {
               "name": "required_ids",
-              "doc": "Get the set of decision variable IDs used in the objective and remaining constraints.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.required_ids()\n{0, 1, 2}\n```",
+              "doc": "Get the decision variable IDs required by the active formulation.\n\n# Postconditions\n\nIDs referenced only by preserved output semantics are not required solver inputs.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> fixed = instance.partial_evaluate({0: 1})\n>>> assert fixed.required_ids() == set()\n>>> assert fixed.evaluate({}).objective == 1.0",
               "signatures": [
                 {
                   "parameters": [],
@@ -11046,7 +11150,7 @@
             },
             {
               "name": "stats",
-              "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0\n```",
+              "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0",
               "signatures": [
                 {
                   "parameters": [],
@@ -11062,7 +11166,7 @@
             },
             {
               "name": "substitute",
-              "doc": "Substitute decision variables with function expressions (in-place).\n\nReplaces each given decision variable with the provided function in the\nobjective and all active constraints. This is the general substitution\nmechanism behind {meth}`~ommx.Instance.log_encode`, exposed so that\nusers can implement their own integer encodings (e.g. unary, one-hot).\n\n**Args:**\n- `assignments`: A dict mapping decision variable IDs to the function\n  expressions that should replace them.\n\n**Important:**\nThis method performs an algebraic rewrite. It does not automatically\ntranslate the substituted variable's bound or kind into constraints on\nthe replacement expression. For example, substituting a binary variable\n``x`` with ``y + z`` does not add ``0 <= y + z <= 1``, and substituting\nan integer variable does not ensure that the replacement expression is\nintegral. If the substitution must preserve the optimization problem,\nthe caller must provide a domain-preserving encoding or add the required\nlinking and bound constraints explicitly.\n\nRaises ``ValueError`` on cyclic or recursive assignments, or when\nsubstituting a variable that is a member of an indicator, one-hot, or\nSOS1 constraint.\n\n# Examples\n\nEncode an integer variable x0 in range $[0, 3]$ into two binary\nvariables by hand, instead of using {meth}`~ommx.Instance.log_encode`:\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = DecisionVariable.integer(0, lower=0, upper=3, name=\"x\")\n>>> b = [DecisionVariable.binary(i, name=\"b\", subscripts=[i]) for i in (1, 2)]\n>>> instance = Instance.from_components(\n...     decision_variables=[x, *b],\n...     objective=x,\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.substitute({0: b[0] + 2 * b[1]})\n>>> instance.objective\nFunction(x1 + 2*x2)\n```",
+              "doc": "Substitute decision variables with function expressions (in-place).\n\nReplaces each given decision variable with the provided function in the\nobjective and all active constraints. This is the general substitution\nmechanism behind {meth}`~ommx.Instance.log_encode`, exposed so that\nusers can implement their own integer encodings (e.g. unary, one-hot).\n\n**Args:**\n- `assignments`: A dict mapping decision variable IDs to the function\n  expressions that should replace them.\n\n**Important:**\nThis method performs an algebraic rewrite. It does not automatically\ntranslate the substituted variable's bound or kind into constraints on\nthe replacement expression. For example, substituting a binary variable\n``x`` with ``y + z`` does not add ``0 <= y + z <= 1``, and substituting\nan integer variable does not ensure that the replacement expression is\nintegral. If the substitution must preserve the optimization problem,\nthe caller must provide a domain-preserving encoding or add the required\nlinking and bound constraints explicitly.\n\nRaises ``ValueError`` on cyclic or recursive assignments, or when\nsubstituting a variable that is a member of an indicator, one-hot, or\nSOS1 constraint.\n\n# Postconditions\n\nSubstitution rewrites the active objective while output evaluation restores the substituted variable value.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> b = DecisionVariable.binary(1)\n>>> instance = Instance.from_components(\n...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> instance.substitute({0: b})\n>>> assert instance.required_ids() == {1}\n>>> assert instance.objective.evaluate({1: 1}) == -1.0\n>>> solution = instance.evaluate({1: 1})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)",
               "signatures": [
                 {
                   "parameters": [
@@ -11104,7 +11208,7 @@
             },
             {
               "name": "to_hubo",
-              "doc": "Convert the instance to a HUBO format.\n\nThis is a **Driver API** for HUBO conversion calling single-purpose methods in order:\n\n1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to HUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to HUBO format by {meth}`~ommx.Instance.as_hubo_format`.\n\nPlease see the documentation for {meth}`~ommx.Instance.to_qubo` for more information, or the\ndocumentation for each individual method for additional details. The\ndifference between this and {meth}`~ommx.Instance.to_qubo` is that this method isn't\nrestricted to quadratic or linear problems. If you want to customize the\nconversion, use the individual methods above manually.",
+              "doc": "Convert the instance to a HUBO format.\n\n# Postconditions\n\nThe driver is equivalent to HUBO Preparation followed by active-objective formatting and retains the input output semantics.\n\n>>> import copy\n>>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> explicit = copy.copy(instance)\n>>> policy = PreparationPolicy.for_hubo(uniform_penalty_weight=2.0)\n>>> _ = explicit.prepare(InstanceClass.hubo(), policy)\n>>> expected = explicit.as_hubo_format()\n>>> actual = instance.to_hubo(uniform_penalty_weight=2.0)\n>>> assert actual == expected\n>>> assert InstanceClass.hubo().contains(instance)\n>>> assert instance.sense == Sense.Minimize\n>>> assert instance.objective.evaluate({0: 0}) == 2.0\n>>> solution = instance.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)\n\n# Errors\n\nMutually exclusive penalty options raise ``ValueError`` before mutating the instance.\n\n>>> unchanged = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> before = unchanged.to_v2_bytes()\n>>> try:\n...     unchanged.to_hubo(uniform_penalty_weight=1.0, penalty_weights={7: 2.0})\n... except ValueError:\n...     pass\n... else:\n...     raise AssertionError(\"mutually exclusive penalty options were accepted\")\n>>> assert unchanged.to_v2_bytes() == before",
               "signatures": [
                 {
                   "parameters": [
@@ -11191,7 +11295,7 @@
             },
             {
               "name": "to_qubo",
-              "doc": "Convert the instance to a QUBO format.\n\nThis is a **Driver API** for QUBO conversion calling single-purpose methods in order:\n\n1. Convert the instance to a minimization problem by {meth}`~ommx.Instance.as_minimization_problem`.\n2. Check continuous variables and raise error if exists.\n3. Convert inequality constraints\n\n  * Try {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.\n  * If failed, {meth}`~ommx.Instance.add_integer_slack_to_inequality`\n\n4. Convert to QUBO with (uniform) penalty method\n\n  * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.Instance.penalty_method` with the given weights.\n  * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.Instance.uniform_penalty_method` with the given weight.\n  * If both are None, defaults to ``uniform_penalty_weight = 1.0``.\n\n5. Log-encode integer variables by {meth}`~ommx.Instance.log_encode`.\n6. Finally convert to QUBO format by {meth}`~ommx.Instance.as_qubo_format`.\n\nPlease see the document of each method for details.\nIf you want to customize the conversion, use the methods above manually.\n\n# Examples\n\nLet's consider a maximization problem with two integer variables $x_0, x_1 \\in [0, 2]$ subject to an inequality:\n\n$$\\max \\; x_0 + x_1 \\quad \\text{s.t.} \\quad x_0 + 2 x_1 \\leq 3$$\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.integer(i, lower=0, upper=2, name=\"x\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nConvert into QUBO format\n\n```python\n>>> qubo, offset = instance.to_qubo()\n>>> qubo\n{(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}\n>>> offset\n9.0\n```\n\nFor the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.\n\n```python\n>>> instance.sense == Instance.MAXIMIZE\nTrue\n```",
+              "doc": "Convert the instance to a QUBO format.\n\n# Postconditions\n\nThe driver is equivalent to QUBO Preparation followed by active-objective formatting and retains the input output semantics.\n\n>>> import copy\n>>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> explicit = copy.copy(instance)\n>>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)\n>>> _ = explicit.prepare(InstanceClass.qubo(), policy)\n>>> expected = explicit.as_qubo_format()\n>>> actual = instance.to_qubo(uniform_penalty_weight=2.0)\n>>> assert actual == expected\n>>> assert InstanceClass.qubo().contains(instance)\n>>> assert instance.sense == Sense.Minimize\n>>> assert instance.objective.evaluate({0: 0}) == 2.0\n>>> solution = instance.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)\n\n# Errors\n\nMutually exclusive penalty options raise ``ValueError`` before mutating the instance.\n\n>>> unchanged = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> before = unchanged.to_v2_bytes()\n>>> try:\n...     unchanged.to_qubo(uniform_penalty_weight=1.0, penalty_weights={7: 2.0})\n... except ValueError:\n...     pass\n... else:\n...     raise AssertionError(\"mutually exclusive penalty options were accepted\")\n>>> assert unchanged.to_v2_bytes() == before",
               "signatures": [
                 {
                   "parameters": [
@@ -11278,7 +11382,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "",
+              "doc": "Serialize this instance in the OMMX v1 wire format.\n\n# Errors\n\nSerialization raises ``RuntimeError`` when distinct output semantics cannot be represented by v1.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> try:\n...     instance.to_v1_bytes()\n... except RuntimeError:\n...     pass\n... else:\n...     raise AssertionError(\"v1 serialization accepted distinct output semantics\")",
               "signatures": [
                 {
                   "parameters": [],
@@ -11294,7 +11398,7 @@
             },
             {
               "name": "to_v2_bytes",
-              "doc": "",
+              "doc": "Serialize this instance in the OMMX v2 wire format.\n\n# Postconditions\n\nA v2 round-trip preserves both active and output objective semantics.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> restored = Instance.from_v2_bytes(instance.to_v2_bytes())\n>>> assert restored.sense == Sense.Minimize\n>>> assert restored.objective.evaluate({0: 1}) == -3.0\n>>> solution = restored.evaluate({0: 1})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)",
               "signatures": [
                 {
                   "parameters": [],
@@ -11310,7 +11414,7 @@
             },
             {
               "name": "unary_encode",
-              "doc": "Unary-encode the integer decision variables.\n\nUnary encoding of an integer variable $x \\in [l, u]$ is to represent it\nby $u - l$ bits $b_j \\in \\{0, 1\\}$:\n\n$$x = l + \\sum_j b_j$$\n\nEvery bit configuration maps to a valid integer in the original range,\nso no encoding-validity penalty or linking constraint is added. This\ncosts linearly many auxiliary variables, so use it for narrow integer\nranges.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.\n  If not specified (or empty), all used integer variables are unary-encoded.\n- `max_range`: Maximum allowed `upper - lower` range for each encoded\n  variable. This also bounds the number of auxiliary binary variables\n  introduced per integer variable.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = DecisionVariable.integer(0, lower=2, upper=5, name=\"x\")\n>>> instance = Instance.from_components(\n...     decision_variables=[x],\n...     objective=x,\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.unary_encode({0})\n>>> instance.objective\nFunction(x1 + x2 + x3 + 2)\n```",
+              "doc": "Unary-encode the integer decision variables.\n\nUnary encoding of an integer variable $x \\in [l, u]$ is to represent it\nby $u - l$ bits $b_j \\in \\{0, 1\\}$:\n\n$$x = l + \\sum_j b_j$$\n\nEvery bit configuration maps to a valid integer in the original range,\nso no encoding-validity penalty or linking constraint is added. This\ncosts linearly many auxiliary variables, so use it for narrow integer\nranges.\n\n**Args:**\n- `decision_variable_ids`: The IDs of the integer decision variables to unary-encode.\n  If not specified (or empty), all used integer variables are unary-encoded.\n- `max_range`: Maximum allowed `upper - lower` range for each encoded\n  variable. This also bounds the number of auxiliary binary variables\n  introduced per integer variable.\n- `atol`: Optional absolute tolerance used when normalizing integer\n  bounds before encoding. If None, uses the default tolerance.\n\n# Postconditions\n\nEncoding rewrites the active objective while output evaluation restores the encoded integer value.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.integer(0, lower=2, upper=5, name=\"x\")\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> instance.unary_encode({0})\n>>> encoded_ids = instance.required_ids()\n>>> assert len(encoded_ids) == 3\n>>> state = {variable_id: 1 for variable_id in encoded_ids}\n>>> assert instance.objective.evaluate(state) == -5.0\n>>> solution = instance.evaluate(state)\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 5.0)",
               "signatures": [
                 {
                   "parameters": [
@@ -11375,7 +11479,7 @@
             },
             {
               "name": "uniform_penalty_method",
-              "doc": "Convert to a parametric unconstrained instance by penalty method with uniform weight.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with a parameter:\n\n$$\\min_x f(x) + \\lambda \\left( \\sum_i g_i(x)^2 + \\sum_j h_j(x)^2 \\right)$$\n\nwhere $\\lambda$ is the uniform penalty weight parameter for all constraints.\n\nThe removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 3],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.uniform_penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n1\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=ommx.Instance.uniform_penalty_method)\n```\n\nThere is only one parameter in the instance\n\n```python\n>>> len(pi.parameters)\n1\n>>> p = pi.parameters[0]\n>>> p.id\n3\n>>> p.name\n'uniform_penalty_weight'\n```",
+              "doc": "Convert to a parametric unconstrained instance by penalty method with uniform weight.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with a parameter:\n\n$$\\min_x f(x) + \\lambda \\left( \\sum_i g_i(x)^2 + \\sum_j h_j(x)^2 \\right)$$\n\nwhere $\\lambda$ is the uniform penalty weight parameter for all constraints.\n\nThe removed constraints are stored in {attr}`~ommx.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.Instance.add_integer_slack_to_inequality`.\n\n# Postconditions\n\nMaterialization evaluates uniform-penalty energy actively while retaining the pre-penalty objective for output and invalidating optimality transport.\n\n>>> from ommx import DecisionVariable, Instance, Optimality, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize\n... )\n>>> parametric = instance.uniform_penalty_method()\n>>> parameter_id = parametric.parameters[0].id\n>>> prepared = parametric.with_parameters({parameter_id: 2.0})\n>>> assert parametric.constraints == {}\n>>> assert 7 in parametric.removed_constraints\n>>> assert prepared.objective.evaluate({0: 0}) == 2.0\n>>> solution = prepared.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)\n>>> assert prepared.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified",
               "signatures": [
                 {
                   "parameters": [],
@@ -11724,7 +11828,7 @@
             },
             {
               "name": "objective",
-              "doc": "",
+              "doc": "Active objective used by the solver-facing formulation.\n\n# Postconditions\n\nAssignment replaces the active objective and rebases subsequent output evaluation onto it.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> assert instance.objective.evaluate({0: 1}) == -1.0\n>>> instance.objective = 2 * x\n>>> solution = instance.evaluate({0: 1})\n>>> assert instance.sense == Sense.Minimize\n>>> assert (solution.sense, solution.objective) == (Sense.Minimize, 2.0)",
               "type_": {
                 "display": "Function",
                 "link_target": {
@@ -11849,7 +11953,7 @@
             },
             {
               "name": "sense",
-              "doc": "",
+              "doc": "Active optimization sense used by the solver-facing formulation.\n\n# Postconditions\n\nThe property reports the active sense even when evaluation uses a distinct output sense.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> assert instance.sense == Sense.Minimize\n>>> assert instance.evaluate({0: 1}).sense == Sense.Maximize",
               "type_": {
                 "display": "Sense",
                 "link_target": null,
@@ -12014,6 +12118,38 @@
                   ],
                   "return_type": {
                     "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "hubo",
+              "doc": "Class of minimization HUBO formulations accepted by\n{meth}`~ommx.Instance.as_hubo_format` after Preparation.\n\n# Postconditions\n\nThe target accepts unconstrained minimization Binary HUBO formulations and rejects models outside that class.\n\n>>> from ommx import DecisionVariable, Instance, InstanceClass, Sense\n>>> x = DecisionVariable.binary(0)\n>>> linear = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize\n... )\n>>> cubic = Instance.from_components(\n...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize\n... )\n>>> maximizing = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> continuous = DecisionVariable.continuous(1)\n>>> non_binary = Instance.from_components(\n...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize\n... )\n>>> constrained = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize\n... )\n>>> target = InstanceClass.hubo()\n>>> assert target.contains(linear)\n>>> assert target.contains(cubic)\n>>> assert not target.contains(maximizing)\n>>> assert not target.contains(non_binary)\n>>> assert not target.contains(constrained)",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "InstanceClass",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "qubo",
+              "doc": "Class of minimization QUBO formulations accepted by\n{meth}`~ommx.Instance.as_qubo_format` after Preparation.\n\n# Postconditions\n\nThe target accepts unconstrained minimization QUBO formulations and rejects models outside that class.\n\n>>> from ommx import DecisionVariable, Instance, InstanceClass, Sense\n>>> x = DecisionVariable.binary(0)\n>>> linear = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize\n... )\n>>> quadratic = Instance.from_components(\n...     decision_variables=[x], objective=x * x, constraints={}, sense=Sense.Minimize\n... )\n>>> cubic = Instance.from_components(\n...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Minimize\n... )\n>>> maximizing = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> continuous = DecisionVariable.continuous(1)\n>>> non_binary = Instance.from_components(\n...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize\n... )\n>>> constrained = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize\n... )\n>>> target = InstanceClass.qubo()\n>>> assert target.contains(linear)\n>>> assert target.contains(quadratic)\n>>> assert not target.contains(cubic)\n>>> assert not target.contains(maximizing)\n>>> assert not target.contains(non_binary)\n>>> assert not target.contains(constrained)",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "InstanceClass",
                     "link_target": null,
                     "children": []
                   }
@@ -12850,7 +12986,7 @@
         {
           "kind": "Class",
           "name": "Linear",
-          "doc": "Linear function of decision variables.\n\nA linear function has the form: $c_0 + \\sum_i c_i x_i$ where $x_i$ are decision variables\nand $c_i$ are coefficients.\n\n# Examples\n\nCreate a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:\n\n```python\n>>> f = Linear(terms={1: 2, 2: 3}, constant=1)\n```\n\nOr create via DecisionVariable arithmetic:\n\n```python\n>>> x1 = DecisionVariable.integer(1)\n>>> x2 = DecisionVariable.integer(2)\n>>> g = 2*x1 + 3*x2 + 1\n```\n\nCompare two linear functions with tolerance:\n\n```python\n>>> f.almost_equal(g, atol=1e-12)\nTrue\n```\n\nNote that `==` creates an equality Constraint, not a boolean:\n\n```python\n>>> constraint = f == g  # Returns Constraint, not bool\n```",
+          "doc": "Linear function of decision variables.\n\nA linear function has the form: $c_0 + \\sum_i c_i x_i$ where $x_i$ are decision variables\nand $c_i$ are coefficients.\n\n# Examples\n\nCreate a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:\n\n>>> f = Linear(terms={1: 2, 2: 3}, constant=1)\n\nOr create via DecisionVariable arithmetic:\n\n>>> x1 = DecisionVariable.integer(1)\n>>> x2 = DecisionVariable.integer(2)\n>>> g = 2*x1 + 3*x2 + 1\n\nCompare two linear functions with tolerance:\n\n>>> f.almost_equal(g, atol=1e-12)\nTrue\n\nNote that `==` creates an equality Constraint, not a boolean:\n\n>>> constraint = f == g  # Returns Constraint, not bool",
           "bases": [],
           "methods": [
             {
@@ -14870,6 +15006,80 @@
         },
         {
           "kind": "Class",
+          "name": "ObjectivePreparation",
+          "doc": "Convert the active objective to ``target`` during Preparation.\n\n# Invariants\n\nThe immutable target records the solver-facing sense requested by Preparation.\n\n>>> from ommx import ObjectivePreparation, Sense\n>>> preparation = ObjectivePreparation(target=Sense.Minimize)\n>>> assert preparation.target == Sense.Minimize",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "target",
+                      "type_": {
+                        "display": "Sense",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ObjectivePreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "target",
+              "doc": "",
+              "type_": {
+                "display": "Sense",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "OneHotConstraint",
           "doc": "A one-hot constraint: exactly one variable must be 1, the rest must be 0.\n\nThis is a structural constraint — no explicit function is stored.\nThe implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.",
           "bases": [],
@@ -15290,7 +15500,7 @@
         {
           "kind": "Class",
           "name": "Parameter",
-          "doc": "Parameter in an optimization problem.\n\nParameters are values that are fixed during optimization but may vary between different\nruns or scenarios. They share the same ID space with decision variables.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n```python\n>>> p = Parameter(1, name=\"penalty\")\n>>> x = DecisionVariable.integer(2)\n>>> x + p  # Returns Linear expression\nLinear(...)\n```",
+          "doc": "Parameter in an optimization problem.\n\nParameters are values that are fixed during optimization but may vary between different\nruns or scenarios. They share the same ID space with decision variables.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n>>> p = Parameter(1, name=\"penalty\")\n>>> x = DecisionVariable.integer(2)\n>>> x + p  # Returns Linear expression\nLinear(...)",
           "bases": [],
           "methods": [
             {
@@ -17637,7 +17847,7 @@
             },
             {
               "name": "substitute",
-              "doc": "Substitute decision variables with function expressions (in-place).\n\nReplaces each given decision variable with the provided function in the\nobjective and all active constraints. Replacement functions may still\nreference parameters; those parameter references remain in this\nparametric instance and are evaluated later by {meth}`with_parameters`.\nAssignment targets must be existing decision variable IDs. Replacement\nexpressions may only reference existing decision variable or parameter\nIDs; parameter IDs cannot be assignment targets.\n\n**Args:**\n- `assignments`: A dict mapping decision variable IDs to the function\n  expressions that should replace them.\n\n**Important:**\nThis method performs an algebraic rewrite. It does not automatically\ntranslate the substituted variable's bound or kind into constraints on\nthe replacement expression. If the substitution must preserve the\noptimization problem, the caller must provide a domain-preserving\nencoding or add the required linking and bound constraints explicitly.\n\nRaises ``ValueError`` on cyclic or recursive assignments, undefined\nIDs, when a parameter ID is used as an assignment target, or when\nsubstituting a variable that is a member of an indicator, one-hot, or\nSOS1 constraint.",
+              "doc": "Substitute decision variables with function expressions (in-place).\n\nReplaces each given decision variable with the provided function in the\nobjective and all active constraints. Replacement functions may still\nreference parameters; those parameter references remain in this\nparametric instance and are evaluated later by {meth}`with_parameters`.\nAssignment targets must be existing decision variable IDs. Replacement\nexpressions may only reference existing decision variable or parameter\nIDs; parameter IDs cannot be assignment targets.\n\n**Args:**\n- `assignments`: A dict mapping decision variable IDs to the function\n  expressions that should replace them.\n\n**Important:**\nThis method performs an algebraic rewrite. It does not automatically\ntranslate the substituted variable's bound or kind into constraints on\nthe replacement expression. If the substitution must preserve the\noptimization problem, the caller must provide a domain-preserving\nencoding or add the required linking and bound constraints explicitly.\n\nRaises ``ValueError`` on cyclic or recursive assignments, undefined\nIDs, when a parameter ID is used as an assignment target, or when\nsubstituting a variable that is a member of an indicator, one-hot, or\nSOS1 constraint.\n\n# Postconditions\n\nSubstitution rewrites active expressions while materialized output evaluation restores the substituted variable.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> b = DecisionVariable.binary(1)\n>>> source = Instance.from_components(\n...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert source.convert_active_objective(Sense.Minimize)\n>>> parametric = source.as_parametric_instance()\n>>> parametric.substitute({0: b})\n>>> materialized = parametric.with_parameters({})\n>>> assert materialized.required_ids() == {1}\n>>> assert materialized.objective.evaluate({1: 1}) == -1.0\n>>> solution = materialized.evaluate({1: 1})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)",
               "signatures": [
                 {
                   "parameters": [
@@ -17679,7 +17889,7 @@
             },
             {
               "name": "to_v1_bytes",
-              "doc": "",
+              "doc": "Serialize this parametric instance in the OMMX v1 wire format.\n\n# Errors\n\nSerialization raises ``RuntimeError`` when distinct output semantics cannot be represented by v1.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> parametric = instance.as_parametric_instance()\n>>> try:\n...     parametric.to_v1_bytes()\n... except RuntimeError:\n...     pass\n... else:\n...     raise AssertionError(\"v1 serialization accepted distinct output semantics\")",
               "signatures": [
                 {
                   "parameters": [],
@@ -17695,7 +17905,7 @@
             },
             {
               "name": "to_v2_bytes",
-              "doc": "",
+              "doc": "Serialize this parametric instance in the OMMX v2 wire format.\n\n# Postconditions\n\nA v2 round-trip preserves both active and output objective semantics through materialization.\n\n>>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> source = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize\n... )\n>>> parametric = source.uniform_penalty_method()\n>>> parameter_id = parametric.parameters[0].id\n>>> restored = ParametricInstance.from_v2_bytes(parametric.to_v2_bytes())\n>>> materialized = restored.with_parameters({parameter_id: 2.0})\n>>> assert materialized.sense == Sense.Minimize\n>>> assert materialized.objective.evaluate({0: 0}) == 2.0\n>>> solution = materialized.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective) == (Sense.Minimize, 0.0)",
               "signatures": [
                 {
                   "parameters": [],
@@ -17743,7 +17953,7 @@
             },
             {
               "name": "with_parameters",
-              "doc": "Substitute parameters to yield an instance.\n\nParameters can be provided as a dict mapping parameter IDs to their values.",
+              "doc": "Substitute parameters to yield an instance.\n\nParameters can be provided as a dict mapping parameter IDs to their values.\n\n# Postconditions\n\nMaterialization substitutes parameters in active energy while retaining the pre-penalty objective for output evaluation.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> source = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize\n... )\n>>> parametric = source.uniform_penalty_method()\n>>> parameter_id = parametric.parameters[0].id\n>>> materialized = parametric.with_parameters({parameter_id: 2.0})\n>>> assert materialized.objective.evaluate({0: 0}) == 2.0\n>>> solution = materialized.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)",
               "signatures": [
                 {
                   "parameters": [
@@ -18227,7 +18437,7 @@
         {
           "kind": "Class",
           "name": "Polynomial",
-          "doc": "Polynomial function of decision variables.\n\nA polynomial function of arbitrary degree with terms of the form $c \\cdot x_1^{a_1} \\cdot x_2^{a_2} \\cdots$\nwhere $x_i$ are decision variables and $c$ is a coefficient.\n\n# Examples\n\nCreate via DecisionVariable operations:\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> y = DecisionVariable.integer(2)\n>>> p = x * x * y + x * y * y + 1  # Cubic polynomial\n```\n\nNote that `==`, `<=`, `>=` create Constraint objects:\n\n```python\n>>> constraint = p == 0  # Returns Constraint\n```",
+          "doc": "Polynomial function of decision variables.\n\nA polynomial function of arbitrary degree with terms of the form $c \\cdot x_1^{a_1} \\cdot x_2^{a_2} \\cdots$\nwhere $x_i$ are decision variables and $c$ is a coefficient.\n\n# Examples\n\nCreate via DecisionVariable operations:\n\n>>> x = DecisionVariable.integer(1)\n>>> y = DecisionVariable.integer(2)\n>>> p = x * x * y + x * y * y + 1  # Cubic polynomial\n\nNote that `==`, `<=`, `>=` create Constraint objects:\n\n>>> constraint = p == 0  # Returns Constraint",
           "bases": [],
           "methods": [
             {
@@ -19289,7 +19499,7 @@
         {
           "kind": "Class",
           "name": "PreparationPolicy",
-          "doc": "",
+          "doc": "Select optional transformations applied by {meth}`~ommx.Instance.prepare`.\n\n# Invariants\n\nA default policy selects no Preparation phase.\n\n>>> from ommx import PreparationPolicy\n>>> policy = PreparationPolicy()\n>>> assert (\n...     policy.special_constraints,\n...     policy.objective,\n...     policy.integer_slack,\n...     policy.integer_encoding,\n...     policy.fixed_penalty,\n...     policy.binary_power_reduction,\n... ) == (None, None, None, None, None, None)",
           "bases": [],
           "methods": [
             {
@@ -19343,13 +19553,13 @@
                       }
                     },
                     {
-                      "name": "sense",
+                      "name": "objective",
                       "type_": {
-                        "display": "Optional[SensePreparation]",
+                        "display": "Optional[ObjectivePreparation]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "SensePreparation",
+                            "display": "ObjectivePreparation",
                             "link_target": null,
                             "children": []
                           }
@@ -19413,6 +19623,176 @@
                         "kind": "Simple",
                         "value": "None"
                       }
+                    },
+                    {
+                      "name": "binary_power_reduction",
+                      "type_": {
+                        "display": "Optional[BinaryPowerPreparation]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "BinaryPowerPreparation",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PreparationPolicy",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "for_hubo",
+              "doc": "Return a fresh policy for preparing an instance for HUBO formatting.\n\n``uniform_penalty_weight`` and ``penalty_weights`` override the default\nuniform penalty weight of 1.0 and are mutually exclusive. The keyed form\nmust cover exactly the active regular constraints at the penalty phase.\n``inequality_integer_slack_max_range`` defaults to 31 and configures both\nthe exact Integer-slack range and the fallback slack upper bound. Unlike\n{meth}`for_qubo`, this policy leaves Binary-power reduction disabled\nbecause HUBO accepts arbitrary polynomial degree.\n\n# Postconditions\n\nEach call returns a fresh complete HUBO policy with no Binary-power reduction and exact overrides.\n\n>>> from ommx import (\n...     FixedPenaltyPreparation, IntegerEncodingPreparation,\n...     IntegerSlackPreparation, ObjectivePreparation,\n...     PreparationPolicy, Sense, SpecialConstraintKind,\n...     SpecialConstraintPreparation,\n... )\n>>> expected_special = SpecialConstraintPreparation.lower_special_constraints(\n...     kinds={\n...         SpecialConstraintKind.Indicator,\n...         SpecialConstraintKind.OneHot,\n...         SpecialConstraintKind.Sos1,\n...     }\n... )\n>>> first = PreparationPolicy.for_hubo(inequality_integer_slack_max_range=17)\n>>> second = PreparationPolicy.for_hubo(inequality_integer_slack_max_range=17)\n>>> assert first is not second\n>>> assert first.special_constraints == expected_special\n>>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)\n>>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)\n>>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()\n>>> assert first.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)\n>>> assert first.binary_power_reduction is None\n>>> first.fixed_penalty = None\n>>> assert second.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)\n>>> uniform = PreparationPolicy.for_hubo(uniform_penalty_weight=4.0)\n>>> assert uniform.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=4.0)\n\n# Errors\n\nSupplying uniform and keyed penalty weights together raises ``ValueError``.\n\n>>> try:\n...     PreparationPolicy.for_hubo(uniform_penalty_weight=1.0, penalty_weights={3: 2.0})\n... except ValueError as error:\n...     assert \"Both uniform_penalty_weight\" in str(error)\n... else:\n...     raise AssertionError(\"mutually exclusive penalty options were accepted\")",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "uniform_penalty_weight",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "penalty_weights",
+                      "type_": {
+                        "display": "Optional[Mapping[int, float]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, float]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "float",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "inequality_integer_slack_max_range",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "31"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PreparationPolicy",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "for_qubo",
+              "doc": "Return a fresh policy for preparing an instance for QUBO formatting.\n\n``uniform_penalty_weight`` and ``penalty_weights`` override the default\nuniform penalty weight of 1.0 and are mutually exclusive. The keyed form\nmust cover exactly the active regular constraints at the penalty phase.\n``inequality_integer_slack_max_range`` defaults to 31 and configures both\nthe exact Integer-slack range and the fallback slack upper bound. This\nQUBO policy also reduces powers of Binary variables before checking the\nquadratic target.\n\n# Postconditions\n\nEach call returns a fresh complete QUBO policy whose optional weights and slack range are applied exactly.\n\n>>> from ommx import (\n...     BinaryPowerPreparation, FixedPenaltyPreparation,\n...     IntegerEncodingPreparation, IntegerSlackPreparation,\n...     ObjectivePreparation, PreparationPolicy, Sense,\n...     SpecialConstraintKind, SpecialConstraintPreparation,\n... )\n>>> expected_special = SpecialConstraintPreparation.lower_special_constraints(\n...     kinds={\n...         SpecialConstraintKind.Indicator,\n...         SpecialConstraintKind.OneHot,\n...         SpecialConstraintKind.Sos1,\n...     }\n... )\n>>> expected_penalty = FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)\n>>> first = PreparationPolicy.for_qubo(inequality_integer_slack_max_range=17)\n>>> second = PreparationPolicy.for_qubo(inequality_integer_slack_max_range=17)\n>>> assert first is not second\n>>> assert first.special_constraints == expected_special\n>>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)\n>>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)\n>>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()\n>>> assert first.fixed_penalty == expected_penalty\n>>> assert first.binary_power_reduction == BinaryPowerPreparation()\n>>> first.fixed_penalty = None\n>>> first.binary_power_reduction = None\n>>> assert second.fixed_penalty == expected_penalty\n>>> assert second.binary_power_reduction == BinaryPowerPreparation()\n>>> keyed = PreparationPolicy.for_qubo(penalty_weights={3: 2.0})\n>>> assert keyed.fixed_penalty == FixedPenaltyPreparation.penalty_method_with_fixed_weights(weights={3: 2.0})\n\n# Errors\n\nSupplying uniform and keyed penalty weights together raises ``ValueError``.\n\n>>> try:\n...     PreparationPolicy.for_qubo(uniform_penalty_weight=1.0, penalty_weights={3: 2.0})\n... except ValueError as error:\n...     assert \"Both uniform_penalty_weight\" in str(error)\n... else:\n...     raise AssertionError(\"mutually exclusive penalty options were accepted\")",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "uniform_penalty_weight",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "penalty_weights",
+                      "type_": {
+                        "display": "Optional[Mapping[int, float]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Mapping[int, float]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "float",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "inequality_integer_slack_max_range",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "31"
+                      }
                     }
                   ],
                   "return_type": {
@@ -19427,6 +19807,22 @@
             }
           ],
           "attributes": [
+            {
+              "name": "binary_power_reduction",
+              "doc": "",
+              "type_": {
+                "display": "Optional[BinaryPowerPreparation]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "BinaryPowerPreparation",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true
+            },
             {
               "name": "fixed_penalty",
               "doc": "",
@@ -19476,14 +19872,14 @@
               "is_property": true
             },
             {
-              "name": "sense",
+              "name": "objective",
               "doc": "",
               "type_": {
-                "display": "Optional[SensePreparation]",
+                "display": "Optional[ObjectivePreparation]",
                 "link_target": null,
                 "children": [
                   {
-                    "display": "SensePreparation",
+                    "display": "ObjectivePreparation",
                     "link_target": null,
                     "children": []
                   }
@@ -19661,7 +20057,7 @@
         {
           "kind": "Class",
           "name": "Quadratic",
-          "doc": "Quadratic function of decision variables.\n\nA quadratic function has the form: $c_0 + \\sum_i c_i x_i + \\sum_{ij} q_{ij} x_i x_j$\nwhere $x_i$ are decision variables and $c_i$, $q_{ij}$ are coefficients.\n\n# Examples\n\nCreate via DecisionVariable multiplication:\n\n```python\n>>> x = DecisionVariable.integer(1)\n>>> y = DecisionVariable.integer(2)\n>>> q = x * y + 2*x + 3*y + 1\n```\n\nNote that `==`, `<=`, `>=` create Constraint objects:\n\n```python\n>>> constraint = q <= 10  # Returns Constraint\n```",
+          "doc": "Quadratic function of decision variables.\n\nA quadratic function has the form: $c_0 + \\sum_i c_i x_i + \\sum_{ij} q_{ij} x_i x_j$\nwhere $x_i$ are decision variables and $c_i$, $q_{ij}$ are coefficients.\n\n# Examples\n\nCreate via DecisionVariable multiplication:\n\n>>> x = DecisionVariable.integer(1)\n>>> y = DecisionVariable.integer(2)\n>>> q = x * y + 2*x + 3*y + 1\n\nNote that `==`, `<=`, `>=` create Constraint objects:\n\n>>> constraint = q <= 10  # Returns Constraint",
           "bases": [],
           "methods": [
             {
@@ -21612,7 +22008,7 @@
         {
           "kind": "Class",
           "name": "SampleSet",
-          "doc": "The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).\n\n- Similar to `Solution` rather than the raw `State` message.\n  This class contains the sampled values of decision variables with the objective value, constraint violations,\n  feasibility, and modeling labels/context of constraints and decision variables.\n- This class is usually created via `Instance.evaluate_samples`.\n\n# Examples\n\nLet's consider a simple optimization problem:\n\nmaximize x_1 + 2 x_2 + 3 x_3\nsubject to x_1 + x_2 + x_3 = 1\nx_1, x_2, x_3 in {0, 1}\n\n```python\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + 2*x[1] + 3*x[2],\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n```\n\nwith three samples:\n\n```python\n>>> samples = {\n...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0\n...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0\n...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)\n... } # ^ sample ID\n```\n\nNote that this will be done by sampling-based solvers, but we do it manually here.\nWe can evaluate the samples via `Instance.evaluate_samples`:\n\n```python\n>>> sample_set = instance.evaluate_samples(samples)\n>>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE\n           objective  feasible\nsample_id\n1                3.0      True\n0                1.0      True\n2                3.0     False\n```\n\nThe `summary` attribute shows the objective value, feasibility of each sample.\nNote that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.\nYou can get each sample by `get` as a `Solution` format:\n\n```python\n>>> solution = sample_set.get(sample_id=0)\n>>> solution.objective\n1.0\n```\n\n`best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:\n\n```python\n>>> solution = sample_set.best_feasible\n>>> solution.objective\n3.0\n```\n\nOf course, the sample of smallest objective value is returned for minimization problems.",
+          "doc": "The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).\n\n- Similar to `Solution` rather than the raw `State` message.\n  This class contains the sampled values of decision variables with the objective value, constraint violations,\n  feasibility, and modeling labels/context of constraints and decision variables.\n- This class is usually created via `Instance.evaluate_samples`.\n\n# Examples\n\nLet's consider a simple optimization problem:\n\nmaximize x_1 + 2 x_2 + 3 x_3\nsubject to x_1 + x_2 + x_3 = 1\nx_1, x_2, x_3 in {0, 1}\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + 2*x[1] + 3*x[2],\n...     constraints={0: sum(x) == 1},\n...     sense=Sense.Maximize,\n... )\n\nwith three samples:\n\n>>> samples = {\n...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0\n...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0\n...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)\n... } # ^ sample ID\n\nNote that this will be done by sampling-based solvers, but we do it manually here.\nWe can evaluate the samples via `Instance.evaluate_samples`:\n\n>>> sample_set = instance.evaluate_samples(samples)\n>>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE\n           objective  feasible\nsample_id\n1                3.0      True\n0                1.0      True\n2                3.0     False\n\nThe `summary` attribute shows the objective value, feasibility of each sample.\nNote that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.\nYou can get each sample by `get` as a `Solution` format:\n\n>>> solution = sample_set.get(sample_id=0)\n>>> solution.objective\n1.0\n\n`best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:\n\n>>> solution = sample_set.best_feasible\n>>> solution.objective\n3.0\n\nOf course, the sample of smallest objective value is returned for minimization problems.",
           "bases": [],
           "methods": [
             {
@@ -22070,7 +22466,7 @@
             },
             {
               "name": "extract_all_decision_variables",
-              "doc": "Extract all decision variables grouped by name for a given sample ID.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises KeyError if the sample ID does not exist, and ValueError if the\nsame name and subscript combination is found multiple times.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})\n>>> all_vars = sample_set.extract_all_decision_variables(0)\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
+              "doc": "Extract all decision variables grouped by name for a given sample ID.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises KeyError if the sample ID does not exist, and ValueError if the\nsame name and subscript combination is found multiple times.\n\n# Examples\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints={},\n...     sense=Sense.Maximize,\n... )\n>>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})\n>>> all_vars = sample_set.extract_all_decision_variables(0)\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}",
               "signatures": [
                 {
                   "parameters": [
@@ -22829,7 +23225,7 @@
             },
             {
               "name": "decision_variable_names",
-              "doc": "Get all unique decision variable names in this sample set.\n\nReturns a set of all unique variable names. Variables without names are not included.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})\n>>> sorted(sample_set.decision_variable_names)\n['x', 'y']\n```",
+              "doc": "Get all unique decision variable names in this sample set.\n\nReturns a set of all unique variable names. Variables without names are not included.\n\n# Examples\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints={},\n...     sense=Sense.Maximize,\n... )\n>>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})\n>>> sorted(sample_set.decision_variable_names)\n['x', 'y']",
               "type_": {
                 "display": "set[str]",
                 "link_target": null,
@@ -23874,58 +24270,6 @@
         },
         {
           "kind": "Class",
-          "name": "SensePreparation",
-          "doc": "",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "as_minimization_problem",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "SensePreparation",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "Solution",
           "doc": "Python SDK domain type for evaluated optimization results.\n\nThis class contains annotations persisted in protobuf payloads and mirrored\nto OMMX Artifact descriptors.",
           "bases": [],
@@ -24385,7 +24729,7 @@
             },
             {
               "name": "extract_all_decision_variables",
-              "doc": "Extract all decision variables grouped by name.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises ValueError if the same name and subscript combination is found\nmultiple times.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(5)})\n>>> all_vars = solution.extract_all_decision_variables()\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}\n```",
+              "doc": "Extract all decision variables grouped by name.\n\nReturns a mapping from variable name to a mapping from subscripts to values.\nThis is useful for extracting all variables at once in a structured format.\nVariables without names are not included in the result.\n\nRaises ValueError if the same name and subscript combination is found\nmultiple times.\n\n# Examples\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints={},\n...     sense=Sense.Maximize,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(5)})\n>>> all_vars = solution.extract_all_decision_variables()\n>>> all_vars[\"x\"]\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n>>> all_vars[\"y\"]\n{(0,): 1.0, (1,): 1.0}",
               "signatures": [
                 {
                   "parameters": [],
@@ -24417,7 +24761,7 @@
             },
             {
               "name": "extract_constraints",
-              "doc": "Extract the values of constraints based on the `name` with `subscripts` key.\n\nRaises KeyError if no constraint has the requested name. Raises\nValueError if a matching constraint has parameters or if the same\nsubscript is found more than once.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[c0, c1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}\n```",
+              "doc": "Extract the values of constraints based on the `name` with `subscripts` key.\n\nRaises KeyError if no constraint has the requested name. Raises\nValueError if a matching constraint has parameters or if the same\nsubscript is found more than once.\n\n# Examples\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: c0, 1: c1},\n...     sense=Sense.Maximize,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}",
               "signatures": [
                 {
                   "parameters": [
@@ -24443,7 +24787,7 @@
             },
             {
               "name": "extract_decision_variables",
-              "doc": "Extract the values of decision variables based on the `name` with `subscripts` key.\n\nRaises KeyError if no decision variable has the requested name, and\nValueError if the same subscript is found more than once.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(3)})\n>>> solution.extract_decision_variables(\"x\")\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}\n```",
+              "doc": "Extract the values of decision variables based on the `name` with `subscripts` key.\n\nRaises KeyError if no decision variable has the requested name, and\nValueError if the same subscript is found more than once.\n\n# Examples\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: sum(x) == 1},\n...     sense=Sense.Maximize,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(3)})\n>>> solution.extract_decision_variables(\"x\")\n{(0,): 1.0, (1,): 1.0, (2,): 1.0}",
               "signatures": [
                 {
                   "parameters": [
@@ -25083,7 +25427,7 @@
             },
             {
               "name": "decision_variable_names",
-              "doc": "Get all unique decision variable names in this solution.\n\nReturns a set of all unique variable names. Variables without names are not included.\n\n# Examples\n\n```python\n>>> from ommx import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints=[],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(5)})\n>>> sorted(solution.decision_variable_names)\n['x', 'y']\n```",
+              "doc": "Get all unique decision variable names in this solution.\n\nReturns a set of all unique variable names. Variables without names are not included.\n\n# Examples\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(3)]\n>>> y = [DecisionVariable.binary(i+3, name=\"y\", subscripts=[i]) for i in range(2)]\n>>> instance = Instance.from_components(\n...     decision_variables=x + y,\n...     objective=sum(x) + sum(y),\n...     constraints={},\n...     sense=Sense.Maximize,\n... )\n>>> solution = instance.evaluate({i: 1 for i in range(5)})\n>>> sorted(solution.decision_variable_names)\n['x', 'y']",
               "type_": {
                 "display": "set[str]",
                 "link_target": null,
@@ -26832,7 +27176,7 @@
         {
           "kind": "Class",
           "name": "Artifact",
-          "doc": "Reader for OMMX Artifacts.\n\nAn artifact is an OCI container image that stores OMMX data\n(instances, solutions, sample sets, etc.) as layers.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```",
+          "doc": "Reader for OMMX Artifacts.\n\nAn artifact is an OCI container image that stores OMMX data\n(instances, solutions, sample sets, etc.) as layers.\n\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f",
           "bases": [],
           "methods": [
             {
@@ -27183,7 +27527,7 @@
             },
             {
               "name": "import_archive",
-              "doc": "Import an artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory) into the user's v3 SQLite Local Registry,\nand return a handle to the imported registry entry.\n\n**Side effect (intentional)**: archive / directory contents are\npermanently written into the SQLite Local Registry under the\ndefault root (`$XDG_DATA_HOME/ommx/` on Linux,\n`$HOME/Library/Application Support/org.ommx.ommx/` on macOS, or\n`$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent\n`Artifact.load(image_name)` calls resolve from SQLite without\nre-importing.\n\nFor a side-effect-free read that just surfaces the manifest /\nlayer descriptors without writing into the registry, use\n{meth}`Artifact.inspect_archive` instead.\n\nIf the input lacks an `org.opencontainers.image.ref.name`\nannotation, v3 synthesizes an anonymous Local Registry ref and\nimports the content under that name. This keeps v2 unnamed\narchives importable while still making the imported artifact\naddressable in SQLite.\n\n```python\n>>> artifact = Artifact.import_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...\n\n```",
+              "doc": "Import an artifact from a `.ommx` OCI archive file (or an OCI\nImage Layout directory) into the user's v3 SQLite Local Registry,\nand return a handle to the imported registry entry.\n\n**Side effect (intentional)**: archive / directory contents are\npermanently written into the SQLite Local Registry under the\ndefault root (`$XDG_DATA_HOME/ommx/` on Linux,\n`$HOME/Library/Application Support/org.ommx.ommx/` on macOS, or\n`$OMMX_LOCAL_REGISTRY_ROOT` when set). Subsequent\n`Artifact.load(image_name)` calls resolve from SQLite without\nre-importing.\n\nFor a side-effect-free read that just surfaces the manifest /\nlayer descriptors without writing into the registry, use\n{meth}`Artifact.inspect_archive` instead.\n\nIf the input lacks an `org.opencontainers.image.ref.name`\nannotation, v3 synthesizes an anonymous Local Registry ref and\nimports the content under that name. This keeps v2 unnamed\narchives importable while still making the imported artifact\naddressable in SQLite.\n\n>>> artifact = Artifact.import_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...",
               "signatures": [
                 {
                   "parameters": [
@@ -27230,7 +27574,7 @@
             },
             {
               "name": "inspect_archive",
-              "doc": "Read a `.ommx` OCI archive's manifest and layer descriptors\nwithout importing it into the SQLite Local Registry. Useful\nwhen you want to inspect an archive's contents (e.g. iterate\nlayer media types or check the artifact type) without\ntriggering a registry write — the analogue of\n`ommx inspect <archive>` from the CLI.\n\nFor full registry import (so the artifact is reachable by\n`Artifact.load(image_name)` later), use\n{meth}`Artifact.import_archive`.\n\n```python\n>>> manifest = Artifact.inspect_archive(\"data/random_lp_instance.ommx\")\n>>> for layer in manifest.layers:\n...     print(layer.media_type)\napplication/org.ommx.v1.instance\n\n```",
+              "doc": "Read a `.ommx` OCI archive's manifest and layer descriptors\nwithout importing it into the SQLite Local Registry. Useful\nwhen you want to inspect an archive's contents (e.g. iterate\nlayer media types or check the artifact type) without\ntriggering a registry write — the analogue of\n`ommx inspect <archive>` from the CLI.\n\nFor full registry import (so the artifact is reachable by\n`Artifact.load(image_name)` later), use\n{meth}`Artifact.import_archive`.\n\n>>> manifest = Artifact.inspect_archive(\"data/random_lp_instance.ommx\")\n>>> for layer in manifest.layers:\n...     print(layer.media_type)\napplication/org.ommx.v1.instance",
               "signatures": [
                 {
                   "parameters": [
@@ -27277,7 +27621,7 @@
             },
             {
               "name": "load",
-              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```\n\nRaises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the\nexact remote reference does not exist. Other remote access failures\nraise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.\nAn invalid image reference raises {class}`ValueError` before any remote\naccess is attempted.",
+              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n\nRaises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the\nexact remote reference does not exist. Other remote access failures\nraise subclasses of {class}`~ommx.artifact.RemoteArtifactError`.\nAn invalid image reference raises {class}`ValueError` before any remote\naccess is attempted.",
               "signatures": [
                 {
                   "parameters": [
@@ -27533,7 +27877,7 @@
         {
           "kind": "Class",
           "name": "ArtifactDraft",
-          "doc": "Mutable draft for OMMX Artifacts.\n\n```python\n>>> draft = ArtifactDraft.temp()\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
+          "doc": "Mutable draft for OMMX Artifacts.\n\n>>> draft = ArtifactDraft.temp()\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h",
           "bases": [],
           "methods": [
             {
@@ -27573,7 +27917,7 @@
             },
             {
               "name": "add_dataframe",
-              "doc": "Add a pandas DataFrame to the artifact with parquet format.\n\n```python\n>>> import pandas as pd\n>>> df = pd.DataFrame({\"a\": [1, 2], \"b\": [3, 4]})\n>>> draft = ArtifactDraft.temp()\n>>> _desc = draft.add_dataframe(df, title=\"test_dataframe\")\n>>> artifact = draft.commit()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.apache.parquet\n\n```",
+              "doc": "Add a pandas DataFrame to the artifact with parquet format.\n\n>>> import pandas as pd\n>>> df = pd.DataFrame({\"a\": [1, 2], \"b\": [3, 4]})\n>>> draft = ArtifactDraft.temp()\n>>> _desc = draft.add_dataframe(df, title=\"test_dataframe\")\n>>> artifact = draft.commit()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.apache.parquet",
               "signatures": [
                 {
                   "parameters": [
@@ -27625,7 +27969,7 @@
             },
             {
               "name": "add_instance",
-              "doc": "Add an {class}`~ommx.Instance` to the artifact with annotations.\n\n```python\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> instance.title = \"test instance\"\n>>> draft = ArtifactDraft.temp()\n>>> desc = draft.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance\n\n```",
+              "doc": "Add an {class}`~ommx.Instance` to the artifact with annotations.\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> instance.title = \"test instance\"\n>>> draft = ArtifactDraft.temp()\n>>> desc = draft.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance",
               "signatures": [
                 {
                   "parameters": [
@@ -27656,7 +28000,7 @@
             },
             {
               "name": "add_json",
-              "doc": "Add a JSON object to the artifact.\n\n```python\n>>> obj = {\"a\": 1, \"b\": 2}\n>>> draft = ArtifactDraft.temp()\n>>> _desc = draft.add_json(obj, title=\"test_json\")\n>>> artifact = draft.commit()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/json\n\n```",
+              "doc": "Add a JSON object to the artifact.\n\n>>> obj = {\"a\": 1, \"b\": 2}\n>>> draft = ArtifactDraft.temp()\n>>> _desc = draft.add_json(obj, title=\"test_json\")\n>>> artifact = draft.commit()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/json",
               "signatures": [
                 {
                   "parameters": [
@@ -27771,7 +28115,7 @@
             },
             {
               "name": "add_ndarray",
-              "doc": "Add a numpy ndarray to the artifact with npy format.\n\n```python\n>>> import numpy as np\n>>> array = np.array([1, 2, 3])\n>>> draft = ArtifactDraft.temp()\n>>> _desc = draft.add_ndarray(array, title=\"test_array\")\n>>> artifact = draft.commit()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.numpy\n>>> print(layer.annotations)\n{'org.ommx.user.title': 'test_array'}\n\n```",
+              "doc": "Add a numpy ndarray to the artifact with npy format.\n\n>>> import numpy as np\n>>> array = np.array([1, 2, 3])\n>>> draft = ArtifactDraft.temp()\n>>> _desc = draft.add_ndarray(array, title=\"test_array\")\n>>> artifact = draft.commit()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.numpy\n>>> print(layer.annotations)\n{'org.ommx.user.title': 'test_array'}",
               "signatures": [
                 {
                   "parameters": [
@@ -27995,7 +28339,7 @@
             },
             {
               "name": "new",
-              "doc": "Create a new artifact draft with an explicit image name. The\nartifact is published into the user's persistent SQLite Local\nRegistry on `commit()`; call {meth}`Artifact.save(path)` on the\nreturned handle if you also want a `.ommx` archive file for\nsharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> draft = ArtifactDraft.new(image_name)\n>>> _desc = draft.add_instance(instance)\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```\n\nRaises {class}`ValueError` when `image_name` is not a valid OCI image\nreference. Registry and storage failures raise {class}`RuntimeError`.",
+              "doc": "Create a new artifact draft with an explicit image name. The\nartifact is published into the user's persistent SQLite Local\nRegistry on `commit()`; call {meth}`Artifact.save(path)` on the\nreturned handle if you also want a `.ommx` archive file for\nsharing.\n\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> draft = ArtifactDraft.new(image_name)\n>>> _desc = draft.add_instance(instance)\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n\nRaises {class}`ValueError` when `image_name` is not a valid OCI image\nreference. Registry and storage failures raise {class}`RuntimeError`.",
               "signatures": [
                 {
                   "parameters": [
@@ -28026,7 +28370,7 @@
             },
             {
               "name": "new_anonymous",
-              "doc": "Create a new artifact draft without inventing an image name.\n\nUX shortcut: a synthetic image name of the form\n`<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`\nis generated when the draft is created and used as the SQLite Local\nRegistry key. v3 stores every artifact in the registry, so\nanonymous artifacts still need a key — the registry-id prefix\n(a random 8-hex truncation of a UUID generated once per\n`LocalRegistry` and persisted in its SQLite metadata)\nidentifies which registry produced the artifact (useful when\narchives are shared), the local-time timestamp lets you\nidentify entries by when they were created, and the 12-hex\n(48-bit) random nonce keeps concurrent anonymous drafts\n(MINTO-style scripts emitting many artifacts per second)\ncollision-free regardless of clock resolution. Use\n`Artifact.image_name` to read the synthesized name back. The\n`.local` mDNS TLD prevents an accidental push from leaking to\na real remote registry. Use `ommx prune-anonymous`\nto clean accumulated entries.\n\nThe timestamp is the **caller's local time** with no timezone\nmarker. If an anonymous archive is shared with someone in a\ndifferent timezone, the recipient will see the same digits but\ninterpret them as their own local time — the time component\nloses absolute meaning across machines. Anonymous artifacts\nare not intended for cross-timezone sharing; pick an explicit\nname via `ArtifactDraft.new(...)` if absolute time matters.\n\nCall {meth}`Artifact.save(path)` on the returned handle to also\nwrite a `.ommx` archive file for sharing.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> draft = ArtifactDraft.new_anonymous()\n>>> _desc = draft.add_instance(instance)\n>>> artifact = draft.commit()\n>>> assert \".ommx.local/anonymous:\" in artifact.image_name\n\n```",
+              "doc": "Create a new artifact draft without inventing an image name.\n\nUX shortcut: a synthetic image name of the form\n`<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>`\nis generated when the draft is created and used as the SQLite Local\nRegistry key. v3 stores every artifact in the registry, so\nanonymous artifacts still need a key — the registry-id prefix\n(a random 8-hex truncation of a UUID generated once per\n`LocalRegistry` and persisted in its SQLite metadata)\nidentifies which registry produced the artifact (useful when\narchives are shared), the local-time timestamp lets you\nidentify entries by when they were created, and the 12-hex\n(48-bit) random nonce keeps concurrent anonymous drafts\n(MINTO-style scripts emitting many artifacts per second)\ncollision-free regardless of clock resolution. Use\n`Artifact.image_name` to read the synthesized name back. The\n`.local` mDNS TLD prevents an accidental push from leaking to\na real remote registry. Use `ommx prune-anonymous`\nto clean accumulated entries.\n\nThe timestamp is the **caller's local time** with no timezone\nmarker. If an anonymous archive is shared with someone in a\ndifferent timezone, the recipient will see the same digits but\ninterpret them as their own local time — the time component\nloses absolute meaning across machines. Anonymous artifacts\nare not intended for cross-timezone sharing; pick an explicit\nname via `ArtifactDraft.new(...)` if absolute time matters.\n\nCall {meth}`Artifact.save(path)` on the returned handle to also\nwrite a `.ommx` archive file for sharing.\n\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> draft = ArtifactDraft.new_anonymous()\n>>> _desc = draft.add_instance(instance)\n>>> artifact = draft.commit()\n>>> assert \".ommx.local/anonymous:\" in artifact.image_name",
               "signatures": [
                 {
                   "parameters": [],
@@ -28047,7 +28391,7 @@
             },
             {
               "name": "temp",
-              "doc": "Create a new artifact draft under a random `ttl.sh` image name.\nInsecure; for tests only. `ttl.sh` is a public registry that\nexpires images after one hour.\n\n```python\n>>> draft = ArtifactDraft.temp()\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
+              "doc": "Create a new artifact draft under a random `ttl.sh` image name.\nInsecure; for tests only. `ttl.sh` is a public registry that\nexpires images after one hour.\n\n>>> draft = ArtifactDraft.temp()\n>>> artifact = draft.commit()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h",
               "signatures": [
                 {
                   "parameters": [],
@@ -29136,7 +29480,7 @@
         {
           "kind": "Function",
           "name": "gc",
-          "doc": "Report or delete Local Registry blobs unreachable from SQLite refs.\n\nThis is the Python SDK equivalent of `ommx gc`. It is a dry-run by\ndefault. Pass `delete=True` to unlink orphan candidates. The `grace_period`\nstring accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\nAn invalid duration raises {class}`ValueError`; registry and storage failures\nraise {class}`RuntimeError`.\n\n```python\n>>> from ommx.artifact import gc\n>>> report = gc()\n>>> report.delete_applied\nFalse\n\n```",
+          "doc": "Report or delete Local Registry blobs unreachable from SQLite refs.\n\nThis is the Python SDK equivalent of `ommx gc`. It is a dry-run by\ndefault. Pass `delete=True` to unlink orphan candidates. The `grace_period`\nstring accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\nAn invalid duration raises {class}`ValueError`; registry and storage failures\nraise {class}`RuntimeError`.\n\n>>> from ommx.artifact import gc\n>>> report = gc()\n>>> report.delete_applied\nFalse",
           "signatures": [
             {
               "parameters": [
@@ -29362,7 +29706,7 @@
         {
           "kind": "Function",
           "name": "prune_anonymous",
-          "doc": "Report or delete anonymous Artifact and Experiment refs in the Local Registry.\n\nThis is the Python SDK equivalent of `ommx prune-anonymous`.\nIt only removes SQLite refs when `delete=True`; manifest and payload blobs\nare left for {func}`gc` to reclaim if they become unreachable.\nAnonymous Experiment refs are included only when `experiments=True`.\n`older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\nAn invalid duration raises {class}`ValueError`; registry and storage failures\nraise {class}`RuntimeError`.\n\n```python\n>>> from ommx.artifact import prune_anonymous\n>>> report = prune_anonymous()\n>>> report.delete_applied\nFalse\n\n```",
+          "doc": "Report or delete anonymous Artifact and Experiment refs in the Local Registry.\n\nThis is the Python SDK equivalent of `ommx prune-anonymous`.\nIt only removes SQLite refs when `delete=True`; manifest and payload blobs\nare left for {func}`gc` to reclaim if they become unreachable.\nAnonymous Experiment refs are included only when `experiments=True`.\n`older_than` accepts the same `s`, `m`, `h`, and `d` suffixes as the CLI.\nAn invalid duration raises {class}`ValueError`; registry and storage failures\nraise {class}`RuntimeError`.\n\n>>> from ommx.artifact import prune_anonymous\n>>> report = prune_anonymous()\n>>> report.delete_applied\nFalse",
           "signatures": [
             {
               "parameters": [
@@ -33672,6 +34016,7 @@
     "ommx.AttachedIndicatorConstraint": "ommx",
     "ommx.AttachedOneHotConstraint": "ommx",
     "ommx.AttachedSos1Constraint": "ommx",
+    "ommx.BinaryPowerPreparation": "ommx",
     "ommx.Bound": "ommx",
     "ommx.Constraint": "ommx",
     "ommx.DecisionVariable": "ommx",
@@ -33698,6 +34043,7 @@
     "ommx.Linear": "ommx",
     "ommx.LogEncodingError": "ommx",
     "ommx.NamedFunction": "ommx",
+    "ommx.ObjectivePreparation": "ommx",
     "ommx.OneHotConstraint": "ommx",
     "ommx.Optimality": "ommx",
     "ommx.Parameter": "ommx",
@@ -33720,7 +34066,6 @@
     "ommx.SampledNamedFunction": "ommx",
     "ommx.Samples": "ommx",
     "ommx.Sense": "ommx",
-    "ommx.SensePreparation": "ommx",
     "ommx.Solution": "ommx",
     "ommx.Sos1Constraint": "ommx",
     "ommx.SpecialConstraintKind": "ommx",

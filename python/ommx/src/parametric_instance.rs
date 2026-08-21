@@ -44,11 +44,49 @@ impl ParametricInstance {
         })
     }
 
+    /// Serialize this parametric instance in the OMMX v1 wire format.
+    ///
+    /// # Errors
+    ///
+    /// Serialization raises ``RuntimeError`` when distinct output semantics cannot be represented by v1.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> assert instance.convert_active_objective(Sense.Minimize)
+    /// >>> parametric = instance.as_parametric_instance()
+    /// >>> try:
+    /// ...     parametric.to_v1_bytes()
+    /// ... except RuntimeError:
+    /// ...     pass
+    /// ... else:
+    /// ...     raise AssertionError("v1 serialization accepted distinct output semantics")
     pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
 
+    /// Serialize this parametric instance in the OMMX v2 wire format.
+    ///
+    /// # Postconditions
+    ///
+    /// A v2 round-trip preserves both active and output objective semantics through materialization.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ... )
+    /// >>> parametric = source.uniform_penalty_method()
+    /// >>> parameter_id = parametric.parameters[0].id
+    /// >>> restored = ParametricInstance.from_v2_bytes(parametric.to_v2_bytes())
+    /// >>> materialized = restored.with_parameters({parameter_id: 2.0})
+    /// >>> assert materialized.sense == Sense.Minimize
+    /// >>> assert materialized.objective.evaluate({0: 0}) == 2.0
+    /// >>> solution = materialized.evaluate({0: 0})
+    /// >>> assert (solution.sense, solution.objective) == (Sense.Minimize, 0.0)
     pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
         PyBytes::new(py, &self.inner.to_v2_bytes())
@@ -219,6 +257,22 @@ impl ParametricInstance {
     /// Substitute parameters to yield an instance.
     ///
     /// Parameters can be provided as a dict mapping parameter IDs to their values.
+    ///
+    /// # Postconditions
+    ///
+    /// Materialization substitutes parameters in active energy while retaining the pre-penalty objective for output evaluation.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ... )
+    /// >>> parametric = source.uniform_penalty_method()
+    /// >>> parameter_id = parametric.parameters[0].id
+    /// >>> materialized = parametric.with_parameters({parameter_id: 2.0})
+    /// >>> assert materialized.objective.evaluate({0: 0}) == 2.0
+    /// >>> solution = materialized.evaluate({0: 0})
+    /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
     pub fn with_parameters(&self, parameters: HashMap<u64, f64>) -> OmmxPyResult<Instance> {
         let mut v1_params = ommx::v1::Parameters::default();
         v1_params.entries = parameters;
@@ -296,6 +350,25 @@ impl ParametricInstance {
     /// IDs, when a parameter ID is used as an assignment target, or when
     /// substituting a variable that is a member of an indicator, one-hot, or
     /// SOS1 constraint.
+    ///
+    /// # Postconditions
+    ///
+    /// Substitution rewrites active expressions while materialized output evaluation restores the substituted variable.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> b = DecisionVariable.binary(1)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> assert source.convert_active_objective(Sense.Minimize)
+    /// >>> parametric = source.as_parametric_instance()
+    /// >>> parametric.substitute({0: b})
+    /// >>> materialized = parametric.with_parameters({})
+    /// >>> assert materialized.required_ids() == {1}
+    /// >>> assert materialized.objective.evaluate({1: 1}) == -1.0
+    /// >>> solution = materialized.evaluate({1: 1})
+    /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
     #[pyo3(signature = (assignments))]
     pub fn substitute(
         &mut self,

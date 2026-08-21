@@ -15,10 +15,10 @@ from ommx import (
     InstanceClassMembershipReport,
     InstanceClassMismatch,
     Kind,
+    ObjectivePreparation,
     OneHotConstraint,
     PreparationPolicy,
     Sense,
-    SensePreparation,
     Sos1Constraint,
     SpecialConstraintKind,
 )
@@ -335,8 +335,8 @@ def test_solver_adapter_returns_a_fresh_empty_preparation_recommendation() -> No
     assert second == PreparationPolicy()
     assert first is not second
 
-    first.sense = SensePreparation.as_minimization_problem()
-    assert second.sense is None
+    first.objective = ObjectivePreparation(target=Sense.Minimize)
+    assert second.objective is None
 
 
 def test_solver_adapter_applicability_is_input_class_membership() -> None:

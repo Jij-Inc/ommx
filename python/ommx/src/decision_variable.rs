@@ -21,19 +21,15 @@ use std::collections::HashMap;
 ///
 /// # Examples
 ///
-/// ```python
 /// >>> x = DecisionVariable.integer(1)
 /// >>> x == 1  # Returns Constraint, not bool
 /// Constraint(...)
-/// ```
 ///
 /// For object equality comparison, use the ``equals_to()`` method or compare IDs:
 ///
-/// ```python
 /// >>> y = DecisionVariable.integer(2)
 /// >>> x.id == y.id
 /// False
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]

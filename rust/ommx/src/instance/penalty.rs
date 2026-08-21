@@ -74,8 +74,44 @@ impl Instance {
     /// $$
     ///
     /// where $\lambda_1$ and $\lambda_2$ are penalty parameters.
-    pub fn penalty_method(self) -> Result<ParametricInstance> {
+    ///
+    /// # Postconditions
+    ///
+    /// The transformed objective contains parameterized penalties and preserves the entry objective for output.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, Constraint, ConstraintID, DecisionVariable, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let original = Function::from(linear!(1));
+    /// let instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(original.clone())
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let parametric = instance.penalty_method().unwrap();
+    /// assert!(parametric.constraints().is_empty());
+    /// assert_eq!(parametric.parameters().len(), 1);
+    /// let output = parametric.output_objective().unwrap();
+    /// assert_eq!(output.sense(), Sense::Minimize);
+    /// assert_eq!(output.function(), &original);
+    /// assert!(!output.preserves_optimality());
+    /// ```
+    pub fn penalty_method(mut self) -> Result<ParametricInstance> {
         self.ensure_penalty_method_supported("penalty_method")?;
+        if !self.constraints().is_empty() {
+            self.invalidate_output_objective_optimality();
+        }
 
         let mut max_id = 0;
 
@@ -134,6 +170,7 @@ impl Instance {
         Ok(ParametricInstance {
             sense: self.sense,
             objective,
+            output_objective: self.output_objective,
             decision_variables: self.decision_variables,
             parameters,
             constraint_collection,
@@ -172,6 +209,44 @@ impl Instance {
     /// exact identity operation. Otherwise, fallible function arithmetic and
     /// regular-constraint lifecycle changes are completed on local values and
     /// committed only after both succeed.
+    ///
+    /// # Postconditions
+    ///
+    /// Fixed penalties change the active objective while preserving the entry objective for output.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, Constraint, ConstraintID, DecisionVariable,
+    ///     Evaluate, Function, Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let original = Function::from(linear!(1));
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(original.clone())
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// instance
+    ///     .penalty_method_with_fixed_weights(
+    ///         &BTreeMap::from([(ConstraintID::from(1), 2.0)]),
+    ///         ATol::default(),
+    ///     )
+    ///     .unwrap();
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), 3.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// assert_eq!(instance.output_objective().unwrap().function(), &original);
+    /// assert!(!instance.output_objective().unwrap().preserves_optimality());
+    /// ```
     ///
     /// # Errors
     ///
@@ -243,7 +318,40 @@ impl Instance {
     /// $$
     ///
     /// where $\lambda$ is the single penalty parameter.
-    pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
+    ///
+    /// # Postconditions
+    ///
+    /// The transformed objective contains one shared penalty parameter and preserves the entry objective for output.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, Constraint, ConstraintID, DecisionVariable, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let original = Function::from(linear!(1));
+    /// let instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(original.clone())
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let parametric = instance.uniform_penalty_method().unwrap();
+    /// assert!(parametric.constraints().is_empty());
+    /// assert_eq!(parametric.parameters().len(), 1);
+    /// let output = parametric.output_objective().unwrap();
+    /// assert_eq!(output.sense(), Sense::Minimize);
+    /// assert_eq!(output.function(), &original);
+    /// assert!(!output.preserves_optimality());
+    /// ```
+    pub fn uniform_penalty_method(mut self) -> Result<ParametricInstance> {
         self.ensure_penalty_method_supported("uniform_penalty_method")?;
 
         // Early return if no active constraints (preserve any existing removed constraints)
@@ -251,6 +359,7 @@ impl Instance {
             return Ok(ParametricInstance {
                 sense: self.sense,
                 objective: self.objective,
+                output_objective: self.output_objective,
                 decision_variables: self.decision_variables,
                 parameters: ParameterTable::default(),
                 constraint_collection: self.constraint_collection,
@@ -263,6 +372,8 @@ impl Instance {
                 annotations: self.annotations,
             });
         }
+
+        self.invalidate_output_objective_optimality();
 
         let mut max_id = 0;
 
@@ -312,6 +423,7 @@ impl Instance {
         Ok(ParametricInstance {
             sense: self.sense,
             objective,
+            output_objective: self.output_objective,
             decision_variables: self.decision_variables,
             parameters,
             constraint_collection,
@@ -349,6 +461,41 @@ impl Instance {
     /// operation. Otherwise, fallible function arithmetic and regular-constraint
     /// lifecycle changes are completed on local values and committed only after
     /// both succeed.
+    ///
+    /// # Postconditions
+    ///
+    /// The uniform fixed penalty changes the active objective while preserving the entry objective for output.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, Constraint, ConstraintID, DecisionVariable,
+    ///     Evaluate, Function, Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let original = Function::from(linear!(1));
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(original.clone())
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// instance
+    ///     .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
+    ///     .unwrap();
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), 3.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// assert_eq!(instance.output_objective().unwrap().function(), &original);
+    /// assert!(!instance.output_objective().unwrap().preserves_optimality());
+    /// ```
     ///
     /// # Errors
     ///
@@ -456,6 +603,9 @@ impl Instance {
         let mut constraint_collection = self.constraint_collection.clone();
         constraint_collection.move_active_rows_to_removed(removals)?;
 
+        if !self.constraint_collection.active().is_empty() || objective != self.objective {
+            self.invalidate_output_objective_optimality();
+        }
         self.objective = objective;
         self.constraint_collection = constraint_collection;
         Ok(())
@@ -467,7 +617,7 @@ mod tests {
     use super::*;
     use crate::{
         coeff, constraint::Equality, linear, quadratic, v1::State, ATol, ConstraintContext,
-        DecisionVariable, Evaluate, ModelingLabel, Sense,
+        DecisionVariable, Evaluate, ModelingLabel, Sampled, Sense,
     };
     use std::collections::{BTreeMap, BTreeSet};
 
@@ -578,6 +728,42 @@ mod tests {
         }
     }
 
+    fn assert_penalty_output_semantics(
+        instance: &Instance,
+        expected_active: f64,
+        expected_output: f64,
+    ) {
+        let state = State::from_iter([(1, 2.0), (2, 1.0)]);
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Minimize);
+        assert!(!output.preserves_optimality());
+        assert_eq!(
+            output.function().evaluate(&state, ATol::default()).unwrap(),
+            expected_output
+        );
+        assert_eq!(
+            instance
+                .objective()
+                .evaluate(&state, ATol::default())
+                .unwrap(),
+            expected_active
+        );
+
+        let solution = instance.evaluate(&state, ATol::default()).unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Minimize));
+        assert_eq!(*solution.objective(), expected_output);
+
+        let sample_set = instance
+            .evaluate_samples(&Sampled::from(state), ATol::default())
+            .unwrap();
+        let sample_id = sample_set.sample_ids().into_iter().next().unwrap();
+        assert_eq!(*sample_set.sense(), Sense::Minimize);
+        assert_eq!(
+            sample_set.objectives().get(sample_id),
+            Some(&expected_output)
+        );
+    }
+
     /// Helper function to verify penalty method properties
     fn verify_penalty_method_properties(
         original_objective: Function,
@@ -614,6 +800,11 @@ mod tests {
             parametric_instance.parameters().keys().cloned().collect();
         assert!(dv_ids.is_disjoint(&p_ids));
 
+        let output = parametric_instance.output_objective().unwrap();
+        assert_eq!(output.sense(), parametric_instance.sense);
+        assert_eq!(output.function(), &original_objective);
+        assert!(!output.preserves_optimality());
+
         // Verify zero penalty weight behavior
         use crate::v1::Parameters;
         use ::approx::AbsDiffEq;
@@ -629,6 +820,10 @@ mod tests {
         assert!(substituted
             .objective
             .abs_diff_eq(&original_objective, crate::ATol::default()));
+        let output = substituted.output_objective().unwrap();
+        assert_eq!(output.sense(), substituted.sense);
+        assert_eq!(output.function(), &original_objective);
+        assert!(!output.preserves_optimality());
         assert_eq!(substituted.constraints().len(), 0);
     }
 
@@ -694,6 +889,25 @@ mod tests {
         assert_eq!(parametric_instance.constraints().len(), 0);
         assert_eq!(parametric_instance.removed_constraints().len(), 0);
         assert_eq!(parametric_instance.objective, objective);
+    }
+
+    #[test]
+    fn no_constraint_penalty_preserves_existing_output_objective() {
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            BTreeMap::from([(VariableID::from(1), DecisionVariable::continuous())]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        assert!(instance.convert_active_objective(Sense::Maximize));
+        let output = instance.output_objective().cloned().unwrap();
+
+        let keyed = instance.clone().penalty_method().unwrap();
+        assert_eq!(keyed.output_objective(), Some(&output));
+
+        let uniform = instance.uniform_penalty_method().unwrap();
+        assert_eq!(uniform.output_objective(), Some(&output));
     }
 
     #[test]
@@ -893,6 +1107,7 @@ mod tests {
 
         let mut uniform = create_test_instance_with_constraints();
         uniform.sense = Sense::Maximize;
+        let uniform_original = uniform.objective().clone();
         uniform
             .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
             .unwrap();
@@ -903,9 +1118,14 @@ mod tests {
                 .unwrap(),
             -7.0
         );
+        let uniform_output = uniform.output_objective().unwrap();
+        assert_eq!(uniform_output.sense(), Sense::Maximize);
+        assert_eq!(uniform_output.function(), &uniform_original);
+        assert!(!uniform_output.preserves_optimality());
 
         let mut keyed = create_test_instance_with_constraints();
         keyed.sense = Sense::Maximize;
+        let keyed_original = keyed.objective().clone();
         keyed
             .penalty_method_with_fixed_weights(
                 &BTreeMap::from([(ConstraintID::from(1), 2.0), (ConstraintID::from(2), 3.0)]),
@@ -916,6 +1136,79 @@ mod tests {
             keyed.objective().evaluate(&state, ATol::default()).unwrap(),
             -8.0
         );
+        let keyed_output = keyed.output_objective().unwrap();
+        assert_eq!(keyed_output.sense(), Sense::Maximize);
+        assert_eq!(keyed_output.function(), &keyed_original);
+        assert!(!keyed_output.preserves_optimality());
+    }
+
+    #[test]
+    fn fixed_penalty_preserves_existing_output_objective() {
+        let mut instance = create_test_instance_with_constraints();
+        instance.sense = Sense::Maximize;
+        let original_objective = instance.objective().clone();
+        assert!(instance.convert_active_objective(Sense::Minimize));
+
+        instance
+            .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
+            .unwrap();
+
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), &original_objective);
+        assert!(!output.preserves_optimality());
+        let solution = instance
+            .evaluate(&State::from_iter([(1, 2.0), (2, 1.0)]), ATol::default())
+            .unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 3.0);
+    }
+
+    #[test]
+    fn direct_fixed_penalty_preserves_the_original_objective_even_at_zero_weight() {
+        let mut instance = create_test_instance_with_constraints();
+        let original_objective = instance.objective().clone();
+
+        instance
+            .uniform_penalty_method_with_fixed_weight(0.0, ATol::default())
+            .unwrap();
+
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Minimize);
+        assert_eq!(output.function(), &original_objective);
+        assert!(!output.preserves_optimality());
+    }
+
+    #[test]
+    fn parametric_penalty_methods_preserve_existing_output_objective() {
+        let mut instance = create_test_instance_with_constraints();
+        instance.sense = Sense::Maximize;
+        let original_objective = instance.objective().clone();
+        assert!(instance.convert_active_objective(Sense::Minimize));
+
+        for parametric in [
+            instance.clone().penalty_method().unwrap(),
+            instance.uniform_penalty_method().unwrap(),
+        ] {
+            let output = parametric.output_objective().unwrap();
+            assert_eq!(output.sense(), Sense::Maximize);
+            assert_eq!(output.function(), &original_objective);
+            assert!(!output.preserves_optimality());
+
+            let parameters = crate::v1::Parameters {
+                entries: parametric
+                    .parameters()
+                    .keys()
+                    .map(|id| (id.into_inner(), 2.0))
+                    .collect(),
+            };
+            let materialized = parametric.with_parameters(parameters).unwrap();
+            let solution = materialized
+                .evaluate(&State::from_iter([(1, 2.0), (2, 1.0)]), ATol::default())
+                .unwrap();
+            assert_eq!(*solution.sense(), Some(Sense::Maximize));
+            assert_eq!(*solution.objective(), 3.0);
+        }
     }
 
     #[test]
@@ -1039,14 +1332,7 @@ mod tests {
             Some("penalized")
         );
         assert_fixed_penalty_removal_provenance(&instance, "penalty_method_with_fixed_weights");
-        let state = State::from_iter([(1, 2.0), (2, 1.0)]);
-        assert_eq!(
-            instance
-                .objective()
-                .evaluate(&state, ATol::default())
-                .unwrap(),
-            14.0
-        );
+        assert_penalty_output_semantics(&instance, 14.0, 3.0);
         let state = State::from_iter([(1, 0.0), (2, 0.0)]);
         assert_eq!(
             instance

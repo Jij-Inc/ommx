@@ -160,9 +160,8 @@ def test_evaluate_emits_rust_span_under_python_parent() -> None:
         assert s.context.trace_id == parent_trace_id
 
 
-def test_to_qubo_emits_pipeline_spans() -> None:
-    """``Instance.to_qubo`` exercises the nested QUBO conversion pipeline,
-    producing the expected span names on the Rust side."""
+def test_to_qubo_emits_active_format_span() -> None:
+    """``Instance.to_qubo`` keeps its Rust-side format operation observable."""
     exporter = get_test_exporter()
     provider = get_test_provider()
     exporter.clear()
@@ -179,10 +178,6 @@ def test_to_qubo_emits_pipeline_spans() -> None:
 
     provider.force_flush()
     names = {s.name for s in exporter.spans}
-    # The PyO3 pipeline wrapper and the Rust-side formatter both emit spans.
-    assert "qubo_hubo_pipeline" in names, (
-        f"Missing 'qubo_hubo_pipeline' span. Got: {sorted(names)}"
-    )
     assert "as_qubo_format" in names, (
         f"Missing 'as_qubo_format' span. Got: {sorted(names)}"
     )

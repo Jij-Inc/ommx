@@ -203,9 +203,10 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<InstanceClassClauseReport>()?;
     m.add_class::<InstanceClassMembershipReport>()?;
     m.add_class::<SpecialConstraintPreparation>()?;
-    m.add_class::<SensePreparation>()?;
+    m.add_class::<ObjectivePreparation>()?;
     m.add_class::<IntegerSlackPreparation>()?;
     m.add_class::<IntegerEncodingPreparation>()?;
+    m.add_class::<BinaryPowerPreparation>()?;
     m.add_class::<FixedPenaltyPreparation>()?;
     m.add_class::<PreparationPolicy>()?;
     m.add_class::<Constraint>()?;
@@ -308,9 +309,10 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "InstanceClassMembershipReport",
     // Preparation
     "SpecialConstraintPreparation",
-    "SensePreparation",
+    "ObjectivePreparation",
     "IntegerSlackPreparation",
     "IntegerEncodingPreparation",
+    "BinaryPowerPreparation",
     "FixedPenaltyPreparation",
     "PreparationPolicy",
     // Constraint and named function

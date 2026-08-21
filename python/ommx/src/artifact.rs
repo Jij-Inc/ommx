@@ -125,12 +125,10 @@ impl PyArtifactRef {
 /// An artifact is an OCI container image that stores OMMX data
 /// (instances, solutions, sample sets, etc.) as layers.
 ///
-/// ```python
 /// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
 /// >>> print(artifact.image_name)
 /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 ///
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Artifact")]
@@ -180,12 +178,10 @@ impl PyArtifact {
     /// archives importable while still making the imported artifact
     /// addressable in SQLite.
     ///
-    /// ```python
     /// >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
     /// >>> print(artifact.image_name)
     /// ghcr.io/jij-inc/ommx/random_lp_instance:...
     ///
-    /// ```
     #[staticmethod]
     pub fn import_archive(py: Python<'_>, path: PathBuf) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -237,13 +233,11 @@ impl PyArtifact {
     /// `Artifact.load(image_name)` later), use
     /// {meth}`Artifact.import_archive`.
     ///
-    /// ```python
     /// >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")
     /// >>> for layer in manifest.layers:
     /// ...     print(layer.media_type)
     /// application/org.ommx.v1.instance
     ///
-    /// ```
     #[staticmethod]
     pub fn inspect_archive(py: Python<'_>, path: PathBuf) -> OmmxPyResult<PyArchiveManifest> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -255,12 +249,10 @@ impl PyArtifact {
     ///
     /// If the image is not found in local registry, it will try to pull from remote registry.
     ///
-    /// ```python
     /// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
     /// >>> print(artifact.image_name)
     /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
     ///
-    /// ```
     ///
     /// Raises {class}`~ommx.artifact.RemoteArtifactNotFoundError` when the
     /// exact remote reference does not exist. Other remote access failures
@@ -1396,13 +1388,11 @@ impl DraftInner {
 
 /// Mutable draft for OMMX Artifacts.
 ///
-/// ```python
 /// >>> draft = ArtifactDraft.temp()
 /// >>> artifact = draft.commit()
 /// >>> print(artifact.image_name)
 /// ttl.sh/...-...-...-...-...:1h
 ///
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "ArtifactDraft")]
@@ -1417,7 +1407,6 @@ impl PyArtifactDraft {
     /// returned handle if you also want a `.ommx` archive file for
     /// sharing.
     ///
-    /// ```python
     /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
     /// >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
     /// >>> instance = generator.get_v1_instance()
@@ -1429,7 +1418,6 @@ impl PyArtifactDraft {
     /// >>> print(artifact.image_name)
     /// ghcr.io/jij-inc/ommx/single_feasible_lp:...
     ///
-    /// ```
     ///
     /// Raises {class}`ValueError` when `image_name` is not a valid OCI image
     /// reference. Registry and storage failures raise {class}`RuntimeError`.
@@ -1471,7 +1459,6 @@ impl PyArtifactDraft {
     /// Call {meth}`Artifact.save(path)` on the returned handle to also
     /// write a `.ommx` archive file for sharing.
     ///
-    /// ```python
     /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
     /// >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
     /// >>> instance = generator.get_v1_instance()
@@ -1480,7 +1467,6 @@ impl PyArtifactDraft {
     /// >>> artifact = draft.commit()
     /// >>> assert ".ommx.local/anonymous:" in artifact.image_name
     ///
-    /// ```
     #[staticmethod]
     pub fn new_anonymous() -> OmmxPyResult<Self> {
         let builder = ommx::artifact::ArtifactDraft::new_anonymous()?;
@@ -1491,13 +1477,11 @@ impl PyArtifactDraft {
     /// Insecure; for tests only. `ttl.sh` is a public registry that
     /// expires images after one hour.
     ///
-    /// ```python
     /// >>> draft = ArtifactDraft.temp()
     /// >>> artifact = draft.commit()
     /// >>> print(artifact.image_name)
     /// ttl.sh/...-...-...-...-...:1h
     ///
-    /// ```
     #[staticmethod]
     pub fn temp() -> OmmxPyResult<Self> {
         let builder = ommx::artifact::ArtifactDraft::temp()?;
@@ -1517,7 +1501,6 @@ impl PyArtifactDraft {
 
     /// Add an {class}`~ommx.Instance` to the artifact with annotations.
     ///
-    /// ```python
     /// >>> from ommx import Instance
     /// >>> instance = Instance.minimize()
     /// >>> instance.title = "test instance"
@@ -1526,7 +1509,6 @@ impl PyArtifactDraft {
     /// >>> print(desc.annotations['org.ommx.v1.instance.title'])
     /// test instance
     ///
-    /// ```
     pub fn add_instance(
         &mut self,
         py: Python<'_>,
@@ -1575,7 +1557,6 @@ impl PyArtifactDraft {
 
     /// Add a numpy ndarray to the artifact with npy format.
     ///
-    /// ```python
     /// >>> import numpy as np
     /// >>> array = np.array([1, 2, 3])
     /// >>> draft = ArtifactDraft.temp()
@@ -1587,7 +1568,6 @@ impl PyArtifactDraft {
     /// >>> print(layer.annotations)
     /// {'org.ommx.user.title': 'test_array'}
     ///
-    /// ```
     #[pyo3(signature = (array, *, annotation_namespace = "org.ommx.user.", **annotations))]
     pub fn add_ndarray(
         &mut self,
@@ -1608,7 +1588,6 @@ impl PyArtifactDraft {
 
     /// Add a pandas DataFrame to the artifact with parquet format.
     ///
-    /// ```python
     /// >>> import pandas as pd
     /// >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
     /// >>> draft = ArtifactDraft.temp()
@@ -1618,7 +1597,6 @@ impl PyArtifactDraft {
     /// >>> print(layer.media_type)
     /// application/vnd.apache.parquet
     ///
-    /// ```
     #[pyo3(signature = (df, *, annotation_namespace = "org.ommx.user.", **annotations))]
     pub fn add_dataframe(
         &mut self,
@@ -1635,7 +1613,6 @@ impl PyArtifactDraft {
 
     /// Add a JSON object to the artifact.
     ///
-    /// ```python
     /// >>> obj = {"a": 1, "b": 2}
     /// >>> draft = ArtifactDraft.temp()
     /// >>> _desc = draft.add_json(obj, title="test_json")
@@ -1644,7 +1621,6 @@ impl PyArtifactDraft {
     /// >>> print(layer.media_type)
     /// application/json
     ///
-    /// ```
     #[pyo3(signature = (obj, *, annotation_namespace = "org.ommx.user.", **annotations))]
     pub fn add_json(
         &mut self,
@@ -1852,13 +1828,11 @@ pub fn restore_image(
 /// An invalid duration raises {class}`ValueError`; registry and storage failures
 /// raise {class}`RuntimeError`.
 ///
-/// ```python
 /// >>> from ommx.artifact import prune_anonymous
 /// >>> report = prune_anonymous()
 /// >>> report.delete_applied
 /// False
 ///
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (*, root = None, delete = false, experiments = false, older_than = None))]
@@ -1900,13 +1874,11 @@ pub fn prune_anonymous(
 /// An invalid duration raises {class}`ValueError`; registry and storage failures
 /// raise {class}`RuntimeError`.
 ///
-/// ```python
 /// >>> from ommx.artifact import gc
 /// >>> report = gc()
 /// >>> report.delete_applied
 /// False
 ///
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (*, root = None, delete = false, grace_period = "24h"))]

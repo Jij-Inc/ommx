@@ -98,6 +98,23 @@ pub fn validate_feature_payload(
     }
 }
 
+/// Reject the output-objective feature on v2 roots that cannot carry its payload.
+///
+/// `Feature` is a protobuf-global enum, so merely recognizing its numeric value
+/// is not enough to establish that a particular root can represent it.
+pub fn reject_output_objective_feature(
+    required_features: &BTreeSet<Feature>,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    validate_feature_payload(
+        required_features,
+        Feature::OutputObjective,
+        false,
+        message,
+        "output_objective",
+    )
+}
+
 pub fn parse_feasibility_atol(
     value: Option<f64>,
     message: &'static str,

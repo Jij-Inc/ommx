@@ -1,5 +1,5 @@
 use super::{ExactIntegerSlackUnavailable, Instance, SpecialConstraintKinds};
-use crate::{ATol, ConstraintID, Equality, InstanceClass, InstanceClassMembershipReport};
+use crate::{ATol, ConstraintID, Equality, InstanceClass, InstanceClassMembershipReport, Sense};
 use std::collections::BTreeMap;
 
 /// Preparation of active special constraints.
@@ -16,14 +16,13 @@ pub enum SpecialConstraintPreparation {
     },
 }
 
-/// Preparation of the optimization sense.
+/// Preparation of the active objective used by the solver-facing formulation.
 ///
-/// Each variant selects one existing [`Instance`] owner operation.
-#[non_exhaustive]
+/// The conversion itself remains owned by [`Instance::convert_active_objective`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SensePreparation {
-    /// Invoke [`Instance::as_minimization_problem`].
-    AsMinimizationProblem,
+pub struct ObjectivePreparation {
+    /// Target optimization sense passed to [`Instance::convert_active_objective`].
+    pub target: Sense,
 }
 
 /// Preparation that introduces Integer slack variables into active regular
@@ -72,10 +71,18 @@ pub enum IntegerEncodingPreparation {
     },
 }
 
+/// Preparation that reduces powers of active Binary decision variables.
+///
+/// This unit phase invokes [`Instance::reduce_binary_power`]. Existing output
+/// semantics are retained by the enclosing [`Instance::prepare`] operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BinaryPowerPreparation;
+
 /// Fixed-weight penalty preparation of active regular constraints.
 ///
 /// Exactly one fixed-weight penalty owner operation is selected. Weight and
-/// constraint-ID validation remains owned by that operation.
+/// constraint-ID validation and output-objective preservation remain owned by
+/// that operation.
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum FixedPenaltyPreparation {
@@ -108,46 +115,143 @@ pub enum FixedPenaltyPreparation {
 /// phase is disabled by default, including fields added in future releases.
 ///
 /// [`Instance::prepare`] applies each selected phase at most once in this
-/// canonical order: special constraints, optimization sense, Integer slack,
-/// Integer encoding, then fixed penalty. It checks whole-class membership
-/// before and after each selected phase and stops as soon as the target class
-/// contains the instance.
+/// canonical order: special constraints, active objective, Integer slack,
+/// fixed penalty, Integer encoding, then Binary-power reduction. It checks
+/// whole-class membership before and after each selected phase and stops as
+/// soon as the target class contains the instance.
 ///
-/// # Examples
+/// # Invariants
+///
+/// Every Preparation phase is disabled by default.
 ///
 /// ```
-/// use ommx::{
-///     ATol, FixedPenaltyPreparation, IntegerSlackPreparation, PreparationPolicy,
-///     SensePreparation,
-/// };
+/// use ommx::PreparationPolicy;
 ///
-/// let mut policy = PreparationPolicy::default();
-/// policy.sense = Some(SensePreparation::AsMinimizationProblem);
-/// policy.integer_slack = Some(IntegerSlackPreparation {
-///     max_integer_range: 32,
-///     atol: ATol::default(),
-///     slack_upper_bound: None,
-/// });
-/// policy.fixed_penalty = Some(
-///     FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight {
-///         weight: 2.0,
-///         atol: ATol::default(),
-///     },
-/// );
+/// let policy = PreparationPolicy::default();
+/// assert!(policy.special_constraints.is_none());
+/// assert!(policy.objective.is_none());
+/// assert!(policy.integer_slack.is_none());
+/// assert!(policy.integer_encoding.is_none());
+/// assert!(policy.fixed_penalty.is_none());
+/// assert!(policy.binary_power_reduction.is_none());
 /// ```
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PreparationPolicy {
     /// Optional special-constraint phase.
     pub special_constraints: Option<SpecialConstraintPreparation>,
-    /// Optional optimization-sense phase.
-    pub sense: Option<SensePreparation>,
+    /// Optional active-objective phase.
+    pub objective: Option<ObjectivePreparation>,
     /// Optional Integer slack phase. `None` does not introduce Integer slack.
     pub integer_slack: Option<IntegerSlackPreparation>,
     /// Optional used-Integer encoding phase.
     pub integer_encoding: Option<IntegerEncodingPreparation>,
     /// Optional fixed-weight penalty phase.
     pub fixed_penalty: Option<FixedPenaltyPreparation>,
+    /// Optional Binary-power reduction phase.
+    pub binary_power_reduction: Option<BinaryPowerPreparation>,
+}
+
+impl PreparationPolicy {
+    /// Return a fresh default policy for reaching [`InstanceClass::qubo`].
+    ///
+    /// # Postconditions
+    ///
+    /// The returned QUBO policy enables every default preparation phase.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     BinaryPowerPreparation, FixedPenaltyPreparation,
+    ///     IntegerEncodingPreparation, ObjectivePreparation, PreparationPolicy,
+    ///     Sense, SpecialConstraintPreparation,
+    /// };
+    ///
+    /// let policy = PreparationPolicy::for_qubo();
+    /// assert!(matches!(
+    ///     policy.special_constraints,
+    ///     Some(SpecialConstraintPreparation::LowerSpecialConstraints { .. }),
+    /// ));
+    /// assert_eq!(
+    ///     policy.objective,
+    ///     Some(ObjectivePreparation { target: Sense::Minimize }),
+    /// );
+    /// let slack = policy.integer_slack.unwrap();
+    /// assert_eq!(slack.max_integer_range, 31);
+    /// assert_eq!(slack.slack_upper_bound, Some(31));
+    /// assert!(matches!(
+    ///     policy.integer_encoding,
+    ///     Some(IntegerEncodingPreparation::LogEncodeAllUsedIntegers { .. }),
+    /// ));
+    /// assert!(matches!(
+    ///     policy.fixed_penalty,
+    ///     Some(FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight {
+    ///         weight: 1.0,
+    ///         ..
+    ///     }),
+    /// ));
+    /// assert_eq!(policy.binary_power_reduction, Some(BinaryPowerPreparation));
+    /// ```
+    pub fn for_qubo() -> Self {
+        Self::for_binary_polynomial_format(Some(BinaryPowerPreparation))
+    }
+
+    /// Return a fresh default policy for reaching [`InstanceClass::hubo`].
+    ///
+    /// # Postconditions
+    ///
+    /// The returned HUBO policy leaves Binary-power reduction disabled.
+    ///
+    /// ```
+    /// use ommx::{ObjectivePreparation, PreparationPolicy, Sense};
+    ///
+    /// let policy = PreparationPolicy::for_hubo();
+    /// assert!(policy.special_constraints.is_some());
+    /// assert_eq!(
+    ///     policy.objective,
+    ///     Some(ObjectivePreparation { target: Sense::Minimize }),
+    /// );
+    /// assert!(policy.integer_slack.is_some());
+    /// assert!(policy.integer_encoding.is_some());
+    /// assert!(policy.fixed_penalty.is_some());
+    /// assert!(policy.binary_power_reduction.is_none());
+    /// ```
+    pub fn for_hubo() -> Self {
+        Self::for_binary_polynomial_format(None)
+    }
+
+    fn for_binary_polynomial_format(
+        binary_power_reduction: Option<BinaryPowerPreparation>,
+    ) -> Self {
+        Self {
+            special_constraints: Some(SpecialConstraintPreparation::LowerSpecialConstraints {
+                kinds: [
+                    super::SpecialConstraintKind::Indicator,
+                    super::SpecialConstraintKind::OneHot,
+                    super::SpecialConstraintKind::Sos1,
+                ]
+                .into_iter()
+                .collect(),
+            }),
+            objective: Some(ObjectivePreparation {
+                target: Sense::Minimize,
+            }),
+            integer_slack: Some(IntegerSlackPreparation {
+                max_integer_range: 31,
+                atol: ATol::default(),
+                slack_upper_bound: Some(31),
+            }),
+            integer_encoding: Some(IntegerEncodingPreparation::LogEncodeAllUsedIntegers {
+                atol: ATol::default(),
+            }),
+            fixed_penalty: Some(
+                FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight {
+                    weight: 1.0,
+                    atol: ATol::default(),
+                },
+            ),
+            binary_power_reduction,
+        }
+    }
 }
 
 /// Signal returned when configured Preparation phases are exhausted before the
@@ -186,13 +290,9 @@ impl PreparationStep for SpecialConstraintPreparation {
     }
 }
 
-impl PreparationStep for SensePreparation {
+impl PreparationStep for ObjectivePreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
-        match self {
-            Self::AsMinimizationProblem => {
-                instance.as_minimization_problem();
-            }
-        }
+        instance.convert_active_objective(self.target);
         Ok(())
     }
 }
@@ -252,6 +352,13 @@ impl PreparationStep for FixedPenaltyPreparation {
     }
 }
 
+impl PreparationStep for BinaryPowerPreparation {
+    fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
+        instance.reduce_binary_power()?;
+        Ok(())
+    }
+}
+
 fn apply_preparation_step<S: PreparationStep>(
     instance: &mut Instance,
     input_class: &InstanceClass,
@@ -289,6 +396,46 @@ impl Instance {
     /// own mutation and failure semantics, and changes committed by earlier
     /// operations remain when a later operation fails.
     ///
+    /// # Postconditions
+    ///
+    /// Successful preparation reaches the target class while retaining output semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     coeff, linear, v1::{Optimality, State}, ATol, Constraint, ConstraintID,
+    ///     DecisionVariable, Evaluate, Function, Instance, InstanceClass,
+    ///     PreparationPolicy, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let constraint = Function::from((linear!(1) + coeff!(-1.0)).unwrap());
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(constraint),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    /// let target = InstanceClass::qubo();
+    ///
+    /// instance.prepare(&target, &PreparationPolicy::for_qubo()).unwrap();
+    /// assert!(target.contains(&instance));
+    /// assert_eq!(instance.sense(), Sense::Minimize);
+    /// let state = State::from(HashMap::from([(1, 0.0)]));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), 1.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 0.0);
+    /// assert_eq!(
+    ///     instance.map_active_optimality(Optimality::Optimal),
+    ///     Optimality::Unspecified,
+    /// );
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns an error from a configured owner operation, or
@@ -296,6 +443,16 @@ impl Instance {
     /// the configured operations are exhausted without reaching
     /// `input_class`.
     pub fn prepare(
+        &mut self,
+        input_class: &InstanceClass,
+        policy: &PreparationPolicy,
+    ) -> crate::Result<()> {
+        self.preserve_output_objective_during_preparation(|instance| {
+            instance.prepare_phases(input_class, policy)
+        })
+    }
+
+    fn prepare_phases(
         &mut self,
         input_class: &InstanceClass,
         policy: &PreparationPolicy,
@@ -308,7 +465,7 @@ impl Instance {
             return Ok(());
         }
 
-        if apply_preparation_step(self, input_class, policy.sense.as_ref())? {
+        if apply_preparation_step(self, input_class, policy.objective.as_ref())? {
             return Ok(());
         }
 
@@ -316,11 +473,15 @@ impl Instance {
             return Ok(());
         }
 
+        if apply_preparation_step(self, input_class, policy.fixed_penalty.as_ref())? {
+            return Ok(());
+        }
+
         if apply_preparation_step(self, input_class, policy.integer_encoding.as_ref())? {
             return Ok(());
         }
 
-        if apply_preparation_step(self, input_class, policy.fixed_penalty.as_ref())? {
+        if apply_preparation_step(self, input_class, policy.binary_power_reduction.as_ref())? {
             return Ok(());
         }
 
@@ -333,9 +494,10 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, linear, quadratic, Bound, Constraint, DecisionVariable, DegreeBound,
-        ExactIntegerSlackUnavailable, Function, InfeasibleDetected, InstanceClassClause, Kind,
-        OneHotConstraint, OneHotConstraintID, Sense, SpecialConstraintKind, VariableID,
+        coeff, linear, quadratic, Bound, Constraint, DecisionVariable, DecisionVariableRole,
+        DegreeBound, Evaluate, ExactIntegerSlackUnavailable, Function, InfeasibleDetected,
+        InstanceClassClause, Kind, MonomialDyn, OneHotConstraint, OneHotConstraintID, Polynomial,
+        Sense, SpecialConstraintKind, VariableID,
     };
     use std::collections::BTreeSet;
 
@@ -372,6 +534,144 @@ mod tests {
             )]),
         )
         .unwrap()
+    }
+
+    fn cubic_binary_instance(ids: Vec<VariableID>) -> Instance {
+        let variables = ids
+            .iter()
+            .copied()
+            .map(|id| (id, DecisionVariable::binary()))
+            .collect();
+        let objective = Function::from(Polynomial::single_term(MonomialDyn::new(ids), coeff!(1.0)));
+        Instance::new(Sense::Minimize, objective, variables, BTreeMap::new()).unwrap()
+    }
+
+    #[test]
+    fn qubo_preparation_reduces_repeated_binary_power() {
+        let variable = VariableID::from(1);
+        let mut instance = cubic_binary_instance(vec![variable, variable, variable]);
+        let source_objective = instance.objective().clone();
+
+        instance
+            .prepare(&InstanceClass::qubo(), &PreparationPolicy::for_qubo())
+            .unwrap();
+
+        assert!(InstanceClass::qubo().contains(&instance));
+        assert_eq!(instance.objective().degree(), crate::Degree::from(1));
+        assert_eq!(
+            instance.objective().required_ids(),
+            crate::VariableIDSet::from([variable])
+        );
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Minimize);
+        assert_eq!(output.function(), &source_objective);
+        assert!(output.preserves_optimality());
+        instance.as_qubo_format().unwrap();
+    }
+
+    #[test]
+    fn qubo_rejects_but_hubo_accepts_three_distinct_binary_variables() {
+        let ids = vec![
+            VariableID::from(1),
+            VariableID::from(2),
+            VariableID::from(3),
+        ];
+        let source = cubic_binary_instance(ids);
+
+        let mut qubo = source.clone();
+        let error = qubo
+            .prepare(&InstanceClass::qubo(), &PreparationPolicy::for_qubo())
+            .unwrap_err();
+        assert!(error.is::<PreparationTargetNotReached>());
+        assert!(!InstanceClass::qubo().contains(&qubo));
+        assert!(qubo.output_objective().is_none());
+
+        let mut hubo = source;
+        hubo.prepare(&InstanceClass::hubo(), &PreparationPolicy::for_hubo())
+            .unwrap();
+        assert!(InstanceClass::hubo().contains(&hubo));
+        assert!(hubo.output_objective().is_none());
+        hubo.as_hubo_format().unwrap();
+    }
+
+    #[test]
+    fn qubo_preparation_preserves_entry_objective_and_pre_encoding_constraint() {
+        let variable = VariableID::from(1);
+        let constraint_id = ConstraintID::from(7);
+        let objective = Function::from(linear!(variable));
+        let constraint_function = (Function::from(linear!(variable)) + coeff!(-1.0)).unwrap();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.clone(),
+            BTreeMap::from([(
+                variable,
+                DecisionVariable::new(
+                    Kind::Integer,
+                    Bound::new(0.0, 3.0).unwrap(),
+                    ATol::default(),
+                )
+                .unwrap(),
+            )]),
+            BTreeMap::from([(
+                constraint_id,
+                Constraint::equal_to_zero(constraint_function.clone()),
+            )]),
+        )
+        .unwrap();
+
+        instance
+            .prepare(&InstanceClass::qubo(), &PreparationPolicy::for_qubo())
+            .unwrap();
+
+        assert!(InstanceClass::qubo().contains(&instance));
+        let output = instance.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Minimize);
+        assert_eq!(output.function(), &objective);
+        assert!(!output.preserves_optimality());
+        assert_eq!(
+            instance.removed_constraints()[&constraint_id].0.function(),
+            &constraint_function
+        );
+        assert_eq!(
+            instance.decision_variable_role(variable),
+            Some(DecisionVariableRole::Dependent)
+        );
+    }
+
+    #[test]
+    fn prepare_error_canonicalizes_redundant_entry_output_objective() {
+        let variable = VariableID::from(1);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(variable)),
+            BTreeMap::from([(variable, DecisionVariable::binary())]),
+            BTreeMap::from([(
+                ConstraintID::from(1),
+                Constraint::equal_to_zero(Function::from(linear!(variable))),
+            )]),
+        )
+        .unwrap();
+        let before = instance.clone();
+        let policy = PreparationPolicy {
+            objective: Some(ObjectivePreparation {
+                target: Sense::Minimize,
+            }),
+            fixed_penalty: Some(
+                FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight {
+                    weight: -1.0,
+                    atol: ATol::default(),
+                },
+            ),
+            ..Default::default()
+        };
+
+        let error = instance
+            .prepare(&InstanceClass::qubo(), &policy)
+            .unwrap_err();
+
+        assert!(error.is::<crate::InvalidPenaltyWeight>());
+        assert_eq!(instance, before);
+        assert!(instance.output_objective().is_none());
     }
 
     #[test]
@@ -573,7 +873,9 @@ mod tests {
             special_constraints: Some(SpecialConstraintPreparation::LowerSpecialConstraints {
                 kinds: BTreeSet::from([SpecialConstraintKind::OneHot]),
             }),
-            sense: Some(SensePreparation::AsMinimizationProblem),
+            objective: Some(ObjectivePreparation {
+                target: Sense::Minimize,
+            }),
             integer_slack: Some(IntegerSlackPreparation {
                 max_integer_range: 32,
                 atol: ATol::default(),
@@ -616,7 +918,9 @@ mod tests {
             DegreeBound::at_most(1),
         );
         let policy = PreparationPolicy {
-            sense: Some(SensePreparation::AsMinimizationProblem),
+            objective: Some(ObjectivePreparation {
+                target: Sense::Minimize,
+            }),
             ..Default::default()
         };
 

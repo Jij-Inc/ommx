@@ -7,7 +7,7 @@ import pytest
 
 from ommx.adapter import DiagnosticCollector, UnboundedDetected
 from ommx.experiment import Experiment
-from ommx import Instance, Constraint, DecisionVariable, Solution
+from ommx import Constraint, DecisionVariable, Instance, Optimality, Solution
 
 from ommx_pyscipopt_adapter import (
     SCIPDiagnosticsAnalyzer,
@@ -161,6 +161,22 @@ def test_solution_optimality():
 
     solution = OMMXPySCIPOptAdapter.solve(ommx_instance)
     assert solution.optimality == Solution.OPTIMAL
+
+
+def test_solution_optimality_is_not_transported_through_fixed_penalty():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={7: x == 1},
+        sense=Instance.MINIMIZE,
+    )
+    instance.to_qubo(uniform_penalty_weight=0.0)
+
+    solution = OMMXPySCIPOptAdapter.solve(instance)
+
+    assert not solution.feasible
+    assert solution.optimality == Optimality.Unspecified
 
 
 def test_direct_solve_records_termination_report():

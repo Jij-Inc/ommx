@@ -19,6 +19,7 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
     )
     source.prepare(input_class, policy)
     adapter_input = source
+    assert adapter_input.sense == Sense.Minimize
     input_bytes = adapter_input.to_v2_bytes()
     experiment = Experiment.with_temp_local_registry()
     prepared_samples: SampleSet | None = None
@@ -32,7 +33,7 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
         )
 
     assert prepared_samples is not None
-    assert prepared_samples.sense == Sense.Minimize
+    assert prepared_samples.sense == Sense.Maximize
     for sample_id in prepared_samples.sample_ids():
         actual = prepared_samples.get(sample_id)
         expected = adapter_input.evaluate(actual.state)

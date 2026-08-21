@@ -452,6 +452,7 @@ impl InstanceBuilder {
         Ok(Instance {
             sense,
             objective,
+            output_objective: None,
             decision_variables,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,

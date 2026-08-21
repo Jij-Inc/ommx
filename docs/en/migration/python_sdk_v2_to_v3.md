@@ -230,7 +230,7 @@ The dict shape itself landed in 3.0.0a2 with snapshot `Constraint` values. In 3.
 
 `SampleSet.constraints` / `.decision_variables` / `.named_functions` remain `list`.
 
-## 5. Renames and signature changes
+## 5. Renames, signature changes, and behavior changes
 
 ### 5.1 `write_mps` → `save_mps` (`3.0.0a1`, [#775](https://github.com/Jij-Inc/ommx/pull/775))
 
@@ -298,6 +298,29 @@ Linear(
 from ommx import Linear
 Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
 ```
+
+### 5.6 `to_qubo()` / `to_hubo()` preserve the input objective in evaluated output (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+The driver methods remain available and still mutate their input. In v3, the
+mutated `Instance` keeps the minimization energy sent to the QUBO or HUBO
+solver as its active objective, while `evaluate()` and `evaluate_samples()`
+retain the objective semantics that the instance exposed before conversion.
+Python SDK v2 instead restored the active sense and evaluated the final
+penalized energy, mixing solver input with user-facing output.
+
+Code that reads `Instance.objective` therefore sees the solver energy; code
+that consumes `Solution` or `SampleSet` sees the preserved input objective.
+The executable postconditions are documented on {meth}`~ommx.Instance.to_qubo`,
+{meth}`~ommx.Instance.to_hubo`, {meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples`.
+
+The same pipeline can be run explicitly with
+{meth}`~ommx.Instance.prepare`, {meth}`~ommx.Instance.as_qubo_format`, or
+{meth}`~ommx.Instance.as_hubo_format`. The matching target classes and editable
+policies are provided by {meth}`~ommx.InstanceClass.qubo`,
+{meth}`~ommx.InstanceClass.hubo`,
+{meth}`~ommx.PreparationPolicy.for_qubo`, and
+{meth}`~ommx.PreparationPolicy.for_hubo`.
 
 ## 6. Return-type changes
 
@@ -409,8 +432,8 @@ implicitly. In v3, the caller owns those choices. Start with the adapter's fresh
 recommended `PreparationPolicy`, edit application-specific fields, and apply it
 in place with `Instance.prepare()` before calling the strict adapter API.
 
-The OpenJij recommendation enables special-constraint lowering, minimization
-sense normalization, Integer slack, and used-Integer log encoding. Integer
+The OpenJij recommendation enables special-constraint lowering, active-objective
+conversion to minimization, Integer slack, and used-Integer log encoding. Integer
 slack first attempts exact equality conversion with range 32 and, when that
 exact operation is unavailable, permits inequality-preserving slack with upper
 bound 32. Set `slack_upper_bound=None` on a replacement

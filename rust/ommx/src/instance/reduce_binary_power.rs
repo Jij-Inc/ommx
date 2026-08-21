@@ -7,7 +7,38 @@ impl Instance {
     /// This method replaces binary powers in the instance with their equivalent linear expressions.
     /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
     ///
-    /// Returns `true` if any reduction was performed, `false` otherwise.
+    /// # Postconditions
+    ///
+    /// Reduction rewrites active functions while preserving the output objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     quadratic, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(quadratic!(1, 1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let output = instance.output_objective().cloned();
+    ///
+    /// assert!(instance.reduce_binary_power().unwrap());
+    /// assert_eq!(instance.output_objective(), output.as_ref());
+    /// assert!(!instance.reduce_binary_power().unwrap());
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// ```
     pub fn reduce_binary_power(&mut self) -> Result<bool, crate::CoefficientError> {
         let binary_ids = self.binary_ids();
         if binary_ids.is_empty() {

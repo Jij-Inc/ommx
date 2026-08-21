@@ -66,7 +66,7 @@ reported as conversion errors.
 `ommx.PreparationPolicy`. It recommends:
 
 - lowering active Indicator, OneHot, and SOS1 constraints;
-- normalizing maximization to minimization;
+- converting the active objective from maximization to minimization;
 - attempting exact Integer slack with range 32, while permitting
   inequality-preserving Integer slack with upper bound 32 when exact equality
   conversion is unavailable; and

@@ -9,6 +9,29 @@ import "ommx/v2/constraint.proto";
 import "ommx/v2/decision_variable.proto";
 import "ommx/v2/named_function.proto";
 
+// Serialized output-objective semantics distinct from the root's active objective.
+//
+// `sense` and `function` form one atomic pair. A validated payload carries
+// both. When a root omits `output_objective`, its own `sense` and `objective`
+// are also its output semantics. The pair may equal the active pair when this
+// payload exists only to record that active-formulation optimality does not
+// transport.
+message OutputObjective {
+  ommx.v1.Instance.Sense sense = 1;
+  ommx.v1.Function function = 2;
+
+  // Whether optimality for the active formulation also proves optimality for
+  // this output objective.
+  //
+  // This compares objective orderings over candidate states of the active
+  // formulation. It does not assert feasibility or optimality with respect to
+  // removed constraints.
+  //
+  // `false` is conservative: it means that such a proof is not available,
+  // not that the reconstructed state is known to be suboptimal.
+  bool preserves_optimality = 3;
+}
+
 // Validated optimization problem serialization root.
 message Instance {
   repeated Feature required_features = 1;
@@ -24,4 +47,7 @@ message Instance {
   map<uint64, ommx.v1.Function> decision_variable_dependency = 11;
   NamedFunctionTable named_functions = 12;
   map<string, string> annotations = 13;
+  // Optional output-objective pair. Function references must resolve to
+  // decision variables owned by this root.
+  OutputObjective output_objective = 14;
 }

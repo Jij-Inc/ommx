@@ -17,6 +17,9 @@ workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+# Doc comments in this binding crate are Python/Sphinx doctests, not Rustdoc.
+doc = false
+doctest = false
 
 [[bin]]
 name = "stub_gen"
