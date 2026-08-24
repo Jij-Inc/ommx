@@ -110,6 +110,7 @@ impl Instance {
     pub fn penalty_method(mut self) -> Result<ParametricInstance> {
         self.ensure_penalty_method_supported("penalty_method")?;
         if !self.constraints().is_empty() {
+            self.capture_output_objective();
             self.invalidate_output_objective_optimality();
         }
 
@@ -373,6 +374,7 @@ impl Instance {
             });
         }
 
+        self.capture_output_objective();
         self.invalidate_output_objective_optimality();
 
         let mut max_id = 0;
@@ -604,6 +606,7 @@ impl Instance {
         constraint_collection.move_active_rows_to_removed(removals)?;
 
         if !self.constraint_collection.active().is_empty() || objective != self.objective {
+            self.capture_output_objective();
             self.invalidate_output_objective_optimality();
         }
         self.objective = objective;

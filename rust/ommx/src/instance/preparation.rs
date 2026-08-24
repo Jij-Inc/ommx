@@ -73,8 +73,8 @@ pub enum IntegerEncodingPreparation {
 
 /// Preparation that reduces powers of active Binary decision variables.
 ///
-/// This unit phase invokes [`Instance::reduce_binary_power`]. Existing output
-/// semantics are retained by the enclosing [`Instance::prepare`] operation.
+/// This unit phase invokes [`Instance::reduce_binary_power`], which owns the
+/// corresponding output-objective update.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct BinaryPowerPreparation;
 
@@ -398,7 +398,8 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Successful preparation reaches the target class while retaining output semantics.
+    /// Selected owner operations establish their own output semantics, and
+    /// successful composition reaches the target class.
     ///
     /// ```
     /// use ommx::{
@@ -443,16 +444,6 @@ impl Instance {
     /// the configured operations are exhausted without reaching
     /// `input_class`.
     pub fn prepare(
-        &mut self,
-        input_class: &InstanceClass,
-        policy: &PreparationPolicy,
-    ) -> crate::Result<()> {
-        self.preserve_output_objective_during_preparation(|instance| {
-            instance.prepare_phases(input_class, policy)
-        })
-    }
-
-    fn prepare_phases(
         &mut self,
         input_class: &InstanceClass,
         policy: &PreparationPolicy,
@@ -595,7 +586,7 @@ mod tests {
     }
 
     #[test]
-    fn qubo_preparation_preserves_entry_objective_and_pre_encoding_constraint() {
+    fn qubo_preparation_composes_encoding_and_penalty_output_semantics() {
         let variable = VariableID::from(1);
         let constraint_id = ConstraintID::from(7);
         let objective = Function::from(linear!(variable));
@@ -636,42 +627,6 @@ mod tests {
             instance.decision_variable_role(variable),
             Some(DecisionVariableRole::Dependent)
         );
-    }
-
-    #[test]
-    fn prepare_error_canonicalizes_redundant_entry_output_objective() {
-        let variable = VariableID::from(1);
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            Function::from(linear!(variable)),
-            BTreeMap::from([(variable, DecisionVariable::binary())]),
-            BTreeMap::from([(
-                ConstraintID::from(1),
-                Constraint::equal_to_zero(Function::from(linear!(variable))),
-            )]),
-        )
-        .unwrap();
-        let before = instance.clone();
-        let policy = PreparationPolicy {
-            objective: Some(ObjectivePreparation {
-                target: Sense::Minimize,
-            }),
-            fixed_penalty: Some(
-                FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight {
-                    weight: -1.0,
-                    atol: ATol::default(),
-                },
-            ),
-            ..Default::default()
-        };
-
-        let error = instance
-            .prepare(&InstanceClass::qubo(), &policy)
-            .unwrap_err();
-
-        assert!(error.is::<crate::InvalidPenaltyWeight>());
-        assert_eq!(instance, before);
-        assert!(instance.output_objective().is_none());
     }
 
     #[test]

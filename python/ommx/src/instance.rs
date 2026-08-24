@@ -1844,19 +1844,18 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Encoding rewrites the active objective while output evaluation restores the encoded integer value.
+    /// Encoding rewrites the active objective while preserving the entry objective for output evaluation.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.integer(0, lower=0, upper=3)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
     /// ... )
-    /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> instance.log_encode({0})
     /// >>> encoded_ids = instance.required_ids()
     /// >>> assert len(encoded_ids) == 2
     /// >>> state = {variable_id: 1 for variable_id in encoded_ids}
-    /// >>> assert instance.objective.evaluate(state) == -3.0
+    /// >>> assert instance.objective.evaluate(state) == 3.0
     /// >>> solution = instance.evaluate(state)
     /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
     #[pyo3(signature = (decision_variable_ids=BTreeSet::new(), *, atol=None))]
@@ -1914,19 +1913,18 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Encoding rewrites the active objective while output evaluation restores the encoded integer value.
+    /// Encoding rewrites the active objective while preserving the entry objective for output evaluation.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
     /// ... )
-    /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> instance.unary_encode({0})
     /// >>> encoded_ids = instance.required_ids()
     /// >>> assert len(encoded_ids) == 3
     /// >>> state = {variable_id: 1 for variable_id in encoded_ids}
-    /// >>> assert instance.objective.evaluate(state) == -5.0
+    /// >>> assert instance.objective.evaluate(state) == 5.0
     /// >>> solution = instance.evaluate(state)
     /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 5.0)
     #[pyo3(signature = (decision_variable_ids=BTreeSet::new(), *, max_range=16, atol=None))]
@@ -2750,16 +2748,15 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Reduction simplifies only active expressions while preserving output evaluation semantics.
+    /// Reduction rewrites active expressions while preserving the entry objective for output evaluation.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=[x], objective=x * x * x, constraints={}, sense=Sense.Maximize
     /// ... )
-    /// >>> assert instance.convert_active_objective(Sense.Minimize)
     /// >>> assert instance.reduce_binary_power()
-    /// >>> assert instance.objective.evaluate({0: 1}) == -1.0
+    /// >>> assert instance.objective.evaluate({0: 1}) == 1.0
     /// >>> solution = instance.evaluate({0: 1})
     /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
     /// >>> assert not instance.reduce_binary_power()

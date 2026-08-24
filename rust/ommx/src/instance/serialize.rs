@@ -7,7 +7,9 @@ impl Instance {
     ///
     /// # Errors
     ///
-    /// v1 serialization rejects instances with a distinct output objective.
+    /// `ommx.v1.Instance` cannot represent an [`Instance::output_objective`]
+    /// distinct from the active objective, so this conversion rejects such an
+    /// instance.
     ///
     /// ```
     /// use ommx::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
@@ -80,7 +82,9 @@ impl ParametricInstance {
     ///
     /// # Errors
     ///
-    /// v1 serialization rejects parametric instances with a distinct output objective.
+    /// `ommx.v1.ParametricInstance` cannot represent a
+    /// [`ParametricInstance::output_objective`] distinct from the active
+    /// objective, so this conversion rejects such an instance.
     ///
     /// ```
     /// use ommx::{linear, DecisionVariable, Function, Instance, ParametricInstance, Sense, VariableID};
@@ -454,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn v2_instance_parse_canonicalizes_redundant_output_objective() {
+    fn v2_instance_parse_removes_redundant_output_objective() {
         let instance = Instance::default();
         let mut proto = v2::Instance::from(instance.clone());
         proto
@@ -528,7 +532,7 @@ mod tests {
     }
 
     #[test]
-    fn v2_parametric_parse_canonicalizes_redundant_output_objective() {
+    fn v2_parametric_parse_removes_redundant_output_objective() {
         let instance = ParametricInstance::default();
         let mut proto = v2::ParametricInstance::from(instance.clone());
         proto

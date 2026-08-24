@@ -614,7 +614,7 @@ impl Parse for v2::Instance {
             annotations,
             named_functions,
         };
-        instance.canonicalize_output_objective();
+        instance.remove_redundant_output_objective();
         Ok(instance)
     }
 }
@@ -631,7 +631,11 @@ impl TryFrom<Instance> for v1::Instance {
     type Error = crate::Error;
 
     fn try_from(value: Instance) -> crate::Result<Self> {
-        value.ensure_no_output_objective("serialization to ommx.v1.Instance")?;
+        if value.output_objective.is_some() {
+            crate::bail!(
+                "ommx.v1.Instance cannot represent Instance.output_objective; use the v2 format"
+            );
+        }
         let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
         let (constraints, removed_constraints): (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) =
             value.constraint_collection.into();
@@ -1022,7 +1026,7 @@ impl Parse for v2::ParametricInstance {
             description: self.description,
             annotations,
         };
-        instance.canonicalize_output_objective();
+        instance.remove_redundant_output_objective();
         Ok(instance)
     }
 }
@@ -1038,11 +1042,16 @@ impl TryFrom<v2::ParametricInstance> for ParametricInstance {
 impl TryFrom<ParametricInstance> for v1::ParametricInstance {
     type Error = crate::Error;
 
-    fn try_from(
-        ParametricInstance {
+    fn try_from(value: ParametricInstance) -> crate::Result<Self> {
+        if value.output_objective.is_some() {
+            crate::bail!(
+                "ommx.v1.ParametricInstance cannot represent ParametricInstance.output_objective; use the v2 format"
+            );
+        }
+        let ParametricInstance {
             sense,
             objective,
-            output_objective,
+            output_objective: _,
             decision_variables,
             parameters,
             constraint_collection,
@@ -1053,13 +1062,7 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
             description,
             named_functions,
             annotations,
-        }: ParametricInstance,
-    ) -> crate::Result<Self> {
-        if output_objective.is_some() {
-            crate::bail!(
-                "serialization to ommx.v1.ParametricInstance cannot preserve ParametricInstance.output_objective"
-            );
-        }
+        } = value;
         // Special constraint types do not have a v1 proto representation yet.
         if !indicator_constraint_collection.active().is_empty()
             || !indicator_constraint_collection.removed().is_empty()

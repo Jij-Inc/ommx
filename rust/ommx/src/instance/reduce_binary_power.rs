@@ -28,14 +28,15 @@ impl Instance {
     ///     .constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
-    /// assert!(instance.convert_active_objective(Sense::Minimize));
-    /// let output = instance.output_objective().cloned();
+    /// let original = instance.objective().clone();
     ///
     /// assert!(instance.reduce_binary_power().unwrap());
-    /// assert_eq!(instance.output_objective(), output.as_ref());
+    /// let output = instance.output_objective().unwrap();
+    /// assert_eq!(output.sense(), Sense::Maximize);
+    /// assert_eq!(output.function(), &original);
     /// assert!(!instance.reduce_binary_power().unwrap());
     /// let state = State::from(HashMap::from([(1, 1.0)]));
-    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), 1.0);
     /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
     /// assert_eq!(*solution.objective(), 1.0);
     /// ```
@@ -52,7 +53,8 @@ impl Instance {
         // mutated, so a `CoefficientError` never leaves `self` partially
         // rewritten.
         let mut new_objective = self.objective.clone();
-        let mut changed = new_objective.reduce_binary_power(&binary_ids)?;
+        let objective_changed = new_objective.reduce_binary_power(&binary_ids)?;
+        let mut changed = objective_changed;
         let mut replacements = BTreeMap::new();
         for (&id, constraint) in self.constraint_collection.active() {
             let mut constraint = constraint.clone();
@@ -65,7 +67,13 @@ impl Instance {
         // Commit: only the touched fields are written, so this drops just
         // the old objective and the old versions of the touched active
         // constraints, not the whole instance.
-        self.objective = new_objective;
+        if objective_changed {
+            let captured_output = self.capture_output_objective();
+            self.objective = new_objective;
+            if !captured_output {
+                self.remove_redundant_output_objective();
+            }
+        }
         self.constraint_collection
             .replace_active_rows(replacements)
             .expect("replacement IDs were read from active constraints");
@@ -78,7 +86,7 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, constraint::CreatedData, quadratic, Bound, Coefficient, Constraint,
+        coeff, constraint::CreatedData, linear, quadratic, Bound, Coefficient, Constraint,
         DecisionVariable, Equality, Kind, Sense,
     };
     use ::approx::assert_abs_diff_eq;
@@ -120,12 +128,18 @@ mod tests {
             },
         );
 
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.clone(),
+            decision_variables,
+            constraints,
+        )
+        .unwrap();
 
         // Apply reduction
         let changed = instance.reduce_binary_power().unwrap();
         assert!(changed);
+        assert_eq!(instance.output_objective().unwrap().function(), &objective);
 
         // Check objective: x1^2 -> x1
         let mut expected_objective_poly =
@@ -175,6 +189,26 @@ mod tests {
         let changed = instance.reduce_binary_power().unwrap();
         assert!(!changed);
         assert_eq!(instance.objective(), &objective);
+        assert!(instance.output_objective().is_none());
+    }
+
+    #[test]
+    fn reduce_binary_power_does_not_capture_constraint_only_rewrite() {
+        let variable = VariableID::from(1);
+        let objective = Function::from(linear!(1));
+        let constraint = Constraint::equal_to_zero(Function::from(quadratic!(1, 1)));
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.clone(),
+            BTreeMap::from([(variable, DecisionVariable::binary())]),
+            BTreeMap::from([(ConstraintID::from(1), constraint)]),
+        )
+        .unwrap();
+
+        assert!(instance.reduce_binary_power().unwrap());
+
+        assert_eq!(instance.objective(), &objective);
+        assert!(instance.output_objective().is_none());
     }
 
     #[test]
@@ -207,6 +241,7 @@ mod tests {
         assert_eq!(err, crate::CoefficientError::Infinite);
         assert_eq!(instance.objective(), &before_objective);
         assert_eq!(instance.constraints(), &before_constraints);
+        assert!(instance.output_objective().is_none());
     }
 
     proptest! {

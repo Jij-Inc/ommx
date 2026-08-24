@@ -1,5 +1,5 @@
 use super::{encoding::ensure_unit_spaced_integer_bound, Instance};
-use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, Substitute, VariableID};
+use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, VariableID};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Calculate the number of binary variables for unary encoding.
@@ -97,19 +97,20 @@ impl Instance {
     ///     .constraints(BTreeMap::new())
     ///     .build()
     ///     .unwrap();
-    /// assert!(instance.convert_active_objective(Sense::Minimize));
-    /// let output = instance.output_objective().cloned();
+    /// let original = instance.objective().clone();
     ///
     /// instance
     ///     .unary_encode([variable], 3, ATol::default())
     ///     .unwrap();
-    /// assert_eq!(instance.output_objective(), output.as_ref());
+    /// let output = instance.output_objective().unwrap();
+    /// assert_eq!(output.sense(), Sense::Maximize);
+    /// assert_eq!(output.function(), &original);
     /// let encoded_ids = instance.required_ids();
     /// assert_eq!(encoded_ids.len(), 3);
     /// let state = State::from(HashMap::from_iter(
     ///     encoded_ids.into_iter().map(|id| (id.into_inner(), 1.0)),
     /// ));
-    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -5.0);
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), 5.0);
     /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
     /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
     /// assert_eq!(*solution.objective(), 5.0);
@@ -146,7 +147,8 @@ impl Instance {
             assignments.push((id, Function::from(linear.clone())));
             encodings.insert(id, linear);
         }
-        encoded = encoded.substitute(assignments)?;
+        let acyclic = crate::AcyclicAssignments::new(assignments)?;
+        encoded.apply_encoding_substitution(&acyclic, Vec::new(), atol)?;
         *self = encoded;
         Ok(encodings)
     }
@@ -209,9 +211,10 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, v1::State, Bound, DecisionVariable, DecisionVariableRole, Equality, Evaluate,
-        Function, IndicatorConstraint, IndicatorConstraintID, Instance, Kind, LinearMonomial,
-        OneHotConstraint, OneHotConstraintID, Sense, Solution, Sos1Constraint, Sos1ConstraintID,
+        coeff, v1::State, Bound, Constraint, ConstraintID, DecisionVariable, DecisionVariableRole,
+        Equality, Evaluate, Function, IndicatorConstraint, IndicatorConstraintID, Instance, Kind,
+        LinearMonomial, OneHotConstraint, OneHotConstraintID, Sense, Solution, Sos1Constraint,
+        Sos1ConstraintID,
     };
     use approx::relative_eq;
     use proptest::prelude::*;
@@ -639,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn unary_encode_does_not_create_or_rewrite_output_objective() {
+    fn unary_encode_captures_changed_active_objective_and_preserves_existing_output() {
         let id = VariableID::from(0);
         let make_instance = || {
             let variable = DecisionVariable::new(
@@ -658,6 +661,7 @@ mod tests {
         };
 
         let mut without_output = make_instance();
+        let original = without_output.objective().clone();
         without_output
             .unary_encode(
                 [id],
@@ -665,7 +669,9 @@ mod tests {
                 ATol::default(),
             )
             .unwrap();
-        assert!(without_output.output_objective().is_none());
+        let output = without_output.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), &original);
 
         let mut with_output = make_instance();
         assert!(with_output.convert_active_objective(Sense::Minimize));
@@ -693,6 +699,35 @@ mod tests {
         let solution = with_output.evaluate(&state, ATol::default()).unwrap();
         assert_eq!(*solution.sense(), Some(Sense::Maximize));
         assert_eq!(*solution.objective(), 0.0);
+    }
+
+    #[test]
+    fn unary_encode_does_not_capture_when_active_objective_is_unchanged() {
+        let id = VariableID::from(0);
+        let variable = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let constraint = Constraint::equal_to_zero(Function::from(crate::linear!(0)));
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(id, variable)]))
+            .constraints(BTreeMap::from([(ConstraintID::from(0), constraint)]))
+            .build()
+            .unwrap();
+
+        instance
+            .unary_encode(
+                [id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap();
+
+        assert!(instance.output_objective().is_none());
     }
 
     #[test]

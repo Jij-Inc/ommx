@@ -457,22 +457,24 @@ impl Instance {
         }
     }
 
-    /// Preserve the current active objective pair before a transformation
-    /// separates either the output pair or its optimality-transport status
-    /// from the solver-facing formulation.
-    fn capture_output_objective(&mut self) {
-        if self.output_objective.is_none() {
-            self.output_objective = Some(OutputObjective::new(
-                self.sense,
-                self.objective.clone(),
-                true,
-            ));
+    /// Preserve the current active objective pair when no output pair exists.
+    ///
+    /// Returns whether this operation installed the output objective.
+    fn capture_output_objective(&mut self) -> bool {
+        if self.output_objective.is_some() {
+            return false;
         }
+        self.output_objective = Some(OutputObjective::new(
+            self.sense,
+            self.objective.clone(),
+            true,
+        ));
+        true
     }
 
     /// Remove an output sidecar when its complete semantics are already
     /// represented by the active objective pair.
-    fn canonicalize_output_objective(&mut self) {
+    fn remove_redundant_output_objective(&mut self) {
         let is_redundant = self.output_objective.as_ref().is_some_and(|output| {
             output.preserves_optimality
                 && output.sense == self.sense
@@ -483,54 +485,16 @@ impl Instance {
         }
     }
 
-    /// Run one Preparation operation while retaining the entry output
-    /// semantics across every return path.
-    ///
-    /// Preparation may rewrite only the active formulation, so its output must
-    /// continue to mean the effective objective observed at entry. Optimality
-    /// transport is monotone: an unavailable guarantee at entry or after an
-    /// applied phase remains unavailable. A redundant preserved sidecar is
-    /// canonicalized away after the operation completes, including on error.
-    fn preserve_output_objective_during_preparation<R>(
-        &mut self,
-        operation: impl FnOnce(&mut Self) -> R,
-    ) -> R {
-        let (entry_sense, entry_function, entry_preserves_optimality) = self
-            .output_objective
-            .as_ref()
-            .map(|output| {
-                (
-                    output.sense,
-                    output.function.clone(),
-                    output.preserves_optimality,
-                )
-            })
-            .unwrap_or_else(|| (self.sense, self.objective.clone(), true));
-
-        let result = operation(self);
-
-        let preparation_preserves_optimality = self
-            .output_objective
-            .as_ref()
-            .is_none_or(|output| output.preserves_optimality);
-        self.output_objective = Some(OutputObjective::new(
-            entry_sense,
-            entry_function,
-            entry_preserves_optimality && preparation_preserves_optimality,
-        ));
-        self.canonicalize_output_objective();
-        result
-    }
-
     /// Record that the active formulation no longer provides an optimality
     /// proof for the reconstructed output semantics. Once lost, later rewrites
     /// cannot infer that guarantee again.
-    fn invalidate_output_objective_optimality(&mut self) {
-        self.capture_output_objective();
-        self.output_objective
-            .as_mut()
-            .expect("capture_output_objective installs the output objective")
-            .preserves_optimality = false;
+    ///
+    /// Returns whether the guarantee changed from available to unavailable.
+    fn invalidate_output_objective_optimality(&mut self) -> bool {
+        let Some(output) = self.output_objective.as_mut() else {
+            return false;
+        };
+        std::mem::replace(&mut output.preserves_optimality, false)
     }
 
     /// Objective pair that Solution and SampleSet evaluation must expose.
@@ -539,14 +503,6 @@ impl Instance {
             .as_ref()
             .map(|output| (output.sense, &output.function))
             .unwrap_or((self.sense, &self.objective))
-    }
-
-    /// Reject conversions to roots that cannot represent output semantics.
-    fn ensure_no_output_objective(&self, operation: &str) -> crate::Result<()> {
-        if self.output_objective.is_some() {
-            crate::bail!("{operation} cannot preserve Instance.output_objective");
-        }
-        Ok(())
     }
 
     /// Access the decision-variable definition table.
@@ -1003,7 +959,7 @@ impl ParametricInstance {
 
     /// Remove an output sidecar when its complete semantics are already
     /// represented by the active objective pair.
-    fn canonicalize_output_objective(&mut self) {
+    fn remove_redundant_output_objective(&mut self) {
         let is_redundant = self.output_objective.as_ref().is_some_and(|output| {
             output.preserves_optimality
                 && output.sense == self.sense

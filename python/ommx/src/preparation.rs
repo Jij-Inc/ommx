@@ -571,7 +571,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Successful Preparation mutates the owner into the target class while preserving output evaluation semantics.
+    /// Selected owner operations establish their own output semantics, and successful composition reaches the target class.
     ///
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense
     /// >>> x = DecisionVariable.binary(0)

@@ -135,12 +135,15 @@ impl Instance {
             .expect("replacement IDs were read from named functions");
     }
 
-    /// Apply a substitution together with prevalidated fresh decision variables.
+    /// Apply an exact encoding's active-formulation substitution together with
+    /// prevalidated fresh decision variables.
     ///
-    /// This owner-level operation is the narrow cross-module boundary used by
-    /// log encoding. The substitution plan cannot be detached from this
-    /// receiver and committed to another [`Instance`].
-    pub(super) fn substitute_acyclic_with_fresh_decision_variables(
+    /// This operation captures the pre-encoding active objective if and only if
+    /// the validated substitution changes it. Capture happens after the last
+    /// fallible operation, immediately before the planned rewrite is committed.
+    /// Generic [`Substitute`] operations do not use this path and retain their
+    /// existing output-objective semantics.
+    pub(super) fn apply_encoding_substitution(
         &mut self,
         acyclic: &crate::AcyclicAssignments,
         fresh_variables: Vec<(VariableID, DecisionVariable, ModelingLabel)>,
@@ -167,6 +170,10 @@ impl Instance {
         }
 
         let plan = self.plan_substitution(acyclic)?;
+        let objective_changed = plan
+            .objective
+            .as_ref()
+            .is_some_and(|objective| objective != &self.objective);
 
         // This is the last fallible operation. It plans and validates the
         // dependency update before mutating the table, and clones only the
@@ -179,7 +186,11 @@ impl Instance {
                 .insert(id, variable, label, None, atol)
                 .expect("fresh decision variable IDs were reserved from this instance");
         }
+        let captured_output = objective_changed && self.capture_output_objective();
         self.commit_substitution(plan);
+        if objective_changed && !captured_output {
+            self.remove_redundant_output_objective();
+        }
         Ok(())
     }
 }
@@ -430,7 +441,7 @@ mod tests {
         let before = instance.clone();
 
         let err = instance
-            .substitute_acyclic_with_fresh_decision_variables(&acyclic, Vec::new(), ATol::default())
+            .apply_encoding_substitution(&acyclic, Vec::new(), ATol::default())
             .unwrap_err();
 
         assert!(err.to_string().contains("unowned decision variable"));

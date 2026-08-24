@@ -58,13 +58,14 @@ impl Instance {
     /// assert_eq!(sample_set.objectives().get(sample_id), Some(&1.0));
     /// ```
     pub fn convert_active_objective(&mut self, target: Sense) -> bool {
-        let converted = if self.sense == target {
-            false
-        } else {
-            self.capture_output_objective();
-            convert_objective_pair(&mut self.sense, &mut self.objective, target)
-        };
-        self.canonicalize_output_objective();
+        if self.sense == target {
+            return false;
+        }
+        let captured = self.capture_output_objective();
+        let converted = convert_objective_pair(&mut self.sense, &mut self.objective, target);
+        if !captured {
+            self.remove_redundant_output_objective();
+        }
         converted
     }
 
@@ -149,8 +150,11 @@ impl Instance {
         } else {
             false
         };
-        self.canonicalize_output_objective();
-        active_converted || output_converted
+        let converted = active_converted || output_converted;
+        if converted {
+            self.remove_redundant_output_objective();
+        }
+        converted
     }
 }
 
@@ -341,7 +345,7 @@ impl ParametricInstance {
             description: self.description,
             annotations: self.annotations,
         };
-        instance.canonicalize_output_objective();
+        instance.remove_redundant_output_objective();
         Ok(instance)
     }
 }
@@ -396,8 +400,8 @@ mod output_objective_tests {
         assert!(!output.preserves_optimality());
         assert_evaluation(&instance, Sense::Maximize, 1.0);
 
-        // Only the output pair still needs normalization. Its false flag must
-        // keep the sidecar present even when both pairs become identical.
+        // The false flag is independent output semantics, so the sidecar must
+        // remain present even when the active and output pairs become identical.
         assert!(instance.as_minimization_problem());
         let output = instance.output_objective().unwrap();
         assert_eq!(output.sense(), Sense::Minimize);
@@ -451,7 +455,7 @@ mod output_objective_tests {
     }
 
     #[test]
-    fn with_parameters_canonicalizes_redundant_output_objective() {
+    fn with_parameters_removes_redundant_output_objective() {
         let mut parametric = ParametricInstance::new(
             Sense::Minimize,
             Function::from(linear!(1)),
