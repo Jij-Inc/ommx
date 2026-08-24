@@ -2,12 +2,6 @@ use super::*;
 use crate::{v2, Parse, ParseError, RawParseError};
 use std::collections::{BTreeMap, BTreeSet};
 
-fn sampled_collection_has_payload<T: crate::ConstraintType>(
-    collection: &crate::constraint_type::SampledCollection<T>,
-) -> bool {
-    !collection.is_empty()
-}
-
 fn validate_sampled_indicator_structural_ids(
     constraints: &crate::constraint_type::SampledCollection<crate::IndicatorConstraint>,
     decision_variables: &crate::SampledDecisionVariableTable,
@@ -260,9 +254,7 @@ impl Parse for v2::SampleSet {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.SampleSet";
-        let required_features =
-            crate::v2_io::parse_required_features(self.required_features, message)?;
-        crate::v2_io::reject_output_objective_feature(&required_features, message)?;
+        crate::v2_io::validate_required_features(self.required_features, message)?;
         let feasibility_atol =
             crate::v2_io::parse_feasibility_atol(self.feasibility_atol, message)?;
         let annotations =
@@ -304,28 +296,6 @@ impl Parse for v2::SampleSet {
             .map(|value| value.parse_as(&feasibility_atol, message, "sampled_sos1_constraints"))
             .transpose()?
             .unwrap_or_default();
-
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::ConstraintIndicator,
-            sampled_collection_has_payload(&indicator_constraints),
-            message,
-            "sampled_indicator_constraints",
-        )?;
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::ConstraintOneHot,
-            sampled_collection_has_payload(&one_hot_constraints),
-            message,
-            "sampled_one_hot_constraints",
-        )?;
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::ConstraintSos1,
-            sampled_collection_has_payload(&sos1_constraints),
-            message,
-            "sampled_sos1_constraints",
-        )?;
 
         let named_functions = self
             .sampled_named_functions

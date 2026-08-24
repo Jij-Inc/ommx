@@ -4,7 +4,7 @@
 //! sibling domain owner modules can share the same protobuf-boundary policies
 //! without exporting those helpers as Rust SDK API.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 
 use crate::constraint_type::IDType;
 use crate::v2::Feature;
@@ -52,11 +52,15 @@ pub fn extension_annotations_from_v2_map(
     Ok(annotations.into_iter().collect())
 }
 
-pub fn parse_required_features(
+/// Validate that every required feature is known to this SDK.
+///
+/// Payload fields are deliberately not cross-checked against this list. The
+/// writer owns declaring the features its payload uses; the reader uses only
+/// the declarations to decide whether it can interpret the payload.
+pub fn validate_required_features(
     features: Vec<i32>,
     message: &'static str,
-) -> Result<BTreeSet<Feature>, ParseError> {
-    let mut parsed = BTreeSet::new();
+) -> Result<(), ParseError> {
     for value in features {
         let feature = Feature::try_from(value).map_err(|_| {
             RawParseError::UnknownEnumValue {
@@ -72,47 +76,34 @@ pub fn parse_required_features(
             }
             .context(message, "required_features"));
         }
-        parsed.insert(feature);
     }
-    Ok(parsed)
+    Ok(())
 }
 
-pub fn validate_feature_payload(
-    required_features: &BTreeSet<Feature>,
-    feature: Feature,
-    has_payload: bool,
-    message: &'static str,
-    field: &'static str,
-) -> Result<(), ParseError> {
-    let feature_required = required_features.contains(&feature);
-    match (feature_required, has_payload) {
-        (true, true) | (false, false) => Ok(()),
-        (true, false) => Err(RawParseError::InvalidInstance(format!(
-            "{feature:?} is listed in required_features, but {field} is empty",
-        ))
-        .context(message, field)),
-        (false, true) => Err(RawParseError::InvalidInstance(format!(
-            "{field} is non-empty, but required_features does not include {feature:?}",
-        ))
-        .context(message, "required_features")),
-    }
-}
+#[cfg(test)]
+mod required_features_tests {
+    use super::*;
 
-/// Reject the output-objective feature on v2 roots that cannot carry its payload.
-///
-/// `Feature` is a protobuf-global enum, so merely recognizing its numeric value
-/// is not enough to establish that a particular root can represent it.
-pub fn reject_output_objective_feature(
-    required_features: &BTreeSet<Feature>,
-    message: &'static str,
-) -> Result<(), ParseError> {
-    validate_feature_payload(
-        required_features,
-        Feature::OutputObjective,
-        false,
-        message,
-        "output_objective",
-    )
+    #[test]
+    fn accepts_known_features() {
+        validate_required_features(
+            vec![
+                Feature::ConstraintIndicator as i32,
+                Feature::ConstraintOneHot as i32,
+                Feature::ConstraintSos1 as i32,
+                Feature::OutputObjective as i32,
+            ],
+            "test.Message",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn rejects_unspecified_and_unknown_features() {
+        for feature in [Feature::Unspecified as i32, i32::MAX] {
+            assert!(validate_required_features(vec![feature], "test.Message").is_err());
+        }
+    }
 }
 
 pub fn parse_feasibility_atol(

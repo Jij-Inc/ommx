@@ -474,31 +474,13 @@ mod tests {
     }
 
     #[test]
-    fn v2_instance_output_objective_requires_feature() {
-        let mut proto = v2::Instance::from(instance_with_output_objective());
+    fn v2_instance_reader_accepts_output_objective_without_feature_declaration() {
+        let instance = instance_with_output_objective();
+        let mut proto = v2::Instance::from(instance.clone());
         proto.required_features.clear();
 
-        let err = Instance::try_from(proto).unwrap_err();
-
-        assert!(
-            err.to_string().contains("required_features")
-                && err.to_string().contains("OutputObjective"),
-            "unexpected error: {err}",
-        );
-    }
-
-    #[test]
-    fn v2_instance_output_objective_feature_requires_payload() {
-        let mut proto = v2::Instance::from(instance_with_output_objective());
-        proto.output_objective = None;
-
-        let err = Instance::try_from(proto).unwrap_err();
-
-        assert!(
-            err.to_string().contains("output_objective")
-                && err.to_string().contains("OutputObjective"),
-            "unexpected error: {err}",
-        );
+        let restored = Instance::try_from(proto).unwrap();
+        assert_eq!(restored, instance);
     }
 
     #[test]
@@ -566,32 +548,6 @@ mod tests {
     }
 
     #[test]
-    fn v2_parametric_instance_output_objective_requires_feature() {
-        let mut proto = v2::ParametricInstance::from(parametric_instance_with_output_objective());
-        proto.required_features.clear();
-
-        let err = ParametricInstance::try_from(proto).unwrap_err();
-        assert!(
-            err.to_string().contains("required_features")
-                && err.to_string().contains("OutputObjective"),
-            "unexpected error: {err}",
-        );
-    }
-
-    #[test]
-    fn v2_parametric_instance_output_objective_feature_requires_payload() {
-        let mut proto = v2::ParametricInstance::from(parametric_instance_with_output_objective());
-        proto.output_objective = None;
-
-        let err = ParametricInstance::try_from(proto).unwrap_err();
-        assert!(
-            err.to_string().contains("output_objective")
-                && err.to_string().contains("OutputObjective"),
-            "unexpected error: {err}",
-        );
-    }
-
-    #[test]
     fn v2_parametric_instance_rejects_undefined_output_objective_id() {
         let mut proto = v2::ParametricInstance::from(parametric_instance_with_output_objective());
         proto.output_objective.as_mut().unwrap().function =
@@ -601,47 +557,6 @@ mod tests {
         assert!(
             err.to_string().contains("output_objective.function")
                 && err.to_string().contains("Undefined variable ID"),
-            "unexpected error: {err}",
-        );
-    }
-
-    #[test]
-    fn v2_solution_and_sample_set_reject_output_objective_feature() {
-        let instance = Instance::default();
-        let state = crate::v1::State::default();
-
-        let mut solution = v2::Solution::from(instance.evaluate(&state, ATol::default()).unwrap());
-        solution
-            .required_features
-            .push(v2::Feature::OutputObjective as i32);
-        let solution_error = crate::Solution::try_from(solution).unwrap_err();
-        assert!(solution_error.to_string().contains("OutputObjective"));
-
-        let mut sample_set = v2::SampleSet::from(
-            instance
-                .evaluate_samples(&Sampled::from(state), ATol::default())
-                .unwrap(),
-        );
-        sample_set
-            .required_features
-            .push(v2::Feature::OutputObjective as i32);
-        let sample_set_error = crate::SampleSet::try_from(sample_set).unwrap_err();
-        assert!(sample_set_error.to_string().contains("OutputObjective"));
-    }
-
-    #[test]
-    fn v2_instance_deserialization_rejects_missing_required_feature() {
-        let mut proto = v2::Instance::from(instance_with_special_constraints());
-        proto.required_features = vec![
-            v2::Feature::ConstraintOneHot as i32,
-            v2::Feature::ConstraintSos1 as i32,
-        ];
-
-        let err = Instance::try_from(proto).unwrap_err();
-
-        assert!(
-            err.to_string().contains("required_features")
-                && err.to_string().contains("ConstraintIndicator"),
             "unexpected error: {err}",
         );
     }

@@ -29,9 +29,12 @@ pub struct ModelingLabel {
 /// different problem. Top-level roots therefore declare the semantic features
 /// required by the concrete payload.
 ///
-/// Readers must reject payloads containing unknown, unsupported, or unspecified
+/// Readers must reject payloads containing unknown or unspecified
 /// `required_features`. Writers must include every feature whose omission would
 /// let an older reader silently interpret a weaker or otherwise different model.
+/// Readers use only `required_features` for this compatibility decision and do
+/// not compare the declarations with decoded payload fields. Declaring every
+/// feature used by a payload is the writer's responsibility.
 /// Writers must not emit `FEATURE_UNSPECIFIED` as a required feature.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

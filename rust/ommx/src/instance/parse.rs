@@ -104,43 +104,6 @@ fn parse_v2_output_objective(
     ))
 }
 
-fn created_collection_has_payload<T: crate::ConstraintType>(
-    collection: &ConstraintCollection<T>,
-) -> bool {
-    !collection.active().is_empty() || !collection.removed().is_empty()
-}
-
-fn validate_instance_special_features(
-    required_features: &std::collections::BTreeSet<v2::Feature>,
-    indicator_constraints: &ConstraintCollection<crate::IndicatorConstraint>,
-    one_hot_constraints: &ConstraintCollection<crate::OneHotConstraint>,
-    sos1_constraints: &ConstraintCollection<crate::Sos1Constraint>,
-    message: &'static str,
-) -> Result<(), ParseError> {
-    crate::v2_io::validate_feature_payload(
-        required_features,
-        v2::Feature::ConstraintIndicator,
-        created_collection_has_payload(indicator_constraints),
-        message,
-        "indicator_constraints",
-    )?;
-    crate::v2_io::validate_feature_payload(
-        required_features,
-        v2::Feature::ConstraintOneHot,
-        created_collection_has_payload(one_hot_constraints),
-        message,
-        "one_hot_constraints",
-    )?;
-    crate::v2_io::validate_feature_payload(
-        required_features,
-        v2::Feature::ConstraintSos1,
-        created_collection_has_payload(sos1_constraints),
-        message,
-        "sos1_constraints",
-    )?;
-    Ok(())
-}
-
 fn validate_created_constraint_references<T: crate::ConstraintType>(
     collection: &ConstraintCollection<T>,
     valid_ids: &VariableIDSet,
@@ -496,8 +459,7 @@ impl Parse for v2::Instance {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.Instance";
-        let required_features =
-            crate::v2_io::parse_required_features(self.required_features, message)?;
+        crate::v2_io::validate_required_features(self.required_features, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
         let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
@@ -528,14 +490,6 @@ impl Parse for v2::Instance {
             .output_objective
             .map(|value| parse_v2_output_objective(value, &decision_variable_ids, message))
             .transpose()?;
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::OutputObjective,
-            output_objective.is_some(),
-            message,
-            "output_objective",
-        )?;
-
         let constraint_collection = self
             .regular_constraints
             .map(|value| value.parse_as(&(), message, "regular_constraints"))
@@ -556,14 +510,6 @@ impl Parse for v2::Instance {
             .map(|value| value.parse_as(&(), message, "sos1_constraints"))
             .transpose()?
             .unwrap_or_default();
-        validate_instance_special_features(
-            &required_features,
-            &indicator_constraint_collection,
-            &one_hot_constraint_collection,
-            &sos1_constraint_collection,
-            message,
-        )?;
-
         validate_created_constraint_references(
             &constraint_collection,
             &decision_variable_ids,
@@ -905,8 +851,7 @@ impl Parse for v2::ParametricInstance {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.ParametricInstance";
-        let required_features =
-            crate::v2_io::parse_required_features(self.required_features, message)?;
+        crate::v2_io::validate_required_features(self.required_features, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
         let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
@@ -953,14 +898,6 @@ impl Parse for v2::ParametricInstance {
             .output_objective
             .map(|value| parse_v2_output_objective(value, &all_variable_ids, message))
             .transpose()?;
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::OutputObjective,
-            output_objective.is_some(),
-            message,
-            "output_objective",
-        )?;
-
         let constraint_collection = self
             .regular_constraints
             .map(|value| value.parse_as(&(), message, "regular_constraints"))
@@ -981,14 +918,6 @@ impl Parse for v2::ParametricInstance {
             .map(|value| value.parse_as(&(), message, "sos1_constraints"))
             .transpose()?
             .unwrap_or_default();
-        validate_instance_special_features(
-            &required_features,
-            &indicator_constraint_collection,
-            &one_hot_constraint_collection,
-            &sos1_constraint_collection,
-            message,
-        )?;
-
         validate_created_constraint_references(
             &constraint_collection,
             &all_variable_ids,
