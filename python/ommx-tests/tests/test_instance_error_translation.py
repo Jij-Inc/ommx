@@ -63,8 +63,8 @@ def test_to_qubo_rejects_missing_penalty_weight():
     )
 
     with pytest.raises(
-        RuntimeError,
+        ValueError,
         match=r"Fixed penalty weights must match active regular constraint IDs: "
-        r"missing \[ConstraintID\(456\)\], unexpected \[\]",
+        r"missing \{ConstraintID\(456\)\}, unexpected \{\}",
     ):
         instance.to_qubo(penalty_weights={123: 1.0})

@@ -41,6 +41,10 @@ restored the active sense and used
 the penalized solver energy as the evaluated objective. The returned QUBO/HUBO
 coefficients keep the same meaning.
 
+An `Instance` or `ParametricInstance` with an explicit output objective cannot
+be represented losslessly by the v1 wire format. Its `to_v1_bytes()` method
+therefore raises `RuntimeError`; use `to_v2_bytes()` for these models.
+
 Penalty rewrites also map solver-reported optimality conservatively: when an
 active-formulation proof does not transport, evaluated output remains
 `Optimality.Unspecified`. Executable postconditions are documented on

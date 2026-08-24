@@ -20,6 +20,33 @@ pub struct InvalidPenaltyWeight {
     atol: ATol,
 }
 
+/// Signal that fixed penalty weights do not cover exactly the active regular
+/// constraint IDs.
+///
+/// Callers can inspect [`Self::missing_ids`] and [`Self::unexpected_ids`],
+/// correct the ID-keyed weight decision, and retry the unchanged [`Instance`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+#[error(
+    "Fixed penalty weights must match active regular constraint IDs: missing {missing_ids:?}, unexpected {unexpected_ids:?}"
+)]
+pub struct FixedPenaltyWeightIDMismatch {
+    missing_ids: BTreeSet<ConstraintID>,
+    unexpected_ids: BTreeSet<ConstraintID>,
+}
+
+impl FixedPenaltyWeightIDMismatch {
+    /// Active regular constraint IDs without a supplied weight.
+    pub fn missing_ids(&self) -> &BTreeSet<ConstraintID> {
+        &self.missing_ids
+    }
+
+    /// Supplied weight IDs that are not active regular constraints.
+    pub fn unexpected_ids(&self) -> &BTreeSet<ConstraintID> {
+        &self.unexpected_ids
+    }
+}
+
 impl InvalidPenaltyWeight {
     /// Return the rejected weight.
     pub fn weight(&self) -> f64 {
@@ -77,7 +104,8 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// The transformed objective contains parameterized penalties and preserves the entry objective for output.
+    /// The transformed objective contains parameterized penalties and preserves
+    /// the output semantics present on entry.
     ///
     /// ```
     /// use ommx::{
@@ -213,7 +241,8 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Fixed penalties change the active objective while preserving the entry objective for output.
+    /// Fixed penalties change the active objective while preserving the output
+    /// semantics present on entry.
     ///
     /// ```
     /// use ommx::{
@@ -254,7 +283,8 @@ impl Instance {
     /// Returns an error if an unsupported active special constraint is present,
     /// if `weights` does not cover exactly the active regular constraints, if a
     /// weight is invalid, or if constructing or adding a penalty term fails.
-    /// Invalid weights retain [`InvalidPenaltyWeight`] in the error chain. Any
+    /// Mismatched weight IDs retain [`FixedPenaltyWeightIDMismatch`] and invalid
+    /// numeric weights retain [`InvalidPenaltyWeight`] in the error chain. Any
     /// error leaves the instance unchanged.
     pub fn penalty_method_with_fixed_weights(
         &mut self,
@@ -322,7 +352,8 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// The transformed objective contains one shared penalty parameter and preserves the entry objective for output.
+    /// The transformed objective contains one shared penalty parameter and
+    /// preserves the output semantics present on entry.
     ///
     /// ```
     /// use ommx::{
@@ -466,7 +497,8 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// The uniform fixed penalty changes the active objective while preserving the entry objective for output.
+    /// The uniform fixed penalty changes the active objective while preserving
+    /// the output semantics present on entry.
     ///
     /// ```
     /// use ommx::{
@@ -568,17 +600,17 @@ impl Instance {
         let missing_ids = active_ids
             .difference(&weight_ids)
             .copied()
-            .collect::<Vec<_>>();
+            .collect::<BTreeSet<_>>();
         let unexpected_ids = weight_ids
             .difference(&active_ids)
             .copied()
-            .collect::<Vec<_>>();
+            .collect::<BTreeSet<_>>();
         if !missing_ids.is_empty() || !unexpected_ids.is_empty() {
-            crate::bail!(
-                { ?missing_ids, ?unexpected_ids },
-                "Fixed penalty weights must match active regular constraint IDs: \
-                 missing {missing_ids:?}, unexpected {unexpected_ids:?}",
-            );
+            return Err(FixedPenaltyWeightIDMismatch {
+                missing_ids,
+                unexpected_ids,
+            }
+            .into());
         }
         Ok(())
     }
@@ -605,10 +637,9 @@ impl Instance {
         let mut constraint_collection = self.constraint_collection.clone();
         constraint_collection.move_active_rows_to_removed(removals)?;
 
-        if !self.constraint_collection.active().is_empty() || objective != self.objective {
-            self.capture_output_objective();
-            self.invalidate_output_objective_optimality();
-        }
+        debug_assert!(!self.constraint_collection.active().is_empty());
+        self.capture_output_objective();
+        self.invalidate_output_objective_optimality();
         self.objective = objective;
         self.constraint_collection = constraint_collection;
         Ok(())
@@ -1372,21 +1403,31 @@ mod tests {
     fn fixed_penalty_weights_require_exact_active_id_coverage() {
         let before = create_test_instance_with_constraints();
         let cases = [
-            BTreeMap::from([(ConstraintID::from(1), 2.0)]),
-            BTreeMap::from([
-                (ConstraintID::from(1), 2.0),
-                (ConstraintID::from(2), 3.0),
-                (ConstraintID::from(3), 4.0),
-            ]),
+            (
+                BTreeMap::from([(ConstraintID::from(1), 2.0)]),
+                BTreeSet::from([ConstraintID::from(2)]),
+                BTreeSet::new(),
+            ),
+            (
+                BTreeMap::from([
+                    (ConstraintID::from(1), 2.0),
+                    (ConstraintID::from(2), 3.0),
+                    (ConstraintID::from(3), 4.0),
+                ]),
+                BTreeSet::new(),
+                BTreeSet::from([ConstraintID::from(3)]),
+            ),
         ];
 
-        for weights in cases {
+        for (weights, missing_ids, unexpected_ids) in cases {
             let mut instance = before.clone();
             let err = instance
                 .penalty_method_with_fixed_weights(&weights, ATol::default())
                 .unwrap_err();
 
-            assert!(err.to_string().contains("constraint IDs"));
+            let signal = err.downcast_ref::<FixedPenaltyWeightIDMismatch>().unwrap();
+            assert_eq!(signal.missing_ids(), &missing_ids);
+            assert_eq!(signal.unexpected_ids(), &unexpected_ids);
             assert_eq!(instance, before);
         }
     }

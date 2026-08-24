@@ -4,8 +4,8 @@ use crate::{
         constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
         PyDataFrame, ToPandasEntry,
     },
-    Constraint, DecisionVariable, Function, Instance, NamedFunction, Parameter, RemovedConstraint,
-    Sense,
+    Constraint, DecisionVariable, Function, Instance, NamedFunction, OutputObjective, Parameter,
+    RemovedConstraint, Sense,
 };
 use ommx::{ConstraintID, NamedFunctionID, VariableID};
 use pyo3::{
@@ -261,7 +261,7 @@ impl ParametricInstance {
     ///
     /// # Postconditions
     ///
-    /// Materialization substitutes parameters in active energy while retaining the pre-penalty objective for output evaluation. An existing output objective remains explicit even if specialization makes it structurally equal to the active objective.
+    /// Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists. Materialization substitutes parameters in the active energy, and an existing output objective remains explicit even if specialization makes it structurally equal to the active objective.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -392,6 +392,31 @@ impl ParametricInstance {
     #[getter]
     pub fn objective(&self) -> Function {
         Function(self.inner.objective().clone())
+    }
+
+    /// Read-only output objective retained through parameter materialization,
+    /// if one has been captured.
+    ///
+    /// # Postconditions
+    ///
+    /// Conversion preserves both absence and an explicit output objective equal to the active pair.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> assert source.as_parametric_instance().output_objective is None
+    /// >>> assert source.convert_active_objective(Sense.Minimize)
+    /// >>> assert source.convert_active_objective(Sense.Maximize)
+    /// >>> parametric = source.as_parametric_instance()
+    /// >>> output = parametric.output_objective
+    /// >>> assert output is not None
+    /// >>> assert output.sense == parametric.sense
+    /// >>> assert output.function.almost_equal(parametric.objective)
+    #[getter]
+    pub fn output_objective(&self) -> Option<OutputObjective> {
+        self.inner.output_objective().cloned().map(Into::into)
     }
 
     /// List of all decision variables in the parametric instance sorted by

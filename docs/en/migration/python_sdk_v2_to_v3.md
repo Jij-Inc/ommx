@@ -314,8 +314,13 @@ The executable postconditions are documented on {meth}`~ommx.Instance.to_qubo`,
 {meth}`~ommx.Instance.to_hubo`, {meth}`~ommx.Instance.evaluate`, and
 {meth}`~ommx.Instance.evaluate_samples`.
 
+An `Instance` or `ParametricInstance` with an explicit output objective cannot
+be represented losslessly by the v1 wire format. Its `to_v1_bytes()` method
+raises `RuntimeError`; use `to_v2_bytes()` for these models.
+
 The same pipeline can be run explicitly with
-{meth}`~ommx.Instance.prepare`, {meth}`~ommx.Instance.as_qubo_format`, or
+{meth}`~ommx.Instance.prepare` followed by
+{meth}`~ommx.Instance.as_qubo_format` or
 {meth}`~ommx.Instance.as_hubo_format`. The matching target classes and editable
 policies are provided by {meth}`~ommx.InstanceClass.qubo`,
 {meth}`~ommx.InstanceClass.hubo`,

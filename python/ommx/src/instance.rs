@@ -21,6 +21,48 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+/// Read-only objective semantics used when evaluating solver output.
+///
+/// # Invariants
+///
+/// The sense, function, and optimality-transport flag are exposed as one
+/// root-owned value. Instances create and update this value through their
+/// mathematical owner operations; Python callers cannot construct or mutate it.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(frozen)]
+#[derive(Clone)]
+pub struct OutputObjective {
+    inner: ommx::OutputObjective,
+}
+
+impl From<ommx::OutputObjective> for OutputObjective {
+    fn from(inner: ommx::OutputObjective) -> Self {
+        Self { inner }
+    }
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl OutputObjective {
+    /// Optimization sense used for evaluated output objective values.
+    #[getter]
+    pub fn sense(&self) -> Sense {
+        self.inner.sense().into()
+    }
+
+    /// Function evaluated after the full state is populated.
+    #[getter]
+    pub fn function(&self) -> Function {
+        Function(self.inner.function().clone())
+    }
+
+    /// Whether active-formulation optimality transports to the output objective.
+    #[getter]
+    pub fn preserves_optimality(&self) -> bool {
+        self.inner.preserves_optimality()
+    }
+}
+
 /// Optimization problem instance.
 ///
 /// # Invariants
@@ -324,6 +366,35 @@ impl Instance {
     pub fn set_objective(&mut self, objective: Function) -> OmmxPyResult<()> {
         self.inner.set_objective(objective.0)?;
         Ok(())
+    }
+
+    /// Read-only output objective used by {meth}`~ommx.Instance.evaluate` and
+    /// {meth}`~ommx.Instance.evaluate_samples`, if one has been captured.
+    ///
+    /// # Postconditions
+    ///
+    /// Absence and an explicit output objective equal to the active pair remain distinct.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> assert instance.output_objective is None
+    /// >>> assert instance.convert_active_objective(Sense.Minimize)
+    /// >>> output = instance.output_objective
+    /// >>> assert output is not None
+    /// >>> assert output.sense == Sense.Maximize
+    /// >>> assert output.function.evaluate({0: 1}) == 3.0
+    /// >>> assert output.preserves_optimality
+    /// >>> assert instance.convert_active_objective(Sense.Maximize)
+    /// >>> output = instance.output_objective
+    /// >>> assert output is not None
+    /// >>> assert output.sense == instance.sense
+    /// >>> assert output.function.almost_equal(instance.objective)
+    #[getter]
+    pub fn output_objective(&self) -> Option<OutputObjective> {
+        self.inner.output_objective().cloned().map(Into::into)
     }
 
     /// Get all unique decision variable names in this instance
@@ -995,7 +1066,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// The driver is equivalent to QUBO Preparation followed by active-objective formatting and retains the input output semantics.
+    /// The driver is equivalent to QUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.
     ///
     /// >>> import copy
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
@@ -1052,7 +1123,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// The driver is equivalent to HUBO Preparation followed by active-objective formatting and retains the input output semantics.
+    /// The driver is equivalent to HUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.
     ///
     /// >>> import copy
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
@@ -1149,7 +1220,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Materialization evaluates penalty energy actively while retaining the pre-penalty objective for output and invalidating optimality transport.
+    /// Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -1193,7 +1264,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Materialization evaluates uniform-penalty energy actively while retaining the pre-penalty objective for output and invalidating optimality transport.
+    /// Uniform-penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -1845,7 +1916,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Encoding rewrites the active objective while preserving the entry objective for output evaluation.
+    /// Encoding preserves existing output semantics, or captures the pre-encoding active objective when no output objective exists, while rewriting the active objective.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.integer(0, lower=0, upper=3)
@@ -1914,7 +1985,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Encoding rewrites the active objective while preserving the entry objective for output evaluation.
+    /// Encoding preserves existing output semantics, or captures the pre-encoding active objective when no output objective exists, while rewriting the active objective.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
@@ -2749,7 +2820,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Reduction rewrites active expressions while preserving the entry objective for output evaluation.
+    /// Reduction preserves existing output semantics, or captures the pre-reduction active objective when no output objective exists, while rewriting active expressions.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)

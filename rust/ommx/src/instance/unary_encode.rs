@@ -528,6 +528,10 @@ mod tests {
         ) {
             let decoded_value = decoded_unary_value(target.lower, &bits);
             let expected_state = state_with_original_value(state.clone(), &target, decoded_value);
+            let expected_active_objective = instance
+                .objective()
+                .evaluate(&expected_state, ATol::default())
+                .unwrap();
             let expected = instance.evaluate(&expected_state, ATol::default()).unwrap();
 
             let mut encoded_instance = instance.clone();
@@ -543,8 +547,17 @@ mod tests {
             prop_assert_eq!(binary_ids.len(), target.width);
 
             let encoded_state = state_with_unary_bits(state, &target, &binary_ids, &bits);
+            let actual_active_objective = encoded_instance
+                .objective()
+                .evaluate(&encoded_state, ATol::default())
+                .unwrap();
             let actual = encoded_instance.evaluate(&encoded_state, ATol::default()).unwrap();
 
+            assert_float_eq(
+                "active objective",
+                expected_active_objective,
+                actual_active_objective,
+            )?;
             assert_same_observable_evaluation(&expected, &actual)?;
         }
 
@@ -580,9 +593,22 @@ mod tests {
             let prefix_state =
                 state_with_unary_bits(state.clone(), &target, &binary_ids, &prefix_bits);
             let suffix_state = state_with_unary_bits(state, &target, &binary_ids, &suffix_bits);
+            let prefix_active_objective = encoded_instance
+                .objective()
+                .evaluate(&prefix_state, ATol::default())
+                .unwrap();
+            let suffix_active_objective = encoded_instance
+                .objective()
+                .evaluate(&suffix_state, ATol::default())
+                .unwrap();
             let prefix = encoded_instance.evaluate(&prefix_state, ATol::default()).unwrap();
             let suffix = encoded_instance.evaluate(&suffix_state, ATol::default()).unwrap();
 
+            assert_float_eq(
+                "active objective",
+                prefix_active_objective,
+                suffix_active_objective,
+            )?;
             assert_same_observable_evaluation(&prefix, &suffix)?;
         }
     }
@@ -642,7 +668,7 @@ mod tests {
     }
 
     #[test]
-    fn unary_encode_captures_changed_active_objective_and_preserves_existing_output() {
+    fn unary_encode_captures_targeted_active_objective_and_preserves_existing_output() {
         let id = VariableID::from(0);
         let make_instance = || {
             let variable = DecisionVariable::new(
@@ -702,7 +728,7 @@ mod tests {
     }
 
     #[test]
-    fn unary_encode_does_not_capture_when_active_objective_is_unchanged() {
+    fn unary_encode_does_not_capture_when_active_objective_is_not_targeted() {
         let id = VariableID::from(0);
         let variable = DecisionVariable::new(
             Kind::Integer,

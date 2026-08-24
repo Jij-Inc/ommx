@@ -75,6 +75,7 @@ __all__ = [
     "OneHotConstraint",
     "OpenSolve",
     "Optimality",
+    "OutputObjective",
     "Parameter",
     "Parameters",
     "ParametricInstance",
@@ -276,8 +277,10 @@ class Artifact:
     An artifact is an OCI container image that stores OMMX data
     (instances, solutions, sample sets, etc.) as layers.
 
-    >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-    >>> print(artifact.image_name)
+    This example requires remote registry access and is not executed as a doctest.
+
+    >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
+    >>> print(artifact.image_name)  # doctest: +SKIP
     ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
     """
 
@@ -351,8 +354,11 @@ class Artifact:
         archives importable while still making the imported artifact
         addressable in SQLite.
 
-        >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
-        >>> print(artifact.image_name)
+        This example requires an external archive and writes to the persistent
+        Local Registry, so it is not executed as a doctest.
+
+        >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")  # doctest: +SKIP
+        >>> print(artifact.image_name)  # doctest: +SKIP
         ghcr.io/jij-inc/ommx/random_lp_instance:...
         """
     @staticmethod
@@ -392,8 +398,10 @@ class Artifact:
         `Artifact.load(image_name)` later), use
         {meth}`Artifact.import_archive`.
 
-        >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")
-        >>> for layer in manifest.layers:
+        This example requires an external archive and is not executed as a doctest.
+
+        >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")  # doctest: +SKIP
+        >>> for layer in manifest.layers:  # doctest: +SKIP
         ...     print(layer.media_type)
         application/org.ommx.v1.instance
         """
@@ -404,8 +412,10 @@ class Artifact:
 
         If the image is not found in local registry, it will try to pull from remote registry.
 
-        >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-        >>> print(artifact.image_name)
+        This example requires remote registry access and is not executed as a doctest.
+
+        >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
+        >>> print(artifact.image_name)  # doctest: +SKIP
         ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 
 
@@ -536,9 +546,11 @@ class ArtifactDraft:
     r"""
     Mutable draft for OMMX Artifacts.
 
-    >>> draft = ArtifactDraft.temp()
-    >>> artifact = draft.commit()
-    >>> print(artifact.image_name)
+    This example writes to the persistent Local Registry and is not executed as a doctest.
+
+    >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    >>> artifact = draft.commit()  # doctest: +SKIP
+    >>> print(artifact.image_name)  # doctest: +SKIP
     ttl.sh/...-...-...-...-...:1h
     """
     @staticmethod
@@ -555,10 +567,13 @@ class ArtifactDraft:
         >>> instance = generator.get_v1_instance()
         >>> import uuid
         >>> image_name = f"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}"
-        >>> draft = ArtifactDraft.new(image_name)
-        >>> _desc = draft.add_instance(instance)
-        >>> artifact = draft.commit()
-        >>> print(artifact.image_name)
+
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.new(image_name)  # doctest: +SKIP
+        >>> _desc = draft.add_instance(instance)  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> print(artifact.image_name)  # doctest: +SKIP
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
 
@@ -602,10 +617,13 @@ class ArtifactDraft:
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
         >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
         >>> instance = generator.get_v1_instance()
-        >>> draft = ArtifactDraft.new_anonymous()
-        >>> _desc = draft.add_instance(instance)
-        >>> artifact = draft.commit()
-        >>> assert ".ommx.local/anonymous:" in artifact.image_name
+
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.new_anonymous()  # doctest: +SKIP
+        >>> _desc = draft.add_instance(instance)  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> assert ".ommx.local/anonymous:" in artifact.image_name  # doctest: +SKIP
         """
     @staticmethod
     def temp() -> ArtifactDraft:
@@ -614,9 +632,11 @@ class ArtifactDraft:
         Insecure; for tests only. `ttl.sh` is a public registry that
         expires images after one hour.
 
-        >>> draft = ArtifactDraft.temp()
-        >>> artifact = draft.commit()
-        >>> print(artifact.image_name)
+        This example writes to the persistent Local Registry and is not executed as a doctest.
+
+        >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> print(artifact.image_name)  # doctest: +SKIP
         ttl.sh/...-...-...-...-...:1h
         """
     @staticmethod
@@ -637,9 +657,12 @@ class ArtifactDraft:
         >>> from ommx import Instance
         >>> instance = Instance.minimize()
         >>> instance.title = "test instance"
-        >>> draft = ArtifactDraft.temp()
-        >>> desc = draft.add_instance(instance)
-        >>> print(desc.annotations['org.ommx.v1.instance.title'])
+
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+        >>> desc = draft.add_instance(instance)  # doctest: +SKIP
+        >>> print(desc.annotations['org.ommx.v1.instance.title'])  # doctest: +SKIP
         test instance
         """
     def add_parametric_instance(self, instance: ParametricInstance) -> Descriptor:
@@ -666,13 +689,16 @@ class ArtifactDraft:
 
         >>> import numpy as np
         >>> array = np.array([1, 2, 3])
-        >>> draft = ArtifactDraft.temp()
-        >>> _desc = draft.add_ndarray(array, title="test_array")
-        >>> artifact = draft.commit()
-        >>> layer = artifact.layers[0]
-        >>> print(layer.media_type)
+
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+        >>> _desc = draft.add_ndarray(array, title="test_array")  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> layer = artifact.layers[0]  # doctest: +SKIP
+        >>> print(layer.media_type)  # doctest: +SKIP
         application/vnd.numpy
-        >>> print(layer.annotations)
+        >>> print(layer.annotations)  # doctest: +SKIP
         {'org.ommx.user.title': 'test_array'}
         """
     def add_dataframe(
@@ -687,11 +713,14 @@ class ArtifactDraft:
 
         >>> import pandas as pd
         >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-        >>> draft = ArtifactDraft.temp()
-        >>> _desc = draft.add_dataframe(df, title="test_dataframe")
-        >>> artifact = draft.commit()
-        >>> layer = artifact.layers[0]
-        >>> print(layer.media_type)
+
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+        >>> _desc = draft.add_dataframe(df, title="test_dataframe")  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> layer = artifact.layers[0]  # doctest: +SKIP
+        >>> print(layer.media_type)  # doctest: +SKIP
         application/vnd.apache.parquet
         """
     def add_json(
@@ -705,11 +734,14 @@ class ArtifactDraft:
         Add a JSON object to the artifact.
 
         >>> obj = {"a": 1, "b": 2}
-        >>> draft = ArtifactDraft.temp()
-        >>> _desc = draft.add_json(obj, title="test_json")
-        >>> artifact = draft.commit()
-        >>> layer = artifact.layers[0]
-        >>> print(layer.media_type)
+
+        The remaining operations use the persistent Local Registry.
+
+        >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+        >>> _desc = draft.add_json(obj, title="test_json")  # doctest: +SKIP
+        >>> artifact = draft.commit()  # doctest: +SKIP
+        >>> layer = artifact.layers[0]  # doctest: +SKIP
+        >>> print(layer.media_type)  # doctest: +SKIP
         application/json
         """
     def add_layer(
@@ -1910,7 +1942,9 @@ class Experiment:
 
     If the experiment has only one run, open the experiment and the run in
     one `with` statement. On normal exit, the run is finished first and then
-    the experiment is committed:
+    the experiment is committed. The following workflow uses the caller's
+    persistent Local Registry and a remote registry, so it is not executed by
+    doctest:
 
     >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
     ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
@@ -2061,13 +2095,12 @@ class Experiment:
 
         If `image_name` is omitted, OMMX generates an anonymous local
         Experiment name for the child. The returned Experiment can be used as
-        a context manager:
+        a context manager. This requires an already committed parent in a
+        caller-owned Local Registry, so it is not executed by doctest:
 
-        ```python
-        with parent.fork() as child:
-            with child.run() as run:
-                run.log_parameter("capacity", 56)
-        ```
+        >>> with parent.fork() as child:  # doctest: +SKIP
+        ...     with child.run() as run:
+        ...         run.log_parameter("capacity", 56)
 
         Raises an error if this Experiment has not been committed yet.
 
@@ -2200,12 +2233,12 @@ class Experiment:
         Start a new Run in this unsealed Experiment.
 
         The returned `Run` must be closed before `commit()`. Use it as a
-        context manager to close it automatically on normal or exceptional exit:
+        context manager to close it automatically on normal or exceptional
+        exit. This requires a caller-owned unsealed Experiment and writes to
+        its Local Registry, so it is not executed by doctest:
 
-        ```python
-        with experiment.run() as run:
-            run.log_parameter("capacity", 47)
-        ```
+        >>> with experiment.run() as run:  # doctest: +SKIP
+        ...     run.log_parameter("capacity", 47)
 
         Closing a Run records its status as `"finished"`, `"failed"`, or
         `"interrupted"`. It also publishes a best-effort draft checkpoint when
@@ -2977,6 +3010,34 @@ class Instance:
     @objective.setter
     def objective(self, value: ToFunction) -> None: ...
     @property
+    def output_objective(self) -> typing.Optional[OutputObjective]:
+        r"""
+        Read-only output objective used by {meth}`~ommx.Instance.evaluate` and
+        {meth}`~ommx.Instance.evaluate_samples`, if one has been captured.
+
+        # Postconditions
+
+        Absence and an explicit output objective equal to the active pair remain distinct.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert instance.output_objective is None
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> output = instance.output_objective
+        >>> assert output is not None
+        >>> assert output.sense == Sense.Maximize
+        >>> assert output.function.evaluate({0: 1}) == 3.0
+        >>> assert output.preserves_optimality
+        >>> assert instance.convert_active_objective(Sense.Maximize)
+        >>> output = instance.output_objective
+        >>> assert output is not None
+        >>> assert output.sense == instance.sense
+        >>> assert output.function.almost_equal(instance.objective)
+        """
+    @property
     def decision_variable_names(self) -> builtins.set[builtins.str]:
         r"""
         Get all unique decision variable names in this instance
@@ -3454,7 +3515,7 @@ class Instance:
 
         # Postconditions
 
-        The driver is equivalent to QUBO Preparation followed by active-objective formatting and retains the input output semantics.
+        The driver is equivalent to QUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.
 
         >>> import copy
         >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
@@ -3504,7 +3565,7 @@ class Instance:
 
         # Postconditions
 
-        The driver is equivalent to HUBO Preparation followed by active-objective formatting and retains the input output semantics.
+        The driver is equivalent to HUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.
 
         >>> import copy
         >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
@@ -3583,7 +3644,7 @@ class Instance:
 
         # Postconditions
 
-        Materialization evaluates penalty energy actively while retaining the pre-penalty objective for output and invalidating optimality transport.
+        Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
 
         >>> from ommx import DecisionVariable, Instance, Optimality, Sense
         >>> x = DecisionVariable.binary(0)
@@ -3622,7 +3683,7 @@ class Instance:
 
         # Postconditions
 
-        Materialization evaluates uniform-penalty energy actively while retaining the pre-penalty objective for output and invalidating optimality transport.
+        Uniform-penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
 
         >>> from ommx import DecisionVariable, Instance, Optimality, Sense
         >>> x = DecisionVariable.binary(0)
@@ -4155,7 +4216,7 @@ class Instance:
 
         # Postconditions
 
-        Encoding rewrites the active objective while preserving the entry objective for output evaluation.
+        Encoding preserves existing output semantics, or captures the pre-encoding active objective when no output objective exists, while rewriting the active objective.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.integer(0, lower=0, upper=3)
@@ -4201,7 +4262,7 @@ class Instance:
 
         # Postconditions
 
-        Encoding rewrites the active objective while preserving the entry objective for output evaluation.
+        Encoding preserves existing output semantics, or captures the pre-encoding active objective when no output objective exists, while rewriting the active objective.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.integer(0, lower=2, upper=5, name="x")
@@ -4685,7 +4746,7 @@ class Instance:
 
         # Postconditions
 
-        Reduction rewrites active expressions while preserving the entry objective for output evaluation.
+        Reduction preserves existing output semantics, or captures the pre-reduction active objective when no output objective exists, while rewriting active expressions.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -5614,6 +5675,33 @@ class OpenSolve:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class OutputObjective:
+    r"""
+    Read-only objective semantics used when evaluating solver output.
+
+    # Invariants
+
+    The sense, function, and optimality-transport flag are exposed as one
+    root-owned value. Instances create and update this value through their
+    mathematical owner operations; Python callers cannot construct or mutate it.
+    """
+    @property
+    def sense(self) -> Sense:
+        r"""
+        Optimization sense used for evaluated output objective values.
+        """
+    @property
+    def function(self) -> Function:
+        r"""
+        Function evaluated after the full state is populated.
+        """
+    @property
+    def preserves_optimality(self) -> builtins.bool:
+        r"""
+        Whether active-formulation optimality transports to the output objective.
+        """
+
+@typing.final
 class Parameter:
     r"""
     Parameter in an optimization problem.
@@ -5771,6 +5859,30 @@ class ParametricInstance:
     def sense(self) -> Sense: ...
     @property
     def objective(self) -> Function: ...
+    @property
+    def output_objective(self) -> typing.Optional[OutputObjective]:
+        r"""
+        Read-only output objective retained through parameter materialization,
+        if one has been captured.
+
+        # Postconditions
+
+        Conversion preserves both absence and an explicit output objective equal to the active pair.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> source = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+        ... )
+        >>> assert source.as_parametric_instance().output_objective is None
+        >>> assert source.convert_active_objective(Sense.Minimize)
+        >>> assert source.convert_active_objective(Sense.Maximize)
+        >>> parametric = source.as_parametric_instance()
+        >>> output = parametric.output_objective
+        >>> assert output is not None
+        >>> assert output.sense == parametric.sense
+        >>> assert output.function.almost_equal(parametric.objective)
+        """
     @property
     def decision_variables(self) -> builtins.list[AttachedDecisionVariable]:
         r"""
@@ -5977,7 +6089,7 @@ class ParametricInstance:
 
         # Postconditions
 
-        Materialization substitutes parameters in active energy while retaining the pre-penalty objective for output evaluation. An existing output objective remains explicit even if specialization makes it structurally equal to the active objective.
+        Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists. Materialization substitutes parameters in the active energy, and an existing output objective remains explicit even if specialization makes it structurally equal to the active objective.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -8632,8 +8744,11 @@ def gc(
     raise {class}`RuntimeError`.
 
     >>> from ommx.artifact import gc
-    >>> report = gc()
-    >>> report.delete_applied
+
+    The following dry run still reads the caller's persistent Local Registry.
+
+    >>> report = gc()  # doctest: +SKIP
+    >>> report.delete_applied  # doctest: +SKIP
     False
     """
 
@@ -8732,8 +8847,11 @@ def prune_anonymous(
     raise {class}`RuntimeError`.
 
     >>> from ommx.artifact import prune_anonymous
-    >>> report = prune_anonymous()
-    >>> report.delete_applied
+
+    The following dry run still reads the caller's persistent Local Registry.
+
+    >>> report = prune_anonymous()  # doctest: +SKIP
+    >>> report.delete_applied  # doctest: +SKIP
     False
     """
 

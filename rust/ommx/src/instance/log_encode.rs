@@ -700,6 +700,10 @@ mod tests {
         ) {
             let decoded_value = target.lower as f64 + delta as f64;
             let expected_state = state_with_original_value(state.clone(), &target, decoded_value);
+            let expected_active_objective = instance
+                .objective()
+                .evaluate(&expected_state, ATol::default())
+                .unwrap();
             let expected = instance.evaluate(&expected_state, ATol::default()).unwrap();
 
             let (coefficients, _) = log_encoding_coefficients(
@@ -723,8 +727,17 @@ mod tests {
             prop_assert_eq!(binary_ids.len(), bits.len());
 
             let encoded_state = state_with_log_bits(state, &target, &binary_ids, &bits);
+            let actual_active_objective = encoded_instance
+                .objective()
+                .evaluate(&encoded_state, ATol::default())
+                .unwrap();
             let actual = encoded_instance.evaluate(&encoded_state, ATol::default()).unwrap();
 
+            assert_float_eq(
+                "active objective",
+                expected_active_objective,
+                actual_active_objective,
+            )?;
             assert_same_observable_evaluation(&expected, &actual)?;
         }
     }
@@ -777,7 +790,7 @@ mod tests {
     }
 
     #[test]
-    fn log_encode_captures_changed_active_objective_and_preserves_existing_output() {
+    fn log_encode_captures_targeted_active_objective_and_preserves_existing_output() {
         let id = VariableID::from(0);
         let make_instance = || {
             let variable = DecisionVariable::new(
@@ -825,7 +838,7 @@ mod tests {
     }
 
     #[test]
-    fn log_encode_does_not_capture_when_active_objective_is_unchanged() {
+    fn log_encode_does_not_capture_when_active_objective_is_not_targeted() {
         let id = VariableID::from(0);
         let variable = DecisionVariable::new(
             Kind::Integer,

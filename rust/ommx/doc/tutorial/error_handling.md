@@ -28,6 +28,10 @@ returns the typed error directly):
   becomes infeasible after substitution.
 - [`CoefficientError`](crate::CoefficientError), [`BoundError`](crate::BoundError), [`AtolError`](crate::AtolError),
   [`InvalidPenaltyWeight`](crate::InvalidPenaltyWeight) — numeric-domain validation failures.
+- [`FixedPenaltyWeightIDMismatch`](crate::FixedPenaltyWeightIDMismatch) —
+  identifies the missing and unexpected active constraint IDs in a caller-owned
+  fixed-penalty weight map, so the caller can correct the keys and retry the
+  atomic operation on the unchanged [`Instance`](crate::Instance).
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.

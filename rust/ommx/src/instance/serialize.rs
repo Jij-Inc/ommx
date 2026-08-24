@@ -489,6 +489,9 @@ mod tests {
     fn v2_instance_reader_accepts_output_objective_without_feature_declaration() {
         let instance = instance_with_output_objective();
         let mut proto = v2::Instance::from(instance.clone());
+        assert!(proto
+            .required_features
+            .contains(&(v2::Feature::OutputObjective as i32)));
         proto.required_features.clear();
 
         let restored = Instance::try_from(proto).unwrap();

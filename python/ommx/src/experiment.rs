@@ -386,7 +386,9 @@ impl PyAutosavePolicy {
 ///
 /// If the experiment has only one run, open the experiment and the run in
 /// one `with` statement. On normal exit, the run is finished first and then
-/// the experiment is committed:
+/// the experiment is committed. The following workflow uses the caller's
+/// persistent Local Registry and a remote registry, so it is not executed by
+/// doctest:
 ///
 /// >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
 /// ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
@@ -523,13 +525,12 @@ impl PyExperiment {
     ///
     /// If `image_name` is omitted, OMMX generates an anonymous local
     /// Experiment name for the child. The returned Experiment can be used as
-    /// a context manager:
+    /// a context manager. This requires an already committed parent in a
+    /// caller-owned Local Registry, so it is not executed by doctest:
     ///
-    /// ```python
-    /// with parent.fork() as child:
-    ///     with child.run() as run:
-    ///         run.log_parameter("capacity", 56)
-    /// ```
+    /// >>> with parent.fork() as child:  # doctest: +SKIP
+    /// ...     with child.run() as run:
+    /// ...         run.log_parameter("capacity", 56)
     ///
     /// Raises an error if this Experiment has not been committed yet.
     ///
@@ -821,12 +822,12 @@ impl PyExperiment {
     /// Start a new Run in this unsealed Experiment.
     ///
     /// The returned `Run` must be closed before `commit()`. Use it as a
-    /// context manager to close it automatically on normal or exceptional exit:
+    /// context manager to close it automatically on normal or exceptional
+    /// exit. This requires a caller-owned unsealed Experiment and writes to
+    /// its Local Registry, so it is not executed by doctest:
     ///
-    /// ```python
-    /// with experiment.run() as run:
-    ///     run.log_parameter("capacity", 47)
-    /// ```
+    /// >>> with experiment.run() as run:  # doctest: +SKIP
+    /// ...     run.log_parameter("capacity", 47)
     ///
     /// Closing a Run records its status as `"finished"`, `"failed"`, or
     /// `"interrupted"`. It also publishes a best-effort draft checkpoint when

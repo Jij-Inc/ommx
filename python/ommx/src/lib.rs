@@ -190,6 +190,7 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Polynomial>()?;
     m.add_class::<Function>()?;
     m.add_class::<VariableBound>()?;
+    m.add_class::<OutputObjective>()?;
     m.add_class::<Instance>()?;
     m.add_class::<InstanceDescription>()?;
     m.add_class::<DecisionVariable>()?;
@@ -295,6 +296,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "Quadratic",
     "Polynomial",
     "Function",
+    "OutputObjective",
     // Decision variable and parameter
     "DecisionVariable",
     "AttachedDecisionVariable",

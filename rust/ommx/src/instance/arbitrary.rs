@@ -147,7 +147,8 @@ impl InstanceParameters {
     /// variables are sampled from strategies. The V3-specific structure —
     /// fixed and dependent variables, removed constraints, indicator,
     /// one-hot, and SOS1 families, parameters, description, and annotations
-    /// plus a preserved output objective — is injected deterministically, so
+    /// plus an output objective with an active-independent function and no
+    /// optimality-preservation guarantee — is injected deterministically, so
     /// each of those dimensions is exercised at a single representative point
     /// (smoke coverage) rather
     /// than sampled. Every generated instance contains all V3 features;
@@ -561,14 +562,20 @@ impl Arbitrary for Instance {
                                         "org.ommx.user.arbitrary".to_string(),
                                         "true".to_string(),
                                     );
-                                    match instance.sense() {
-                                        Sense::Minimize => {
-                                            instance.convert_active_objective(Sense::Maximize);
-                                        }
-                                        Sense::Maximize => {
-                                            instance.convert_active_objective(Sense::Minimize);
-                                        }
-                                    }
+                                    let output_only_id = *instance
+                                        .fixed_decision_variable_values()
+                                        .keys()
+                                        .next()
+                                        .expect("FullV3 instances contain a fixed variable");
+                                    let output_sense = match instance.sense() {
+                                        Sense::Minimize => Sense::Maximize,
+                                        Sense::Maximize => Sense::Minimize,
+                                    };
+                                    instance.output_objective = Some(OutputObjective::new(
+                                        output_sense,
+                                        Function::from(linear!(output_only_id.into_inner())),
+                                        false,
+                                    ));
                                 }
 
                                 instance
@@ -669,7 +676,16 @@ mod tests {
             prop_assert!(instance.parameters.is_some());
             prop_assert!(instance.description.is_some());
             prop_assert!(!instance.annotations.is_empty());
-            prop_assert!(instance.output_objective().is_some());
+            let output = instance.output_objective().unwrap();
+            prop_assert!(!output.preserves_optimality());
+            let output_only_ids = output.function().required_ids();
+            prop_assert!(!output_only_ids.is_empty());
+            let solver_used_ids = instance.used_decision_variable_ids();
+            let usage = instance.decision_variable_usage();
+            for id in output_only_ids {
+                prop_assert!(!solver_used_ids.contains(&id));
+                prop_assert!(usage.get(id).is_none());
+            }
             prop_assert!(
                 instance
                     .indicator_constraints()

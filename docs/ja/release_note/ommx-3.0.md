@@ -40,6 +40,10 @@ assert instance.evaluate_samples({0: state}).objectives[0] == 0.0
 これは最新stable Python SDKからのbreakingな修正です。返すQUBO/HUBO係数の
 意味は変わりません。
 
+明示的なoutput objectiveを持つ`Instance`または`ParametricInstance`は、v1 wire formatで
+losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`を送出するため、
+`to_v2_bytes()`を使用してください。
+
 Penalty変換後のoptimalityも保守的に変換され、active formulationのproofを
 移せない評価結果は`Optimality.Unspecified`のままです。実行可能な事後条件は
 {meth}`~ommx.Instance.to_qubo`、{meth}`~ommx.Instance.to_hubo`、

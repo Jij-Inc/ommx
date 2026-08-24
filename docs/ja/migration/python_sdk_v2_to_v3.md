@@ -213,6 +213,10 @@ objectiveを表します。実行可能な事後条件は{meth}`~ommx.Instance.t
 {meth}`~ommx.Instance.to_hubo`、{meth}`~ommx.Instance.evaluate`、
 {meth}`~ommx.Instance.evaluate_samples`に記載されています。
 
+明示的なoutput objectiveを持つ`Instance`または`ParametricInstance`は、v1 wire formatで
+losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`を送出するため、
+`to_v2_bytes()`を使用してください。
+
 同じpipelineは{meth}`~ommx.Instance.prepare`と
 {meth}`~ommx.Instance.as_qubo_format`または
 {meth}`~ommx.Instance.as_hubo_format`で明示的に実行できます。対応するtarget classと

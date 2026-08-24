@@ -19,7 +19,7 @@ mod parametric_builder;
 mod parse;
 mod pass;
 mod penalty;
-pub use penalty::InvalidPenaltyWeight;
+pub use penalty::{FixedPenaltyWeightIDMismatch, InvalidPenaltyWeight};
 mod preparation;
 mod qubo;
 mod reduce_binary_power;
@@ -358,8 +358,8 @@ pub struct Instance {
     ///
     /// `None` means that evaluation directly uses the active [`Self::sense`] /
     /// [`Self::objective`] pair and active optimality implicitly transports.
-    /// A present output pair may equal the active pair when its optimality
-    /// guarantee still needs to be recorded explicitly.
+    /// A present value remains explicit even when its sense/function pair
+    /// equals the active pair; equality is not a canonicalization rule.
     output_objective: Option<OutputObjective>,
     /// Created decision-variable rows, modeling labels, and fixed values.
     decision_variables: DecisionVariableTable,
@@ -898,7 +898,9 @@ pub struct ParametricInstance {
     ///
     /// `None` means the specialized active [`Self::sense`] /
     /// [`Self::objective`] pair is also the output pair. A present function may
-    /// reference both decision-variable and parameter IDs owned by this root.
+    /// reference both decision-variable and parameter IDs owned by this root,
+    /// and the value remains explicit even if specialization makes its pair
+    /// equal to the active pair.
     output_objective: Option<OutputObjective>,
     /// Created decision-variable rows, modeling labels, and fixed values.
     decision_variables: DecisionVariableTable,

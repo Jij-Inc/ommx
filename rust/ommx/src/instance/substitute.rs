@@ -139,8 +139,10 @@ impl Instance {
     /// prevalidated fresh decision variables.
     ///
     /// This operation captures the pre-encoding active objective if and only if
-    /// the validated substitution changes it. Capture happens after the last
+    /// the validated substitution targets it. Capture happens after the last
     /// fallible operation, immediately before the planned rewrite is committed.
+    /// Whether the rewritten function happens to equal the original function is
+    /// irrelevant: ownership of the rewrite determines the capture boundary.
     /// Generic [`Substitute`] operations do not use this path and retain their
     /// existing output-objective semantics.
     pub(super) fn apply_encoding_substitution(
@@ -170,10 +172,7 @@ impl Instance {
         }
 
         let plan = self.plan_substitution(acyclic)?;
-        let objective_changed = plan
-            .objective
-            .as_ref()
-            .is_some_and(|objective| objective != &self.objective);
+        let objective_is_affected = plan.objective.is_some();
 
         // This is the last fallible operation. It plans and validates the
         // dependency update before mutating the table, and clones only the
@@ -186,7 +185,7 @@ impl Instance {
                 .insert(id, variable, label, None, atol)
                 .expect("fresh decision variable IDs were reserved from this instance");
         }
-        if objective_changed {
+        if objective_is_affected {
             self.capture_output_objective();
         }
         self.commit_substitution(plan);

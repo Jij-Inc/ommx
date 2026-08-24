@@ -87,7 +87,54 @@ DOCTESTS = tuple(
     if (test := parse_docstring(owner_path, owner, module)) is not None
 )
 
+# Number of hermetic setup examples before each owner reaches an external
+# archive, remote registry, or the caller's persistent Local Registry. Every
+# example from that boundary onward must carry an explicit doctest SKIP.
+NON_HERMETIC_SETUP_EXAMPLES = {
+    "ommx.artifact.Artifact": 0,
+    "ommx.artifact.Artifact.import_archive": 0,
+    "ommx.artifact.Artifact.inspect_archive": 0,
+    "ommx.artifact.Artifact.load": 0,
+    "ommx.artifact.ArtifactDraft": 0,
+    "ommx.artifact.ArtifactDraft.new": 5,
+    "ommx.artifact.ArtifactDraft.new_anonymous": 3,
+    "ommx.artifact.ArtifactDraft.temp": 0,
+    "ommx.artifact.ArtifactDraft.add_instance": 3,
+    "ommx.artifact.ArtifactDraft.add_ndarray": 2,
+    "ommx.artifact.ArtifactDraft.add_dataframe": 2,
+    "ommx.artifact.ArtifactDraft.add_json": 1,
+    "ommx.artifact.gc": 1,
+    "ommx.artifact.prune_anonymous": 1,
+    "ommx.dataset.miplib2017": 1,
+    "ommx.dataset.qplib": 1,
+    "ommx.experiment.Experiment": 5,
+    "ommx.experiment.Experiment.fork": 0,
+    "ommx.experiment.Experiment.run": 0,
+}
+
 
 @pytest.mark.parametrize("test", DOCTESTS, ids=lambda test: test.name)
 def test_doctest(test: doctest.DocTest) -> None:
     doctest.DebugRunner(optionflags=doctest.ELLIPSIS).run(test)
+
+
+def test_non_hermetic_examples_are_explicitly_skipped() -> None:
+    tests_by_name = {test.name: test for test in DOCTESTS}
+    skipped_owners = {
+        test.name
+        for test in DOCTESTS
+        if any(example.options.get(doctest.SKIP, False) for example in test.examples)
+    }
+    assert skipped_owners == NON_HERMETIC_SETUP_EXAMPLES.keys()
+
+    for name, setup_count in NON_HERMETIC_SETUP_EXAMPLES.items():
+        examples = tests_by_name[name].examples
+        assert all(
+            not example.options.get(doctest.SKIP, False)
+            for example in examples[:setup_count]
+        )
+        assert examples[setup_count:]
+        assert all(
+            example.options.get(doctest.SKIP, False)
+            for example in examples[setup_count:]
+        )

@@ -125,8 +125,10 @@ impl PyArtifactRef {
 /// An artifact is an OCI container image that stores OMMX data
 /// (instances, solutions, sample sets, etc.) as layers.
 ///
-/// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-/// >>> print(artifact.image_name)
+/// This example requires remote registry access and is not executed as a doctest.
+///
+/// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
+/// >>> print(artifact.image_name)  # doctest: +SKIP
 /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 ///
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -178,8 +180,11 @@ impl PyArtifact {
     /// archives importable while still making the imported artifact
     /// addressable in SQLite.
     ///
-    /// >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")
-    /// >>> print(artifact.image_name)
+    /// This example requires an external archive and writes to the persistent
+    /// Local Registry, so it is not executed as a doctest.
+    ///
+    /// >>> artifact = Artifact.import_archive("data/random_lp_instance.ommx")  # doctest: +SKIP
+    /// >>> print(artifact.image_name)  # doctest: +SKIP
     /// ghcr.io/jij-inc/ommx/random_lp_instance:...
     ///
     #[staticmethod]
@@ -233,8 +238,10 @@ impl PyArtifact {
     /// `Artifact.load(image_name)` later), use
     /// {meth}`Artifact.import_archive`.
     ///
-    /// >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")
-    /// >>> for layer in manifest.layers:
+    /// This example requires an external archive and is not executed as a doctest.
+    ///
+    /// >>> manifest = Artifact.inspect_archive("data/random_lp_instance.ommx")  # doctest: +SKIP
+    /// >>> for layer in manifest.layers:  # doctest: +SKIP
     /// ...     print(layer.media_type)
     /// application/org.ommx.v1.instance
     ///
@@ -249,8 +256,10 @@ impl PyArtifact {
     ///
     /// If the image is not found in local registry, it will try to pull from remote registry.
     ///
-    /// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-    /// >>> print(artifact.image_name)
+    /// This example requires remote registry access and is not executed as a doctest.
+    ///
+    /// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")  # doctest: +SKIP
+    /// >>> print(artifact.image_name)  # doctest: +SKIP
     /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
     ///
     ///
@@ -1388,9 +1397,11 @@ impl DraftInner {
 
 /// Mutable draft for OMMX Artifacts.
 ///
-/// >>> draft = ArtifactDraft.temp()
-/// >>> artifact = draft.commit()
-/// >>> print(artifact.image_name)
+/// This example writes to the persistent Local Registry and is not executed as a doctest.
+///
+/// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+/// >>> artifact = draft.commit()  # doctest: +SKIP
+/// >>> print(artifact.image_name)  # doctest: +SKIP
 /// ttl.sh/...-...-...-...-...:1h
 ///
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
@@ -1412,10 +1423,13 @@ impl PyArtifactDraft {
     /// >>> instance = generator.get_v1_instance()
     /// >>> import uuid
     /// >>> image_name = f"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}"
-    /// >>> draft = ArtifactDraft.new(image_name)
-    /// >>> _desc = draft.add_instance(instance)
-    /// >>> artifact = draft.commit()
-    /// >>> print(artifact.image_name)
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.new(image_name)  # doctest: +SKIP
+    /// >>> _desc = draft.add_instance(instance)  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> print(artifact.image_name)  # doctest: +SKIP
     /// ghcr.io/jij-inc/ommx/single_feasible_lp:...
     ///
     ///
@@ -1462,10 +1476,13 @@ impl PyArtifactDraft {
     /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
     /// >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
     /// >>> instance = generator.get_v1_instance()
-    /// >>> draft = ArtifactDraft.new_anonymous()
-    /// >>> _desc = draft.add_instance(instance)
-    /// >>> artifact = draft.commit()
-    /// >>> assert ".ommx.local/anonymous:" in artifact.image_name
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.new_anonymous()  # doctest: +SKIP
+    /// >>> _desc = draft.add_instance(instance)  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> assert ".ommx.local/anonymous:" in artifact.image_name  # doctest: +SKIP
     ///
     #[staticmethod]
     pub fn new_anonymous() -> OmmxPyResult<Self> {
@@ -1477,9 +1494,11 @@ impl PyArtifactDraft {
     /// Insecure; for tests only. `ttl.sh` is a public registry that
     /// expires images after one hour.
     ///
-    /// >>> draft = ArtifactDraft.temp()
-    /// >>> artifact = draft.commit()
-    /// >>> print(artifact.image_name)
+    /// This example writes to the persistent Local Registry and is not executed as a doctest.
+    ///
+    /// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> print(artifact.image_name)  # doctest: +SKIP
     /// ttl.sh/...-...-...-...-...:1h
     ///
     #[staticmethod]
@@ -1504,9 +1523,12 @@ impl PyArtifactDraft {
     /// >>> from ommx import Instance
     /// >>> instance = Instance.minimize()
     /// >>> instance.title = "test instance"
-    /// >>> draft = ArtifactDraft.temp()
-    /// >>> desc = draft.add_instance(instance)
-    /// >>> print(desc.annotations['org.ommx.v1.instance.title'])
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    /// >>> desc = draft.add_instance(instance)  # doctest: +SKIP
+    /// >>> print(desc.annotations['org.ommx.v1.instance.title'])  # doctest: +SKIP
     /// test instance
     ///
     pub fn add_instance(
@@ -1559,13 +1581,16 @@ impl PyArtifactDraft {
     ///
     /// >>> import numpy as np
     /// >>> array = np.array([1, 2, 3])
-    /// >>> draft = ArtifactDraft.temp()
-    /// >>> _desc = draft.add_ndarray(array, title="test_array")
-    /// >>> artifact = draft.commit()
-    /// >>> layer = artifact.layers[0]
-    /// >>> print(layer.media_type)
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    /// >>> _desc = draft.add_ndarray(array, title="test_array")  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> layer = artifact.layers[0]  # doctest: +SKIP
+    /// >>> print(layer.media_type)  # doctest: +SKIP
     /// application/vnd.numpy
-    /// >>> print(layer.annotations)
+    /// >>> print(layer.annotations)  # doctest: +SKIP
     /// {'org.ommx.user.title': 'test_array'}
     ///
     #[pyo3(signature = (array, *, annotation_namespace = "org.ommx.user.", **annotations))]
@@ -1590,11 +1615,14 @@ impl PyArtifactDraft {
     ///
     /// >>> import pandas as pd
     /// >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
-    /// >>> draft = ArtifactDraft.temp()
-    /// >>> _desc = draft.add_dataframe(df, title="test_dataframe")
-    /// >>> artifact = draft.commit()
-    /// >>> layer = artifact.layers[0]
-    /// >>> print(layer.media_type)
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    /// >>> _desc = draft.add_dataframe(df, title="test_dataframe")  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> layer = artifact.layers[0]  # doctest: +SKIP
+    /// >>> print(layer.media_type)  # doctest: +SKIP
     /// application/vnd.apache.parquet
     ///
     #[pyo3(signature = (df, *, annotation_namespace = "org.ommx.user.", **annotations))]
@@ -1614,11 +1642,14 @@ impl PyArtifactDraft {
     /// Add a JSON object to the artifact.
     ///
     /// >>> obj = {"a": 1, "b": 2}
-    /// >>> draft = ArtifactDraft.temp()
-    /// >>> _desc = draft.add_json(obj, title="test_json")
-    /// >>> artifact = draft.commit()
-    /// >>> layer = artifact.layers[0]
-    /// >>> print(layer.media_type)
+    ///
+    /// The remaining operations use the persistent Local Registry.
+    ///
+    /// >>> draft = ArtifactDraft.temp()  # doctest: +SKIP
+    /// >>> _desc = draft.add_json(obj, title="test_json")  # doctest: +SKIP
+    /// >>> artifact = draft.commit()  # doctest: +SKIP
+    /// >>> layer = artifact.layers[0]  # doctest: +SKIP
+    /// >>> print(layer.media_type)  # doctest: +SKIP
     /// application/json
     ///
     #[pyo3(signature = (obj, *, annotation_namespace = "org.ommx.user.", **annotations))]
@@ -1829,8 +1860,11 @@ pub fn restore_image(
 /// raise {class}`RuntimeError`.
 ///
 /// >>> from ommx.artifact import prune_anonymous
-/// >>> report = prune_anonymous()
-/// >>> report.delete_applied
+///
+/// The following dry run still reads the caller's persistent Local Registry.
+///
+/// >>> report = prune_anonymous()  # doctest: +SKIP
+/// >>> report.delete_applied  # doctest: +SKIP
 /// False
 ///
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
@@ -1875,8 +1909,11 @@ pub fn prune_anonymous(
 /// raise {class}`RuntimeError`.
 ///
 /// >>> from ommx.artifact import gc
-/// >>> report = gc()
-/// >>> report.delete_applied
+///
+/// The following dry run still reads the caller's persistent Local Registry.
+///
+/// >>> report = gc()  # doctest: +SKIP
+/// >>> report.delete_applied  # doctest: +SKIP
 /// False
 ///
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]

@@ -586,13 +586,15 @@ pub struct SampledNamedFunctionTable {
     #[prost(btree_map = "uint64, message", tag = "2")]
     pub labels: ::prost::alloc::collections::BTreeMap<u64, ModelingLabel>,
 }
-/// Serialized output-objective semantics distinct from the root's active objective.
+/// Serialized output-objective semantics retained separately from the root's
+/// active objective.
 ///
-/// `sense` and `function` form one atomic pair. A validated payload carries
-/// both. When a root omits `output_objective`, its own `sense` and `objective`
-/// are also its output semantics. The pair may equal the active pair when this
-/// payload exists only to record that active-formulation optimality does not
-/// transport.
+/// `sense`, `function`, and `preserves_optimality` form one atomic value. A
+/// validated payload carries all three. When a root omits `output_objective`,
+/// its own `sense` and `objective` are also its output semantics and active
+/// optimality implicitly transports. Presence is explicit and must be retained
+/// even when later transformations make the output sense/function pair equal
+/// to the active pair.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
