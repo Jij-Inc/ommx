@@ -46,60 +46,9 @@ binary_linear_with_one_hot = InstanceClass(
 )
 ```
 
-Adapters declare their complete applicability condition as `INPUT_CLASS`. Use
-`check_applicability()` for a structured membership result or
-`require_applicable()` to raise when membership fails. The easy `solve()` and
-`sample()` APIs copy the caller's Instance and prepare that private copy for
-`INPUT_CLASS`; they do not mutate the caller's value. The preparation-free
-`solve_without_preparation()` and `sample_without_preparation()` APIs require
-an exact member. When an application uses a custom Preparation policy, it
-explicitly copies and prepares the input before calling the preparation-free
-API.
+Adapters declare their complete applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured membership result or `require_applicable()` to raise when membership fails. Explicit preparation produces another input value, whose membership must be checked again.
 
 Applicability and solver-input construction are separate boundaries. Membership does not guarantee that every converter or backend operation succeeds. A converter may validate the representation consumed by a local helper, and a backend may reject a numeric value or implementation limit while solver input is built. Those failures are conversion or backend errors, not additional applicability conditions, and must not be reported as `AdapterNotApplicableError`.
-
-### Active and output objective semantics
-
-Preparation may rewrite an Instance's objective or sense to produce an exact
-Adapter input. In that case, {attr}`Instance.objective <ommx.Instance.objective>`
-and {attr}`Instance.sense <ommx.Instance.sense>` describe the active formulation
-seen by the backend, while the read-only
-{attr}`Instance.output_objective <ommx.Instance.output_objective>` preserves the
-objective function and sense presented to users.
-
-{meth}`Instance.evaluate <ommx.Instance.evaluate>` and
-{meth}`Instance.evaluate_samples <ommx.Instance.evaluate_samples>` use the
-output pair when it is present. For example, a maximization model normalized to
-minimization can be sampled by OpenJij while the returned `SampleSet` still has
-the source maximization sense and objective values. `output_objective` is
-normally `None` when evaluation can use the active pair directly.
-
-The first transformation that changes the active objective or sense normally
-establishes the output pair. A transformation may also establish an equal pair
-solely to record that active-formulation optimality does not transport. Later
-transformations continue to rewrite only the active formulation; they neither
-replace nor negate an existing output pair. Assigning a new
-`Instance.objective` is an explicit model redefinition and clears the preserved
-pair, making the current active sense and new objective the output semantics
-again.
-
-Backend optimality proofs and dual values belong to the active formulation.
-`OutputObjective.preserves_optimality` records whether optimality for that
-formulation also proves optimality for the reconstructed output semantics.
-Exact rewrites such as sense reversal and partial evaluation preserve this
-guarantee. Fixed-penalty conversion invalidates it because a finite penalty
-does not generally prove equivalence to the source problem. Built-in solver
-Adapters report backend optimality only when this guarantee is present.
-
-Dual values require a separate mapping of rows, signs, and scales. Built-in
-solver Adapters therefore continue to omit dual values whenever an output pair
-is present, even when optimality itself transports.
-
-This is output semantics, not a Preparation event log. The easy Adapter APIs
-discard their temporary prepared Instance and return only `Solution` or
-`SampleSet`; Experiment records the original input together with that output.
-`Instance` and `Solution` / `SampleSet` remain the serialization roots, and no
-separate solve-outcome or Preparation-history object is introduced.
 
 ## SpecialConstraintKind and active_special_constraint_kinds
 
@@ -255,7 +204,6 @@ for cid, c in instance2.constraints.items():
 | Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
 | Define adapter applicability | `INPUT_CLASS` |
 | Report or enforce `INPUT_CLASS` membership | `check_applicability()` / `require_applicable()` |
-| Inspect preserved output objective semantics | {attr}`~ommx.Instance.output_objective` |
 | Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |
