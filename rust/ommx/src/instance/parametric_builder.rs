@@ -495,6 +495,7 @@ impl ParametricInstanceBuilder {
         Ok(ParametricInstance {
             sense,
             objective,
+            output_objective: None,
             decision_variables,
             parameters,
             constraint_collection: ConstraintCollection::with_context(
@@ -554,6 +555,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(*instance.sense(), Sense::Minimize);
+        assert!(instance.output_objective().is_none());
         assert!(instance.decision_variables().is_empty());
         assert!(instance.parameters().is_empty());
         assert!(instance.constraints().is_empty());

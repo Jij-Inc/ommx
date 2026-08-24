@@ -434,12 +434,17 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         # Evaluate the state using the instance
         solution = self.instance.evaluate(state)
 
-        # Set the optimality status
+        # Map the backend status through the output-objective contract
         if data.getStatus() == "optimal":
-            solution.optimality = Solution.OPTIMAL
+            solution.optimality = self.instance.map_active_optimality(
+                Solution.OPTIMAL
+            )
 
         return solution
 ```
+
+`map_active_optimality()` keeps an active-formulation optimum only when it also
+proves optimality for the objective reported by the returned `Solution`.
 
 The caller decides whether to use and modify the recommendation before invoking the strict adapter API:
 

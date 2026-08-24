@@ -430,12 +430,17 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         # インスタンスを使用して解を評価
         solution = self.instance.evaluate(state)
 
-        # 最適性ステータスを設定
+        # backend statusをoutput-objective contractに従って写す
         if data.getStatus() == "optimal":
-            solution.optimality = Solution.OPTIMAL
+            solution.optimality = self.instance.map_active_optimality(
+                Solution.OPTIMAL
+            )
 
         return solution
 ```
+
+`map_active_optimality()`は、active formulationの最適性が返却する`Solution`の
+objectiveに対する最適性も証明するときにだけ、そのstatusを保持します。
 
 呼び出し側は、厳格な Adapter API を呼ぶ前に推奨 Policy を使うかどうかを決め、必要に応じて編集します：
 

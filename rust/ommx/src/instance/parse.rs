@@ -75,41 +75,33 @@ fn parse_v2_decision_variable_dependency(
         .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))
 }
 
-fn created_collection_has_payload<T: crate::ConstraintType>(
-    collection: &ConstraintCollection<T>,
-) -> bool {
-    !collection.active().is_empty() || !collection.removed().is_empty()
-}
-
-fn validate_instance_special_features(
-    required_features: &std::collections::BTreeSet<v2::Feature>,
-    indicator_constraints: &ConstraintCollection<crate::IndicatorConstraint>,
-    one_hot_constraints: &ConstraintCollection<crate::OneHotConstraint>,
-    sos1_constraints: &ConstraintCollection<crate::Sos1Constraint>,
+fn parse_v2_output_objective(
+    value: v2::OutputObjective,
+    allowed_ids: &VariableIDSet,
     message: &'static str,
-) -> Result<(), ParseError> {
-    crate::v2_io::validate_feature_payload(
-        required_features,
-        v2::Feature::ConstraintIndicator,
-        created_collection_has_payload(indicator_constraints),
-        message,
-        "indicator_constraints",
-    )?;
-    crate::v2_io::validate_feature_payload(
-        required_features,
-        v2::Feature::ConstraintOneHot,
-        created_collection_has_payload(one_hot_constraints),
-        message,
-        "one_hot_constraints",
-    )?;
-    crate::v2_io::validate_feature_payload(
-        required_features,
-        v2::Feature::ConstraintSos1,
-        created_collection_has_payload(sos1_constraints),
-        message,
-        "sos1_constraints",
-    )?;
-    Ok(())
+) -> Result<OutputObjective, ParseError> {
+    let sense = crate::v2_io::parse_v2_required_sense(value.sense, message)
+        .map_err(|error| error.context(message, "output_objective"))?;
+    let function = value
+        .function
+        .ok_or(RawParseError::MissingField {
+            message,
+            field: "output_objective.function",
+        })?
+        .parse_as(&(), message, "output_objective.function")?;
+    for id in function.required_ids() {
+        if !allowed_ids.contains(&id) {
+            return Err(RawParseError::InvalidInstance(format!(
+                "Undefined variable ID is used: {id:?}"
+            ))
+            .context(message, "output_objective.function"));
+        }
+    }
+    Ok(OutputObjective::new(
+        sense,
+        function,
+        value.preserves_optimality,
+    ))
 }
 
 fn validate_created_constraint_references<T: crate::ConstraintType>(
@@ -345,7 +337,6 @@ impl Parse for v1::Instance {
                 .context(message, "objective"));
             }
         }
-
         let (constraints, mut constraint_context): (
             BTreeMap<ConstraintID, Constraint>,
             crate::ConstraintContextStore<ConstraintID>,
@@ -429,6 +420,7 @@ impl Parse for v1::Instance {
         Ok(Instance {
             sense,
             objective,
+            output_objective: None,
             decision_variables,
             constraint_collection: ConstraintCollection::with_context(
                 constraints,
@@ -467,8 +459,7 @@ impl Parse for v2::Instance {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.Instance";
-        let required_features =
-            crate::v2_io::parse_required_features(self.required_features, message)?;
+        crate::v2_io::validate_required_features(self.required_features, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
         let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
@@ -495,7 +486,10 @@ impl Parse for v2::Instance {
                 .context(message, "objective"));
             }
         }
-
+        let output_objective = self
+            .output_objective
+            .map(|value| parse_v2_output_objective(value, &decision_variable_ids, message))
+            .transpose()?;
         let constraint_collection = self
             .regular_constraints
             .map(|value| value.parse_as(&(), message, "regular_constraints"))
@@ -516,14 +510,6 @@ impl Parse for v2::Instance {
             .map(|value| value.parse_as(&(), message, "sos1_constraints"))
             .transpose()?
             .unwrap_or_default();
-        validate_instance_special_features(
-            &required_features,
-            &indicator_constraint_collection,
-            &one_hot_constraint_collection,
-            &sos1_constraint_collection,
-            message,
-        )?;
-
         validate_created_constraint_references(
             &constraint_collection,
             &decision_variable_ids,
@@ -616,6 +602,7 @@ impl Parse for v2::Instance {
         Ok(Instance {
             sense,
             objective,
+            output_objective,
             decision_variables,
             constraint_collection,
             indicator_constraint_collection,
@@ -642,6 +629,11 @@ impl TryFrom<Instance> for v1::Instance {
     type Error = crate::Error;
 
     fn try_from(value: Instance) -> crate::Result<Self> {
+        if value.output_objective.is_some() {
+            crate::bail!(
+                "ommx.v1.Instance cannot represent Instance.output_objective; use the v2 format"
+            );
+        }
         let decision_variables: Vec<v1::DecisionVariable> = (&value.decision_variables).into();
         let (constraints, removed_constraints): (Vec<v1::Constraint>, Vec<v1::RemovedConstraint>) =
             value.constraint_collection.into();
@@ -829,6 +821,7 @@ impl Parse for v1::ParametricInstance {
         Ok(ParametricInstance {
             sense,
             objective,
+            output_objective: None,
             decision_variables,
             parameters,
             constraint_collection: ConstraintCollection::with_context(
@@ -860,8 +853,7 @@ impl Parse for v2::ParametricInstance {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.ParametricInstance";
-        let required_features =
-            crate::v2_io::parse_required_features(self.required_features, message)?;
+        crate::v2_io::validate_required_features(self.required_features, message)?;
         let annotations =
             crate::v2_io::extension_annotations_from_v2_map(self.annotations, message)?;
         let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
@@ -904,7 +896,10 @@ impl Parse for v2::ParametricInstance {
                 .context(message, "objective"));
             }
         }
-
+        let output_objective = self
+            .output_objective
+            .map(|value| parse_v2_output_objective(value, &all_variable_ids, message))
+            .transpose()?;
         let constraint_collection = self
             .regular_constraints
             .map(|value| value.parse_as(&(), message, "regular_constraints"))
@@ -925,14 +920,6 @@ impl Parse for v2::ParametricInstance {
             .map(|value| value.parse_as(&(), message, "sos1_constraints"))
             .transpose()?
             .unwrap_or_default();
-        validate_instance_special_features(
-            &required_features,
-            &indicator_constraint_collection,
-            &one_hot_constraint_collection,
-            &sos1_constraint_collection,
-            message,
-        )?;
-
         validate_created_constraint_references(
             &constraint_collection,
             &all_variable_ids,
@@ -1025,6 +1012,7 @@ impl Parse for v2::ParametricInstance {
         Ok(ParametricInstance {
             sense,
             objective,
+            output_objective,
             decision_variables,
             parameters,
             constraint_collection,
@@ -1050,10 +1038,16 @@ impl TryFrom<v2::ParametricInstance> for ParametricInstance {
 impl TryFrom<ParametricInstance> for v1::ParametricInstance {
     type Error = crate::Error;
 
-    fn try_from(
-        ParametricInstance {
+    fn try_from(value: ParametricInstance) -> crate::Result<Self> {
+        if value.output_objective.is_some() {
+            crate::bail!(
+                "ommx.v1.ParametricInstance cannot represent ParametricInstance.output_objective; use the v2 format"
+            );
+        }
+        let ParametricInstance {
             sense,
             objective,
+            output_objective: _,
             decision_variables,
             parameters,
             constraint_collection,
@@ -1064,8 +1058,7 @@ impl TryFrom<ParametricInstance> for v1::ParametricInstance {
             description,
             named_functions,
             annotations,
-        }: ParametricInstance,
-    ) -> crate::Result<Self> {
+        } = value;
         // Special constraint types do not have a v1 proto representation yet.
         if !indicator_constraint_collection.active().is_empty()
             || !indicator_constraint_collection.removed().is_empty()

@@ -270,6 +270,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         `solver_input`, you must set `solution.relaxation` yourself if you
         care about this value.
 
+        Backend optimality is mapped through the instance's output-objective
+        semantics. It remains unspecified when active-formulation optimality
+        does not transport to that objective.
+
         Examples
         =========
 
@@ -313,7 +317,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 solution.set_dual_variable(constraint_id, dual_value)
 
             if data.status == mip.OptimizationStatus.OPTIMAL:
-                solution.optimality = Solution.OPTIMAL
+                solution.optimality = self.instance.map_active_optimality(
+                    Solution.OPTIMAL
+                )
 
             if self._relax:
                 solution.relaxation = Solution.LP_RELAXED

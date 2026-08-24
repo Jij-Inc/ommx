@@ -15,9 +15,9 @@ from ommx import (
     InstanceClass,
     InstanceClassClause,
     Kind,
+    ObjectivePreparation,
     PreparationPolicy,
     Sense,
-    SensePreparation,
     Samples,
     SampleSet,
     Solution,
@@ -41,7 +41,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     Arbitrary polynomial objective degree is supported through OpenJij's QUBO
     and Binary-HUBO paths.
 
-    Integer encoding, sense normalization, slack introduction, and fixed
+    Integer encoding, active-objective conversion, slack introduction, and fixed
     constraint penalties are explicit preparation operations, not part of the
     declared input class. Start from
     :meth:`recommended_preparation_policy`, edit caller-owned choices such as
@@ -65,8 +65,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     def recommended_preparation_policy(cls) -> PreparationPolicy:
         """Recommend the model changes commonly needed by OpenJij.
 
-        The recommendation lowers every special-constraint family, normalizes
-        maximization to minimization, adds Integer slack while permitting an
+        The recommendation lowers every special-constraint family, converts the
+        active objective to minimization, adds Integer slack while permitting an
         inequality to remain when exact equality conversion is unavailable,
         and log-encodes every used Integer variable. Both Integer slack ranges
         use 32.
@@ -85,7 +85,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                     SpecialConstraintKind.Sos1,
                 }
             ),
-            sense=SensePreparation.as_minimization_problem(),
+            objective=ObjectivePreparation(target=Sense.Minimize),
             integer_slack=IntegerSlackPreparation(
                 max_integer_range=32,
                 slack_upper_bound=32,

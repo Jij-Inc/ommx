@@ -197,7 +197,7 @@ def test_recommended_preparation_reaches_the_highs_input_class():
 
     policy = OMMXHighsAdapter.recommended_preparation_policy()
     assert policy.special_constraints is not None
-    assert policy.sense is None
+    assert policy.objective is None
     assert policy.integer_slack is None
     assert policy.integer_encoding is None
     assert policy.fixed_penalty is None

@@ -1,6 +1,6 @@
 import pytest
 
-from ommx import Instance, DecisionVariable, Solution
+from ommx import DecisionVariable, Instance, Optimality, Solution
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 from ommx_highs_adapter import OMMXHighsAdapter
@@ -60,6 +60,22 @@ def test_solution_optimality():
 
     solution = OMMXHighsAdapter.solve(ommx_instance)
     assert solution.optimality == Solution.OPTIMAL
+
+
+def test_solution_optimality_is_not_transported_through_fixed_penalty():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={7: x == 1},
+        sense=Instance.MINIMIZE,
+    )
+    instance.to_qubo(uniform_penalty_weight=0.0)
+
+    solution = OMMXHighsAdapter.solve(instance)
+
+    assert not solution.feasible
+    assert solution.optimality == Optimality.Unspecified
 
 
 @pytest.mark.parametrize(

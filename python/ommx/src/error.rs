@@ -463,6 +463,7 @@ define_ommx_error_mappings!(
     ommx::artifact::ImageRefParseError => image_ref_parse_error_to_pyerr,
     ommx::ParameterIDCollision => value_error,
     ommx::AtolError => value_error,
+    ommx::FixedPenaltyWeightIDMismatch => value_error,
     ommx::InvalidPenaltyWeight => value_error,
     ommx::BoundError => value_error,
     ommx::SubstitutionError => value_error,

@@ -175,7 +175,7 @@ for cid, c in instance.constraints.items():
 
 `Instance` / `ParametricInstance` の制約 dict は、v3 final では `AttachedX` handle を返します。`Solution.constraints` は評価結果の snapshot なので `EvaluatedConstraint` のままです。`SampleSet.constraints` / `.decision_variables` / `.named_functions` は `list` のままです。
 
-## 5. rename と signature 変更
+## 5. rename、signature、挙動の変更
 
 主な rename / signature 変更は次の通りです。
 
@@ -199,6 +199,30 @@ instance.save_mps("out.mps.gz")
 p = Parameter(3, name="w")
 pi.with_parameters({p.id: 1.0})
 ```
+
+### 5.6 `to_qubo()` / `to_hubo()`は入力objectiveを評価結果に保持 (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+Driver methodは引き続き利用でき、入力をin-placeに変更します。v3では変更後の
+`Instance`がQUBO/HUBO solverへ渡すminimization energyをactive objectiveとして保持し、
+`evaluate()`と`evaluate_samples()`は変換前のinstanceが公開していたobjective semanticsを
+保持します。Python SDK v2はactive senseを戻したうえで最終的なpenalty energyを評価しており、
+solver inputとuser-facing outputを混在させていました。
+
+したがって`Instance.objective`はsolver energyを、`Solution`と`SampleSet`は保持された入力
+objectiveを表します。実行可能な事後条件は{meth}`~ommx.Instance.to_qubo`、
+{meth}`~ommx.Instance.to_hubo`、{meth}`~ommx.Instance.evaluate`、
+{meth}`~ommx.Instance.evaluate_samples`に記載されています。
+
+明示的なoutput objectiveを持つ`Instance`または`ParametricInstance`は、v1 wire formatで
+losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`を送出するため、
+`to_v2_bytes()`を使用してください。
+
+同じpipelineは{meth}`~ommx.Instance.prepare`と
+{meth}`~ommx.Instance.as_qubo_format`または
+{meth}`~ommx.Instance.as_hubo_format`で明示的に実行できます。対応するtarget classと
+編集可能なpolicyは{meth}`~ommx.InstanceClass.qubo`、
+{meth}`~ommx.InstanceClass.hubo`、{meth}`~ommx.PreparationPolicy.for_qubo`、
+{meth}`~ommx.PreparationPolicy.for_hubo`が提供します。
 
 ## 6. return type の変更
 
@@ -245,9 +269,9 @@ v3では呼び出し側がこれらの選択を所有します。Adapterが返�
 `PreparationPolicy` を出発点に、application固有のfieldを編集し、厳格なAdapter APIを
 呼ぶ前に `Instance.prepare()` でin-placeに適用します。
 
-OpenJijの推奨Policyでは、特殊制約lowering、minimizationへのsense正規化、Integer slack、
-使用中Integer変数のlog encodingを有効にします。Integer slackはrange 32でexactな
-equality変換を最初に試し、そのoperationが利用できない場合には、上限32のslackを
+OpenJijの推奨Policyでは、特殊制約lowering、active objectiveのminimizationへの変換、
+Integer slack、使用中Integer変数のlog encodingを有効にします。Integer slackはrange 32で
+exactなequality変換を最初に試し、そのoperationが利用できない場合には、上限32のslackを
 追加してinequalityのまま残すことを許可します。equalityが必須なら、置き換える
 `IntegerSlackPreparation` の `slack_upper_bound=None` を指定します。
 

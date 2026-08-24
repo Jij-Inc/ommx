@@ -8,6 +8,49 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### ⚠ Solver Preparationで入力objectiveを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+`to_qubo()`と`to_hubo()`は、変換後のactive `Instance`にsolverが使う
+minimization energyを保持しつつ、`Solution`と`SampleSet`には入力instanceが
+公開していたobjective semanticsを保持するようになりました。
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+
+instance.to_qubo(uniform_penalty_weight=2.0)
+state = {0: 0.0}
+
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == 2.0
+assert instance.evaluate(state).sense == Sense.Maximize
+assert instance.evaluate(state).objective == 0.0
+assert instance.evaluate_samples({0: state}).sense == Sense.Maximize
+assert instance.evaluate_samples({0: state}).objectives[0] == 0.0
+```
+
+従来のdriverはactive senseを戻し、penalized solver energyを評価結果に使っていたため、
+これは最新stable Python SDKからのbreakingな修正です。返すQUBO/HUBO係数の
+意味は変わりません。
+
+明示的なoutput objectiveを持つ`Instance`または`ParametricInstance`は、v1 wire formatで
+losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`を送出するため、
+`to_v2_bytes()`を使用してください。
+
+Penalty変換後のoptimalityも保守的に変換され、active formulationのproofを
+移せない評価結果は`Optimality.Unspecified`のままです。実行可能な事後条件は
+{meth}`~ommx.Instance.to_qubo`、{meth}`~ommx.Instance.to_hubo`、
+{meth}`~ommx.Instance.evaluate`、{meth}`~ommx.Instance.evaluate_samples`に記載されています。
+明示的なPreparation workflowは
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
 ### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
 
 `SolverAdapter.check_applicability()` と `require_applicable()` は、完全な

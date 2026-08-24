@@ -13,11 +13,11 @@ from ommx import (
     IntegerEncodingPreparation,
     IntegerSlackPreparation,
     Kind,
+    ObjectivePreparation,
     OneHotConstraint,
     PreparationPolicy,
     PreparationTargetNotReachedError,
     Sense,
-    SensePreparation,
     SpecialConstraintKind,
     SpecialConstraintPreparation,
 )
@@ -60,7 +60,7 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
     policy.special_constraints = SpecialConstraintPreparation.lower_special_constraints(
         kinds={SpecialConstraintKind.OneHot}
     )
-    policy.sense = SensePreparation.as_minimization_problem()
+    policy.objective = ObjectivePreparation(target=Sense.Minimize)
     policy.integer_slack = IntegerSlackPreparation(
         max_integer_range=1,
         slack_upper_bound=2,
@@ -89,7 +89,7 @@ def test_prepare_preserves_owner_signal_and_earlier_commits() -> None:
         objective_degree=1,
     )
     policy = PreparationPolicy(
-        sense=SensePreparation.as_minimization_problem(),
+        objective=ObjectivePreparation(target=Sense.Minimize),
         integer_slack=IntegerSlackPreparation(max_integer_range=1),
     )
 

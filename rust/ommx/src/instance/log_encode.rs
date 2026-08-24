@@ -172,6 +172,49 @@ impl Instance {
     /// [`Self::MAX_LOG_ENCODING_BITS`] binary variables are rejected instead of
     /// creating an impractically large encoded search space.
     ///
+    /// # Postconditions
+    ///
+    /// Encoding rewrites only the active formulation and preserves evaluation
+    /// in the pre-encoding output semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, Bound, DecisionVariable, Evaluate, Function,
+    ///     Instance, Kind, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(0);
+    /// let integer = DecisionVariable::new(
+    ///     Kind::Integer,
+    ///     Bound::new(0.0, 3.0).unwrap(),
+    ///     ATol::default(),
+    /// )
+    /// .unwrap();
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(0)))
+    ///     .decision_variables(BTreeMap::from([(variable, integer)]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// let original = instance.objective().clone();
+    ///
+    /// instance.log_encode([variable], ATol::default()).unwrap();
+    /// let output = instance.output_objective().unwrap();
+    /// assert_eq!(output.sense(), Sense::Maximize);
+    /// assert_eq!(output.function(), &original);
+    /// let encoded_ids = instance.required_ids();
+    /// assert_eq!(encoded_ids.len(), 2);
+    /// let state = State::from(HashMap::from_iter(
+    ///     encoded_ids.into_iter().map(|id| (id.into_inner(), 1.0)),
+    /// ));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), 3.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 3.0);
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns [`LogEncodingUnavailable`] when an otherwise valid Integer
@@ -209,7 +252,7 @@ impl Instance {
         // Safe unwrap: each right-hand side uses only the fresh auxiliary IDs
         // planned above, none of which are assignment keys.
         let acyclic = crate::AcyclicAssignments::new(assignments).unwrap();
-        self.substitute_acyclic_with_fresh_decision_variables(&acyclic, auxiliary_variables, atol)?;
+        self.apply_encoding_substitution(&acyclic, auxiliary_variables, atol)?;
         Ok(encodings)
     }
 
@@ -309,9 +352,10 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, v1::State, Bound, DecisionVariable, DecisionVariableRole, Equality, Evaluate,
-        Function, IndicatorConstraint, IndicatorConstraintID, Instance, Kind, LinearMonomial,
-        OneHotConstraint, OneHotConstraintID, Sense, Solution, Sos1Constraint, Sos1ConstraintID,
+        coeff, v1::State, Bound, Constraint, ConstraintID, DecisionVariable, DecisionVariableRole,
+        Equality, Evaluate, Function, IndicatorConstraint, IndicatorConstraintID, Instance, Kind,
+        LinearMonomial, OneHotConstraint, OneHotConstraintID, Sense, Solution, Sos1Constraint,
+        Sos1ConstraintID,
     };
     use approx::relative_eq;
     use proptest::prelude::*;
@@ -656,6 +700,10 @@ mod tests {
         ) {
             let decoded_value = target.lower as f64 + delta as f64;
             let expected_state = state_with_original_value(state.clone(), &target, decoded_value);
+            let expected_active_objective = instance
+                .objective()
+                .evaluate(&expected_state, ATol::default())
+                .unwrap();
             let expected = instance.evaluate(&expected_state, ATol::default()).unwrap();
 
             let (coefficients, _) = log_encoding_coefficients(
@@ -679,8 +727,17 @@ mod tests {
             prop_assert_eq!(binary_ids.len(), bits.len());
 
             let encoded_state = state_with_log_bits(state, &target, &binary_ids, &bits);
+            let actual_active_objective = encoded_instance
+                .objective()
+                .evaluate(&encoded_state, ATol::default())
+                .unwrap();
             let actual = encoded_instance.evaluate(&encoded_state, ATol::default()).unwrap();
 
+            assert_float_eq(
+                "active objective",
+                expected_active_objective,
+                actual_active_objective,
+            )?;
             assert_same_observable_evaluation(&expected, &actual)?;
         }
     }
@@ -730,6 +787,77 @@ mod tests {
         // Check the encoded linear expression has correct number of terms
         // Should have 3 terms for binary variables + 1 constant term
         assert_eq!(encoded.num_terms(), 4);
+    }
+
+    #[test]
+    fn log_encode_captures_targeted_active_objective_and_preserves_existing_output() {
+        let id = VariableID::from(0);
+        let make_instance = || {
+            let variable = DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap();
+            Instance::builder()
+                .sense(Sense::Maximize)
+                .objective(Function::from(crate::linear!(0)))
+                .decision_variables(BTreeMap::from([(id, variable)]))
+                .constraints(BTreeMap::new())
+                .build()
+                .unwrap()
+        };
+
+        let mut without_output = make_instance();
+        let original = without_output.objective().clone();
+        without_output.log_encode([id], ATol::default()).unwrap();
+        let output = without_output.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), &original);
+
+        let mut with_output = make_instance();
+        assert!(with_output.convert_active_objective(Sense::Minimize));
+        let output = with_output.output_objective().cloned().unwrap();
+        with_output.log_encode([id], ATol::default()).unwrap();
+
+        assert_eq!(with_output.output_objective(), Some(&output));
+        assert_eq!(
+            with_output.decision_variable_role(id),
+            Some(DecisionVariableRole::Dependent)
+        );
+        assert!(!with_output.used_decision_variable_ids().contains(&id));
+        let state = State::from_iter(
+            with_output
+                .used_decision_variable_ids()
+                .into_iter()
+                .map(|id| (id.into_inner(), 0.0)),
+        );
+        let solution = with_output.evaluate(&state, ATol::default()).unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 0.0);
+    }
+
+    #[test]
+    fn log_encode_does_not_capture_when_active_objective_is_not_targeted() {
+        let id = VariableID::from(0);
+        let variable = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let constraint = Constraint::equal_to_zero(Function::from(crate::linear!(0)));
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(id, variable)]))
+            .constraints(BTreeMap::from([(ConstraintID::from(0), constraint)]))
+            .build()
+            .unwrap();
+
+        instance.log_encode([id], ATol::default()).unwrap();
+
+        assert!(instance.output_objective().is_none());
     }
 
     #[test]
