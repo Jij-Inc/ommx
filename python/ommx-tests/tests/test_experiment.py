@@ -24,8 +24,6 @@ from ommx import (
     InstanceClass,
     InstanceClassClause,
     Kind,
-    ObjectivePreparation,
-    PreparationPolicy,
     SampleSet,
     Sense,
     Solution,
@@ -1020,64 +1018,6 @@ def test_log_solve_logs_input_solution_and_adapter_options():
     assert df.shape == (1, 0)
 
 
-def test_log_solve_stores_original_input_while_easy_api_prepares_a_copy():
-    class MinimizationAdapter(ExperimentTestSolverAdapter):
-        INPUT_CLASS = InstanceClass(
-            [
-                InstanceClassClause(
-                    label="constant-minimization",
-                    allowed_variable_kinds=set(),
-                    objective_degree_bound=DegreeBound.at_most(0),
-                    allowed_senses={Sense.Minimize},
-                )
-            ]
-        )
-
-        @classmethod
-        def recommended_preparation_policy(cls) -> PreparationPolicy:
-            return PreparationPolicy(
-                objective=ObjectivePreparation(target=Sense.Minimize)
-            )
-
-        @classmethod
-        def solve_without_preparation(
-            cls,
-            ommx_instance: Instance,
-            *,
-            diagnostics: DiagnosticsSink | None = None,
-            **kwargs: object,
-        ) -> Solution:
-            assert diagnostics is None
-            assert kwargs == {}
-            assert ommx_instance.sense == Sense.Minimize
-            return ommx_instance.evaluate({})
-
-    source = Instance.from_components(
-        decision_variables=[],
-        objective=3.0,
-        constraints={},
-        sense=Sense.Maximize,
-    )
-    source.add_user_annotation("source", "unchanged")
-    before = bytes(source.to_v2_bytes())
-
-    solution: Solution | None = None
-    with Experiment.with_temp_local_registry() as experiment:
-        with experiment.run() as run:
-            solution = run.log_solve(MinimizationAdapter, source)
-
-    assert bytes(source.to_v2_bytes()) == before
-    assert solution is not None
-    assert solution.sense == Sense.Maximize
-    assert solution.objective == 3.0
-
-    solve = experiment.runs[0].solves[0]
-    assert bytes(solve.input.to_v2_bytes()) == before
-    assert solve.output is not None
-    assert solve.output.sense == Sense.Maximize
-    assert solve.output.objective == 3.0
-
-
 def test_log_sample_records_finished_sample_set_without_feasible_samples():
     class DummySampler(ExperimentTestSamplerAdapter):
         seen_diagnostics: ClassVar[DiagnosticsSink | None]
@@ -1140,64 +1080,6 @@ def test_log_sample_records_finished_sample_set_without_feasible_samples():
     assert sampling.output.feasible_ids() == set()
     assert sampling.adapter_options == {"num_reads": 1}
     assert sampling.diagnostics == [{"status": "sampled", "bound": 0.0}]
-
-
-def test_log_solve_and_sample_forward_disabled_diagnostics_as_none():
-    class Solver(ExperimentTestSolverAdapter):
-        @classmethod
-        def solve_without_preparation(
-            cls,
-            ommx_instance: Instance,
-            *,
-            diagnostics: DiagnosticsSink | None = None,
-            **kwargs: object,
-        ) -> Solution:
-            assert diagnostics is None
-            assert kwargs == {}
-            return ommx_instance.evaluate({})
-
-        @property
-        def solver_input(self) -> Any:
-            raise NotImplementedError
-
-        def decode(self, data: Any) -> Solution:
-            raise NotImplementedError
-
-    class Sampler(ExperimentTestSamplerAdapter):
-        @classmethod
-        def sample_without_preparation(
-            cls,
-            ommx_instance: Instance,
-            *,
-            diagnostics: DiagnosticsSink | None = None,
-            **kwargs: object,
-        ) -> SampleSet:
-            assert diagnostics is None
-            assert kwargs == {}
-            return ommx_instance.evaluate_samples([{}])
-
-        @property
-        def solver_input(self) -> Any:
-            raise NotImplementedError
-
-        def decode(self, data: Any) -> Solution:
-            raise NotImplementedError
-
-        @property
-        def sampler_input(self) -> Any:
-            raise NotImplementedError
-
-        def decode_to_sampleset(self, data: Any) -> SampleSet:
-            raise NotImplementedError
-
-    instance = Instance.empty()
-    experiment = Experiment.with_temp_local_registry()
-
-    with experiment.run() as run:
-        solution = run.log_solve(Solver, instance)
-        sample_set = run.log_sample(Sampler, instance)
-        assert solution.feasible
-        assert sample_set.feasible_ids() == {0}
 
 
 def test_log_sample_records_failed_sampling_separately_from_solves():

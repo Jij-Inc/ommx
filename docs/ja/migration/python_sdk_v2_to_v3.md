@@ -320,7 +320,7 @@ Instanceの`objective`と`sense`はbackend formulationを表し、read-onlyな
 `output_objective`がユーザー向けのpairを保持します。`evaluate()`と
 `evaluate_samples()`はoutput pairを使うため、backendが変換後formulationを解いても、
 `solve()` / `sample()`はsource側のobjective valueとsenseを返します。一時的なPrepare後
-InstanceやPreparation historyは返却・保存されません。
+Instanceは結果の評価後に破棄されます。
 
 ## 8. DataFrame accessor
 

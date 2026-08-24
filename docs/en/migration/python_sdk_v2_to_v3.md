@@ -492,8 +492,8 @@ working Instance exposes that backend formulation through `objective` and
 `sense`, and preserves the user-facing pair in the read-only
 `output_objective`. `evaluate()` and `evaluate_samples()` use the output pair,
 so `solve()` / `sample()` return source objective values and sense even when the
-backend solved a transformed formulation. The temporary prepared Instance and
-Preparation history are not returned or stored.
+backend solved a transformed formulation. The temporary prepared Instance is
+discarded after evaluating the result.
 
 ```python
 # v2.5.1

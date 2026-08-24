@@ -7128,10 +7128,9 @@ class Run:
         r"""
         Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
 
-        `SolverAdapter.solve` owns copying and preparing its working Instance,
-        so this method does not mutate the caller's object. The original input
-        is always stored as the Solve input; the temporary prepared Instance is
-        not stored separately.
+        The input Instance is cloned before calling the adapter, so adapter-side
+        capability reductions do not mutate the caller's object. The original
+        input is always stored as the Solve input.
 
         `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
         arguments are passed to `adapter.solve(...)` and recorded as
@@ -7165,11 +7164,9 @@ class Run:
         r"""
         Sample an Instance with an OMMX SamplerAdapter and log a Sampling entry.
 
-        `SamplerAdapter.sample` owns copying and preparing its working Instance,
-        so this method does not mutate the caller's object. The original input
-        is stored together with the returned `SampleSet`; the temporary prepared
-        Instance is not stored separately. A successful sampler call is recorded
-        as finished even when none of its samples are feasible.
+        The original input is stored together with the returned `SampleSet`.
+        A successful sampler call is recorded as finished even when none of its
+        samples are feasible.
 
         `adapter` must be a subclass of `ommx.adapter.SamplerAdapter`. Keyword
         arguments are passed to `adapter.sample(...)` and recorded as
@@ -7190,14 +7187,12 @@ class Run:
         r"""
         Open a manual Solve scope for direct backend solver model access.
 
-        This is a preparation-free workflow. The caller must prepare the
-        Instance for the adapter's `INPUT_CLASS` before opening the context.
-        Entering the context reserves a Solve ID, constructs the adapter with a
-        cloned input Instance, and exposes the adapter's `solver_input`; it does
-        not call `SolverAdapter.solve`. The caller can run backend-specific APIs,
-        record adapter options that are set directly on the backend model, decode
-        the backend output, and continue recording diagnostics until the context
-        exits. The Solve entry is finalized on context exit. If adapter
+        This returns a manual Solve context. Entering the context reserves a
+        Solve ID, constructs the adapter with a cloned input Instance, and
+        exposes the adapter's `solver_input`. The caller can run backend-specific
+        APIs, record adapter options that are set directly on the backend model,
+        decode the backend output, and continue recording diagnostics until the
+        context exits. The Solve entry is finalized on context exit. If adapter
         construction or the context body fails before `decode` succeeds, a failed
         or interrupted Solve is recorded when possible and the exception is
         re-raised.

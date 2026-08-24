@@ -190,20 +190,9 @@ with Experiment() as experiment:
 
 通常のRunでは {py:meth}`~ommx.experiment.Run.log_solve` を使います。これはadapterの `solve` メソッドを呼び出し、入力、出力、adapter名、adapter optionsをまとめて記録します。一方で、AdapterのAPIではサポートしきれていないソルバーの高度な機能を使う必要がある場合は、手動Solveスコープを開きます。
 
-`log_solve`と`log_sample`はEasy Adapter APIを使います。Adapterは渡されたInstanceを
-copyし、そのprivate copyをPrepareして、出力を作った後に破棄します。Experimentが保存
-するのは、最初に渡されたInstanceと`Solution`または`SampleSet`です。Prepare後Instanceや
-Preparation historyは保存しません。backend向けに変換されたobjectiveとsenseは、working
-copyが出力を評価する際に`Instance.output_objective`を使って元の意味へ戻します。
-
 {py:class}`~ommx.adapter.SamplerAdapter` では、代わりに {py:meth}`~ommx.experiment.Run.log_sample` を使います。adapter の `sample` メソッドを呼び出し、完全な {py:class}`~ommx.SampleSet` を出力に持つ独立した {py:class}`~ommx.experiment.Sampling` として記録します。adapter呼び出し自体が成功していれば、SampleSet に feasible sample がなくてもSamplingはfinishedとして記録されます。読み込んだSampling recordは {py:attr}`~ommx.experiment.SealedRun.samplings` から取得できます。
 
-`open_solve`はpreparation-freeな経路です。入力は事前にAdapterの`INPUT_CLASS`
-へ属している必要があり、変換が必要なら明示的なworking copyを先にPrepareします。手動
-Solveスコープでは、まず`solver_input`でbackend solverのModelを受け取り、そのModelを
-直接操作して最適化を行います。最後に`solve.decode(model)`を呼ぶと、adapterがbackendの
-結果を{py:class}`~ommx.Solution`に変換し、そのSolutionがExperimentに記録されるSolveの
-出力になります。
+手動Solveスコープでは、まず `solver_input` でバックエンドソルバーのModelを受け取り、ユーザーがそのModelを直接操作して最適化を行います。最後に `solve.decode(model)` を呼ぶと、adapterがバックエンドの結果を {py:class}`~ommx.Solution` に変換し、そのSolutionがExperimentに記録されるSolveの出力になります。
 
 ```python
 with experiment.run() as run:

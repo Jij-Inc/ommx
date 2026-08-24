@@ -34,10 +34,9 @@ solution = OMMXHighsAdapter.solve_without_preparation(working)
 ```
 
 Custom Adapters must implement `solve_without_preparation()` or
-`sample_without_preparation()` as their exact-input execution API. Experiment
-continues to record the original input and returned output, not the temporary
-prepared copy. Built-in solver Adapters omit active-formulation dual values
-when output-objective projection is present.
+`sample_without_preparation()` as their exact-input execution API. Built-in
+solver Adapters omit active-formulation dual values when output-objective
+projection is present.
 
 ### ⚠ Preserve input objectives across solver Preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 

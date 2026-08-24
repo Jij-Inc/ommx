@@ -33,10 +33,8 @@ solution = OMMXHighsAdapter.solve_without_preparation(working)
 ```
 
 独自Adapterでは、exact inputを実行するAPIとして`solve_without_preparation()`または
-`sample_without_preparation()`を実装する必要があります。Experimentが記録するのは
-元のinputと返されたoutputであり、一時的にPrepareしたcopyではありません。
-output-objective projectionがある場合、built-in solver Adapterはactive formulationの
-dual valueを省略します。
+`sample_without_preparation()`を実装する必要があります。output-objective projectionが
+ある場合、built-in solver Adapterはactive formulationのdual valueを省略します。
 
 ### ⚠ Solver Preparationで入力objectiveを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 

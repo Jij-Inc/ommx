@@ -190,22 +190,9 @@ All data stored during the experiment is saved in OMMX's *Local Registry*.
 
 Most runs should use {py:meth}`~ommx.experiment.Run.log_solve`, which calls the adapter's `solve` method and records the input, output, adapter name, and adapter options in one step. When you need advanced solver features that the Adapter API does not cover, open a manual Solve scope.
 
-`log_solve` and `log_sample` use the Easy Adapter APIs: the Adapter copies the
-supplied Instance, prepares that private copy, and discards it after producing
-the output. Experiment stores the original supplied Instance together with the
-`Solution` or `SampleSet`; it does not store a prepared Instance or Preparation
-history. Objective and sense transformations needed by the backend are restored
-through `Instance.output_objective` when the working copy evaluates the output.
-
 For a {py:class}`~ommx.adapter.SamplerAdapter`, use {py:meth}`~ommx.experiment.Run.log_sample` instead. It calls the adapter's `sample` method and records a separate {py:class}`~ommx.experiment.Sampling` whose output is the complete {py:class}`~ommx.SampleSet`. The Sampling is still recorded as finished when the adapter succeeds but the SampleSet contains no feasible sample. Loaded Sampling records are available through {py:attr}`~ommx.experiment.SealedRun.samplings`.
 
-`open_solve` is the preparation-free path. Its input must already belong
-to the Adapter's `INPUT_CLASS`; prepare an explicit working copy first when a
-conversion is needed. In the manual scope, get the backend solver model through
-`solver_input`, operate on that model, and run the optimization yourself.
-Finally, call `solve.decode(model)`: the adapter converts the backend result into
-an {py:class}`~ommx.Solution`, and that Solution becomes the output of the Solve
-recorded in the Experiment.
+In a manual Solve scope, first get the backend solver model through `solver_input`, then operate on that model and run the optimization yourself. Finally, call `solve.decode(model)`: the adapter converts the backend result into an {py:class}`~ommx.Solution`, and that Solution becomes the output of the Solve recorded in the Experiment.
 
 ```python
 with experiment.run() as run:
