@@ -277,7 +277,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 最後に、Adapter毎のAPIを揃えるために `ommx.adapter.SolverAdapter` を継承したクラスを作成します。これは `@abstractmethod` を含む次のような抽象基底クラスです：
 
 ```python
-from typing import ClassVar
+from typing import Any, ClassVar
 
 class SolverAdapter(ABC):
     # Adapter applicability を完全に定義する OMMX の条件
@@ -289,11 +289,12 @@ class SolverAdapter(ABC):
 
     @classmethod
     @abstractmethod
-    def solve(
+    def solve_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> Solution:
         pass
 
@@ -307,12 +308,20 @@ class SolverAdapter(ABC):
         pass
 ```
 
-この抽象基底クラスは以下の2通りのユースケースを想定しています: 
+この抽象基底クラスは以下の3通りのユースケースを想定しています:
 
-- バックエンドソルバーのパラメータなどを調整しない場合は、  `solve` クラスメソッドを使う。
+- 通常の1 call workflowでは、継承した`solve`クラスメソッドを使う。入力をcopyし、
+  `INPUT_CLASS`向けの`recommended_preparation_policy()`を適用してから、一時的な
+  Prepare済みcopyに対して`solve_without_preparation`を呼び出します。
+- Application側でexactなAdapter inputを用意する場合は、Preparationを行わない
+  `solve_without_preparation`を使う。
 - バックエンドソルバーのパラメータなどを調整する場合は、 `solver_input` を使ってバックエンドソルバーの入力用のデータ構造（今回は `pyscipopt.Model`）を取得し、調整した後にバックエンドソルバーへ入力し、最後にバックエンドソルバーの出力を `decode` で変換する。
 
-具体的な adapter の `solve` クラスメソッドは、adapter 固有の keyword option を追加で定義できます。予約済みの `diagnostics` keyword は `Run.log_solve` が管理します。`Run.log_solve(..., store_diagnostics=True)` を使う場合、adapter はその sink に adapter 定義の diagnostic report を記録できます。`None` の場合、diagnostics は無効です。
+具体的なadapterの`solve_without_preparation`クラスメソッドはadapter固有のkeyword optionを追加で
+定義でき、`solve`はそれらをそのまま転送します。予約済みの`diagnostics` keywordは
+`Run.log_solve`が管理します。`Run.log_solve(..., store_diagnostics=True)`を使う場合、
+adapterはそのsinkにadapter定義のdiagnostic reportを記録できます。`None`の場合、
+diagnosticsは無効です。
 
 #### 入力 class と推奨 Preparation
 
@@ -320,7 +329,16 @@ Adapter は、受け取れる具体的な `Instance` 値の集合 `INPUT_CLASS` 
 
 Applicability は、その後の全ての変換や backend operation の成功を保証するものではありません。`as_linear()` のような helper が扱う、より狭い表現を converter が検証したり、solver input の構築中に backend が数値や実装上の上限を拒否したりすることがあります。これらは converter または backend の error として扱い、Adapter applicability の別の source of truth にしないでください。
 
-Adapter の直接 API は厳格であり、入力を適用可能にするための変換を内部では行いません。代わりに、Adapter は `recommended_preparation_policy()` を override して、その `INPUT_CLASS` 向けの新しい編集可能な {class}`~ommx.PreparationPolicy` を返せます。推奨 Policy は instance を参照・変更せず、Preparation を実行せず、Adapter applicability も保証しません。`INPUT_CLASS` と Policy は {meth}`~ommx.Instance.prepare` に別々の引数として渡します。
+通常の`solve` APIがPreparationを所有します。呼び出し元のInstanceをcopyし、
+`recommended_preparation_policy()`が返すfreshなPolicyをそのcopyへ適用してから、
+`solve_without_preparation`を呼び出します。Preparationやbackendが失敗した場合も含め、呼び出し元の
+Instanceは変更されません。推奨Policy自体はinstanceを参照・変更せず、Preparationを
+実行せず、Adapter applicabilityも保証しません。
+
+`solve_without_preparation`はpreparation-freeなAPIです。`INPUT_CLASS`のexactなmemberを要求し、
+満たさなければ`AdapterNotApplicableError`を送出します。customなPreparation Policyが
+必要なapplicationはInstanceを明示的にcopyし、そのworking copyへ編集済みPolicyを
+{meth}`~ommx.Instance.prepare`で適用してから`solve_without_preparation`へ渡します。
 
 推奨 Policy から特殊制約 lowering を有効にする場合は、以下の family selector を使います：
 
@@ -331,12 +349,18 @@ Adapter の直接 API は厳格であり、入力を適用可能にするため�
 `Instance` が現在保持する family は {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` で確認できます。選択された Preparation phase は {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` に委譲し、active な family を通常制約へ変換します（indicator/SOS1 は Big-M、one-hot は線形等式）。Validation と数学的な意味は引き続き owner operation が定義します。
 
 ```{important}
-`INPUT_CLASS` は Adapter が受け取る時点の入力値そのものを記述し、その membership が applicability の完全な条件です。Preparation は呼び出し側が所有し、その値を in-place に変更します。Preparation の成功は membership を保証します。その後も solver input の構築時に converter 固有または backend 固有の validation が失敗することはありますが、その失敗によって入力が「not applicable」になるわけではありません。
+`INPUT_CLASS`は`solve_without_preparation`が受け取る時点の入力値そのものを記述し、そのmembershipが
+applicabilityの完全な条件です。`solve`はprivateなworking copyだけをPrepareします。
+Preparationの成功はmembershipを保証します。その後もsolver inputの構築時にconverter
+固有またはbackend固有のvalidationが失敗することはありますが、その失敗によって入力が
+「not applicable」になるわけではありません。
 ```
 
 ここまでで用意した関数を使って次のように実装することができます：
 
 ```{code-cell} ipython3
+from typing import Any
+
 from ommx.adapter import DiagnosticsSink, SolverAdapter
 from ommx import (
     DegreeBound,
@@ -394,17 +418,18 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         set_constraints(self.model, self.instance, self.varname_map)
 
     @classmethod
-    def solve(
+    def solve_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> Solution:
         """
         PySCIPoptを使ってommx.Instanceを解き、ommx.Solutionを返す
         """
         _ = diagnostics
-        adapter = cls(ommx_instance)
+        adapter = cls(ommx_instance, **kwargs)
         model = adapter.solver_input
         model.optimize()
         return adapter.decode(model)
@@ -442,18 +467,28 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 `map_active_optimality()`は、active formulationの最適性が返却する`Solution`の
 objectiveに対する最適性も証明するときにだけ、そのstatusを保持します。
 
-呼び出し側は、厳格な Adapter API を呼ぶ前に推奨 Policy を使うかどうかを決め、必要に応じて編集します：
+通常の呼び出しでは、InstanceのcopyとPreparationが自動的に行われます：
 
 ```python
-input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
-policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
-# Application に異なる選択が必要なら、ここで public field を編集します。
-instance.prepare(input_class, policy)
-OMMXPySCIPOptAdapter.require_applicable(instance)
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
-上の明示的な `require_applicable()` は `INPUT_CLASS` membership だけを検査します。`solve()` も厳格な入口で同じ membership を検査し、その後の PySCIPOpt model の構築・求解時には converter または backend の error を返すことがあります。
+呼び出し元の`instance`は変更されません。Preparationをcustomizeする場合は、明示的な
+working copyを作ってpreparation-free APIを呼び出します：
+
+```python
+import copy
+
+working = copy.copy(instance)
+input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
+policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
+# Application に異なる選択が必要なら、ここで public field を編集します。
+working.prepare(input_class, policy)
+solution = OMMXPySCIPOptAdapter.solve_without_preparation(working)
+```
+
+`solve_without_preparation()`は`INPUT_CLASS` membershipを検査し、その後のPySCIPOpt modelの
+構築・求解時にはconverterまたはbackendのerrorを返すことがあります。
 
 これでSolver Adapter完成です 🎉
 
@@ -462,12 +497,13 @@ Pythonは継承したクラスでパラメータ引数を追加してもいい�
 
 ```python
     @classmethod
-    def solve(
+    def solve_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
         timeout: Optional[int] = None,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> Solution:
 ```
 
@@ -543,11 +579,12 @@ PySCIPOptの時は `SolverAdapter` を継承しましたが、今回は `Sampler
 class SamplerAdapter(SolverAdapter):
     @classmethod
     @abstractmethod
-    def sample(
+    def sample_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> SampleSet:
         pass
 
@@ -561,11 +598,18 @@ class SamplerAdapter(SolverAdapter):
         pass
 ```
 
-`SamplerAdapter` は `SolverAdapter` を継承しているので `solve` などの `@abstractmethod` も実装する必要と思うかもしれません。しかし、これらについては `sample` を使って最善のサンプルを返すという機能が `SamplerAdapter` に実装されているため、`sample` だけを実装すれば十分です。自分でより効率の良い実装を行いたい場合は `solve` をオーバーライドしてください。
+`SamplerAdapter`にも同じ二段階のAPIがあります。継承した`sample`は呼び出し元の
+InstanceをcopyしてPrepareし、`sample_without_preparation`はexactなAdapter inputを受け取ります。
+`SamplerAdapter.solve_without_preparation`は`sample_without_preparation`の`best_feasible`を選び、`solver_input`は
+`sampler_input`へ委譲し、`decode`は`decode_to_sampleset(...).best_feasible`を返します。
+したがってSampler実装が定義するのはsampler側の`sample_without_preparation`、`sampler_input`、
+`decode_to_sampleset`だけで、Easy APIとSolver bridgeは継承されます。
 
 `solve` と同様に、予約済みの `diagnostics` keyword は `Run.log_sample` が管理します。sink が `None` でない場合、sampler は adapter 固有の report を記録できます。
 
 ```{code-cell} ipython3
+from typing import Any
+
 from ommx.adapter import DiagnosticsSink, SamplerAdapter
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
@@ -602,14 +646,15 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     # サンプリングを行う共通のメソッド
     @classmethod
-    def sample(
+    def sample_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> SampleSet:
         _ = diagnostics
-        adapter = cls(ommx_instance)
+        adapter = cls(ommx_instance, **kwargs)
         response = adapter._sample()
         return adapter.decode_to_sampleset(response)
     
@@ -625,26 +670,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         # ここで `ommx.Instance` が保持している情報が必要になる
         return self.ommx_instance.evaluate_samples(samples)
 
-    # SamplerAdapterはSolverAdapterとしても使えるようにするため、必要なAPIを実装します
-    @property
-    def solver_input(self) -> dict[tuple[int, ...], float]:
-        return self.sampler_input
-
-    # ここではサンプル結果のうち最良の実行可能な解を返すようにする
-    def decode(self, data: oj.Response) -> Solution:
-        sample_set = self.decode_to_sampleset(data)
-        return sample_set.best_feasible
-
-    @classmethod
-    def solve(
-        cls,
-        ommx_instance: Instance,
-        *,
-        diagnostics: DiagnosticsSink | None = None,
-    ) -> Solution:
-        _ = diagnostics
-        sample_set = cls.sample( ommx_instance,)
-        return sample_set.best_feasible
 ```
 
 ### Sampler Adapterを使って簡単なサンプリングを行う
@@ -676,7 +701,11 @@ sample_set.summary
 このチュートリアルでは、PySCIPOptと接続するSolver Adapterの実装とOpenJijと接続するSampler Adapterの実装を通して、OMMX Adapterの実装方法について学びました。以下がOMMX Adapterを実装する際の重要なポイントです：
 
 1. OMMX Adapterは `SolverAdapter` または `SamplerAdapter` の抽象基底クラスを継承することで実装します
-2. `INPUT_CLASS` で applicability を定義します。`check_applicability()` と `require_applicable()` が report または強制するのは membership だけです。有用な場合は、`recommended_preparation_policy()` から新しい編集可能な Policy を返し、呼び出し側が厳格な Adapter API を呼ぶ前に `Instance.prepare()` で適用します
+2. `INPUT_CLASS`でapplicabilityを定義し、preparation-freeな`solve_without_preparation()`または
+   `sample_without_preparation()`を実装します。通常の`solve()`と`sample()`は呼び出し元のInstanceを
+   copyし、`recommended_preparation_policy()`のfreshなPolicyを自動的に適用します。
+   Preparationをcustomizeするapplicationは、明示的なcopyをPrepareして
+   preparation-free APIを呼び出します
 3. 実装の主なステップは以下の通りです：
    - `ommx.Instance` をバックエンドソルバーが理解できる形式に変換する
    - バックエンドソルバーを実行して解を取得する

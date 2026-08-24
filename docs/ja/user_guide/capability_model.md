@@ -46,9 +46,55 @@ binary_linear_with_one_hot = InstanceClass(
 )
 ```
 
-Adapter は applicability の完全な条件を `INPUT_CLASS` として宣言します。構造化された membership result を得るには `check_applicability()`、membership が満たされない場合に例外を送出するには `require_applicable()` を使います。明示的な preparation で別の入力値を作った場合は、その値で membership を再評価します。
+Adapterはapplicabilityの完全な条件を`INPUT_CLASS`として宣言します。構造化された
+membership resultを得るには`check_applicability()`、membershipが満たされない場合に
+例外を送出するには`require_applicable()`を使います。easyな`solve()`と`sample()`は
+呼び出し元のInstanceをcopyし、そのprivate copyを`INPUT_CLASS`向けにPrepareするため、
+呼び出し元の値を変更しません。preparation-freeな
+`solve_without_preparation()`と`sample_without_preparation()`はexactなmemberを要求します。
+customなPreparation Policyを使うapplicationは、入力を明示的にcopyしてPrepareした後に
+preparation-free APIを呼びます。
 
 Applicability と solver input の構築は別の境界です。Membership は、その後の全ての converter または backend operation の成功を保証しません。Converter は local helper が受け取る表現を検証でき、backend は solver input の構築中に数値や実装上の上限を拒否できます。これらは conversion または backend の error であり、追加の applicability 条件ではありません。また、`AdapterNotApplicableError` として報告してはいけません。
+
+### Active objectiveとoutput objective
+
+Preparationでは、exactなAdapter inputを作るためにInstanceのobjectiveやsenseを書き換える
+ことがあります。その場合、{attr}`Instance.objective <ommx.Instance.objective>`と
+{attr}`Instance.sense <ommx.Instance.sense>`はbackendが受け取るactive formulationを表し、
+read-onlyな{attr}`Instance.output_objective <ommx.Instance.output_objective>`はユーザーへ
+提示するobjective functionとsenseを保持します。
+
+{meth}`Instance.evaluate <ommx.Instance.evaluate>`と
+{meth}`Instance.evaluate_samples <ommx.Instance.evaluate_samples>`は、output pairがあれば
+それを使います。例えば最大化modelをOpenJij向けに最小化へ正規化してsampleしても、返る
+`SampleSet`はsource側の最大化senseとobjective valueを持ちます。active pairをそのまま
+評価に使える場合、`output_objective`は通常`None`です。
+
+active objectiveまたはsenseを最初に変更した変換が通常output pairを確立します。変換は、
+active formulationのoptimalityをtransportできないことだけを記録するため、active pairと
+同じoutput pairを確立する場合もあります。それ以降の変換はactive formulationだけを
+書き換え、既存のoutput pairを置換したり符号反転したりしません。新しい
+`Instance.objective`の代入はmodelの明示的な再定義なので、保持済みのpairをclearし、
+現在のactive senseと新しいobjectiveを再び出力意味論にします。
+
+backendのoptimality proofとdual valueはactive formulationに属します。
+`OutputObjective.preserves_optimality`は、そのformulationに対するoptimalityが、復元後の
+output semanticsに対するoptimalityも証明するかを表します。sense反転やpartial
+evaluationのようなexact rewriteはこの保証を維持します。fixed penaltyは、有限の
+penaltyだけではsource problemとの同値性を一般に証明できないため、この保証を無効に
+します。built-in solver Adapterは、この保証がある場合にだけbackendのoptimalityを
+出力します。
+
+dual valueにはrow、sign、scaleの別個のmappingが必要です。そのためbuilt-in solver
+Adapterはoptimalityをtransportできる場合でも、output pairがあればdual valueを引き続き
+省略します。
+
+これは出力意味論であり、Preparationのevent logではありません。easyなAdapter APIは
+一時的なPrepare後Instanceを破棄し、`Solution`または`SampleSet`だけを返します。
+Experimentは元の入力とその出力を記録します。`Instance`と`Solution` / `SampleSet`が
+引き続きserialization rootであり、別のsolve outcomeやPreparation history objectは
+導入しません。
 
 ## SpecialConstraintKind と active_special_constraint_kinds
 
@@ -204,6 +250,7 @@ for cid, c in instance2.constraints.items():
 | Adapter 入力の構造的な集合を記述する | {class}`~ommx.InstanceClass` |
 | Adapter applicability を定義する | `INPUT_CLASS` |
 | `INPUT_CLASS` membership を report または強制する | `check_applicability()` / `require_applicable()` |
+| 保持された出力objectiveの意味を確認する | {attr}`~ommx.Instance.output_objective` |
 | active な特殊制約 family を調べる | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | 選択した特殊制約を明示的に lowering する | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | 個別に通常制約に変換する | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |

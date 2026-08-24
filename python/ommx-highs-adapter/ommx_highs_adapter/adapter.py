@@ -599,8 +599,9 @@ class OMMXHighsAdapter(SolverAdapter):
         HiGHS accepts both optimization senses, Binary, Integer, and Continuous
         variables, and linear regular constraints directly. Its recommendation
         therefore enables only lowering for the special-constraint families
-        currently understood by OMMX. The returned policy is fresh and may be
-        edited by the caller before :meth:`Instance.prepare` is invoked.
+        currently understood by OMMX. The easy API applies a fresh policy to an
+        isolated copy; callers may instead edit and apply one before invoking
+        :meth:`solve_without_preparation`.
         """
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
@@ -647,6 +648,7 @@ class OMMXHighsAdapter(SolverAdapter):
         *,
         verbose: bool = False,
         diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
     ) -> Solution:
         """
         Solve an OMMX optimization problem using HiGHS solver.
@@ -658,12 +660,8 @@ class OMMXHighsAdapter(SolverAdapter):
         Parameters
         ----------
         ommx_instance : Instance
-            The OMMX optimization problem to solve. Must satisfy HiGHS adapter
-            requirements: linear objective function (constant or linear terms only),
-            linear constraints (constant or linear terms only), variables of type
-            Binary, Integer, or Continuous only (Semi-integer and Semi-continuous
-            support is planned but not yet implemented), and constraints of type
-            ``EQUAL_TO_ZERO`` or ``LESS_THAN_OR_EQUAL_TO_ZERO`` only.
+            The OMMX optimization problem to solve. The input is not modified;
+            an isolated copy is prepared with the recommended HiGHS policy.
 
         verbose : bool, default=False
             If True, enable HiGHS's console logging for debugging
@@ -752,9 +750,27 @@ class OMMXHighsAdapter(SolverAdapter):
         #     ...
         # ommx.adapter.UnboundedDetected: Model was unbounded
         # ````
+        prepared = cls._prepare_for_execution(ommx_instance)
+        return cls.solve_without_preparation(
+            prepared,
+            verbose=verbose,
+            diagnostics=diagnostics,
+            **kwargs,
+        )
+
+    @classmethod
+    def solve_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        *,
+        verbose: bool = False,
+        diagnostics: DiagnosticsSink | None = None,
+        **kwargs: Any,
+    ) -> Solution:
+        """Solve an exact HiGHS Adapter input without preparing it."""
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
-            adapter = cls(ommx_instance, verbose=verbose)
+            adapter = cls(ommx_instance, verbose=verbose, **kwargs)
             model = adapter.solver_input
             diagnostics_callback: Callable[[Any], None] | None = None
             if diagnostics is not None:
@@ -864,14 +880,18 @@ class OMMXHighsAdapter(SolverAdapter):
                     Solution.OPTIMAL
                 )
 
-            # dual variables
-            solution_info = data.getSolution()
-            row_dual = solution_info.row_dual
-            row_dual_len = len(row_dual)
+            # Duals certify the active formulation and need an explicit mapping
+            # before they can be attached to projected output semantics.
+            if self.instance.output_objective is None:
+                solution_info = data.getSolution()
+                row_dual = solution_info.row_dual
+                row_dual_len = len(row_dual)
 
-            for constraint_id in solution.constraint_ids:
-                if constraint_id < row_dual_len:
-                    solution.set_dual_variable(constraint_id, row_dual[constraint_id])
+                for constraint_id in solution.constraint_ids:
+                    if constraint_id < row_dual_len:
+                        solution.set_dual_variable(
+                            constraint_id, row_dual[constraint_id]
+                        )
 
             return solution
 

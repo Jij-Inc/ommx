@@ -1,6 +1,6 @@
 import pytest
 
-from ommx import DecisionVariable, Instance, Optimality, Solution
+from ommx import DecisionVariable, Instance, Optimality, Sense, Solution
 from ommx.adapter import InfeasibleDetected, UnboundedDetected, NoSolutionReturned
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
@@ -91,6 +91,24 @@ def test_solution_optimality_is_not_transported_through_fixed_penalty():
     assert solution.optimality == Optimality.Unspecified
 
 
+def test_output_objective_omits_active_formulation_dual_values():
+    x = DecisionVariable.continuous(0, lower=0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={0: x <= 1},
+        sense=Sense.Maximize,
+    )
+    assert instance.convert_active_objective(Sense.Minimize)
+
+    adapter = OMMXPythonMIPAdapter(instance)
+    model = adapter.solver_input
+    model.optimize()
+    solution = adapter.decode(model)
+
+    assert solution.get_dual_variable(0) is None
+
+
 def test_partial_evaluate():
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     instance = Instance.from_components(
@@ -103,6 +121,8 @@ def test_partial_evaluate():
     partial = instance.partial_evaluate({0: 1})
     # x[0] is no longer present in the problem
     assert partial.used_decision_variables == x[1:]
+    assert partial.output_objective is not None
+    assert partial.output_objective.preserves_optimality
 
     solution = OMMXPythonMIPAdapter.solve(partial)
     assert [var.value for var in solution.decision_variables] == [1, 0, 0]

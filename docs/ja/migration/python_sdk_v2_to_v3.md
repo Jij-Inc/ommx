@@ -260,14 +260,19 @@ ids_list: list[int] = sample_set.sample_ids_list
 - `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
 - `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
 - `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-- `ommx_openjij_adapter.sample_qubo_sa(...)` - 呼び出し側が所有する `Instance` を `OMMXOpenJijSAAdapter.INPUT_CLASS` 向けにprepareし、その同じinstanceを `OMMXOpenJijSAAdapter.sample(...)` に渡します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
+- `ommx_openjij_adapter.sample_qubo_sa(...)` -
+  `OMMXOpenJijSAAdapter.sample(instance)`を使います。置き換え後は入力を変更せず、内部で
+  copyしてPrepareし、raw `Samples` ではなく評価済みの `SampleSet` を返します
+  （`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
 
 v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `uniform_penalty_weight`、`penalty_weights`、
 `inequality_integer_slack_max_range` を直接受け取り、暗黙にmodel変換を実行していました。
-v3では呼び出し側がこれらの選択を所有します。Adapterが返す新しい推奨
-`PreparationPolicy` を出発点に、application固有のfieldを編集し、厳格なAdapter APIを
-呼ぶ前に `Instance.prepare()` でin-placeに適用します。
+v3のeasyな`sample()` / `solve()` APIは入力をcopyし、Adapterの推奨
+`PreparationPolicy`を適用します。呼び出し元のInstanceは変更されません。一方、固定
+penalty magnitudeのようなapplication固有の選択は引き続き呼び出し側が所有します。
+customizeする場合は明示的なworking copyをPrepareし、preparation-freeな
+`sample_without_preparation()` / `solve_without_preparation()` APIを呼びます。
 
 OpenJijの推奨Policyでは、特殊制約lowering、active objectiveのminimizationへの変換、
 Integer slack、使用中Integer変数のlog encodingを有効にします。Integer slackはrange 32で
@@ -282,9 +287,12 @@ exactなequality変換を最初に試し、そのoperationが利用できない�
 constraint IDごとのweightを `policy.fixed_penalty` で選択します。
 
 ```python
+import copy
+
 from ommx import FixedPenaltyPreparation, IntegerSlackPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
+working = copy.copy(source)
 input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.integer_slack = IntegerSlackPreparation(
@@ -294,17 +302,25 @@ policy.integer_slack = IntegerSlackPreparation(
 policy.fixed_penalty = (
     FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
 )
-source.prepare(input_class, policy)
-samples = OMMXOpenJijSAAdapter.sample(source)
+working.prepare(input_class, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(working)
 ```
 
 `Instance.prepare()` はtarget class membershipへ到達した場合だけreturnし、選択した
-OMMX operationの既存exception typeを使います。instanceをin-placeで変更し、後のerrorが
-起きても先に完了したoperationをglobalにrollbackしません。このmembershipがAdapter
-applicabilityの完全な条件であり、`OMMXOpenJijSAAdapter.require_applicable(source)` が
-reportまたは強制するのもmembershipだけです。OpenJijのsolver inputを構築する際には、
-converterがsigned IDの上限とinteraction coefficientの有限性を別途検証します。これらの
-失敗はconversion errorであり、applicability failureではありません。
+OMMX operationの既存exception typeを使います。明示的なworking copyをin-placeで変更し、
+後のerrorが起きても先に完了したoperationをglobalにrollbackしません。このmembershipが
+Adapter applicabilityの完全な条件であり、`sample_without_preparation()`はPreparationを行わずに
+membershipを強制します。OpenJijのsolver inputを構築する際には、converterがsigned IDの
+上限とinteraction coefficientの有限性を別途検証します。これらの失敗はconversion
+errorであり、applicability failureではありません。easyな`sample(source)`はこの
+copy-and-prepareを内部で行い、`source`を変更しません。
+
+Preparationがobjectiveまたはoptimization senseを書き換えた場合、一時的なworking
+Instanceの`objective`と`sense`はbackend formulationを表し、read-onlyな
+`output_objective`がユーザー向けのpairを保持します。`evaluate()`と
+`evaluate_samples()`はoutput pairを使うため、backendが変換後formulationを解いても、
+`solve()` / `sample()`はsource側のobjective valueとsenseを返します。一時的なPrepare後
+InstanceやPreparation historyは返却・保存されません。
 
 ## 8. DataFrame accessor
 

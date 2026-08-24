@@ -25,7 +25,13 @@ The examples below use the PySCIPOpt Adapter, as in [Solving optimization proble
 pip install ommx-pyscipopt-adapter
 ```
 
-The PySCIPOpt Adapter passes Indicator and SOS1 constraints through to SCIP's `addConsIndicator` / `addConsSOS1` (equality indicators are split into two inequality indicators). It does not accept OneHot directly, so callers must explicitly lower OneHot to a regular equality before passing the resulting input to the adapter. This preparation is separate from `INPUT_CLASS` membership and adapter applicability; see [Adapter Input Classes and Explicit Constraint Lowering](./capability_model.md).
+The PySCIPOpt Adapter passes Indicator and SOS1 constraints through to SCIP's
+`addConsIndicator` / `addConsSOS1` (equality indicators are split into two
+inequality indicators). Its `solve()` API copies the input and uses the
+recommended Preparation policy to lower OneHot constraints to regular
+equalities. Callers using `solve_without_preparation()` must perform that lowering on their
+explicit working copy first. See [Adapter Input Classes and Explicit Constraint
+Lowering](./capability_model.md).
 
 ## IndicatorConstraint
 

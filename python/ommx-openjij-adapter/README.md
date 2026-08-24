@@ -11,10 +11,21 @@ Provides an adapter between [OMMX](https://github.com/Jij-Inc/ommx) and
 pip install ommx-openjij-adapter
 ```
 
-OpenJij directly accepts a Binary, unconstrained minimization model through
-this adapter. Prepare a constrained model in place before sampling it:
+The easy API prepares an isolated copy with the Adapter's recommended policy,
+so it can directly accept inputs such as an Integer maximization model without
+modifying the caller's `Instance`:
+
+```python
+sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=16)
+```
+
+Preparation choices that require application knowledge remain explicit. For
+example, prepare a copy with a selected fixed penalty weight and use the
+preparation-free API for a constrained model:
 
 ```python markdown-code-runner
+import copy
+
 from ommx import DecisionVariable, FixedPenaltyPreparation, Instance
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
@@ -26,15 +37,15 @@ instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
+prepared = copy.copy(instance)
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.fixed_penalty = FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
     weight=2.0
 )
-instance.prepare(input_class, policy)
+prepared.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
-sample_set = OMMXOpenJijSAAdapter.sample(
-    instance,
+sample_set = OMMXOpenJijSAAdapter.sample_without_preparation(
+    prepared,
     num_reads=16,
 )
 print(sample_set.summary)
@@ -78,10 +89,11 @@ are usually the convenient choice when special-constraint lowering creates
 regular constraints with generated IDs. OMMX validates the weight domain; the
 caller remains responsible for selecting a sufficient magnitude.
 
-Pass the same prepared `Instance` to the adapter. It remains the evaluation
+Pass the prepared `Instance` to `sample_without_preparation`. It remains the evaluation
 owner for the returned `SampleSet` and retains the data needed to restore
-source-variable values and evaluate removed constraints. If an application
-also needs the pre-transformation model, copy it before calling `prepare()`.
+source-variable values and evaluate removed constraints. The easy `sample`
+API performs the copy and recommended preparation automatically when no custom
+preparation choices are needed.
 
 Integer log encoding follows the representability and bit-count limits of the
 OMMX encoding operation. OMMX does not yet implement `Kind::Spin`; direct

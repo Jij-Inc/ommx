@@ -25,7 +25,12 @@ OMMX は通常の制約（{class}`~ommx.Constraint`、等式・不等式を持�
 pip install ommx-pyscipopt-adapter
 ```
 
-PySCIPOpt Adapter は Indicator と SOS1 を SCIP の `addConsIndicator` / `addConsSOS1` にそのまま渡します（等式 Indicator は上下2本の不等式 Indicator に分解されます）。OneHot は直接受け入れないため、呼び出し側が通常の等式制約へ明示的に lowering してから、得られた入力を Adapter に渡す必要があります。この preparation は `INPUT_CLASS` の membership や Adapter applicability とは別です。詳しくは [Adapter の入力 class と明示的な特殊制約 lowering](./capability_model.md) を参照してください。
+PySCIPOpt AdapterはIndicatorとSOS1をSCIPの`addConsIndicator` / `addConsSOS1`へ
+そのまま渡します（等式Indicatorは上下2本の不等式Indicatorに分解されます）。`solve()`
+APIは入力をcopyし、推奨Preparation Policyを使ってOneHotを通常の等式制約へlowering
+します。`solve_without_preparation()`を使う呼び出し側は、明示的なworking copyに対して先にこの
+loweringを行う必要があります。詳しくは
+[Adapterの入力classと明示的な特殊制約lowering](./capability_model.md)を参照してください。
 
 ## IndicatorConstraint
 

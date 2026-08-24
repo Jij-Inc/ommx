@@ -428,14 +428,19 @@ parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not pr
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
 - `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
-- `ommx_openjij_adapter.sample_qubo_sa(...)` — prepare the caller-owned `Instance` for `OMMXOpenJijSAAdapter.INPUT_CLASS`, then pass that same instance to `OMMXOpenJijSAAdapter.sample(...)`. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use
+  `OMMXOpenJijSAAdapter.sample(instance)`. The replacement copies and prepares
+  the input without mutating it and returns an evaluated `SampleSet`, rather
+  than raw `Samples`.
 
 In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
 `uniform_penalty_weight`, `penalty_weights`, and
 `inequality_integer_slack_max_range` directly and performed model conversion
-implicitly. In v3, the caller owns those choices. Start with the adapter's fresh
-recommended `PreparationPolicy`, edit application-specific fields, and apply it
-in place with `Instance.prepare()` before calling the strict adapter API.
+implicitly. In v3, the easy `sample()` / `solve()` APIs copy the input and apply
+the adapter's recommended `PreparationPolicy`; the caller's Instance is not
+modified. The caller still owns application-specific choices such as a fixed
+penalty magnitude. To customize them, prepare an explicit working copy and call
+the preparation-free `sample_without_preparation()` / `solve_without_preparation()` API.
 
 The OpenJij recommendation enables special-constraint lowering, active-objective
 conversion to minimization, Integer slack, and used-Integer log encoding. Integer
@@ -453,9 +458,12 @@ constraint-ID-keyed weights through `policy.fixed_penalty` when constraints
 must be removed for OpenJij.
 
 ```python
+import copy
+
 from ommx import FixedPenaltyPreparation, IntegerSlackPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
+working = copy.copy(source)
 input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.integer_slack = IntegerSlackPreparation(
@@ -465,18 +473,27 @@ policy.integer_slack = IntegerSlackPreparation(
 policy.fixed_penalty = (
     FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
 )
-source.prepare(input_class, policy)
-samples = OMMXOpenJijSAAdapter.sample(source)
+working.prepare(input_class, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(working)
 ```
 
 `Instance.prepare()` returns only after target-class membership is reached and
 uses the existing exception types of the selected OMMX operations. It mutates
-the instance in place and does not globally roll back earlier operations after
-a later failure. That membership is the complete Adapter applicability
-condition; `OMMXOpenJijSAAdapter.require_applicable(source)` only reports or
-enforces it. When OpenJij solver input is built, the converter separately
+the explicit working copy in place and does not globally roll back earlier
+operations after a later failure. That membership is the complete Adapter
+applicability condition; `sample_without_preparation()` enforces it without running
+Preparation. When OpenJij solver input is built, the converter separately
 validates signed-ID limits and finite interaction coefficients. Those failures
-are conversion errors, not applicability failures.
+are conversion errors, not applicability failures. The easy `sample(source)`
+performs the copy-and-prepare sequence internally and leaves `source` unchanged.
+
+When Preparation rewrites the objective or optimization sense, the temporary
+working Instance exposes that backend formulation through `objective` and
+`sense`, and preserves the user-facing pair in the read-only
+`output_objective`. `evaluate()` and `evaluate_samples()` use the output pair,
+so `solve()` / `sample()` return source objective values and sense even when the
+backend solved a transformed formulation. The temporary prepared Instance and
+Preparation history are not returned or stored.
 
 ```python
 # v2.5.1

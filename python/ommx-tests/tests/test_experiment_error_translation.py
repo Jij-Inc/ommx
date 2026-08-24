@@ -6,7 +6,17 @@ from typing import NoReturn
 
 import pytest
 
-from ommx import Instance, SampleSet, Solution
+from ommx import (
+    DegreeBound,
+    Equality,
+    Instance,
+    InstanceClass,
+    InstanceClassClause,
+    Kind,
+    SampleSet,
+    Sense,
+    Solution,
+)
 from ommx.adapter import SamplerAdapter, SolverAdapter
 from ommx.experiment import Experiment, list_experiment_checkpoints
 
@@ -16,6 +26,42 @@ INVALID_IMAGE_REF = "INVALID/EXPERIMENT"
 
 class SentinelError(Exception):
     pass
+
+
+_EXPERIMENT_TEST_INPUT_CLASS = InstanceClass(
+    [
+        InstanceClassClause(
+            label="experiment-error-test-input",
+            allowed_variable_kinds={
+                Kind.Binary,
+                Kind.Integer,
+                Kind.Continuous,
+                Kind.SemiInteger,
+                Kind.SemiContinuous,
+            },
+            objective_degree_bound=DegreeBound.unbounded(),
+            allowed_senses={Sense.Minimize, Sense.Maximize},
+            regular_constraint_degree_bounds={
+                Equality.EqualToZero: DegreeBound.unbounded(),
+                Equality.LessThanOrEqualToZero: DegreeBound.unbounded(),
+            },
+            indicator_constraint_degree_bounds={
+                Equality.EqualToZero: DegreeBound.unbounded(),
+                Equality.LessThanOrEqualToZero: DegreeBound.unbounded(),
+            },
+            allows_one_hot=True,
+            allows_sos1=True,
+        )
+    ]
+)
+
+
+class ExperimentTestSolverAdapter(SolverAdapter):
+    INPUT_CLASS = _EXPERIMENT_TEST_INPUT_CLASS
+
+
+class ExperimentTestSamplerAdapter(SamplerAdapter):
+    INPUT_CLASS = _EXPERIMENT_TEST_INPUT_CLASS
 
 
 def raise_sentinel(*args: object, **kwargs: object) -> NoReturn:  # noqa: ARG001
@@ -123,14 +169,16 @@ def test_log_adapter_exceptions_are_preserved():
     solver_error = SentinelError("sentinel solver error")
     sampler_error = SentinelError("sentinel sampler error")
 
-    class FailingSolver(SolverAdapter):
+    class FailingSolver(ExperimentTestSolverAdapter):
         @classmethod
-        def solve(cls, ommx_instance: Instance, **kwargs: object) -> Solution:  # noqa: ARG003
+        def solve_without_preparation(
+            cls, ommx_instance: Instance, **kwargs: object
+        ) -> Solution:  # noqa: ARG003
             raise solver_error
 
-    class FailingSampler(SamplerAdapter):
+    class FailingSampler(ExperimentTestSamplerAdapter):
         @classmethod
-        def sample(
+        def sample_without_preparation(
             cls,
             ommx_instance: Instance,
             **kwargs: object,  # noqa: ARG003
