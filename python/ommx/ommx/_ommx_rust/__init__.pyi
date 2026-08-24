@@ -3320,7 +3320,7 @@ class Instance:
 
         # Errors
 
-        Serialization raises ``RuntimeError`` when distinct output semantics cannot be represented by v1.
+        Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -3328,12 +3328,13 @@ class Instance:
         ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> assert instance.convert_active_objective(Sense.Maximize)
         >>> try:
         ...     instance.to_v1_bytes()
         ... except RuntimeError:
         ...     pass
         ... else:
-        ...     raise AssertionError("v1 serialization accepted distinct output semantics")
+        ...     raise AssertionError("v1 serialization accepted an output objective")
         """
     def to_v2_bytes(self) -> bytes:
         r"""
@@ -4544,7 +4545,7 @@ class Instance:
 
         # Postconditions
 
-        Conversion changes both active and output objective semantics and is idempotent at the target sense.
+        Conversion changes both active and output objective semantics and is idempotent at the target sense. An existing output objective remains explicit even if both objectives become structurally equal.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -4572,7 +4573,7 @@ class Instance:
 
         # Postconditions
 
-        Conversion changes both active and output objective semantics and is idempotent at the target sense.
+        Conversion changes both active and output objective semantics and is idempotent at the target sense. An existing output objective remains explicit even if both objectives become structurally equal.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -4605,7 +4606,7 @@ class Instance:
 
         # Postconditions
 
-        Conversion negates only the active objective and preserves evaluation semantics in either direction.
+        Conversion negates only the active objective and preserves evaluation semantics in either direction. Once captured, the output objective remains explicit even if a later conversion makes it structurally equal to the active objective.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -5894,7 +5895,7 @@ class ParametricInstance:
 
         # Errors
 
-        Serialization raises ``RuntimeError`` when distinct output semantics cannot be represented by v1.
+        Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -5902,13 +5903,14 @@ class ParametricInstance:
         ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> assert instance.convert_active_objective(Sense.Maximize)
         >>> parametric = instance.as_parametric_instance()
         >>> try:
         ...     parametric.to_v1_bytes()
         ... except RuntimeError:
         ...     pass
         ... else:
-        ...     raise AssertionError("v1 serialization accepted distinct output semantics")
+        ...     raise AssertionError("v1 serialization accepted an output objective")
         """
     def to_v2_bytes(self) -> bytes:
         r"""
@@ -5975,7 +5977,7 @@ class ParametricInstance:
 
         # Postconditions
 
-        Materialization substitutes parameters in active energy while retaining the pre-penalty objective for output evaluation.
+        Materialization substitutes parameters in active energy while retaining the pre-penalty objective for output evaluation. An existing output objective remains explicit even if specialization makes it structurally equal to the active objective.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)

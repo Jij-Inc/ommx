@@ -829,7 +829,7 @@ impl Instance {
     ///
     /// # Errors
     ///
-    /// Serialization raises ``RuntimeError`` when distinct output semantics cannot be represented by v1.
+    /// Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -837,12 +837,13 @@ impl Instance {
     /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
+    /// >>> assert instance.convert_active_objective(Sense.Maximize)
     /// >>> try:
     /// ...     instance.to_v1_bytes()
     /// ... except RuntimeError:
     /// ...     pass
     /// ... else:
-    /// ...     raise AssertionError("v1 serialization accepted distinct output semantics")
+    /// ...     raise AssertionError("v1 serialization accepted an output objective")
     pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
@@ -2560,7 +2561,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Conversion changes both active and output objective semantics and is idempotent at the target sense.
+    /// Conversion changes both active and output objective semantics and is idempotent at the target sense. An existing output objective remains explicit even if both objectives become structurally equal.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -2589,7 +2590,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Conversion changes both active and output objective semantics and is idempotent at the target sense.
+    /// Conversion changes both active and output objective semantics and is idempotent at the target sense. An existing output objective remains explicit even if both objectives become structurally equal.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -2623,7 +2624,7 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Conversion negates only the active objective and preserves evaluation semantics in either direction.
+    /// Conversion negates only the active objective and preserves evaluation semantics in either direction. Once captured, the output objective remains explicit even if a later conversion makes it structurally equal to the active objective.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)

@@ -7,9 +7,9 @@ impl Instance {
     ///
     /// # Errors
     ///
-    /// `ommx.v1.Instance` cannot represent an [`Instance::output_objective`]
-    /// distinct from the active objective, so this conversion rejects such an
-    /// instance.
+    /// `ommx.v1.Instance` cannot represent the presence of an
+    /// [`Instance::output_objective`], even when it currently matches the
+    /// active objective.
     ///
     /// ```
     /// use ommx::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
@@ -26,6 +26,8 @@ impl Instance {
     ///     .build()
     ///     .unwrap();
     /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// assert!(instance.convert_active_objective(Sense::Maximize));
+    /// assert_eq!(instance.output_objective().unwrap().function(), instance.objective());
     ///
     /// assert!(instance.to_v1_bytes().is_err());
     /// ```
@@ -82,9 +84,9 @@ impl ParametricInstance {
     ///
     /// # Errors
     ///
-    /// `ommx.v1.ParametricInstance` cannot represent a
-    /// [`ParametricInstance::output_objective`] distinct from the active
-    /// objective, so this conversion rejects such an instance.
+    /// `ommx.v1.ParametricInstance` cannot represent the presence of a
+    /// [`ParametricInstance::output_objective`], even when it currently matches
+    /// the active objective.
     ///
     /// ```
     /// use ommx::{linear, DecisionVariable, Function, Instance, ParametricInstance, Sense, VariableID};
@@ -101,7 +103,9 @@ impl ParametricInstance {
     ///     .build()
     ///     .unwrap();
     /// assert!(source.convert_active_objective(Sense::Minimize));
+    /// assert!(source.convert_active_objective(Sense::Maximize));
     /// let instance = ParametricInstance::from(source);
+    /// assert_eq!(instance.output_objective().unwrap().function(), instance.objective());
     ///
     /// assert!(instance.to_v1_bytes().is_err());
     /// ```
@@ -458,9 +462,9 @@ mod tests {
     }
 
     #[test]
-    fn v2_instance_parse_removes_redundant_output_objective() {
-        let instance = Instance::default();
-        let mut proto = v2::Instance::from(instance.clone());
+    fn v2_instance_parse_preserves_explicit_output_objective() {
+        let mut expected = Instance::default();
+        let mut proto = v2::Instance::from(expected.clone());
         proto
             .required_features
             .push(v2::Feature::OutputObjective as i32);
@@ -469,12 +473,16 @@ mod tests {
             function: proto.objective.clone(),
             preserves_optimality: true,
         });
+        expected.output_objective = Some(OutputObjective::new(
+            expected.sense(),
+            expected.objective().clone(),
+            true,
+        ));
 
         let restored = Instance::try_from(proto).unwrap();
 
-        assert_eq!(restored, instance);
-        assert!(restored.output_objective().is_none());
-        assert!(restored.to_v1_bytes().is_ok());
+        assert_eq!(restored, expected);
+        assert!(restored.to_v1_bytes().is_err());
     }
 
     #[test]
@@ -532,9 +540,9 @@ mod tests {
     }
 
     #[test]
-    fn v2_parametric_parse_removes_redundant_output_objective() {
-        let instance = ParametricInstance::default();
-        let mut proto = v2::ParametricInstance::from(instance.clone());
+    fn v2_parametric_parse_preserves_explicit_output_objective() {
+        let mut expected = ParametricInstance::default();
+        let mut proto = v2::ParametricInstance::from(expected.clone());
         proto
             .required_features
             .push(v2::Feature::OutputObjective as i32);
@@ -543,12 +551,16 @@ mod tests {
             function: proto.objective.clone(),
             preserves_optimality: true,
         });
+        expected.output_objective = Some(OutputObjective::new(
+            *expected.sense(),
+            expected.objective().clone(),
+            true,
+        ));
 
         let restored = ParametricInstance::try_from(proto).unwrap();
 
-        assert_eq!(restored, instance);
-        assert!(restored.output_objective().is_none());
-        assert!(restored.to_v1_bytes().is_ok());
+        assert_eq!(restored, expected);
+        assert!(restored.to_v1_bytes().is_err());
     }
 
     #[test]

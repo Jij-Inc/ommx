@@ -458,31 +458,15 @@ impl Instance {
     }
 
     /// Preserve the current active objective pair when no output pair exists.
-    ///
-    /// Returns whether this operation installed the output objective.
-    fn capture_output_objective(&mut self) -> bool {
+    fn capture_output_objective(&mut self) {
         if self.output_objective.is_some() {
-            return false;
+            return;
         }
         self.output_objective = Some(OutputObjective::new(
             self.sense,
             self.objective.clone(),
             true,
         ));
-        true
-    }
-
-    /// Remove an output sidecar when its complete semantics are already
-    /// represented by the active objective pair.
-    fn remove_redundant_output_objective(&mut self) {
-        let is_redundant = self.output_objective.as_ref().is_some_and(|output| {
-            output.preserves_optimality
-                && output.sense == self.sense
-                && output.function == self.objective
-        });
-        if is_redundant {
-            self.output_objective = None;
-        }
     }
 
     /// Record that the active formulation no longer provides an optimality
@@ -955,19 +939,6 @@ impl ParametricInstance {
     /// the output semantics directly.
     pub fn output_objective(&self) -> Option<&OutputObjective> {
         self.output_objective.as_ref()
-    }
-
-    /// Remove an output sidecar when its complete semantics are already
-    /// represented by the active objective pair.
-    fn remove_redundant_output_objective(&mut self) {
-        let is_redundant = self.output_objective.as_ref().is_some_and(|output| {
-            output.preserves_optimality
-                && output.sense == self.sense
-                && output.function == self.objective
-        });
-        if is_redundant {
-            self.output_objective = None;
-        }
     }
 
     /// Access the decision-variable definition table.

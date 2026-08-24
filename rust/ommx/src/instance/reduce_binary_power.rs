@@ -68,11 +68,8 @@ impl Instance {
         // the old objective and the old versions of the touched active
         // constraints, not the whole instance.
         if objective_changed {
-            let captured_output = self.capture_output_objective();
+            self.capture_output_objective();
             self.objective = new_objective;
-            if !captured_output {
-                self.remove_redundant_output_objective();
-            }
         }
         self.constraint_collection
             .replace_active_rows(replacements)

@@ -599,7 +599,7 @@ impl Parse for v2::Instance {
             message,
         )?;
 
-        let mut instance = Instance {
+        Ok(Instance {
             sense,
             objective,
             output_objective,
@@ -613,9 +613,7 @@ impl Parse for v2::Instance {
             description: self.description,
             annotations,
             named_functions,
-        };
-        instance.remove_redundant_output_objective();
-        Ok(instance)
+        })
     }
 }
 
@@ -1011,7 +1009,7 @@ impl Parse for v2::ParametricInstance {
             message,
         )?;
 
-        let mut instance = ParametricInstance {
+        Ok(ParametricInstance {
             sense,
             objective,
             output_objective,
@@ -1025,9 +1023,7 @@ impl Parse for v2::ParametricInstance {
             decision_variable_dependency,
             description: self.description,
             annotations,
-        };
-        instance.remove_redundant_output_objective();
-        Ok(instance)
+        })
     }
 }
 

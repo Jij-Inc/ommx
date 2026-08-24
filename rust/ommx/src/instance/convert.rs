@@ -20,7 +20,8 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Only the active pair changes, while evaluation retains the entry output semantics.
+    /// Only the active pair changes, while evaluation retains the entry output
+    /// semantics even if a later conversion makes both pairs structurally equal.
     ///
     /// ```
     /// use ommx::{
@@ -56,17 +57,18 @@ impl Instance {
     /// assert_eq!(*sample_set.sense(), Sense::Maximize);
     /// let sample_id = sample_set.sample_ids().into_iter().next().unwrap();
     /// assert_eq!(sample_set.objectives().get(sample_id), Some(&1.0));
+    ///
+    /// assert!(instance.convert_active_objective(Sense::Maximize));
+    /// let output = instance.output_objective().unwrap();
+    /// assert_eq!(output.sense(), instance.sense());
+    /// assert_eq!(output.function(), instance.objective());
     /// ```
     pub fn convert_active_objective(&mut self, target: Sense) -> bool {
         if self.sense == target {
             return false;
         }
-        let captured = self.capture_output_objective();
-        let converted = convert_objective_pair(&mut self.sense, &mut self.objective, target);
-        if !captured {
-            self.remove_redundant_output_objective();
-        }
-        converted
+        self.capture_output_objective();
+        convert_objective_pair(&mut self.sense, &mut self.objective, target)
     }
 
     /// Convert the complete instance objective semantics to minimization.
@@ -74,6 +76,8 @@ impl Instance {
     /// # Postconditions
     ///
     /// Both active and output objective semantics become minimization semantics.
+    /// An existing output objective remains explicit even if both pairs become
+    /// structurally equal.
     ///
     /// ```
     /// use ommx::{
@@ -94,9 +98,13 @@ impl Instance {
     ///     .unwrap();
     /// let state = State::from(HashMap::from([(1, 1.0)]));
     ///
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
     /// assert!(instance.as_minimization_problem());
     /// assert_eq!(instance.sense(), Sense::Minimize);
     /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
+    /// let output = instance.output_objective().unwrap();
+    /// assert_eq!(output.sense(), instance.sense());
+    /// assert_eq!(output.function(), instance.objective());
     /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
     /// assert_eq!(*solution.sense(), Some(Sense::Minimize));
     /// assert_eq!(*solution.objective(), -1.0);
@@ -111,6 +119,8 @@ impl Instance {
     /// # Postconditions
     ///
     /// Both active and output objective semantics become maximization semantics.
+    /// An existing output objective remains explicit even if both pairs become
+    /// structurally equal.
     ///
     /// ```
     /// use ommx::{
@@ -150,11 +160,7 @@ impl Instance {
         } else {
             false
         };
-        let converted = active_converted || output_converted;
-        if converted {
-            self.remove_redundant_output_objective();
-        }
-        converted
+        active_converted || output_converted
     }
 }
 
@@ -226,6 +232,8 @@ impl ParametricInstance {
     /// # Postconditions
     ///
     /// Materialization removes parameter IDs from both active and output objectives.
+    /// An existing output objective remains explicit even if specialization
+    /// makes it structurally equal to the active objective.
     ///
     /// ```
     /// use ommx::{
@@ -325,7 +333,7 @@ impl ParametricInstance {
         let mut decision_variable_dependency = self.decision_variable_dependency;
         decision_variable_dependency.partial_evaluate(&state, atol)?;
 
-        let mut instance = Instance {
+        Ok(Instance {
             sense: self.sense,
             objective,
             output_objective,
@@ -344,9 +352,7 @@ impl ParametricInstance {
             parameters: Some(parameters),
             description: self.description,
             annotations: self.annotations,
-        };
-        instance.remove_redundant_output_objective();
-        Ok(instance)
+        })
     }
 }
 
@@ -455,7 +461,7 @@ mod output_objective_tests {
     }
 
     #[test]
-    fn with_parameters_removes_redundant_output_objective() {
+    fn with_parameters_preserves_output_objective_when_it_matches_active() {
         let mut parametric = ParametricInstance::new(
             Sense::Minimize,
             Function::from(linear!(1)),
@@ -476,8 +482,11 @@ mod output_objective_tests {
             })
             .unwrap();
 
-        assert!(materialized.output_objective().is_none());
-        assert!(materialized.to_v1_bytes().is_ok());
+        let output = materialized.output_objective().unwrap();
+        assert_eq!(output.sense(), materialized.sense());
+        assert_eq!(output.function(), materialized.objective());
+        assert!(output.preserves_optimality());
+        assert!(materialized.to_v1_bytes().is_err());
     }
 }
 

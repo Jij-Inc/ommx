@@ -186,11 +186,10 @@ impl Instance {
                 .insert(id, variable, label, None, atol)
                 .expect("fresh decision variable IDs were reserved from this instance");
         }
-        let captured_output = objective_changed && self.capture_output_objective();
-        self.commit_substitution(plan);
-        if objective_changed && !captured_output {
-            self.remove_redundant_output_objective();
+        if objective_changed {
+            self.capture_output_objective();
         }
+        self.commit_substitution(plan);
         Ok(())
     }
 }
