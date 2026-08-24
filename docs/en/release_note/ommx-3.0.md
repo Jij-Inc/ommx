@@ -8,6 +8,37 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Solver Adapter easy APIs prepare a private copy ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()` and `SamplerAdapter.sample()` now copy the supplied
+{class}`~ommx.Instance`, prepare the copy for the Adapter's `INPUT_CLASS` with
+its recommended policy, and execute it. The caller's Instance remains
+unchanged, and the returned `Solution` or `SampleSet` retains its output
+objective semantics.
+
+Applications that own Preparation choices can prepare an explicit copy and use
+the new preparation-free APIs:
+
+```python
+import copy
+
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)  # `instance` is unchanged
+
+working = copy.copy(instance)
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Customize policy here.
+working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_without_preparation(working)
+```
+
+Custom Adapters must implement `solve_without_preparation()` or
+`sample_without_preparation()` as their exact-input execution API. Experiment
+continues to record the original input and returned output, not the temporary
+prepared copy. Built-in solver Adapters omit active-formulation dual values
+when output-objective projection is present.
+
 ### ⚠ Preserve input objectives across solver Preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
 `to_qubo()` and `to_hubo()` now leave the active `Instance` as the minimization

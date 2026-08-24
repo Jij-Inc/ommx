@@ -8,6 +8,36 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### ⚠ Solver Adapterのeasy APIがprivate copyをPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()`と`SamplerAdapter.sample()`は、渡された
+{class}`~ommx.Instance`をcopyし、Adapterの推奨Policyで`INPUT_CLASS`向けにPrepareして
+実行するようになりました。呼び出し元のInstanceは変更されず、返される`Solution`または
+`SampleSet`にはoutput objective semanticsが保持されます。
+
+Preparationの選択をapplication側で管理する場合は、明示的なcopyをPrepareして、新しい
+preparation-free APIを使います。
+
+```python
+import copy
+
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)  # `instance` は変更されない
+
+working = copy.copy(instance)
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# 必要に応じてpolicyを調整する。
+working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_without_preparation(working)
+```
+
+独自Adapterでは、exact inputを実行するAPIとして`solve_without_preparation()`または
+`sample_without_preparation()`を実装する必要があります。Experimentが記録するのは
+元のinputと返されたoutputであり、一時的にPrepareしたcopyではありません。
+output-objective projectionがある場合、built-in solver Adapterはactive formulationの
+dual valueを省略します。
+
 ### ⚠ Solver Preparationで入力objectiveを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
 `to_qubo()`と`to_hubo()`は、変換後のactive `Instance`にsolverが使う
