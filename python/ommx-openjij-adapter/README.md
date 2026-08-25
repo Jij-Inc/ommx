@@ -11,6 +11,16 @@ Provides an adapter between [OMMX](https://github.com/Jij-Inc/ommx) and
 pip install ommx-openjij-adapter
 ```
 
+> [!WARNING]
+> **The meaning of `SampleSet.objectives` changed in OMMX v3.** In v2, when
+> `OMMXOpenJijSAAdapter.sample()` applied a penalty method,
+> `SampleSet.objectives` included the penalty terms from the QUBO/HUBO energy
+> (with the source sense restored for maximization). In v3 and later,
+> `SampleSet.objectives` contains the original problem's objective value.
+> Penalty terms still affect OpenJij's sampling but are not included in the
+> returned objective. Update code that treated `SampleSet.objectives` as the
+> OpenJij energy.
+
 The easy API prepares an isolated copy with the Adapter's recommended policy,
 so it can directly accept inputs such as an Integer maximization model without
 modifying the caller's `Instance`:
