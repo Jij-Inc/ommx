@@ -350,10 +350,12 @@ solution = OMMXHighsAdapter.solve_without_preparation(instance)
 ```
 
 Custom Adapter implementations must provide `solve_without_preparation()` or
-`sample_without_preparation()`. Adapters with additional options declare the
-same typed options on the easy and preparation-free methods and forward them
-explicitly. HiGHS and Python-MIP no longer attach dual values when the Adapter
-input has an `output_objective`.
+`sample_without_preparation()`. Declare every additional option explicitly on
+the APIs where its meaning is defined. An easy method may forward an option
+whose meaning survives Preparation; an option tied to the exact Adapter input,
+such as solver-variable IDs, belongs only to the preparation-free method.
+HiGHS and Python-MIP no longer attach dual values when the Adapter input has an
+`output_objective`.
 
 ## 6. Return-type changes
 
@@ -470,6 +472,11 @@ recommended `PreparationPolicy`:
 
 Direct constructor calls remain preparation-free and must receive an Instance
 that has already been prepared for `OMMXOpenJijSAAdapter.INPUT_CLASS`.
+
+OpenJij `initial_state` is defined over the solver-variable representation of
+that exact prepared input; dictionary keys are those variable IDs. In v3 it is
+accepted by the exact-input constructor, `sample_without_preparation()`, and
+`solve_without_preparation()`, but not by the easy methods.
 
 The usual `sample()` / `solve()` workflow is described in §5.7. When a model
 requires a fixed penalty, the application must choose its magnitude; v3 no
@@ -916,7 +923,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Rename `instance.used_decision_variable_ids()` / `function.used_decision_variable_ids()` → `required_ids()`.
 - [ ] Replace `Parameter.new(id=...)` with `Parameter(id, ...)`.
 - [ ] Replace `pi.with_parameters(Parameters(entries={...}))` with `pi.with_parameters({...})`.
-- [ ] Use Adapter `solve()` / `sample()` directly for recommended Preparation; when customizing the policy, call `Instance.prepare()` and then `solve_without_preparation()` / `sample_without_preparation()`. Add the preparation-free method to custom Adapters, and declare any Adapter-specific options explicitly on both APIs.
+- [ ] Use Adapter `solve()` / `sample()` directly for recommended Preparation; when customizing the policy, call `Instance.prepare()` and then `solve_without_preparation()` / `sample_without_preparation()`. Add the preparation-free method to custom Adapters, and declare each Adapter-specific option only on the APIs where its meaning is defined.
 - [ ] Update `constraint.name` / `constraint.description` handling for `None` return (was `""`).
 - [ ] Update code that used `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` as a property — they are methods now.
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.

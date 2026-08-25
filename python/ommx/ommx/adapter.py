@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import copy
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, ClassVar, Protocol, runtime_checkable
+
+from opentelemetry.trace import Tracer
 
 from ommx._ommx_rust import DiagnosticCollector as DiagnosticCollector
 from ommx import (
@@ -161,6 +166,35 @@ class SolverAdapter(ABC):
     @abstractmethod
     def decode(self, data: SolverOutput) -> Solution:
         pass
+
+
+_active_adapter_execution_spans: ContextVar[
+    frozenset[tuple[type[SolverAdapter], str]]
+] = ContextVar("active_adapter_execution_spans", default=frozenset())
+
+
+@contextmanager
+def _adapter_execution_span(
+    tracer: Tracer,
+    operation: str,
+    adapter_cls: type[SolverAdapter],
+) -> Iterator[None]:
+    """Create one span for a possibly nested Adapter API operation."""
+    key = (adapter_cls, operation)
+    active = _active_adapter_execution_spans.get()
+    if key in active:
+        yield
+        return
+
+    token = _active_adapter_execution_spans.set(active | {key})
+    try:
+        with tracer.start_as_current_span(operation) as span:
+            span.set_attribute(
+                "adapter", f"{adapter_cls.__module__}.{adapter_cls.__qualname__}"
+            )
+            yield
+    finally:
+        _active_adapter_execution_spans.reset(token)
 
 
 class SamplerAdapter(SolverAdapter):

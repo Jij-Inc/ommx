@@ -24,7 +24,7 @@ from ommx import (
     SpecialConstraintKind,
     SpecialConstraintPreparation,
 )
-from ommx.adapter import DiagnosticsSink, SamplerAdapter
+from ommx.adapter import DiagnosticsSink, SamplerAdapter, _adapter_execution_span
 from opentelemetry import trace
 
 from ._decode import _decode_for_instance, decode_to_samples
@@ -169,30 +169,37 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         num_sweeps: int | None = None,
         num_reads: int | None = None,
         schedule: list | None = None,
-        initial_state: list | dict | None = None,
         updater: str | None = None,
         sparse: bool | None = None,
         reinitialize_state: bool | None = None,
         seed: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
     ) -> SampleSet:
-        """Prepare and sample an isolated copy of ``ommx_instance``."""
-        prepared = copy.copy(ommx_instance)
-        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
-        return cls.sample_without_preparation(
-            prepared,
-            beta_min=beta_min,
-            beta_max=beta_max,
-            num_sweeps=num_sweeps,
-            num_reads=num_reads,
-            schedule=schedule,
-            initial_state=initial_state,
-            updater=updater,
-            sparse=sparse,
-            reinitialize_state=reinitialize_state,
-            seed=seed,
-            diagnostics=diagnostics,
-        )
+        """Prepare and sample an isolated copy of ``ommx_instance``.
+
+        OpenJij ``initial_state`` values are defined against the solver-variable
+        representation of an exact Adapter input, so they are accepted only by
+        :meth:`sample_without_preparation`.
+        """
+        with _adapter_execution_span(_tracer, "sample", cls):
+            prepared = copy.copy(ommx_instance)
+            prepared.prepare(
+                cls.INPUT_CLASS,
+                cls.recommended_preparation_policy(),
+            )
+            return cls.sample_without_preparation(
+                prepared,
+                beta_min=beta_min,
+                beta_max=beta_max,
+                num_sweeps=num_sweeps,
+                num_reads=num_reads,
+                schedule=schedule,
+                updater=updater,
+                sparse=sparse,
+                reinitialize_state=reinitialize_state,
+                seed=seed,
+                diagnostics=diagnostics,
+            )
 
     @classmethod
     def sample_without_preparation(
@@ -211,10 +218,13 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         seed: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
     ) -> SampleSet:
-        """Sample an exact OpenJij Adapter input without preparing it."""
-        _ = diagnostics
-        with _tracer.start_as_current_span("sample") as span:
-            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
+        """Sample an exact OpenJij Adapter input without preparing it.
+
+        ``initial_state`` is defined against this exact input's solver-variable
+        representation.
+        """
+        with _adapter_execution_span(_tracer, "sample", cls):
+            _ = diagnostics
             sampler = cls(
                 ommx_instance,
                 beta_min=beta_min,
@@ -241,28 +251,37 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         num_sweeps: int | None = None,
         num_reads: int | None = None,
         schedule: list | None = None,
-        initial_state: list | dict | None = None,
         updater: str | None = None,
         sparse: bool | None = None,
         reinitialize_state: bool | None = None,
         seed: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
-        """Prepare, sample, and return the best feasible result."""
-        return cls.sample(
-            ommx_instance,
-            beta_min=beta_min,
-            beta_max=beta_max,
-            num_sweeps=num_sweeps,
-            num_reads=num_reads,
-            schedule=schedule,
-            initial_state=initial_state,
-            updater=updater,
-            sparse=sparse,
-            reinitialize_state=reinitialize_state,
-            seed=seed,
-            diagnostics=diagnostics,
-        ).best_feasible
+        """Prepare, sample, and return the best feasible result.
+
+        OpenJij ``initial_state`` values are defined against the solver-variable
+        representation of an exact Adapter input, so they are accepted only by
+        :meth:`solve_without_preparation`.
+        """
+        with _adapter_execution_span(_tracer, "solve", cls):
+            prepared = copy.copy(ommx_instance)
+            prepared.prepare(
+                cls.INPUT_CLASS,
+                cls.recommended_preparation_policy(),
+            )
+            return cls.solve_without_preparation(
+                prepared,
+                beta_min=beta_min,
+                beta_max=beta_max,
+                num_sweeps=num_sweeps,
+                num_reads=num_reads,
+                schedule=schedule,
+                updater=updater,
+                sparse=sparse,
+                reinitialize_state=reinitialize_state,
+                seed=seed,
+                diagnostics=diagnostics,
+            )
 
     @classmethod
     def solve_without_preparation(
@@ -281,21 +300,26 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         seed: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
-        """Return the best feasible result from :meth:`sample_without_preparation`."""
-        return cls.sample_without_preparation(
-            ommx_instance,
-            beta_min=beta_min,
-            beta_max=beta_max,
-            num_sweeps=num_sweeps,
-            num_reads=num_reads,
-            schedule=schedule,
-            initial_state=initial_state,
-            updater=updater,
-            sparse=sparse,
-            reinitialize_state=reinitialize_state,
-            seed=seed,
-            diagnostics=diagnostics,
-        ).best_feasible
+        """Return the best feasible result from :meth:`sample_without_preparation`.
+
+        ``initial_state`` is defined against the exact Adapter input's
+        solver-variable representation.
+        """
+        with _adapter_execution_span(_tracer, "solve", cls):
+            return cls.sample_without_preparation(
+                ommx_instance,
+                beta_min=beta_min,
+                beta_max=beta_max,
+                num_sweeps=num_sweeps,
+                num_reads=num_reads,
+                schedule=schedule,
+                initial_state=initial_state,
+                updater=updater,
+                sparse=sparse,
+                reinitialize_state=reinitialize_state,
+                seed=seed,
+                diagnostics=diagnostics,
+            ).best_feasible
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
         with _tracer.start_as_current_span("decode"):

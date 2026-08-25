@@ -320,12 +320,14 @@ This abstract base class assumes the following three use cases:
   `solve_without_preparation`. This method performs no Preparation.
 - If you adjust the backend solver's parameters, use `solver_input` to get the data structure for the backend solver (in this case, `pyscipopt.Model`), adjust it, then input it to the backend solver, and finally convert the backend solver's output using `decode`.
 
-The inherited `solve` method covers Adapters with no additional options. When
-a concrete Adapter has Adapter-specific options, declare the same typed options
-on both `solve` and `solve_without_preparation`. Its `solve` implementation
-copies and prepares the input, then forwards those options explicitly. Do not
-use a catch-all `**kwargs`: it prevents type checkers from rejecting unknown
-options. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When
+The inherited `solve` method covers Adapters with no additional options. A
+concrete Adapter declares each Adapter-specific option only on the APIs where
+its meaning is defined. If an option has the same meaning before and after
+Preparation, declare it on both methods and forward it explicitly. An option
+that refers to the exact Adapter input belongs only to
+`solve_without_preparation`. Do not use a catch-all `**kwargs`: it prevents type
+checkers from rejecting unknown options. The reserved `diagnostics` keyword is
+owned by `Run.log_solve`. When
 `Run.log_solve(..., store_diagnostics=True)` is used, adapters may record
 adapter-defined diagnostic reports into that sink; `None` means diagnostics are
 disabled.
@@ -495,9 +497,9 @@ converter or backend error while constructing or solving the PySCIPOpt model.
 This completes the Solver Adapter 🎉
 
 ````{note}
-Adapter-specific options belong in explicit typed signatures on both APIs. The
-easy API must prepare its own copy before forwarding the option to the
-preparation-free API:
+An option such as `timeout` has the same meaning across Preparation, so it
+belongs in explicit typed signatures on both APIs. The easy API prepares its
+own copy before forwarding that option to the preparation-free API:
 
 ```python
 import copy
@@ -627,14 +629,17 @@ class SamplerAdapter(SolverAdapter):
 ```
 
 `SamplerAdapter` supplies the same two-level API. The inherited `sample` copies
-and prepares the caller's Instance, while `sample_without_preparation` receives the exact
-Adapter input. `SamplerAdapter.solve_without_preparation` selects `best_feasible` from
+the caller's Instance and prepares that copy, while `sample_without_preparation`
+receives the exact Adapter input. `SamplerAdapter.solve_without_preparation` selects `best_feasible` from
 `sample_without_preparation`; `solver_input` delegates to `sampler_input`, and `decode`
 returns `decode_to_sampleset(...).best_feasible`. A Sampler implementation
 therefore defines only its sampler-owned `sample_without_preparation`, `sampler_input`, and
 `decode_to_sampleset` operations when it has no additional options. A Sampler
-with Adapter-specific options also overrides `sample` (and `solve` when that
-API exposes the same options) with explicit typed signatures.
+with Adapter-specific options declares each option only on the APIs where its
+meaning is defined. Options whose meaning survives Preparation use matching
+typed signatures on `sample` and `sample_without_preparation`; options tied to
+exact sampler-variable IDs belong only to `sample_without_preparation`. Apply
+the same rule when exposing options through the Solver API.
 
 As with `solve`, the reserved `diagnostics` keyword is owned by `Run.log_sample`. A sampler may record adapter-defined reports into the sink when it is not `None`.
 

@@ -4818,7 +4818,9 @@ class Instance:
         6. ``binary_power_reduction``:
            {meth}`~ommx.Instance.reduce_binary_power`
 
-        Success guarantees membership only, not Adapter applicability. This
+        Success guarantees ``input_class`` membership. When ``input_class`` is an
+        Adapter's ``INPUT_CLASS``, that membership is the complete applicability
+        condition; converter-local or backend failures may still occur later. This
         operation is not transactional, so an error may leave the instance changed.
         {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership
         report when the selections do not reach ``input_class``.

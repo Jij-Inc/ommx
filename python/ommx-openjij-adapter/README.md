@@ -29,6 +29,12 @@ modifying the caller's `Instance`:
 sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=16)
 ```
 
+OpenJij's `initial_state` is defined over the exact Adapter-input solver
+variables; dictionary keys are those variable IDs. Because Preparation may
+replace source variables with encoded or slack variables, pass `initial_state`
+only to the exact-input constructor, `sample_without_preparation()`, or
+`solve_without_preparation()` after preparing the Instance explicitly.
+
 Preparation choices that require application knowledge remain explicit. For
 example, prepare the Instance with a selected fixed penalty weight and use the
 preparation-free API for a constrained model:

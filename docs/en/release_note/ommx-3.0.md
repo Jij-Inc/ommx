@@ -16,7 +16,14 @@ recommended Preparation before execution and leave the supplied
 should prepare the Instance in place and call
 `solve_without_preparation()` or `sample_without_preparation()` instead. Custom
 Adapters must implement the corresponding preparation-free method. An Adapter
-with additional options declares them explicitly on both methods.
+declares each additional option only on the APIs where its meaning is defined.
+Options whose meaning survives Preparation may be forwarded by the easy API;
+options tied to exact solver-variable IDs belong only to the preparation-free
+API.
+
+Accordingly, OpenJij's `initial_state` option is available on the exact-input
+constructor and preparation-free methods, where it refers to the prepared
+solver-variable representation, but not on the easy methods.
 
 HiGHS and Python-MIP omit dual values when the Adapter input has an
 `output_objective`. See the

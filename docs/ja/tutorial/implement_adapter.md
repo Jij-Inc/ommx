@@ -316,10 +316,11 @@ class SolverAdapter(ABC):
   `solve_without_preparation`を使う。
 - バックエンドソルバーのパラメータなどを調整する場合は、 `solver_input` を使ってバックエンドソルバーの入力用のデータ構造（今回は `pyscipopt.Model`）を取得し、調整した後にバックエンドソルバーへ入力し、最後にバックエンドソルバーの出力を `decode` で変換する。
 
-追加optionがないAdapterは、継承した`solve`をそのまま使えます。Adapter固有optionがある場合は、
-`solve`と`solve_without_preparation`の両方で同じtyped optionを明示的に宣言します。`solve`は
-入力をcopyしてPrepareし、それらのoptionを明示的に転送します。未知のoptionをtype checkerが
-拒否できなくなるため、包括的な`**kwargs`は使いません。予約済みの`diagnostics` keywordは
+追加optionがないAdapterは、継承した`solve`をそのまま使えます。Adapter固有optionは、その意味が
+定義できるAPIだけで明示的に宣言します。Preparationの前後で意味が変わらないoptionは両methodで
+同じ型として宣言し、明示的に転送します。exactなAdapter inputを参照するoptionは
+`solve_without_preparation`だけに属します。未知のoptionをtype checkerが拒否できなくなるため、
+包括的な`**kwargs`は使いません。予約済みの`diagnostics` keywordは
 `Run.log_solve`が管理します。`Run.log_solve(..., store_diagnostics=True)`を使う場合、adapterは
 そのsinkにadapter定義のdiagnostic reportを記録できます。`None`の場合、diagnosticsは無効です。
 
@@ -487,8 +488,9 @@ solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
 これでSolver Adapter完成です 🎉
 
 ````{note}
-Adapter固有optionは両方のAPIで明示的に型付けします。Easy APIは独自のcopyをPrepareしてから、
-そのoptionをpreparation-free APIへ転送します。
+`timeout`のようにPreparationをまたいでも意味が変わらないoptionは、両方のAPIで明示的に
+型付けします。Easy APIは独自のcopyをPrepareしてから、そのoptionをpreparation-free APIへ
+転送します。
 
 ```python
 import copy
@@ -620,9 +622,10 @@ InstanceをcopyしてPrepareし、`sample_without_preparation`はexactなAdapter
 `SamplerAdapter.solve_without_preparation`は`sample_without_preparation`の`best_feasible`を選び、`solver_input`は
 `sampler_input`へ委譲し、`decode`は`decode_to_sampleset(...).best_feasible`を返します。
 追加optionがない場合、Sampler実装が定義するのはsampler側の`sample_without_preparation`、
-`sampler_input`、`decode_to_sampleset`だけです。Adapter固有optionがあるSamplerは`sample`も
-明示的なtyped signatureでoverrideします。そのoptionを`solve`でも公開する場合は、`solve`も
-同様にoverrideします。
+`sampler_input`、`decode_to_sampleset`だけです。Adapter固有optionは、その意味が定義できるAPIだけで
+明示的に宣言します。Preparationをまたいでも意味が変わらないoptionは`sample`と
+`sample_without_preparation`で同じtyped signatureを使い、exactなsampler変数IDに依存するoptionは
+`sample_without_preparation`だけに置きます。Solver APIでoptionを公開する場合も同じ規則を使います。
 
 `solve` と同様に、予約済みの `diagnostics` keyword は `Run.log_sample` が管理します。sink が `None` でない場合、sampler は adapter 固有の report を記録できます。
 

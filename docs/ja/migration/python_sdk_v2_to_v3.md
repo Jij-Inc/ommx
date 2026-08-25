@@ -246,9 +246,10 @@ solution = OMMXHighsAdapter.solve_without_preparation(instance)
 ```
 
 独自Adapterでは、`solve_without_preparation()`または`sample_without_preparation()`を実装します。
-Adapter固有optionがある場合は、easy methodとpreparation-free methodの両方で同じtyped optionを
-宣言して明示的に転送します。Adapter inputに`output_objective`がある場合、HiGHSとPython-MIPは
-dual valueを付与しません。
+追加optionは、その意味が定義できるAPIだけで明示的に宣言します。Preparationをまたいでも
+意味が変わらないoptionはeasy methodから転送できますが、exactなAdapter inputのsolver変数ID
+などに依存するoptionはpreparation-free methodだけに属します。Adapter inputに
+`output_objective`がある場合、HiGHSとPython-MIPはdual valueを付与しません。
 
 ## 6. return type の変更
 
@@ -301,6 +302,10 @@ v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 
 constructorを直接使う場合は自動的にPrepareされないため、あらかじめ
 `OMMXOpenJijSAAdapter.INPUT_CLASS`向けにPrepareしたInstanceを渡します。
+
+OpenJijの`initial_state`は、このexactなprepared inputのsolver変数表現に対して定義され、dictの
+keyはその変数IDです。そのためv3ではeasy methodではなく、exact-input constructor、
+`sample_without_preparation()`、`solve_without_preparation()`で受け取ります。
 
 通常の`sample()` / `solve()` workflowは§5.7で説明しています。固定penaltyが必要なmodelでは、
 applicationがそのmagnitudeを選ぶ必要があります。v3はv2の暗黙なuniform weight `1.0`を
@@ -496,7 +501,7 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] `Constraint.id` / `set_id()` / `id=` を削除し、host dict の key で ID を渡す。
 - [ ] `constraints=[...]` を `constraints={id: constraint}` に置き換える。
 - [ ] `constraint_hints` を `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に置き換える。
-- [ ] Adapterの推奨Preparationを使う場合は`solve()` / `sample()`を直接呼ぶ。Policyをcustomizeする場合は`Instance.prepare()`後に`solve_without_preparation()` / `sample_without_preparation()`を呼ぶ。独自Adapterにはpreparation-free methodを追加し、Adapter固有optionは両方のAPIで明示的に宣言する。
+- [ ] Adapterの推奨Preparationを使う場合は`solve()` / `sample()`を直接呼ぶ。Policyをcustomizeする場合は`Instance.prepare()`後に`solve_without_preparation()` / `sample_without_preparation()`を呼ぶ。独自Adapterにはpreparation-free methodを追加し、Adapter固有optionは意味が定義できるAPIだけで明示的に宣言する。
 - [ ] `*_df` accessor に `()` を付ける。
 - [ ] `RuntimeError` を捕捉していた `evaluate` / `partial_evaluate` 周辺を `ValueError` に変える。
 - [ ] `decision_variable_analysis()` を `decision_variable_roles()` / `decision_variable_role(id)` / `fixed_decision_variables()` / `dependent_decision_variable_ids()` / `irrelevant_decision_variable_ids()` / `decision_variables_df()["state_role"]` に置き換える。

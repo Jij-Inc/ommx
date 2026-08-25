@@ -99,23 +99,26 @@ instance_oh = Instance.from_components(
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
 ```
 
-PySCIPOpt Adapter に渡す前に、OneHot を通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ へ明示的に lowering します。変換後は別の入力値になるため、solve の前にその applicability を確認します。
+元のInstanceをeasy `solve()` APIへそのまま渡します。推奨Preparationは、Adapter内部の
+copyだけでOneHotを通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ へloweringします。
 
 ```{code-cell} ipython3
-instance_oh.convert_all_one_hots_to_constraints()
-assert OMMXPySCIPOptAdapter.check_applicability(instance_oh).is_member
 solution = OMMXPySCIPOptAdapter.solve(instance_oh)
 # 3 つのうち丁度 1 つを選ぶので、最大値 10 をもつ x_1 が選ばれる
 assert abs(solution.objective - 10.0) < 1e-6
 ```
 
-`convert_all_one_hots_to_constraints()` は `instance_oh` を in-place に変更します。明示的な preparation の後は OneHot 制約が除去され、通常制約へ変換された痕跡が `removed_one_hot_constraints` に残ります。`solve` はこの変換を行いません。
+呼び出し元が所有する`instance_oh`は変更されません。
 
 ```{code-cell} ipython3
-assert instance_oh.one_hot_constraints == {}
-assert len(instance_oh.constraints) == 1
-assert set(instance_oh.removed_one_hot_constraints.keys()) == {0}
+assert set(instance_oh.one_hot_constraints.keys()) == {0}
+assert instance_oh.constraints == {}
+assert instance_oh.removed_one_hot_constraints == {}
 ```
+
+`solve_without_preparation()`を使う場合は、呼び出し側がOneHotをin-placeでloweringしてから
+solveします。この明示的な変換はactiveなOneHotを除去し、同値な通常制約を追加して、
+元の制約を`removed_one_hot_constraints`へ記録します。
 
 ## Sos1Constraint
 

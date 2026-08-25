@@ -11,6 +11,7 @@ from pyscipopt.scip import PY_SCIP_EVENTTYPE as SCIP_EVENTTYPE
 from opentelemetry import trace
 
 from ommx.adapter import (
+    _adapter_execution_span,
     DiagnosticsSink,
     SolverAdapter,
     InfeasibleDetected,
@@ -661,13 +662,17 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
-        prepared = copy.copy(ommx_instance)
-        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
-        return cls.solve_without_preparation(
-            prepared,
-            initial_state=initial_state,
-            diagnostics=diagnostics,
-        )
+        with _adapter_execution_span(_tracer, "solve", cls):
+            prepared = copy.copy(ommx_instance)
+            prepared.prepare(
+                cls.INPUT_CLASS,
+                cls.recommended_preparation_policy(),
+            )
+            return cls.solve_without_preparation(
+                prepared,
+                initial_state=initial_state,
+                diagnostics=diagnostics,
+            )
 
     @classmethod
     def solve_without_preparation(
@@ -678,8 +683,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """Solve an exact PySCIPOpt Adapter input without preparing it."""
-        with _tracer.start_as_current_span("solve") as span:
-            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
+        with _adapter_execution_span(_tracer, "solve", cls):
             adapter = cls(ommx_instance, initial_state=initial_state)
             model = adapter.solver_input
             if diagnostics is not None:
@@ -697,8 +701,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     SCIPProgressSnapshot.from_termination_report(termination_report)
                 )
                 diagnostics.record(termination_report)
-            solution = adapter.decode(model)
-            return solution
+            return adapter.decode(model)
 
     @property
     def solver_input(self) -> pyscipopt.Model:

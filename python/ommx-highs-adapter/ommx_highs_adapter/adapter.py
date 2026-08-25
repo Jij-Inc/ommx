@@ -28,6 +28,7 @@ from ommx import (
     State,
 )
 from ommx.adapter import (
+    _adapter_execution_span,
     DiagnosticsSink,
     SolverAdapter,
     InfeasibleDetected,
@@ -460,9 +461,10 @@ class OMMXHighsAdapter(SolverAdapter):
          - **Not supported** (support planned)
          - \\-
 
-    **Note**: Semi-integer and semi-continuous variables are planned for future support but are
-    currently unsupported. Using these variable types will raise an
-    ``AdapterNotApplicableError`` with a ``VariableKindNotAllowed`` mismatch.
+    **Note**: Semi-integer and semi-continuous variables are planned for future
+    support but are currently unsupported. Exact-input APIs reject these kinds
+    with ``AdapterNotApplicableError``; the easy API reports that recommended
+    Preparation could not reach ``INPUT_CLASS``.
 
     Constraints
     -----------
@@ -523,7 +525,10 @@ class OMMXHighsAdapter(SolverAdapter):
     - A HiGHS ``kOptimal`` status becomes ``OPTIMALITY_UNSPECIFIED`` when it
       does not transport to the output objective
 
-    **Dual Variables**: Extracted from ``solution.row_dual`` for constraints
+    **Dual Variables**: Extracted from ``solution.row_dual`` when the active
+    objective is also the output objective. They are omitted when
+    output-objective projection would require a dual mapping that OMMX does not
+    define.
 
     Error Handling
     --------------
@@ -674,7 +679,7 @@ class OMMXHighsAdapter(SolverAdapter):
             - Objective value in solution.objective
             - Constraint evaluations in solution.constraints
             - Optimality status in solution.optimality
-            - Dual variables (if available) in constraint.dual_variable
+            - Dual variables when the active and output objectives coincide
 
         Raises
         ------
@@ -682,8 +687,8 @@ class OMMXHighsAdapter(SolverAdapter):
             When the optimization problem has no feasible solution
         UnboundedDetected
             When the optimization problem is unbounded
-        AdapterNotApplicableError
-            When the input does not belong to the adapter's declared input class
+        PreparationTargetNotReachedError
+            When the recommended preparation cannot reach the Adapter input class
         OMMXHighsAdapterError
             When conversion or HiGHS encounters an adapter-specific error
 
@@ -750,13 +755,17 @@ class OMMXHighsAdapter(SolverAdapter):
         #     ...
         # ommx.adapter.UnboundedDetected: Model was unbounded
         # ````
-        prepared = copy.copy(ommx_instance)
-        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
-        return cls.solve_without_preparation(
-            prepared,
-            verbose=verbose,
-            diagnostics=diagnostics,
-        )
+        with _adapter_execution_span(_tracer, "solve", cls):
+            prepared = copy.copy(ommx_instance)
+            prepared.prepare(
+                cls.INPUT_CLASS,
+                cls.recommended_preparation_policy(),
+            )
+            return cls.solve_without_preparation(
+                prepared,
+                verbose=verbose,
+                diagnostics=diagnostics,
+            )
 
     @classmethod
     def solve_without_preparation(
@@ -767,8 +776,7 @@ class OMMXHighsAdapter(SolverAdapter):
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """Solve an exact HiGHS Adapter input without preparing it."""
-        with _tracer.start_as_current_span("solve") as span:
-            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
+        with _adapter_execution_span(_tracer, "solve", cls):
             adapter = cls(ommx_instance, verbose=verbose)
             model = adapter.solver_input
             diagnostics_callback: Callable[[Any], None] | None = None
@@ -809,7 +817,8 @@ class OMMXHighsAdapter(SolverAdapter):
         Convert an optimized HiGHS model back to an OMMX Solution.
 
         This method translates HiGHS solver results into OMMX format, including
-        variable values, optimality status, and dual variable information.
+        variable values, optimality status, and transportable dual variable
+        information.
         Backend optimality is mapped through the instance's output-objective
         semantics and remains unspecified when it does not transport.
 
@@ -826,7 +835,7 @@ class OMMXHighsAdapter(SolverAdapter):
             - Variable values mapped back to original OMMX IDs
             - Constraint evaluations and feasibility status
             - Optimality information from HiGHS when transportable to the output objective
-            - Dual variables for linear constraints
+            - Dual variables for linear constraints without output-objective projection
 
         Raises
         ------
@@ -843,9 +852,11 @@ class OMMXHighsAdapter(SolverAdapter):
         Any modifications to the HiGHS model structure after creation may
         make the decoding process incompatible.
 
-        The dual variables are extracted from HiGHS's row_dual and mapped
-        to OMMX constraints based on their order. Only constraints with
-        valid dual information will have the dual_variable field set.
+        When the active objective is also the output objective, dual variables
+        are extracted from HiGHS's ``row_dual`` and mapped to OMMX constraints
+        based on their order. If ``output_objective`` is present, every dual is
+        omitted because OMMX does not define how the active formulation's dual
+        certificate maps to the projected output semantics.
 
         Examples
         --------
