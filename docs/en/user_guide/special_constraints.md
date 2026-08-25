@@ -29,8 +29,8 @@ The PySCIPOpt Adapter passes Indicator and SOS1 constraints through to SCIP's
 `addConsIndicator` / `addConsSOS1` (equality indicators are split into two
 inequality indicators). Its `solve()` API copies the input and uses the
 recommended Preparation policy to lower OneHot constraints to regular
-equalities. Callers using `solve_without_preparation()` must perform that lowering on their
-explicit working copy first. See [Adapter Input Classes and Explicit Constraint
+equalities. Callers using `solve_without_preparation()` must perform that lowering on the
+Instance first. See [Adapter Input Classes and Explicit Constraint
 Lowering](./capability_model.md).
 
 ## IndicatorConstraint

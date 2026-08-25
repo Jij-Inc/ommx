@@ -337,8 +337,8 @@ inspect or mutate an instance, run Preparation, or guarantee applicability.
 
 `solve_without_preparation` is the preparation-free API. It requires an exact member of
 `INPUT_CLASS` and raises `AdapterNotApplicableError` otherwise. Applications
-that need a custom Preparation policy explicitly copy their Instance, apply the
-edited policy with {meth}`~ommx.Instance.prepare`, and pass that working copy to
+that need a custom Preparation policy apply the edited policy to their Instance
+with {meth}`~ommx.Instance.prepare`, then pass that Instance to
 `solve_without_preparation`.
 
 A recommendation can enable special-constraint lowering with these family selectors:
@@ -474,18 +474,15 @@ The usual call copies and prepares the Instance automatically:
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
-The caller's `instance` is unchanged. To customize Preparation, create an
-explicit working copy and invoke the preparation-free API:
+The usual call leaves the caller's `instance` unchanged. To customize
+Preparation, prepare the Instance in place and invoke the preparation-free API:
 
 ```python
-import copy
-
-working = copy.copy(instance)
 input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
 policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
 # Edit public policy fields here when the application needs different choices.
-working.prepare(input_class, policy)
-solution = OMMXPySCIPOptAdapter.solve_without_preparation(working)
+instance.prepare(input_class, policy)
+solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
 ```
 
 `solve_without_preparation()` checks `INPUT_CLASS` membership, then may still raise a
@@ -709,8 +706,7 @@ In this tutorial, we learned how to implement an OMMX Adapter by connecting to P
    `solve_without_preparation()` or `sample_without_preparation()` method. The usual `solve()` and
    `sample()` APIs copy the caller's Instance and apply the fresh policy from
    `recommended_preparation_policy()` automatically. Applications customize
-   Preparation by preparing an explicit copy and invoking the preparation-free
-   API.
+   Preparation by preparing their Instance and invoking the preparation-free API.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.

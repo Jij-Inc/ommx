@@ -15,21 +15,18 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 実行するようになりました。呼び出し元のInstanceは変更されず、返される`Solution`または
 `SampleSet`にはoutput objective semanticsが保持されます。
 
-Preparationの選択をapplication側で管理する場合は、明示的なcopyをPrepareして、新しい
-preparation-free APIを使います。
+Preparationの選択をapplication側で管理する場合は、Instanceをin-placeでPrepareして、
+新しいpreparation-free APIを使います。
 
 ```python
-import copy
-
 from ommx_highs_adapter import OMMXHighsAdapter
 
 solution = OMMXHighsAdapter.solve(instance)  # `instance` は変更されない
 
-working = copy.copy(instance)
 policy = OMMXHighsAdapter.recommended_preparation_policy()
 # 必要に応じてpolicyを調整する。
-working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
-solution = OMMXHighsAdapter.solve_without_preparation(working)
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_without_preparation(instance)
 ```
 
 独自Adapterでは、exact inputを実行するAPIとして`solve_without_preparation()`または

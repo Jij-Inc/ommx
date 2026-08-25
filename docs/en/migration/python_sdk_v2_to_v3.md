@@ -439,8 +439,9 @@ In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
 implicitly. In v3, the easy `sample()` / `solve()` APIs copy the input and apply
 the adapter's recommended `PreparationPolicy`; the caller's Instance is not
 modified. The caller still owns application-specific choices such as a fixed
-penalty magnitude. To customize them, prepare an explicit working copy and call
-the preparation-free `sample_without_preparation()` / `solve_without_preparation()` API.
+penalty magnitude. To customize them, edit the recommended policy, prepare the
+Instance in place, and call the preparation-free
+`sample_without_preparation()` / `solve_without_preparation()` API.
 
 The OpenJij recommendation enables special-constraint lowering, active-objective
 conversion to minimization, Integer slack, and used-Integer log encoding. Integer
@@ -458,12 +459,9 @@ constraint-ID-keyed weights through `policy.fixed_penalty` when constraints
 must be removed for OpenJij.
 
 ```python
-import copy
-
 from ommx import FixedPenaltyPreparation, IntegerSlackPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-working = copy.copy(source)
 input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.integer_slack = IntegerSlackPreparation(
@@ -473,13 +471,13 @@ policy.integer_slack = IntegerSlackPreparation(
 policy.fixed_penalty = (
     FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
 )
-working.prepare(input_class, policy)
-samples = OMMXOpenJijSAAdapter.sample_without_preparation(working)
+source.prepare(input_class, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(source)
 ```
 
 `Instance.prepare()` returns only after target-class membership is reached and
 uses the existing exception types of the selected OMMX operations. It mutates
-the explicit working copy in place and does not globally roll back earlier
+`source` in place and does not globally roll back earlier
 operations after a later failure. That membership is the complete Adapter
 applicability condition; `sample_without_preparation()` enforces it without running
 Preparation. When OpenJij solver input is built, the converter separately
@@ -487,13 +485,14 @@ validates signed-ID limits and finite interaction coefficients. Those failures
 are conversion errors, not applicability failures. The easy `sample(source)`
 performs the copy-and-prepare sequence internally and leaves `source` unchanged.
 
-When Preparation rewrites the objective or optimization sense, the temporary
-working Instance exposes that backend formulation through `objective` and
-`sense`, and preserves the user-facing pair in the read-only
+When Preparation rewrites the objective or optimization sense, the prepared
+Instance exposes that backend formulation through `objective` and `sense`, and
+preserves the user-facing pair in the read-only
 `output_objective`. `evaluate()` and `evaluate_samples()` use the output pair,
-so `solve()` / `sample()` return source objective values and sense even when the
-backend solved a transformed formulation. The temporary prepared Instance is
-discarded after evaluating the result.
+so `solve_without_preparation()` / `sample_without_preparation()` return the
+pre-Preparation objective values and sense even when the backend solved a
+transformed formulation. The easy APIs perform the same conversion on a
+private copy and discard that copy after evaluating the result.
 
 ```python
 # v2.5.1

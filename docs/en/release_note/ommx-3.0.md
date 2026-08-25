@@ -16,21 +16,18 @@ its recommended policy, and execute it. The caller's Instance remains
 unchanged, and the returned `Solution` or `SampleSet` retains its output
 objective semantics.
 
-Applications that own Preparation choices can prepare an explicit copy and use
-the new preparation-free APIs:
+Applications that own Preparation choices can prepare their Instance in place
+and use the new preparation-free APIs:
 
 ```python
-import copy
-
 from ommx_highs_adapter import OMMXHighsAdapter
 
 solution = OMMXHighsAdapter.solve(instance)  # `instance` is unchanged
 
-working = copy.copy(instance)
 policy = OMMXHighsAdapter.recommended_preparation_policy()
 # Customize policy here.
-working.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
-solution = OMMXHighsAdapter.solve_without_preparation(working)
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_without_preparation(instance)
 ```
 
 Custom Adapters must implement `solve_without_preparation()` or

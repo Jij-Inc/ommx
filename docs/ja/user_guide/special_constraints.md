@@ -28,8 +28,8 @@ pip install ommx-pyscipopt-adapter
 PySCIPOpt AdapterはIndicatorとSOS1をSCIPの`addConsIndicator` / `addConsSOS1`へ
 そのまま渡します（等式Indicatorは上下2本の不等式Indicatorに分解されます）。`solve()`
 APIは入力をcopyし、推奨Preparation Policyを使ってOneHotを通常の等式制約へlowering
-します。`solve_without_preparation()`を使う呼び出し側は、明示的なworking copyに対して先にこの
-loweringを行う必要があります。詳しくは
+します。`solve_without_preparation()`を使う呼び出し側は、Instanceに対して先にこのloweringを
+行う必要があります。詳しくは
 [Adapterの入力classと明示的な特殊制約lowering](./capability_model.md)を参照してください。
 
 ## IndicatorConstraint

@@ -337,8 +337,8 @@ Instanceは変更されません。推奨Policy自体はinstanceを参照・変�
 
 `solve_without_preparation`はpreparation-freeなAPIです。`INPUT_CLASS`のexactなmemberを要求し、
 満たさなければ`AdapterNotApplicableError`を送出します。customなPreparation Policyが
-必要なapplicationはInstanceを明示的にcopyし、そのworking copyへ編集済みPolicyを
-{meth}`~ommx.Instance.prepare`で適用してから`solve_without_preparation`へ渡します。
+必要なapplicationは編集済みPolicyを{meth}`~ommx.Instance.prepare`でInstanceへ適用し、
+そのInstanceを`solve_without_preparation`へ渡します。
 
 推奨 Policy から特殊制約 lowering を有効にする場合は、以下の family selector を使います：
 
@@ -473,18 +473,15 @@ objectiveに対する最適性も証明するときにだけ、そのstatusを�
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
-呼び出し元の`instance`は変更されません。Preparationをcustomizeする場合は、明示的な
-working copyを作ってpreparation-free APIを呼び出します：
+通常の呼び出しでは、呼び出し元の`instance`は変更されません。Preparationをcustomizeする
+場合は、Instanceをin-placeでPrepareしてpreparation-free APIを呼び出します：
 
 ```python
-import copy
-
-working = copy.copy(instance)
 input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
 policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
 # Application に異なる選択が必要なら、ここで public field を編集します。
-working.prepare(input_class, policy)
-solution = OMMXPySCIPOptAdapter.solve_without_preparation(working)
+instance.prepare(input_class, policy)
+solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
 ```
 
 `solve_without_preparation()`は`INPUT_CLASS` membershipを検査し、その後のPySCIPOpt modelの
@@ -704,8 +701,8 @@ sample_set.summary
 2. `INPUT_CLASS`でapplicabilityを定義し、preparation-freeな`solve_without_preparation()`または
    `sample_without_preparation()`を実装します。通常の`solve()`と`sample()`は呼び出し元のInstanceを
    copyし、`recommended_preparation_policy()`のfreshなPolicyを自動的に適用します。
-   Preparationをcustomizeするapplicationは、明示的なcopyをPrepareして
-   preparation-free APIを呼び出します
+   PreparationをcustomizeするapplicationはInstanceをPrepareしてpreparation-free APIを
+   呼び出します
 3. 実装の主なステップは以下の通りです：
    - `ommx.Instance` をバックエンドソルバーが理解できる形式に変換する
    - バックエンドソルバーを実行して解を取得する

@@ -20,12 +20,10 @@ sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=16)
 ```
 
 Preparation choices that require application knowledge remain explicit. For
-example, prepare a copy with a selected fixed penalty weight and use the
+example, prepare the Instance with a selected fixed penalty weight and use the
 preparation-free API for a constrained model:
 
 ```python markdown-code-runner
-import copy
-
 from ommx import DecisionVariable, FixedPenaltyPreparation, Instance
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
@@ -37,15 +35,14 @@ instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-prepared = copy.copy(instance)
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.fixed_penalty = FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
     weight=2.0
 )
-prepared.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
 sample_set = OMMXOpenJijSAAdapter.sample_without_preparation(
-    prepared,
+    instance,
     num_reads=16,
 )
 print(sample_set.summary)

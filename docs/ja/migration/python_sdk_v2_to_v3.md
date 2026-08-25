@@ -271,8 +271,9 @@ v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 v3のeasyな`sample()` / `solve()` APIは入力をcopyし、Adapterの推奨
 `PreparationPolicy`を適用します。呼び出し元のInstanceは変更されません。一方、固定
 penalty magnitudeのようなapplication固有の選択は引き続き呼び出し側が所有します。
-customizeする場合は明示的なworking copyをPrepareし、preparation-freeな
-`sample_without_preparation()` / `solve_without_preparation()` APIを呼びます。
+customizeする場合は推奨Policyを編集し、Instanceをin-placeでPrepareしてから、
+preparation-freeな`sample_without_preparation()` / `solve_without_preparation()` APIを
+呼びます。
 
 OpenJijの推奨Policyでは、特殊制約lowering、active objectiveのminimizationへの変換、
 Integer slack、使用中Integer変数のlog encodingを有効にします。Integer slackはrange 32で
@@ -287,12 +288,9 @@ exactなequality変換を最初に試し、そのoperationが利用できない�
 constraint IDごとのweightを `policy.fixed_penalty` で選択します。
 
 ```python
-import copy
-
 from ommx import FixedPenaltyPreparation, IntegerSlackPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-working = copy.copy(source)
 input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.integer_slack = IntegerSlackPreparation(
@@ -302,12 +300,12 @@ policy.integer_slack = IntegerSlackPreparation(
 policy.fixed_penalty = (
     FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
 )
-working.prepare(input_class, policy)
-samples = OMMXOpenJijSAAdapter.sample_without_preparation(working)
+source.prepare(input_class, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(source)
 ```
 
 `Instance.prepare()` はtarget class membershipへ到達した場合だけreturnし、選択した
-OMMX operationの既存exception typeを使います。明示的なworking copyをin-placeで変更し、
+OMMX operationの既存exception typeを使います。`source`をin-placeで変更し、
 後のerrorが起きても先に完了したoperationをglobalにrollbackしません。このmembershipが
 Adapter applicabilityの完全な条件であり、`sample_without_preparation()`はPreparationを行わずに
 membershipを強制します。OpenJijのsolver inputを構築する際には、converterがsigned IDの
@@ -315,12 +313,13 @@ membershipを強制します。OpenJijのsolver inputを構築する際には、
 errorであり、applicability failureではありません。easyな`sample(source)`はこの
 copy-and-prepareを内部で行い、`source`を変更しません。
 
-Preparationがobjectiveまたはoptimization senseを書き換えた場合、一時的なworking
-Instanceの`objective`と`sense`はbackend formulationを表し、read-onlyな
+Preparationがobjectiveまたはoptimization senseを書き換えた場合、Prepare後Instanceの
+`objective`と`sense`はbackend formulationを表し、read-onlyな
 `output_objective`がユーザー向けのpairを保持します。`evaluate()`と
 `evaluate_samples()`はoutput pairを使うため、backendが変換後formulationを解いても、
-`solve()` / `sample()`はsource側のobjective valueとsenseを返します。一時的なPrepare後
-Instanceは結果の評価後に破棄されます。
+`solve_without_preparation()` / `sample_without_preparation()`はPrepare前のobjective valueと
+senseを返します。easy APIは同じ変換をprivate copyに適用し、結果の評価後にそのcopyを
+破棄します。
 
 ## 8. DataFrame accessor
 
