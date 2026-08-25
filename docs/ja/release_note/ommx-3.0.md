@@ -14,12 +14,8 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 適用し、渡された{class}`~ommx.Instance`自体は変更しないようになりました。
 Preparationをcustomizeするapplicationでは、Instanceをin-placeでPrepareし、代わりに
 `solve_without_preparation()`または`sample_without_preparation()`を呼びます。独自Adapterは
-対応するpreparation-free methodを実装する必要があります。追加optionがあるAdapterは、
-各optionを公開するAPIごとに明示的な型付きsignatureとして宣言し、包括的な`**kwargs`は
-使いません。Preparationをまたいでも意味が
-変わらないoptionはeasy APIから転送できます。exactなprepared inputに意味が依存し、
-Preparation過程をまたぐtransportを定義しない場合、具体的なAdapterはそのoptionを
-preparation-free APIだけに公開できます。
+対応するpreparation-free methodを実装する必要があります。exactなprepared inputを参照する
+optionは、preparation-free APIだけで利用できる場合があります。
 
 OpenJijはこの選択を`initial_state` optionに適用しています。このoptionはexact-input
 constructorとpreparation-free methodで利用でき、prepared solver変数表現を参照しますが、
