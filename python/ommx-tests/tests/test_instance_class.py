@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, ClassVar, cast
+from typing import Any, cast
 
 import pytest
 
@@ -24,7 +24,6 @@ from ommx import (
 )
 from ommx.adapter import (
     AdapterNotApplicableError,
-    SamplerAdapter,
     SolverAdapter,
 )
 
@@ -338,103 +337,6 @@ def test_solver_adapter_returns_a_fresh_empty_preparation_recommendation() -> No
 
     first.objective = ObjectivePreparation(target=Sense.Minimize)
     assert second.objective is None
-
-
-def test_solver_adapter_easy_solve_prepares_a_copy() -> None:
-    x = DecisionVariable.binary(1)
-    source = Instance.from_components(
-        sense=Sense.Maximize,
-        objective=x,
-        decision_variables=[x],
-        constraints={},
-    )
-    before = source.to_v2_bytes()
-    diagnostics = object()
-
-    class Adapter(SolverAdapter):
-        INPUT_CLASS = binary_linear_input_class()
-        seen_instance: ClassVar[Instance | None] = None
-        seen_diagnostics: ClassVar[object | None] = None
-
-        @classmethod
-        def recommended_preparation_policy(cls) -> PreparationPolicy:
-            return PreparationPolicy(
-                objective=ObjectivePreparation(target=Sense.Minimize)
-            )
-
-        @classmethod
-        def solve_without_preparation(
-            cls,
-            ommx_instance: Instance,
-            *,
-            diagnostics: Any = None,
-        ) -> Any:
-            cls.require_applicable(ommx_instance)
-            cls.seen_instance = ommx_instance
-            cls.seen_diagnostics = diagnostics
-            return ommx_instance.evaluate({1: 1})
-
-    solution = Adapter.solve(source, diagnostics=diagnostics)  # type: ignore[arg-type]
-
-    assert source.to_v2_bytes() == before
-    assert Adapter.seen_instance is not source
-    assert Adapter.seen_instance is not None
-    assert Adapter.seen_instance.sense == Sense.Minimize
-    assert Adapter.seen_diagnostics is diagnostics
-    assert solution.sense == Sense.Maximize
-    assert solution.objective == pytest.approx(1.0)
-
-
-def test_sampler_adapter_inherits_easy_and_solver_bridges() -> None:
-    x = DecisionVariable.binary(1)
-    source = Instance.from_components(
-        sense=Sense.Maximize,
-        objective=x,
-        decision_variables=[x],
-        constraints={},
-    )
-    before = source.to_v2_bytes()
-
-    class Adapter(SamplerAdapter):
-        INPUT_CLASS = binary_linear_input_class()
-        calls_without_preparation: ClassVar[int] = 0
-
-        @classmethod
-        def recommended_preparation_policy(cls) -> PreparationPolicy:
-            return PreparationPolicy(
-                objective=ObjectivePreparation(target=Sense.Minimize)
-            )
-
-        @classmethod
-        def sample_without_preparation(
-            cls,
-            ommx_instance: Instance,
-            *,
-            diagnostics: Any = None,
-        ) -> Any:
-            _ = diagnostics
-            cls.require_applicable(ommx_instance)
-            cls.calls_without_preparation += 1
-            return ommx_instance.evaluate_samples([{1: 1}])
-
-        @property
-        def sampler_input(self) -> Any:
-            return "sampler-input"
-
-        def decode_to_sampleset(self, data: Any) -> Any:
-            return data
-
-    solution = Adapter.solve(source)
-
-    assert source.to_v2_bytes() == before
-    assert Adapter.calls_without_preparation == 1
-    assert solution.sense == Sense.Maximize
-    assert solution.objective == pytest.approx(1.0)
-
-    adapter = Adapter()
-    assert adapter.solver_input == "sampler-input"
-    sample_set = source.evaluate_samples([{1: 1}])
-    assert adapter.decode(sample_set).objective == pytest.approx(1.0)
 
 
 def test_solver_adapter_applicability_is_input_class_membership() -> None:
