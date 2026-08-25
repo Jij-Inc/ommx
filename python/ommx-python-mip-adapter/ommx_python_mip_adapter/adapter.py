@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, ClassVar, Optional
+import copy
+from typing import ClassVar, Optional
 
 import mip
 from opentelemetry import trace
@@ -128,7 +129,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         verbose: bool = False,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """
         Solve the given ommx.Instance using Python-MIP, returning an ommx.Solution.
@@ -241,12 +241,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 1.0
 
         """
-        return super().solve(
-            ommx_instance,
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
             relax=relax,
             verbose=verbose,
             diagnostics=diagnostics,
-            **kwargs,
         )
 
     @classmethod
@@ -257,13 +258,12 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         verbose: bool = False,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """Solve an exact Python-MIP Adapter input without preparing it."""
         _ = diagnostics
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
-            adapter = cls(ommx_instance, relax=relax, verbose=verbose, **kwargs)
+            adapter = cls(ommx_instance, relax=relax, verbose=verbose)
             model = adapter.solver_input
             with _tracer.start_as_current_span("call"):
                 model.optimize(relax=relax)

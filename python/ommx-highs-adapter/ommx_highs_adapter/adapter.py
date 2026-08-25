@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Callable, ClassVar, Iterable, Mapping, cast
 
@@ -648,7 +649,6 @@ class OMMXHighsAdapter(SolverAdapter):
         *,
         verbose: bool = False,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """
         Solve an OMMX optimization problem using HiGHS solver.
@@ -750,11 +750,12 @@ class OMMXHighsAdapter(SolverAdapter):
         #     ...
         # ommx.adapter.UnboundedDetected: Model was unbounded
         # ````
-        return super().solve(
-            ommx_instance,
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
             verbose=verbose,
             diagnostics=diagnostics,
-            **kwargs,
         )
 
     @classmethod
@@ -764,12 +765,11 @@ class OMMXHighsAdapter(SolverAdapter):
         *,
         verbose: bool = False,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """Solve an exact HiGHS Adapter input without preparing it."""
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
-            adapter = cls(ommx_instance, verbose=verbose, **kwargs)
+            adapter = cls(ommx_instance, verbose=verbose)
             model = adapter.solver_input
             diagnostics_callback: Callable[[Any], None] | None = None
             if diagnostics is not None:

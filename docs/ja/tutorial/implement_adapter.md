@@ -277,7 +277,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 最後に、Adapter毎のAPIを揃えるために `ommx.adapter.SolverAdapter` を継承したクラスを作成します。これは `@abstractmethod` を含む次のような抽象基底クラスです：
 
 ```python
-from typing import Any, ClassVar
+from typing import ClassVar
 
 class SolverAdapter(ABC):
     # Adapter applicability を完全に定義する OMMX の条件
@@ -294,7 +294,6 @@ class SolverAdapter(ABC):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         pass
 
@@ -317,11 +316,12 @@ class SolverAdapter(ABC):
   `solve_without_preparation`を使う。
 - バックエンドソルバーのパラメータなどを調整する場合は、 `solver_input` を使ってバックエンドソルバーの入力用のデータ構造（今回は `pyscipopt.Model`）を取得し、調整した後にバックエンドソルバーへ入力し、最後にバックエンドソルバーの出力を `decode` で変換する。
 
-具体的なadapterの`solve_without_preparation`クラスメソッドはadapter固有のkeyword optionを追加で
-定義でき、`solve`はそれらをそのまま転送します。予約済みの`diagnostics` keywordは
-`Run.log_solve`が管理します。`Run.log_solve(..., store_diagnostics=True)`を使う場合、
-adapterはそのsinkにadapter定義のdiagnostic reportを記録できます。`None`の場合、
-diagnosticsは無効です。
+追加optionがないAdapterは、継承した`solve`をそのまま使えます。Adapter固有optionがある場合は、
+`solve`と`solve_without_preparation`の両方で同じtyped optionを明示的に宣言します。`solve`は
+入力をcopyしてPrepareし、それらのoptionを明示的に転送します。未知のoptionをtype checkerが
+拒否できなくなるため、包括的な`**kwargs`は使いません。予約済みの`diagnostics` keywordは
+`Run.log_solve`が管理します。`Run.log_solve(..., store_diagnostics=True)`を使う場合、adapterは
+そのsinkにadapter定義のdiagnostic reportを記録できます。`None`の場合、diagnosticsは無効です。
 
 #### 入力 class と推奨 Preparation
 
@@ -359,8 +359,6 @@ Preparationの成功はmembershipを保証します。その後もsolver input�
 ここまでで用意した関数を使って次のように実装することができます：
 
 ```{code-cell} ipython3
-from typing import Any
-
 from ommx.adapter import DiagnosticsSink, SolverAdapter
 from ommx import (
     DegreeBound,
@@ -423,13 +421,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """
         PySCIPoptを使ってommx.Instanceを解き、ommx.Solutionを返す
         """
         _ = diagnostics
-        adapter = cls(ommx_instance, **kwargs)
+        adapter = cls(ommx_instance)
         model = adapter.solver_input
         model.optimize()
         return adapter.decode(model)
@@ -489,20 +486,44 @@ solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
 
 これでSolver Adapter完成です 🎉
 
-```{note}
-Pythonは継承したクラスでパラメータ引数を追加してもいいので、次のように追加のパラメータを定義することもできます。ただし、これによってバックエンドソルバーの様々な機能が使えるようになる一方、他のAdapterとの互換性が損なわれるので、Adapterを作る際には慎重に検討してください。
+````{note}
+Adapter固有optionは両方のAPIで明示的に型付けします。Easy APIは独自のcopyをPrepareしてから、
+そのoptionをpreparation-free APIへ転送します。
 
 ```python
+import copy
+
+class MyAdapter(SolverAdapter):
+    INPUT_CLASS = input_class
+
+    @classmethod
+    def solve(
+        cls,
+        ommx_instance: Instance,
+        *,
+        timeout: int | None = None,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
+            timeout=timeout,
+            diagnostics=diagnostics,
+        )
+
     @classmethod
     def solve_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
+        cls.require_applicable(ommx_instance)
+        ...
 ```
+````
 
 ### Solver Adapterを使ってナップザック問題を解く
 
@@ -581,7 +602,6 @@ class SamplerAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> SampleSet:
         pass
 
@@ -599,14 +619,14 @@ class SamplerAdapter(SolverAdapter):
 InstanceをcopyしてPrepareし、`sample_without_preparation`はexactなAdapter inputを受け取ります。
 `SamplerAdapter.solve_without_preparation`は`sample_without_preparation`の`best_feasible`を選び、`solver_input`は
 `sampler_input`へ委譲し、`decode`は`decode_to_sampleset(...).best_feasible`を返します。
-したがってSampler実装が定義するのはsampler側の`sample_without_preparation`、`sampler_input`、
-`decode_to_sampleset`だけで、Easy APIとSolver bridgeは継承されます。
+追加optionがない場合、Sampler実装が定義するのはsampler側の`sample_without_preparation`、
+`sampler_input`、`decode_to_sampleset`だけです。Adapter固有optionがあるSamplerは`sample`も
+明示的なtyped signatureでoverrideします。そのoptionを`solve`でも公開する場合は、`solve`も
+同様にoverrideします。
 
 `solve` と同様に、予約済みの `diagnostics` keyword は `Run.log_sample` が管理します。sink が `None` でない場合、sampler は adapter 固有の report を記録できます。
 
 ```{code-cell} ipython3
-from typing import Any
-
 from ommx.adapter import DiagnosticsSink, SamplerAdapter
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
@@ -648,10 +668,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> SampleSet:
         _ = diagnostics
-        adapter = cls(ommx_instance, **kwargs)
+        adapter = cls(ommx_instance)
         response = adapter._sample()
         return adapter.decode_to_sampleset(response)
     

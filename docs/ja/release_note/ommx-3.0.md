@@ -14,7 +14,8 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 適用し、渡された{class}`~ommx.Instance`自体は変更しないようになりました。
 Preparationをcustomizeするapplicationでは、Instanceをin-placeでPrepareし、代わりに
 `solve_without_preparation()`または`sample_without_preparation()`を呼びます。独自Adapterは
-対応するpreparation-free methodを実装する必要があります。
+対応するpreparation-free methodを実装する必要があります。追加optionがあるAdapterは、
+両方のmethodでそれらを明示的に宣言します。
 
 Adapter inputに`output_objective`がある場合、HiGHSとPython-MIPはdual valueを省略します。
 2つの呼び出し方は

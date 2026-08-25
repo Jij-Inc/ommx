@@ -350,9 +350,10 @@ solution = OMMXHighsAdapter.solve_without_preparation(instance)
 ```
 
 Custom Adapter implementations must provide `solve_without_preparation()` or
-`sample_without_preparation()` instead of implementing the easy method. HiGHS
-and Python-MIP no longer attach dual values when the Adapter input has an
-`output_objective`.
+`sample_without_preparation()`. Adapters with additional options declare the
+same typed options on the easy and preparation-free methods and forward them
+explicitly. HiGHS and Python-MIP no longer attach dual values when the Adapter
+input has an `output_objective`.
 
 ## 6. Return-type changes
 
@@ -915,7 +916,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Rename `instance.used_decision_variable_ids()` / `function.used_decision_variable_ids()` → `required_ids()`.
 - [ ] Replace `Parameter.new(id=...)` with `Parameter(id, ...)`.
 - [ ] Replace `pi.with_parameters(Parameters(entries={...}))` with `pi.with_parameters({...})`.
-- [ ] Use Adapter `solve()` / `sample()` directly for recommended Preparation; when customizing the policy, call `Instance.prepare()` and then `solve_without_preparation()` / `sample_without_preparation()`. Move custom Adapter implementations to the preparation-free method.
+- [ ] Use Adapter `solve()` / `sample()` directly for recommended Preparation; when customizing the policy, call `Instance.prepare()` and then `solve_without_preparation()` / `sample_without_preparation()`. Add the preparation-free method to custom Adapters, and declare any Adapter-specific options explicitly on both APIs.
 - [ ] Update `constraint.name` / `constraint.description` handling for `None` return (was `""`).
 - [ ] Update code that used `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` as a property — they are methods now.
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.

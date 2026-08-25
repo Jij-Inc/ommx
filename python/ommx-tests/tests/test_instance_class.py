@@ -340,7 +340,7 @@ def test_solver_adapter_returns_a_fresh_empty_preparation_recommendation() -> No
     assert second.objective is None
 
 
-def test_solver_adapter_easy_solve_prepares_a_copy_and_forwards_options() -> None:
+def test_solver_adapter_easy_solve_prepares_a_copy() -> None:
     x = DecisionVariable.binary(1)
     source = Instance.from_components(
         sense=Sense.Maximize,
@@ -355,7 +355,6 @@ def test_solver_adapter_easy_solve_prepares_a_copy_and_forwards_options() -> Non
         INPUT_CLASS = binary_linear_input_class()
         seen_instance: ClassVar[Instance | None] = None
         seen_diagnostics: ClassVar[object | None] = None
-        seen_kwargs: ClassVar[dict[str, Any]] = {}
 
         @classmethod
         def recommended_preparation_policy(cls) -> PreparationPolicy:
@@ -369,27 +368,19 @@ def test_solver_adapter_easy_solve_prepares_a_copy_and_forwards_options() -> Non
             ommx_instance: Instance,
             *,
             diagnostics: Any = None,
-            **kwargs: Any,
         ) -> Any:
             cls.require_applicable(ommx_instance)
             cls.seen_instance = ommx_instance
             cls.seen_diagnostics = diagnostics
-            cls.seen_kwargs = kwargs
-            return ommx_instance.evaluate(kwargs["state"])
+            return ommx_instance.evaluate({1: 1})
 
-    solution = Adapter.solve(
-        source,
-        diagnostics=diagnostics,  # type: ignore[arg-type]
-        state={1: 1},
-        marker="forwarded",
-    )
+    solution = Adapter.solve(source, diagnostics=diagnostics)  # type: ignore[arg-type]
 
     assert source.to_v2_bytes() == before
     assert Adapter.seen_instance is not source
     assert Adapter.seen_instance is not None
     assert Adapter.seen_instance.sense == Sense.Minimize
     assert Adapter.seen_diagnostics is diagnostics
-    assert Adapter.seen_kwargs == {"state": {1: 1}, "marker": "forwarded"}
     assert solution.sense == Sense.Maximize
     assert solution.objective == pytest.approx(1.0)
 
@@ -420,12 +411,11 @@ def test_sampler_adapter_inherits_easy_and_solver_bridges() -> None:
             ommx_instance: Instance,
             *,
             diagnostics: Any = None,
-            **kwargs: Any,
         ) -> Any:
             _ = diagnostics
             cls.require_applicable(ommx_instance)
             cls.calls_without_preparation += 1
-            return ommx_instance.evaluate_samples([kwargs["state"]])
+            return ommx_instance.evaluate_samples([{1: 1}])
 
         @property
         def sampler_input(self) -> Any:
@@ -434,7 +424,7 @@ def test_sampler_adapter_inherits_easy_and_solver_bridges() -> None:
         def decode_to_sampleset(self, data: Any) -> Any:
             return data
 
-    solution = Adapter.solve(source, state={1: 1})
+    solution = Adapter.solve(source)
 
     assert source.to_v2_bytes() == before
     assert Adapter.calls_without_preparation == 1

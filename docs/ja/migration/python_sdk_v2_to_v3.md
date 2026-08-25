@@ -245,9 +245,10 @@ instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
 solution = OMMXHighsAdapter.solve_without_preparation(instance)
 ```
 
-独自Adapterでは、easy methodではなく`solve_without_preparation()`または
-`sample_without_preparation()`を実装します。Adapter inputに`output_objective`がある場合、
-HiGHSとPython-MIPはdual valueを付与しません。
+独自Adapterでは、`solve_without_preparation()`または`sample_without_preparation()`を実装します。
+Adapter固有optionがある場合は、easy methodとpreparation-free methodの両方で同じtyped optionを
+宣言して明示的に転送します。Adapter inputに`output_objective`がある場合、HiGHSとPython-MIPは
+dual valueを付与しません。
 
 ## 6. return type の変更
 
@@ -495,7 +496,7 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] `Constraint.id` / `set_id()` / `id=` を削除し、host dict の key で ID を渡す。
 - [ ] `constraints=[...]` を `constraints={id: constraint}` に置き換える。
 - [ ] `constraint_hints` を `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に置き換える。
-- [ ] Adapterの推奨Preparationを使う場合は`solve()` / `sample()`を直接呼ぶ。Policyをcustomizeする場合は`Instance.prepare()`後に`solve_without_preparation()` / `sample_without_preparation()`を呼び、独自Adapterの実装もpreparation-free methodへ移す。
+- [ ] Adapterの推奨Preparationを使う場合は`solve()` / `sample()`を直接呼ぶ。Policyをcustomizeする場合は`Instance.prepare()`後に`solve_without_preparation()` / `sample_without_preparation()`を呼ぶ。独自Adapterにはpreparation-free methodを追加し、Adapter固有optionは両方のAPIで明示的に宣言する。
 - [ ] `*_df` accessor に `()` を付ける。
 - [ ] `RuntimeError` を捕捉していた `evaluate` / `partial_evaluate` 周辺を `ValueError` に変える。
 - [ ] `decision_variable_analysis()` を `decision_variable_roles()` / `decision_variable_role(id)` / `fixed_decision_variables()` / `dependent_decision_variable_ids()` / `irrelevant_decision_variable_ids()` / `decision_variables_df()["state_role"]` に置き換える。

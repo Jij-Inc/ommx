@@ -119,7 +119,6 @@ class SolverAdapter(ABC):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """Prepare and solve an isolated copy of an OMMX instance.
 
@@ -134,17 +133,9 @@ class SolverAdapter(ABC):
         solve; ``None`` means diagnostics are disabled. Adapters do not need to
         catch exceptions raised by a non-conforming diagnostics sink.
         """
-        input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
-        if input_class is None:
-            raise TypeError(
-                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
-            )
-
         prepared = copy.copy(ommx_instance)
-        prepared.prepare(input_class, cls.recommended_preparation_policy())
-        return cls.solve_without_preparation(
-            prepared, diagnostics=diagnostics, **kwargs
-        )
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(prepared, diagnostics=diagnostics)
 
     @classmethod
     @abstractmethod
@@ -153,7 +144,6 @@ class SolverAdapter(ABC):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """Solve an exact Adapter input without running ``Instance.prepare``.
 
@@ -186,7 +176,6 @@ class SamplerAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> SampleSet:
         """Prepare and sample an isolated copy of an OMMX instance.
 
@@ -198,17 +187,9 @@ class SamplerAdapter(SolverAdapter):
         it the same way as ``Run.log_solve``. ``None`` means diagnostics are
         disabled.
         """
-        input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
-        if input_class is None:
-            raise TypeError(
-                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
-            )
-
         prepared = copy.copy(ommx_instance)
-        prepared.prepare(input_class, cls.recommended_preparation_policy())
-        return cls.sample_without_preparation(
-            prepared, diagnostics=diagnostics, **kwargs
-        )
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.sample_without_preparation(prepared, diagnostics=diagnostics)
 
     @classmethod
     @abstractmethod
@@ -217,7 +198,6 @@ class SamplerAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> SampleSet:
         """Sample an exact Adapter input without running ``Instance.prepare``.
 
@@ -233,13 +213,11 @@ class SamplerAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """Return the best feasible result from :meth:`sample_without_preparation`."""
         return cls.sample_without_preparation(
             ommx_instance,
             diagnostics=diagnostics,
-            **kwargs,
         ).best_feasible
 
     @property

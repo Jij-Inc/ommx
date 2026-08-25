@@ -16,18 +16,7 @@ from ommx.experiment import (
     list_experiments,
 )
 from ommx.tracing import TraceResult, render_text_tree
-from ommx import (
-    DecisionVariable,
-    DegreeBound,
-    Equality,
-    Instance,
-    InstanceClass,
-    InstanceClassClause,
-    Kind,
-    SampleSet,
-    Sense,
-    Solution,
-)
+from ommx import DecisionVariable, Instance, SampleSet, Solution
 
 from conftest import get_test_exporter
 
@@ -52,42 +41,6 @@ class DummyMapKeyDiagnostic:
 @dataclass(frozen=True, slots=True)
 class UnserializableDiagnostic:
     value: object
-
-
-_EXPERIMENT_TEST_INPUT_CLASS = InstanceClass(
-    [
-        InstanceClassClause(
-            label="experiment-test-input",
-            allowed_variable_kinds={
-                Kind.Binary,
-                Kind.Integer,
-                Kind.Continuous,
-                Kind.SemiInteger,
-                Kind.SemiContinuous,
-            },
-            objective_degree_bound=DegreeBound.unbounded(),
-            allowed_senses={Sense.Minimize, Sense.Maximize},
-            regular_constraint_degree_bounds={
-                Equality.EqualToZero: DegreeBound.unbounded(),
-                Equality.LessThanOrEqualToZero: DegreeBound.unbounded(),
-            },
-            indicator_constraint_degree_bounds={
-                Equality.EqualToZero: DegreeBound.unbounded(),
-                Equality.LessThanOrEqualToZero: DegreeBound.unbounded(),
-            },
-            allows_one_hot=True,
-            allows_sos1=True,
-        )
-    ]
-)
-
-
-class ExperimentTestSolverAdapter(SolverAdapter):
-    INPUT_CLASS = _EXPERIMENT_TEST_INPUT_CLASS
-
-
-class ExperimentTestSamplerAdapter(SamplerAdapter):
-    INPUT_CLASS = _EXPERIMENT_TEST_INPUT_CLASS
 
 
 def _df_snap(df: pd.DataFrame) -> str:
@@ -523,17 +476,15 @@ def test_store_trace_records_run_scope_in_artifact():
 
 
 def test_store_trace_records_log_solve_scope_in_artifact():
-    class DummyAdapter(ExperimentTestSolverAdapter):
+    class DummyAdapter(SolverAdapter):
         @classmethod
-        def solve_without_preparation(
+        def solve(
             cls,
             ommx_instance: Instance,
             *,
             diagnostics: Any | None = None,
-            **kwargs: object,
         ) -> Solution:
             assert diagnostics is None
-            assert kwargs == {}
             tracer = otel_trace.get_tracer("dummy_adapter")
             with tracer.start_as_current_span("solve") as span:
                 span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
@@ -565,7 +516,7 @@ def test_store_trace_records_log_solve_scope_in_artifact():
 
 
 def test_store_trace_records_open_solve_scope_in_artifact():
-    class ManualAdapter(ExperimentTestSolverAdapter):
+    class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance):
             self.instance = ommx_instance
 
@@ -575,9 +526,7 @@ def test_store_trace_records_open_solve_scope_in_artifact():
             ommx_instance: Instance,
             *,
             diagnostics: Any | None = None,
-            **kwargs: object,
         ) -> Solution:
-            assert kwargs == {}
             raise AssertionError("direct solver_input workflow should not call solve")
 
         @property
@@ -608,7 +557,7 @@ def test_store_trace_records_open_solve_scope_in_artifact():
 
 
 def test_store_trace_marks_open_solve_missing_decode_span_error():
-    class ManualAdapter(ExperimentTestSolverAdapter):
+    class ManualAdapter(SolverAdapter):
         def __init__(self, _ommx_instance: Instance):
             pass
 
@@ -618,9 +567,7 @@ def test_store_trace_marks_open_solve_missing_decode_span_error():
             ommx_instance: Instance,
             *,
             diagnostics: Any | None = None,
-            **kwargs: object,
         ) -> Solution:
-            assert kwargs == {}
             raise AssertionError("direct solver_input workflow should not call solve")
 
         @property
@@ -923,11 +870,11 @@ def test_log_parameter_rejects_python_int_outside_i64():
 
 
 def test_log_solve_logs_input_solution_and_adapter_options():
-    class DummyAdapter(ExperimentTestSolverAdapter):
+    class DummyAdapter(SolverAdapter):
         seen_kwargs: ClassVar[list[dict[str, object]]] = []
 
         @classmethod
-        def solve_without_preparation(
+        def solve(
             cls,
             ommx_instance: Instance,
             *,
@@ -1019,11 +966,11 @@ def test_log_solve_logs_input_solution_and_adapter_options():
 
 
 def test_log_sample_records_finished_sample_set_without_feasible_samples():
-    class DummySampler(ExperimentTestSamplerAdapter):
+    class DummySampler(SamplerAdapter):
         seen_diagnostics: ClassVar[DiagnosticsSink | None]
 
         @classmethod
-        def sample_without_preparation(
+        def sample(
             cls,
             ommx_instance: Instance,
             *,
@@ -1035,6 +982,15 @@ def test_log_sample_records_finished_sample_set_without_feasible_samples():
             if diagnostics is not None:
                 diagnostics.record(DummyDiagnostic(status="sampled", bound=0.0))
             return ommx_instance.evaluate_samples([{0: 0}])
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: DiagnosticsSink | None = None,
+        ) -> Solution:
+            raise NotImplementedError
 
         @property
         def solver_input(self) -> Any:
@@ -1082,10 +1038,62 @@ def test_log_sample_records_finished_sample_set_without_feasible_samples():
     assert sampling.diagnostics == [{"status": "sampled", "bound": 0.0}]
 
 
-def test_log_sample_records_failed_sampling_separately_from_solves():
-    class FailingSampler(ExperimentTestSamplerAdapter):
+def test_log_solve_and_sample_omit_disabled_diagnostics_keyword():
+    class LegacySolver(SolverAdapter):
         @classmethod
-        def sample_without_preparation(
+        def solve(  # type: ignore[override]
+            cls, ommx_instance: Instance
+        ) -> Solution:
+            return ommx_instance.evaluate({})
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+    class LegacySampler(SamplerAdapter):
+        @classmethod
+        def sample(  # type: ignore[override]
+            cls, ommx_instance: Instance
+        ) -> SampleSet:
+            return ommx_instance.evaluate_samples([{}])
+
+        @classmethod
+        def solve(  # type: ignore[override]
+            cls, ommx_instance: Instance
+        ) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def solver_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode(self, data: Any) -> Solution:
+            raise NotImplementedError
+
+        @property
+        def sampler_input(self) -> Any:
+            raise NotImplementedError
+
+        def decode_to_sampleset(self, data: Any) -> SampleSet:
+            raise NotImplementedError
+
+    instance = Instance.empty()
+    experiment = Experiment.with_temp_local_registry()
+
+    with experiment.run() as run:
+        solution = run.log_solve(LegacySolver, instance)
+        sample_set = run.log_sample(LegacySampler, instance)
+        assert solution.feasible
+        assert sample_set.feasible_ids() == {0}
+
+
+def test_log_sample_records_failed_sampling_separately_from_solves():
+    class FailingSampler(SamplerAdapter):
+        @classmethod
+        def sample(
             cls,
             ommx_instance: Instance,
             *,
@@ -1093,6 +1101,15 @@ def test_log_sample_records_failed_sampling_separately_from_solves():
             **kwargs: object,
         ) -> SampleSet:
             raise RuntimeError("sampling failed")
+
+        @classmethod
+        def solve(
+            cls,
+            ommx_instance: Instance,
+            *,
+            diagnostics: DiagnosticsSink | None = None,
+        ) -> Solution:
+            raise NotImplementedError
 
         @property
         def solver_input(self) -> Any:
@@ -1123,7 +1140,7 @@ def test_log_sample_records_failed_sampling_separately_from_solves():
 
 
 def test_open_solve_records_direct_solver_input_workflow():
-    class ManualAdapter(ExperimentTestSolverAdapter):
+    class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, constructor_label: str = ""):
             self.instance = ommx_instance
             self.model: dict[str, object] = {
@@ -1213,7 +1230,7 @@ def test_open_solve_records_direct_solver_input_workflow():
 
 
 def test_open_solve_manual_accessors_are_context_scoped():
-    class ManualAdapter(ExperimentTestSolverAdapter):
+    class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance):
             self.instance = ommx_instance
             self.model: dict[str, object] = {}
@@ -1282,7 +1299,7 @@ def test_open_solve_manual_accessors_are_context_scoped():
 
 
 def test_open_solve_rejects_reserved_diagnostics_option_with_manual_message():
-    class ManualAdapter(ExperimentTestSolverAdapter):
+    class ManualAdapter(SolverAdapter):
         @classmethod
         def solve_without_preparation(
             cls,
@@ -1315,7 +1332,7 @@ def test_open_solve_rejects_reserved_diagnostics_option_with_manual_message():
 
 
 def test_open_solve_records_failed_attempt_when_adapter_construction_fails():
-    class FailingConstructorAdapter(ExperimentTestSolverAdapter):
+    class FailingConstructorAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, label: str = ""):
             raise RuntimeError("model build failed")
 
@@ -1379,7 +1396,7 @@ def test_open_solve_records_failed_attempt_when_adapter_construction_fails():
 
 
 def test_open_solve_failed_decode_clears_previous_decoded_solution():
-    class ManualAdapter(ExperimentTestSolverAdapter):
+    class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance):
             self.instance = ommx_instance
             self.model: dict[str, object] = {"decode_fails": False}
@@ -1443,7 +1460,7 @@ def test_open_solve_failed_decode_clears_previous_decoded_solution():
 
 
 def test_open_solve_records_failed_attempt_on_exception():
-    class ManualAdapter(ExperimentTestSolverAdapter):
+    class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, label: str = ""):
             self.label = label
 
@@ -1512,7 +1529,7 @@ def test_open_solve_records_failed_attempt_on_exception():
 
 
 def test_open_solve_records_failed_attempt_when_outcome_is_missing():
-    class ManualAdapter(ExperimentTestSolverAdapter):
+    class ManualAdapter(SolverAdapter):
         def __init__(self, ommx_instance: Instance, *, label: str = ""):
             self.label = label
 
@@ -1585,11 +1602,11 @@ def test_open_solve_records_failed_attempt_when_outcome_is_missing():
 
 
 def test_log_solve_records_adapter_diagnostics():
-    class DiagnosticAdapter(ExperimentTestSolverAdapter):
+    class DiagnosticAdapter(SolverAdapter):
         seen_kwargs: ClassVar[list[dict[str, object]]] = []
 
         @classmethod
-        def solve_without_preparation(
+        def solve(
             cls,
             ommx_instance: Instance,
             *,
@@ -1639,9 +1656,9 @@ def test_log_solve_records_adapter_diagnostics():
 
 
 def test_log_solve_records_solve_without_unserializable_diagnostics():
-    class UnserializableDiagnosticAdapter(ExperimentTestSolverAdapter):
+    class UnserializableDiagnosticAdapter(SolverAdapter):
         @classmethod
-        def solve_without_preparation(
+        def solve(
             cls,
             ommx_instance: Instance,
             *,
@@ -1687,11 +1704,11 @@ def test_log_solve_records_solve_without_unserializable_diagnostics():
 
 
 def test_failed_run_preserves_completed_solves_after_adapter_exception():
-    class FailingThirdAdapter(ExperimentTestSolverAdapter):
+    class FailingThirdAdapter(SolverAdapter):
         calls: ClassVar[int] = 0
 
         @classmethod
-        def solve_without_preparation(
+        def solve(
             cls,
             ommx_instance: Instance,
             *,
@@ -1765,9 +1782,9 @@ def test_failed_run_preserves_completed_solves_after_adapter_exception():
 
 
 def test_log_solve_preserves_keyboard_interrupt_type_and_records_interrupted_solve():
-    class InterruptingAdapter(ExperimentTestSolverAdapter):
+    class InterruptingAdapter(SolverAdapter):
         @classmethod
-        def solve_without_preparation(
+        def solve(
             cls,
             ommx_instance: Instance,
             *,
@@ -1826,11 +1843,11 @@ def test_log_solve_rejects_non_solver_adapter():
 
 
 def test_log_solve_rejects_non_json_kwargs_before_solving():
-    class DummyAdapter(ExperimentTestSolverAdapter):
+    class DummyAdapter(SolverAdapter):
         called: ClassVar[bool] = False
 
         @classmethod
-        def solve_without_preparation(
+        def solve(
             cls,
             ommx_instance: Instance,
             *,

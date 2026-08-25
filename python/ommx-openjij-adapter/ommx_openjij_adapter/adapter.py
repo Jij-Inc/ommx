@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 from math import isfinite
-from typing import Any, ClassVar
+from typing import ClassVar
 
 import openjij as oj
 from ommx import (
@@ -175,11 +175,12 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         reinitialize_state: bool | None = None,
         seed: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> SampleSet:
         """Prepare and sample an isolated copy of ``ommx_instance``."""
-        return super().sample(
-            ommx_instance,
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.sample_without_preparation(
+            prepared,
             beta_min=beta_min,
             beta_max=beta_max,
             num_sweeps=num_sweeps,
@@ -191,7 +192,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             reinitialize_state=reinitialize_state,
             seed=seed,
             diagnostics=diagnostics,
-            **kwargs,
         )
 
     @classmethod
@@ -210,7 +210,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         reinitialize_state: bool | None = None,
         seed: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> SampleSet:
         """Sample an exact OpenJij Adapter input without preparing it."""
         _ = diagnostics
@@ -228,7 +227,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 sparse=sparse,
                 reinitialize_state=reinitialize_state,
                 seed=seed,
-                **kwargs,
             )
             response = sampler._sample()
             return sampler.decode_to_sampleset(response)
@@ -249,10 +247,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         reinitialize_state: bool | None = None,
         seed: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """Prepare, sample, and return the best feasible result."""
-        return super().solve(
+        return cls.sample(
             ommx_instance,
             beta_min=beta_min,
             beta_max=beta_max,
@@ -265,8 +262,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             reinitialize_state=reinitialize_state,
             seed=seed,
             diagnostics=diagnostics,
-            **kwargs,
-        )
+        ).best_feasible
 
     @classmethod
     def solve_without_preparation(
@@ -284,7 +280,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         reinitialize_state: bool | None = None,
         seed: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """Return the best feasible result from :meth:`sample_without_preparation`."""
         return cls.sample_without_preparation(
@@ -300,7 +295,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             reinitialize_state=reinitialize_state,
             seed=seed,
             diagnostics=diagnostics,
-            **kwargs,
         ).best_feasible
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:

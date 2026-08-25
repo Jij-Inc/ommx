@@ -281,7 +281,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 Finally, create a class that inherits `ommx.adapter.SolverAdapter` to standardize the API for each adapter. This is an abstract base class with `@abstractmethod` as follows:
 
 ```python
-from typing import Any, ClassVar
+from typing import ClassVar
 
 class SolverAdapter(ABC):
     # Complete OMMX-defined condition for adapter applicability.
@@ -298,7 +298,6 @@ class SolverAdapter(ABC):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         pass
 
@@ -321,7 +320,15 @@ This abstract base class assumes the following three use cases:
   `solve_without_preparation`. This method performs no Preparation.
 - If you adjust the backend solver's parameters, use `solver_input` to get the data structure for the backend solver (in this case, `pyscipopt.Model`), adjust it, then input it to the backend solver, and finally convert the backend solver's output using `decode`.
 
-The `solve_without_preparation` class method may define additional adapter-specific keyword options in concrete adapters; `solve` forwards them unchanged. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When `Run.log_solve(..., store_diagnostics=True)` is used, adapters may record adapter-defined diagnostic reports into that sink; `None` means diagnostics are disabled.
+The inherited `solve` method covers Adapters with no additional options. When
+a concrete Adapter has Adapter-specific options, declare the same typed options
+on both `solve` and `solve_without_preparation`. Its `solve` implementation
+copies and prepares the input, then forwards those options explicitly. Do not
+use a catch-all `**kwargs`: it prevents type checkers from rejecting unknown
+options. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When
+`Run.log_solve(..., store_diagnostics=True)` is used, adapters may record
+adapter-defined diagnostic reports into that sink; `None` means diagnostics are
+disabled.
 
 #### Input Class and Recommended Preparation
 
@@ -360,8 +367,6 @@ backend validation, but that failure does not make the input "not applicable."
 Using the functions prepared so far, you can implement it as follows:
 
 ```{code-cell} ipython3
-from typing import Any
-
 from ommx.adapter import DiagnosticsSink, SolverAdapter
 from ommx import (
     DegreeBound,
@@ -424,13 +429,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
         """
         Solve an ommx.Instance using PySCIPopt and return an ommx.Solution
         """
         _ = diagnostics
-        adapter = cls(ommx_instance, **kwargs)
+        adapter = cls(ommx_instance)
         model = adapter.solver_input
         model.optimize()
         return adapter.decode(model)
@@ -490,20 +494,45 @@ converter or backend error while constructing or solving the PySCIPOpt model.
 
 This completes the Solver Adapter 🎉
 
-```{note}
-You can add parameter arguments in the inherited class in Python, so you can define additional parameters as follows. However, while this allows you to use various features of the backend solver, it may compromise compatibility with other adapters, so carefully consider when creating an adapter.
+````{note}
+Adapter-specific options belong in explicit typed signatures on both APIs. The
+easy API must prepare its own copy before forwarding the option to the
+preparation-free API:
 
 ```python
+import copy
+
+class MyAdapter(SolverAdapter):
+    INPUT_CLASS = input_class
+
+    @classmethod
+    def solve(
+        cls,
+        ommx_instance: Instance,
+        *,
+        timeout: int | None = None,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
+            timeout=timeout,
+            diagnostics=diagnostics,
+        )
+
     @classmethod
     def solve_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> Solution:
+        cls.require_applicable(ommx_instance)
+        ...
 ```
+````
 
 ### Solving a Knapsack Problem Using the Solver Adapter
 
@@ -584,7 +613,6 @@ class SamplerAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> SampleSet:
         pass
 
@@ -604,13 +632,13 @@ Adapter input. `SamplerAdapter.solve_without_preparation` selects `best_feasible
 `sample_without_preparation`; `solver_input` delegates to `sampler_input`, and `decode`
 returns `decode_to_sampleset(...).best_feasible`. A Sampler implementation
 therefore defines only its sampler-owned `sample_without_preparation`, `sampler_input`, and
-`decode_to_sampleset` operations. The Easy and Solver bridges are inherited.
+`decode_to_sampleset` operations when it has no additional options. A Sampler
+with Adapter-specific options also overrides `sample` (and `solve` when that
+API exposes the same options) with explicit typed signatures.
 
 As with `solve`, the reserved `diagnostics` keyword is owned by `Run.log_sample`. A sampler may record adapter-defined reports into the sink when it is not `None`.
 
 ```{code-cell} ipython3
-from typing import Any
-
 from ommx.adapter import DiagnosticsSink, SamplerAdapter
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
@@ -652,10 +680,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         ommx_instance: Instance,
         *,
         diagnostics: DiagnosticsSink | None = None,
-        **kwargs: Any,
     ) -> SampleSet:
         _ = diagnostics
-        adapter = cls(ommx_instance, **kwargs)
+        adapter = cls(ommx_instance)
         response = adapter._sample()
         return adapter.decode_to_sampleset(response)
     
