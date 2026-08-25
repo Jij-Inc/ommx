@@ -15,12 +15,15 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 Preparationをcustomizeするapplicationでは、Instanceをin-placeでPrepareし、代わりに
 `solve_without_preparation()`または`sample_without_preparation()`を呼びます。独自Adapterは
 対応するpreparation-free methodを実装する必要があります。追加optionがあるAdapterは、
-その意味が定義できるAPIだけで各optionを明示的に宣言します。Preparationをまたいでも意味が
-変わらないoptionはeasy APIから転送できますが、exactなsolver変数IDに依存するoptionは
-preparation-free APIだけに属します。
+各optionを公開するAPIごとに明示的な型付きsignatureとして宣言し、包括的な`**kwargs`は
+使いません。Preparationをまたいでも意味が
+変わらないoptionはeasy APIから転送できます。exactなprepared inputに意味が依存し、
+Preparation過程をまたぐtransportを定義しない場合、具体的なAdapterはそのoptionを
+preparation-free APIだけに公開できます。
 
-したがってOpenJijの`initial_state` optionは、prepared solver変数表現を参照できるexact-input
-constructorとpreparation-free methodで利用でき、easy methodでは受け取りません。
+OpenJijはこの選択を`initial_state` optionに適用しています。このoptionはexact-input
+constructorとpreparation-free methodで利用でき、prepared solver変数表現を参照しますが、
+easy methodでは受け取りません。
 
 Adapter inputに`output_objective`がある場合、HiGHSとPython-MIPはdual valueを省略します。
 2つの呼び出し方は

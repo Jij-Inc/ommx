@@ -350,10 +350,13 @@ solution = OMMXHighsAdapter.solve_without_preparation(instance)
 ```
 
 Custom Adapter implementations must provide `solve_without_preparation()` or
-`sample_without_preparation()`. Declare every additional option explicitly on
-the APIs where its meaning is defined. An easy method may forward an option
-whose meaning survives Preparation; an option tied to the exact Adapter input,
-such as solver-variable IDs, belongs only to the preparation-free method.
+`sample_without_preparation()`. Declare every additional option with an
+explicit typed signature rather than a catch-all `**kwargs`. An easy method may
+forward an option whose meaning survives Preparation. When an option depends on
+the exact prepared Adapter input and the Adapter defines no way to transport it
+through Preparation, the concrete Adapter may instead expose that option only
+on its preparation-free method.
+
 HiGHS and Python-MIP no longer attach dual values when the Adapter input has an
 `output_objective`.
 
@@ -923,7 +926,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Rename `instance.used_decision_variable_ids()` / `function.used_decision_variable_ids()` → `required_ids()`.
 - [ ] Replace `Parameter.new(id=...)` with `Parameter(id, ...)`.
 - [ ] Replace `pi.with_parameters(Parameters(entries={...}))` with `pi.with_parameters({...})`.
-- [ ] Use Adapter `solve()` / `sample()` directly for recommended Preparation; when customizing the policy, call `Instance.prepare()` and then `solve_without_preparation()` / `sample_without_preparation()`. Add the preparation-free method to custom Adapters, and declare each Adapter-specific option only on the APIs where its meaning is defined.
+- [ ] Use Adapter `solve()` / `sample()` directly for recommended Preparation; when customizing the policy, call `Instance.prepare()` and then `solve_without_preparation()` / `sample_without_preparation()`. Add the preparation-free method to custom Adapters, and declare every Adapter-specific option with an explicit typed signature. A concrete Adapter may restrict an option to the preparation-free API when it depends on the exact prepared input and no transport through Preparation is defined.
 - [ ] Update `constraint.name` / `constraint.description` handling for `None` return (was `""`).
 - [ ] Update code that used `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` as a property — they are methods now.
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.

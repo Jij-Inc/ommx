@@ -316,10 +316,11 @@ class SolverAdapter(ABC):
   `solve_without_preparation`を使う。
 - バックエンドソルバーのパラメータなどを調整する場合は、 `solver_input` を使ってバックエンドソルバーの入力用のデータ構造（今回は `pyscipopt.Model`）を取得し、調整した後にバックエンドソルバーへ入力し、最後にバックエンドソルバーの出力を `decode` で変換する。
 
-追加optionがないAdapterは、継承した`solve`をそのまま使えます。Adapter固有optionは、その意味が
-定義できるAPIだけで明示的に宣言します。Preparationの前後で意味が変わらないoptionは両methodで
-同じ型として宣言し、明示的に転送します。exactなAdapter inputを参照するoptionは
-`solve_without_preparation`だけに属します。未知のoptionをtype checkerが拒否できなくなるため、
+追加optionがないAdapterは、継承した`solve`をそのまま使えます。Adapter固有optionは、それを公開する
+各APIで明示的に型付けします。Preparationの前後で意味が変わらないoptionはeasy methodから
+preparation-free methodへ明示的に転送できます。exactなprepared inputに意味が依存し、Preparation過程をまたぐ
+transportを定義しない場合、具体的なAdapterはそのoptionを`solve_without_preparation`だけに公開できます。
+未知のoptionをtype checkerが拒否できなくなるため、
 包括的な`**kwargs`は使いません。予約済みの`diagnostics` keywordは
 `Run.log_solve`が管理します。`Run.log_solve(..., store_diagnostics=True)`を使う場合、adapterは
 そのsinkにadapter定義のdiagnostic reportを記録できます。`None`の場合、diagnosticsは無効です。
@@ -488,9 +489,9 @@ solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
 これでSolver Adapter完成です 🎉
 
 ````{note}
-`timeout`のようにPreparationをまたいでも意味が変わらないoptionは、両方のAPIで明示的に
-型付けします。Easy APIは独自のcopyをPrepareしてから、そのoptionをpreparation-free APIへ
-転送します。
+`timeout`のようにPreparationをまたいでも意味が変わらないoptionは、両方のAPIで提供できます。
+その場合は両方で明示的に型付けし、easy APIは独自のcopyをPrepareしてから、そのoptionを
+preparation-free APIへ転送します。
 
 ```python
 import copy
@@ -622,10 +623,10 @@ InstanceをcopyしてPrepareし、`sample_without_preparation`はexactなAdapter
 `SamplerAdapter.solve_without_preparation`は`sample_without_preparation`の`best_feasible`を選び、`solver_input`は
 `sampler_input`へ委譲し、`decode`は`decode_to_sampleset(...).best_feasible`を返します。
 追加optionがない場合、Sampler実装が定義するのはsampler側の`sample_without_preparation`、
-`sampler_input`、`decode_to_sampleset`だけです。Adapter固有optionは、その意味が定義できるAPIだけで
-明示的に宣言します。Preparationをまたいでも意味が変わらないoptionは`sample`と
-`sample_without_preparation`で同じtyped signatureを使い、exactなsampler変数IDに依存するoptionは
-`sample_without_preparation`だけに置きます。Solver APIでoptionを公開する場合も同じ規則を使います。
+`sampler_input`、`decode_to_sampleset`だけです。Adapter固有optionは公開する各APIで明示的に
+型付けします。Preparationをまたいでも意味が変わらないoptionはeasy APIから明示的に転送できます。
+exactなprepared inputに意味が依存し、Preparation過程をまたぐtransportを定義しない場合、具体的なSampler Adapterは
+そのoptionを`sample_without_preparation`だけに公開できます。Solver APIでoptionを公開する場合も同様です。
 
 `solve` と同様に、予約済みの `diagnostics` keyword は `Run.log_sample` が管理します。sink が `None` でない場合、sampler は adapter 固有の report を記録できます。
 
