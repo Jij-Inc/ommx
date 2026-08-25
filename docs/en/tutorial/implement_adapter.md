@@ -293,7 +293,7 @@ class SolverAdapter(ABC):
 
     @classmethod
     @abstractmethod
-    def solve(
+    def solve_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
@@ -311,12 +311,27 @@ class SolverAdapter(ABC):
         pass
 ```
 
-This abstract base class assumes the following two use cases:
+This abstract base class assumes the following three use cases:
 
-- If you do not adjust the backend solver's parameters, use the `solve` class method.
+- For the usual one-call workflow, use the inherited `solve` class method. It
+  copies the input, applies `recommended_preparation_policy()` for
+  `INPUT_CLASS`, and calls `solve_without_preparation` on that temporary prepared copy.
+- If the application prepares an exact Adapter input itself, call
+  `solve_without_preparation`. This method performs no Preparation.
 - If you adjust the backend solver's parameters, use `solver_input` to get the data structure for the backend solver (in this case, `pyscipopt.Model`), adjust it, then input it to the backend solver, and finally convert the backend solver's output using `decode`.
 
-The `solve` class method may define additional adapter-specific keyword options in concrete adapters. The reserved `diagnostics` keyword is owned by `Run.log_solve`. When `Run.log_solve(..., store_diagnostics=True)` is used, adapters may record adapter-defined diagnostic reports into that sink; `None` means diagnostics are disabled.
+The inherited `solve` method covers Adapters with no additional options. A
+concrete Adapter declares each Adapter-specific option with an explicit typed
+signature on the methods that support it. If an option has the same meaning
+before and after Preparation, the Adapter may declare it on both methods and
+forward it explicitly. If an option depends on the exact prepared input and the
+Adapter defines no way to transport it through Preparation, the Adapter may
+instead expose it only on `solve_without_preparation`. Do not use a catch-all
+`**kwargs`: it prevents type checkers from rejecting unknown options. The
+reserved `diagnostics` keyword is owned by `Run.log_solve`. When
+`Run.log_solve(..., store_diagnostics=True)` is used, adapters may record
+adapter-defined diagnostic reports into that sink; `None` means diagnostics are
+disabled.
 
 #### Input Class and Recommended Preparation
 
@@ -324,7 +339,17 @@ An adapter defines applicability entirely with `INPUT_CLASS`, the set of exact `
 
 Applicability does not promise that every later conversion or backend operation succeeds. A converter may validate the narrower representation handled by a helper such as `as_linear()`, and a backend may reject a numeric value or implementation limit while solver input is being built. Report those as converter or backend errors; do not add them as a second source of adapter applicability semantics.
 
-Direct adapter APIs are strict: they do not transform an input to make it applicable. Instead, an adapter may override `recommended_preparation_policy()` to return a fresh, caller-editable {class}`~ommx.PreparationPolicy` for its `INPUT_CLASS`. The recommendation does not inspect or mutate an instance, run preparation, or guarantee applicability. `INPUT_CLASS` and the policy remain independent inputs to {meth}`~ommx.Instance.prepare`.
+The usual `solve` API owns Preparation. It copies the caller's Instance,
+applies the fresh policy returned by `recommended_preparation_policy()` to the
+copy, and invokes `solve_without_preparation`. The caller's Instance is unchanged, including
+when Preparation or the backend fails. The recommendation itself does not
+inspect or mutate an instance, run Preparation, or guarantee applicability.
+
+`solve_without_preparation` is the preparation-free API. It requires an exact member of
+`INPUT_CLASS` and raises `AdapterNotApplicableError` otherwise. Applications
+that need a custom Preparation policy apply the edited policy to their Instance
+with {meth}`~ommx.Instance.prepare`, then pass that Instance to
+`solve_without_preparation`.
 
 A recommendation can enable special-constraint lowering with these family selectors:
 
@@ -335,7 +360,11 @@ A recommendation can enable special-constraint lowering with these family select
 Use {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` to inspect the currently active families. The selected Preparation phase delegates to {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>`, which converts each selected active family into regular constraints (Big-M for indicator / SOS1, linear equality for one-hot). The owner operation still defines its validation and mathematical meaning.
 
 ```{important}
-`INPUT_CLASS` describes the exact value received by the adapter, and membership is the complete applicability condition. Preparation is owned by the caller and changes that value in place. Successful preparation guarantees membership. Building solver input can still fail during converter-local or backend validation, but that failure does not make the input "not applicable."
+`INPUT_CLASS` describes the exact value received by `solve_without_preparation`, and
+membership is the complete applicability condition. `solve` performs
+Preparation only on its private working copy. Successful Preparation guarantees
+membership. Building solver input can still fail during converter-local or
+backend validation, but that failure does not make the input "not applicable."
 ```
 
 Using the functions prepared so far, you can implement it as follows:
@@ -398,7 +427,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         set_constraints(self.model, self.instance, self.varname_map)
 
     @classmethod
-    def solve(
+    def solve_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
@@ -446,34 +475,68 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 `map_active_optimality()` keeps an active-formulation optimum only when it also
 proves optimality for the objective reported by the returned `Solution`.
 
-The caller decides whether to use and modify the recommendation before invoking the strict adapter API:
+The usual call copies and prepares the Instance automatically:
+
+```python
+solution = OMMXPySCIPOptAdapter.solve(instance)
+```
+
+The usual call leaves the caller's `instance` unchanged. To customize
+Preparation, prepare the Instance in place and invoke the preparation-free API:
 
 ```python
 input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
 policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
 # Edit public policy fields here when the application needs different choices.
 instance.prepare(input_class, policy)
-OMMXPySCIPOptAdapter.require_applicable(instance)
-solution = OMMXPySCIPOptAdapter.solve(instance)
+solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
 ```
 
-The explicit `require_applicable()` call above checks only `INPUT_CLASS` membership. `solve()` checks the same membership at its strict entry point, then may still raise a converter or backend error while constructing or solving the PySCIPOpt model.
+`solve_without_preparation()` checks `INPUT_CLASS` membership, then may still raise a
+converter or backend error while constructing or solving the PySCIPOpt model.
 
 This completes the Solver Adapter 🎉
 
-```{note}
-You can add parameter arguments in the inherited class in Python, so you can define additional parameters as follows. However, while this allows you to use various features of the backend solver, it may compromise compatibility with other adapters, so carefully consider when creating an adapter.
+````{note}
+An option such as `timeout` has the same meaning across Preparation, so a
+concrete Adapter can expose it with explicit typed signatures on both APIs. The
+easy API prepares its own copy before forwarding that option to the
+preparation-free API:
 
 ```python
+import copy
+
+class MyAdapter(SolverAdapter):
+    INPUT_CLASS = input_class
+
     @classmethod
     def solve(
         cls,
         ommx_instance: Instance,
         *,
-        timeout: Optional[int] = None,
+        timeout: int | None = None,
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
+            timeout=timeout,
+            diagnostics=diagnostics,
+        )
+
+    @classmethod
+    def solve_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        *,
+        timeout: int | None = None,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        cls.require_applicable(ommx_instance)
+        ...
 ```
+````
 
 ### Solving a Knapsack Problem Using the Solver Adapter
 
@@ -549,7 +612,7 @@ In the case of PySCIPOpt, we inherited `SolverAdapter`, but this time we will in
 class SamplerAdapter(SolverAdapter):
     @classmethod
     @abstractmethod
-    def sample(
+    def sample_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
@@ -567,7 +630,20 @@ class SamplerAdapter(SolverAdapter):
         pass
 ```
 
-`SamplerAdapter` inherits from `SolverAdapter`, so you might think you need to implement `solve` and other `@abstractmethod`. However, since `SamplerAdapter` has a function to return the best sample using `sample`, it is sufficient to implement only `sample`. If you want to implement a more efficient implementation yourself, override `solve`.
+`SamplerAdapter` supplies the same two-level API. The inherited `sample` copies
+the caller's Instance and prepares that copy, while `sample_without_preparation`
+receives the exact Adapter input. `SamplerAdapter.solve_without_preparation` selects `best_feasible` from
+`sample_without_preparation`; `solver_input` delegates to `sampler_input`, and `decode`
+returns `decode_to_sampleset(...).best_feasible`. A Sampler implementation
+therefore defines only its sampler-owned `sample_without_preparation`, `sampler_input`, and
+`decode_to_sampleset` operations when it has no additional options. A Sampler
+with Adapter-specific options declares each option with explicit typed
+signatures on the methods that support it. Options whose meaning survives
+Preparation may use matching signatures on `sample` and
+`sample_without_preparation`. When an option depends on the exact prepared
+sampler input and no transport through Preparation is defined, a concrete
+Sampler may expose it only on `sample_without_preparation`. The same choice is
+available when exposing options through the Solver API.
 
 As with `solve`, the reserved `diagnostics` keyword is owned by `Run.log_sample`. A sampler may record adapter-defined reports into the sink when it is not `None`.
 
@@ -608,7 +684,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     # Common method for performing sampling
     @classmethod
-    def sample(
+    def sample_without_preparation(
         cls,
         ommx_instance: Instance,
         *,
@@ -631,26 +707,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         # The information stored in `ommx.Instance` is required here
         return self.ommx_instance.evaluate_samples(samples)
 
-    # We also add API for `SolverAdapter`
-    @property
-    def solver_input(self) -> dict[tuple[int, ...], float]:
-        return self.sampler_input
-
-    # Here we return the best feasible solution from the SampleSet
-    def decode(self, data: oj.Response) -> Solution:
-        sample_set = self.decode_to_sampleset(data)
-        return sample_set.best_feasible
-
-    @classmethod
-    def solve(
-        cls,
-        ommx_instance: Instance,
-        *,
-        diagnostics: DiagnosticsSink | None = None,
-    ) -> Solution:
-        _ = diagnostics
-        sample_set = cls.sample( ommx_instance,)
-        return sample_set.best_feasible
 ```
 
 ### Sampling using our Adapter
@@ -682,7 +738,11 @@ sample_set.summary
 In this tutorial, we learned how to implement an OMMX Adapter by connecting to PySCIPOpt as a Solver Adapter and OpenJij as a Sampler Adapter. Here are the key points when implementing an OMMX Adapter:
 
 1. Implement an OMMX Adapter by inheriting the abstract base class `SolverAdapter` or `SamplerAdapter`.
-2. Define applicability with `INPUT_CLASS`. `check_applicability()` and `require_applicable()` report or enforce only membership. If useful, return a fresh caller-editable policy from `recommended_preparation_policy()`; the caller applies it with `Instance.prepare()` before calling the strict adapter API.
+2. Define applicability with `INPUT_CLASS` and implement the preparation-free
+   `solve_without_preparation()` or `sample_without_preparation()` method. The usual `solve()` and
+   `sample()` APIs copy the caller's Instance and apply the fresh policy from
+   `recommended_preparation_policy()` automatically. Applications customize
+   Preparation by preparing their Instance and invoking the preparation-free API.
 3. The main steps of the implementation are as follows:
    - Convert `ommx.Instance` into a format that the backend solver can understand.
    - Run the backend solver to obtain a solution.

@@ -11,8 +11,33 @@ Provides an adapter between [OMMX](https://github.com/Jij-Inc/ommx) and
 pip install ommx-openjij-adapter
 ```
 
-OpenJij directly accepts a Binary, unconstrained minimization model through
-this adapter. Prepare a constrained model in place before sampling it:
+> [!WARNING]
+> **The meaning of `SampleSet.objectives` changed in OMMX v3.** In v2, when
+> `OMMXOpenJijSAAdapter.sample()` applied a penalty method,
+> `SampleSet.objectives` included the penalty terms from the QUBO/HUBO energy
+> (with the source sense restored for maximization). In v3 and later,
+> `SampleSet.objectives` contains the original problem's objective value.
+> Penalty terms still affect OpenJij's sampling but are not included in the
+> returned objective. Update code that treated `SampleSet.objectives` as the
+> OpenJij energy.
+
+The easy API prepares an isolated copy with the Adapter's recommended policy,
+so it can directly accept inputs such as an Integer maximization model without
+modifying the caller's `Instance`:
+
+```python
+sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=16)
+```
+
+OpenJij's `initial_state` is defined over the exact Adapter-input solver
+variables; dictionary keys are those variable IDs. Because Preparation may
+replace source variables with encoded or slack variables, pass `initial_state`
+only to the exact-input constructor, `sample_without_preparation()`, or
+`solve_without_preparation()` after preparing the Instance explicitly.
+
+Preparation choices that require application knowledge remain explicit. For
+example, prepare the Instance with a selected fixed penalty weight and use the
+preparation-free API for a constrained model:
 
 ```python markdown-code-runner
 from ommx import DecisionVariable, FixedPenaltyPreparation, Instance
@@ -26,14 +51,13 @@ instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.fixed_penalty = FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
     weight=2.0
 )
-instance.prepare(input_class, policy)
+instance.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
 
-sample_set = OMMXOpenJijSAAdapter.sample(
+sample_set = OMMXOpenJijSAAdapter.sample_without_preparation(
     instance,
     num_reads=16,
 )
@@ -78,10 +102,11 @@ are usually the convenient choice when special-constraint lowering creates
 regular constraints with generated IDs. OMMX validates the weight domain; the
 caller remains responsible for selecting a sufficient magnitude.
 
-Pass the same prepared `Instance` to the adapter. It remains the evaluation
+Pass the prepared `Instance` to `sample_without_preparation`. It remains the evaluation
 owner for the returned `SampleSet` and retains the data needed to restore
-source-variable values and evaluate removed constraints. If an application
-also needs the pre-transformation model, copy it before calling `prepare()`.
+source-variable values and evaluate removed constraints. The easy `sample`
+API performs the copy and recommended preparation automatically when no custom
+preparation choices are needed.
 
 Integer log encoding follows the representability and bit-count limits of the
 OMMX encoding operation. OMMX does not yet implement `Kind::Spin`; direct

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from typing import ClassVar, Optional
 
 import mip
@@ -59,8 +60,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         Python-MIP currently accepts only regular constraints through this
         adapter. The recommendation therefore lowers the special-constraint
-        families currently understood by OMMX. The returned policy is fresh and
-        may be edited by the caller before :meth:`Instance.prepare` is invoked.
+        families currently understood by OMMX. The easy API applies a fresh
+        policy to an isolated copy; callers may instead edit and apply one
+        before invoking :meth:`solve_without_preparation`.
         """
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
@@ -131,7 +133,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         Solve the given ommx.Instance using Python-MIP, returning an ommx.Solution.
 
-        :param ommx_instance: The ommx.Instance to solve.
+        The input instance is not modified. An isolated copy is prepared with
+        the recommended Python-MIP policy before preparation-free execution.
+
+        :param ommx_instance: The ommx.Instance to prepare and solve.
         :param relax: If True, relax all integer variables to continuous variables by using the `relax` parameter in Python-MIP's `Model.optimize() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.optimize>`.
         :param verbose: If True, enable Python-MIP's verbose mode
 
@@ -236,9 +241,28 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 1.0
 
         """
-        _ = diagnostics
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
+            relax=relax,
+            verbose=verbose,
+            diagnostics=diagnostics,
+        )
+
+    @classmethod
+    def solve_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        relax: bool = False,
+        verbose: bool = False,
+        *,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        """Solve an exact Python-MIP Adapter input without preparing it."""
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
+            _ = diagnostics
             adapter = cls(ommx_instance, relax=relax, verbose=verbose)
             model = adapter.solver_input
             with _tracer.start_as_current_span("call"):
@@ -307,14 +331,17 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             state = self.decode_to_state(data)
             solution = self.instance.evaluate(state)
 
-            dual_variables = {}
-            for constraint in data.constrs:
-                pi = constraint.pi
-                if pi is not None:
-                    id = int(constraint.name)
-                    dual_variables[id] = pi
-            for constraint_id, dual_value in dual_variables.items():
-                solution.set_dual_variable(constraint_id, dual_value)
+            # Duals certify the active formulation and need an explicit mapping
+            # before they can be attached to projected output semantics.
+            if self.instance.output_objective is None:
+                dual_variables = {}
+                for constraint in data.constrs:
+                    pi = constraint.pi
+                    if pi is not None:
+                        id = int(constraint.name)
+                        dual_variables[id] = pi
+                for constraint_id, dual_value in dual_variables.items():
+                    solution.set_dual_variable(constraint_id, dual_value)
 
             if data.status == mip.OptimizationStatus.OPTIMAL:
                 solution.optimality = self.instance.map_active_optimality(

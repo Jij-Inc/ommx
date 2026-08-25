@@ -8,6 +8,32 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ `solve()` and `sample()` now prepare inputs automatically ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()` and `SamplerAdapter.sample()` now apply the Adapter's
+recommended Preparation before execution and leave the supplied
+{class}`~ommx.Instance` unchanged. Applications that customize Preparation
+should prepare the Instance in place and call
+`solve_without_preparation()` or `sample_without_preparation()` instead.
+
+The breaking changes that require updates to existing code are:
+
+- `OMMXOpenJijSAAdapter.sample(..., initial_state=...)` and
+  `OMMXOpenJijSAAdapter.solve(..., initial_state=...)` are no longer accepted.
+  Prepare the Instance explicitly, then call
+  `OMMXOpenJijSAAdapter.sample_without_preparation(instance, initial_state=...)`
+  or `OMMXOpenJijSAAdapter.solve_without_preparation(instance, initial_state=...)`.
+- Custom Adapters must implement `solve_without_preparation()` or
+  `sample_without_preparation()` and move backend execution there. If
+  Adapter-specific options remain available on `solve()` or `sample()`, those
+  methods prepare a copy and forward the options to the preparation-free
+  method.
+
+HiGHS and Python-MIP omit dual values when the Adapter input has an
+`output_objective`. See the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the two calling workflows.
+
 ### ⚠ Preserve input objectives across solver Preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
 `to_qubo()` and `to_hubo()` now leave the active `Instance` as the minimization

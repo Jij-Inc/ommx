@@ -327,6 +327,39 @@ policies are provided by {meth}`~ommx.InstanceClass.qubo`,
 {meth}`~ommx.PreparationPolicy.for_qubo`, and
 {meth}`~ommx.PreparationPolicy.for_hubo`.
 
+### 5.7 Adapter `solve()` / `sample()` prepare inputs automatically (`3.0.0`, [#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+For the usual workflow, pass the original Instance directly to `solve()` or
+`sample()`. The Adapter applies its recommended Preparation without modifying
+that Instance:
+
+```python
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)
+```
+
+When the application needs a custom Preparation policy, prepare the Instance
+in place and use the preparation-free API:
+
+```python
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Customize policy here.
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_without_preparation(instance)
+```
+
+Custom Adapter implementations must provide `solve_without_preparation()` or
+`sample_without_preparation()`. Declare every additional option with an
+explicit typed signature rather than a catch-all `**kwargs`. An easy method may
+forward an option whose meaning survives Preparation. When an option depends on
+the exact prepared Adapter input and the Adapter defines no way to transport it
+through Preparation, the concrete Adapter may instead expose that option only
+on its preparation-free method.
+
+HiGHS and Python-MIP no longer attach dual values when the Adapter input has an
+`output_objective`.
+
 ## 6. Return-type changes
 
 ### 6.1 `Constraint.name` / `Constraint.description` are `Optional[str]` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
@@ -428,55 +461,47 @@ parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not pr
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
 - `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
-- `ommx_openjij_adapter.sample_qubo_sa(...)` — prepare the caller-owned `Instance` for `OMMXOpenJijSAAdapter.INPUT_CLASS`, then pass that same instance to `OMMXOpenJijSAAdapter.sample(...)`. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use
+  `OMMXOpenJijSAAdapter.sample(instance)`. The replacement leaves `instance`
+  unchanged and returns an evaluated `SampleSet`, rather than raw `Samples`.
 
 In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
 `uniform_penalty_weight`, `penalty_weights`, and
-`inequality_integer_slack_max_range` directly and performed model conversion
-implicitly. In v3, the caller owns those choices. Start with the adapter's fresh
-recommended `PreparationPolicy`, edit application-specific fields, and apply it
-in place with `Instance.prepare()` before calling the strict adapter API.
+`inequality_integer_slack_max_range` directly. In v3 these choices moved to the
+recommended `PreparationPolicy`:
 
-The OpenJij recommendation enables special-constraint lowering, active-objective
-conversion to minimization, Integer slack, and used-Integer log encoding. Integer
-slack first attempts exact equality conversion with range 32 and, when that
-exact operation is unavailable, permits inequality-preserving slack with upper
-bound 32. Set `slack_upper_bound=None` on a replacement
-`IntegerSlackPreparation` when equality is required.
+- `uniform_penalty_weight` and `penalty_weights` map to `policy.fixed_penalty`;
+- `inequality_integer_slack_max_range` maps to `policy.integer_slack`.
 
-Fixed penalty weights are nonnegative magnitudes selected explicitly by the
-caller. v2 selected a uniform weight of `1.0` when no penalty setting was
-supplied; v3 does not guess an application-specific sufficient magnitude.
-The owner operation accepts values down to `-atol` and normalizes tolerated
-negative values to zero. Select either a uniform operation or
-constraint-ID-keyed weights through `policy.fixed_penalty` when constraints
-must be removed for OpenJij.
+Direct constructor calls remain preparation-free and must receive an Instance
+that has already been prepared for `OMMXOpenJijSAAdapter.INPUT_CLASS`.
+
+OpenJij `initial_state` is defined over the solver-variable representation of
+that exact prepared input; dictionary keys are those variable IDs. In v3 it is
+accepted by the exact-input constructor, `sample_without_preparation()`, and
+`solve_without_preparation()`, but not by the easy methods.
+
+The usual `sample()` / `solve()` workflow is described in §5.7. When a model
+requires a fixed penalty, the application must choose its magnitude; v3 no
+longer supplies v2's implicit uniform weight of `1.0`. Apply the customized
+policy to the Instance, then call the preparation-free method:
 
 ```python
-from ommx import FixedPenaltyPreparation, IntegerSlackPreparation
+from ommx import FixedPenaltyPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
-policy.integer_slack = IntegerSlackPreparation(
-    max_integer_range=32,
-    slack_upper_bound=32,
-)
 policy.fixed_penalty = (
     FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
 )
-source.prepare(input_class, policy)
-samples = OMMXOpenJijSAAdapter.sample(source)
+source.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(source)
 ```
 
-`Instance.prepare()` returns only after target-class membership is reached and
-uses the existing exception types of the selected OMMX operations. It mutates
-the instance in place and does not globally roll back earlier operations after
-a later failure. That membership is the complete Adapter applicability
-condition; `OMMXOpenJijSAAdapter.require_applicable(source)` only reports or
-enforces it. When OpenJij solver input is built, the converter separately
-validates signed-ID limits and finite interaction coefficients. Those failures
-are conversion errors, not applicability failures.
+`prepare()` modifies `source` in place. The returned `SampleSet` reports the
+objective and sense exposed by `source` before Preparation (§5.6). The
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) covers policy
+details and penalty selection.
 
 ```python
 # v2.5.1
@@ -901,6 +926,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Rename `instance.used_decision_variable_ids()` / `function.used_decision_variable_ids()` → `required_ids()`.
 - [ ] Replace `Parameter.new(id=...)` with `Parameter(id, ...)`.
 - [ ] Replace `pi.with_parameters(Parameters(entries={...}))` with `pi.with_parameters({...})`.
+- [ ] Use Adapter `solve()` / `sample()` directly for recommended Preparation; when customizing the policy, call `Instance.prepare()` and then `solve_without_preparation()` / `sample_without_preparation()`. Add the preparation-free method to custom Adapters, and declare every Adapter-specific option with an explicit typed signature. A concrete Adapter may restrict an option to the preparation-free API when it depends on the exact prepared input and no transport through Preparation is defined.
 - [ ] Update `constraint.name` / `constraint.description` handling for `None` return (was `""`).
 - [ ] Update code that used `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` as a property — they are methods now.
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.

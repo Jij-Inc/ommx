@@ -224,6 +224,35 @@ losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`�
 {meth}`~ommx.InstanceClass.hubo`、{meth}`~ommx.PreparationPolicy.for_qubo`、
 {meth}`~ommx.PreparationPolicy.for_hubo`が提供します。
 
+### 5.7 Adapterの`solve()` / `sample()`が入力を自動的にPrepare (`3.0.0`, [#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+通常は元のInstanceをそのまま`solve()`または`sample()`へ渡します。AdapterはそのInstanceを
+変更せずに推奨Preparationを適用します。
+
+```python
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)
+```
+
+application固有のPreparation Policyが必要な場合は、Instanceをin-placeでPrepareしてから
+preparation-free APIを使います。
+
+```python
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# 必要に応じてpolicyを調整する。
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_without_preparation(instance)
+```
+
+独自Adapterでは、`solve_without_preparation()`または`sample_without_preparation()`を実装します。
+追加optionは、それを公開する各APIで明示的な型付きsignatureとして宣言し、包括的な
+`**kwargs`は使いません。Preparationをまたいでも
+意味が変わらないoptionはeasy methodから転送できます。exactなprepared inputに
+意味が依存し、Preparation過程をまたぐtransportを定義しない場合、具体的なAdapterはそのoptionを
+preparation-free methodだけに公開できます。Adapter inputに
+`output_objective`がある場合、HiGHSとPython-MIPはdual valueを付与しません。
+
 ## 6. return type の変更
 
 `Constraint.name` / `Constraint.description` などは、未設定時に空文字列ではなく `None` を返します。
@@ -260,51 +289,45 @@ ids_list: list[int] = sample_set.sample_ids_list
 - `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
 - `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
 - `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-- `ommx_openjij_adapter.sample_qubo_sa(...)` - 呼び出し側が所有する `Instance` を `OMMXOpenJijSAAdapter.INPUT_CLASS` 向けにprepareし、その同じinstanceを `OMMXOpenJijSAAdapter.sample(...)` に渡します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
+- `ommx_openjij_adapter.sample_qubo_sa(...)` -
+  `OMMXOpenJijSAAdapter.sample(instance)`を使います。置き換え後は`instance`を変更せず、
+  raw `Samples`ではなく評価済みの`SampleSet`を返します
+  （`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
 
 v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `uniform_penalty_weight`、`penalty_weights`、
-`inequality_integer_slack_max_range` を直接受け取り、暗黙にmodel変換を実行していました。
-v3では呼び出し側がこれらの選択を所有します。Adapterが返す新しい推奨
-`PreparationPolicy` を出発点に、application固有のfieldを編集し、厳格なAdapter APIを
-呼ぶ前に `Instance.prepare()` でin-placeに適用します。
+`inequality_integer_slack_max_range`を直接受け取っていました。v3ではこれらの選択を推奨
+`PreparationPolicy`へ移します。
 
-OpenJijの推奨Policyでは、特殊制約lowering、active objectiveのminimizationへの変換、
-Integer slack、使用中Integer変数のlog encodingを有効にします。Integer slackはrange 32で
-exactなequality変換を最初に試し、そのoperationが利用できない場合には、上限32のslackを
-追加してinequalityのまま残すことを許可します。equalityが必須なら、置き換える
-`IntegerSlackPreparation` の `slack_upper_bound=None` を指定します。
+- `uniform_penalty_weight`と`penalty_weights`は`policy.fixed_penalty`へ移す。
+- `inequality_integer_slack_max_range`は`policy.integer_slack`へ移す。
 
-固定penalty weightは、呼び出し側が明示的に選ぶ非負のmagnitudeです。v2はpenalty設定が
-ない場合に一律weight `1.0` を選びましたが、v3はapplicationに十分なmagnitudeを推測
-しません。owner operationは `-atol` までの値を受け入れ、許容された負値を0へ正規化
-します。OpenJij向けに制約を取り除く必要がある場合は、uniform operationまたは
-constraint IDごとのweightを `policy.fixed_penalty` で選択します。
+constructorを直接使う場合は自動的にPrepareされないため、あらかじめ
+`OMMXOpenJijSAAdapter.INPUT_CLASS`向けにPrepareしたInstanceを渡します。
+
+OpenJijの`initial_state`は、このexactなprepared inputのsolver変数表現に対して定義され、dictの
+keyはその変数IDです。そのためv3ではeasy methodではなく、exact-input constructor、
+`sample_without_preparation()`、`solve_without_preparation()`で受け取ります。
+
+通常の`sample()` / `solve()` workflowは§5.7で説明しています。固定penaltyが必要なmodelでは、
+applicationがそのmagnitudeを選ぶ必要があります。v3はv2の暗黙なuniform weight `1.0`を
+使用しません。customizeしたPolicyをInstanceへ適用し、preparation-free methodを呼びます。
 
 ```python
-from ommx import FixedPenaltyPreparation, IntegerSlackPreparation
+from ommx import FixedPenaltyPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
-policy.integer_slack = IntegerSlackPreparation(
-    max_integer_range=32,
-    slack_upper_bound=32,
-)
 policy.fixed_penalty = (
     FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
 )
-source.prepare(input_class, policy)
-samples = OMMXOpenJijSAAdapter.sample(source)
+source.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(source)
 ```
 
-`Instance.prepare()` はtarget class membershipへ到達した場合だけreturnし、選択した
-OMMX operationの既存exception typeを使います。instanceをin-placeで変更し、後のerrorが
-起きても先に完了したoperationをglobalにrollbackしません。このmembershipがAdapter
-applicabilityの完全な条件であり、`OMMXOpenJijSAAdapter.require_applicable(source)` が
-reportまたは強制するのもmembershipだけです。OpenJijのsolver inputを構築する際には、
-converterがsigned IDの上限とinteraction coefficientの有限性を別途検証します。これらの
-失敗はconversion errorであり、applicability failureではありません。
+`prepare()`は`source`をin-placeで変更します。返される`SampleSet`のobjectiveとsenseは
+Preparation前に`source`が公開していたものです（§5.6）。Policyの詳細とpenaltyの選び方は
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter)を参照してください。
 
 ## 8. DataFrame accessor
 
@@ -480,6 +503,7 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] `Constraint.id` / `set_id()` / `id=` を削除し、host dict の key で ID を渡す。
 - [ ] `constraints=[...]` を `constraints={id: constraint}` に置き換える。
 - [ ] `constraint_hints` を `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に置き換える。
+- [ ] Adapterの推奨Preparationを使う場合は`solve()` / `sample()`を直接呼ぶ。Policyをcustomizeする場合は`Instance.prepare()`後に`solve_without_preparation()` / `sample_without_preparation()`を呼ぶ。独自Adapterにはpreparation-free methodを追加し、Adapter固有optionは公開するAPIごとに明示的な型付きsignatureとして宣言して、包括的な`**kwargs`は使わない。exactなprepared inputに依存するoptionのtransportを定義しない場合は、preparation-free methodだけに公開できる。
 - [ ] `*_df` accessor に `()` を付ける。
 - [ ] `RuntimeError` を捕捉していた `evaluate` / `partial_evaluate` 周辺を `ValueError` に変える。
 - [ ] `decision_variable_analysis()` を `decision_variable_roles()` / `decision_variable_role(id)` / `fixed_decision_variables()` / `dependent_decision_variable_ids()` / `irrelevant_decision_variable_ids()` / `decision_variables_df()["state_role"]` に置き換える。

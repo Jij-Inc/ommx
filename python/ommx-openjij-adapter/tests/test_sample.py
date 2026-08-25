@@ -227,7 +227,9 @@ def test_sample(instance, ans):
     "instance, ans",
     [
         binary_no_constraint_minimize(),
+        binary_no_constraint_maximize(),
         hubo_binary_no_constraint_minimize(),
+        hubo_binary_no_constraint_maximize(),
     ],
 )
 def test_solve(instance, ans):
@@ -236,6 +238,26 @@ def test_solve(instance, ans):
     assert solution.extract_decision_variables("x") == ans
     _assert_solution_uses_source_model(solution, instance, ans)
     assert instance.to_v2_bytes() == before
+
+
+def test_easy_sample_restores_maximization_output_without_mutating_input():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=3 * x + 2,
+        constraints={},
+        sense=Instance.MAXIMIZE,
+    )
+    before = instance.to_v2_bytes()
+
+    sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=4, seed=999)
+
+    assert instance.to_v2_bytes() == before
+    assert sample_set.sense == Instance.MAXIMIZE
+    for sample_id in sample_set.sample_ids():
+        solution = sample_set.get(sample_id)
+        assert solution.sense == Instance.MAXIMIZE
+        assert solution.objective == pytest.approx(3 * solution.state.entries[0] + 2)
 
 
 @pytest.mark.parametrize(

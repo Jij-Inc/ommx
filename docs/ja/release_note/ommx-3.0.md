@@ -8,6 +8,29 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### ⚠ `solve()`と`sample()`が入力を自動的にPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()`と`SamplerAdapter.sample()`は実行前にAdapterの推奨Preparationを
+適用し、渡された{class}`~ommx.Instance`自体は変更しないようになりました。
+Preparationをcustomizeするapplicationでは、Instanceをin-placeでPrepareし、代わりに
+`solve_without_preparation()`または`sample_without_preparation()`を呼びます。
+
+既存コードで移行が必要な破壊的変更は次の2点です。
+
+- `OMMXOpenJijSAAdapter.sample(..., initial_state=...)`と
+  `OMMXOpenJijSAAdapter.solve(..., initial_state=...)`は利用できなくなりました。Instanceを
+  明示的にPrepareしてから、
+  `OMMXOpenJijSAAdapter.sample_without_preparation(instance, initial_state=...)`または
+  `OMMXOpenJijSAAdapter.solve_without_preparation(instance, initial_state=...)`を呼びます。
+- 独自Adapterは`solve_without_preparation()`または`sample_without_preparation()`を実装し、
+  backendの実行処理をそこへ移します。Adapter固有optionを`solve()`または`sample()`でも
+  提供する場合、これらのmethodではcopyをPrepareし、optionをpreparation-free methodへ
+  転送します。
+
+Adapter inputに`output_objective`がある場合、HiGHSとPython-MIPはdual valueを省略します。
+2つの呼び出し方は
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
 ### ⚠ Solver Preparationで入力objectiveを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
 `to_qubo()`と`to_hubo()`は、変換後のactive `Instance`にsolverが使う

@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import copy
 import math
 from dataclasses import asdict, dataclass, fields
 from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Mapping, Optional, cast
@@ -527,8 +529,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         PySCIPOpt accepts Indicator and SOS1 constraints directly, so this
         recommendation preserves those families and lowers only OneHot
-        constraints. The returned policy is fresh and may be edited by the
-        caller before :meth:`Instance.prepare` is invoked.
+        constraints. The easy API applies a fresh policy to an isolated copy;
+        callers may instead edit and apply one before invoking
+        :meth:`solve_without_preparation`.
         """
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
@@ -571,7 +574,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         """
         Solve the given ommx.Instance using PySCIPopt, returning an ommx.Solution.
 
-        :param ommx_instance: The ommx.Instance to solve.
+        The input instance is not modified. An isolated copy is prepared with
+        the recommended PySCIPOpt policy before preparation-free execution.
+
+        :param ommx_instance: The ommx.Instance to prepare and solve.
         :param initial_state: Optional initial solution state.
 
         Examples
@@ -655,6 +661,23 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
+            initial_state=initial_state,
+            diagnostics=diagnostics,
+        )
+
+    @classmethod
+    def solve_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        *,
+        initial_state: Optional[ToState] = None,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        """Solve an exact PySCIPOpt Adapter input without preparing it."""
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, initial_state=initial_state)
@@ -674,8 +697,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     SCIPProgressSnapshot.from_termination_report(termination_report)
                 )
                 diagnostics.record(termination_report)
-            solution = adapter.decode(model)
-            return solution
+            return adapter.decode(model)
 
     @property
     def solver_input(self) -> pyscipopt.Model:

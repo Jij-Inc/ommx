@@ -84,6 +84,9 @@ def test_direct_accepts_arbitrary_degree_binary_minimization_without_mutation() 
     assert adapter.ommx_instance.to_v2_bytes() == before
     assert instance.to_v2_bytes() == before
 
+    assert instance.convert_active_objective(Sense.Maximize)
+    assert adapter.ommx_instance.to_v2_bytes() == before
+
 
 def test_sampler_input_rejects_nonfinite_aggregated_interactions() -> None:
     x = DecisionVariable.binary(0)
@@ -148,12 +151,17 @@ def test_direct_rejects_non_binary_variable_kind_without_mutation(
 
 def test_direct_rejects_maximization_without_mutation() -> None:
     instance = _instance_with_variable(DecisionVariable.binary(0), sense=Sense.Maximize)
+    before = instance.to_v2_bytes()
 
     mismatches = _assert_direct_rejection_does_not_mutate(instance)
     [mismatch] = mismatches
     assert isinstance(mismatch, InstanceClassMismatch.SenseNotAllowed)
     assert mismatch.sense == Sense.Maximize
     assert mismatch.allowed_senses == {Sense.Minimize}
+
+    with pytest.raises(AdapterNotApplicableError):
+        OMMXOpenJijSAAdapter.sample_without_preparation(instance, num_reads=1, seed=999)
+    assert instance.to_v2_bytes() == before
 
 
 def test_direct_rejects_regular_constraints_without_mutation() -> None:
