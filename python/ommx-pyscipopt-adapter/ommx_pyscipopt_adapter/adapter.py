@@ -660,9 +660,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
-        prepared = cls._prepare_for_execution(ommx_instance)
-        return cls.solve_without_preparation(
-            prepared,
+        return super().solve(
+            ommx_instance,
             initial_state=initial_state,
             diagnostics=diagnostics,
             **kwargs,

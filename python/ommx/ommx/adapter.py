@@ -90,19 +90,6 @@ class SolverAdapter(ABC):
         return PreparationPolicy()
 
     @classmethod
-    def _prepare_for_execution(cls, ommx_instance: Instance) -> Instance:
-        """Prepare an isolated copy for an easy Adapter API call."""
-        input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
-        if input_class is None:
-            raise TypeError(
-                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
-            )
-
-        prepared = copy.copy(ommx_instance)
-        prepared.prepare(input_class, cls.recommended_preparation_policy())
-        return prepared
-
-    @classmethod
     def check_applicability(
         cls, ommx_instance: Instance
     ) -> InstanceClassMembershipReport:
@@ -147,7 +134,14 @@ class SolverAdapter(ABC):
         solve; ``None`` means diagnostics are disabled. Adapters do not need to
         catch exceptions raised by a non-conforming diagnostics sink.
         """
-        prepared = cls._prepare_for_execution(ommx_instance)
+        input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
+        if input_class is None:
+            raise TypeError(
+                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
+            )
+
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(input_class, cls.recommended_preparation_policy())
         return cls.solve_without_preparation(
             prepared, diagnostics=diagnostics, **kwargs
         )
@@ -204,7 +198,14 @@ class SamplerAdapter(SolverAdapter):
         it the same way as ``Run.log_solve``. ``None`` means diagnostics are
         disabled.
         """
-        prepared = cls._prepare_for_execution(ommx_instance)
+        input_class: InstanceClass | None = getattr(cls, "INPUT_CLASS", None)
+        if input_class is None:
+            raise TypeError(
+                f"{cls.__module__}.{cls.__qualname__} must declare INPUT_CLASS"
+            )
+
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(input_class, cls.recommended_preparation_policy())
         return cls.sample_without_preparation(
             prepared, diagnostics=diagnostics, **kwargs
         )

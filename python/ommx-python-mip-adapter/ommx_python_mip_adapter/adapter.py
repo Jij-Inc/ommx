@@ -241,9 +241,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 1.0
 
         """
-        prepared = cls._prepare_for_execution(ommx_instance)
-        return cls.solve_without_preparation(
-            prepared,
+        return super().solve(
+            ommx_instance,
             relax=relax,
             verbose=verbose,
             diagnostics=diagnostics,

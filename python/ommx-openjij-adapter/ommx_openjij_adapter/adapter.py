@@ -178,9 +178,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         **kwargs: Any,
     ) -> SampleSet:
         """Prepare and sample an isolated copy of ``ommx_instance``."""
-        prepared = cls._prepare_for_execution(ommx_instance)
-        return cls.sample_without_preparation(
-            prepared,
+        return super().sample(
+            ommx_instance,
             beta_min=beta_min,
             beta_max=beta_max,
             num_sweeps=num_sweeps,
@@ -253,9 +252,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         **kwargs: Any,
     ) -> Solution:
         """Prepare, sample, and return the best feasible result."""
-        prepared = cls._prepare_for_execution(ommx_instance)
-        return cls.solve_without_preparation(
-            prepared,
+        return super().solve(
+            ommx_instance,
             beta_min=beta_min,
             beta_max=beta_max,
             num_sweeps=num_sweeps,
