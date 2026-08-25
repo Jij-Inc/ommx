@@ -13,13 +13,19 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 `SolverAdapter.solve()`と`SamplerAdapter.sample()`は実行前にAdapterの推奨Preparationを
 適用し、渡された{class}`~ommx.Instance`自体は変更しないようになりました。
 Preparationをcustomizeするapplicationでは、Instanceをin-placeでPrepareし、代わりに
-`solve_without_preparation()`または`sample_without_preparation()`を呼びます。独自Adapterは
-対応するpreparation-free methodを実装する必要があります。exactなprepared inputを参照する
-optionは、preparation-free APIだけで利用できる場合があります。
+`solve_without_preparation()`または`sample_without_preparation()`を呼びます。
 
-OpenJijはこの選択を`initial_state` optionに適用しています。このoptionはexact-input
-constructorとpreparation-free methodで利用でき、prepared solver変数表現を参照しますが、
-easy methodでは受け取りません。
+既存コードで移行が必要な破壊的変更は次の2点です。
+
+- `OMMXOpenJijSAAdapter.sample(..., initial_state=...)`と
+  `OMMXOpenJijSAAdapter.solve(..., initial_state=...)`は利用できなくなりました。Instanceを
+  明示的にPrepareしてから、
+  `OMMXOpenJijSAAdapter.sample_without_preparation(instance, initial_state=...)`または
+  `OMMXOpenJijSAAdapter.solve_without_preparation(instance, initial_state=...)`を呼びます。
+- 独自Adapterは`solve_without_preparation()`または`sample_without_preparation()`を実装し、
+  backendの実行処理をそこへ移します。Adapter固有optionを`solve()`または`sample()`でも
+  提供する場合、これらのmethodではcopyをPrepareし、optionをpreparation-free methodへ
+  転送します。
 
 Adapter inputに`output_objective`がある場合、HiGHSとPython-MIPはdual valueを省略します。
 2つの呼び出し方は
