@@ -8,30 +8,17 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### ⚠ Solver Adapterのeasy APIがprivate copyをPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+### ⚠ `solve()`と`sample()`が入力を自動的にPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 
-`SolverAdapter.solve()`と`SamplerAdapter.sample()`は、渡された
-{class}`~ommx.Instance`をcopyし、Adapterの推奨Policyで`INPUT_CLASS`向けにPrepareして
-実行するようになりました。呼び出し元のInstanceは変更されず、返される`Solution`または
-`SampleSet`にはoutput objective semanticsが保持されます。
+`SolverAdapter.solve()`と`SamplerAdapter.sample()`は実行前にAdapterの推奨Preparationを
+適用し、渡された{class}`~ommx.Instance`自体は変更しないようになりました。
+Preparationをcustomizeするapplicationでは、Instanceをin-placeでPrepareし、代わりに
+`solve_without_preparation()`または`sample_without_preparation()`を呼びます。独自Adapterは
+対応するpreparation-free methodを実装する必要があります。
 
-Preparationの選択をapplication側で管理する場合は、Instanceをin-placeでPrepareして、
-新しいpreparation-free APIを使います。
-
-```python
-from ommx_highs_adapter import OMMXHighsAdapter
-
-solution = OMMXHighsAdapter.solve(instance)  # `instance` は変更されない
-
-policy = OMMXHighsAdapter.recommended_preparation_policy()
-# 必要に応じてpolicyを調整する。
-instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
-solution = OMMXHighsAdapter.solve_without_preparation(instance)
-```
-
-独自Adapterでは、exact inputを実行するAPIとして`solve_without_preparation()`または
-`sample_without_preparation()`を実装する必要があります。output-objective projectionが
-ある場合、built-in solver Adapterはactive formulationのdual valueを省略します。
+Adapter inputに`output_objective`がある場合、HiGHSとPython-MIPはdual valueを省略します。
+2つの呼び出し方は
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
 
 ### ⚠ Solver Preparationで入力objectiveを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 

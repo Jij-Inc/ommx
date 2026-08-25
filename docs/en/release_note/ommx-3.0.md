@@ -8,32 +8,19 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### ⚠ Solver Adapter easy APIs prepare a private copy ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+### ⚠ `solve()` and `sample()` now prepare inputs automatically ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 
-`SolverAdapter.solve()` and `SamplerAdapter.sample()` now copy the supplied
-{class}`~ommx.Instance`, prepare the copy for the Adapter's `INPUT_CLASS` with
-its recommended policy, and execute it. The caller's Instance remains
-unchanged, and the returned `Solution` or `SampleSet` retains its output
-objective semantics.
+`SolverAdapter.solve()` and `SamplerAdapter.sample()` now apply the Adapter's
+recommended Preparation before execution and leave the supplied
+{class}`~ommx.Instance` unchanged. Applications that customize Preparation
+should prepare the Instance in place and call
+`solve_without_preparation()` or `sample_without_preparation()` instead. Custom
+Adapters must implement the corresponding preparation-free method.
 
-Applications that own Preparation choices can prepare their Instance in place
-and use the new preparation-free APIs:
-
-```python
-from ommx_highs_adapter import OMMXHighsAdapter
-
-solution = OMMXHighsAdapter.solve(instance)  # `instance` is unchanged
-
-policy = OMMXHighsAdapter.recommended_preparation_policy()
-# Customize policy here.
-instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
-solution = OMMXHighsAdapter.solve_without_preparation(instance)
-```
-
-Custom Adapters must implement `solve_without_preparation()` or
-`sample_without_preparation()` as their exact-input execution API. Built-in
-solver Adapters omit active-formulation dual values when output-objective
-projection is present.
+HiGHS and Python-MIP omit dual values when the Adapter input has an
+`output_objective`. See the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the two calling workflows.
 
 ### ⚠ Preserve input objectives across solver Preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
 
