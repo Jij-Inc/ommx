@@ -24,7 +24,7 @@ from ommx import (
     SpecialConstraintKind,
     SpecialConstraintPreparation,
 )
-from ommx.adapter import DiagnosticsSink, SamplerAdapter, _adapter_execution_span
+from ommx.adapter import DiagnosticsSink, SamplerAdapter
 from opentelemetry import trace
 
 from ._decode import _decode_for_instance, decode_to_samples
@@ -118,7 +118,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     seed: int | None = None
     """ seed for Monte Carlo algorithm """
 
-    _solver_instance: Instance
     _sampler_input_prepared: bool
     _is_hubo: bool
     _hubo: dict[tuple[int, ...], float]
@@ -142,8 +141,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         if not isinstance(ommx_instance, Instance):
             raise TypeError("ommx_instance must be an Instance")
         self.require_applicable(ommx_instance)
-        self._solver_instance = copy.deepcopy(ommx_instance)
-        self.ommx_instance = copy.deepcopy(ommx_instance)
+        self.ommx_instance = copy.copy(ommx_instance)
         self.beta_min = beta_min
         self.beta_max = beta_max
         self.num_sweeps = num_sweeps
@@ -181,25 +179,24 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         representation of an exact Adapter input, so they are accepted only by
         :meth:`sample_without_preparation`.
         """
-        with _adapter_execution_span(_tracer, "sample", cls):
-            prepared = copy.copy(ommx_instance)
-            prepared.prepare(
-                cls.INPUT_CLASS,
-                cls.recommended_preparation_policy(),
-            )
-            return cls.sample_without_preparation(
-                prepared,
-                beta_min=beta_min,
-                beta_max=beta_max,
-                num_sweeps=num_sweeps,
-                num_reads=num_reads,
-                schedule=schedule,
-                updater=updater,
-                sparse=sparse,
-                reinitialize_state=reinitialize_state,
-                seed=seed,
-                diagnostics=diagnostics,
-            )
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(
+            cls.INPUT_CLASS,
+            cls.recommended_preparation_policy(),
+        )
+        return cls.sample_without_preparation(
+            prepared,
+            beta_min=beta_min,
+            beta_max=beta_max,
+            num_sweeps=num_sweeps,
+            num_reads=num_reads,
+            schedule=schedule,
+            updater=updater,
+            sparse=sparse,
+            reinitialize_state=reinitialize_state,
+            seed=seed,
+            diagnostics=diagnostics,
+        )
 
     @classmethod
     def sample_without_preparation(
@@ -223,7 +220,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         ``initial_state`` is defined against this exact input's solver-variable
         representation.
         """
-        with _adapter_execution_span(_tracer, "sample", cls):
+        with _tracer.start_as_current_span("sample") as span:
+            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             _ = diagnostics
             sampler = cls(
                 ommx_instance,
@@ -263,25 +261,24 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         representation of an exact Adapter input, so they are accepted only by
         :meth:`solve_without_preparation`.
         """
-        with _adapter_execution_span(_tracer, "solve", cls):
-            prepared = copy.copy(ommx_instance)
-            prepared.prepare(
-                cls.INPUT_CLASS,
-                cls.recommended_preparation_policy(),
-            )
-            return cls.solve_without_preparation(
-                prepared,
-                beta_min=beta_min,
-                beta_max=beta_max,
-                num_sweeps=num_sweeps,
-                num_reads=num_reads,
-                schedule=schedule,
-                updater=updater,
-                sparse=sparse,
-                reinitialize_state=reinitialize_state,
-                seed=seed,
-                diagnostics=diagnostics,
-            )
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(
+            cls.INPUT_CLASS,
+            cls.recommended_preparation_policy(),
+        )
+        return cls.solve_without_preparation(
+            prepared,
+            beta_min=beta_min,
+            beta_max=beta_max,
+            num_sweeps=num_sweeps,
+            num_reads=num_reads,
+            schedule=schedule,
+            updater=updater,
+            sparse=sparse,
+            reinitialize_state=reinitialize_state,
+            seed=seed,
+            diagnostics=diagnostics,
+        )
 
     @classmethod
     def solve_without_preparation(
@@ -305,21 +302,20 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         ``initial_state`` is defined against the exact Adapter input's
         solver-variable representation.
         """
-        with _adapter_execution_span(_tracer, "solve", cls):
-            return cls.sample_without_preparation(
-                ommx_instance,
-                beta_min=beta_min,
-                beta_max=beta_max,
-                num_sweeps=num_sweeps,
-                num_reads=num_reads,
-                schedule=schedule,
-                initial_state=initial_state,
-                updater=updater,
-                sparse=sparse,
-                reinitialize_state=reinitialize_state,
-                seed=seed,
-                diagnostics=diagnostics,
-            ).best_feasible
+        return cls.sample_without_preparation(
+            ommx_instance,
+            beta_min=beta_min,
+            beta_max=beta_max,
+            num_sweeps=num_sweeps,
+            num_reads=num_reads,
+            schedule=schedule,
+            initial_state=initial_state,
+            updater=updater,
+            sparse=sparse,
+            reinitialize_state=reinitialize_state,
+            seed=seed,
+            diagnostics=diagnostics,
+        ).best_feasible
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
         with _tracer.start_as_current_span("decode"):
@@ -386,7 +382,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         with _tracer.start_as_current_span("convert"):
             out_of_range_ids = sorted(
                 variable.id
-                for variable in self._solver_instance.used_decision_variables
+                for variable in self.ommx_instance.used_decision_variables
                 if variable.id > self.MAX_OPENJIJ_VARIABLE_ID
             )
             if out_of_range_ids:
@@ -396,13 +392,13 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 )
 
             try:
-                hubo, _ = self._solver_instance.as_hubo_format()
+                hubo, _ = self.ommx_instance.as_hubo_format()
                 is_hubo = any(len(key) > 2 for key in hubo)
                 if is_hubo:
                     interactions = hubo
                     qubo = {}
                 else:
-                    qubo, _ = self._solver_instance.as_qubo_format()
+                    qubo, _ = self.ommx_instance.as_qubo_format()
                     interactions = qubo
             except Exception as error:
                 raise ValueError(

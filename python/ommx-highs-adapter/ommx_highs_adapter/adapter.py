@@ -28,7 +28,6 @@ from ommx import (
     State,
 )
 from ommx.adapter import (
-    _adapter_execution_span,
     DiagnosticsSink,
     SolverAdapter,
     InfeasibleDetected,
@@ -755,17 +754,13 @@ class OMMXHighsAdapter(SolverAdapter):
         #     ...
         # ommx.adapter.UnboundedDetected: Model was unbounded
         # ````
-        with _adapter_execution_span(_tracer, "solve", cls):
-            prepared = copy.copy(ommx_instance)
-            prepared.prepare(
-                cls.INPUT_CLASS,
-                cls.recommended_preparation_policy(),
-            )
-            return cls.solve_without_preparation(
-                prepared,
-                verbose=verbose,
-                diagnostics=diagnostics,
-            )
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
+            verbose=verbose,
+            diagnostics=diagnostics,
+        )
 
     @classmethod
     def solve_without_preparation(
@@ -776,7 +771,8 @@ class OMMXHighsAdapter(SolverAdapter):
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """Solve an exact HiGHS Adapter input without preparing it."""
-        with _adapter_execution_span(_tracer, "solve", cls):
+        with _tracer.start_as_current_span("solve") as span:
+            span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, verbose=verbose)
             model = adapter.solver_input
             diagnostics_callback: Callable[[Any], None] | None = None

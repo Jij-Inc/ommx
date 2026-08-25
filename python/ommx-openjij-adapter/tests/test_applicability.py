@@ -84,6 +84,9 @@ def test_direct_accepts_arbitrary_degree_binary_minimization_without_mutation() 
     assert adapter.ommx_instance.to_v2_bytes() == before
     assert instance.to_v2_bytes() == before
 
+    assert instance.convert_active_objective(Sense.Maximize)
+    assert adapter.ommx_instance.to_v2_bytes() == before
+
 
 def test_sampler_input_rejects_nonfinite_aggregated_interactions() -> None:
     x = DecisionVariable.binary(0)
