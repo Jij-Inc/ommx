@@ -485,6 +485,123 @@ mod tests {
     }
 
     #[test]
+    fn composite_function_display_snapshot() {
+        let x = Function::from(linear!(1));
+        let y = Function::from(linear!(2));
+
+        let cases = [
+            ("neg", -x.clone().abs()),
+            ("abs", x.clone().abs()),
+            ("signum", x.clone().signum()),
+            ("powi", x.clone().powi(-2)),
+            ("add", (x.clone().abs() + y.clone()).unwrap()),
+            ("mul", (x.clone().abs() * y.clone()).unwrap()),
+            ("min", x.clone().min(y.clone())),
+            ("max", x.clone().max(y.clone())),
+            ("div", (x / y).unwrap()),
+        ];
+        let output = cases
+            .into_iter()
+            .map(|(name, function)| format!("{name}: {function}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        insta::assert_snapshot!(output, @r###"
+        neg: -(abs(x1))
+        abs: abs(x1)
+        signum: signum(x1)
+        powi: powi(x1, -2)
+        add: (abs(x1)) + (x2)
+        mul: (abs(x1)) * (x2)
+        min: min(x1, x2)
+        max: max(x1, x2)
+        div: (x1) / (x2)
+        "###);
+    }
+
+    #[test]
+    fn composite_function_grouping_snapshot() {
+        let x = Function::from(linear!(1)).abs();
+        let y = Function::from(linear!(2)).signum();
+        let z = Function::from(linear!(3)).powi(2);
+
+        let left_grouped = ((x.clone() + y.clone()).unwrap() + z.clone()).unwrap();
+        let right_grouped = (x + (y + z).unwrap()).unwrap();
+        let output =
+            format!("left: {left_grouped}\nright: {right_grouped}\ndebug: {left_grouped:?}");
+
+        insta::assert_snapshot!(output, @r###"
+        left: ((abs(x1)) + (signum(x2))) + (powi(x3, 2))
+        right: (abs(x1)) + ((signum(x2)) + (powi(x3, 2)))
+        debug: Expression([Push(Linear(x1)), Unary(Abs), Push(Linear(x2)), Unary(Signum), Associative(Add), Push(Linear(x3)), Unary(Powi(2)), Associative(Add)])
+        "###);
+    }
+
+    #[test]
+    fn composite_context_and_truncation_snapshot() {
+        let x = Function::from(linear!(1));
+        let y = Function::from(linear!(2));
+        let z = Function::from(linear!(3));
+        let function = (x.abs().min(y.signum()) / z.powi(-1)).unwrap();
+        let symbols = BTreeMap::from([
+            (VariableID::from(1), "alpha".to_string()),
+            (VariableID::from(2), "beta".to_string()),
+            (VariableID::from(3), "gamma".to_string()),
+        ]);
+
+        let formatted =
+            format_function_with_symbols(&function, &symbols, FunctionFormatOptions::default())
+                .unwrap();
+        insta::assert_debug_snapshot!(formatted, @r###"
+        FormattedFunction {
+            text: "(min(abs(alpha), signum(beta))) / (powi(gamma, -1))",
+            total_terms: 3,
+            written_terms: 3,
+            omitted_terms: 0,
+            truncated_by_chars: false,
+        }
+        "###);
+
+        let term_limited = format_function_with_symbols(
+            &function,
+            &symbols,
+            FunctionFormatOptions {
+                max_terms: Some(2),
+                max_chars: None,
+            },
+        )
+        .unwrap();
+        insta::assert_debug_snapshot!(term_limited, @r###"
+        FormattedFunction {
+            text: "…",
+            total_terms: 3,
+            written_terms: 0,
+            omitted_terms: 3,
+            truncated_by_chars: false,
+        }
+        "###);
+
+        let char_limited = format_function_with_symbols(
+            &function,
+            &symbols,
+            FunctionFormatOptions {
+                max_terms: None,
+                max_chars: Some(12),
+            },
+        )
+        .unwrap();
+        insta::assert_debug_snapshot!(char_limited, @r###"
+        FormattedFunction {
+            text: "(min(abs(alp",
+            total_terms: 3,
+            written_terms: 0,
+            omitted_terms: 3,
+            truncated_by_chars: true,
+        }
+        "###);
+    }
+
+    #[test]
     fn composite_format_validates_symbols_before_truncation() {
         let function = Function::from(linear!(1)).abs();
         let error = format_function_with_symbols(
