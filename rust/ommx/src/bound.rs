@@ -1,6 +1,6 @@
 use crate::{
     macros::{impl_add_inverse, impl_mul_inverse},
-    parse::{Parse, ParseError, RawParseError},
+    parse::{Parse, ParseError},
     v1, ATol, VariableID,
 };
 use approx::AbsDiffEq;
@@ -37,7 +37,7 @@ impl BoundError {
 
 impl From<BoundError> for ParseError {
     fn from(e: BoundError) -> Self {
-        RawParseError::from(e).into()
+        ParseError::new(e)
     }
 }
 
@@ -539,6 +539,22 @@ mod tests {
     use approx::assert_abs_diff_eq;
 
     use super::*;
+
+    #[test]
+    fn parse_preserves_bound_error() {
+        let error = v1::Bound {
+            lower: 2.0,
+            upper: 1.0,
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(matches!(
+            error.error.downcast_ref::<BoundError>(),
+            Some(BoundError::UpperSmallerThanLower { lower, upper })
+                if *lower == 2.0 && *upper == 1.0
+        ));
+    }
 
     #[test]
     fn partial_ord() {

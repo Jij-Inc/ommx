@@ -16,7 +16,7 @@ impl Parse for v1::linear::Term {
         match self.coefficient.try_into() {
             Ok(coefficient) => Ok(Some(Term { id, coefficient })),
             Err(CoefficientError::Zero) => Ok(None),
-            Err(e) => Err(RawParseError::from(e).context("ommx.v1.linear.Term", "coefficient")),
+            Err(e) => Err(ParseError::new(e).context("ommx.v1.linear.Term", "coefficient")),
         }
     }
 }
@@ -39,15 +39,15 @@ impl Parse for v1::Linear {
             let term = term.parse_as(&(), message, "terms")?;
             if let Some(term) = term {
                 out.add_term(term.id.into(), term.coefficient)
-                    .map_err(|e| RawParseError::from(e).context(message, "terms"))?;
+                    .map_err(|e| ParseError::new(e).context(message, "terms"))?;
             }
         }
         match self.constant.try_into() {
             Ok(coefficient) => out
                 .add_term(LinearMonomial::Constant, coefficient)
-                .map_err(|e| RawParseError::from(e).context(message, "constant"))?,
+                .map_err(|e| ParseError::new(e).context(message, "constant"))?,
             Err(CoefficientError::Zero) => {}
-            Err(e) => return Err(RawParseError::from(e).context(message, "constant")),
+            Err(e) => return Err(ParseError::new(e).context(message, "constant")),
         }
         Ok(out)
     }
@@ -98,16 +98,14 @@ impl Parse for v1::Quadratic {
         let mut out = Quadratic::default();
         let num_terms = self.values.len();
         if self.columns.len() != num_terms {
-            return Err(
-                RawParseError::from(QuadraticParseError::ColumnLengthMismatch {
-                    column: self.columns.len(),
-                    value: num_terms,
-                })
-                .context(message, "columns"),
-            );
+            return Err(ParseError::new(QuadraticParseError::ColumnLengthMismatch {
+                column: self.columns.len(),
+                value: num_terms,
+            })
+            .context(message, "columns"));
         }
         if self.rows.len() != num_terms {
-            return Err(RawParseError::from(QuadraticParseError::RowLengthMismatch {
+            return Err(ParseError::new(QuadraticParseError::RowLengthMismatch {
                 row: self.rows.len(),
                 value: num_terms,
             })
@@ -119,15 +117,15 @@ impl Parse for v1::Quadratic {
             match value.try_into() {
                 Ok(coefficient) => out
                     .add_term((column, row).into(), coefficient)
-                    .map_err(|e| RawParseError::from(e).context(message, "values"))?,
+                    .map_err(|e| ParseError::new(e).context(message, "values"))?,
                 Err(CoefficientError::Zero) => {}
-                Err(e) => return Err(RawParseError::from(e).context(message, "values")),
+                Err(e) => return Err(ParseError::new(e).context(message, "values")),
             }
         }
 
         if let Some(linear) = self.linear {
             let linear = linear.parse_as(&(), message, "linear")?;
-            out = (out + &linear).map_err(|e| RawParseError::from(e).context(message, "linear"))?;
+            out = (out + &linear).map_err(|e| ParseError::new(e).context(message, "linear"))?;
         }
         Ok(out)
     }
@@ -178,7 +176,7 @@ impl Parse for v1::Monomial {
         match self.coefficient.try_into() {
             Ok(coefficient) => Ok(Some((ids, coefficient))),
             Err(CoefficientError::Zero) => Ok(None),
-            Err(e) => Err(RawParseError::from(e).context(message, "coefficient")),
+            Err(e) => Err(ParseError::new(e).context(message, "coefficient")),
         }
     }
 }
@@ -194,7 +192,7 @@ impl Parse for v1::Polynomial {
                 term.parse_as(&(), "ommx.v1.Polynomial", "terms")?
             {
                 out.add_term(monomial, coefficient)
-                    .map_err(|e| RawParseError::from(e).context("ommx.v1.Polynomial", "terms"))?;
+                    .map_err(|e| ParseError::new(e).context("ommx.v1.Polynomial", "terms"))?;
             }
         }
         Ok(out)
@@ -303,7 +301,12 @@ mod tests {
             ],
             constant: 4.0,
         };
-        insta::assert_snapshot!(linear.parse(&()).unwrap_err(), @r###"
+        let error = linear.parse(&()).unwrap_err();
+        assert_eq!(
+            error.error.downcast_ref::<CoefficientError>(),
+            Some(&CoefficientError::Infinite)
+        );
+        insta::assert_snapshot!(error, @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.Linear[terms]
           └─ommx.v1.linear.Term[coefficient]
@@ -370,7 +373,12 @@ mod tests {
             values: vec![7.0, 8.0, 9.0],
             linear: None,
         };
-        insta::assert_snapshot!(quadratic.parse(&()).unwrap_err(), @r###"
+        let error = quadratic.parse(&()).unwrap_err();
+        assert!(matches!(
+            error.error.downcast_ref::<QuadraticParseError>(),
+            Some(QuadraticParseError::RowLengthMismatch { row: 2, value: 3 })
+        ));
+        insta::assert_snapshot!(error, @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.Quadratic[rows]
         Row length (2) does not match value length (3)

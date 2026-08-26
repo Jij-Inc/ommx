@@ -2,7 +2,7 @@ mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::EvaluatedCollection,
+    constraint_type::{EvaluatedCollection, EvaluatedConstraintBehavior},
     decision_variable::{EvaluatedDecisionVariableTable, VariableLabelStore},
     indicator_constraint::IndicatorConstraint,
     ATol, Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
@@ -192,6 +192,82 @@ fn validate_evaluated_named_function_used_ids(
         }
     }
     Ok(())
+}
+
+fn validate_constraint_used_ids<T: crate::ConstraintType>(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    constraints: &EvaluatedCollection<T>,
+    classify: impl Fn(T::ID, VariableID) -> SolutionError,
+) -> Result<(), SolutionError> {
+    for (constraint_id, constraint) in constraints.inner() {
+        for variable_id in constraint.used_decision_variable_ids() {
+            if !decision_variables.contains_key(variable_id) {
+                return Err(classify(*constraint_id, *variable_id));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_solution_regular_constraint_used_ids(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    constraints: &EvaluatedCollection<Constraint>,
+) -> Result<(), SolutionError> {
+    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
+        SolutionError::UndefinedVariableInConstraint { id, constraint_id }
+    })
+}
+
+fn validate_solution_indicator_constraint_used_ids(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    constraints: &EvaluatedCollection<IndicatorConstraint>,
+) -> Result<(), SolutionError> {
+    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
+        SolutionError::InvalidConstraintStructure {
+            constraint_family: "indicator",
+            constraint_id: format!("{constraint_id:?}"),
+            message: format!("variable {id:?} is not in decision_variables"),
+        }
+    })
+}
+
+fn validate_solution_one_hot_constraint_used_ids(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    constraints: &EvaluatedCollection<crate::OneHotConstraint>,
+) -> Result<(), SolutionError> {
+    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
+        SolutionError::InvalidConstraintStructure {
+            constraint_family: "one-hot",
+            constraint_id: format!("{constraint_id:?}"),
+            message: format!("variable {id:?} is not in decision_variables"),
+        }
+    })
+}
+
+fn validate_solution_sos1_constraint_used_ids(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    constraints: &EvaluatedCollection<crate::Sos1Constraint>,
+) -> Result<(), SolutionError> {
+    validate_constraint_used_ids(decision_variables, constraints, |constraint_id, id| {
+        SolutionError::InvalidConstraintStructure {
+            constraint_family: "SOS1",
+            constraint_id: format!("{constraint_id:?}"),
+            message: format!("variable {id:?} is not in decision_variables"),
+        }
+    })
+}
+
+fn validate_all_solution_constraint_used_ids(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    regular_constraints: &EvaluatedCollection<Constraint>,
+    indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
+    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
+    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
+) -> Result<(), SolutionError> {
+    validate_solution_regular_constraint_used_ids(decision_variables, regular_constraints)?;
+    validate_solution_indicator_constraint_used_ids(decision_variables, indicator_constraints)?;
+    validate_solution_one_hot_constraint_used_ids(decision_variables, one_hot_constraints)?;
+    validate_solution_sos1_constraint_used_ids(decision_variables, sos1_constraints)
 }
 
 impl Solution {
@@ -1232,54 +1308,13 @@ impl SolutionBuilder {
             self.feasibility_atol,
         )?;
 
-        // Validate all used_decision_variable_ids in indicator constraints
-        for (ic_id, ic) in self.evaluated_indicator_constraints.iter() {
-            for var_id in &ic.stage.used_decision_variable_ids {
-                if !decision_variables.contains_key(var_id) {
-                    crate::bail!(
-                        { ?var_id, ?ic_id },
-                        "Variable {var_id:?} used in indicator constraint {ic_id:?} is not defined in decision_variables",
-                    );
-                }
-            }
-        }
-
-        // Validate all used_decision_variable_ids in one-hot constraints
-        for (oh_id, oh) in self.evaluated_one_hot_constraints.iter() {
-            for var_id in &oh.stage.used_decision_variable_ids {
-                if !decision_variables.contains_key(var_id) {
-                    crate::bail!(
-                        { ?var_id, ?oh_id },
-                        "Variable {var_id:?} used in one-hot constraint {oh_id:?} is not defined in decision_variables",
-                    );
-                }
-            }
-        }
-
-        // Validate all used_decision_variable_ids in SOS1 constraints
-        for (s1_id, s1) in self.evaluated_sos1_constraints.iter() {
-            for var_id in &s1.stage.used_decision_variable_ids {
-                if !decision_variables.contains_key(var_id) {
-                    crate::bail!(
-                        { ?var_id, ?s1_id },
-                        "Variable {var_id:?} used in SOS1 constraint {s1_id:?} is not defined in decision_variables",
-                    );
-                }
-            }
-        }
-
-        // Validate all used_decision_variable_ids are in decision_variables
-        for (constraint_id, constraint) in evaluated_constraints.iter() {
-            for var_id in &constraint.stage.used_decision_variable_ids {
-                if !decision_variables.contains_key(var_id) {
-                    return Err(SolutionError::UndefinedVariableInConstraint {
-                        id: *var_id,
-                        constraint_id: *constraint_id,
-                    }
-                    .into());
-                }
-            }
-        }
+        validate_all_solution_constraint_used_ids(
+            &decision_variables,
+            &evaluated_constraints,
+            &self.evaluated_indicator_constraints,
+            &self.evaluated_one_hot_constraints,
+            &self.evaluated_sos1_constraints,
+        )?;
         validate_evaluated_named_function_used_ids(
             &decision_variables,
             &evaluated_named_functions,
@@ -1933,6 +1968,106 @@ mod tests {
             solution_err,
             SolutionError::UndefinedVariableInConstraint { id, constraint_id: cid }
                 if *id == var_id && *cid == constraint_id
+        ));
+    }
+
+    #[test]
+    fn builder_preserves_special_constraint_used_id_signals() {
+        let structural_id = VariableID::from(1);
+        let missing_id = VariableID::from(2);
+        let decision_variables = BTreeMap::from([(
+            structural_id,
+            EvaluatedDecisionVariable::new(structural_id, crate::DecisionVariable::binary(), 1.0)
+                .unwrap(),
+        )]);
+
+        let indicator_id = crate::IndicatorConstraintID::from(3);
+        let indicator = crate::indicator_constraint::EvaluatedIndicatorConstraint {
+            indicator_variable: structural_id,
+            equality: crate::Equality::EqualToZero,
+            stage: crate::indicator_constraint::IndicatorEvaluatedData {
+                evaluated_value: 0.0,
+                feasible: true,
+                indicator_active: true,
+                used_decision_variable_ids: BTreeSet::from([missing_id]),
+            },
+        };
+        let error = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .evaluated_indicator_constraints(BTreeMap::from([(indicator_id, indicator)]))
+            .decision_variables(decision_variables.clone())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<SolutionError>(),
+            Some(SolutionError::InvalidConstraintStructure {
+                constraint_family: "indicator",
+                constraint_id,
+                message,
+            }) if constraint_id == "IndicatorConstraintID(3)"
+                && message == "variable VariableID(2) is not in decision_variables"
+        ));
+
+        let one_hot_id = crate::OneHotConstraintID::from(4);
+        let one_hot = crate::one_hot_constraint::EvaluatedOneHotConstraint {
+            variables: BTreeSet::from([structural_id]),
+            stage: crate::one_hot_constraint::OneHotEvaluatedData {
+                feasible: true,
+                active_variable: Some(structural_id),
+                used_decision_variable_ids: BTreeSet::from([missing_id]),
+            },
+        };
+        let error = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .evaluated_one_hot_constraints_collection(
+                EvaluatedCollection::new(BTreeMap::from([(one_hot_id, one_hot)]), BTreeMap::new())
+                    .unwrap(),
+            )
+            .decision_variables(decision_variables.clone())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<SolutionError>(),
+            Some(SolutionError::InvalidConstraintStructure {
+                constraint_family: "one-hot",
+                constraint_id,
+                message,
+            }) if constraint_id == "OneHotConstraintID(4)"
+                && message == "variable VariableID(2) is not in decision_variables"
+        ));
+
+        let sos1_id = crate::Sos1ConstraintID::from(5);
+        let sos1 = crate::sos1_constraint::EvaluatedSos1Constraint {
+            variables: BTreeSet::from([structural_id]),
+            stage: crate::sos1_constraint::Sos1EvaluatedData {
+                feasible: true,
+                active_variable: Some(structural_id),
+                used_decision_variable_ids: BTreeSet::from([missing_id]),
+            },
+        };
+        let error = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .evaluated_sos1_constraints_collection(
+                EvaluatedCollection::new(BTreeMap::from([(sos1_id, sos1)]), BTreeMap::new())
+                    .unwrap(),
+            )
+            .decision_variables(decision_variables)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<SolutionError>(),
+            Some(SolutionError::InvalidConstraintStructure {
+                constraint_family: "SOS1",
+                constraint_id,
+                message,
+            }) if constraint_id == "Sos1ConstraintID(5)"
+                && message == "variable VariableID(2) is not in decision_variables"
         ));
     }
 

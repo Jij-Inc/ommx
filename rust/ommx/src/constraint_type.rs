@@ -36,8 +36,7 @@ use crate::{
         ConstraintContext, ConstraintContextStore, ConstraintID, EvaluatedConstraint,
         RemovedReason, SampledConstraint,
     },
-    v1, ATol, Constraint, Evaluate, Parse, ParseError, RawParseError, SampleID, SampleIDSet,
-    VariableIDSet,
+    v1, ATol, Constraint, Evaluate, Parse, ParseError, SampleID, SampleIDSet, VariableIDSet,
 };
 use std::sync::LazyLock;
 
@@ -846,12 +845,10 @@ macro_rules! impl_parse_v2_created_collection {
                     .chain(removed.keys())
                     .copied()
                     .collect::<BTreeSet<_>>();
-                validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
-                    RawParseError::InvalidInstance(e.to_string()).context(message, "contexts")
-                })?;
-                ConstraintCollection::with_context(active, removed, context).map_err(|e| {
-                    RawParseError::InvalidInstance(e.to_string()).context(message, "active")
-                })
+                validate_context_reference_ids(&context, &owned_ids)
+                    .map_err(|e| ParseError::new(e).context(message, "contexts"))?;
+                ConstraintCollection::with_context(active, removed, context)
+                    .map_err(|e| ParseError::new(e).context(message, "active"))
             }
         }
     };
@@ -882,11 +879,16 @@ macro_rules! impl_parse_v2_evaluated_collection {
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
                 let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
                 validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
-                    RawParseError::InvalidInstance(e.to_string()).context(message, "contexts")
+                    let signal = crate::SolutionError::InvalidSidecar {
+                        message: e.to_string(),
+                    };
+                    ParseError::new(e.context(signal)).context(message, "contexts")
                 })?;
                 EvaluatedCollection::with_context(entries, removed_reasons, context).map_err(|e| {
-                    RawParseError::InvalidInstance(e.to_string())
-                        .context(message, "removed_reasons")
+                    let signal = crate::SolutionError::InvalidSidecar {
+                        message: e.to_string(),
+                    };
+                    ParseError::new(e.context(signal)).context(message, "removed_reasons")
                 })
             }
         }
@@ -918,11 +920,16 @@ macro_rules! impl_parse_v2_sampled_collection {
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
                 let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
                 validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
-                    RawParseError::InvalidInstance(e.to_string()).context(message, "contexts")
+                    let signal = crate::SampleSetError::InvalidSidecar {
+                        message: e.to_string(),
+                    };
+                    ParseError::new(e.context(signal)).context(message, "contexts")
                 })?;
                 SampledCollection::with_context(entries, removed_reasons, context).map_err(|e| {
-                    RawParseError::InvalidInstance(e.to_string())
-                        .context(message, "removed_reasons")
+                    let signal = crate::SampleSetError::InvalidSidecar {
+                        message: e.to_string(),
+                    };
+                    ParseError::new(e.context(signal)).context(message, "removed_reasons")
                 })
             }
         }
@@ -1008,7 +1015,7 @@ where
     let mut out = BTreeMap::new();
     for (id, row) in removed {
         let reason = removed_reasons.remove(&id).ok_or_else(|| {
-            RawParseError::InvalidInstance(format!(
+            ParseError::new(crate::error!(
                 "Removed constraint ID {:?} has no removed reason",
                 ID::from(id)
             ))
@@ -1020,7 +1027,7 @@ where
         );
     }
     if let Some(id) = removed_reasons.keys().next().copied() {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Removed reason references unknown constraint ID {:?}",
             ID::from(id)
         ))
@@ -1909,6 +1916,7 @@ mod tests {
             err.to_string().contains("[contexts]"),
             "unexpected error: {err}"
         );
+        assert!(err.error.downcast_ref::<crate::RawParseError>().is_none());
     }
 
     #[test]
@@ -1932,10 +1940,11 @@ mod tests {
         .parse(&atol)
         .unwrap_err();
 
-        assert!(
-            err.to_string().contains("[contexts]"),
-            "unexpected error: {err}"
-        );
+        assert!(matches!(
+            err.error.downcast_ref::<crate::SolutionError>(),
+            Some(crate::SolutionError::InvalidSidecar { message })
+                if message.contains("unknown constraint ID")
+        ));
     }
 
     #[test]
@@ -1959,9 +1968,54 @@ mod tests {
         .parse(&atol)
         .unwrap_err();
 
-        assert!(
-            err.to_string().contains("[contexts]"),
-            "unexpected error: {err}"
-        );
+        assert!(matches!(
+            err.error.downcast_ref::<crate::SampleSetError>(),
+            Some(crate::SampleSetError::InvalidSidecar { message })
+                if message.contains("unknown constraint ID")
+        ));
+    }
+
+    #[test]
+    fn parse_v2_evaluated_collection_preserves_invalid_removed_reason_signal() {
+        let err = crate::v2::EvaluatedRegularConstraintCollection {
+            removed_reasons: BTreeMap::from([(
+                1,
+                crate::v2::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
+            )]),
+            ..Default::default()
+        }
+        .parse(&ATol::default())
+        .unwrap_err();
+
+        assert!(matches!(
+            err.error.downcast_ref::<crate::SolutionError>(),
+            Some(crate::SolutionError::InvalidSidecar { message })
+                if message.contains("unknown constraint ID")
+        ));
+    }
+
+    #[test]
+    fn parse_v2_sampled_collection_preserves_invalid_removed_reason_signal() {
+        let err = crate::v2::SampledRegularConstraintCollection {
+            removed_reasons: BTreeMap::from([(
+                1,
+                crate::v2::RemovedReason {
+                    reason: "test".to_string(),
+                    parameters: Default::default(),
+                },
+            )]),
+            ..Default::default()
+        }
+        .parse(&ATol::default())
+        .unwrap_err();
+
+        assert!(matches!(
+            err.error.downcast_ref::<crate::SampleSetError>(),
+            Some(crate::SampleSetError::InvalidSidecar { message })
+                if message.contains("unknown constraint ID")
+        ));
     }
 }

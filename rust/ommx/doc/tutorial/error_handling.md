@@ -141,6 +141,16 @@ ParametricInstance namespace collisions, and
 validation. This preserves the validation cause without changing the
 Python-visible parse contract.
 
+[`ParseError::error`](crate::ParseError::error) stores the underlying
+[`Error`](crate::Error) directly. Recoverable semantic failures can therefore
+be downcast to their domain signal without first matching a parse-layer
+wrapper. [`RawParseError`](crate::RawParseError) is reserved for generic
+protobuf-boundary failures such as missing fields, unknown enums, reserved
+annotation keys, and decode errors. Dedicated message-specific signals such as
+[`QuadraticParseError`](crate::QuadraticParseError) are also stored directly.
+Semantic failures without a caller recovery path remain ordinary `Error`
+values and still retain the `ParseError` breadcrumbs.
+
 ## Fail-site macros
 
 [`bail!`](crate::bail), [`error!`](crate::error!), and [`ensure!`](crate::ensure) fuse a `tracing::error!` event

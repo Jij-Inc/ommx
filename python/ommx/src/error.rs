@@ -614,6 +614,29 @@ mod tests {
     }
 
     #[test]
+    fn parse_error_owner_precedes_nested_domain_signals() {
+        let solution_error = ommx::ParseError {
+            context: vec![],
+            error: ommx::SolutionError::UnknownNamedFunctionID {
+                id: ommx::NamedFunctionID::from(1),
+            }
+            .into(),
+        };
+        assert!(solution_error.error.is::<ommx::SolutionError>());
+        assert_exception::<PyValueError>(ommx::Error::from(solution_error).into());
+
+        let sample_set_error = ommx::ParseError {
+            context: vec![],
+            error: ommx::SampleSetError::UnknownSampleID {
+                id: ommx::SampleID::from(1),
+            }
+            .into(),
+        };
+        assert!(sample_set_error.error.is::<ommx::SampleSetError>());
+        assert_exception::<PyValueError>(ommx::Error::from(sample_set_error).into());
+    }
+
+    #[test]
     fn log_encoding_unavailable_maps_to_a_specific_runtime_error() {
         let mut instance = ommx::Instance::default();
         let id = ommx::VariableID::from(7);

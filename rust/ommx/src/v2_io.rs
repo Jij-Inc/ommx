@@ -104,6 +104,51 @@ mod required_features_tests {
             assert!(validate_required_features(vec![feature], "test.Message").is_err());
         }
     }
+
+    #[test]
+    fn parse_feasibility_atol_preserves_atol_signals() {
+        for value in [0.0, -1.0] {
+            let err = parse_feasibility_atol(Some(value), "test.Message").unwrap_err();
+            assert!(matches!(
+                err.error.downcast_ref::<crate::AtolError>(),
+                Some(crate::AtolError::NonPositive { value: actual }) if *actual == value
+            ));
+        }
+
+        let err = parse_feasibility_atol(Some(f64::NAN), "test.Message").unwrap_err();
+        assert!(matches!(
+            err.error.downcast_ref::<crate::AtolError>(),
+            Some(crate::AtolError::NaN)
+        ));
+    }
+
+    #[test]
+    fn parse_feasibility_atol_keeps_infinity_as_an_ordinary_error() {
+        for value in [f64::NEG_INFINITY, f64::INFINITY] {
+            let err = parse_feasibility_atol(Some(value), "test.Message").unwrap_err();
+            assert!(err.error.downcast_ref::<crate::AtolError>().is_none());
+            assert!(err.error.downcast_ref::<RawParseError>().is_none());
+            assert!(err.to_string().contains("feasibility_atol must be finite"));
+        }
+    }
+
+    #[test]
+    fn non_finite_values_are_ordinary_semantic_errors() {
+        let err = validate_finite_f64(f64::NAN, "test.Message", "value").unwrap_err();
+        assert!(err.error.downcast_ref::<RawParseError>().is_none());
+
+        let values = Sampled::from((SampleID::from(7), f64::INFINITY));
+        let err = validate_sampled_f64_values(&values, "test.Message", "values").unwrap_err();
+        assert!(err.error.downcast_ref::<RawParseError>().is_none());
+        assert!(err.to_string().contains("SampleID(7)"));
+    }
+
+    #[test]
+    fn duplicated_variable_references_are_ordinary_semantic_errors() {
+        let err = variable_id_set_from_v2(vec![1, 1], "test.Message", "variables").unwrap_err();
+        assert!(err.error.downcast_ref::<RawParseError>().is_none());
+        assert!(err.to_string().contains("VariableID(1)"));
+    }
 }
 
 pub fn parse_feasibility_atol(
@@ -113,15 +158,13 @@ pub fn parse_feasibility_atol(
     let Some(value) = value else {
         return Ok(ATol::default());
     };
-    if !value.is_finite() {
-        return Err(RawParseError::InvalidInstance(format!(
+    if value.is_infinite() {
+        return Err(ParseError::new(crate::error!(
             "feasibility_atol must be finite: value={value}",
         ))
         .context(message, "feasibility_atol"));
     }
-    ATol::new(value).map_err(|e| {
-        RawParseError::InvalidInstance(e.to_string()).context(message, "feasibility_atol")
-    })
+    ATol::new(value).map_err(|error| ParseError::new(error).context(message, "feasibility_atol"))
 }
 
 pub fn validate_finite_f64(
@@ -133,7 +176,7 @@ pub fn validate_finite_f64(
         Ok(())
     } else {
         Err(
-            RawParseError::InvalidInstance(format!("{field} must be finite: value={value}",))
+            ParseError::new(crate::error!("{field} must be finite: value={value}",))
                 .context(message, field),
         )
     }
@@ -164,7 +207,7 @@ pub fn validate_sampled_f64_values(
 ) -> Result<(), ParseError> {
     for (sample_id, value) in values.iter() {
         if !value.is_finite() {
-            return Err(RawParseError::InvalidInstance(format!(
+            return Err(ParseError::new(crate::error!(
                 "{field} must be finite for sample {sample_id:?}: value={value}",
             ))
             .context(message, field));
@@ -182,7 +225,7 @@ pub fn variable_id_set_from_v2(
     for id in ids {
         let id = VariableID::from(id);
         if !out.insert(id) {
-            return Err(RawParseError::InvalidInstance(format!(
+            return Err(ParseError::new(crate::error!(
                 "Duplicated variable ID is found in {field}: {id:?}",
             ))
             .context(message, field));

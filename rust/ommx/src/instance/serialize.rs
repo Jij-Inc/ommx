@@ -668,14 +668,12 @@ mod tests {
         let err = crate::Solution::try_from(proto).unwrap_err();
 
         assert!(matches!(
-            &err.error,
-            crate::RawParseError::SolutionError(
-                crate::SolutionError::InvalidConstraintStructure {
+            err.error.downcast_ref::<crate::SolutionError>(),
+            Some(crate::SolutionError::InvalidConstraintStructure {
                     constraint_family: "one-hot",
                     constraint_id,
                     message,
-                }
-            ) if constraint_id == "OneHotConstraintID(20)"
+                }) if constraint_id == "OneHotConstraintID(20)"
                 && message == "variable VariableID(999) is not in decision_variables"
         ));
     }

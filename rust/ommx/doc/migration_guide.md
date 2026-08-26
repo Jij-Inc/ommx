@@ -350,6 +350,15 @@ an equality.
   slimmer (1-based `line_num` + rendered `message`, no variant enum),
   and no longer re-exported at the crate root.
 
+**Semantic protobuf parse errors.** `RawParseError::InvalidInstance` and the
+domain-signal wrapper variants on `RawParseError` were removed during the 3.0
+beta. `ParseError::error` now stores `ommx::Error` directly. Match a curated
+signal on that value when the caller has a recovery path, for example
+`parse_error.error.downcast_ref::<SolutionError>()`; otherwise propagate the
+outer `ParseError` or render it for diagnostics. `RawParseError` now contains
+only generic protobuf-boundary failures. Dedicated message-specific parse
+signals, such as `QuadraticParseError`, are also stored directly.
+
 **Key lookups now return `Option<T>`:**
 
 ```rust,ignore

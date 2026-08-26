@@ -22,7 +22,7 @@ impl Parse for v1::Function {
             Constant(c) => match c.try_into() {
                 Ok(c) => Ok(Function::Constant(c)),
                 Err(CoefficientError::Zero) => Ok(Function::Zero),
-                Err(c) => Err(RawParseError::from(c).context(message, "constant")),
+                Err(c) => Err(ParseError::new(c).context(message, "constant")),
             },
             Linear(l) => Ok(Function::Linear(l.parse_as(&(), message, "linear")?)),
             Quadratic(q) => Ok(Function::Quadratic(q.parse_as(

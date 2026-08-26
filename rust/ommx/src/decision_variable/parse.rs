@@ -75,7 +75,7 @@ impl Parse for v1::DecisionVariable {
         let id = VariableID::from(self.id);
         let dv = DecisionVariable::new(kind, bound, ATol::default()) // FIXME: user should provide this
             .map_err(|source| {
-                RawParseError::InvalidDecisionVariable(DecisionVariableError::InvalidDefinition {
+                ParseError::new(DecisionVariableError::InvalidDefinition {
                     id,
                     source: Box::new(source),
                 })
@@ -84,9 +84,7 @@ impl Parse for v1::DecisionVariable {
         let fixed_value = self.substituted_value;
         if let Some(value) = fixed_value {
             dv.check_value_consistency(id, value, ATol::default())
-                .map_err(|e| {
-                    RawParseError::InvalidDecisionVariable(e).context(message, "substituted_value")
-                })?;
+                .map_err(|e| ParseError::new(e).context(message, "substituted_value"))?;
         }
         let label = DecisionVariableLabel {
             name: self.name,
@@ -125,10 +123,7 @@ impl Parse for Vec<v1::DecisionVariable> {
             let parsed: ParsedDecisionVariable = v.parse(&())?;
             let id = parsed.id;
             if decision_variables.insert(id, parsed.variable).is_some() {
-                return Err(RawParseError::InvalidInstance(format!(
-                    "Duplicated variable ID is found in definition: {id:?}"
-                ))
-                .into());
+                return Err(ParseError::new(DecisionVariableError::DuplicateID { id }));
             }
             if let Some(value) = parsed.fixed_value {
                 fixed_values.insert(id, value);
@@ -176,16 +171,14 @@ impl Parse for v1::SampledDecisionVariable {
             let atol = ATol::default();
             for (_, &sample_value) in samples.iter() {
                 if !sample_value.is_finite() {
-                    return Err(RawParseError::InvalidDecisionVariable(
-                        DecisionVariableError::NonFiniteValue {
-                            id: parsed_dv.id,
-                            value: sample_value,
-                        },
-                    )
+                    return Err(ParseError::new(DecisionVariableError::NonFiniteValue {
+                        id: parsed_dv.id,
+                        value: sample_value,
+                    })
                     .context(message, "samples"));
                 }
                 if (sample_value - fixed_value).abs() > *atol {
-                    return Err(RawParseError::InvalidDecisionVariable(
+                    return Err(ParseError::new(
                         DecisionVariableError::SubstitutedValueOverwrite {
                             id: parsed_dv.id,
                             previous_value: fixed_value,
@@ -201,7 +194,7 @@ impl Parse for v1::SampledDecisionVariable {
         // Create SampledDecisionVariable with validation
         let sampled =
             crate::SampledDecisionVariable::new(parsed_dv.id, parsed_dv.variable, samples)
-                .map_err(RawParseError::InvalidDecisionVariable)?;
+                .map_err(ParseError::new)?;
         Ok(ParsedSampledDecisionVariable {
             id: parsed_dv.id,
             variable: sampled,
@@ -233,11 +226,44 @@ mod tests {
             ..Default::default()
         };
         let res: Result<ParsedDecisionVariable, _> = dv.parse(&());
-        insta::assert_snapshot!(res.unwrap_err(), @r###"
+        let error = res.unwrap_err();
+        assert!(matches!(
+            error.error.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::InvalidDefinition { id, source })
+                if *id == VariableID::from(1)
+                    && matches!(
+                        source.as_ref(),
+                        DecisionVariableError::BoundInconsistentToKind { .. }
+                    )
+        ));
+        insta::assert_snapshot!(error, @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.DecisionVariable[bound]
         Invalid decision variable ID=1: Bound is inconsistent to kind: kind=Integer, bound=[1.1, 1.9]
         "###);
+    }
+
+    #[test]
+    fn parse_decision_variables_preserves_duplicate_id_signal() {
+        let decision_variable = v1::DecisionVariable {
+            id: 1,
+            kind: v1::decision_variable::Kind::Binary as i32,
+            bound: Some(v1::Bound {
+                lower: 0.0,
+                upper: 1.0,
+            }),
+            ..Default::default()
+        };
+
+        let error = vec![decision_variable.clone(), decision_variable]
+            .parse(&())
+            .unwrap_err();
+
+        assert!(matches!(
+            error.error.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::DuplicateID { id })
+                if *id == VariableID::from(1)
+        ));
     }
 
     #[test]

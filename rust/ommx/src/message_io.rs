@@ -83,7 +83,10 @@ mod tests {
             let parse_error = error
                 .downcast_ref::<ParseError>()
                 .expect("wire decode failures must remain downcastable as ParseError");
-            assert!(matches!(&parse_error.error, RawParseError::DecodeError(_)));
+            assert!(matches!(
+                parse_error.error.downcast_ref::<RawParseError>(),
+                Some(RawParseError::DecodeError(_))
+            ));
             assert_eq!(parse_error.context.len(), 1);
             assert_eq!(parse_error.context[0].message, message);
             assert_eq!(parse_error.context[0].field, "bytes");

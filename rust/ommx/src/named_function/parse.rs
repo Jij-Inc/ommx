@@ -62,10 +62,10 @@ impl Parse for Vec<v1::NamedFunction> {
             let parsed: ParsedNamedFunction = v.parse(&())?;
             let id = parsed.id;
             if named_functions.insert(id, parsed.named_function).is_some() {
-                return Err(RawParseError::InvalidInstance(format!(
-                    "Duplicated named function ID is found in definition: {id:?}"
-                ))
-                .into());
+                return Err(ParseError::new(crate::error!(
+                    { ?id },
+                    "Duplicated named function ID is found in definition: {id:?}",
+                )));
             }
             label_store.insert(id, parsed.label);
         }
@@ -200,7 +200,13 @@ mod tests {
             },
         ];
         let result: Result<(BTreeMap<NamedFunctionID, NamedFunction>, _), _> = nfs.parse(&());
-        insta::assert_snapshot!(result.unwrap_err(), @r###"
+        let error = result.unwrap_err();
+        assert_eq!(
+            error.error.to_string(),
+            "Duplicated named function ID is found in definition: NamedFunctionID(1)"
+        );
+        assert!(error.error.downcast_ref::<RawParseError>().is_none());
+        insta::assert_snapshot!(error, @r###"
         Traceback for OMMX Message parse error:
         Duplicated named function ID is found in definition: NamedFunctionID(1)
         "###);

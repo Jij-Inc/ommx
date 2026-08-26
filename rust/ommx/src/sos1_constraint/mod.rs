@@ -225,13 +225,7 @@ impl Parse for crate::v2::Sos1Constraint {
             message,
             "variables",
         )?)
-        .map_err(|error| {
-            match error.downcast::<Sos1ConstraintError>() {
-                Ok(error) => crate::RawParseError::from(error),
-                Err(error) => crate::RawParseError::InvalidInstance(error.to_string()),
-            }
-            .context(message, "variables")
-        })
+        .map_err(|error| ParseError::new(error).context(message, "variables"))
     }
 }
 
@@ -264,22 +258,21 @@ impl Parse for crate::v2::EvaluatedSos1Constraint {
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
         if variables.is_empty() {
-            return Err(crate::RawParseError::InvalidInstance(
-                "SOS1 constraints must contain at least one variable".to_string(),
-            )
-            .context(message, "variables"));
+            return Err(
+                ParseError::new(Sos1ConstraintError::EmptyVariables).context(message, "variables")
+            );
         }
         let active_variable = self.active_variable.map(VariableID::from);
         if active_variable.is_some_and(|id| !variables.contains(&id)) {
-            return Err(crate::RawParseError::InvalidInstance(
-                "SOS1 active_variable must be a member of variables".to_string(),
-            )
+            return Err(ParseError::new(crate::error!(
+                "SOS1 active_variable must be a member of variables"
+            ))
             .context(message, "active_variable"));
         }
         if active_variable.is_some() && !self.feasible {
-            return Err(crate::RawParseError::InvalidInstance(
-                "SOS1 active_variable must be unset when feasible is false".to_string(),
-            )
+            return Err(ParseError::new(crate::error!(
+                "SOS1 active_variable must be unset when feasible is false"
+            ))
             .context(message, "active_variable"));
         }
         Ok(Sos1Constraint {
@@ -343,10 +336,9 @@ impl Parse for crate::v2::SampledSos1Constraint {
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
         if variables.is_empty() {
-            return Err(crate::RawParseError::InvalidInstance(
-                "SOS1 constraints must contain at least one variable".to_string(),
-            )
-            .context(message, "variables"));
+            return Err(
+                ParseError::new(Sos1ConstraintError::EmptyVariables).context(message, "variables")
+            );
         }
         let active_variable =
             crate::v2_io::sampled_active_variable_map_from_v2(self.active_variable);
@@ -355,9 +347,9 @@ impl Parse for crate::v2::SampledSos1Constraint {
             .flatten()
             .any(|id| !variables.contains(id))
         {
-            return Err(crate::RawParseError::InvalidInstance(
-                "SOS1 active_variable values must be members of variables".to_string(),
-            )
+            return Err(ParseError::new(crate::error!(
+                "SOS1 active_variable values must be members of variables"
+            ))
             .context(message, "active_variable"));
         }
         let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
@@ -365,9 +357,9 @@ impl Parse for crate::v2::SampledSos1Constraint {
             if active_variable.is_some()
                 && feasible.get(sample_id).is_some_and(|feasible| !feasible)
             {
-                return Err(crate::RawParseError::InvalidInstance(
-                    "SOS1 active_variable must be unset when feasible is false".to_string(),
-                )
+                return Err(ParseError::new(crate::error!(
+                    "SOS1 active_variable must be unset when feasible is false"
+                ))
                 .context(message, "active_variable"));
             }
         }
@@ -404,7 +396,6 @@ impl std::fmt::Display for Sos1Constraint<Created> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::error::Error as _;
 
     #[test]
     fn test_create_sos1_constraint() {
@@ -424,28 +415,36 @@ mod tests {
 
     #[test]
     fn parse_v2_preserves_empty_variables_signal() {
-        let error: crate::Error = crate::v2::Sos1Constraint { variables: vec![] }
+        let parse_error = crate::v2::Sos1Constraint { variables: vec![] }
             .parse(&())
-            .unwrap_err()
-            .into();
-        let parse_error = error
-            .downcast_ref::<ParseError>()
-            .expect("v2 semantic parse failures must remain downcastable as ParseError");
+            .unwrap_err();
 
         assert!(matches!(
-            &parse_error.error,
-            crate::RawParseError::Sos1ConstraintError(Sos1ConstraintError::EmptyVariables)
+            parse_error.error.downcast_ref::<Sos1ConstraintError>(),
+            Some(Sos1ConstraintError::EmptyVariables)
         ));
+    }
 
-        let raw_source = parse_error
-            .source()
-            .expect("ParseError must expose its RawParseError source");
-        assert!(raw_source.downcast_ref::<crate::RawParseError>().is_some());
-        let signal_source = raw_source
-            .source()
-            .expect("RawParseError must expose the SOS1 constraint signal");
+    #[test]
+    fn parse_v2_evaluated_preserves_empty_variables_signal() {
+        let parse_error = crate::v2::EvaluatedSos1Constraint::default()
+            .parse(&ATol::default())
+            .unwrap_err();
+
         assert!(matches!(
-            signal_source.downcast_ref::<Sos1ConstraintError>(),
+            parse_error.error.downcast_ref::<Sos1ConstraintError>(),
+            Some(Sos1ConstraintError::EmptyVariables)
+        ));
+    }
+
+    #[test]
+    fn parse_v2_sampled_preserves_empty_variables_signal() {
+        let parse_error = crate::v2::SampledSos1Constraint::default()
+            .parse(&ATol::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            parse_error.error.downcast_ref::<Sos1ConstraintError>(),
             Some(Sos1ConstraintError::EmptyVariables)
         ));
     }
@@ -461,6 +460,7 @@ mod tests {
 
         let err = proto.parse(&ATol::default()).unwrap_err();
 
+        assert!(err.error.downcast_ref::<crate::RawParseError>().is_none());
         assert!(
             err.to_string()
                 .contains("active_variable must be unset when feasible is false"),
@@ -484,6 +484,7 @@ mod tests {
 
         let err = proto.parse(&ATol::default()).unwrap_err();
 
+        assert!(err.error.downcast_ref::<crate::RawParseError>().is_none());
         assert!(
             err.to_string()
                 .contains("active_variable must be unset when feasible is false"),

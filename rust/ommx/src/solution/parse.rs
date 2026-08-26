@@ -1,5 +1,4 @@
 use super::*;
-use crate::constraint_type::EvaluatedConstraintBehavior;
 use crate::{v2, ATol, Parse, ParseError, RawParseError, SolutionError};
 
 fn parse_v2_solution_sense(value: i32, message: &'static str) -> Result<Option<Sense>, ParseError> {
@@ -16,35 +15,15 @@ fn parse_v2_solution_sense(value: i32, message: &'static str) -> Result<Option<S
     })
 }
 
-fn validate_evaluated_constraint_used_ids<T: crate::ConstraintType>(
-    constraints: &crate::constraint_type::EvaluatedCollection<T>,
-    decision_variables: &crate::EvaluatedDecisionVariableTable,
-    message: &'static str,
-    field: &'static str,
-    classify: impl Fn(T::ID, crate::VariableID) -> SolutionError,
-) -> Result<(), ParseError> {
-    for (constraint_id, constraint) in constraints.inner() {
-        for var_id in constraint.used_decision_variable_ids() {
-            if !decision_variables.contains_key(var_id) {
-                return Err(
-                    RawParseError::SolutionError(classify(*constraint_id, *var_id))
-                        .context(message, field),
-                );
-            }
-        }
-    }
-    Ok(())
-}
-
 fn invalid_solution_sidecar(
     error: crate::Error,
     message: &'static str,
     field: &'static str,
 ) -> ParseError {
-    RawParseError::SolutionError(SolutionError::InvalidSidecar {
+    let signal = SolutionError::InvalidSidecar {
         message: error.to_string(),
-    })
-    .context(message, field)
+    };
+    ParseError::new(error.context(signal)).context(message, field)
 }
 
 impl Parse for crate::v1::Solution {
@@ -109,10 +88,10 @@ impl Parse for crate::v1::Solution {
                 .insert(id, parsed.evaluated_named_function)
                 .is_some()
             {
-                return Err(crate::RawParseError::SolutionError(
-                    SolutionError::DuplicatedNamedFunctionID { id },
-                )
-                .context(message, "evaluated_named_functions"));
+                return Err(
+                    ParseError::new(SolutionError::DuplicatedNamedFunctionID { id })
+                        .context(message, "evaluated_named_functions"),
+                );
             }
             named_function_labels.insert(id, parsed.label);
         }
@@ -135,35 +114,33 @@ impl Parse for crate::v1::Solution {
                 (Some(value), None) | (None, Some(value)) => *value,
                 (Some(value), Some(substituted_value)) => {
                     if (*value - *substituted_value).abs() > *atol {
-                        return Err(crate::RawParseError::SolutionError(
-                            SolutionError::InconsistentVariableValue {
-                                id: dv_id,
-                                state_value: *value,
-                                substituted_value: *substituted_value,
-                            },
-                        )
+                        return Err(ParseError::new(SolutionError::InconsistentVariableValue {
+                            id: dv_id,
+                            state_value: *value,
+                            substituted_value: *substituted_value,
+                        })
                         .context(message, "decision_variables"));
                     }
                     *value
                 }
                 (None, None) => {
-                    return Err(crate::RawParseError::SolutionError(
-                        SolutionError::MissingVariableValue { id: dv_id },
-                    )
-                    .context(message, "decision_variables"));
+                    return Err(
+                        ParseError::new(SolutionError::MissingVariableValue { id: dv_id })
+                            .context(message, "decision_variables"),
+                    );
                 }
             };
 
-            let evaluated_dv = crate::EvaluatedDecisionVariable::new(parsed_id, parsed_dv, value)
-                .map_err(crate::RawParseError::InvalidDecisionVariable)
-                .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
+            let evaluated_dv =
+                crate::EvaluatedDecisionVariable::new(parsed_id, parsed_dv, value)
+                    .map_err(|e| ParseError::new(e).context(message, "decision_variables"))?;
 
             variable_labels.insert(parsed_id, label);
             if decision_variables.insert(parsed_id, evaluated_dv).is_some() {
-                return Err(crate::RawParseError::SolutionError(
-                    SolutionError::DuplicatedVariableID { id: parsed_id },
-                )
-                .context(message, "decision_variables"));
+                return Err(
+                    ParseError::new(SolutionError::DuplicatedVariableID { id: parsed_id })
+                        .context(message, "decision_variables"),
+                );
             }
         }
         let optimality = self
@@ -190,18 +167,20 @@ impl Parse for crate::v1::Solution {
             crate::EvaluatedDecisionVariableTable::new(decision_variables, variable_labels)
                 .map_err(|e| invalid_solution_sidecar(e, message, "decision_variables"))?;
         validate_evaluated_named_function_used_ids(&decision_variables, &evaluated_named_functions)
-            .map_err(|e| {
-                crate::RawParseError::SolutionError(e).context(message, "evaluated_named_functions")
-            })?;
+            .map_err(|e| ParseError::new(e).context(message, "evaluated_named_functions"))?;
+
+        let evaluated_constraints = crate::constraint_type::EvaluatedCollection::with_context(
+            evaluated_constraints,
+            removed_reasons,
+            constraint_context,
+        )
+        .map_err(|e| invalid_solution_sidecar(e, message, "evaluated_constraints"))?;
+        validate_solution_regular_constraint_used_ids(&decision_variables, &evaluated_constraints)
+            .map_err(|e| ParseError::new(e).context(message, "evaluated_constraints"))?;
 
         let solution = Solution {
             objective,
-            evaluated_constraints: crate::constraint_type::EvaluatedCollection::with_context(
-                evaluated_constraints,
-                removed_reasons,
-                constraint_context,
-            )
-            .map_err(|e| invalid_solution_sidecar(e, message, "evaluated_constraints"))?,
+            evaluated_constraints,
             evaluated_indicator_constraints: Default::default(),
             evaluated_one_hot_constraints: Default::default(),
             evaluated_sos1_constraints: Default::default(),
@@ -220,23 +199,21 @@ impl Parse for crate::v1::Solution {
         let computed_feasible_relaxed = solution.feasible_relaxed();
 
         if computed_feasible != provided_feasible {
-            return Err(crate::RawParseError::SolutionError(
-                SolutionError::InconsistentFeasibility {
-                    provided_feasible,
-                    computed_feasible,
-                },
-            )
+            return Err(ParseError::new(SolutionError::InconsistentFeasibility {
+                provided_feasible,
+                computed_feasible,
+            })
             .context(message, "feasible"));
         }
 
         if computed_feasible_relaxed != provided_feasible_relaxed {
-            return Err(crate::RawParseError::SolutionError(
-                SolutionError::InconsistentFeasibilityRelaxed {
+            return Err(
+                ParseError::new(SolutionError::InconsistentFeasibilityRelaxed {
                     provided_feasible_relaxed,
                     computed_feasible_relaxed,
-                },
-            )
-            .context(message, "feasible_relaxed"));
+                })
+                .context(message, "feasible_relaxed"),
+            );
         }
 
         Ok(solution)
@@ -302,91 +279,54 @@ impl Parse for v2::Solution {
             &decision_variables,
             &evaluated_indicator_constraints,
         )
-        .map_err(|e| {
-            RawParseError::SolutionError(e).context(message, "evaluated_indicator_constraints")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "evaluated_indicator_constraints"))?;
         validate_solution_one_hot_constraint_structure(
             &decision_variables,
             &evaluated_one_hot_constraints,
         )
-        .map_err(|e| {
-            RawParseError::SolutionError(e).context(message, "evaluated_one_hot_constraints")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "evaluated_one_hot_constraints"))?;
         validate_solution_sos1_constraint_structure(
             &decision_variables,
             &evaluated_sos1_constraints,
         )
-        .map_err(|e| {
-            RawParseError::SolutionError(e).context(message, "evaluated_sos1_constraints")
-        })?;
-        validate_evaluated_constraint_used_ids(
-            &evaluated_constraints,
+        .map_err(|e| ParseError::new(e).context(message, "evaluated_sos1_constraints"))?;
+        validate_solution_regular_constraint_used_ids(&decision_variables, &evaluated_constraints)
+            .map_err(|e| ParseError::new(e).context(message, "evaluated_regular_constraints"))?;
+        validate_solution_indicator_constraint_used_ids(
             &decision_variables,
-            message,
-            "evaluated_regular_constraints",
-            |constraint_id, id| SolutionError::UndefinedVariableInConstraint { id, constraint_id },
-        )?;
-        validate_evaluated_constraint_used_ids(
             &evaluated_indicator_constraints,
+        )
+        .map_err(|e| ParseError::new(e).context(message, "evaluated_indicator_constraints"))?;
+        validate_solution_one_hot_constraint_used_ids(
             &decision_variables,
-            message,
-            "evaluated_indicator_constraints",
-            |constraint_id, id| SolutionError::InvalidConstraintStructure {
-                constraint_family: "indicator",
-                constraint_id: format!("{constraint_id:?}"),
-                message: format!("variable {id:?} is not in decision_variables"),
-            },
-        )?;
-        validate_evaluated_constraint_used_ids(
             &evaluated_one_hot_constraints,
+        )
+        .map_err(|e| ParseError::new(e).context(message, "evaluated_one_hot_constraints"))?;
+        validate_solution_sos1_constraint_used_ids(
             &decision_variables,
-            message,
-            "evaluated_one_hot_constraints",
-            |constraint_id, id| SolutionError::InvalidConstraintStructure {
-                constraint_family: "one-hot",
-                constraint_id: format!("{constraint_id:?}"),
-                message: format!("variable {id:?} is not in decision_variables"),
-            },
-        )?;
-        validate_evaluated_constraint_used_ids(
             &evaluated_sos1_constraints,
-            &decision_variables,
-            message,
-            "evaluated_sos1_constraints",
-            |constraint_id, id| SolutionError::InvalidConstraintStructure {
-                constraint_family: "SOS1",
-                constraint_id: format!("{constraint_id:?}"),
-                message: format!("variable {id:?} is not in decision_variables"),
-            },
-        )?;
+        )
+        .map_err(|e| ParseError::new(e).context(message, "evaluated_sos1_constraints"))?;
         validate_solution_indicator_stage_values(
             &decision_variables,
             &evaluated_indicator_constraints,
             feasibility_atol,
         )
-        .map_err(|e| {
-            RawParseError::SolutionError(e).context(message, "evaluated_indicator_constraints")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "evaluated_indicator_constraints"))?;
         validate_solution_one_hot_stage_values(
             &decision_variables,
             &evaluated_one_hot_constraints,
             feasibility_atol,
         )
-        .map_err(|e| {
-            RawParseError::SolutionError(e).context(message, "evaluated_one_hot_constraints")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "evaluated_one_hot_constraints"))?;
         validate_solution_sos1_stage_values(
             &decision_variables,
             &evaluated_sos1_constraints,
             feasibility_atol,
         )
-        .map_err(|e| {
-            RawParseError::SolutionError(e).context(message, "evaluated_sos1_constraints")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "evaluated_sos1_constraints"))?;
         validate_evaluated_named_function_used_ids(&decision_variables, &evaluated_named_functions)
-            .map_err(|e| {
-                RawParseError::SolutionError(e).context(message, "evaluated_named_functions")
-            })?;
+            .map_err(|e| ParseError::new(e).context(message, "evaluated_named_functions"))?;
 
         let optimality = crate::v1::Optimality::try_from(self.optimality)
             .map_err(|_| RawParseError::UnknownEnumValue {
@@ -420,24 +360,22 @@ impl Parse for v2::Solution {
 
         let computed_feasible = solution.feasible();
         if computed_feasible != self.feasible {
-            return Err(
-                RawParseError::SolutionError(SolutionError::InconsistentFeasibility {
-                    provided_feasible: self.feasible,
-                    computed_feasible,
-                })
-                .context(message, "feasible"),
-            );
+            return Err(ParseError::new(SolutionError::InconsistentFeasibility {
+                provided_feasible: self.feasible,
+                computed_feasible,
+            })
+            .context(message, "feasible"));
         }
         let provided_feasible_relaxed = self.feasible_relaxed.unwrap_or(self.feasible);
         let computed_feasible_relaxed = solution.feasible_relaxed();
         if computed_feasible_relaxed != provided_feasible_relaxed {
-            return Err(RawParseError::SolutionError(
-                SolutionError::InconsistentFeasibilityRelaxed {
+            return Err(
+                ParseError::new(SolutionError::InconsistentFeasibilityRelaxed {
                     provided_feasible_relaxed,
                     computed_feasible_relaxed,
-                },
-            )
-            .context(message, "feasible_relaxed"));
+                })
+                .context(message, "feasible_relaxed"),
+            );
         }
 
         Ok(solution)
@@ -636,14 +574,18 @@ mod tests {
         expected_constraint_id: &str,
         expected_message: &str,
     ) {
+        let error = error
+            .error
+            .downcast_ref::<SolutionError>()
+            .expect("expected SolutionError");
         assert!(
             matches!(
-                &error.error,
-                RawParseError::SolutionError(SolutionError::InvalidConstraintStructure {
+                error,
+                SolutionError::InvalidConstraintStructure {
                     constraint_family,
                     constraint_id,
                     message,
-                }) if *constraint_family == expected_family
+                } if *constraint_family == expected_family
                     && constraint_id.as_str() == expected_constraint_id
                     && message.as_str() == expected_message
             ),
@@ -665,14 +607,19 @@ mod tests {
 
         let error = invalid_solution_sidecar(source, "ommx.v1.Solution", "evaluated_constraints");
 
+        let solution_error = error
+            .error
+            .downcast_ref::<SolutionError>()
+            .expect("expected SolutionError");
         assert!(matches!(
-            &error.error,
-            RawParseError::SolutionError(SolutionError::InvalidSidecar { message })
+            solution_error,
+            SolutionError::InvalidSidecar { message }
                 if message.as_str() == "Constraint label/provenance references unknown constraint ID ConstraintID(7)"
         ));
         assert_eq!(error.context.len(), 1);
         assert_eq!(error.context[0].message, "ommx.v1.Solution");
         assert_eq!(error.context[0].field, "evaluated_constraints");
+        assert_eq!(error.error.chain().count(), 2);
     }
 
     #[test]
@@ -696,12 +643,16 @@ mod tests {
 
         let error = Solution::try_from(proto).unwrap_err();
 
+        let solution_error = error
+            .error
+            .downcast_ref::<SolutionError>()
+            .expect("expected SolutionError");
         assert!(matches!(
-            &error.error,
-            RawParseError::SolutionError(SolutionError::UndefinedVariableInConstraint {
+            solution_error,
+            SolutionError::UndefinedVariableInConstraint {
                 id,
                 constraint_id,
-            }) if *id == VariableID::from(42) && *constraint_id == ConstraintID::from(7)
+            } if *id == VariableID::from(42) && *constraint_id == ConstraintID::from(7)
         ));
     }
 
@@ -1123,13 +1074,17 @@ mod tests {
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
         let error = result.unwrap_err();
+        let solution_error = error
+            .error
+            .downcast_ref::<SolutionError>()
+            .expect("expected SolutionError");
         assert!(matches!(
-            &error.error,
-            RawParseError::SolutionError(SolutionError::InconsistentVariableValue {
+            solution_error,
+            SolutionError::InconsistentVariableValue {
                 id,
                 state_value,
                 substituted_value,
-            }) if *id == 1 && *state_value == 2.0 && *substituted_value == 3.0
+            } if *id == 1 && *state_value == 2.0 && *substituted_value == 3.0
         ));
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
@@ -1228,10 +1183,14 @@ mod tests {
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
         let error = result.unwrap_err();
+        let solution_error = error
+            .error
+            .downcast_ref::<SolutionError>()
+            .expect("expected SolutionError");
         assert!(matches!(
-            error.error,
-            crate::RawParseError::SolutionError(SolutionError::DuplicatedVariableID { id })
-                if id == crate::VariableID::from(1)
+            solution_error,
+            SolutionError::DuplicatedVariableID { id }
+                if *id == crate::VariableID::from(1)
         ));
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
@@ -1265,11 +1224,14 @@ mod tests {
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
         let error = result.unwrap_err();
+        let solution_error = error
+            .error
+            .downcast_ref::<SolutionError>()
+            .expect("expected SolutionError");
         assert!(matches!(
-            error.error,
-            crate::RawParseError::SolutionError(
-                SolutionError::DuplicatedNamedFunctionID { id }
-            ) if id == crate::NamedFunctionID::from(7)
+            solution_error,
+            SolutionError::DuplicatedNamedFunctionID { id }
+                if *id == crate::NamedFunctionID::from(7)
         ));
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
@@ -1297,21 +1259,54 @@ mod tests {
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
         let error = result.unwrap_err();
+        let solution_error = error
+            .error
+            .downcast_ref::<SolutionError>()
+            .expect("expected SolutionError");
         assert!(matches!(
-            error.error,
-            crate::RawParseError::SolutionError(
-                SolutionError::UndefinedVariableInNamedFunction {
-                    id,
-                    named_function_id,
-                }
-            ) if id == crate::VariableID::from(1)
-                && named_function_id == crate::NamedFunctionID::from(7)
+            solution_error,
+            SolutionError::UndefinedVariableInNamedFunction {
+                id,
+                named_function_id,
+            } if *id == crate::VariableID::from(1)
+                && *named_function_id == crate::NamedFunctionID::from(7)
         ));
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.Solution[evaluated_named_functions]
         Variable ID VariableID(1) used in named function NamedFunctionID(7) is not in decision_variables
         "###);
+    }
+
+    #[test]
+    fn test_v1_solution_parse_classifies_undefined_variable_in_regular_constraint() {
+        let v1_solution = v1::Solution {
+            evaluated_constraints: vec![v1::EvaluatedConstraint {
+                id: 7,
+                equality: v1::Equality::EqualToZero as i32,
+                evaluated_value: 0.0,
+                used_decision_variable_ids: vec![42],
+                ..Default::default()
+            }],
+            feasible: true,
+            feasible_relaxed: Some(true),
+            ..Default::default()
+        };
+
+        let error = v1_solution.parse(&()).unwrap_err();
+
+        let solution_error = error
+            .error
+            .downcast_ref::<SolutionError>()
+            .expect("expected SolutionError");
+        assert!(matches!(
+            solution_error,
+            SolutionError::UndefinedVariableInConstraint {
+                id,
+                constraint_id,
+            } if *id == VariableID::from(42) && *constraint_id == ConstraintID::from(7)
+        ));
+        assert_eq!(error.context[0].field, "evaluated_constraints");
     }
 
     // Data produced by a future SDK whose format version exceeds what this SDK supports

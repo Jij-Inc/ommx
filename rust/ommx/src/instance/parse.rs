@@ -37,19 +37,19 @@ fn validate_fixed_decision_variable_partition(
     let dependent: VariableIDSet = decision_variable_dependency.keys().collect();
 
     if let Some(id) = used.intersection(&dependent).next() {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Dependent variable cannot be used in objectives or constraints: {id:?}"
         ))
         .context(message, "decision_variables"));
     }
     if let Some(id) = used.intersection(&fixed).next() {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Fixed variable {id:?} cannot be used in objectives or constraints"
         ))
         .context(message, "decision_variables"));
     }
     if let Some(id) = fixed.intersection(&dependent).next() {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Variable {id:?} cannot be both fixed and dependent"
         ))
         .context(message, "decision_variables"));
@@ -72,7 +72,7 @@ fn parse_v2_decision_variable_dependency(
         })
         .collect::<Result<BTreeMap<_, _>, ParseError>>()?;
     AcyclicAssignments::new(dependency)
-        .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))
+        .map_err(|e| ParseError::new(e).context(message, "decision_variable_dependency"))
 }
 
 fn parse_v2_output_objective(
@@ -91,10 +91,10 @@ fn parse_v2_output_objective(
         .parse_as(&(), message, "output_objective.function")?;
     for id in function.required_ids() {
         if !allowed_ids.contains(&id) {
-            return Err(RawParseError::InvalidInstance(format!(
-                "Undefined variable ID is used: {id:?}"
-            ))
-            .context(message, "output_objective.function"));
+            return Err(
+                ParseError::new(crate::error!("Undefined variable ID is used: {id:?}"))
+                    .context(message, "output_objective.function"),
+            );
         }
     }
     Ok(OutputObjective::new(
@@ -118,7 +118,7 @@ fn validate_created_constraint_references<T: crate::ConstraintType>(
     ) {
         for id in constraint.required_ids() {
             if !valid_ids.contains(&id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Undefined variable ID is used: {id:?}"
                 ))
                 .context(message, field));
@@ -148,19 +148,19 @@ fn validate_fixed_dependent_partition_from_sets(
     let dependent: VariableIDSet = decision_variable_dependency.keys().collect();
 
     if let Some(id) = used.intersection(&dependent).next() {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Dependent variable cannot be used in objectives or constraints: {id:?}"
         ))
         .context(message, "decision_variables"));
     }
     if let Some(id) = used.intersection(&fixed).next() {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Fixed variable {id:?} cannot be used in objectives or constraints"
         ))
         .context(message, "decision_variables"));
     }
     if let Some(id) = fixed.intersection(&dependent).next() {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Variable {id:?} cannot be both fixed and dependent"
         ))
         .context(message, "decision_variables"));
@@ -191,15 +191,14 @@ fn validate_structural_special_constraints(
             } else {
                 format!("Indicator variable {id:?} is not defined in decision_variables")
             };
-            return Err(
-                RawParseError::InvalidInstance(detail).context(message, "indicator_constraints")
-            );
+            return Err(ParseError::new(crate::error!("{detail}"))
+                .context(message, "indicator_constraints"));
         };
         if variable.kind() != crate::decision_variable::Kind::Binary {
-            return Err(RawParseError::InvalidInstance(format!(
-                "Indicator variable {id:?} must be binary"
-            ))
-            .context(message, "indicator_constraints"));
+            return Err(
+                ParseError::new(crate::error!("Indicator variable {id:?} must be binary"))
+                    .context(message, "indicator_constraints"),
+            );
         }
     }
 
@@ -217,12 +216,11 @@ fn validate_structural_special_constraints(
                 } else {
                     format!("One-hot variable {id:?} is not defined in decision_variables")
                 };
-                return Err(
-                    RawParseError::InvalidInstance(detail).context(message, "one_hot_constraints")
-                );
+                return Err(ParseError::new(crate::error!("{detail}"))
+                    .context(message, "one_hot_constraints"));
             };
             if variable.kind() != crate::decision_variable::Kind::Binary {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "One-hot variable {id:?} must be binary"
                 ))
                 .context(message, "one_hot_constraints"));
@@ -245,7 +243,7 @@ fn validate_structural_special_constraints(
                     format!("SOS1 variable {id:?} is not defined in decision_variables")
                 };
                 return Err(
-                    RawParseError::InvalidInstance(detail).context(message, "sos1_constraints")
+                    ParseError::new(crate::error!("{detail}")).context(message, "sos1_constraints")
                 );
             }
         }
@@ -331,7 +329,7 @@ impl Parse for v1::Instance {
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         for id in objective.required_ids() {
             if !decision_variable_ids.contains(&id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Undefined variable ID is used: {id:?}"
                 ))
                 .context(message, "objective"));
@@ -346,7 +344,7 @@ impl Parse for v1::Instance {
         for constraint in constraints.values() {
             for id in constraint.required_ids() {
                 if !decision_variable_ids.contains(&id) {
-                    return Err(RawParseError::InvalidInstance(format!(
+                    return Err(ParseError::new(crate::error!(
                         "Undefined variable ID is used: {id:?}"
                     ))
                     .context(message, "constraints"));
@@ -380,7 +378,7 @@ impl Parse for v1::Instance {
         for named_function in named_functions.values() {
             for id in named_function.function.required_ids() {
                 if !decision_variable_ids.contains(&id) {
-                    return Err(RawParseError::InvalidInstance(format!(
+                    return Err(ParseError::new(crate::error!(
                         "Undefined variable ID is used: {id:?}"
                     ))
                     .context(message, "named_functions"));
@@ -397,7 +395,7 @@ impl Parse for v1::Instance {
             );
         }
         let decision_variable_dependency = AcyclicAssignments::new(decision_variable_dependency)
-            .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))?;
+            .map_err(|e| ParseError::new(e).context(message, "decision_variable_dependency"))?;
 
         ignore_legacy_constraint_hints(self.constraint_hints, message);
         validate_fixed_decision_variable_partition(
@@ -413,9 +411,7 @@ impl Parse for v1::Instance {
             fixed_decision_variable_values,
             crate::ATol::default(),
         )
-        .map_err(|e| {
-            RawParseError::InvalidInstance(e.to_string()).context(message, "decision_variables")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "decision_variables"))?;
 
         Ok(Instance {
             sense,
@@ -427,9 +423,7 @@ impl Parse for v1::Instance {
                 removed_constraints,
                 constraint_context,
             )
-            .map_err(|e| {
-                RawParseError::InvalidInstance(e.to_string()).context(message, "constraints")
-            })?,
+            .map_err(|e| ParseError::new(e).context(message, "constraints"))?,
             indicator_constraint_collection: Default::default(),
             one_hot_constraint_collection: Default::default(),
             sos1_constraint_collection: Default::default(),
@@ -438,10 +432,7 @@ impl Parse for v1::Instance {
             description: self.description,
             annotations: self.annotations,
             named_functions: crate::NamedFunctionTable::new(named_functions, named_function_labels)
-                .map_err(|e| {
-                    RawParseError::InvalidInstance(e.to_string())
-                        .context(message, "named_functions")
-                })?,
+                .map_err(|e| ParseError::new(e).context(message, "named_functions"))?,
         })
     }
 }
@@ -480,7 +471,7 @@ impl Parse for v2::Instance {
             .parse_as(&(), message, "objective")?;
         for id in objective.required_ids() {
             if !decision_variable_ids.contains(&id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Undefined variable ID is used: {id:?}"
                 ))
                 .context(message, "objective"));
@@ -552,7 +543,7 @@ impl Parse for v2::Instance {
         for named_function in named_functions.values() {
             for id in named_function.function.required_ids() {
                 if !decision_variable_ids.contains(&id) {
-                    return Err(RawParseError::InvalidInstance(format!(
+                    return Err(ParseError::new(crate::error!(
                         "Undefined variable ID is used: {id:?}"
                     ))
                     .context(message, "named_functions"));
@@ -564,7 +555,7 @@ impl Parse for v2::Instance {
             parse_v2_decision_variable_dependency(self.decision_variable_dependency, message)?;
         for id in decision_variable_dependency.keys() {
             if !decision_variable_ids.contains(&id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Variable ID {id:?} in decision_variable_dependency is not in decision_variables"
                 ))
                 .context(message, "decision_variable_dependency"));
@@ -572,7 +563,7 @@ impl Parse for v2::Instance {
         }
         for id in decision_variable_dependency.required_ids() {
             if !decision_variable_ids.contains(&id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Undefined variable ID is used in decision_variable_dependency: {id:?}"
                 ))
                 .context(message, "decision_variable_dependency"));
@@ -700,9 +691,8 @@ impl Parse for v1::ParametricInstance {
             .decision_variables
             .parse_as(&(), message, "decision_variables")?;
 
-        let parameters = ParameterTable::from_v1_parameters(self.parameters).map_err(|e| {
-            RawParseError::InvalidInstance(e.to_string()).context(message, "parameters")
-        })?;
+        let parameters = ParameterTable::from_v1_parameters(self.parameters)
+            .map_err(|e| ParseError::new(e).context(message, "parameters"))?;
 
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();
@@ -712,8 +702,9 @@ impl Parse for v1::ParametricInstance {
             .collect();
         if !intersection.is_empty() {
             let id = *intersection.iter().next().unwrap();
-            return Err(RawParseError::from(crate::ParameterIDCollision { id })
-                .context(message, "parameters"));
+            return Err(
+                ParseError::new(crate::ParameterIDCollision { id }).context(message, "parameters")
+            );
         }
 
         let objective = self
@@ -731,7 +722,7 @@ impl Parse for v1::ParametricInstance {
             .collect();
         for id in objective.required_ids() {
             if !all_variable_ids.contains(&id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Undefined variable ID is used: {id:?}"
                 ))
                 .context(message, "objective"));
@@ -747,7 +738,7 @@ impl Parse for v1::ParametricInstance {
         for constraint in constraints.values() {
             for id in constraint.required_ids() {
                 if !all_variable_ids.contains(&id) {
-                    return Err(RawParseError::InvalidInstance(format!(
+                    return Err(ParseError::new(crate::error!(
                         "Undefined variable ID is used: {id:?}"
                     ))
                     .context(message, "constraints"));
@@ -781,7 +772,7 @@ impl Parse for v1::ParametricInstance {
         for named_function in named_functions.values() {
             for id in named_function.function.required_ids() {
                 if !all_variable_ids.contains(&id) {
-                    return Err(RawParseError::InvalidInstance(format!(
+                    return Err(ParseError::new(crate::error!(
                         "Undefined variable ID is used: {id:?}"
                     ))
                     .context(message, "named_functions"));
@@ -798,7 +789,7 @@ impl Parse for v1::ParametricInstance {
             );
         }
         let decision_variable_dependency = AcyclicAssignments::new(decision_variable_dependency)
-            .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))?;
+            .map_err(|e| ParseError::new(e).context(message, "decision_variable_dependency"))?;
 
         ignore_legacy_constraint_hints(self.constraint_hints, message);
         validate_fixed_decision_variable_partition(
@@ -814,9 +805,7 @@ impl Parse for v1::ParametricInstance {
             fixed_decision_variable_values,
             crate::ATol::default(),
         )
-        .map_err(|e| {
-            RawParseError::InvalidInstance(e.to_string()).context(message, "decision_variables")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "decision_variables"))?;
 
         Ok(ParametricInstance {
             sense,
@@ -829,17 +818,12 @@ impl Parse for v1::ParametricInstance {
                 removed_constraints,
                 constraint_context,
             )
-            .map_err(|e| {
-                RawParseError::InvalidInstance(e.to_string()).context(message, "constraints")
-            })?,
+            .map_err(|e| ParseError::new(e).context(message, "constraints"))?,
             indicator_constraint_collection: Default::default(),
             one_hot_constraint_collection: Default::default(),
             sos1_constraint_collection: Default::default(),
             named_functions: crate::NamedFunctionTable::new(named_functions, named_function_labels)
-                .map_err(|e| {
-                    RawParseError::InvalidInstance(e.to_string())
-                        .context(message, "named_functions")
-                })?,
+                .map_err(|e| ParseError::new(e).context(message, "named_functions"))?,
             decision_variable_dependency,
             description: self.description,
             annotations: self.annotations,
@@ -873,7 +857,7 @@ impl Parse for v2::ParametricInstance {
         let decision_variable_ids: VariableIDSet = decision_variables.keys().copied().collect();
         let parameter_ids: VariableIDSet = parameters.keys().copied().collect();
         if let Some(id) = decision_variable_ids.intersection(&parameter_ids).next() {
-            return Err(RawParseError::from(crate::ParameterIDCollision { id: *id })
+            return Err(ParseError::new(crate::ParameterIDCollision { id: *id })
                 .context(message, "parameters"));
         }
         let all_variable_ids: VariableIDSet = decision_variable_ids
@@ -890,7 +874,7 @@ impl Parse for v2::ParametricInstance {
             .parse_as(&(), message, "objective")?;
         for id in objective.required_ids() {
             if !all_variable_ids.contains(&id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Undefined variable ID is used: {id:?}"
                 ))
                 .context(message, "objective"));
@@ -962,7 +946,7 @@ impl Parse for v2::ParametricInstance {
         for named_function in named_functions.values() {
             for id in named_function.function.required_ids() {
                 if !all_variable_ids.contains(&id) {
-                    return Err(RawParseError::InvalidInstance(format!(
+                    return Err(ParseError::new(crate::error!(
                         "Undefined variable ID is used: {id:?}"
                     ))
                     .context(message, "named_functions"));
@@ -974,7 +958,7 @@ impl Parse for v2::ParametricInstance {
             parse_v2_decision_variable_dependency(self.decision_variable_dependency, message)?;
         for id in decision_variable_dependency.keys() {
             if !decision_variable_ids.contains(&id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Variable ID {id:?} in decision_variable_dependency is not in decision_variables"
                 ))
                 .context(message, "decision_variable_dependency"));
@@ -982,7 +966,7 @@ impl Parse for v2::ParametricInstance {
         }
         for id in decision_variable_dependency.required_ids() {
             if !all_variable_ids.contains(&id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Undefined variable ID is used in decision_variable_dependency: {id:?}"
                 ))
                 .context(message, "decision_variable_dependency"));
@@ -1132,18 +1116,16 @@ mod tests {
             .downcast_ref::<ParseError>()
             .expect("semantic byte decoding must retain ParseError as the outer owner");
         assert!(matches!(
-            &parse_error.error,
-            RawParseError::ParameterIDCollision(crate::ParameterIDCollision { id })
+            parse_error
+                .error
+                .downcast_ref::<crate::ParameterIDCollision>(),
+            Some(crate::ParameterIDCollision { id })
                 if *id == expected_id
         ));
 
-        let raw_source = parse_error
+        let signal_source = parse_error
             .source()
-            .expect("ParseError must expose its RawParseError source");
-        assert!(raw_source.downcast_ref::<RawParseError>().is_some());
-        let signal_source = raw_source
-            .source()
-            .expect("RawParseError must expose the parameter collision signal");
+            .expect("ParseError must expose the parameter collision signal");
         assert!(matches!(
             signal_source.downcast_ref::<crate::ParameterIDCollision>(),
             Some(crate::ParameterIDCollision { id }) if *id == expected_id
