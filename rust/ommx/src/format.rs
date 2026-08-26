@@ -489,34 +489,21 @@ mod tests {
         let x = Function::from(linear!(1));
         let y = Function::from(linear!(2));
 
-        let cases = [
-            ("neg", -x.clone().abs()),
-            ("abs", x.clone().abs()),
-            ("signum", x.clone().signum()),
-            ("powi", x.clone().powi(-2)),
-            ("add", (x.clone().abs() + y.clone()).unwrap()),
-            ("mul", (x.clone().abs() * y.clone()).unwrap()),
-            ("min", x.clone().min(y.clone())),
-            ("max", x.clone().max(y.clone())),
-            ("div", (x / y).unwrap()),
-        ];
-        let output = cases
-            .into_iter()
-            .map(|(name, function)| format!("{name}: {function}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        insta::assert_snapshot!(output, @r###"
-        neg: -(abs(x1))
-        abs: abs(x1)
-        signum: signum(x1)
-        powi: powi(x1, -2)
-        add: (abs(x1)) + (x2)
-        mul: (abs(x1)) * (x2)
-        min: min(x1, x2)
-        max: max(x1, x2)
-        div: (x1) / (x2)
-        "###);
+        insta::assert_snapshot!(-x.clone().abs(), @"-(abs(x1))");
+        insta::assert_snapshot!(x.clone().abs(), @"abs(x1)");
+        insta::assert_snapshot!(x.clone().signum(), @"signum(x1)");
+        insta::assert_snapshot!(x.clone().powi(-2), @"powi(x1, -2)");
+        insta::assert_snapshot!(
+            (x.clone().abs() + y.clone()).unwrap(),
+            @"(abs(x1)) + (x2)"
+        );
+        insta::assert_snapshot!(
+            (x.clone().abs() * y.clone()).unwrap(),
+            @"(abs(x1)) * (x2)"
+        );
+        insta::assert_snapshot!(x.clone().min(y.clone()), @"min(x1, x2)");
+        insta::assert_snapshot!(x.clone().max(y.clone()), @"max(x1, x2)");
+        insta::assert_snapshot!((x / y).unwrap(), @"(x1) / (x2)");
     }
 
     #[test]
@@ -527,14 +514,19 @@ mod tests {
 
         let left_grouped = ((x.clone() + y.clone()).unwrap() + z.clone()).unwrap();
         let right_grouped = (x + (y + z).unwrap()).unwrap();
-        let output =
-            format!("left: {left_grouped}\nright: {right_grouped}\ndebug: {left_grouped:?}");
 
-        insta::assert_snapshot!(output, @r###"
-        left: ((abs(x1)) + (signum(x2))) + (powi(x3, 2))
-        right: (abs(x1)) + ((signum(x2)) + (powi(x3, 2)))
-        debug: Expression([Push(Linear(x1)), Unary(Abs), Push(Linear(x2)), Unary(Signum), Associative(Add), Push(Linear(x3)), Unary(Powi(2)), Associative(Add)])
-        "###);
+        insta::assert_snapshot!(
+            left_grouped,
+            @"((abs(x1)) + (signum(x2))) + (powi(x3, 2))"
+        );
+        insta::assert_snapshot!(
+            right_grouped,
+            @"(abs(x1)) + ((signum(x2)) + (powi(x3, 2)))"
+        );
+        insta::assert_debug_snapshot!(
+            left_grouped,
+            @"Expression([Push(Linear(x1)), Unary(Abs), Push(Linear(x2)), Unary(Signum), Associative(Add), Push(Linear(x3)), Unary(Powi(2)), Associative(Add)])"
+        );
     }
 
     #[test]
@@ -549,10 +541,10 @@ mod tests {
             (VariableID::from(3), "gamma".to_string()),
         ]);
 
-        let formatted =
+        insta::assert_debug_snapshot!(
             format_function_with_symbols(&function, &symbols, FunctionFormatOptions::default())
-                .unwrap();
-        insta::assert_debug_snapshot!(formatted, @r###"
+                .unwrap(),
+            @r###"
         FormattedFunction {
             text: "(min(abs(alpha), signum(beta))) / (powi(gamma, -1))",
             total_terms: 3,
@@ -560,18 +552,20 @@ mod tests {
             omitted_terms: 0,
             truncated_by_chars: false,
         }
-        "###);
+        "###
+        );
 
-        let term_limited = format_function_with_symbols(
-            &function,
-            &symbols,
-            FunctionFormatOptions {
-                max_terms: Some(2),
-                max_chars: None,
-            },
-        )
-        .unwrap();
-        insta::assert_debug_snapshot!(term_limited, @r###"
+        insta::assert_debug_snapshot!(
+            format_function_with_symbols(
+                &function,
+                &symbols,
+                FunctionFormatOptions {
+                    max_terms: Some(2),
+                    max_chars: None,
+                },
+            )
+            .unwrap(),
+            @r###"
         FormattedFunction {
             text: "…",
             total_terms: 3,
@@ -579,18 +573,20 @@ mod tests {
             omitted_terms: 3,
             truncated_by_chars: false,
         }
-        "###);
+        "###
+        );
 
-        let char_limited = format_function_with_symbols(
-            &function,
-            &symbols,
-            FunctionFormatOptions {
-                max_terms: None,
-                max_chars: Some(12),
-            },
-        )
-        .unwrap();
-        insta::assert_debug_snapshot!(char_limited, @r###"
+        insta::assert_debug_snapshot!(
+            format_function_with_symbols(
+                &function,
+                &symbols,
+                FunctionFormatOptions {
+                    max_terms: None,
+                    max_chars: Some(12),
+                },
+            )
+            .unwrap(),
+            @r###"
         FormattedFunction {
             text: "(min(abs(alp",
             total_terms: 3,
@@ -598,7 +594,8 @@ mod tests {
             omitted_terms: 3,
             truncated_by_chars: true,
         }
-        "###);
+        "###
+        );
     }
 
     #[test]
