@@ -318,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn arithmetic_normalizes_low_degree_results() {
+    fn arithmetic_normalizes_polynomials_but_keeps_division_composed() {
         let linear = Function::from(linear!(1));
         let constant = Function::from(coeff!(2.0));
 
@@ -332,7 +332,7 @@ mod tests {
         ));
         assert!(matches!(
             (linear.clone() / coeff!(2.0)).unwrap(),
-            Function::Linear(_)
+            Function::Expression(_)
         ));
         assert!(matches!((linear.clone() - linear).unwrap(), Function::Zero));
     }

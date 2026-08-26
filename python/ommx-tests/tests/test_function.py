@@ -356,6 +356,30 @@ def test_function_evaluation_reports_undefined_integer_power_domain():
         (0 * reciprocal).evaluate({1: 0})
 
 
+def test_function_zero_sensitive_operations_defer_to_evaluation_atol():
+    x = Function(DecisionVariable.continuous(1))
+    tiny = 1e-8
+    coarse_atol = 1e-6
+    fine_atol = 1e-9
+
+    signum = x.signum().partial_evaluate({1: tiny}, atol=coarse_atol)
+    assert signum.type_name == "Expression"
+    assert signum.evaluate({}, atol=coarse_atol) == 0
+    assert signum.evaluate({}, atol=fine_atol) == 1
+
+    reciprocal = (1 / x).partial_evaluate({1: tiny}, atol=coarse_atol)
+    assert reciprocal.type_name == "Expression"
+    with pytest.raises(ValueError, match="division by zero"):
+        reciprocal.evaluate({}, atol=coarse_atol)
+    assert reciprocal.evaluate({}, atol=fine_atol) == pytest.approx(1 / tiny)
+
+    inverse = x.powi(-1).partial_evaluate({1: tiny}, atol=coarse_atol)
+    assert inverse.type_name == "Expression"
+    with pytest.raises(ValueError, match="negative integer exponent"):
+        inverse.evaluate({}, atol=coarse_atol)
+    assert inverse.evaluate({}, atol=fine_atol) == pytest.approx(1 / tiny)
+
+
 def test_function_evaluation_rejects_non_finite_results():
     function = Function(Linear(terms={1: sys.float_info.max}))
 

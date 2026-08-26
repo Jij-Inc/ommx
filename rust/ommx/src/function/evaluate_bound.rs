@@ -814,16 +814,17 @@ mod tests {
 
     #[test]
     fn division_avoids_an_overflowing_reciprocal_intermediate() {
-        let smallest = f64::from_bits(1);
+        let nonzero = f64::from_bits(2);
+        let atol = ATol::new(f64::from_bits(1)).unwrap();
         let lhs = Function::from(linear!(1));
         let rhs = Function::from(linear!(2));
         let function = (lhs / rhs).unwrap();
-        let state = crate::v1::State::from_iter([(1, smallest), (2, smallest)]);
+        let state = crate::v1::State::from_iter([(1, nonzero), (2, nonzero)]);
         let bounds = Bounds::from([
-            (VariableID::from(1), Bound::new(smallest, smallest).unwrap()),
-            (VariableID::from(2), Bound::new(smallest, smallest).unwrap()),
+            (VariableID::from(1), Bound::new(nonzero, nonzero).unwrap()),
+            (VariableID::from(2), Bound::new(nonzero, nonzero).unwrap()),
         ]);
-        let evaluated = function.evaluate(&state, ATol::default()).unwrap();
+        let evaluated = function.evaluate(&state, atol).unwrap();
 
         assert_eq!(evaluated, 1.0);
         assert_contains(function.evaluate_bound(&bounds).unwrap(), evaluated);

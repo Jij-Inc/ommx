@@ -323,7 +323,7 @@ pub fn unary_operation(operator: UnaryOperator, operand: Function) -> Function {
                 return from_instructions_exact(expression.instructions)
                     .expect("removing a trailing double negation preserves validity");
             }
-            if operator == inner && matches!(operator, UnaryOperator::Abs | UnaryOperator::Signum) {
+            if operator == inner && operator == UnaryOperator::Abs {
                 return Function::Expression(expression);
             }
         }
@@ -335,10 +335,8 @@ pub fn unary_operation(operator: UnaryOperator, operand: Function) -> Function {
         let value = match operator {
             UnaryOperator::Neg => Some(-value),
             UnaryOperator::Abs => Some(value.abs()),
-            UnaryOperator::Signum if value < 0.0 => Some(-1.0),
-            UnaryOperator::Signum if value > 0.0 => Some(1.0),
-            UnaryOperator::Signum => Some(0.0),
-            UnaryOperator::Powi(exponent) if value == 0.0 && exponent < 0 => None,
+            UnaryOperator::Signum => None,
+            UnaryOperator::Powi(exponent) if exponent < 0 => None,
             UnaryOperator::Powi(exponent) => Some(value.powi(exponent)),
         };
         if let Some(value) = value.filter(|value| value.is_finite()) {
@@ -375,24 +373,6 @@ pub fn associative_operation(
 }
 
 pub fn binary_operation(operator: BinaryOperator, lhs: Function, rhs: Function) -> Function {
-    if operator == BinaryOperator::Div && lhs.is_polynomial() {
-        if let Some(rhs_value) = as_constant(&rhs) {
-            if let Ok(rhs_coefficient) = Coefficient::try_from(rhs_value) {
-                if let Ok(divided) = lhs.clone() / rhs_coefficient {
-                    return divided;
-                }
-            }
-        }
-    }
-    if let (Some(lhs_value), Some(rhs_value)) = (as_constant(&lhs), as_constant(&rhs)) {
-        let value = match operator {
-            BinaryOperator::Div if rhs_value != 0.0 => Some(lhs_value / rhs_value),
-            BinaryOperator::Div => None,
-        };
-        if let Some(value) = value.filter(|value| value.is_finite()) {
-            return Function::try_from(value).expect("value was checked as finite");
-        }
-    }
     binary_expression(operator, lhs, rhs)
 }
 
@@ -417,7 +397,10 @@ impl Function {
         unary_operation(UnaryOperator::Abs, self)
     }
 
-    /// Mathematical sign function, with `signum(0) = 0`.
+    /// Mathematical sign function.
+    ///
+    /// Evaluation returns zero when the absolute value of the operand is less
+    /// than or equal to the caller-provided [`crate::ATol`].
     pub fn signum(self) -> Self {
         unary_operation(UnaryOperator::Signum, self)
     }
@@ -437,7 +420,9 @@ impl Function {
     /// The exponent is an operation parameter rather than another [`Function`].
     /// Apart from identity and constant folding, the resulting expression
     /// remains composed and therefore has no compact polynomial degree, even
-    /// for non-negative exponents.
+    /// for non-negative exponents. With a negative exponent, evaluation fails
+    /// when the absolute value of the operand is less than or equal to the
+    /// caller-provided [`crate::ATol`].
     pub fn powi(self, exponent: i32) -> Self {
         unary_operation(UnaryOperator::Powi(exponent), self)
     }
@@ -475,6 +460,64 @@ mod tests {
             -1.0
         );
         assert_eq!(signum.evaluate(&state(3.0), ATol::default()).unwrap(), 1.0);
+    }
+
+    #[test]
+    fn zero_sensitive_constant_operations_remain_composed_until_evaluation() {
+        let tiny = constant(1e-8);
+        let signum = tiny.clone().signum();
+        let reciprocal = (Function::one() / tiny.clone()).unwrap();
+        let inverse = tiny.powi(-1);
+
+        assert!(matches!(&signum, Function::Expression(_)));
+        assert!(matches!(&reciprocal, Function::Expression(_)));
+        assert!(matches!(&inverse, Function::Expression(_)));
+
+        let state = crate::v1::State::default();
+        let coarse = ATol::new(1e-6).unwrap();
+        let fine = ATol::new(1e-9).unwrap();
+        assert_eq!(signum.evaluate(&state, coarse).unwrap(), 0.0);
+        assert_eq!(signum.evaluate(&state, fine).unwrap(), 1.0);
+
+        let error = reciprocal.evaluate(&state, coarse).unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<FunctionEvaluationError>(),
+            Some(FunctionEvaluationError::DivisionByZero)
+        ));
+        assert_eq!(reciprocal.evaluate(&state, fine).unwrap(), 1e8);
+
+        let error = inverse.evaluate(&state, coarse).unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<FunctionEvaluationError>(),
+            Some(FunctionEvaluationError::ZeroToNegativeIntegerPower { exponent: -1 })
+        ));
+        assert_eq!(inverse.evaluate(&state, fine).unwrap(), 1e8);
+    }
+
+    #[test]
+    fn nested_signum_is_not_simplified_across_tolerance_boundaries() {
+        let nested = Function::from(linear!(1)).signum().signum();
+        let Function::Expression(program) = &nested else {
+            panic!("nested signum should remain a composed expression");
+        };
+        assert_eq!(
+            instructions(program)
+                .iter()
+                .filter(|instruction| matches!(
+                    instruction,
+                    Instruction::Unary(UnaryOperator::Signum)
+                ))
+                .count(),
+            2
+        );
+
+        // signum(3) is 1, which the outer signum classifies as zero at this tolerance.
+        assert_eq!(
+            nested
+                .evaluate(&state(3.0), ATol::new(2.0).unwrap())
+                .unwrap(),
+            0.0
+        );
     }
 
     #[test]
@@ -630,11 +673,24 @@ mod tests {
     }
 
     #[test]
-    fn division_by_a_nonzero_constant_keeps_the_polynomial_fast_path() {
+    fn division_by_a_coefficient_remains_composed_until_evaluation() {
         let x = Function::from(linear!(1));
-        let divided = binary_operation(BinaryOperator::Div, x, constant(2.0));
-        assert!(divided.is_polynomial());
-        assert_eq!(divided.evaluate(&state(4.0), ATol::default()).unwrap(), 2.0);
+        let divided = (x / coeff!(2.0)).unwrap();
+        assert!(matches!(&divided, Function::Expression(_)));
+        assert_eq!(
+            divided
+                .evaluate(&state(4.0), ATol::new(1.0).unwrap())
+                .unwrap(),
+            2.0
+        );
+
+        let error = divided
+            .evaluate(&state(4.0), ATol::new(2.0).unwrap())
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<FunctionEvaluationError>(),
+            Some(FunctionEvaluationError::DivisionByZero)
+        ));
     }
 
     #[test]
@@ -663,7 +719,19 @@ mod tests {
             .signum()
             .substitute_one(1.into(), &constant(-4.0))
             .unwrap();
-        assert_eq!(as_constant(&substituted), Some(-1.0));
+        assert!(matches!(&substituted, Function::Expression(_)));
+        assert_eq!(
+            substituted
+                .evaluate(&crate::v1::State::default(), ATol::new(1.0).unwrap())
+                .unwrap(),
+            -1.0
+        );
+        assert_eq!(
+            substituted
+                .evaluate(&crate::v1::State::default(), ATol::new(5.0).unwrap())
+                .unwrap(),
+            0.0
+        );
     }
 
     #[test]

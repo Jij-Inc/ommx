@@ -107,26 +107,30 @@ The built-in Python functions `min(fx, fy)` and `max(fx, fy)` perform comparison
 
 `fx**n` and `fx.powi(n)` are equivalent, and `n` must fit in a signed 32-bit integer. Floating-point or function-valued exponents and reverse exponentiation such as `2**fx` are not supported.
 
-Within a composed expression, operands are encountered from left to right and every associative application still combines exactly two values. Both `(abs(a) + abs(b)) + abs(c)` and `abs(a) + (abs(b) + abs(c))` therefore retain their grouping and operation order. Overflow and undefined-operation errors occur in that represented order. The protobuf wire format stores the composition as a flat reverse Polish notation (RPN) instruction sequence rather than a recursively nested tree. Arithmetic containing only polynomials continues to normalize to the compact polynomial representation.
+Within a composed expression, operands are encountered from left to right and every associative application still combines exactly two values. Both `(abs(a) + abs(b)) + abs(c)` and `abs(a) + (abs(b) + abs(c))` therefore retain their grouping and operation order. Overflow and undefined-operation errors occur in that represented order. The protobuf wire format stores the composition as a flat reverse Polish notation (RPN) instruction sequence rather than a recursively nested tree. Exact addition, subtraction, multiplication, and negation containing only polynomials continue to normalize to the compact polynomial representation. Division of a `Function` remains a composed expression even when the divisor is a constant or coefficient, because whether that divisor is treated as zero depends on the evaluation tolerance.
 
-Composed functions follow real-valued evaluation semantics:
+Composed functions follow real-valued evaluation semantics. At an explicit evaluation entry point, the `atol` argument defines zero as $|v| \leq \mathtt{atol}$ (including the boundary):
 
-- `signum(0)` is `0` (including signed zero).
-- Division is undefined when the denominator is zero.
-- Raising zero to a negative integer power is undefined; `0**0` is defined as `1`.
+- `signum(v)` is `0` when $|v| \leq \mathtt{atol}$, `-1` below that interval, and `1` above it.
+- Division is undefined when the absolute value of the denominator is at most `atol`.
+- Raising a value with absolute value at most `atol` to a negative integer power is undefined; `0**0` is defined as `1`.
 - Negative bases are supported because every exponent is an integer.
 - Undefined operations and non-finite intermediate results raise `ValueError` in Python.
 
-Division and negative integer powers can make a `Function` partial. Algebraic simplification preserves that domain: for example, `0 * (1 / fx)` is still undefined where `fx == 0`.
+If `atol` is omitted, that evaluation call uses the configured default tolerance. Expression construction, substitution, and partial evaluation do not use a default tolerance to decide these zero-sensitive operations. Their `Signum`, `Div`, and negative `Powi` nodes remain in the RPN expression so a later evaluation call can apply its own `atol`.
+
+Division and negative integer powers can make a `Function` partial. Algebraic simplification preserves that domain: for example, `0 * (1 / fx)` is still undefined wherever $|\mathtt{fx}| \leq \mathtt{atol}$.
 
 ```{code-cell} ipython3
 try:
-    (1 / fx).evaluate({1: 0})
+    (1 / fx).evaluate({1: 0}, atol=1e-6)
 except ValueError as e:
     print(f"Error: {e}")
 ```
 
 Polynomial metadata is available only when the `Function` uses the compact polynomial representation. `degree()` and `num_terms()` return `None` for composed expressions, while coefficient properties such as `terms` raise `TypeError`. Apart from identity and constant folding, an integer-power expression remains composed even when its exponent is non-negative; use explicit multiplication when you need a compact expanded polynomial. Solver adapters also reject a composed expression unless their declared input class supports it.
+
+Compact polynomial normalization is exact: it removes an actual zero produced by cancellation or floating-point underflow, but retains every finite nonzero coefficient regardless of magnitude. It does not use `atol` to prune small terms. OMMX does not currently perform approximate cleanup implicitly; such cleanup would require a separate, explicit API rather than being part of expression construction or evaluation.
 
 ## Substitution and Partial Evaluation of Decision Variables
 
@@ -153,7 +157,7 @@ linear2= linear.partial_evaluate({1: 1})
 print(f"{linear2=}")
 ```
 
-`Linear`, `Quadratic`, and `Polynomial` partial evaluation keeps the original Python type. For a composed `Function`, the expression structure that still depends on unassigned variables is preserved; when every operand becomes known, it is folded to a compact constant `Function`.
+`Linear`, `Quadratic`, and `Polynomial` partial evaluation keeps the original Python type. For a composed `Function`, the expression structure that still depends on unassigned variables is preserved. A closed subexpression may be folded only when its result is independent of `atol`. Zero-sensitive `Signum`, `Div`, and negative `Powi` subexpressions remain composed even after all their variables have been assigned, so the `atol` of a later `evaluate` call still determines their result or domain error.
 
 +++
 

@@ -226,6 +226,37 @@ mod tests {
         assert_abs_diff_eq!(linear, before);
     }
 
+    #[test]
+    fn partial_evaluate_preserves_tiny_nonzero_coefficients_independently_of_atol() {
+        let tiny = 1e-12;
+        let mut quadratic =
+            crate::Quadratic::single_term(crate::quadratic!(1, 2), crate::coeff!(1.0));
+        let assigned = State::from_iter([(1, tiny)]);
+
+        quadratic
+            .partial_evaluate(&assigned, crate::ATol::new(1.0).unwrap())
+            .unwrap();
+
+        assert_eq!(quadratic.num_terms(), 1);
+        assert_eq!(
+            quadratic
+                .get(&crate::quadratic!(2))
+                .expect("the exact nonzero coefficient must remain")
+                .into_inner(),
+            tiny
+        );
+        assert_eq!(
+            quadratic.required_ids(),
+            VariableIDSet::from([VariableID::from(2)])
+        );
+        assert_eq!(
+            quadratic
+                .evaluate(&State::from_iter([(2, 1.0)]), crate::ATol::default())
+                .unwrap(),
+            tiny
+        );
+    }
+
     fn polynomial_and_samples<M: Monomial>(
     ) -> impl Strategy<Value = (PolynomialBase<M>, Sampled<State>)> {
         PolynomialBase::arbitrary()

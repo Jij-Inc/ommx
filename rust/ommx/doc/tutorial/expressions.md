@@ -46,6 +46,25 @@ explicit composed integer-power expression even for a non-negative exponent.
 Use explicit multiplication when a compact expanded polynomial is required by
 a polynomial-only solver or exporter.
 
+Compact polynomial addition, subtraction, multiplication, and negation are
+normalized exactly. A finite non-zero coefficient is retained regardless of
+its magnitude; [`ATol`](crate::ATol) is not used to discard small terms.
+Cancellation or floating-point underflow removes a term only when its computed
+coefficient is actually zero. OMMX does not currently perform approximate
+cleanup implicitly; such cleanup would require a separate, explicit API.
+
+Division of a [`Function`](crate::Function) remains composed even when its
+divisor is a constant [`Coefficient`](crate::Coefficient). At evaluation time,
+the caller's [`ATol`](crate::ATol) defines zero inclusively: `abs(value) <=
+atol`. [`Function::signum`](crate::Function::signum) returns zero in that
+interval, while division by such a denominator and raising such a value to a
+negative integer power return a
+[`FunctionEvaluationError`](crate::FunctionEvaluationError). Construction,
+substitution, and partial evaluation retain these zero-sensitive RPN nodes so
+that a later [`Evaluate::evaluate`](crate::Evaluate::evaluate) call chooses the
+tolerance. Closed operations whose result is independent of `ATol` may still be
+folded.
+
 A composed [`Function`](crate::Function) uses a single
 [`Function::Expression`](crate::Function::Expression) variant backed by a
 validated, flat reverse-Polish expression program. Every associative instruction

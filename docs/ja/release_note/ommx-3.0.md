@@ -23,11 +23,20 @@ h = f.powi(-2)
 名前付きの演算には {meth}`~ommx.Function.signum`、
 {meth}`~ommx.Function.minimum`、{meth}`~ommx.Function.maximum` を使用します。
 `f**n` と {meth}`~ommx.Function.powi` は同じ演算です。浮動小数や関数値の指数、
-および反転累乗はサポートしません。ゼロ除算、ゼロを負の整数で累乗する演算、
-非有限なevaluation結果は`ValueError`になります。複合式はOMMX protobuf payloadへ
+および反転累乗はサポートしません。評価時には、境界を含む
+`abs(value) <= atol`をゼロと判定します。`signum`は`0`を返し、そのように
+判定された値を分母にする除算や負の整数による累乗は`ValueError`になります。
+複合式はOMMX protobuf payloadへ
 flat な逆ポーランド記法（RPN）の命令列としてserializeされます。一方、現在の
 HiGHS、Python-MIP、PySCIPOpt adapterの入力はpolynomialに限られるため、複合式を
 含むmodelは明示的に拒否されます。
+
+ゼロに依存する`Signum`、`Div`、負の`Powi`ノードは、式の構築、代入、部分評価を
+経ても保持されます。後続の評価処理に渡す`atol`が、結果または定義域エラーを
+決定します。特に、`Function`を定数や係数で除算した場合も複合式のままです。
+厳密な多項式正規化は有限かつ非ゼロの係数をすべて保持し、許容誤差による
+cleanupを暗黙には行いません。近似的なcleanupを将来提供する場合は、別の明示的な
+APIになります。
 
 `Function`が常にpolynomialとは限らなくなったため、複合式に対する
 {meth}`~ommx.Function.degree` と {meth}`~ommx.Function.num_terms` は`None`を返します。

@@ -29,9 +29,11 @@ returns the typed error directly):
 - [`CoefficientError`](crate::CoefficientError), [`BoundError`](crate::BoundError), [`AtolError`](crate::AtolError),
   [`InvalidPenaltyWeight`](crate::InvalidPenaltyWeight) — numeric-domain validation failures.
 - [`FunctionEvaluationError`](crate::FunctionEvaluationError) — identifies
-  undefined division, zero raised to a negative integer power, and non-finite
-  function results, so a caller can change the state or expression before
-  retrying evaluation.
+  undefined division, a zero-classified value raised to a negative integer
+  power, and non-finite function results. At evaluation time, the caller's
+  [`ATol`](crate::ATol) classifies a value as zero when `abs(value) <= atol`,
+  including the boundary. A caller can change the state, expression, or
+  evaluation tolerance before retrying.
 - [`FixedPenaltyWeightIDMismatch`](crate::FixedPenaltyWeightIDMismatch) —
   identifies the missing and unexpected active constraint IDs in a caller-owned
   fixed-penalty weight map, so the caller can correct the keys and retry the

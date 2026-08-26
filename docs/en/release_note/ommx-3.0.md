@@ -23,12 +23,22 @@ h = f.powi(-2)
 Use {meth}`~ommx.Function.signum`, {meth}`~ommx.Function.minimum`, and
 {meth}`~ommx.Function.maximum` for the named operations. `f**n` and
 {meth}`~ommx.Function.powi` are equivalent; floating-point or function-valued
-exponents and reverse exponentiation are not supported. Division by zero, zero
-raised to a negative integer power, and non-finite evaluation results raise
-`ValueError`. Composed expressions are serialized as flat reverse Polish
-notation (RPN) instruction sequences in OMMX protobuf payloads. HiGHS,
+exponents and reverse exponentiation are not supported. At evaluation,
+`abs(value) <= atol` is classified as zero, including the boundary: `signum`
+returns `0`, while division by such a denominator and raising such a value to a
+negative integer power raise `ValueError`. Composed expressions are serialized
+as flat reverse Polish notation (RPN) instruction sequences in OMMX protobuf
+payloads. HiGHS,
 Python-MIP, and PySCIPOpt still reject composed expressions explicitly because
 their current adapter inputs remain polynomial-only.
+
+Zero-sensitive `Signum`, `Div`, and negative `Powi` nodes are retained through
+construction, substitution, and partial evaluation so that a later evaluation
+call supplies the `atol` that determines their result or domain error. In
+particular, dividing a `Function` by a constant or coefficient remains a
+composed expression. Exact polynomial normalization retains every finite
+nonzero coefficient and does not apply an implicit tolerance-based cleanup. A
+future approximate-cleanup API would be separate and explicit.
 
 Because a `Function` is no longer necessarily a polynomial,
 {meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` return

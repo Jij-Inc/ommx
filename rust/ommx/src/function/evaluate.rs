@@ -21,13 +21,25 @@ fn ensure_finite_result(operation: &'static str, value: f64) -> crate::Result<f6
     }
 }
 
+fn is_zero(value: f64, atol: crate::ATol) -> bool {
+    value.abs() <= *atol
+}
+
+fn unary_partial_fold_is_atol_independent(operator: UnaryOperator) -> bool {
+    match operator {
+        UnaryOperator::Neg | UnaryOperator::Abs => true,
+        UnaryOperator::Powi(exponent) => exponent >= 0,
+        UnaryOperator::Signum => false,
+    }
+}
+
 impl Function {
     fn partially_evaluated(
         self,
         state: &crate::v1::State,
         atol: crate::ATol,
     ) -> crate::Result<Self> {
-        let result = match self {
+        Ok(match self {
             Function::Zero | Function::Constant(_) => self,
             Function::Linear(mut function) => {
                 function.partial_evaluate(state, atol)?;
@@ -44,13 +56,7 @@ impl Function {
             Function::Expression(expression) => {
                 partially_evaluate_expression(expression, state, atol)?
             }
-        };
-
-        if result.required_ids().is_empty() && !result.is_polynomial() {
-            let value = result.evaluate(&crate::v1::State::default(), atol)?;
-            return Function::try_from(value).map_err(Into::into);
-        }
-        Ok(result)
+        })
     }
 }
 
@@ -69,15 +75,15 @@ fn evaluate_atom(
     ensure_finite_result("polynomial function", value)
 }
 
-fn evaluate_unary(operator: UnaryOperator, operand: f64) -> crate::Result<f64> {
+fn evaluate_unary(operator: UnaryOperator, operand: f64, atol: crate::ATol) -> crate::Result<f64> {
     let operand = ensure_finite("unary operation operand", operand)?;
     let value = match operator {
         UnaryOperator::Neg => -operand,
         UnaryOperator::Abs => operand.abs(),
+        UnaryOperator::Signum if is_zero(operand, atol) => 0.0,
         UnaryOperator::Signum if operand < 0.0 => -1.0,
-        UnaryOperator::Signum if operand > 0.0 => 1.0,
-        UnaryOperator::Signum => 0.0,
-        UnaryOperator::Powi(exponent) if operand == 0.0 && exponent < 0 => {
+        UnaryOperator::Signum => 1.0,
+        UnaryOperator::Powi(exponent) if exponent < 0 && is_zero(operand, atol) => {
             return Err(FunctionEvaluationError::ZeroToNegativeIntegerPower { exponent }.into());
         }
         UnaryOperator::Powi(exponent) => operand.powi(exponent),
@@ -97,11 +103,16 @@ fn evaluate_associative(operator: AssociativeOperator, lhs: f64, rhs: f64) -> cr
     ensure_finite_result("associative operation", value)
 }
 
-fn evaluate_binary(operator: BinaryOperator, lhs: f64, rhs: f64) -> crate::Result<f64> {
+fn evaluate_binary(
+    operator: BinaryOperator,
+    lhs: f64,
+    rhs: f64,
+    atol: crate::ATol,
+) -> crate::Result<f64> {
     let lhs = ensure_finite("binary operation left operand", lhs)?;
     let rhs = ensure_finite("binary operation right operand", rhs)?;
     let value = match operator {
-        BinaryOperator::Div if rhs == 0.0 => {
+        BinaryOperator::Div if is_zero(rhs, atol) => {
             return Err(FunctionEvaluationError::DivisionByZero.into());
         }
         BinaryOperator::Div => lhs / rhs,
@@ -112,7 +123,7 @@ fn evaluate_binary(operator: BinaryOperator, lhs: f64, rhs: f64) -> crate::Resul
 #[derive(Clone, Copy)]
 struct PartialOperand {
     start: usize,
-    /// A value is present exactly when this operand no longer requires state.
+    /// A value is present when this operand can be folded without an `atol`-dependent decision.
     value: Option<f64>,
 }
 
@@ -153,8 +164,11 @@ fn partially_evaluate_expression(
                 let operand = operands
                     .pop()
                     .expect("validated unary instruction has an operand");
-                if let Some(value) = operand.value {
-                    let value = evaluate_unary(operator, value)?;
+                if let Some(value) = operand
+                    .value
+                    .filter(|_| unary_partial_fold_is_atol_independent(operator))
+                {
+                    let value = evaluate_unary(operator, value, atol)?;
                     operands.push(replace_partial_operand_with_value(
                         &mut instructions,
                         operand.start,
@@ -191,26 +205,17 @@ fn partially_evaluate_expression(
                 }
             }
             Instruction::Binary(operator) => {
-                let rhs = operands
+                let _rhs = operands
                     .pop()
                     .expect("validated binary instruction has a right operand");
                 let lhs = operands
                     .pop()
                     .expect("validated binary instruction has a left operand");
-                if let (Some(lhs_value), Some(rhs_value)) = (lhs.value, rhs.value) {
-                    let value = evaluate_binary(operator, lhs_value, rhs_value)?;
-                    operands.push(replace_partial_operand_with_value(
-                        &mut instructions,
-                        lhs.start,
-                        value,
-                    ));
-                } else {
-                    instructions.push(Instruction::Binary(operator));
-                    operands.push(PartialOperand {
-                        start: lhs.start,
-                        value: None,
-                    });
-                }
+                instructions.push(Instruction::Binary(operator));
+                operands.push(PartialOperand {
+                    start: lhs.start,
+                    value: None,
+                });
             }
         }
     }
@@ -261,7 +266,7 @@ impl Evaluate for Function {
                             let operand = values
                                 .pop()
                                 .expect("validated unary instruction has an operand");
-                            values.push(evaluate_unary(*operator, operand)?);
+                            values.push(evaluate_unary(*operator, operand, atol)?);
                         }
                         Instruction::Associative(operator) => {
                             let rhs = values
@@ -279,7 +284,7 @@ impl Evaluate for Function {
                             let lhs = values
                                 .pop()
                                 .expect("validated binary instruction has a left operand");
-                            values.push(evaluate_binary(*operator, lhs, rhs)?);
+                            values.push(evaluate_binary(*operator, lhs, rhs, atol)?);
                         }
                     }
                 }
@@ -362,6 +367,15 @@ mod tests {
             .boxed()
     }
 
+    fn function_and_state() -> impl Strategy<Value = (Function, crate::v1::State)> {
+        Function::arbitrary()
+            .prop_flat_map(|function| {
+                let state = arbitrary_state(function.required_ids());
+                (Just(function), state)
+            })
+            .boxed()
+    }
+
     fn functions_and_state() -> impl Strategy<Value = (Function, Function, crate::v1::State)> {
         (any::<Function>(), any::<Function>())
             .prop_flat_map(|(lhs, rhs)| {
@@ -393,6 +407,56 @@ mod tests {
                             .iter()
                             .any(|(_, state)| f.evaluate(state, atol).is_err()),
                         "sample evaluation failed although every scalar evaluation succeeded",
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn partial_evaluation_does_not_capture_atol(
+            (function, state) in function_and_state(),
+        ) {
+            let coarse_atol = crate::ATol::new(1e-3).unwrap();
+            let fine_atol = crate::ATol::new(1e-12).unwrap();
+            let mut coarse_partial = function.clone();
+            let mut fine_partial = function.clone();
+            let coarse_result = coarse_partial.partial_evaluate(&state, coarse_atol);
+            let fine_result = fine_partial.partial_evaluate(&state, fine_atol);
+
+            match (coarse_result, fine_result) {
+                (Ok(()), Ok(())) => {
+                    prop_assert_eq!(&coarse_partial, &fine_partial);
+                    for final_atol in [coarse_atol, fine_atol] {
+                        let direct = function.evaluate(&state, final_atol);
+                        let staged = coarse_partial
+                            .evaluate(&crate::v1::State::default(), final_atol);
+                        match (direct, staged) {
+                            (Ok(expected), Ok(actual)) => {
+                                let scale = 1.0_f64.max(expected.abs());
+                                prop_assert!(
+                                    (actual - expected).abs() <= 1e-9 * scale,
+                                    "expected {expected}, actual {actual}, function {function:?}",
+                                );
+                            }
+                            (Err(expected), Err(actual)) => {
+                                prop_assert_eq!(expected.to_string(), actual.to_string());
+                            }
+                            (expected, actual) => {
+                                prop_assert!(
+                                    false,
+                                    "direct and staged evaluation disagree: direct={expected:?}, staged={actual:?}, function={function:?}",
+                                );
+                            }
+                        }
+                    }
+                }
+                (Err(coarse), Err(fine)) => {
+                    prop_assert_eq!(coarse.to_string(), fine.to_string());
+                }
+                (coarse, fine) => {
+                    prop_assert!(
+                        false,
+                        "partial evaluation depends on atol: coarse={coarse:?}, fine={fine:?}, function={function:?}",
                     );
                 }
             }
@@ -493,22 +557,154 @@ mod tests {
     }
 
     #[test]
-    fn partial_evaluation_reports_a_closed_domain_error_before_later_open_operand() {
+    fn partial_evaluation_defers_a_closed_division_domain_check_to_final_evaluation() {
+        let coarse_atol = crate::ATol::new(1e-6).unwrap();
+        let fine_atol = crate::ATol::new(1e-9).unwrap();
+        let tiny = 1e-8;
         let reciprocal =
             (Function::one() / Function::from(linear!(1))).expect("division is representable");
         let mut function =
             (reciprocal + Function::from(linear!(2))).expect("addition is representable");
 
+        function
+            .partial_evaluate(&crate::v1::State::from_iter([(1, tiny)]), coarse_atol)
+            .unwrap();
+        assert!(matches!(function, Function::Expression(_)));
+        assert_eq!(
+            function.required_ids(),
+            VariableIDSet::from([VariableID::from(2)])
+        );
+
+        let remaining_state = crate::v1::State::from_iter([(2, 0.0)]);
         let error = function
-            .partial_evaluate(
-                &crate::v1::State::from_iter([(1, 0.0)]),
-                crate::ATol::default(),
-            )
+            .evaluate(&remaining_state, coarse_atol)
             .unwrap_err();
         assert!(matches!(
             error.downcast_ref::<FunctionEvaluationError>(),
             Some(FunctionEvaluationError::DivisionByZero)
         ));
+        assert_eq!(
+            function.evaluate(&remaining_state, fine_atol).unwrap(),
+            1.0 / tiny
+        );
+    }
+
+    #[test]
+    fn partial_evaluation_defers_zero_sensitive_unary_checks_to_final_atol() {
+        let coarse_atol = crate::ATol::new(1e-6).unwrap();
+        let fine_atol = crate::ATol::new(1e-9).unwrap();
+        let tiny = 1e-8;
+        let assigned = crate::v1::State::from_iter([(1, tiny)]);
+        let empty = crate::v1::State::default();
+
+        let mut signum = Function::from(linear!(1)).signum();
+        signum.partial_evaluate(&assigned, coarse_atol).unwrap();
+        assert!(matches!(signum, Function::Expression(_)));
+        assert_eq!(signum.evaluate(&empty, coarse_atol).unwrap(), 0.0);
+        assert_eq!(signum.evaluate(&empty, fine_atol).unwrap(), 1.0);
+
+        let mut inverse = Function::from(linear!(1)).powi(-1);
+        inverse.partial_evaluate(&assigned, coarse_atol).unwrap();
+        assert!(matches!(inverse, Function::Expression(_)));
+        let error = inverse.evaluate(&empty, coarse_atol).unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<FunctionEvaluationError>(),
+            Some(FunctionEvaluationError::ZeroToNegativeIntegerPower { exponent: -1 })
+        ));
+        assert_eq!(inverse.evaluate(&empty, fine_atol).unwrap(), 1.0 / tiny);
+    }
+
+    #[test]
+    fn zero_sensitive_operations_include_the_atol_boundary() {
+        let atol = crate::ATol::new(1e-6).unwrap();
+        let x = Function::from(linear!(1));
+        let signum = x.clone().signum();
+        let reciprocal = (Function::one() / x.clone()).unwrap();
+        let inverse = x.powi(-1);
+
+        for value in [*atol, -*atol] {
+            let state = crate::v1::State::from_iter([(1, value)]);
+            assert_eq!(signum.evaluate(&state, atol).unwrap(), 0.0);
+
+            let division_error = reciprocal.evaluate(&state, atol).unwrap_err();
+            assert!(matches!(
+                division_error.downcast_ref::<FunctionEvaluationError>(),
+                Some(FunctionEvaluationError::DivisionByZero)
+            ));
+
+            let power_error = inverse.evaluate(&state, atol).unwrap_err();
+            assert!(matches!(
+                power_error.downcast_ref::<FunctionEvaluationError>(),
+                Some(FunctionEvaluationError::ZeroToNegativeIntegerPower { exponent: -1 })
+            ));
+        }
+
+        for (value, expected_sign) in [(2.0 * *atol, 1.0), (-2.0 * *atol, -1.0)] {
+            let state = crate::v1::State::from_iter([(1, value)]);
+            assert_eq!(signum.evaluate(&state, atol).unwrap(), expected_sign);
+            assert_eq!(reciprocal.evaluate(&state, atol).unwrap(), 1.0 / value);
+            assert_eq!(inverse.evaluate(&state, atol).unwrap(), 1.0 / value);
+        }
+    }
+
+    #[test]
+    fn sample_evaluation_uses_the_caller_atol_for_zero_sensitive_operations() {
+        let coarse_atol = crate::ATol::new(1e-6).unwrap();
+        let fine_atol = crate::ATol::new(1e-9).unwrap();
+        let tiny = 1e-8;
+        let samples = Sampled::from(crate::v1::State::from_iter([(1, tiny)]));
+        let sample_id = crate::SampleID::from(0);
+        let x = Function::from(linear!(1));
+
+        let signum = x.clone().signum();
+        assert_eq!(
+            *signum
+                .evaluate_samples(&samples, coarse_atol)
+                .unwrap()
+                .get(sample_id)
+                .unwrap(),
+            0.0
+        );
+        assert_eq!(
+            *signum
+                .evaluate_samples(&samples, fine_atol)
+                .unwrap()
+                .get(sample_id)
+                .unwrap(),
+            1.0
+        );
+
+        let reciprocal = (Function::one() / x.clone()).unwrap();
+        let division_error = reciprocal
+            .evaluate_samples(&samples, coarse_atol)
+            .unwrap_err();
+        assert!(matches!(
+            division_error.downcast_ref::<FunctionEvaluationError>(),
+            Some(FunctionEvaluationError::DivisionByZero)
+        ));
+        assert_eq!(
+            *reciprocal
+                .evaluate_samples(&samples, fine_atol)
+                .unwrap()
+                .get(sample_id)
+                .unwrap(),
+            1.0 / tiny
+        );
+
+        let inverse = x.powi(-1);
+        let power_error = inverse.evaluate_samples(&samples, coarse_atol).unwrap_err();
+        assert!(matches!(
+            power_error.downcast_ref::<FunctionEvaluationError>(),
+            Some(FunctionEvaluationError::ZeroToNegativeIntegerPower { exponent: -1 })
+        ));
+        assert_eq!(
+            *inverse
+                .evaluate_samples(&samples, fine_atol)
+                .unwrap()
+                .get(sample_id)
+                .unwrap(),
+            1.0 / tiny
+        );
     }
 
     #[test]
