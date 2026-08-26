@@ -100,9 +100,10 @@ no longer describes caller input and is converted to an ordinary
 
 The same ownership transition applies to
 [`FunctionEvaluationError`](crate::FunctionEvaluationError): direct function
-evaluation retains the signal, while an internally derived dependent-variable
-or assignment value converts it to ordinary owner-contextualized
-[`Error`](crate::Error).
+evaluation and evaluation of caller-owned
+[`AcyclicAssignments`](crate::AcyclicAssignments) retain the signal, while an
+internally derived, Instance-owned dependent-variable value converts it to
+ordinary owner-contextualized [`Error`](crate::Error).
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 
