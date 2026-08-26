@@ -722,11 +722,9 @@ fn validate_solution_constraint_feasibility(
     Ok(())
 }
 
-fn validate_solution_special_constraint_structure(
+fn validate_solution_indicator_constraint_structure(
     decision_variables: &EvaluatedDecisionVariableTable,
     indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
-    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
-    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
 ) -> Result<(), SolutionError> {
     for (id, constraint) in indicator_constraints.inner() {
         let variable_id = constraint.indicator_variable;
@@ -746,6 +744,13 @@ fn validate_solution_special_constraint_structure(
         }
     }
 
+    Ok(())
+}
+
+fn validate_solution_one_hot_constraint_structure(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
+) -> Result<(), SolutionError> {
     for (id, constraint) in one_hot_constraints.inner() {
         if constraint.variables.is_empty() {
             return Err(SolutionError::InvalidConstraintStructure {
@@ -783,6 +788,13 @@ fn validate_solution_special_constraint_structure(
         }
     }
 
+    Ok(())
+}
+
+fn validate_solution_sos1_constraint_structure(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
+) -> Result<(), SolutionError> {
     for (id, constraint) in sos1_constraints.inner() {
         if constraint.variables.is_empty() {
             return Err(SolutionError::InvalidConstraintStructure {
@@ -814,6 +826,17 @@ fn validate_solution_special_constraint_structure(
     }
 
     Ok(())
+}
+
+fn validate_solution_special_constraint_structure(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
+    one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
+    sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
+) -> Result<(), SolutionError> {
+    validate_solution_indicator_constraint_structure(decision_variables, indicator_constraints)?;
+    validate_solution_one_hot_constraint_structure(decision_variables, one_hot_constraints)?;
+    validate_solution_sos1_constraint_structure(decision_variables, sos1_constraints)
 }
 
 fn expected_binary_activity(

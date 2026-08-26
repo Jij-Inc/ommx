@@ -21,83 +21,30 @@ fn validate_evaluated_constraint_used_ids<T: crate::ConstraintType>(
     decision_variables: &crate::EvaluatedDecisionVariableTable,
     message: &'static str,
     field: &'static str,
+    classify: impl Fn(T::ID, crate::VariableID) -> SolutionError,
 ) -> Result<(), ParseError> {
     for (constraint_id, constraint) in constraints.inner() {
         for var_id in constraint.used_decision_variable_ids() {
             if !decision_variables.contains_key(var_id) {
-                return Err(RawParseError::InvalidInstance(format!(
-                    "Variable {var_id:?} used in constraint {constraint_id:?} is not defined in decision_variables",
-                ))
-                .context(message, field));
+                return Err(
+                    RawParseError::SolutionError(classify(*constraint_id, *var_id))
+                        .context(message, field),
+                );
             }
         }
     }
     Ok(())
 }
 
-fn validate_solution_indicator_structural_ids(
-    constraints: &crate::constraint_type::EvaluatedCollection<crate::IndicatorConstraint>,
-    decision_variables: &crate::EvaluatedDecisionVariableTable,
+fn invalid_solution_sidecar(
+    error: crate::Error,
     message: &'static str,
-) -> Result<(), ParseError> {
-    for (constraint_id, constraint) in constraints.inner() {
-        let id = constraint.indicator_variable;
-        let Some(variable) = decision_variables.get(&id) else {
-            return Err(RawParseError::InvalidInstance(format!(
-                "Indicator variable {id:?} in constraint {constraint_id:?} is not defined in decision_variables",
-            ))
-            .context(message, "evaluated_indicator_constraints"));
-        };
-        if *variable.kind() != crate::decision_variable::Kind::Binary {
-            return Err(RawParseError::InvalidInstance(format!(
-                "Indicator variable {id:?} in constraint {constraint_id:?} must be binary",
-            ))
-            .context(message, "evaluated_indicator_constraints"));
-        }
-    }
-    Ok(())
-}
-
-fn validate_solution_one_hot_structural_ids(
-    constraints: &crate::constraint_type::EvaluatedCollection<crate::OneHotConstraint>,
-    decision_variables: &crate::EvaluatedDecisionVariableTable,
-    message: &'static str,
-) -> Result<(), ParseError> {
-    for (constraint_id, constraint) in constraints.inner() {
-        for id in &constraint.variables {
-            let Some(variable) = decision_variables.get(id) else {
-                return Err(RawParseError::InvalidInstance(format!(
-                    "One-hot variable {id:?} in constraint {constraint_id:?} is not defined in decision_variables",
-                ))
-                .context(message, "evaluated_one_hot_constraints"));
-            };
-            if *variable.kind() != crate::decision_variable::Kind::Binary {
-                return Err(RawParseError::InvalidInstance(format!(
-                    "One-hot variable {id:?} in constraint {constraint_id:?} must be binary",
-                ))
-                .context(message, "evaluated_one_hot_constraints"));
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_solution_sos1_structural_ids(
-    constraints: &crate::constraint_type::EvaluatedCollection<crate::Sos1Constraint>,
-    decision_variables: &crate::EvaluatedDecisionVariableTable,
-    message: &'static str,
-) -> Result<(), ParseError> {
-    for (constraint_id, constraint) in constraints.inner() {
-        for id in &constraint.variables {
-            if !decision_variables.contains_key(id) {
-                return Err(RawParseError::InvalidInstance(format!(
-                    "SOS1 variable {id:?} in constraint {constraint_id:?} is not defined in decision_variables",
-                ))
-                .context(message, "evaluated_sos1_constraints"));
-            }
-        }
-    }
-    Ok(())
+    field: &'static str,
+) -> ParseError {
+    RawParseError::SolutionError(SolutionError::InvalidSidecar {
+        message: error.to_string(),
+    })
+    .context(message, field)
 }
 
 impl Parse for crate::v1::Solution {
@@ -188,12 +135,11 @@ impl Parse for crate::v1::Solution {
                 (Some(value), None) | (None, Some(value)) => *value,
                 (Some(value), Some(substituted_value)) => {
                     if (*value - *substituted_value).abs() > *atol {
-                        return Err(crate::RawParseError::InvalidDecisionVariable(
-                            crate::DecisionVariableError::SubstitutedValueOverwrite {
-                                id: crate::VariableID::from(dv_id),
-                                previous_value: *substituted_value,
-                                new_value: *value,
-                                atol,
+                        return Err(crate::RawParseError::SolutionError(
+                            SolutionError::InconsistentVariableValue {
+                                id: dv_id,
+                                state_value: *value,
+                                substituted_value: *substituted_value,
                             },
                         )
                         .context(message, "decision_variables"));
@@ -239,20 +185,10 @@ impl Parse for crate::v1::Solution {
 
         let evaluated_named_functions =
             crate::NamedFunctionTable::new(evaluated_named_functions, named_function_labels)
-                .map_err(|e| {
-                    crate::RawParseError::SolutionError(crate::SolutionError::InvalidSidecar {
-                        message: e.to_string(),
-                    })
-                    .context(message, "evaluated_named_functions")
-                })?;
+                .map_err(|e| invalid_solution_sidecar(e, message, "evaluated_named_functions"))?;
         let decision_variables =
             crate::EvaluatedDecisionVariableTable::new(decision_variables, variable_labels)
-                .map_err(|e| {
-                    crate::RawParseError::SolutionError(crate::SolutionError::InvalidSidecar {
-                        message: e.to_string(),
-                    })
-                    .context(message, "decision_variables")
-                })?;
+                .map_err(|e| invalid_solution_sidecar(e, message, "decision_variables"))?;
         validate_evaluated_named_function_used_ids(&decision_variables, &evaluated_named_functions)
             .map_err(|e| {
                 crate::RawParseError::SolutionError(e).context(message, "evaluated_named_functions")
@@ -265,10 +201,7 @@ impl Parse for crate::v1::Solution {
                 removed_reasons,
                 constraint_context,
             )
-            .map_err(|e| {
-                crate::RawParseError::InvalidInstance(e.to_string())
-                    .context(message, "evaluated_constraints")
-            })?,
+            .map_err(|e| invalid_solution_sidecar(e, message, "evaluated_constraints"))?,
             evaluated_indicator_constraints: Default::default(),
             evaluated_one_hot_constraints: Default::default(),
             evaluated_sos1_constraints: Default::default(),
@@ -365,44 +298,66 @@ impl Parse for v2::Solution {
             .map(|value| value.parse_as(&(), message, "evaluated_named_functions"))
             .transpose()?
             .unwrap_or_default();
+        validate_solution_indicator_constraint_structure(
+            &decision_variables,
+            &evaluated_indicator_constraints,
+        )
+        .map_err(|e| {
+            RawParseError::SolutionError(e).context(message, "evaluated_indicator_constraints")
+        })?;
+        validate_solution_one_hot_constraint_structure(
+            &decision_variables,
+            &evaluated_one_hot_constraints,
+        )
+        .map_err(|e| {
+            RawParseError::SolutionError(e).context(message, "evaluated_one_hot_constraints")
+        })?;
+        validate_solution_sos1_constraint_structure(
+            &decision_variables,
+            &evaluated_sos1_constraints,
+        )
+        .map_err(|e| {
+            RawParseError::SolutionError(e).context(message, "evaluated_sos1_constraints")
+        })?;
         validate_evaluated_constraint_used_ids(
             &evaluated_constraints,
             &decision_variables,
             message,
             "evaluated_regular_constraints",
+            |constraint_id, id| SolutionError::UndefinedVariableInConstraint { id, constraint_id },
         )?;
         validate_evaluated_constraint_used_ids(
             &evaluated_indicator_constraints,
             &decision_variables,
             message,
             "evaluated_indicator_constraints",
+            |constraint_id, id| SolutionError::InvalidConstraintStructure {
+                constraint_family: "indicator",
+                constraint_id: format!("{constraint_id:?}"),
+                message: format!("variable {id:?} is not in decision_variables"),
+            },
         )?;
         validate_evaluated_constraint_used_ids(
             &evaluated_one_hot_constraints,
             &decision_variables,
             message,
             "evaluated_one_hot_constraints",
+            |constraint_id, id| SolutionError::InvalidConstraintStructure {
+                constraint_family: "one-hot",
+                constraint_id: format!("{constraint_id:?}"),
+                message: format!("variable {id:?} is not in decision_variables"),
+            },
         )?;
         validate_evaluated_constraint_used_ids(
             &evaluated_sos1_constraints,
             &decision_variables,
             message,
             "evaluated_sos1_constraints",
-        )?;
-        validate_solution_indicator_structural_ids(
-            &evaluated_indicator_constraints,
-            &decision_variables,
-            message,
-        )?;
-        validate_solution_one_hot_structural_ids(
-            &evaluated_one_hot_constraints,
-            &decision_variables,
-            message,
-        )?;
-        validate_solution_sos1_structural_ids(
-            &evaluated_sos1_constraints,
-            &decision_variables,
-            message,
+            |constraint_id, id| SolutionError::InvalidConstraintStructure {
+                constraint_family: "SOS1",
+                constraint_id: format!("{constraint_id:?}"),
+                message: format!("variable {id:?} is not in decision_variables"),
+            },
         )?;
         validate_solution_indicator_stage_values(
             &decision_variables,
@@ -569,7 +524,366 @@ impl From<Solution> for crate::v1::Solution {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{v1, Parse};
+    use crate::{v1, DecisionVariable, Parse};
+
+    fn empty_v2_solution() -> v2::Solution {
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(std::collections::BTreeMap::new())
+            .decision_variables(std::collections::BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+        solution.into()
+    }
+
+    fn v2_solution_with_indicator_constraint() -> v2::Solution {
+        let variable_id = VariableID::from(1);
+        let decision_variable =
+            EvaluatedDecisionVariable::new(variable_id, DecisionVariable::binary(), 1.0).unwrap();
+        let constraint = crate::indicator_constraint::EvaluatedIndicatorConstraint {
+            indicator_variable: variable_id,
+            equality: crate::Equality::EqualToZero,
+            stage: crate::indicator_constraint::IndicatorEvaluatedData {
+                evaluated_value: 0.0,
+                feasible: true,
+                indicator_active: true,
+                used_decision_variable_ids: [variable_id].into_iter().collect(),
+            },
+        };
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(std::collections::BTreeMap::new())
+            .evaluated_indicator_constraints(std::collections::BTreeMap::from([(
+                crate::IndicatorConstraintID::from(1),
+                constraint,
+            )]))
+            .decision_variables(std::collections::BTreeMap::from([(
+                variable_id,
+                decision_variable,
+            )]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+        solution.into()
+    }
+
+    fn v2_solution_with_one_hot_constraint() -> v2::Solution {
+        let variable_id = VariableID::from(1);
+        let decision_variable =
+            EvaluatedDecisionVariable::new(variable_id, DecisionVariable::binary(), 1.0).unwrap();
+        let constraint = crate::one_hot_constraint::EvaluatedOneHotConstraint {
+            variables: std::collections::BTreeSet::from([variable_id]),
+            stage: crate::one_hot_constraint::OneHotEvaluatedData {
+                feasible: true,
+                active_variable: Some(variable_id),
+                used_decision_variable_ids: [variable_id].into_iter().collect(),
+            },
+        };
+        let collection = crate::constraint_type::EvaluatedCollection::new(
+            std::collections::BTreeMap::from([(crate::OneHotConstraintID::from(1), constraint)]),
+            std::collections::BTreeMap::new(),
+        )
+        .unwrap();
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(std::collections::BTreeMap::new())
+            .evaluated_one_hot_constraints_collection(collection)
+            .decision_variables(std::collections::BTreeMap::from([(
+                variable_id,
+                decision_variable,
+            )]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+        solution.into()
+    }
+
+    fn v2_solution_with_sos1_constraint() -> v2::Solution {
+        let variable_id = VariableID::from(1);
+        let decision_variable =
+            EvaluatedDecisionVariable::new(variable_id, DecisionVariable::binary(), 0.0).unwrap();
+        let constraint = crate::sos1_constraint::EvaluatedSos1Constraint {
+            variables: std::collections::BTreeSet::from([variable_id]),
+            stage: crate::sos1_constraint::Sos1EvaluatedData {
+                feasible: true,
+                active_variable: None,
+                used_decision_variable_ids: [variable_id].into_iter().collect(),
+            },
+        };
+        let collection = crate::constraint_type::EvaluatedCollection::new(
+            std::collections::BTreeMap::from([(crate::Sos1ConstraintID::from(1), constraint)]),
+            std::collections::BTreeMap::new(),
+        )
+        .unwrap();
+        let solution = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(std::collections::BTreeMap::new())
+            .evaluated_sos1_constraints_collection(collection)
+            .decision_variables(std::collections::BTreeMap::from([(
+                variable_id,
+                decision_variable,
+            )]))
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+        solution.into()
+    }
+
+    fn assert_invalid_constraint_structure(
+        error: &ParseError,
+        expected_family: &str,
+        expected_constraint_id: &str,
+        expected_message: &str,
+    ) {
+        assert!(
+            matches!(
+                &error.error,
+                RawParseError::SolutionError(SolutionError::InvalidConstraintStructure {
+                    constraint_family,
+                    constraint_id,
+                    message,
+                }) if *constraint_family == expected_family
+                    && constraint_id.as_str() == expected_constraint_id
+                    && message.as_str() == expected_message
+            ),
+            "unexpected error: {error}",
+        );
+    }
+
+    #[test]
+    fn invalid_solution_sidecar_preserves_solution_error() {
+        let constraint_id = ConstraintID::from(7);
+        let mut context = crate::ConstraintContextStore::default();
+        context.set_name(constraint_id, "orphan");
+        let source = crate::constraint_type::EvaluatedCollection::<Constraint>::with_context(
+            std::collections::BTreeMap::new(),
+            std::collections::BTreeMap::new(),
+            context,
+        )
+        .unwrap_err();
+
+        let error = invalid_solution_sidecar(source, "ommx.v1.Solution", "evaluated_constraints");
+
+        assert!(matches!(
+            &error.error,
+            RawParseError::SolutionError(SolutionError::InvalidSidecar { message })
+                if message.as_str() == "Constraint label/provenance references unknown constraint ID ConstraintID(7)"
+        ));
+        assert_eq!(error.context.len(), 1);
+        assert_eq!(error.context[0].message, "ommx.v1.Solution");
+        assert_eq!(error.context[0].field, "evaluated_constraints");
+    }
+
+    #[test]
+    fn test_v2_solution_parse_classifies_undefined_variable_in_regular_constraint() {
+        let mut proto = empty_v2_solution();
+        proto
+            .evaluated_regular_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .insert(
+                7,
+                v2::EvaluatedRegularConstraint {
+                    equality: v1::Equality::EqualToZero as i32,
+                    evaluated_value: 0.0,
+                    feasible: true,
+                    used_decision_variable_ids: vec![42],
+                    dual_variable: None,
+                },
+            );
+
+        let error = Solution::try_from(proto).unwrap_err();
+
+        assert!(matches!(
+            &error.error,
+            RawParseError::SolutionError(SolutionError::UndefinedVariableInConstraint {
+                id,
+                constraint_id,
+            }) if *id == VariableID::from(42) && *constraint_id == ConstraintID::from(7)
+        ));
+    }
+
+    #[test]
+    fn test_v2_solution_parse_classifies_undefined_used_id_in_indicator_constraint() {
+        let mut proto = v2_solution_with_indicator_constraint();
+        proto
+            .evaluated_indicator_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .used_decision_variable_ids
+            .push(2);
+
+        let error = Solution::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "indicator",
+            "IndicatorConstraintID(1)",
+            "variable VariableID(2) is not in decision_variables",
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_classifies_undefined_used_id_in_one_hot_constraint() {
+        let mut proto = v2_solution_with_one_hot_constraint();
+        proto
+            .evaluated_one_hot_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .used_decision_variable_ids
+            .push(2);
+
+        let error = Solution::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "one-hot",
+            "OneHotConstraintID(1)",
+            "variable VariableID(2) is not in decision_variables",
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_classifies_undefined_used_id_in_sos1_constraint() {
+        let mut proto = v2_solution_with_sos1_constraint();
+        proto
+            .evaluated_sos1_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .used_decision_variable_ids
+            .push(2);
+
+        let error = Solution::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "SOS1",
+            "Sos1ConstraintID(1)",
+            "variable VariableID(2) is not in decision_variables",
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_classifies_undefined_indicator_variable() {
+        let mut proto = v2_solution_with_indicator_constraint();
+        proto
+            .evaluated_indicator_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .indicator_variable = 2;
+
+        let error = Solution::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "indicator",
+            "IndicatorConstraintID(1)",
+            "indicator variable VariableID(2) is not in decision_variables",
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_classifies_non_binary_indicator_variable() {
+        let mut proto = v2_solution_with_indicator_constraint();
+        proto
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .kind = v1::decision_variable::Kind::Continuous as i32;
+
+        let error = Solution::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "indicator",
+            "IndicatorConstraintID(1)",
+            "indicator variable VariableID(1) must be binary",
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_classifies_undefined_one_hot_variable() {
+        let mut proto = v2_solution_with_one_hot_constraint();
+        let row = proto
+            .evaluated_one_hot_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.variables = vec![2];
+        row.active_variable = Some(2);
+
+        let error = Solution::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "one-hot",
+            "OneHotConstraintID(1)",
+            "variable VariableID(2) is not in decision_variables",
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_classifies_non_binary_one_hot_variable() {
+        let mut proto = v2_solution_with_one_hot_constraint();
+        proto
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .kind = v1::decision_variable::Kind::Continuous as i32;
+
+        let error = Solution::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "one-hot",
+            "OneHotConstraintID(1)",
+            "variable VariableID(1) must be binary",
+        );
+    }
+
+    #[test]
+    fn test_v2_solution_parse_classifies_undefined_sos1_variable() {
+        let mut proto = v2_solution_with_sos1_constraint();
+        proto
+            .evaluated_sos1_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .variables = vec![2];
+
+        let error = Solution::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "SOS1",
+            "Sos1ConstraintID(1)",
+            "variable VariableID(2) is not in decision_variables",
+        );
+    }
 
     #[test]
     fn test_solution_parse_rejects_reserved_annotation_key() {
@@ -809,10 +1123,18 @@ mod tests {
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
         let error = result.unwrap_err();
+        assert!(matches!(
+            &error.error,
+            RawParseError::SolutionError(SolutionError::InconsistentVariableValue {
+                id,
+                state_value,
+                substituted_value,
+            }) if *id == 1 && *state_value == 2.0 && *substituted_value == 3.0
+        ));
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.Solution[decision_variables]
-        Substituted value for ID=1 cannot be overwritten: previous=3, new=2, atol=ATol(1e-6)
+        Inconsistent value for variable 1: state=2, substituted_value=3
         "###);
     }
 
