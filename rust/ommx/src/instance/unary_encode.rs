@@ -1,5 +1,5 @@
 use super::{encoding::ensure_unit_spaced_integer_bound, Instance};
-use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, Substitute, VariableID};
+use crate::{ATol, Bound, Coefficient, Function, Kind, Linear, VariableID};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Calculate the number of binary variables for unary encoding.
@@ -70,6 +70,51 @@ impl Instance {
     /// clone, and the result is committed back only if all encodings succeed.
     /// Duplicate IDs are encoded once. Pass a single-element iterator such as
     /// `[id]` to encode exactly one variable.
+    ///
+    /// # Postconditions
+    ///
+    /// Encoding rewrites only the active formulation and preserves evaluation
+    /// in the pre-encoding output semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, Bound, DecisionVariable, Evaluate, Function,
+    ///     Instance, Kind, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(0);
+    /// let integer = DecisionVariable::new(
+    ///     Kind::Integer,
+    ///     Bound::new(2.0, 5.0).unwrap(),
+    ///     ATol::default(),
+    /// )
+    /// .unwrap();
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(0)))
+    ///     .decision_variables(BTreeMap::from([(variable, integer)]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// let original = instance.objective().clone();
+    ///
+    /// instance
+    ///     .unary_encode([variable], 3, ATol::default())
+    ///     .unwrap();
+    /// let output = instance.output_objective().unwrap();
+    /// assert_eq!(output.sense(), Sense::Maximize);
+    /// assert_eq!(output.function(), &original);
+    /// let encoded_ids = instance.required_ids();
+    /// assert_eq!(encoded_ids.len(), 3);
+    /// let state = State::from(HashMap::from_iter(
+    ///     encoded_ids.into_iter().map(|id| (id.into_inner(), 1.0)),
+    /// ));
+    /// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), 5.0);
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 5.0);
+    /// ```
     #[tracing::instrument(skip(self, ids))]
     pub fn unary_encode(
         &mut self,
@@ -102,7 +147,8 @@ impl Instance {
             assignments.push((id, Function::from(linear.clone())));
             encodings.insert(id, linear);
         }
-        encoded = encoded.substitute(assignments)?;
+        let acyclic = crate::AcyclicAssignments::new(assignments)?;
+        encoded.apply_encoding_substitution(&acyclic, Vec::new(), atol)?;
         *self = encoded;
         Ok(encodings)
     }
@@ -165,9 +211,10 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, v1::State, Bound, DecisionVariable, Equality, Evaluate, Function,
-        IndicatorConstraint, IndicatorConstraintID, Instance, Kind, LinearMonomial,
-        OneHotConstraint, OneHotConstraintID, Sense, Solution, Sos1Constraint, Sos1ConstraintID,
+        coeff, v1::State, Bound, Constraint, ConstraintID, DecisionVariable, DecisionVariableRole,
+        Equality, Evaluate, Function, IndicatorConstraint, IndicatorConstraintID, Instance, Kind,
+        LinearMonomial, OneHotConstraint, OneHotConstraintID, Sense, Solution, Sos1Constraint,
+        Sos1ConstraintID,
     };
     use approx::relative_eq;
     use proptest::prelude::*;
@@ -492,6 +539,10 @@ mod tests {
         ) {
             let decoded_value = decoded_unary_value(target.lower, &bits);
             let expected_state = state_with_original_value(state.clone(), &target, decoded_value);
+            let expected_active_objective = instance
+                .objective()
+                .evaluate(&expected_state, ATol::default())
+                .unwrap();
             let expected = instance.evaluate(&expected_state, ATol::default()).unwrap();
 
             let mut encoded_instance = instance.clone();
@@ -507,8 +558,17 @@ mod tests {
             prop_assert_eq!(binary_ids.len(), target.width);
 
             let encoded_state = state_with_unary_bits(state, &target, &binary_ids, &bits);
+            let actual_active_objective = encoded_instance
+                .objective()
+                .evaluate(&encoded_state, ATol::default())
+                .unwrap();
             let actual = encoded_instance.evaluate(&encoded_state, ATol::default()).unwrap();
 
+            assert_float_eq(
+                "active objective",
+                expected_active_objective,
+                actual_active_objective,
+            )?;
             assert_same_observable_evaluation(&expected, &actual)?;
         }
 
@@ -544,9 +604,22 @@ mod tests {
             let prefix_state =
                 state_with_unary_bits(state.clone(), &target, &binary_ids, &prefix_bits);
             let suffix_state = state_with_unary_bits(state, &target, &binary_ids, &suffix_bits);
+            let prefix_active_objective = encoded_instance
+                .objective()
+                .evaluate(&prefix_state, ATol::default())
+                .unwrap();
+            let suffix_active_objective = encoded_instance
+                .objective()
+                .evaluate(&suffix_state, ATol::default())
+                .unwrap();
             let prefix = encoded_instance.evaluate(&prefix_state, ATol::default()).unwrap();
             let suffix = encoded_instance.evaluate(&suffix_state, ATol::default()).unwrap();
 
+            assert_float_eq(
+                "active objective",
+                prefix_active_objective,
+                suffix_active_objective,
+            )?;
             assert_same_observable_evaluation(&prefix, &suffix)?;
         }
     }
@@ -603,6 +676,95 @@ mod tests {
                 Some(coeff!(1.0))
             );
         }
+    }
+
+    #[test]
+    fn unary_encode_captures_targeted_active_objective_and_preserves_existing_output() {
+        let id = VariableID::from(0);
+        let make_instance = || {
+            let variable = DecisionVariable::new(
+                Kind::Integer,
+                Bound::new(0.0, 3.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap();
+            Instance::builder()
+                .sense(Sense::Maximize)
+                .objective(Function::from(crate::linear!(0)))
+                .decision_variables(BTreeMap::from([(id, variable)]))
+                .constraints(BTreeMap::new())
+                .build()
+                .unwrap()
+        };
+
+        let mut without_output = make_instance();
+        let original = without_output.objective().clone();
+        without_output
+            .unary_encode(
+                [id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap();
+        let output = without_output.output_objective().unwrap();
+        assert_eq!(output.sense(), Sense::Maximize);
+        assert_eq!(output.function(), &original);
+
+        let mut with_output = make_instance();
+        assert!(with_output.convert_active_objective(Sense::Minimize));
+        let output = with_output.output_objective().cloned().unwrap();
+        with_output
+            .unary_encode(
+                [id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap();
+
+        assert_eq!(with_output.output_objective(), Some(&output));
+        assert_eq!(
+            with_output.decision_variable_role(id),
+            Some(DecisionVariableRole::Dependent)
+        );
+        assert!(!with_output.used_decision_variable_ids().contains(&id));
+        let state = State::from_iter(
+            with_output
+                .used_decision_variable_ids()
+                .into_iter()
+                .map(|id| (id.into_inner(), 0.0)),
+        );
+        let solution = with_output.evaluate(&state, ATol::default()).unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+        assert_eq!(*solution.objective(), 0.0);
+    }
+
+    #[test]
+    fn unary_encode_does_not_capture_when_active_objective_is_not_targeted() {
+        let id = VariableID::from(0);
+        let variable = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let constraint = Constraint::equal_to_zero(Function::from(crate::linear!(0)));
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(id, variable)]))
+            .constraints(BTreeMap::from([(ConstraintID::from(0), constraint)]))
+            .build()
+            .unwrap();
+
+        instance
+            .unary_encode(
+                [id],
+                Instance::DEFAULT_UNARY_ENCODING_MAX_RANGE,
+                ATol::default(),
+            )
+            .unwrap();
+
+        assert!(instance.output_objective().is_none());
     }
 
     #[test]

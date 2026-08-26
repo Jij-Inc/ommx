@@ -25,7 +25,12 @@ OMMX は通常の制約（{class}`~ommx.Constraint`、等式・不等式を持�
 pip install ommx-pyscipopt-adapter
 ```
 
-PySCIPOpt Adapter は Indicator と SOS1 を SCIP の `addConsIndicator` / `addConsSOS1` にそのまま渡します（等式 Indicator は上下2本の不等式 Indicator に分解されます）。OneHot は直接受け入れないため、呼び出し側が通常の等式制約へ明示的に lowering してから、得られた入力を Adapter に渡す必要があります。この preparation は `INPUT_CLASS` の membership や Adapter applicability とは別です。詳しくは [Adapter の入力 class と明示的な特殊制約 lowering](./capability_model.md) を参照してください。
+PySCIPOpt AdapterはIndicatorとSOS1をSCIPの`addConsIndicator` / `addConsSOS1`へ
+そのまま渡します（等式Indicatorは上下2本の不等式Indicatorに分解されます）。`solve()`
+APIは入力をcopyし、推奨Preparation Policyを使ってOneHotを通常の等式制約へlowering
+します。`solve_without_preparation()`を使う呼び出し側は、Instanceに対して先にこのloweringを
+行う必要があります。詳しくは
+[Adapterの入力classと明示的な特殊制約lowering](./capability_model.md)を参照してください。
 
 ## IndicatorConstraint
 
@@ -94,23 +99,26 @@ instance_oh = Instance.from_components(
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
 ```
 
-PySCIPOpt Adapter に渡す前に、OneHot を通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ へ明示的に lowering します。変換後は別の入力値になるため、solve の前にその applicability を確認します。
+元のInstanceをeasy `solve()` APIへそのまま渡します。推奨Preparationは、Adapter内部の
+copyだけでOneHotを通常の等式制約 $x_0 + x_1 + x_2 - 1 = 0$ へloweringします。
 
 ```{code-cell} ipython3
-instance_oh.convert_all_one_hots_to_constraints()
-assert OMMXPySCIPOptAdapter.check_applicability(instance_oh).is_applicable
 solution = OMMXPySCIPOptAdapter.solve(instance_oh)
 # 3 つのうち丁度 1 つを選ぶので、最大値 10 をもつ x_1 が選ばれる
 assert abs(solution.objective - 10.0) < 1e-6
 ```
 
-`convert_all_one_hots_to_constraints()` は `instance_oh` を in-place に変更します。明示的な preparation の後は OneHot 制約が除去され、通常制約へ変換された痕跡が `removed_one_hot_constraints` に残ります。`solve` はこの変換を行いません。
+呼び出し元が所有する`instance_oh`は変更されません。
 
 ```{code-cell} ipython3
-assert instance_oh.one_hot_constraints == {}
-assert len(instance_oh.constraints) == 1
-assert set(instance_oh.removed_one_hot_constraints.keys()) == {0}
+assert set(instance_oh.one_hot_constraints.keys()) == {0}
+assert instance_oh.constraints == {}
+assert instance_oh.removed_one_hot_constraints == {}
 ```
+
+`solve_without_preparation()`を使う場合は、呼び出し側がOneHotをin-placeでloweringしてから
+solveします。この明示的な変換はactiveなOneHotを除去し、同値な通常制約を追加して、
+元の制約を`removed_one_hot_constraints`へ記録します。
 
 ## Sos1Constraint
 

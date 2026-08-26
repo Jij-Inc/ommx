@@ -23,6 +23,7 @@ ommx
    _items/ommx.Quadratic
    _items/ommx.Polynomial
    _items/ommx.Function
+   _items/ommx.OutputObjective
    _items/ommx.DecisionVariable
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
@@ -34,9 +35,10 @@ ommx
    _items/ommx.InstanceClassClauseReport
    _items/ommx.InstanceClassMembershipReport
    _items/ommx.SpecialConstraintPreparation
-   _items/ommx.SensePreparation
+   _items/ommx.ObjectivePreparation
    _items/ommx.IntegerSlackPreparation
    _items/ommx.IntegerEncodingPreparation
+   _items/ommx.BinaryPowerPreparation
    _items/ommx.FixedPenaltyPreparation
    _items/ommx.PreparationPolicy
    _items/ommx.Constraint

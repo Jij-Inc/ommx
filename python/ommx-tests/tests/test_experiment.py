@@ -521,7 +521,7 @@ def test_store_trace_records_open_solve_scope_in_artifact():
             self.instance = ommx_instance
 
         @classmethod
-        def solve(
+        def solve_without_preparation(
             cls,
             ommx_instance: Instance,
             *,
@@ -562,7 +562,7 @@ def test_store_trace_marks_open_solve_missing_decode_span_error():
             pass
 
         @classmethod
-        def solve(
+        def solve_without_preparation(
             cls,
             ommx_instance: Instance,
             *,
@@ -1149,7 +1149,7 @@ def test_open_solve_records_direct_solver_input_workflow():
             }
 
         @classmethod
-        def solve(
+        def solve_without_preparation(
             cls,
             ommx_instance: Instance,
             *,
@@ -1236,7 +1236,7 @@ def test_open_solve_manual_accessors_are_context_scoped():
             self.model: dict[str, object] = {}
 
         @classmethod
-        def solve(
+        def solve_without_preparation(
             cls,
             ommx_instance: Instance,
             *,
@@ -1301,7 +1301,7 @@ def test_open_solve_manual_accessors_are_context_scoped():
 def test_open_solve_rejects_reserved_diagnostics_option_with_manual_message():
     class ManualAdapter(SolverAdapter):
         @classmethod
-        def solve(
+        def solve_without_preparation(
             cls,
             ommx_instance: Instance,
             *,
@@ -1337,7 +1337,7 @@ def test_open_solve_records_failed_attempt_when_adapter_construction_fails():
             raise RuntimeError("model build failed")
 
         @classmethod
-        def solve(
+        def solve_without_preparation(
             cls,
             ommx_instance: Instance,
             *,
@@ -1402,7 +1402,7 @@ def test_open_solve_failed_decode_clears_previous_decoded_solution():
             self.model: dict[str, object] = {"decode_fails": False}
 
         @classmethod
-        def solve(
+        def solve_without_preparation(
             cls,
             ommx_instance: Instance,
             *,
@@ -1465,7 +1465,7 @@ def test_open_solve_records_failed_attempt_on_exception():
             self.label = label
 
         @classmethod
-        def solve(
+        def solve_without_preparation(
             cls,
             ommx_instance: Instance,
             *,
@@ -1534,7 +1534,7 @@ def test_open_solve_records_failed_attempt_when_outcome_is_missing():
             self.label = label
 
         @classmethod
-        def solve(
+        def solve_without_preparation(
             cls,
             ommx_instance: Instance,
             *,

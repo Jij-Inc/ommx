@@ -14,6 +14,39 @@ impl Instance {
     ///   - TODO: Binary encoding will be added.
     /// - The objective is a polynomial of degree at most 2.
     ///
+    /// # Postconditions
+    ///
+    /// The returned QUBO encodes the active objective, while evaluation uses the output objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, BinaryIdPair, DecisionVariable, Evaluate,
+    ///     Function, Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    ///
+    /// let (qubo, offset) = instance.as_qubo_format().unwrap();
+    /// assert_eq!(qubo.get(&BinaryIdPair(1, 1)), Some(&-1.0));
+    /// assert_eq!(offset, 0.0);
+    ///
+    /// let solution = instance
+    ///     .evaluate(&State::from_iter([(1, 1.0)]), ATol::default())
+    ///     .unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// ```
     #[tracing::instrument(skip_all)]
     pub fn as_qubo_format(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
         let Some(terms) = self.objective().iter() else {
@@ -68,6 +101,40 @@ impl Instance {
     ///   - TODO: Binary encoding will be added.
     /// - The objective is polynomial.
     ///
+    /// # Postconditions
+    ///
+    /// The returned HUBO encodes the active objective, while evaluation uses the output objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function,
+    ///     Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    ///
+    /// let (hubo, offset) = instance.as_hubo_format().unwrap();
+    /// assert_eq!(hubo.len(), 1);
+    /// assert_eq!(hubo.values().next(), Some(&-1.0));
+    /// assert_eq!(offset, 0.0);
+    ///
+    /// let solution = instance
+    ///     .evaluate(&State::from_iter([(1, 1.0)]), ATol::default())
+    ///     .unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// ```
     #[tracing::instrument(skip_all)]
     pub fn as_hubo_format(&self) -> Result<(BTreeMap<BinaryIds, f64>, f64)> {
         let Some(terms) = self.objective().iter() else {

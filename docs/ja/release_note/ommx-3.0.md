@@ -35,6 +35,104 @@ polynomial termのaccessorと {meth}`~ommx.Function.content_factor` は、複合
 polynomialとして扱わず`TypeError`を送出します。演算順序、evaluation error、
 serializationの詳細は [Function user guide](../user_guide/function.md) を参照してください。
 
+### ⚠ `solve()`と`sample()`が入力を自動的にPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()`と`SamplerAdapter.sample()`は実行前にAdapterの推奨Preparationを
+適用し、渡された{class}`~ommx.Instance`自体は変更しないようになりました。
+Preparationをcustomizeするapplicationでは、Instanceをin-placeでPrepareし、代わりに
+`solve_without_preparation()`または`sample_without_preparation()`を呼びます。
+
+既存コードで移行が必要な破壊的変更は次の2点です。
+
+- `OMMXOpenJijSAAdapter.sample(..., initial_state=...)`と
+  `OMMXOpenJijSAAdapter.solve(..., initial_state=...)`は利用できなくなりました。Instanceを
+  明示的にPrepareしてから、
+  `OMMXOpenJijSAAdapter.sample_without_preparation(instance, initial_state=...)`または
+  `OMMXOpenJijSAAdapter.solve_without_preparation(instance, initial_state=...)`を呼びます。
+- 独自Adapterは`solve_without_preparation()`または`sample_without_preparation()`を実装し、
+  backendの実行処理をそこへ移します。Adapter固有optionを`solve()`または`sample()`でも
+  提供する場合、これらのmethodではcopyをPrepareし、optionをpreparation-free methodへ
+  転送します。
+
+Adapter inputに`output_objective`がある場合、HiGHSとPython-MIPはdual valueを省略します。
+2つの呼び出し方は
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+### ⚠ Solver Preparationで入力objectiveを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+`to_qubo()`と`to_hubo()`は、変換後のactive `Instance`にsolverが使う
+minimization energyを保持しつつ、`Solution`と`SampleSet`には入力instanceが
+公開していたobjective semanticsを保持するようになりました。
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+
+instance.to_qubo(uniform_penalty_weight=2.0)
+state = {0: 0.0}
+
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == 2.0
+assert instance.evaluate(state).sense == Sense.Maximize
+assert instance.evaluate(state).objective == 0.0
+assert instance.evaluate_samples({0: state}).sense == Sense.Maximize
+assert instance.evaluate_samples({0: state}).objectives[0] == 0.0
+```
+
+従来のdriverはactive senseを戻し、penalized solver energyを評価結果に使っていたため、
+これは最新stable Python SDKからのbreakingな修正です。返すQUBO/HUBO係数の
+意味は変わりません。
+
+明示的なoutput objectiveを持つ`Instance`または`ParametricInstance`は、v1 wire formatで
+losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`を送出するため、
+`to_v2_bytes()`を使用してください。
+
+Penalty変換後のoptimalityも保守的に変換され、active formulationのproofを
+移せない評価結果は`Optimality.Unspecified`のままです。実行可能な事後条件は
+{meth}`~ommx.Instance.to_qubo`、{meth}`~ommx.Instance.to_hubo`、
+{meth}`~ommx.Instance.evaluate`、{meth}`~ommx.Instance.evaluate_samples`に記載されています。
+明示的なPreparation workflowは
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
+
+`SolverAdapter.check_applicability()` と `require_applicable()` は、完全な
+applicability 条件として `INPUT_CLASS` membership だけを使うようになりました。
+Adapter が所有していた第2の precondition 層は廃止し、
+`AdapterPreconditionViolation`、`ConstraintRef`、`_check_preconditions()`、report の
+`preconditions_checked` と `precondition_violations` field を削除しました。
+
+両 method は `InstanceClassMembershipReport` を直接返すようになり、
+`AdapterApplicabilityReport` wrapper は削除されました。`report.is_applicable` は
+`report.is_member`、`report.input_membership` は `report` に置き換えてください。
+`AdapterNotApplicableError` では、`error.report` が membership report そのものであり、
+Adapter identity は `error.adapter` から取得できます。
+
+Adapter 実装は、受け入れる model の条件をすべて `INPUT_CLASS` で表現する必要があります。
+Converter 固有の表現検査や backend の上限検査は solver input の構築経路に残りますが、
+その失敗は `AdapterNotApplicableError` ではなく conversion または backend の error です。
+特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
+行われるようになりました。責務境界の詳細は
+[Adapter Input Class](../user_guide/capability_model.md) と
+[Adapter 実装チュートリアル](../tutorial/implement_adapter.md)を参照してください。
+
+### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
+
+具体的な `SolverAdapter` / `SamplerAdapter` 実装では、`INPUT_CLASS` を
+非 Optional の `ClassVar[InstanceClass]` として宣言する必要があり、`None` は
+有効な宣言ではありません。リポジトリ内の Adapter も `InstanceClass` を直接公開するため、
+呼び出し側は `is not None` の確認なしで `Adapter.INPUT_CLASS` を
+{meth}`~ommx.Instance.prepare` に渡せます。宣言がない場合は、applicability の確認時に
+引き続き明確な `TypeError` を送出します。契約の全体像は
+[Adapter 実装チュートリアル](../tutorial/implement_adapter.md)を参照してください。
+
 ## 3.0.0 Beta 3
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)

@@ -75,11 +75,44 @@ impl Instance {
         )
     }
 
-    /// Set the objective function
+    /// Set the objective function and rebase output semantics.
+    ///
+    /// # Postconditions
+    ///
+    /// Setting the objective makes it the new active and output semantics.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     coeff, linear, v1::State, ATol, DecisionVariable, Evaluate, Function,
+    ///     Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    ///
+    /// instance
+    ///     .set_objective(Function::from((coeff!(2.0) * linear!(1)).unwrap()))
+    ///     .unwrap();
+    /// assert_eq!(instance.sense(), Sense::Minimize);
+    /// assert!(instance.output_objective().is_none());
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Minimize));
+    /// assert_eq!(*solution.objective(), 2.0);
+    /// ```
     pub fn set_objective(&mut self, objective: Function) -> crate::Result<()> {
         // Validate that all variables in the objective are defined
         self.validate_required_ids(objective.required_ids())?;
         self.objective = objective;
+        self.output_objective = None;
         Ok(())
     }
 

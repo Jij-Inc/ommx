@@ -3,11 +3,66 @@ use crate::{message_io, v1, v2, ConstraintType, Message, Parse};
 use anyhow::Result;
 
 impl Instance {
+    /// Serialize this instance using the v1 wire format.
+    ///
+    /// # Errors
+    ///
+    /// `ommx.v1.Instance` cannot represent the presence of an
+    /// [`Instance::output_objective`], even when it currently matches the
+    /// active objective.
+    ///
+    /// ```
+    /// use ommx::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// assert!(instance.convert_active_objective(Sense::Maximize));
+    /// assert_eq!(instance.output_objective().unwrap().function(), instance.objective());
+    ///
+    /// assert!(instance.to_v1_bytes().is_err());
+    /// ```
     pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
         let v1_instance = v1::Instance::try_from(self.clone())?;
         Ok(v1_instance.encode_to_vec())
     }
 
+    /// Serialize this instance using the v2 wire format.
+    ///
+    /// # Postconditions
+    ///
+    /// v2 serialization round-trips the output objective.
+    ///
+    /// ```
+    /// use ommx::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    ///
+    /// let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+    /// assert_eq!(restored.sense(), Sense::Minimize);
+    /// assert_eq!(restored.output_objective().unwrap().sense(), Sense::Maximize);
+    /// assert_eq!(restored, instance);
+    /// ```
     pub fn to_v2_bytes(&self) -> Vec<u8> {
         let v2_instance = v2::Instance::from(self.clone());
         v2_instance.encode_to_vec()
@@ -25,11 +80,67 @@ impl Instance {
 }
 
 impl ParametricInstance {
+    /// Serialize this parametric instance using the v1 wire format.
+    ///
+    /// # Errors
+    ///
+    /// `ommx.v1.ParametricInstance` cannot represent the presence of a
+    /// [`ParametricInstance::output_objective`], even when it currently matches
+    /// the active objective.
+    ///
+    /// ```
+    /// use ommx::{linear, DecisionVariable, Function, Instance, ParametricInstance, Sense, VariableID};
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut source = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(source.convert_active_objective(Sense::Minimize));
+    /// assert!(source.convert_active_objective(Sense::Maximize));
+    /// let instance = ParametricInstance::from(source);
+    /// assert_eq!(instance.output_objective().unwrap().function(), instance.objective());
+    ///
+    /// assert!(instance.to_v1_bytes().is_err());
+    /// ```
     pub fn to_v1_bytes(&self) -> Result<Vec<u8>> {
         let v1_instance = v1::ParametricInstance::try_from(self.clone())?;
         Ok(v1_instance.encode_to_vec())
     }
 
+    /// Serialize this parametric instance using the v2 wire format.
+    ///
+    /// # Postconditions
+    ///
+    /// v2 serialization round-trips the parametric output objective.
+    ///
+    /// ```
+    /// use ommx::{linear, DecisionVariable, Function, Instance, ParametricInstance, Sense, VariableID};
+    /// use std::collections::BTreeMap;
+    ///
+    /// let mut source = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(source.convert_active_objective(Sense::Minimize));
+    /// let instance = ParametricInstance::from(source);
+    ///
+    /// let restored = ParametricInstance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+    /// assert_eq!(restored.output_objective().unwrap().sense(), Sense::Maximize);
+    /// assert_eq!(restored, instance);
+    /// ```
     pub fn to_v2_bytes(&self) -> Vec<u8> {
         let v2_instance = v2::ParametricInstance::from(self.clone());
         v2_instance.encode_to_vec()
@@ -50,15 +161,19 @@ impl ParametricInstance {
 
 impl From<Instance> for v2::Instance {
     fn from(value: Instance) -> Self {
-        let required_features = crate::v2_io::required_features(
+        let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
         );
+        if value.output_objective.is_some() {
+            required_features.push(v2::Feature::OutputObjective as i32);
+        }
 
         let Instance {
             sense,
             objective,
+            output_objective,
             decision_variables,
             constraint_collection,
             indicator_constraint_collection,
@@ -87,21 +202,36 @@ impl From<Instance> for v2::Instance {
             ),
             named_functions: Some(named_functions.into()),
             annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
+            output_objective: output_objective.map(Into::into),
+        }
+    }
+}
+
+impl From<OutputObjective> for v2::OutputObjective {
+    fn from(value: OutputObjective) -> Self {
+        Self {
+            sense: value.sense.into(),
+            function: Some(value.function.into()),
+            preserves_optimality: value.preserves_optimality,
         }
     }
 }
 
 impl From<ParametricInstance> for v2::ParametricInstance {
     fn from(value: ParametricInstance) -> Self {
-        let required_features = crate::v2_io::required_features(
+        let mut required_features = crate::v2_io::required_features(
             created_collection_has_payload(&value.indicator_constraint_collection),
             created_collection_has_payload(&value.one_hot_constraint_collection),
             created_collection_has_payload(&value.sos1_constraint_collection),
         );
+        if value.output_objective.is_some() {
+            required_features.push(v2::Feature::OutputObjective as i32);
+        }
 
         let ParametricInstance {
             sense,
             objective,
+            output_objective,
             decision_variables,
             parameters,
             constraint_collection,
@@ -130,6 +260,7 @@ impl From<ParametricInstance> for v2::ParametricInstance {
             ),
             named_functions: Some(named_functions.into()),
             annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
+            output_objective: output_objective.map(Into::into),
         }
     }
 }
@@ -155,6 +286,7 @@ mod tests {
         IndicatorConstraintID, OneHotConstraint, OneHotConstraintID, ParameterLabelStore,
         ParameterTable, Sampled, Sos1Constraint, Sos1ConstraintID, VariableID,
     };
+    use proptest::prelude::*;
     use std::collections::{BTreeMap, BTreeSet, HashMap};
 
     fn deeply_composed_function(depth: usize) -> Function {
@@ -252,6 +384,44 @@ mod tests {
         ]
     }
 
+    fn instance_with_output_objective() -> Instance {
+        let mut instance = Instance::builder()
+            .sense(Sense::Maximize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::binary()),
+                (VariableID::from(2), DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        assert!(instance.convert_active_objective(Sense::Minimize));
+        instance
+    }
+
+    fn parametric_instance_with_output_objective() -> ParametricInstance {
+        let parameter_id = VariableID::from(100);
+        let output_function =
+            Function::from((linear!(1) + linear!(parameter_id.into_inner())).unwrap());
+        let mut instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(output_function.clone())
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                DecisionVariable::binary(),
+            )]))
+            .parameters(ParameterTable::from_ids(BTreeSet::from([parameter_id])))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        instance.output_objective = Some(OutputObjective::new(
+            Sense::Maximize,
+            output_function,
+            false,
+        ));
+        instance
+    }
+
     fn assert_btree_map<K: Ord, V>(_: &BTreeMap<K, V>) {}
 
     #[test]
@@ -333,18 +503,120 @@ mod tests {
     }
 
     #[test]
-    fn v2_instance_deserialization_rejects_missing_required_feature() {
-        let mut proto = v2::Instance::from(instance_with_special_constraints());
-        proto.required_features = vec![
-            v2::Feature::ConstraintOneHot as i32,
-            v2::Feature::ConstraintSos1 as i32,
-        ];
+    fn v2_instance_parse_preserves_explicit_output_objective() {
+        let mut expected = Instance::default();
+        let mut proto = v2::Instance::from(expected.clone());
+        proto
+            .required_features
+            .push(v2::Feature::OutputObjective as i32);
+        proto.output_objective = Some(v2::OutputObjective {
+            sense: proto.sense,
+            function: proto.objective.clone(),
+            preserves_optimality: true,
+        });
+        expected.output_objective = Some(OutputObjective::new(
+            expected.sense(),
+            expected.objective().clone(),
+            true,
+        ));
+
+        let restored = Instance::try_from(proto).unwrap();
+
+        assert_eq!(restored, expected);
+        assert!(restored.to_v1_bytes().is_err());
+    }
+
+    #[test]
+    fn v2_instance_reader_accepts_output_objective_without_feature_declaration() {
+        let instance = instance_with_output_objective();
+        let mut proto = v2::Instance::from(instance.clone());
+        assert!(proto
+            .required_features
+            .contains(&(v2::Feature::OutputObjective as i32)));
+        proto.required_features.clear();
+
+        let restored = Instance::try_from(proto).unwrap();
+        assert_eq!(restored, instance);
+    }
+
+    #[test]
+    fn v2_instance_rejects_undefined_output_objective_variable() {
+        let mut proto = v2::Instance::from(instance_with_output_objective());
+        proto.output_objective.as_mut().unwrap().function =
+            Some(Function::from(linear!(999)).into());
 
         let err = Instance::try_from(proto).unwrap_err();
 
         assert!(
-            err.to_string().contains("required_features")
-                && err.to_string().contains("ConstraintIndicator"),
+            err.to_string().contains("output_objective.function")
+                && err.to_string().contains("Undefined variable ID"),
+            "unexpected error: {err}",
+        );
+    }
+
+    #[test]
+    fn v2_parametric_instance_round_trip_preserves_parameterized_output_objective() {
+        let instance = parametric_instance_with_output_objective();
+        let proto = v2::ParametricInstance::from(instance.clone());
+
+        assert!(proto
+            .required_features
+            .contains(&(v2::Feature::OutputObjective as i32)));
+        let output = proto.output_objective.as_ref().unwrap();
+        assert_eq!(
+            output.sense,
+            i32::from(crate::v1::instance::Sense::Maximize)
+        );
+        assert!(!output.preserves_optimality);
+        let output_function: Function = output
+            .function
+            .as_ref()
+            .unwrap()
+            .clone()
+            .parse(&())
+            .unwrap();
+        assert!(output_function
+            .required_ids()
+            .contains(&VariableID::from(100)));
+
+        let restored = ParametricInstance::try_from(proto).unwrap();
+        assert_eq!(restored, instance);
+    }
+
+    #[test]
+    fn v2_parametric_parse_preserves_explicit_output_objective() {
+        let mut expected = ParametricInstance::default();
+        let mut proto = v2::ParametricInstance::from(expected.clone());
+        proto
+            .required_features
+            .push(v2::Feature::OutputObjective as i32);
+        proto.output_objective = Some(v2::OutputObjective {
+            sense: proto.sense,
+            function: proto.objective.clone(),
+            preserves_optimality: true,
+        });
+        expected.output_objective = Some(OutputObjective::new(
+            *expected.sense(),
+            expected.objective().clone(),
+            true,
+        ));
+
+        let restored = ParametricInstance::try_from(proto).unwrap();
+
+        assert_eq!(restored, expected);
+        assert!(restored.to_v1_bytes().is_err());
+    }
+
+    #[test]
+    fn v2_parametric_instance_rejects_undefined_output_objective_id() {
+        let mut proto = v2::ParametricInstance::from(parametric_instance_with_output_objective());
+        proto.output_objective.as_mut().unwrap().function =
+            Some(Function::from(linear!(999)).into());
+
+        let err = ParametricInstance::try_from(proto).unwrap_err();
+        assert!(
+            err.to_string().contains("output_objective.function")
+                && err.to_string().contains("Undefined variable ID"),
             "unexpected error: {err}",
         );
     }
@@ -601,5 +873,15 @@ mod tests {
 
         assert_eq!(restored, instance);
         assert_eq!(restored.parameters().labels().name(parameter_id), Some("p"));
+    }
+
+    proptest! {
+        #[test]
+        fn v2_instance_round_trip_preserves_full_v3_semantics(
+            instance in Instance::arbitrary_with(crate::InstanceParameters::full_v3())
+        ) {
+            let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+            prop_assert_eq!(restored, instance);
+        }
     }
 }

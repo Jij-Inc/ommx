@@ -25,7 +25,6 @@ from ommx import (
 
 def test_declares_quadratic_mip_input_class():
     input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
-    assert input_class is not None
     [clause] = input_class.clauses
     assert clause.label == "pyscipopt-quadratic-mip"
     assert clause.allowed_variable_kinds == {
@@ -66,9 +65,8 @@ def test_input_class_accepts_complete_quadratic_mip_boundary(sense):
     before = instance.to_v2_bytes()
 
     report = OMMXPySCIPOptAdapter.check_applicability(instance)
-    assert report.is_applicable
-    assert report.input_membership.matching_clauses == [(0, "pyscipopt-quadratic-mip")]
-    assert report.precondition_violations == ()
+    assert report.is_member
+    assert report.matching_clauses == [(0, "pyscipopt-quadratic-mip")]
     OMMXPySCIPOptAdapter(instance)
     assert instance.to_v2_bytes() == before
 
@@ -83,7 +81,7 @@ def test_error_polynomial_objective():
     )
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(ommx_instance)
-    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatches = e.value.report.clause_reports[0].mismatches
     assert len(mismatches) == 1
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.ObjectiveDegreeExceedsBound)
@@ -103,7 +101,7 @@ def test_error_non_polynomial_objective():
     with pytest.raises(AdapterNotApplicableError) as error:
         OMMXPySCIPOptAdapter(instance)
 
-    [mismatch] = error.value.report.input_membership.clause_reports[0].mismatches
+    [mismatch] = error.value.report.clause_reports[0].mismatches
     assert isinstance(mismatch, InstanceClassMismatch.ObjectiveFunctionNotPolynomial)
 
 
@@ -141,7 +139,7 @@ def test_error_nonlinear_constraint():
     )
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(ommx_instance)
-    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatches = e.value.report.clause_reports[0].mismatches
     assert len(mismatches) == 1
     mismatch = mismatches[0]
     assert isinstance(
@@ -166,7 +164,7 @@ def test_rejects_quadratic_indicator_body_without_mutating_input():
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(instance)
 
-    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatches = e.value.report.clause_reports[0].mismatches
     assert len(mismatches) == 1
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.IndicatorBodyDegreeExceedsBound)
@@ -195,7 +193,7 @@ def test_rejects_unsupported_variable_kinds(variable, kind):
 
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(instance)
-    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatches = e.value.report.clause_reports[0].mismatches
     assert len(mismatches) == 1
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.VariableKindNotAllowed)
@@ -215,7 +213,7 @@ def test_accepts_unused_unsupported_variable_kind_without_mutating_input():
     before = instance.to_v2_bytes()
 
     report = OMMXPySCIPOptAdapter.check_applicability(instance)
-    assert report.is_applicable
+    assert report.is_member
     OMMXPySCIPOptAdapter(instance)
     assert instance.to_v2_bytes() == before
 
@@ -235,7 +233,7 @@ def test_rejects_one_hot_without_implicit_lowering():
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(instance)
 
-    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatches = e.value.report.clause_reports[0].mismatches
     assert len(mismatches) == 1
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.OneHotConstraintsNotAllowed)

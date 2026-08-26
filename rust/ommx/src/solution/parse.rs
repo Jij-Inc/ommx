@@ -35,12 +35,6 @@ fn validate_evaluated_constraint_used_ids<T: crate::ConstraintType>(
     Ok(())
 }
 
-fn evaluated_collection_has_payload<T: crate::ConstraintType>(
-    collection: &crate::constraint_type::EvaluatedCollection<T>,
-) -> bool {
-    !collection.is_empty()
-}
-
 fn validate_solution_indicator_structural_ids(
     constraints: &crate::constraint_type::EvaluatedCollection<crate::IndicatorConstraint>,
     decision_variables: &crate::EvaluatedDecisionVariableTable,
@@ -322,8 +316,7 @@ impl Parse for v2::Solution {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.Solution";
-        let required_features =
-            crate::v2_io::parse_required_features(self.required_features, message)?;
+        crate::v2_io::validate_required_features(self.required_features, message)?;
         let feasibility_atol =
             crate::v2_io::parse_feasibility_atol(self.feasibility_atol, message)?;
         let annotations =
@@ -366,28 +359,6 @@ impl Parse for v2::Solution {
             .map(|value| value.parse_as(&feasibility_atol, message, "evaluated_sos1_constraints"))
             .transpose()?
             .unwrap_or_default();
-
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::ConstraintIndicator,
-            evaluated_collection_has_payload(&evaluated_indicator_constraints),
-            message,
-            "evaluated_indicator_constraints",
-        )?;
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::ConstraintOneHot,
-            evaluated_collection_has_payload(&evaluated_one_hot_constraints),
-            message,
-            "evaluated_one_hot_constraints",
-        )?;
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::ConstraintSos1,
-            evaluated_collection_has_payload(&evaluated_sos1_constraints),
-            message,
-            "evaluated_sos1_constraints",
-        )?;
 
         let evaluated_named_functions = self
             .evaluated_named_functions

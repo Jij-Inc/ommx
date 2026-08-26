@@ -616,11 +616,40 @@ impl Evaluate for Instance {
     type Output = crate::Solution;
     type SampledOutput = crate::SampleSet;
 
+    /// # Postconditions
+    ///
+    /// Evaluation reports the preserved output sense and objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    ///
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// ```
     #[tracing::instrument(skip_all)]
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
         let state = self.populate_state(state.clone(), atol)?;
 
-        let objective = self.objective.evaluate(&state, atol)?;
+        let (sense, output_objective) = self.objective_for_output();
+        let objective = output_objective.evaluate(&state, atol)?;
         let evaluated_constraints = self.constraint_collection.evaluate(&state, atol)?;
         let evaluated_indicator_constraints = self
             .indicator_constraint_collection
@@ -636,8 +665,6 @@ impl Evaluate for Instance {
         }
 
         let evaluated_named_functions = self.named_functions.evaluate(&state, atol)?;
-
-        let sense = self.sense();
 
         // SAFETY: Instance invariants guarantee Solution invariants
         let solution = unsafe {
@@ -658,6 +685,35 @@ impl Evaluate for Instance {
         Ok(solution)
     }
 
+    /// # Postconditions
+    ///
+    /// Sample evaluation reports the preserved output semantics for every sample.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sampled, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let samples = Sampled::from(State::from(HashMap::from([(1, 1.0)])));
+    ///
+    /// let sample_set = instance.evaluate_samples(&samples, ATol::default()).unwrap();
+    /// assert_eq!(*sample_set.sense(), Sense::Maximize);
+    /// let sample_id = sample_set.sample_ids().into_iter().next().unwrap();
+    /// assert_eq!(sample_set.objectives().get(sample_id), Some(&1.0));
+    /// ```
     #[tracing::instrument(skip_all)]
     fn evaluate_samples(
         &self,
@@ -695,7 +751,8 @@ impl Evaluate for Instance {
             .evaluate_samples(&samples, atol)?;
 
         // Objective
-        let objectives = self.objective().evaluate_samples(&samples, atol)?;
+        let (sense, output_objective) = self.objective_for_output();
+        let objectives = output_objective.evaluate_samples(&samples, atol)?;
 
         // Reconstruct decision variable values
         let mut decision_variables = std::collections::BTreeMap::new();
@@ -715,11 +772,41 @@ impl Evaluate for Instance {
             .one_hot_constraints_collection(sampled_one_hot_constraints)
             .sos1_constraints_collection(sampled_sos1_constraints)
             .named_function_table(named_functions)
-            .sense(self.sense)
+            .sense(sense)
             .feasibility_atol(atol)
             .build()?)
     }
 
+    /// # Postconditions
+    ///
+    /// Partial evaluation rewrites active data while preserving the output objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let output = instance.output_objective().cloned();
+    ///
+    /// instance
+    ///     .partial_evaluate(&State::from(HashMap::from([(1, 1.0)])), ATol::default())
+    ///     .unwrap();
+    /// assert_eq!(instance.output_objective(), output.as_ref());
+    /// assert!(instance.required_ids().is_empty());
+    /// let solution = instance.evaluate(&State::default(), ATol::default()).unwrap();
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// ```
     #[tracing::instrument(skip_all)]
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
         if let Some(plan) = PartialEvaluatePlan::prepare(self, state, atol)? {
@@ -1409,6 +1496,10 @@ mod tests {
                 .is_none()
         );
 
+        let mut with_output = instance.clone();
+        assert!(with_output.convert_active_objective(Sense::Maximize));
+        let output = with_output.output_objective().cloned().unwrap();
+
         let mut borrowed = instance.clone();
         borrowed.partial_evaluate(&state, ATol::default()).unwrap();
         let consumed = instance
@@ -1426,6 +1517,16 @@ mod tests {
                 (VariableID::from(3), 0.0),
             ])
         );
+
+        with_output
+            .partial_evaluate(&state, ATol::default())
+            .unwrap();
+        assert_eq!(with_output.output_objective(), Some(&output));
+        let solution = with_output
+            .evaluate(&v1::State::default(), ATol::default())
+            .unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Minimize));
+        assert_eq!(*solution.objective(), 1.0);
     }
 
     #[test]

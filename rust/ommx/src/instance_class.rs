@@ -6,10 +6,10 @@
 //! that set. An [`InstanceClassClause`] is one conjunctive clause in the
 //! representation; an instance class is the finite union of its clauses.
 //!
-//! Membership describes only the input's OMMX-defined structure. It does not
-//! include preparation or lowering, adapter-specific preconditions,
-//! wire-format `ommx.v2.Feature` handling, or whether the adapter returns an
-//! output successfully. If preparation produces another instance to use as
+//! Membership defines whether the exact input is applicable to an adapter. It
+//! does not perform preparation or lowering, handle wire-format
+//! `ommx.v2.Feature` values, or guarantee that later conversion and backend
+//! operations succeed. If preparation produces another instance to use as
 //! input, membership must be checked on that value.
 
 mod instance_facts;
@@ -411,6 +411,141 @@ impl InstanceClass {
         Self { clauses }
     }
 
+    /// Return the class of QUBO solver inputs.
+    ///
+    /// # Postconditions
+    ///
+    /// The returned class admits only unconstrained minimization models over
+    /// Binary variables whose objective degree is at most two.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, monomial, Constraint, ConstraintID, DecisionVariable, Function,
+    ///     Instance, InstanceClass, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let binary = BTreeMap::from([(variable, DecisionVariable::binary())]);
+    /// let build = |sense, objective, constraints| {
+    ///     Instance::builder()
+    ///         .sense(sense)
+    ///         .objective(objective)
+    ///         .decision_variables(binary.clone())
+    ///         .constraints(constraints)
+    ///         .build()
+    ///         .unwrap()
+    /// };
+    /// let linear = build(Sense::Minimize, Function::from(linear!(1)), BTreeMap::new());
+    /// let quadratic = build(
+    ///     Sense::Minimize,
+    ///     Function::from(monomial!(1, 1)),
+    ///     BTreeMap::new(),
+    /// );
+    /// let cubic = build(
+    ///     Sense::Minimize,
+    ///     Function::from(monomial!(1, 1, 1)),
+    ///     BTreeMap::new(),
+    /// );
+    /// let maximizing = build(Sense::Maximize, Function::from(linear!(1)), BTreeMap::new());
+    /// let constrained = build(
+    ///     Sense::Minimize,
+    ///     Function::from(linear!(1)),
+    ///     BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]),
+    /// );
+    /// let non_binary = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::continuous())]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let class = InstanceClass::qubo();
+    /// assert!(class.contains(&linear));
+    /// assert!(class.contains(&quadratic));
+    /// assert!(!class.contains(&cubic));
+    /// assert!(!class.contains(&maximizing));
+    /// assert!(!class.contains(&constrained));
+    /// assert!(!class.contains(&non_binary));
+    /// ```
+    pub fn qubo() -> Self {
+        InstanceClassClause::new(
+            "qubo",
+            BTreeSet::from([Kind::Binary]),
+            DegreeBound::at_most(2),
+            BTreeSet::from([Sense::Minimize]),
+        )
+        .into()
+    }
+
+    /// Return the class of Binary HUBO solver inputs.
+    ///
+    /// # Postconditions
+    ///
+    /// The returned class admits unconstrained minimization models over Binary
+    /// variables with any polynomial objective degree.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, monomial, Constraint, ConstraintID, DecisionVariable, Function,
+    ///     Instance, InstanceClass, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let build = |sense, objective, decision_variable| {
+    ///     Instance::builder()
+    ///         .sense(sense)
+    ///         .objective(objective)
+    ///         .decision_variables(BTreeMap::from([(variable, decision_variable)]))
+    ///         .constraints(BTreeMap::new())
+    ///         .build()
+    ///         .unwrap()
+    /// };
+    /// let linear = build(Sense::Minimize, Function::from(linear!(1)), DecisionVariable::binary());
+    /// let cubic = build(
+    ///     Sense::Minimize,
+    ///     Function::from(monomial!(1, 1, 1)),
+    ///     DecisionVariable::binary(),
+    /// );
+    /// let maximizing = build(Sense::Maximize, Function::from(linear!(1)), DecisionVariable::binary());
+    /// let non_binary = build(
+    ///     Sense::Minimize,
+    ///     Function::from(linear!(1)),
+    ///     DecisionVariable::continuous(),
+    /// );
+    /// let constrained = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let class = InstanceClass::hubo();
+    /// assert!(class.contains(&linear));
+    /// assert!(class.contains(&cubic));
+    /// assert!(!class.contains(&maximizing));
+    /// assert!(!class.contains(&non_binary));
+    /// assert!(!class.contains(&constrained));
+    /// ```
+    pub fn hubo() -> Self {
+        InstanceClassClause::new(
+            "hubo",
+            BTreeSet::from([Kind::Binary]),
+            DegreeBound::Unbounded,
+            BTreeSet::from([Sense::Minimize]),
+        )
+        .into()
+    }
+
     /// Return the clauses representing this class.
     pub fn clauses(&self) -> &[InstanceClassClause] {
         &self.clauses
@@ -631,8 +766,8 @@ impl InstanceClassClauseReport {
 /// Side-effect-free [`InstanceClass`] membership report.
 ///
 /// An instance is a member when at least one complete clause contains it.
-/// Adapter identity and adapter-specific preconditions belong to an adapter
-/// applicability report layered on top of this result.
+/// Adapters use this membership report directly when checking applicability;
+/// they do not add another applicability condition.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceClassMembershipReport {
     clause_reports: Vec<InstanceClassClauseReport>,

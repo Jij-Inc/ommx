@@ -1,5 +1,7 @@
 import copy
 
+import pytest
+
 from ommx import (
     DecisionVariable,
     Instance,
@@ -9,6 +11,7 @@ from ommx import (
     SpecialConstraintKind,
 )
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+from ommx.adapter import AdapterNotApplicableError
 
 
 def test_recommended_preparation_lowers_only_one_hot() -> None:
@@ -24,10 +27,18 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
         sos1_constraints={20: Sos1Constraint(variables=x)},
         sense=Instance.MAXIMIZE,
     )
+    before = instance.to_v2_bytes()
+
+    with pytest.raises(AdapterNotApplicableError):
+        OMMXPySCIPOptAdapter.solve_without_preparation(instance)
+    assert instance.to_v2_bytes() == before
+
+    solution = OMMXPySCIPOptAdapter.solve(instance)
+    assert solution.feasible
+    assert instance.to_v2_bytes() == before
 
     prepared = copy.copy(instance)
     input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
-    assert input_class is not None
     prepared.prepare(
         input_class,
         OMMXPySCIPOptAdapter.recommended_preparation_policy(),
@@ -53,7 +64,7 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
 
     assert input_class.contains(prepared)
     report = OMMXPySCIPOptAdapter.check_applicability(prepared)
-    assert report.is_applicable
+    assert report.is_member
     adapter = OMMXPySCIPOptAdapter(prepared)
     assert adapter.instance is prepared
 

@@ -175,7 +175,7 @@ for cid, c in instance.constraints.items():
 
 `Instance` / `ParametricInstance` の制約 dict は、v3 final では `AttachedX` handle を返します。`Solution.constraints` は評価結果の snapshot なので `EvaluatedConstraint` のままです。`SampleSet.constraints` / `.decision_variables` / `.named_functions` は `list` のままです。
 
-## 5. rename と signature 変更
+## 5. rename、signature、挙動の変更
 
 主な rename / signature 変更は次の通りです。
 
@@ -199,6 +199,59 @@ instance.save_mps("out.mps.gz")
 p = Parameter(3, name="w")
 pi.with_parameters({p.id: 1.0})
 ```
+
+### 5.6 `to_qubo()` / `to_hubo()`は入力objectiveを評価結果に保持 (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+Driver methodは引き続き利用でき、入力をin-placeに変更します。v3では変更後の
+`Instance`がQUBO/HUBO solverへ渡すminimization energyをactive objectiveとして保持し、
+`evaluate()`と`evaluate_samples()`は変換前のinstanceが公開していたobjective semanticsを
+保持します。Python SDK v2はactive senseを戻したうえで最終的なpenalty energyを評価しており、
+solver inputとuser-facing outputを混在させていました。
+
+したがって`Instance.objective`はsolver energyを、`Solution`と`SampleSet`は保持された入力
+objectiveを表します。実行可能な事後条件は{meth}`~ommx.Instance.to_qubo`、
+{meth}`~ommx.Instance.to_hubo`、{meth}`~ommx.Instance.evaluate`、
+{meth}`~ommx.Instance.evaluate_samples`に記載されています。
+
+明示的なoutput objectiveを持つ`Instance`または`ParametricInstance`は、v1 wire formatで
+losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`を送出するため、
+`to_v2_bytes()`を使用してください。
+
+同じpipelineは{meth}`~ommx.Instance.prepare`と
+{meth}`~ommx.Instance.as_qubo_format`または
+{meth}`~ommx.Instance.as_hubo_format`で明示的に実行できます。対応するtarget classと
+編集可能なpolicyは{meth}`~ommx.InstanceClass.qubo`、
+{meth}`~ommx.InstanceClass.hubo`、{meth}`~ommx.PreparationPolicy.for_qubo`、
+{meth}`~ommx.PreparationPolicy.for_hubo`が提供します。
+
+### 5.7 Adapterの`solve()` / `sample()`が入力を自動的にPrepare (`3.0.0`, [#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+通常は元のInstanceをそのまま`solve()`または`sample()`へ渡します。AdapterはそのInstanceを
+変更せずに推奨Preparationを適用します。
+
+```python
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)
+```
+
+application固有のPreparation Policyが必要な場合は、Instanceをin-placeでPrepareしてから
+preparation-free APIを使います。
+
+```python
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# 必要に応じてpolicyを調整する。
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_without_preparation(instance)
+```
+
+独自Adapterでは、`solve_without_preparation()`または`sample_without_preparation()`を実装します。
+追加optionは、それを公開する各APIで明示的な型付きsignatureとして宣言し、包括的な
+`**kwargs`は使いません。Preparationをまたいでも
+意味が変わらないoptionはeasy methodから転送できます。exactなprepared inputに
+意味が依存し、Preparation過程をまたぐtransportを定義しない場合、具体的なAdapterはそのoptionを
+preparation-free methodだけに公開できます。Adapter inputに
+`output_objective`がある場合、HiGHSとPython-MIPはdual valueを付与しません。
 
 ## 6. return type の変更
 
@@ -236,50 +289,45 @@ ids_list: list[int] = sample_set.sample_ids_list
 - `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
 - `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
 - `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-- `ommx_openjij_adapter.sample_qubo_sa(...)` - 呼び出し側が所有する `Instance` を `OMMXOpenJijSAAdapter.INPUT_CLASS` 向けにprepareし、その同じinstanceを `OMMXOpenJijSAAdapter.sample(...)` に渡します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
+- `ommx_openjij_adapter.sample_qubo_sa(...)` -
+  `OMMXOpenJijSAAdapter.sample(instance)`を使います。置き換え後は`instance`を変更せず、
+  raw `Samples`ではなく評価済みの`SampleSet`を返します
+  （`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
 
 v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `uniform_penalty_weight`、`penalty_weights`、
-`inequality_integer_slack_max_range` を直接受け取り、暗黙にmodel変換を実行していました。
-v3では呼び出し側がこれらの選択を所有します。Adapterが返す新しい推奨
-`PreparationPolicy` を出発点に、application固有のfieldを編集し、厳格なAdapter APIを
-呼ぶ前に `Instance.prepare()` でin-placeに適用します。
+`inequality_integer_slack_max_range`を直接受け取っていました。v3ではこれらの選択を推奨
+`PreparationPolicy`へ移します。
 
-OpenJijの推奨Policyでは、特殊制約lowering、minimizationへのsense正規化、Integer slack、
-使用中Integer変数のlog encodingを有効にします。Integer slackはrange 32でexactな
-equality変換を最初に試し、そのoperationが利用できない場合には、上限32のslackを
-追加してinequalityのまま残すことを許可します。equalityが必須なら、置き換える
-`IntegerSlackPreparation` の `slack_upper_bound=None` を指定します。
+- `uniform_penalty_weight`と`penalty_weights`は`policy.fixed_penalty`へ移す。
+- `inequality_integer_slack_max_range`は`policy.integer_slack`へ移す。
 
-固定penalty weightは、呼び出し側が明示的に選ぶ非負のmagnitudeです。v2はpenalty設定が
-ない場合に一律weight `1.0` を選びましたが、v3はapplicationに十分なmagnitudeを推測
-しません。owner operationは `-atol` までの値を受け入れ、許容された負値を0へ正規化
-します。OpenJij向けに制約を取り除く必要がある場合は、uniform operationまたは
-constraint IDごとのweightを `policy.fixed_penalty` で選択します。
+constructorを直接使う場合は自動的にPrepareされないため、あらかじめ
+`OMMXOpenJijSAAdapter.INPUT_CLASS`向けにPrepareしたInstanceを渡します。
+
+OpenJijの`initial_state`は、このexactなprepared inputのsolver変数表現に対して定義され、dictの
+keyはその変数IDです。そのためv3ではeasy methodではなく、exact-input constructor、
+`sample_without_preparation()`、`solve_without_preparation()`で受け取ります。
+
+通常の`sample()` / `solve()` workflowは§5.7で説明しています。固定penaltyが必要なmodelでは、
+applicationがそのmagnitudeを選ぶ必要があります。v3はv2の暗黙なuniform weight `1.0`を
+使用しません。customizeしたPolicyをInstanceへ適用し、preparation-free methodを呼びます。
 
 ```python
-from ommx import FixedPenaltyPreparation, IntegerSlackPreparation
+from ommx import FixedPenaltyPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-assert input_class is not None
 policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
-policy.integer_slack = IntegerSlackPreparation(
-    max_integer_range=32,
-    slack_upper_bound=32,
-)
 policy.fixed_penalty = (
     FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
 )
-source.prepare(input_class, policy)
-samples = OMMXOpenJijSAAdapter.sample(source)
+source.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(source)
 ```
 
-`Instance.prepare()` はtarget class membershipへ到達した場合だけreturnし、選択した
-OMMX operationの既存exception typeを使います。instanceをin-placeで変更し、後のerrorが
-起きても先に完了したoperationをglobalにrollbackしません。その後、
-`OMMXOpenJijSAAdapter.require_applicable(source)` で、signed IDとfinite coefficientという
-OpenJij固有の残りのpreconditionを検査できます。
+`prepare()`は`source`をin-placeで変更します。返される`SampleSet`のobjectiveとsenseは
+Preparation前に`source`が公開していたものです（§5.6）。Policyの詳細とpenaltyの選び方は
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter)を参照してください。
 
 ## 8. DataFrame accessor
 
@@ -455,6 +503,7 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] `Constraint.id` / `set_id()` / `id=` を削除し、host dict の key で ID を渡す。
 - [ ] `constraints=[...]` を `constraints={id: constraint}` に置き換える。
 - [ ] `constraint_hints` を `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に置き換える。
+- [ ] Adapterの推奨Preparationを使う場合は`solve()` / `sample()`を直接呼ぶ。Policyをcustomizeする場合は`Instance.prepare()`後に`solve_without_preparation()` / `sample_without_preparation()`を呼ぶ。独自Adapterにはpreparation-free methodを追加し、Adapter固有optionは公開するAPIごとに明示的な型付きsignatureとして宣言して、包括的な`**kwargs`は使わない。exactなprepared inputに依存するoptionのtransportを定義しない場合は、preparation-free methodだけに公開できる。
 - [ ] `*_df` accessor に `()` を付ける。
 - [ ] `RuntimeError` を捕捉していた `evaluate` / `partial_evaluate` 周辺を `ValueError` に変える。
 - [ ] `decision_variable_analysis()` を `decision_variable_roles()` / `decision_variable_role(id)` / `fixed_decision_variables()` / `dependent_decision_variable_ids()` / `irrelevant_decision_variable_ids()` / `decision_variables_df()["state_role"]` に置き換える。

@@ -38,6 +38,111 @@ composed expression as an empty polynomial. See the
 [Function user guide](../user_guide/function.md) for operation ordering,
 evaluation errors, and serialization details.
 
+### ⚠ `solve()` and `sample()` now prepare inputs automatically ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()` and `SamplerAdapter.sample()` now apply the Adapter's
+recommended Preparation before execution and leave the supplied
+{class}`~ommx.Instance` unchanged. Applications that customize Preparation
+should prepare the Instance in place and call
+`solve_without_preparation()` or `sample_without_preparation()` instead.
+
+The breaking changes that require updates to existing code are:
+
+- `OMMXOpenJijSAAdapter.sample(..., initial_state=...)` and
+  `OMMXOpenJijSAAdapter.solve(..., initial_state=...)` are no longer accepted.
+  Prepare the Instance explicitly, then call
+  `OMMXOpenJijSAAdapter.sample_without_preparation(instance, initial_state=...)`
+  or `OMMXOpenJijSAAdapter.solve_without_preparation(instance, initial_state=...)`.
+- Custom Adapters must implement `solve_without_preparation()` or
+  `sample_without_preparation()` and move backend execution there. If
+  Adapter-specific options remain available on `solve()` or `sample()`, those
+  methods prepare a copy and forward the options to the preparation-free
+  method.
+
+HiGHS and Python-MIP omit dual values when the Adapter input has an
+`output_objective`. See the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the two calling workflows.
+
+### ⚠ Preserve input objectives across solver Preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+`to_qubo()` and `to_hubo()` now leave the active `Instance` as the minimization
+energy used by a solver, while `Solution` and `SampleSet` retain the objective
+semantics exposed by the input instance:
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+
+instance.to_qubo(uniform_penalty_weight=2.0)
+state = {0: 0.0}
+
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == 2.0
+assert instance.evaluate(state).sense == Sense.Maximize
+assert instance.evaluate(state).objective == 0.0
+assert instance.evaluate_samples({0: state}).sense == Sense.Maximize
+assert instance.evaluate_samples({0: state}).objectives[0] == 0.0
+```
+
+This is a breaking correction from the latest stable Python SDK, whose drivers
+restored the active sense and used
+the penalized solver energy as the evaluated objective. The returned QUBO/HUBO
+coefficients keep the same meaning.
+
+An `Instance` or `ParametricInstance` with an explicit output objective cannot
+be represented losslessly by the v1 wire format. Its `to_v1_bytes()` method
+therefore raises `RuntimeError`; use `to_v2_bytes()` for these models.
+
+Penalty rewrites also map solver-reported optimality conservatively: when an
+active-formulation proof does not transport, evaluated output remains
+`Optimality.Unspecified`. Executable postconditions are documented on
+{meth}`~ommx.Instance.to_qubo`, {meth}`~ommx.Instance.to_hubo`,
+{meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples`. See the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the explicit Preparation workflow.
+
+### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
+
+`SolverAdapter.check_applicability()` and `require_applicable()` now use
+`INPUT_CLASS` membership as the complete applicability condition. The secondary
+adapter-owned precondition layer has been removed, including
+`AdapterPreconditionViolation`, `ConstraintRef`, `_check_preconditions()`, and
+the `preconditions_checked` and `precondition_violations` report fields.
+
+Both methods now return `InstanceClassMembershipReport` directly, and the
+`AdapterApplicabilityReport` wrapper has been removed. Replace
+`report.is_applicable` with `report.is_member` and `report.input_membership`
+with `report`. For `AdapterNotApplicableError`, `error.report` is the membership
+report itself and the Adapter identity is available as `error.adapter`.
+
+Adapter implementations must express every accepted-model condition in
+`INPUT_CLASS`. Converter-local representation checks and backend limits remain
+in the solver-input construction path; their failures are conversion or backend
+errors rather than `AdapterNotApplicableError`. In particular, OpenJij signed-ID
+and finite-coefficient validation now occurs when sampler input is built. See
+[Adapter input classes](../user_guide/capability_model.md) and the
+[Adapter implementation tutorial](../tutorial/implement_adapter.md) for the
+responsibility boundary.
+
+### Adapter input classes are required ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
+
+Concrete `SolverAdapter` and `SamplerAdapter` implementations must declare
+`INPUT_CLASS` as a non-optional `ClassVar[InstanceClass]`; `None` is not a valid
+declaration. In-repository adapters now expose `InstanceClass` directly, so
+callers can pass `Adapter.INPUT_CLASS` to {meth}`~ommx.Instance.prepare` without
+an `is not None` guard. A missing declaration still produces a clear `TypeError`
+when applicability is checked. See the [Adapter implementation tutorial](../tutorial/implement_adapter.md)
+for the complete contract.
+
 ## 3.0.0 Beta 3
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)
