@@ -67,10 +67,8 @@ impl Parse for v1::function::Expression {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        from_instructions_exact(instructions).map_err(|error| {
-            RawParseError::InvalidFunction(error.to_string())
-                .context(EXPRESSION_MESSAGE, "instructions")
-        })
+        from_instructions_exact(instructions)
+            .map_err(|error| ParseError::new(error).context(EXPRESSION_MESSAGE, "instructions"))
     }
 }
 
@@ -134,9 +132,9 @@ fn parse_unary(
         }
     };
     if !matches!(operator, UnaryOperator::Powi(_)) && value.integer_exponent.is_some() {
-        return Err(RawParseError::InvalidFunction(
-            "integer_exponent is only valid for unary POWI instructions".into(),
-        )
+        return Err(ParseError::new(crate::error!(
+            "integer_exponent is only valid for unary POWI instructions"
+        ))
         .context(UNARY_MESSAGE, "integer_exponent"));
     }
     Ok(Instruction::Unary(operator))
@@ -187,7 +185,7 @@ fn parse_constant(
     match value.try_into() {
         Ok(value) => Ok(Atom::Constant(value)),
         Err(CoefficientError::Zero) => Ok(Atom::Zero),
-        Err(error) => Err(RawParseError::from(error).context(message, field)),
+        Err(error) => Err(ParseError::new(error).context(message, field)),
     }
 }
 
@@ -273,6 +271,7 @@ impl From<Instruction> for v1::function::expression::Instruction {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::function::operation::ExpressionValidationError;
     use crate::{FunctionParameters, Message, PolynomialParameters};
     use proptest::prelude::*;
     use v1::function::expression::instruction::{
@@ -327,6 +326,48 @@ mod tests {
             Ok(_) => panic!("malformed expression unexpectedly parsed"),
             Err(error) => error,
         }
+    }
+
+    fn parse_error_source(error: &ParseError) -> &(dyn std::error::Error + 'static) {
+        std::error::Error::source(error).expect("ParseError should expose its cause")
+    }
+
+    #[test]
+    fn expression_parse_error_sources_follow_ownership() {
+        let stack_error = parse_error(expression(vec![]));
+        assert!(matches!(
+            parse_error_source(&stack_error).downcast_ref::<ExpressionValidationError>(),
+            Some(ExpressionValidationError::InvalidFinalStackHeight { height: 0 })
+        ));
+
+        let missing_exponent =
+            parse_error(expression(vec![WireInstruction::Constant(2.0), powi(None)]));
+        assert!(matches!(
+            parse_error_source(&missing_exponent).downcast_ref::<RawParseError>(),
+            Some(RawParseError::MissingField {
+                message: UNARY_MESSAGE,
+                field: "integer_exponent",
+            })
+        ));
+
+        let unexpected_exponent = parse_error(expression(vec![
+            WireInstruction::Constant(2.0),
+            WireInstruction::Unary(UnaryOperation {
+                operator: unary_operation::Operator::Abs as i32,
+                integer_exponent: Some(2),
+            }),
+        ]));
+        assert!(
+            !parse_error_source(&unexpected_exponent).is::<RawParseError>(),
+            "a Function semantic failure must not become a generic protobuf-boundary signal"
+        );
+
+        let invalid_constant =
+            parse_error(expression(vec![WireInstruction::Constant(f64::INFINITY)]));
+        assert!(matches!(
+            parse_error_source(&invalid_constant).downcast_ref::<CoefficientError>(),
+            Some(CoefficientError::Infinite)
+        ));
     }
 
     #[test]

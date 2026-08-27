@@ -564,7 +564,9 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ommx::Parse as _;
     use pyo3::type_object::PyTypeInfo;
+    use std::error::Error as _;
 
     fn assert_exception<T>(error: OmmxPyError)
     where
@@ -612,6 +614,46 @@ mod tests {
             ommx::Error::from(ommx::SolutionError::MissingRequiredField { field: "objective" })
                 .into(),
         );
+    }
+
+    #[test]
+    fn parse_error_owner_precedes_domain_signals() {
+        let mut decision_variable = ommx::v1::DecisionVariable::default();
+        decision_variable.id = 1;
+        decision_variable.kind = ommx::v1::decision_variable::Kind::Continuous as i32;
+        let mut state = ommx::v1::State::default();
+        state.entries = [(1, 2.0)].into_iter().collect();
+        let mut solution = ommx::v1::Solution::default();
+        solution.state = Some(state);
+        solution.decision_variables = vec![decision_variable.clone(), decision_variable];
+        solution.feasible_relaxed = Some(true);
+        let solution_error = solution.parse(&()).unwrap_err();
+        assert!(solution_error
+            .source()
+            .is_some_and(|source| source.is::<ommx::SolutionError>()));
+        assert_exception::<PyValueError>(ommx::Error::from(solution_error).into());
+
+        let sample_id = ommx::SampleID::from(0);
+        let mut entry = ommx::v1::sampled_values::SampledValuesEntry::default();
+        entry.ids = vec![sample_id.into_inner()];
+        entry.value = 1.0;
+        let mut sampled_values = ommx::v1::SampledValues::default();
+        sampled_values.entries = vec![entry];
+        let mut first_named_function = ommx::v1::SampledNamedFunction::default();
+        first_named_function.id = 1;
+        first_named_function.evaluated_values = Some(sampled_values.clone());
+        let mut second_named_function = ommx::v1::SampledNamedFunction::default();
+        second_named_function.id = 1;
+        second_named_function.evaluated_values = Some(sampled_values.clone());
+        let mut sample_set = ommx::v1::SampleSet::default();
+        sample_set.objectives = Some(sampled_values);
+        sample_set.named_functions = vec![first_named_function, second_named_function];
+        sample_set.sense = ommx::v1::instance::Sense::Minimize as i32;
+        let sample_set_error = sample_set.parse(&()).unwrap_err();
+        assert!(sample_set_error
+            .source()
+            .is_some_and(|source| source.is::<ommx::SampleSetError>()));
+        assert_exception::<PyValueError>(ommx::Error::from(sample_set_error).into());
     }
 
     #[test]

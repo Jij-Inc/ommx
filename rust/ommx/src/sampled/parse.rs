@@ -4,15 +4,9 @@ use crate::{
     v1::{self, sampled_values::SampledValuesEntry, samples::SamplesEntry},
 };
 
-impl From<DuplicatedSampleIDError> for RawParseError {
-    fn from(e: DuplicatedSampleIDError) -> Self {
-        RawParseError::DuplicatedSampleID { id: e.id() }
-    }
-}
-
 impl From<DuplicatedSampleIDError> for ParseError {
     fn from(e: DuplicatedSampleIDError) -> Self {
-        ParseError::from(RawParseError::from(e))
+        ParseError::new(e)
     }
 }
 
@@ -92,5 +86,31 @@ impl From<Sampled<f64>> for v1::SampledValues {
                 })
                 .collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::error::Error as _;
+
+    #[test]
+    fn parse_preserves_duplicated_sample_id_error() {
+        let error = v1::SampledValues {
+            entries: vec![SampledValuesEntry {
+                value: 1.0,
+                ids: vec![7, 7],
+            }],
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert_eq!(
+            error
+                .source()
+                .and_then(|error| error.downcast_ref::<DuplicatedSampleIDError>())
+                .map(DuplicatedSampleIDError::id),
+            Some(SampleID::from(7))
+        );
     }
 }

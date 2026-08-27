@@ -502,8 +502,7 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
             .context(message, "substituted_value"),
         )?;
 
-        EvaluatedDecisionVariable::new(parsed.id, dv, value)
-            .map_err(|e| crate::RawParseError::InvalidDecisionVariable(e).into())
+        EvaluatedDecisionVariable::new(parsed.id, dv, value).map_err(crate::ParseError::new)
     }
 }
 
