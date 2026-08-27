@@ -31,14 +31,14 @@ This page covers:
 An `InstanceClass` is a finite union of complete, conjunctive {class}`~ommx.InstanceClassClause` values. Membership is evaluated against the exact input without mutating or preparing it.
 
 ```{code-cell} ipython3
-from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
+from ommx import InstanceClass, InstanceClassClause, Kind, PolynomialRequirement, Sense
 
 binary_linear_with_one_hot = InstanceClass(
     [
         InstanceClassClause(
             label="binary-linear-with-one-hot",
             allowed_variable_kinds={Kind.Binary},
-            objective_degree_bound=DegreeBound.at_most(1),
+            objective_polynomial_requirement=PolynomialRequirement.at_most(1),
             allowed_senses={Sense.Maximize},
             allows_one_hot=True,
         )

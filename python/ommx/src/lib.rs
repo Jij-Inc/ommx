@@ -197,7 +197,7 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
     m.add_class::<SpecialConstraintKind>()?;
-    m.add_class::<DegreeBound>()?;
+    m.add_class::<PolynomialRequirement>()?;
     m.add_class::<InstanceClassClause>()?;
     m.add_class::<InstanceClass>()?;
     m.add_class::<InstanceClassMismatch>()?;
@@ -303,7 +303,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "Parameter",
     // Instance classes and explicit special-constraint lowering
     "SpecialConstraintKind",
-    "DegreeBound",
+    "PolynomialRequirement",
     "InstanceClassClause",
     "InstanceClass",
     "InstanceClassMismatch",

@@ -5723,144 +5723,6 @@
         },
         {
           "kind": "Class",
-          "name": "DegreeBound",
-          "doc": "Cumulative polynomial-degree bound in an :class:`InstanceClassClause`.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "at_most",
-              "doc": "Include every degree up to and including ``maximum``.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "maximum",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "DegreeBound",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "includes",
-              "doc": "Return whether ``actual_degree`` satisfies this bound.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "actual_degree",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "unbounded",
-              "doc": "Include every polynomial degree representable by OMMX.",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "DegreeBound",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "maximum",
-              "doc": "Inclusive maximum degree, or ``None`` when unbounded.",
-              "type_": {
-                "display": "Optional[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "Equality",
           "doc": "Equality type for constraints",
           "bases": [],
@@ -12527,9 +12389,9 @@
                       "default": null
                     },
                     {
-                      "name": "objective_degree_bound",
+                      "name": "objective_polynomial_requirement",
                       "type_": {
-                        "display": "DegreeBound",
+                        "display": "PolynomialRequirement",
                         "link_target": null,
                         "children": []
                       },
@@ -12551,13 +12413,13 @@
                       "default": null
                     },
                     {
-                      "name": "regular_constraint_degree_bounds",
+                      "name": "regular_constraint_polynomial_requirements",
                       "type_": {
-                        "display": "Optional[Mapping[Equality, DegreeBound]]",
+                        "display": "Optional[Mapping[Equality, PolynomialRequirement]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[Equality, DegreeBound]",
+                            "display": "Mapping[Equality, PolynomialRequirement]",
                             "link_target": null,
                             "children": [
                               {
@@ -12566,7 +12428,7 @@
                                 "children": []
                               },
                               {
-                                "display": "DegreeBound",
+                                "display": "PolynomialRequirement",
                                 "link_target": null,
                                 "children": []
                               }
@@ -12580,13 +12442,13 @@
                       }
                     },
                     {
-                      "name": "indicator_constraint_degree_bounds",
+                      "name": "indicator_body_polynomial_requirements",
                       "type_": {
-                        "display": "Optional[Mapping[Equality, DegreeBound]]",
+                        "display": "Optional[Mapping[Equality, PolynomialRequirement]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[Equality, DegreeBound]",
+                            "display": "Mapping[Equality, PolynomialRequirement]",
                             "link_target": null,
                             "children": [
                               {
@@ -12595,7 +12457,7 @@
                                 "children": []
                               },
                               {
-                                "display": "DegreeBound",
+                                "display": "PolynomialRequirement",
                                 "link_target": null,
                                 "children": []
                               }
@@ -12718,10 +12580,10 @@
               "is_readonly": true
             },
             {
-              "name": "indicator_constraint_degree_bounds",
+              "name": "indicator_body_polynomial_requirements",
               "doc": "",
               "type_": {
-                "display": "dict[Equality, DegreeBound]",
+                "display": "dict[Equality, PolynomialRequirement]",
                 "link_target": null,
                 "children": [
                   {
@@ -12730,7 +12592,7 @@
                     "children": []
                   },
                   {
-                    "display": "DegreeBound",
+                    "display": "PolynomialRequirement",
                     "link_target": null,
                     "children": []
                   }
@@ -12751,10 +12613,10 @@
               "is_readonly": true
             },
             {
-              "name": "objective_degree_bound",
+              "name": "objective_polynomial_requirement",
               "doc": "",
               "type_": {
-                "display": "DegreeBound",
+                "display": "PolynomialRequirement",
                 "link_target": null,
                 "children": []
               },
@@ -12762,10 +12624,10 @@
               "is_readonly": true
             },
             {
-              "name": "regular_constraint_degree_bounds",
+              "name": "regular_constraint_polynomial_requirements",
               "doc": "",
               "type_": {
-                "display": "dict[Equality, DegreeBound]",
+                "display": "dict[Equality, PolynomialRequirement]",
                 "link_target": null,
                 "children": [
                   {
@@ -12774,7 +12636,7 @@
                     "children": []
                   },
                   {
-                    "display": "DegreeBound",
+                    "display": "PolynomialRequirement",
                     "link_target": null,
                     "children": []
                   }
@@ -19843,6 +19705,144 @@
             }
           ],
           "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PolynomialRequirement",
+          "doc": "Polynomial requirement for one function position in an\n:class:`InstanceClassClause`.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "accepts_degree",
+              "doc": "Return whether ``actual_degree`` satisfies this requirement.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "actual_degree",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "any_degree",
+              "doc": "Require a polynomial of any degree.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "PolynomialRequirement",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "at_most",
+              "doc": "Require a polynomial whose degree is at most ``maximum``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "maximum",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PolynomialRequirement",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "maximum_degree",
+              "doc": "Inclusive maximum degree, or ``None`` when any degree is accepted.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
           "deprecated": null
         },
         {
@@ -34370,7 +34370,6 @@
     "ommx.Constraint": "ommx",
     "ommx.DecisionVariable": "ommx",
     "ommx.DecisionVariableRole": "ommx",
-    "ommx.DegreeBound": "ommx",
     "ommx.Equality": "ommx",
     "ommx.EvaluatedConstraint": "ommx",
     "ommx.EvaluatedDecisionVariable": "ommx",
@@ -34399,6 +34398,7 @@
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
+    "ommx.PolynomialRequirement": "ommx",
     "ommx.PreparationPolicy": "ommx",
     "ommx.PreparationTargetNotReachedError": "ommx",
     "ommx.Provenance": "ommx",

@@ -36,7 +36,6 @@ __all__ = [
     "Constraint",
     "DecisionVariable",
     "DecisionVariableRole",
-    "DegreeBound",
     "Descriptor",
     "DiagnosticCollector",
     "Equality",
@@ -80,6 +79,7 @@ __all__ = [
     "Parameters",
     "ParametricInstance",
     "Polynomial",
+    "PolynomialRequirement",
     "PreparationPolicy",
     "PreparationTargetNotReachedError",
     "Provenance",
@@ -1670,33 +1670,6 @@ class DecisionVariable:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
-
-@typing.final
-class DegreeBound:
-    r"""
-    Cumulative polynomial-degree bound in an :class:`InstanceClassClause`.
-    """
-    @property
-    def maximum(self) -> typing.Optional[builtins.int]:
-        r"""
-        Inclusive maximum degree, or ``None`` when unbounded.
-        """
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-    @staticmethod
-    def at_most(maximum: builtins.int) -> DegreeBound:
-        r"""
-        Include every degree up to and including ``maximum``.
-        """
-    @staticmethod
-    def unbounded() -> DegreeBound:
-        r"""
-        Include every polynomial degree representable by OMMX.
-        """
-    def includes(self, actual_degree: builtins.int) -> builtins.bool:
-        r"""
-        Return whether ``actual_degree`` satisfies this bound.
-        """
-    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class Descriptor:
@@ -5021,15 +4994,15 @@ class InstanceClassClause:
     @property
     def allowed_variable_kinds(self) -> builtins.set[Kind]: ...
     @property
-    def objective_degree_bound(self) -> DegreeBound: ...
+    def objective_polynomial_requirement(self) -> PolynomialRequirement: ...
     @property
-    def regular_constraint_degree_bounds(
+    def regular_constraint_polynomial_requirements(
         self,
-    ) -> builtins.dict[Equality, DegreeBound]: ...
+    ) -> builtins.dict[Equality, PolynomialRequirement]: ...
     @property
-    def indicator_constraint_degree_bounds(
+    def indicator_body_polynomial_requirements(
         self,
-    ) -> builtins.dict[Equality, DegreeBound]: ...
+    ) -> builtins.dict[Equality, PolynomialRequirement]: ...
     @property
     def allows_one_hot(self) -> builtins.bool: ...
     @property
@@ -5041,13 +5014,13 @@ class InstanceClassClause:
         *,
         label: builtins.str,
         allowed_variable_kinds: builtins.set[Kind],
-        objective_degree_bound: DegreeBound,
+        objective_polynomial_requirement: PolynomialRequirement,
         allowed_senses: builtins.set[Sense],
-        regular_constraint_degree_bounds: typing.Optional[
-            typing.Mapping[Equality, DegreeBound]
+        regular_constraint_polynomial_requirements: typing.Optional[
+            typing.Mapping[Equality, PolynomialRequirement]
         ] = None,
-        indicator_constraint_degree_bounds: typing.Optional[
-            typing.Mapping[Equality, DegreeBound]
+        indicator_body_polynomial_requirements: typing.Optional[
+            typing.Mapping[Equality, PolynomialRequirement]
         ] = None,
         allows_one_hot: builtins.bool = False,
         allows_sos1: builtins.bool = False,
@@ -5118,9 +5091,9 @@ class InstanceClassMismatch:
         @property
         def actual_degree(self) -> builtins.int: ...
         @property
-        def bound(self) -> DegreeBound: ...
+        def bound(self) -> PolynomialRequirement: ...
         def __new__(
-            cls, actual_degree: builtins.int, bound: DegreeBound
+            cls, actual_degree: builtins.int, bound: PolynomialRequirement
         ) -> InstanceClassMismatch.ObjectiveDegreeExceedsBound: ...
 
     @typing.final
@@ -5160,12 +5133,12 @@ class InstanceClassMismatch:
         @property
         def actual_degrees(self) -> builtins.dict[builtins.int, builtins.int]: ...
         @property
-        def bound(self) -> DegreeBound: ...
+        def bound(self) -> PolynomialRequirement: ...
         def __new__(
             cls,
             relation: Equality,
             actual_degrees: typing.Mapping[builtins.int, builtins.int],
-            bound: DegreeBound,
+            bound: PolynomialRequirement,
         ) -> InstanceClassMismatch.RegularConstraintDegreeExceedsBound: ...
 
     @typing.final
@@ -5223,12 +5196,12 @@ class InstanceClassMismatch:
         @property
         def actual_degrees(self) -> builtins.dict[builtins.int, builtins.int]: ...
         @property
-        def bound(self) -> DegreeBound: ...
+        def bound(self) -> PolynomialRequirement: ...
         def __new__(
             cls,
             relation: Equality,
             actual_degrees: typing.Mapping[builtins.int, builtins.int],
-            bound: DegreeBound,
+            bound: PolynomialRequirement,
         ) -> InstanceClassMismatch.IndicatorBodyDegreeExceedsBound: ...
 
     @typing.final
@@ -6544,6 +6517,34 @@ class Polynomial:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
+
+@typing.final
+class PolynomialRequirement:
+    r"""
+    Polynomial requirement for one function position in an
+    :class:`InstanceClassClause`.
+    """
+    @property
+    def maximum_degree(self) -> typing.Optional[builtins.int]:
+        r"""
+        Inclusive maximum degree, or ``None`` when any degree is accepted.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def at_most(maximum: builtins.int) -> PolynomialRequirement:
+        r"""
+        Require a polynomial whose degree is at most ``maximum``.
+        """
+    @staticmethod
+    def any_degree() -> PolynomialRequirement:
+        r"""
+        Require a polynomial of any degree.
+        """
+    def accepts_degree(self, actual_degree: builtins.int) -> builtins.bool:
+        r"""
+        Return whether ``actual_degree`` satisfies this requirement.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class PreparationPolicy:

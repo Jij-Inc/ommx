@@ -3,13 +3,13 @@ import pytest
 from ommx import (
     Constraint,
     DecisionVariable,
-    DegreeBound,
     Equality,
     Function,
     IndicatorConstraint,
     Instance,
     InstanceClassMismatch,
     Kind,
+    PolynomialRequirement,
     OneHotConstraint,
     Sense,
     Sos1Constraint,
@@ -28,12 +28,12 @@ def test_declares_linear_mip_input_class():
         Kind.Integer,
         Kind.Continuous,
     }
-    assert clause.objective_degree_bound == DegreeBound.at_most(1)
-    assert clause.regular_constraint_degree_bounds == {
-        Equality.EqualToZero: DegreeBound.at_most(1),
-        Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+    assert clause.objective_polynomial_requirement == PolynomialRequirement.at_most(1)
+    assert clause.regular_constraint_polynomial_requirements == {
+        Equality.EqualToZero: PolynomialRequirement.at_most(1),
+        Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
     }
-    assert clause.indicator_constraint_degree_bounds == {}
+    assert clause.indicator_body_polynomial_requirements == {}
     assert not clause.allows_one_hot
     assert not clause.allows_sos1
     assert clause.allowed_senses == {Sense.Minimize, Sense.Maximize}

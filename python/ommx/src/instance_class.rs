@@ -2,42 +2,43 @@ use crate::{Equality, Instance, Kind, Sense};
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Cumulative polynomial-degree bound in an :class:`InstanceClassClause`.
+/// Polynomial requirement for one function position in an
+/// :class:`InstanceClassClause`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DegreeBound(pub ommx::DegreeBound);
+pub struct PolynomialRequirement(pub ommx::PolynomialRequirement);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl DegreeBound {
-    /// Include every degree up to and including ``maximum``.
+impl PolynomialRequirement {
+    /// Require a polynomial whose degree is at most ``maximum``.
     #[staticmethod]
     pub fn at_most(maximum: u32) -> Self {
-        Self(ommx::DegreeBound::at_most(maximum))
+        Self(ommx::PolynomialRequirement::at_most(maximum))
     }
 
-    /// Include every polynomial degree representable by OMMX.
+    /// Require a polynomial of any degree.
     #[staticmethod]
-    pub fn unbounded() -> Self {
-        Self(ommx::DegreeBound::Unbounded)
+    pub fn any_degree() -> Self {
+        Self(ommx::PolynomialRequirement::any_degree())
     }
 
-    /// Inclusive maximum degree, or ``None`` when unbounded.
+    /// Inclusive maximum degree, or ``None`` when any degree is accepted.
     #[getter]
-    pub fn maximum(&self) -> Option<u32> {
-        self.0.maximum().map(|degree| degree.into_inner())
+    pub fn maximum_degree(&self) -> Option<u32> {
+        self.0.maximum_degree().map(|degree| degree.into_inner())
     }
 
-    /// Return whether ``actual_degree`` satisfies this bound.
-    pub fn includes(&self, actual_degree: u32) -> bool {
-        self.0.includes(actual_degree.into())
+    /// Return whether ``actual_degree`` satisfies this requirement.
+    pub fn accepts_degree(&self, actual_degree: u32) -> bool {
+        self.0.accepts_degree(actual_degree.into())
     }
 
     pub fn __repr__(&self) -> String {
-        match self.maximum() {
-            Some(maximum) => format!("DegreeBound.at_most({maximum})"),
-            None => "DegreeBound.unbounded()".to_string(),
+        match self.maximum_degree() {
+            Some(maximum) => format!("PolynomialRequirement.at_most({maximum})"),
+            None => "PolynomialRequirement.any_degree()".to_string(),
         }
     }
 }
@@ -56,29 +57,33 @@ pub struct InstanceClassClause(pub ommx::InstanceClassClause);
 #[pymethods]
 impl InstanceClassClause {
     #[new]
-    #[pyo3(signature = (*, label, allowed_variable_kinds, objective_degree_bound, allowed_senses, regular_constraint_degree_bounds=None, indicator_constraint_degree_bounds=None, allows_one_hot=false, allows_sos1=false))]
+    #[pyo3(signature = (*, label, allowed_variable_kinds, objective_polynomial_requirement, allowed_senses, regular_constraint_polynomial_requirements=None, indicator_body_polynomial_requirements=None, allows_one_hot=false, allows_sos1=false))]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         label: String,
         allowed_variable_kinds: BTreeSet<Kind>,
-        objective_degree_bound: DegreeBound,
+        objective_polynomial_requirement: PolynomialRequirement,
         allowed_senses: BTreeSet<Sense>,
-        regular_constraint_degree_bounds: Option<BTreeMap<Equality, DegreeBound>>,
-        indicator_constraint_degree_bounds: Option<BTreeMap<Equality, DegreeBound>>,
+        regular_constraint_polynomial_requirements: Option<
+            BTreeMap<Equality, PolynomialRequirement>,
+        >,
+        indicator_body_polynomial_requirements: Option<BTreeMap<Equality, PolynomialRequirement>>,
         allows_one_hot: bool,
         allows_sos1: bool,
     ) -> Self {
         let mut clause = ommx::InstanceClassClause::new(
             label,
             allowed_variable_kinds.into_iter().map(Into::into).collect(),
-            objective_degree_bound.0,
+            objective_polynomial_requirement.0,
             allowed_senses.into_iter().map(Into::into).collect(),
         );
-        for (relation, bound) in regular_constraint_degree_bounds.unwrap_or_default() {
-            clause = clause.with_regular_constraint(relation.into(), bound.0);
+        for (relation, requirement) in
+            regular_constraint_polynomial_requirements.unwrap_or_default()
+        {
+            clause = clause.with_regular_constraint(relation.into(), requirement.0);
         }
-        for (relation, bound) in indicator_constraint_degree_bounds.unwrap_or_default() {
-            clause = clause.with_indicator_constraint(relation.into(), bound.0);
+        for (relation, requirement) in indicator_body_polynomial_requirements.unwrap_or_default() {
+            clause = clause.with_indicator_constraint(relation.into(), requirement.0);
         }
         if allows_one_hot {
             clause = clause.with_one_hot();
@@ -106,23 +111,27 @@ impl InstanceClassClause {
     }
 
     #[getter]
-    pub fn objective_degree_bound(&self) -> DegreeBound {
-        DegreeBound(self.0.objective_degree_bound())
+    pub fn objective_polynomial_requirement(&self) -> PolynomialRequirement {
+        PolynomialRequirement(self.0.objective_polynomial_requirement())
     }
 
     #[getter]
-    pub fn regular_constraint_degree_bounds(&self) -> BTreeMap<Equality, DegreeBound> {
+    pub fn regular_constraint_polynomial_requirements(
+        &self,
+    ) -> BTreeMap<Equality, PolynomialRequirement> {
         self.0
-            .regular_constraint_degree_bounds()
-            .map(|(relation, bound)| (relation.into(), DegreeBound(bound)))
+            .regular_constraint_polynomial_requirements()
+            .map(|(relation, requirement)| (relation.into(), PolynomialRequirement(requirement)))
             .collect()
     }
 
     #[getter]
-    pub fn indicator_constraint_degree_bounds(&self) -> BTreeMap<Equality, DegreeBound> {
+    pub fn indicator_body_polynomial_requirements(
+        &self,
+    ) -> BTreeMap<Equality, PolynomialRequirement> {
         self.0
-            .indicator_constraint_degree_bounds()
-            .map(|(relation, bound)| (relation.into(), DegreeBound(bound)))
+            .indicator_body_polynomial_requirements()
+            .map(|(relation, requirement)| (relation.into(), PolynomialRequirement(requirement)))
             .collect()
     }
 
@@ -285,7 +294,7 @@ pub enum InstanceClassMismatch {
     },
     ObjectiveDegreeExceedsBound {
         actual_degree: u32,
-        bound: DegreeBound,
+        bound: PolynomialRequirement,
     },
     ObjectiveFunctionNotPolynomial {},
     RegularConstraintRelationNotAllowed {
@@ -296,7 +305,7 @@ pub enum InstanceClassMismatch {
     RegularConstraintDegreeExceedsBound {
         relation: Equality,
         actual_degrees: BTreeMap<u64, u32>,
-        bound: DegreeBound,
+        bound: PolynomialRequirement,
     },
     RegularConstraintFunctionNotPolynomial {
         relation: Equality,
@@ -313,7 +322,7 @@ pub enum InstanceClassMismatch {
     IndicatorBodyDegreeExceedsBound {
         relation: Equality,
         actual_degrees: BTreeMap<u64, u32>,
-        bound: DegreeBound,
+        bound: PolynomialRequirement,
     },
     IndicatorBodyFunctionNotPolynomial {
         relation: Equality,
@@ -351,7 +360,7 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                 bound,
             } => Self::ObjectiveDegreeExceedsBound {
                 actual_degree: actual_degree.into_inner(),
-                bound: DegreeBound(bound),
+                bound: PolynomialRequirement(bound),
             },
             ommx::InstanceClassMismatch::ObjectiveFunctionNotPolynomial => {
                 Self::ObjectiveFunctionNotPolynomial {}
@@ -378,7 +387,7 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                     .into_iter()
                     .map(|(id, degree)| (id.into_inner(), degree.into_inner()))
                     .collect(),
-                bound: DegreeBound(bound),
+                bound: PolynomialRequirement(bound),
             },
             ommx::InstanceClassMismatch::RegularConstraintFunctionNotPolynomial {
                 relation,
@@ -420,7 +429,7 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                     .into_iter()
                     .map(|(id, degree)| (id.into_inner(), degree.into_inner()))
                     .collect(),
-                bound: DegreeBound(bound),
+                bound: PolynomialRequirement(bound),
             },
             ommx::InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
                 relation,

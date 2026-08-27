@@ -61,7 +61,7 @@ mod tests;
 pub use compressed::is_gzipped;
 pub use format::{format, to_string};
 
-use crate::{DegreeBound, Equality, InstanceClass, InstanceClassClause, Kind, Sense};
+use crate::{Equality, InstanceClass, InstanceClassClause, Kind, PolynomialRequirement, Sense};
 use parser::*;
 use std::{collections::BTreeSet, io::Read, path::Path, sync::LazyLock};
 
@@ -69,7 +69,7 @@ use std::{collections::BTreeSet, io::Read, path::Path, sync::LazyLock};
 /// the MPS writer before an output side effect starts.
 fn preflight(instance: &crate::Instance) -> crate::Result<()> {
     static INPUT_CLASS: LazyLock<InstanceClass> = LazyLock::new(|| {
-        let quadratic = DegreeBound::at_most(2);
+        let quadratic = PolynomialRequirement::at_most(2);
         InstanceClassClause::new(
             "MPS",
             BTreeSet::from([Kind::Binary, Kind::Integer, Kind::Continuous]),

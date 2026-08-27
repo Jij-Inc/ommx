@@ -31,14 +31,14 @@ OMMX では、従来 Adapter Capability として一緒に説明されていた�
 `InstanceClass` は、条件を論理積でまとめた完全な {class}`~ommx.InstanceClassClause` の有限和です。membership は入力値そのものに対して評価され、入力の変更や preparation は行いません。
 
 ```{code-cell} ipython3
-from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
+from ommx import InstanceClass, InstanceClassClause, Kind, PolynomialRequirement, Sense
 
 binary_linear_with_one_hot = InstanceClass(
     [
         InstanceClassClause(
             label="binary-linear-with-one-hot",
             allowed_variable_kinds={Kind.Binary},
-            objective_degree_bound=DegreeBound.at_most(1),
+            objective_polynomial_requirement=PolynomialRequirement.at_most(1),
             allowed_senses={Sense.Maximize},
             allows_one_hot=True,
         )

@@ -4,7 +4,6 @@ import pytest
 
 from ommx import (
     DecisionVariable,
-    DegreeBound,
     ExactIntegerSlackError,
     FixedPenaltyPreparation,
     Instance,
@@ -17,6 +16,7 @@ from ommx import (
     OneHotConstraint,
     PreparationPolicy,
     PreparationTargetNotReachedError,
+    PolynomialRequirement,
     Sense,
     SpecialConstraintKind,
     SpecialConstraintPreparation,
@@ -34,7 +34,9 @@ def unconstrained_class(
             InstanceClassClause(
                 label="target",
                 allowed_variable_kinds=allowed_variable_kinds,
-                objective_degree_bound=DegreeBound.at_most(objective_degree),
+                objective_polynomial_requirement=PolynomialRequirement.at_most(
+                    objective_degree
+                ),
                 allowed_senses={sense},
             )
         ]
