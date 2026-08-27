@@ -82,6 +82,39 @@ pub enum Kind {
 }
 
 impl Kind {
+    /// Return the exact discrete value represented by `value` under `atol`.
+    ///
+    /// This is crate-visible so Instance-owned solver-state population can use
+    /// the kind's normalization rule without moving state ownership out of
+    /// [`crate::Instance`].
+    /// Bounds are intentionally not considered here: snapping to the variable's
+    /// discrete kind does not make an out-of-bound value feasible, so Solution
+    /// feasibility can still report the bound violation.
+    pub(crate) fn canonical_discrete_value(&self, value: f64, atol: ATol) -> Option<f64> {
+        if !value.is_finite() {
+            return None;
+        }
+
+        let candidate = match self {
+            Kind::Binary => {
+                if value < 0.5 {
+                    0.0
+                } else {
+                    1.0
+                }
+            }
+            Kind::Integer | Kind::SemiInteger => value.round(),
+            Kind::Continuous | Kind::SemiContinuous => return None,
+        };
+
+        if (candidate - value).abs() < *atol {
+            // Normalize negative zero so exact state grouping is deterministic.
+            Some(if candidate == 0.0 { 0.0 } else { candidate })
+        } else {
+            None
+        }
+    }
+
     /// Check and convert the bound to a consistent bound
     ///
     /// - For [`Kind::Continuous`] or [`Kind::SemiContinuous`], arbitrary bound is allowed.
@@ -675,6 +708,47 @@ mod tests {
             EvaluatedDecisionVariable::new(id, dv, f64::NEG_INFINITY),
             Err(DecisionVariableError::NonFiniteValue { .. })
         ));
+    }
+
+    #[test]
+    fn canonical_discrete_value_uses_the_existing_strict_atol_boundary() {
+        let atol = ATol::new(0.125).unwrap();
+
+        assert_eq!(
+            Kind::Binary.canonical_discrete_value(-0.0625, atol),
+            Some(0.0)
+        );
+        assert_eq!(
+            Kind::Binary.canonical_discrete_value(1.0625, atol),
+            Some(1.0)
+        );
+        assert_eq!(
+            Kind::Integer.canonical_discrete_value(-2.0625, atol),
+            Some(-2.0)
+        );
+        assert_eq!(
+            Kind::SemiInteger.canonical_discrete_value(-1.9375, atol),
+            Some(-2.0)
+        );
+
+        assert_eq!(Kind::Binary.canonical_discrete_value(1.125, atol), None);
+        assert_eq!(Kind::Integer.canonical_discrete_value(-2.125, atol), None);
+        assert_eq!(
+            Kind::SemiInteger.canonical_discrete_value(-1.875, atol),
+            None
+        );
+        assert_eq!(Kind::Integer.canonical_discrete_value(-2.25, atol), None);
+        assert_eq!(Kind::Continuous.canonical_discrete_value(1.125, atol), None);
+        assert_eq!(
+            Kind::SemiContinuous.canonical_discrete_value(1.125, atol),
+            None
+        );
+
+        let large_atol = ATol::new(2.0).unwrap();
+        assert_eq!(
+            Kind::Binary.canonical_discrete_value(1.5, large_atol),
+            Some(1.0)
+        );
     }
 
     #[test]

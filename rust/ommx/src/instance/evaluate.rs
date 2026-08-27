@@ -85,6 +85,20 @@ fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
     left.is_finite() && right.is_finite() && (left - right).abs() <= *atol
 }
 
+/// Canonicalize a finite state value only when it represents the variable's
+/// discrete kind under the caller's tolerance.
+///
+/// Values outside the discrete tolerance remain unchanged so evaluation can
+/// return an infeasible [`Solution`](crate::Solution) instead of rejecting
+/// solver output. Bound feasibility remains a separate concern. Continuous and
+/// semi-continuous values are never rounded.
+fn canonicalize_state_value(decision_variable: &DecisionVariable, value: f64, atol: ATol) -> f64 {
+    decision_variable
+        .kind()
+        .canonical_discrete_value(value, atol)
+        .unwrap_or(value)
+}
+
 fn fixed_values_state(fixed_values: &BTreeMap<VariableID, f64>) -> v1::State {
     v1::State::from(
         fixed_values
@@ -171,9 +185,11 @@ fn merge_state(
 }
 
 struct StatePopulationPlan<'a> {
+    decision_variables: &'a DecisionVariableTable,
     all: VariableIDSet,
     used: VariableIDSet,
     fixed: Vec<(VariableID, f64)>,
+    fixed_ids: VariableIDSet,
     irrelevant: Vec<(VariableID, Kind, Bound)>,
     dependency: &'a AcyclicAssignments,
 }
@@ -347,27 +363,35 @@ impl StatePopulationPlan<'_> {
             ensure_state_value_is_finite(id, value)?;
         }
 
-        // Bound and kind checking is intentionally left to Solution::feasible().
         for (id, value) in &self.fixed {
             ensure_instance_value_is_finite(*id, *value)?;
-            use std::collections::hash_map::Entry;
-            match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(entry) => {
-                    let state_value = *entry.get();
-                    if !values_are_consistent(state_value, *value, atol) {
-                        return Err(DecisionVariableError::SubstitutedValueOverwrite {
-                            id: *id,
-                            previous_value: *value,
-                            new_value: state_value,
-                            atol,
-                        }
-                        .into());
+            if let Some(&state_value) = state.entries.get(&id.into_inner()) {
+                if !values_are_consistent(state_value, *value, atol) {
+                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
+                        id: *id,
+                        previous_value: *value,
+                        new_value: state_value,
+                        atol,
                     }
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(*value);
+                    .into());
                 }
             }
+            state.entries.insert(id.into_inner(), *value);
+        }
+
+        // Canonicalize caller-owned coordinates before dependencies consume
+        // them. Keep dependent coordinates raw until their assertion is checked
+        // against the corresponding raw derived value below.
+        for (&raw_id, value) in &mut state.entries {
+            let id = VariableID::from(raw_id);
+            if self.fixed_ids.contains(&id) || self.dependency.get(&id).is_some() {
+                continue;
+            }
+            let decision_variable = self
+                .decision_variables
+                .get(&id)
+                .expect("state variable IDs were validated above");
+            *value = canonicalize_state_value(decision_variable, *value, atol);
         }
 
         for (id, kind, bound) in &self.irrelevant {
@@ -397,23 +421,21 @@ impl StatePopulationPlan<'_> {
                     "dependent variable {id:?} evaluated to non-finite value: {value}",
                 );
             }
-            use std::collections::hash_map::Entry;
-            match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(entry) => {
-                    let state_value = *entry.get();
-                    if !values_are_consistent(state_value, value, atol) {
-                        return Err(InconsistentDependentValue {
-                            id,
-                            state_value,
-                            dependency_value: value,
-                        }
-                        .into());
+            if let Some(&state_value) = state.entries.get(&id.into_inner()) {
+                if !values_are_consistent(state_value, value, atol) {
+                    return Err(InconsistentDependentValue {
+                        id,
+                        state_value,
+                        dependency_value: value,
                     }
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(value);
+                    .into());
                 }
             }
+            let decision_variable = self.decision_variables.get(&id).ok_or_else(|| {
+                crate::error!("dependent variable {id:?} is not in decision_variables")
+            })?;
+            let value = canonicalize_state_value(decision_variable, value, atol);
+            state.entries.insert(id.into_inner(), value);
         }
 
         Ok(state)
@@ -447,19 +469,30 @@ impl Instance {
             .collect();
 
         StatePopulationPlan {
+            decision_variables: &self.decision_variables,
             all,
             used,
             fixed,
+            fixed_ids,
             irrelevant,
             dependency: &self.decision_variable_dependency,
         }
     }
 
-    /// Check the state is valid for this instance and populate fixed,
+    /// Check the state is valid for this instance, canonicalize values that are
+    /// consistent with discrete decision-variable kinds, and populate fixed,
     /// irrelevant, and dependent decision variables.
     ///
     /// Post-condition: the returned state contains exactly this instance's
-    /// decision-variable IDs.
+    /// decision-variable IDs. Caller-owned Binary values strictly within `atol`
+    /// of zero or one and Integer or SemiInteger values strictly within `atol` of
+    /// an integer are represented by that exact discrete value. Derived dependent
+    /// values use the same target-kind rule. Continuous and SemiContinuous values
+    /// are not rounded. Other finite solver values are preserved so kind and
+    /// bound violations remain available to Solution feasibility.
+    /// Caller-provided fixed or dependent values are treated as consistency
+    /// assertions. The returned state uses the stored Instance-owned fixed value
+    /// unchanged, or the canonicalized derived dependent value.
     pub fn populate_state(&self, state: v1::State, atol: ATol) -> Result<v1::State> {
         self.state_population_plan().populate(state, atol)
     }
@@ -1022,6 +1055,236 @@ mod tests {
             .constraints(BTreeMap::new())
             .build()
             .unwrap()
+    }
+
+    fn state_canonicalization_instance() -> Instance {
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), crate::DecisionVariable::binary()),
+                (VariableID::from(2), crate::DecisionVariable::integer()),
+                (VariableID::from(3), crate::DecisionVariable::semi_integer()),
+                (VariableID::from(4), crate::DecisionVariable::continuous()),
+                (
+                    VariableID::from(5),
+                    crate::DecisionVariable::semi_continuous(),
+                ),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn populate_state_canonicalizes_discrete_values_strictly_within_atol() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([
+            (1, 1.0625),
+            (2, -2.0625),
+            (3, -1.9375),
+            (4, 2.125),
+            (5, -2.125),
+        ]));
+
+        let populated = instance.populate_state(state.clone(), atol).unwrap();
+        assert_eq!(
+            populated.entries,
+            HashMap::from([(1, 1.0), (2, -2.0), (3, -2.0), (4, 2.125), (5, -2.125),])
+        );
+
+        let solution = instance.evaluate(&state, atol).unwrap();
+        assert_eq!(solution.state(), populated);
+        assert!(solution.feasible_decision_variables());
+    }
+
+    #[test]
+    fn populate_state_preserves_discrete_values_at_the_atol_boundary() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.125), (2, -2.125), (3, -1.875)]));
+
+        let populated = instance.populate_state(state.clone(), atol).unwrap();
+        assert_eq!(populated.entries.get(&1), Some(&1.125));
+        assert_eq!(populated.entries.get(&2), Some(&-2.125));
+        assert_eq!(populated.entries.get(&3), Some(&-1.875));
+
+        let solution = instance.evaluate(&state, atol).unwrap();
+        assert_eq!(solution.state(), populated);
+        assert!(!solution.feasible_decision_variables());
+    }
+
+    #[test]
+    fn populate_state_preserves_finite_values_outside_discrete_tolerance() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 0.5), (2, -2.25), (3, 1.5)]));
+
+        let populated = instance.populate_state(state.clone(), atol).unwrap();
+        assert_eq!(populated.entries.get(&1), Some(&0.5));
+        assert_eq!(populated.entries.get(&2), Some(&-2.25));
+        assert_eq!(populated.entries.get(&3), Some(&1.5));
+
+        let solution = instance.evaluate(&state, atol).unwrap();
+        assert_eq!(solution.state().entries.get(&1), Some(&0.5));
+        assert_eq!(solution.state().entries.get(&2), Some(&-2.25));
+        assert_eq!(solution.state().entries.get(&3), Some(&1.5));
+        assert!(!solution.feasible_decision_variables());
+    }
+
+    #[test]
+    fn populate_state_rejects_non_finite_solver_values() {
+        let instance = state_canonicalization_instance();
+
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let error = instance
+                .populate_state(
+                    v1::State::from(HashMap::from([(1, value)])),
+                    ATol::default(),
+                )
+                .unwrap_err();
+            assert!(matches!(
+                error.downcast_ref::<DecisionVariableError>(),
+                Some(DecisionVariableError::NonFiniteValue { id, value })
+                    if *id == VariableID::from(1) && !value.is_finite()
+            ));
+        }
+    }
+
+    fn fixed_and_dependent_canonicalization_instance() -> Instance {
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), crate::DecisionVariable::integer()),
+                (VariableID::from(10), crate::DecisionVariable::integer()),
+                (VariableID::from(20), crate::DecisionVariable::continuous()),
+                (VariableID::from(30), crate::DecisionVariable::continuous()),
+                (VariableID::from(40), crate::DecisionVariable::integer()),
+            ]))
+            .fixed_decision_variable_values(BTreeMap::from([
+                (VariableID::from(20), 4.0),
+                (VariableID::from(40), 5.0 + 5e-7),
+            ]))
+            .decision_variable_dependency(crate::assign! {
+                10 <- coeff!(2.0 + 5e-7) * linear!(1),
+                30 <- coeff!(2.0) * linear!(20)
+            })
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn populate_state_uses_authoritative_fixed_and_canonical_dependent_values() {
+        let instance = fixed_and_dependent_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.0625), (10, 2.0), (20, 4.125)]));
+
+        let populated = instance.populate_state(state, atol).unwrap();
+        assert_eq!(
+            populated.entries,
+            HashMap::from([(1, 1.0), (10, 2.0), (20, 4.0), (30, 8.0), (40, 5.0 + 5e-7),])
+        );
+
+        let fixed_error = instance
+            .populate_state(v1::State::from(HashMap::from([(1, 1.0), (20, 4.25)])), atol)
+            .unwrap_err();
+        assert!(matches!(
+            fixed_error.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::SubstitutedValueOverwrite {
+                id,
+                previous_value,
+                new_value,
+                ..
+            }) if *id == VariableID::from(20)
+                && *previous_value == 4.0
+                && *new_value == 4.25
+        ));
+
+        let dependent_error = instance
+            .populate_state(v1::State::from(HashMap::from([(1, 1.0), (10, 3.0)])), atol)
+            .unwrap_err();
+        assert!(matches!(
+            dependent_error.downcast_ref::<InconsistentDependentValue>(),
+            Some(InconsistentDependentValue {
+                id,
+                state_value,
+                dependency_value,
+            }) if *id == VariableID::from(10)
+                && *state_value == 3.0
+                && *dependency_value == 2.0 + 5e-7
+        ));
+    }
+
+    #[test]
+    fn evaluate_samples_canonicalizes_values_and_preserves_sample_ids() {
+        let instance = fixed_and_dependent_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let samples = crate::Sampled::new(
+            [
+                vec![crate::SampleID::from(7), crate::SampleID::from(9)],
+                vec![crate::SampleID::from(8)],
+            ],
+            [
+                v1::State::from(HashMap::from([(1, 1.0625), (10, 2.0), (20, 4.125)])),
+                v1::State::from(HashMap::from([(1, 1.9375), (10, 4.0), (20, 3.875)])),
+            ],
+        )
+        .unwrap();
+
+        let sample_set = instance.evaluate_samples(&samples, atol).unwrap();
+        assert_eq!(
+            sample_set.sample_ids(),
+            crate::SampleIDSet::from([
+                crate::SampleID::from(7),
+                crate::SampleID::from(8),
+                crate::SampleID::from(9),
+            ])
+        );
+
+        for (id, shared_value, distinct_value) in [
+            (1, 1.0, 2.0),
+            (10, 2.0, 4.0),
+            (20, 4.0, 4.0),
+            (30, 8.0, 8.0),
+            (40, 5.0 + 5e-7, 5.0 + 5e-7),
+        ] {
+            let sampled = sample_set
+                .decision_variables()
+                .get(&VariableID::from(id))
+                .unwrap()
+                .samples();
+            assert_eq!(sampled.get(crate::SampleID::from(7)), Some(&shared_value));
+            assert_eq!(sampled.get(crate::SampleID::from(9)), Some(&shared_value));
+            assert_eq!(sampled.get(crate::SampleID::from(8)), Some(&distinct_value));
+
+            let chunks = sampled.clone().chunk();
+            if shared_value == distinct_value {
+                assert_eq!(chunks.len(), 1);
+                assert_eq!(chunks[0].0, shared_value);
+                assert_eq!(chunks[0].1.len(), 3);
+            } else {
+                assert_eq!(chunks.len(), 2);
+                let shared_ids = &chunks
+                    .iter()
+                    .find(|(value, _)| *value == shared_value)
+                    .unwrap()
+                    .1;
+                assert_eq!(shared_ids.len(), 2);
+                assert!(shared_ids.contains(&crate::SampleID::from(7)));
+                assert!(shared_ids.contains(&crate::SampleID::from(9)));
+
+                let distinct_ids = &chunks
+                    .iter()
+                    .find(|(value, _)| *value == distinct_value)
+                    .unwrap()
+                    .1;
+                assert_eq!(distinct_ids.len(), 1);
+                assert!(distinct_ids.contains(&crate::SampleID::from(8)));
+            }
+        }
     }
 
     #[test]

@@ -160,7 +160,15 @@ def test_instance_populate_state():
     )
     instance = instance.partial_evaluate({99: 4.0})
 
-    populated = instance.populate_state({1: 2.0, 2: 3.0})
+    populated = instance.populate_state(
+        {
+            1: 2.0,
+            2: 3.0,
+            10: 5.0 + 5e-7,
+            99: 4.0 + 5e-7,
+        },
+        atol=1e-6,
+    )
 
     assert populated.entries == {
         1: 2.0,
@@ -169,3 +177,56 @@ def test_instance_populate_state():
         10: 5.0,
         99: 4.0,
     }
+
+
+def test_instance_canonicalizes_discrete_solver_values():
+    """Scalar and sample evaluation share discrete state canonicalization."""
+    x = {
+        0: DecisionVariable.binary(0),
+        1: DecisionVariable.integer(1),
+        2: DecisionVariable.semi_integer(2),
+        3: DecisionVariable.continuous(3),
+        4: DecisionVariable.semi_continuous(4),
+    }
+    instance = Instance.from_components(
+        decision_variables=list(x.values()),
+        objective=x[0],
+        constraints={},
+        sense=Instance.MINIMIZE,
+    )
+    state = {
+        0: 1.0625,
+        1: -2.0625,
+        2: -1.9375,
+        3: 2.125,
+        4: -2.125,
+    }
+    expected = {
+        0: 1.0,
+        1: -2.0,
+        2: -2.0,
+        3: 2.125,
+        4: -2.125,
+    }
+
+    assert instance.populate_state(state, atol=0.125).entries == expected
+    assert instance.evaluate(state, atol=0.125).state.entries == expected
+
+    sample_set = instance.evaluate_samples(
+        {
+            7: state,
+            8: {
+                0: 0.9375,
+                1: -1.9375,
+                2: -2.0625,
+                3: 2.125,
+                4: -2.125,
+            },
+        },
+        atol=0.125,
+    )
+    assert sample_set.get(7).state.entries == expected
+    assert sample_set.get(8).state.entries == expected
+
+    boundary = state | {0: 1.125, 1: -2.125, 2: -1.875}
+    assert instance.populate_state(boundary, atol=0.125).entries == boundary
