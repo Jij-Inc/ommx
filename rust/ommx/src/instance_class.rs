@@ -849,9 +849,9 @@ impl std::fmt::Display for InstanceClassMembershipReport {
 mod tests {
     use super::*;
     use crate::{
-        linear, quadratic, Constraint, DecisionVariable, Function, IndicatorConstraint,
-        InstanceParameters, OneHotConstraint, OneHotConstraintID, Sos1Constraint, Sos1ConstraintID,
-        VariableID,
+        linear, quadratic, Constraint, DecisionVariable, Function, FunctionParameters,
+        IndicatorConstraint, InstanceParameters, OneHotConstraint, OneHotConstraintID,
+        PolynomialParameters, Sos1Constraint, Sos1ConstraintID, VariableID,
     };
     use proptest::prelude::*;
 
@@ -916,6 +916,16 @@ mod tests {
             clause = clause.with_sos1();
         }
         Some(clause)
+    }
+
+    fn polynomial_full_v3_parameters() -> InstanceParameters {
+        let function = FunctionParameters::polynomial_only(PolynomialParameters::default());
+        InstanceParameters {
+            objective: function,
+            constraint: function,
+            named_function: function,
+            ..InstanceParameters::full_v3()
+        }
     }
 
     #[test]
@@ -1282,12 +1292,11 @@ mod tests {
 
         #[test]
         fn covering_clause_contains_every_polynomial_instance(
-            instance in any_with::<crate::Instance>(InstanceParameters::full_v3())
+            instance in any_with::<crate::Instance>(polynomial_full_v3_parameters())
         ) {
             let facts = InstanceFacts::from(&instance);
-            let Some(clause) = covering_clause(&facts) else {
-                return Ok(());
-            };
+            let clause = covering_clause(&facts)
+                .expect("polynomial-only parameters must produce a covering clause");
             let instance_class = InstanceClass::from(clause);
             let report = instance_class.check_membership(&instance);
             prop_assert!(report.is_member(), "{report}");

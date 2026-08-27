@@ -119,6 +119,8 @@ Composed functions follow real-valued evaluation semantics. At an explicit evalu
 
 If `atol` is omitted, that evaluation call uses the configured default tolerance. Expression construction, substitution, and partial evaluation do not use a default tolerance to decide these zero-sensitive operations. Their `Signum`, `Div`, and negative `Powi` nodes remain in the RPN expression so a later evaluation call can apply its own `atol`.
 
+`evaluate_bound(bounds, atol=...)` uses the same zero classification for interval evaluation. Transformations that derive constraints or coefficients from this bound accept the tolerance so their Function-body semantics are explicit; this is separate from canonicalizing approximate discrete solver values.
+
 Division and negative integer powers can make a `Function` partial. Algebraic simplification preserves that domain: for example, `0 * (1 / fx)` is still undefined wherever $|\mathtt{fx}| \leq \mathtt{atol}$.
 
 ```{code-cell} ipython3
@@ -128,7 +130,7 @@ except ValueError as e:
     print(f"Error: {e}")
 ```
 
-Polynomial metadata is available only when the `Function` uses the compact polynomial representation. `degree()` and `num_terms()` return `None` for composed expressions, while coefficient properties such as `terms` raise `TypeError`. Apart from identity and constant folding, an integer-power expression remains composed even when its exponent is non-negative; use explicit multiplication when you need a compact expanded polynomial. Solver adapters also reject a composed expression unless their declared input class supports it.
+Polynomial metadata is available only when the `Function` uses the compact polynomial representation. `degree()` and `num_terms()` return `None` for composed expressions, while coefficient properties such as `terms` raise `TypeError`. Apart from identity and constant folding, an integer-power expression remains composed even when its exponent is non-negative; use explicit multiplication when you need a compact expanded polynomial. Every current `InstanceClassClause` requires polynomial objective and constraint-body functions. Consequently, all bundled solver adapters reject composed objectives and constraint bodies; reformulate those solver-input functions as supported polynomials before invoking an adapter.
 
 Compact polynomial normalization is exact: it removes an actual zero produced by cancellation or floating-point underflow, but retains every finite nonzero coefficient regardless of magnitude. It does not use `atol` to prune small terms. OMMX does not currently perform approximate cleanup implicitly; such cleanup would require a separate, explicit API rather than being part of expression construction or evaluation.
 

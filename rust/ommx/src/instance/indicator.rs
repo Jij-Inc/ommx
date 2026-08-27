@@ -2,7 +2,7 @@ use super::Instance;
 use crate::{
     constraint::{ConstraintContext, ConstraintID, Equality, Provenance, RemovedReason},
     indicator_constraint::IndicatorConstraintID,
-    Bounds, Coefficient, Constraint, Evaluate, Kind, Linear, LinearMonomial,
+    ATol, Bounds, Coefficient, Constraint, Evaluate, Kind, Linear, LinearMonomial,
 };
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
@@ -62,6 +62,9 @@ impl Instance {
     /// If the indicator variable $y$ itself appears in $f(x)$, the interval bound
     /// treats it as a free binary in $[0, 1]$; the resulting Big-M is still a valid
     /// (possibly loose) over-approximation and the implication is preserved.
+    /// `atol` controls zero-sensitive operations in that interval bound. The
+    /// Big-M identities assume that $y$ is exactly 0 or 1; this operation does
+    /// not canonicalize an approximate solver value near either endpoint.
     ///
     /// The original indicator constraint is moved to
     /// [`Instance::removed_indicator_constraints`] with
@@ -71,14 +74,16 @@ impl Instance {
     pub fn convert_indicator_to_constraint(
         &mut self,
         id: IndicatorConstraintID,
+        atol: ATol,
     ) -> Result<Vec<ConstraintID>> {
-        let plan = self.plan_indicator_conversion(id)?;
+        let plan = self.plan_indicator_conversion(id, atol)?;
         self.apply_indicator_conversion(id, plan)
     }
 
     /// Convert every active indicator constraint to regular constraints using Big-M.
     ///
     /// See [`Self::convert_indicator_to_constraint`] for the conversion rule.
+    /// `atol` has the same meaning as in the single-constraint conversion.
     ///
     /// This is atomic: every active indicator is validated up front, and only once
     /// all validations succeed are the conversions applied. If any indicator fails
@@ -89,6 +94,7 @@ impl Instance {
     /// regular constraints it produced.
     pub fn convert_all_indicators_to_constraints(
         &mut self,
+        atol: ATol,
     ) -> Result<BTreeMap<IndicatorConstraintID, Vec<ConstraintID>>> {
         let ids: Vec<_> = self
             .indicator_constraint_collection
@@ -99,7 +105,7 @@ impl Instance {
         let mut all_plans: Vec<(IndicatorConstraintID, IndicatorPlan)> =
             Vec::with_capacity(ids.len());
         for id in ids {
-            let plan = self.plan_indicator_conversion(id)?;
+            let plan = self.plan_indicator_conversion(id, atol)?;
             all_plans.push((id, plan));
         }
         let mut result = BTreeMap::new();
@@ -114,7 +120,11 @@ impl Instance {
     /// Read-only: never mutates `self`. Errors before producing any plan if the
     /// indicator is missing or if `Function::evaluate_bound` returns a non-finite
     /// bound on a side that would need to be emitted.
-    fn plan_indicator_conversion(&self, id: IndicatorConstraintID) -> Result<IndicatorPlan> {
+    fn plan_indicator_conversion(
+        &self,
+        id: IndicatorConstraintID,
+        atol: ATol,
+    ) -> Result<IndicatorPlan> {
         let ic = self
             .indicator_constraint_collection
             .active()
@@ -150,7 +160,7 @@ impl Instance {
             .iter()
             .map(|(v, dv)| (*v, dv.bound()))
             .collect();
-        let fbound = function.evaluate_bound(&bounds)?;
+        let fbound = function.evaluate_bound(&bounds, atol)?;
 
         // Upper side is always considered. Require a finite upper bound.
         let upper_val = fbound.upper();
@@ -264,8 +274,8 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, indicator_constraint::IndicatorConstraint, linear, Bound, DecisionVariable,
-        Function, Kind, Sense, VariableID,
+        coeff, indicator_constraint::IndicatorConstraint, linear, v1::State, Bound,
+        DecisionVariable, Function, Kind, Sense, VariableID,
     };
     use ::approx::assert_abs_diff_eq;
     use maplit::btreemap;
@@ -309,7 +319,7 @@ mod tests {
         );
 
         let new_ids = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap();
         assert_eq!(new_ids.len(), 1);
 
@@ -361,7 +371,7 @@ mod tests {
             single_indicator_instance(Bound::new(0.0, 5.0).unwrap(), Equality::EqualToZero, f);
 
         let new_ids = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap();
         assert_eq!(new_ids.len(), 2);
 
@@ -391,6 +401,32 @@ mod tests {
     }
 
     #[test]
+    fn equality_bound_uses_the_same_atol_as_evaluation() {
+        // With this tolerance, signum(1e-8) is zero and the Indicator body is
+        // -0.5. The lower Big-M side must therefore be emitted. Computing the
+        // bound with exact-zero signum semantics would emit only the upper side,
+        // which accepts this state after evaluation classifies signum(1e-8) as 0.
+        let atol = ATol::new(1e-6).unwrap();
+        let f = (Function::from(linear!(1)).signum() + coeff!(-0.5)).unwrap();
+        let mut instance =
+            single_indicator_instance(Bound::new(1e-8, 1e-8).unwrap(), Equality::EqualToZero, f);
+
+        let new_ids = instance
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), atol)
+            .unwrap();
+        assert_eq!(new_ids.len(), 1);
+
+        let state = State::from_iter([(1, 1e-8), (10, 1.0)]);
+        let evaluated = instance
+            .constraints()
+            .get(&new_ids[0])
+            .unwrap()
+            .evaluate(&state, atol)
+            .unwrap();
+        assert!(!evaluated.is_feasible_with_tolerance(atol));
+    }
+
+    #[test]
     fn redundant_side_is_skipped() {
         // y=1 → x - 10 <= 0 with x in [0, 5]: upper = -5 <= 0, so constraint is
         // always satisfied by bounds. No big-M emitted; indicator simply relaxed.
@@ -403,7 +439,7 @@ mod tests {
         let before_constraints = instance.constraints().clone();
 
         let new_ids = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap();
         assert!(
             new_ids.is_empty(),
@@ -452,7 +488,7 @@ mod tests {
         let before_indicators = instance.indicator_constraints().clone();
 
         let err = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("non-finite"));
 
@@ -479,7 +515,7 @@ mod tests {
         let before_indicators = instance.indicator_constraints().clone();
 
         let err = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("Coefficient must be finite"));
 
@@ -528,7 +564,7 @@ mod tests {
         let before_constraints = instance.constraints().clone();
 
         let err = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(7))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(7), ATol::default())
             .unwrap_err();
         let msg = err.to_string();
         assert!(
@@ -554,7 +590,7 @@ mod tests {
         let before_constraints = instance.constraints().clone();
 
         let err = instance
-            .convert_indicator_to_constraint(IndicatorConstraintID::from(999))
+            .convert_indicator_to_constraint(IndicatorConstraintID::from(999), ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("999"));
 
@@ -594,7 +630,9 @@ mod tests {
             .build()
             .unwrap();
 
-        let result = instance.convert_all_indicators_to_constraints().unwrap();
+        let result = instance
+            .convert_all_indicators_to_constraints(ATol::default())
+            .unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[&IndicatorConstraintID::from(1)].len(), 1);
         assert_eq!(result[&IndicatorConstraintID::from(2)].len(), 2);
@@ -645,7 +683,7 @@ mod tests {
         let before_constraints = instance.constraints().clone();
 
         let err = instance
-            .convert_all_indicators_to_constraints()
+            .convert_all_indicators_to_constraints(ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("non-finite"));
 

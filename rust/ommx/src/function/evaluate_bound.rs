@@ -2,7 +2,7 @@ use super::operation::{
     instructions, AssociativeOperator, Atom, BinaryOperator, Instruction, UnaryOperator,
 };
 use super::*;
-use crate::{Bound, Bounds};
+use crate::{ATol, Bound, Bounds};
 use num::Zero;
 
 fn round_down(value: f64) -> f64 {
@@ -21,14 +21,26 @@ fn round_up(value: f64) -> f64 {
     }
 }
 
-fn outward_bound(lower: f64, upper: f64) -> crate::Result<Bound> {
-    Ok(Bound::new(round_down(lower), round_up(upper))?)
+fn ensure_representable_endpoint_result(
+    operation: &'static str,
+    operands_are_finite: bool,
+    result: f64,
+) -> crate::Result<f64> {
+    if operands_are_finite && !result.is_finite() {
+        Err(FunctionEvaluationError::NonFiniteResult { operation }.into())
+    } else {
+        Ok(result)
+    }
 }
 
-fn add_enclosure(lhs: f64, rhs: f64) -> (f64, f64) {
-    let rounded = lhs + rhs;
+fn add_enclosure(lhs: f64, rhs: f64) -> crate::Result<(f64, f64)> {
+    let rounded = ensure_representable_endpoint_result(
+        "interval addition",
+        lhs.is_finite() && rhs.is_finite(),
+        lhs + rhs,
+    )?;
     if !rounded.is_finite() {
-        return (rounded, rounded);
+        return Ok((rounded, rounded));
     }
 
     // Knuth's TwoSum recovers the exact rounding residual of finite addition.
@@ -40,48 +52,52 @@ fn add_enclosure(lhs: f64, rhs: f64) -> (f64, f64) {
     let lhs_error = lhs - lhs_approximation;
     let error = lhs_error + rhs_error;
     if error < 0.0 {
-        (rounded.next_down(), rounded)
+        Ok((rounded.next_down(), rounded))
     } else if error > 0.0 {
-        (rounded, rounded.next_up())
+        Ok((rounded, rounded.next_up()))
     } else {
-        (rounded, rounded)
+        Ok((rounded, rounded))
     }
 }
 
-fn mul_enclosure(lhs: f64, rhs: f64) -> (f64, f64) {
-    let rounded = lhs * rhs;
+fn mul_enclosure(lhs: f64, rhs: f64) -> crate::Result<(f64, f64)> {
+    let rounded = ensure_representable_endpoint_result(
+        "interval multiplication",
+        lhs.is_finite() && rhs.is_finite(),
+        lhs * rhs,
+    )?;
     if !rounded.is_finite() {
-        return (rounded, rounded);
+        return Ok((rounded, rounded));
     }
     if rounded == 0.0 {
-        return if lhs == 0.0 || rhs == 0.0 {
+        return Ok(if lhs == 0.0 || rhs == 0.0 {
             (rounded, rounded)
         } else {
             // A non-zero exact product underflowed below the smallest
             // subnormal. Preserve both possible directions around zero.
             (rounded.next_down(), rounded.next_up())
-        };
+        });
     }
     if rounded.is_subnormal() {
         // The fused residual can itself underflow in the subnormal range.
-        return (rounded.next_down(), rounded.next_up());
+        return Ok((rounded.next_down(), rounded.next_up()));
     }
 
     // The fused multiply-add recovers the exact rounding residual when the
     // rounded product is normal.
     let error = lhs.mul_add(rhs, -rounded);
     if error < 0.0 {
-        (rounded.next_down(), rounded)
+        Ok((rounded.next_down(), rounded))
     } else if error > 0.0 {
-        (rounded, rounded.next_up())
+        Ok((rounded, rounded.next_up()))
     } else if rounded.abs() < f64::from_bits(54_u64 << 52) {
         // A binary64 product has at most 106 significant bits. Below 2^-969,
         // its exact residual can fall below the smallest subnormal even when
         // the rounded product is normal, so an FMA result of zero does not
         // prove exactness.
-        (rounded.next_down(), rounded.next_up())
+        Ok((rounded.next_down(), rounded.next_up()))
     } else {
-        (rounded, rounded)
+        Ok((rounded, rounded))
     }
 }
 
@@ -95,8 +111,8 @@ fn add_bounds(lhs: Bound, rhs: Bound) -> crate::Result<Bound> {
     if rhs == Bound::zero() {
         return Ok(lhs);
     }
-    let (lower, _) = add_enclosure(lhs.lower(), rhs.lower());
-    let (_, upper) = add_enclosure(lhs.upper(), rhs.upper());
+    let (lower, _) = add_enclosure(lhs.lower(), rhs.lower())?;
+    let (_, upper) = add_enclosure(lhs.upper(), rhs.upper())?;
     if lower.is_nan() || upper.is_nan() {
         Ok(Bound::default())
     } else {
@@ -116,10 +132,10 @@ fn mul_bounds(lhs: Bound, rhs: Bound) -> crate::Result<Bound> {
         return Ok(lhs);
     }
     let products = [
-        mul_enclosure(lhs.lower(), rhs.lower()),
-        mul_enclosure(lhs.lower(), rhs.upper()),
-        mul_enclosure(lhs.upper(), rhs.lower()),
-        mul_enclosure(lhs.upper(), rhs.upper()),
+        mul_enclosure(lhs.lower(), rhs.lower())?,
+        mul_enclosure(lhs.lower(), rhs.upper())?,
+        mul_enclosure(lhs.upper(), rhs.lower())?,
+        mul_enclosure(lhs.upper(), rhs.upper())?,
     ];
     if products
         .iter()
@@ -138,20 +154,32 @@ fn mul_bounds(lhs: Bound, rhs: Bound) -> crate::Result<Bound> {
     Ok(Bound::new(lower, upper)?)
 }
 
-fn div_enclosure(lhs: f64, rhs: f64) -> (f64, f64) {
-    let rounded = lhs / rhs;
+fn div_enclosure(
+    lhs: f64,
+    rhs: f64,
+    zero_denominator_is_unattainable: bool,
+) -> crate::Result<(f64, f64)> {
+    let rounded = ensure_representable_endpoint_result(
+        "interval division",
+        lhs.is_finite() && rhs.is_finite() && !(rhs == 0.0 && zero_denominator_is_unattainable),
+        lhs / rhs,
+    )?;
     if rounded.is_nan() || rounded.is_infinite() {
-        return (rounded, rounded);
+        return Ok((rounded, rounded));
     }
-    (round_down(rounded), round_up(rounded))
+    Ok((round_down(rounded), round_up(rounded)))
 }
 
-fn div_bounds(lhs: Bound, rhs: Bound) -> crate::Result<Bound> {
+fn div_bounds(
+    lhs: Bound,
+    rhs: Bound,
+    zero_denominator_is_unattainable: bool,
+) -> crate::Result<Bound> {
     let quotients = [
-        div_enclosure(lhs.lower(), rhs.lower()),
-        div_enclosure(lhs.lower(), rhs.upper()),
-        div_enclosure(lhs.upper(), rhs.lower()),
-        div_enclosure(lhs.upper(), rhs.upper()),
+        div_enclosure(lhs.lower(), rhs.lower(), zero_denominator_is_unattainable)?,
+        div_enclosure(lhs.lower(), rhs.upper(), zero_denominator_is_unattainable)?,
+        div_enclosure(lhs.upper(), rhs.lower(), zero_denominator_is_unattainable)?,
+        div_enclosure(lhs.upper(), rhs.upper(), zero_denominator_is_unattainable)?,
     ];
     if quotients
         .iter()
@@ -171,7 +199,12 @@ fn div_bounds(lhs: Bound, rhs: Bound) -> crate::Result<Bound> {
 }
 
 fn reciprocal_bound(bound: Bound) -> crate::Result<Bound> {
-    outward_bound(1.0 / bound.upper(), 1.0 / bound.lower())
+    // The caller has already rejected a base that can actually evaluate to
+    // zero. A zero endpoint here can therefore only be the unattained limit of
+    // a reciprocal over an unbounded finite input interval.
+    let (lower, _) = div_enclosure(1.0, bound.upper(), true)?;
+    let (_, upper) = div_enclosure(1.0, bound.lower(), true)?;
+    Ok(Bound::new(lower, upper)?)
 }
 
 fn point_power_enclosure(value: f64, exponent: u64) -> crate::Result<(f64, f64)> {
@@ -271,10 +304,25 @@ fn integer_power_bound(
         return Ok(Bound::new(1.0, 1.0).unwrap());
     }
     if exponent < 0 && base_may_evaluate_to_zero {
-        anyhow::bail!("cannot bound a negative power when the base interval contains zero")
+        anyhow::bail!(
+            "cannot bound a negative power when the base may be classified as zero at the caller tolerance"
+        )
     }
 
-    let scalar_endpoints = [base.lower().powi(exponent), base.upper().powi(exponent)];
+    let scalar_endpoints = [
+        ensure_representable_endpoint_result(
+            "integer power interval endpoint",
+            base.lower().is_finite()
+                && !(exponent < 0 && base.lower() == 0.0 && !base_may_evaluate_to_zero),
+            base.lower().powi(exponent),
+        )?,
+        ensure_representable_endpoint_result(
+            "integer power interval endpoint",
+            base.upper().is_finite()
+                && !(exponent < 0 && base.upper() == 0.0 && !base_may_evaluate_to_zero),
+            base.upper().powi(exponent),
+        )?,
+    ];
     if scalar_endpoints.iter().any(|value| value.is_nan()) {
         anyhow::bail!("integer power is undefined at an endpoint of the base interval")
     }
@@ -305,6 +353,10 @@ fn bound_contains_zero(bound: Bound) -> bool {
     bound.lower() <= 0.0 && bound.upper() >= 0.0
 }
 
+fn bound_may_be_classified_as_zero(bound: Bound, atol: ATol) -> bool {
+    bound.lower() <= *atol && bound.upper() >= -*atol
+}
+
 fn minimum_absolute_value(bound: Bound) -> f64 {
     if bound_contains_zero(bound) {
         0.0
@@ -327,8 +379,11 @@ fn maximum_finite_absolute_value(bound: Bound) -> f64 {
 #[derive(Clone, Copy)]
 struct BoundAnalysis {
     bound: Bound,
-    /// Whether a finite binary64 evaluation can equal zero. This is stricter
-    /// than checking whether the closed interval enclosure contains zero.
+    /// Whether a finite binary64 evaluation can be classified as zero by the
+    /// caller-provided tolerance. This can be stricter than checking whether
+    /// the interval enclosure intersects `[-atol, atol]` because infinite
+    /// endpoints represent unbounded finite values rather than attainable
+    /// infinities.
     may_evaluate_to_zero: bool,
 }
 
@@ -365,14 +420,14 @@ fn evaluate_polynomial_terms_bound<'a, M: crate::Monomial>(
     Ok(bound)
 }
 
-fn analyze_polynomial_bound(bound: Bound) -> BoundAnalysis {
+fn analyze_polynomial_bound(bound: Bound, atol: ATol) -> BoundAnalysis {
     BoundAnalysis {
         bound,
-        may_evaluate_to_zero: bound_contains_zero(bound),
+        may_evaluate_to_zero: bound_may_be_classified_as_zero(bound, atol),
     }
 }
 
-fn analyze_atom(atom: &Atom, bounds: &Bounds) -> crate::Result<BoundAnalysis> {
+fn analyze_atom(atom: &Atom, bounds: &Bounds, atol: ATol) -> crate::Result<BoundAnalysis> {
     match atom {
         Atom::Zero => Ok(BoundAnalysis {
             bound: Bound::zero(),
@@ -382,19 +437,20 @@ fn analyze_atom(atom: &Atom, bounds: &Bounds) -> crate::Result<BoundAnalysis> {
             let value = value.into_inner();
             Ok(BoundAnalysis {
                 bound: Bound::new(value, value)?,
-                may_evaluate_to_zero: value == 0.0,
+                may_evaluate_to_zero: value.abs() <= *atol,
             })
         }
-        Atom::Linear(function) => Ok(analyze_polynomial_bound(evaluate_polynomial_terms_bound(
-            function.iter(),
-            bounds,
-        )?)),
-        Atom::Quadratic(function) => Ok(analyze_polynomial_bound(evaluate_polynomial_terms_bound(
-            function.iter(),
-            bounds,
-        )?)),
+        Atom::Linear(function) => Ok(analyze_polynomial_bound(
+            evaluate_polynomial_terms_bound(function.iter(), bounds)?,
+            atol,
+        )),
+        Atom::Quadratic(function) => Ok(analyze_polynomial_bound(
+            evaluate_polynomial_terms_bound(function.iter(), bounds)?,
+            atol,
+        )),
         Atom::Polynomial(function) => Ok(analyze_polynomial_bound(
             evaluate_polynomial_terms_bound(function.iter(), bounds)?,
+            atol,
         )),
     }
 }
@@ -402,7 +458,10 @@ fn analyze_atom(atom: &Atom, bounds: &Bounds) -> crate::Result<BoundAnalysis> {
 fn analyze_unary_bound(
     operator: UnaryOperator,
     operand: BoundAnalysis,
+    atol: ATol,
 ) -> crate::Result<BoundAnalysis> {
+    let mut signum_zero_possible = false;
+    let mut signum_nonzero_possible = false;
     let bound = match operator {
         UnaryOperator::Neg => Bound::new(-operand.bound.upper(), -operand.bound.lower())?,
         UnaryOperator::Abs if operand.bound.lower() >= 0.0 => operand.bound,
@@ -414,16 +473,26 @@ fn analyze_unary_bound(
             operand.bound.lower().abs().max(operand.bound.upper().abs()),
         )?,
         UnaryOperator::Signum => {
-            let sign = |value: f64| {
-                if value < 0.0 {
-                    -1.0
-                } else if value > 0.0 {
-                    1.0
-                } else {
-                    0.0
-                }
+            let negative_possible = operand.bound.lower() < -*atol;
+            signum_zero_possible = operand.may_evaluate_to_zero;
+            let positive_possible = operand.bound.upper() > *atol;
+            signum_nonzero_possible = negative_possible || positive_possible;
+
+            let lower = if negative_possible {
+                -1.0
+            } else if signum_zero_possible {
+                0.0
+            } else {
+                1.0
             };
-            Bound::new(sign(operand.bound.lower()), sign(operand.bound.upper()))?
+            let upper = if positive_possible {
+                1.0
+            } else if signum_zero_possible {
+                0.0
+            } else {
+                -1.0
+            };
+            Bound::new(lower, upper)?
         }
         UnaryOperator::Powi(exponent) => {
             integer_power_bound(operand.bound, exponent, operand.may_evaluate_to_zero)?
@@ -431,19 +500,17 @@ fn analyze_unary_bound(
     };
 
     let may_evaluate_to_zero = match operator {
-        UnaryOperator::Powi(0) => false,
-        UnaryOperator::Powi(_) if operand.may_evaluate_to_zero => true,
+        UnaryOperator::Powi(0) => 1.0 <= *atol,
         UnaryOperator::Powi(exponent) => {
             let value = if exponent < 0 {
                 maximum_finite_absolute_value(operand.bound)
             } else {
                 minimum_absolute_value(operand.bound)
             };
-            value.powi(exponent) == 0.0
+            value.powi(exponent).abs() <= *atol
         }
-        UnaryOperator::Neg | UnaryOperator::Abs | UnaryOperator::Signum => {
-            operand.may_evaluate_to_zero
-        }
+        UnaryOperator::Neg | UnaryOperator::Abs => operand.may_evaluate_to_zero,
+        UnaryOperator::Signum => signum_zero_possible || (signum_nonzero_possible && 1.0 <= *atol),
     };
     Ok(BoundAnalysis {
         bound,
@@ -455,6 +522,7 @@ fn analyze_associative_bound(
     operator: AssociativeOperator,
     lhs: BoundAnalysis,
     rhs: BoundAnalysis,
+    atol: ATol,
 ) -> crate::Result<BoundAnalysis> {
     let bound = match operator {
         AssociativeOperator::Add => add_bounds(lhs.bound, rhs.bound)?,
@@ -470,8 +538,7 @@ fn analyze_associative_bound(
     };
     Ok(BoundAnalysis {
         bound,
-        // This conservatively tracks whether either binary operand may be zero.
-        may_evaluate_to_zero: bound_contains_zero(bound),
+        may_evaluate_to_zero: bound_may_be_classified_as_zero(bound, atol),
     })
 }
 
@@ -479,16 +546,22 @@ fn analyze_binary_bound(
     operator: BinaryOperator,
     lhs: BoundAnalysis,
     rhs: BoundAnalysis,
+    atol: ATol,
 ) -> crate::Result<BoundAnalysis> {
     match operator {
         BinaryOperator::Div => {
             if rhs.may_evaluate_to_zero {
-                anyhow::bail!("cannot bound division when the denominator contains zero")
+                anyhow::bail!(
+                    "cannot bound division when the denominator may be classified as zero at the caller tolerance"
+                )
             }
-            let bound = div_bounds(lhs.bound, rhs.bound)?;
+            // A zero endpoint can arise as the unattained limit of a previous
+            // reciprocal over an unbounded finite input. `may_evaluate_to_zero`
+            // distinguishes that sentinel from an attainable denominator.
+            let bound = div_bounds(lhs.bound, rhs.bound, !rhs.may_evaluate_to_zero)?;
             let may_evaluate_to_zero = lhs.may_evaluate_to_zero
                 || minimum_absolute_value(lhs.bound) / maximum_finite_absolute_value(rhs.bound)
-                    == 0.0;
+                    <= *atol;
             Ok(BoundAnalysis {
                 bound,
                 may_evaluate_to_zero,
@@ -500,16 +573,17 @@ fn analyze_binary_bound(
 fn analyze_expression_bound(
     expression: &Expression,
     bounds: &Bounds,
+    atol: ATol,
 ) -> crate::Result<BoundAnalysis> {
     let mut values = Vec::new();
     for instruction in instructions(expression) {
         match instruction {
-            Instruction::Push(atom) => values.push(analyze_atom(atom, bounds)?),
+            Instruction::Push(atom) => values.push(analyze_atom(atom, bounds, atol)?),
             Instruction::Unary(operator) => {
                 let operand = values
                     .pop()
                     .expect("validated unary instruction has an operand");
-                values.push(analyze_unary_bound(*operator, operand)?);
+                values.push(analyze_unary_bound(*operator, operand, atol)?);
             }
             Instruction::Associative(operator) => {
                 let rhs = values
@@ -518,7 +592,7 @@ fn analyze_expression_bound(
                 let lhs = values
                     .pop()
                     .expect("validated associative instruction has a left operand");
-                values.push(analyze_associative_bound(*operator, lhs, rhs)?);
+                values.push(analyze_associative_bound(*operator, lhs, rhs, atol)?);
             }
             Instruction::Binary(operator) => {
                 let rhs = values
@@ -527,7 +601,7 @@ fn analyze_expression_bound(
                 let lhs = values
                     .pop()
                     .expect("validated binary instruction has a left operand");
-                values.push(analyze_binary_bound(*operator, lhs, rhs)?);
+                values.push(analyze_binary_bound(*operator, lhs, rhs, atol)?);
             }
         }
     }
@@ -541,6 +615,9 @@ impl Function {
     /// Compute an interval bound of this function given variable bounds.
     ///
     /// Missing IDs in `bounds` are treated as `Bound::default()` (unbounded).
+    /// The same `atol` used for point evaluation must be supplied here: values
+    /// whose absolute value is less than or equal to `atol` are classified as
+    /// zero by [`Function::signum`], division, and negative integer powers.
     ///
     /// # Tightness
     ///
@@ -556,10 +633,10 @@ impl Function {
     ///
     /// # Errors
     ///
-    /// Returns an error when an interval crosses an undefined division or
-    /// negative-integer-power domain, or when finite interval endpoints cannot
-    /// be represented.
-    pub fn evaluate_bound(&self, bounds: &Bounds) -> crate::Result<Bound> {
+    /// Returns an error when an interval may evaluate into the `[-atol, atol]`
+    /// zero domain of a division or negative integer power, or when finite
+    /// interval endpoints cannot be represented.
+    pub fn evaluate_bound(&self, bounds: &Bounds, atol: ATol) -> crate::Result<Bound> {
         let analysis = match self {
             Function::Zero => BoundAnalysis {
                 bound: Bound::zero(),
@@ -569,19 +646,22 @@ impl Function {
                 let value = value.into_inner();
                 BoundAnalysis {
                     bound: Bound::new(value, value)?,
-                    may_evaluate_to_zero: value == 0.0,
+                    may_evaluate_to_zero: value.abs() <= *atol,
                 }
             }
-            Function::Linear(function) => {
-                analyze_polynomial_bound(evaluate_polynomial_terms_bound(function.iter(), bounds)?)
-            }
-            Function::Quadratic(function) => {
-                analyze_polynomial_bound(evaluate_polynomial_terms_bound(function.iter(), bounds)?)
-            }
-            Function::Polynomial(function) => {
-                analyze_polynomial_bound(evaluate_polynomial_terms_bound(function.iter(), bounds)?)
-            }
-            Function::Expression(expression) => analyze_expression_bound(expression, bounds)?,
+            Function::Linear(function) => analyze_polynomial_bound(
+                evaluate_polynomial_terms_bound(function.iter(), bounds)?,
+                atol,
+            ),
+            Function::Quadratic(function) => analyze_polynomial_bound(
+                evaluate_polynomial_terms_bound(function.iter(), bounds)?,
+                atol,
+            ),
+            Function::Polynomial(function) => analyze_polynomial_bound(
+                evaluate_polynomial_terms_bound(function.iter(), bounds)?,
+                atol,
+            ),
+            Function::Expression(expression) => analyze_expression_bound(expression, bounds, atol)?,
         };
         Ok(analysis.bound)
     }
@@ -605,7 +685,7 @@ mod tests {
     fn bound_of_constant() {
         let f = Function::Constant(coeff!(3.5));
         assert_eq!(
-            f.evaluate_bound(&Bounds::new()).unwrap(),
+            f.evaluate_bound(&Bounds::new(), ATol::default()).unwrap(),
             Bound::new(3.5, 3.5).unwrap()
         );
     }
@@ -616,7 +696,7 @@ mod tests {
         let f = Function::from(((coeff!(2.0) * linear!(1)).unwrap() + coeff!(3.0)).unwrap());
         let mut bounds = Bounds::new();
         bounds.insert(VariableID::from(1), Bound::new(0.0, 2.0).unwrap());
-        let bound = f.evaluate_bound(&bounds).unwrap();
+        let bound = f.evaluate_bound(&bounds, ATol::default()).unwrap();
         assert_contains(bound, 3.0);
         assert_contains(bound, 7.0);
     }
@@ -632,7 +712,7 @@ mod tests {
         let f = Function::from(quadratic!(1, 1));
         let mut bounds = Bounds::new();
         bounds.insert(VariableID::from(1), Bound::new(-2.0, 3.0).unwrap());
-        let bound = f.evaluate_bound(&bounds).unwrap();
+        let bound = f.evaluate_bound(&bounds, ATol::default()).unwrap();
         assert_contains(bound, 0.0);
         assert_contains(bound, 9.0);
     }
@@ -640,7 +720,10 @@ mod tests {
     #[test]
     fn bound_missing_id_is_unbounded() {
         let f = Function::from(linear!(1));
-        assert_eq!(f.evaluate_bound(&Bounds::new()).unwrap(), Bound::default());
+        assert_eq!(
+            f.evaluate_bound(&Bounds::new(), ATol::default()).unwrap(),
+            Bound::default()
+        );
     }
 
     #[test]
@@ -653,11 +736,14 @@ mod tests {
         ));
 
         assert_eq!(
-            square.evaluate_bound(&Bounds::new()).unwrap(),
+            square
+                .evaluate_bound(&Bounds::new(), ATol::default())
+                .unwrap(),
             Bound::positive()
         );
         assert_eq!(
-            cube.evaluate_bound(&Bounds::new()).unwrap(),
+            cube.evaluate_bound(&Bounds::new(), ATol::default())
+                .unwrap(),
             Bound::default()
         );
     }
@@ -670,16 +756,22 @@ mod tests {
         let inverse_cube = x.powi(-3);
 
         let positive_half_line = Bounds::from([(id, Bound::new(1.0, f64::INFINITY).unwrap())]);
-        let positive_bound = inverse_square.evaluate_bound(&positive_half_line).unwrap();
+        let positive_bound = inverse_square
+            .evaluate_bound(&positive_half_line, ATol::default())
+            .unwrap();
         assert_contains(positive_bound, 0.0);
         assert_contains(positive_bound, 1.0);
 
         let negative_half_line = Bounds::from([(id, Bound::new(f64::NEG_INFINITY, -1.0).unwrap())]);
-        let negative_bound = inverse_cube.evaluate_bound(&negative_half_line).unwrap();
+        let negative_bound = inverse_cube
+            .evaluate_bound(&negative_half_line, ATol::default())
+            .unwrap();
         assert_contains(negative_bound, -1.0);
         assert_contains(negative_bound, 0.0);
 
-        assert!(inverse_square.evaluate_bound(&Bounds::new()).is_err());
+        assert!(inverse_square
+            .evaluate_bound(&Bounds::new(), ATol::default())
+            .is_err());
     }
 
     #[test]
@@ -696,7 +788,7 @@ mod tests {
         .unwrap();
         let mut bounds = Bounds::new();
         bounds.insert(VariableID::from(1), Bound::new(0.0, 1.0).unwrap());
-        let bound = f.evaluate_bound(&bounds).unwrap();
+        let bound = f.evaluate_bound(&bounds, ATol::default()).unwrap();
         assert_contains(bound, -1.0);
         assert_contains(bound, 1.0);
     }
@@ -707,19 +799,23 @@ mod tests {
         let mut bounds = Bounds::new();
         bounds.insert(VariableID::from(1), Bound::new(-2.0, 3.0).unwrap());
 
-        let absolute = x.clone().abs().evaluate_bound(&bounds).unwrap();
+        let absolute = x
+            .clone()
+            .abs()
+            .evaluate_bound(&bounds, ATol::default())
+            .unwrap();
         assert_contains(absolute, 0.0);
         assert_contains(absolute, 3.0);
 
         let minimum = x
             .clone()
             .min(Function::try_from(1.0).unwrap())
-            .evaluate_bound(&bounds)
+            .evaluate_bound(&bounds, ATol::default())
             .unwrap();
         assert_contains(minimum, -2.0);
         assert_contains(minimum, 1.0);
 
-        let square = x.powi(2).evaluate_bound(&bounds).unwrap();
+        let square = x.powi(2).evaluate_bound(&bounds, ATol::default()).unwrap();
         assert_contains(square, 0.0);
         assert_contains(square, 9.0);
     }
@@ -730,10 +826,74 @@ mod tests {
         let reciprocal = (Function::one() / x.clone()).unwrap();
         let mut bounds = Bounds::new();
         bounds.insert(VariableID::from(1), Bound::new(-1.0, 1.0).unwrap());
-        assert!(reciprocal.evaluate_bound(&bounds).is_err());
+        assert!(reciprocal.evaluate_bound(&bounds, ATol::default()).is_err());
 
         let inverse = x.powi(-1);
-        assert!(inverse.evaluate_bound(&bounds).is_err());
+        assert!(inverse.evaluate_bound(&bounds, ATol::default()).is_err());
+    }
+
+    #[test]
+    fn point_bound_uses_the_same_atol_as_signum_evaluation() {
+        let id = VariableID::from(1);
+        let atol = ATol::new(1e-6).unwrap();
+        let value = 1e-8;
+        let function = (Function::from(linear!(id)).signum() - coeff!(0.5)).unwrap();
+        let state = crate::v1::State::from_iter([(1, value)]);
+        let bounds = Bounds::from([(id, Bound::new(value, value).unwrap())]);
+
+        let evaluated = function.evaluate(&state, atol).unwrap();
+        assert_eq!(evaluated, -0.5);
+        assert_contains(function.evaluate_bound(&bounds, atol).unwrap(), evaluated);
+    }
+
+    #[test]
+    fn point_bound_rejects_zero_sensitive_domains_at_the_atol_boundary() {
+        let id = VariableID::from(1);
+        let atol = ATol::new(1e-6).unwrap();
+        let x = Function::from(linear!(id));
+        let reciprocal = (Function::one() / x.clone()).unwrap();
+        let inverse = x.powi(-1);
+
+        for value in [*atol, -*atol] {
+            let state = crate::v1::State::from_iter([(1, value)]);
+            let bounds = Bounds::from([(id, Bound::new(value, value).unwrap())]);
+
+            assert!(reciprocal.evaluate(&state, atol).is_err());
+            assert!(reciprocal.evaluate_bound(&bounds, atol).is_err());
+            assert!(inverse.evaluate(&state, atol).is_err());
+            assert!(inverse.evaluate_bound(&bounds, atol).is_err());
+        }
+
+        for value in [2.0 * *atol, -2.0 * *atol] {
+            let state = crate::v1::State::from_iter([(1, value)]);
+            let bounds = Bounds::from([(id, Bound::new(value, value).unwrap())]);
+
+            let reciprocal_value = reciprocal.evaluate(&state, atol).unwrap();
+            assert_contains(
+                reciprocal.evaluate_bound(&bounds, atol).unwrap(),
+                reciprocal_value,
+            );
+            let inverse_value = inverse.evaluate(&state, atol).unwrap();
+            assert_contains(
+                inverse.evaluate_bound(&bounds, atol).unwrap(),
+                inverse_value,
+            );
+        }
+    }
+
+    #[test]
+    fn nested_zero_sensitive_domain_uses_the_caller_atol() {
+        let id = VariableID::from(1);
+        let atol = ATol::new(1e-6).unwrap();
+        let value = 1e8;
+        let x = Function::from(linear!(id));
+        let reciprocal = (Function::one() / x).unwrap();
+        let inverse_reciprocal = reciprocal.powi(-1);
+        let state = crate::v1::State::from_iter([(1, value)]);
+        let bounds = Bounds::from([(id, Bound::new(value, value).unwrap())]);
+
+        assert!(inverse_reciprocal.evaluate(&state, atol).is_err());
+        assert!(inverse_reciprocal.evaluate_bound(&bounds, atol).is_err());
     }
 
     #[test]
@@ -744,7 +904,10 @@ mod tests {
         let bounds = Bounds::from([(id, Bound::new(2.0, 2.0).unwrap())]);
         let expected = 2.0_f64.powi(256);
 
-        assert_contains(function.evaluate_bound(&bounds).unwrap(), expected);
+        assert_contains(
+            function.evaluate_bound(&bounds, ATol::default()).unwrap(),
+            expected,
+        );
     }
 
     #[test]
@@ -757,9 +920,10 @@ mod tests {
             (VariableID::from(1), Bound::new(0.1, 0.1).unwrap()),
             (VariableID::from(2), Bound::new(10.1, 10.1).unwrap()),
         ]);
+        let atol = ATol::default();
 
-        let value = function.evaluate(&state, ATol::default()).unwrap();
-        assert_contains(function.evaluate_bound(&bounds).unwrap(), value);
+        let value = function.evaluate(&state, atol).unwrap();
+        assert_contains(function.evaluate_bound(&bounds, atol).unwrap(), value);
     }
 
     #[test]
@@ -770,9 +934,10 @@ mod tests {
             let function = Function::Polynomial(Polynomial::single_term(monomial, coeff!(1.0)));
             let state = crate::v1::State::from_iter([(1, value)]);
             let bounds = Bounds::from([(id, Bound::new(value, value).unwrap())]);
+            let atol = ATol::default();
 
-            let evaluated = function.evaluate(&state, ATol::default()).unwrap();
-            assert_contains(function.evaluate_bound(&bounds).unwrap(), evaluated);
+            let evaluated = function.evaluate(&state, atol).unwrap();
+            assert_contains(function.evaluate_bound(&bounds, atol).unwrap(), evaluated);
         }
     }
 
@@ -782,9 +947,10 @@ mod tests {
         let function = Function::from(linear!(id)).powi(4);
         let state = crate::v1::State::from_iter([(1, 0.1)]);
         let bounds = Bounds::from([(id, Bound::new(0.1, 0.1).unwrap())]);
+        let atol = ATol::default();
 
-        let evaluated = function.evaluate(&state, ATol::default()).unwrap();
-        assert_contains(function.evaluate_bound(&bounds).unwrap(), evaluated);
+        let evaluated = function.evaluate(&state, atol).unwrap();
+        assert_contains(function.evaluate_bound(&bounds, atol).unwrap(), evaluated);
     }
 
     #[test]
@@ -793,10 +959,11 @@ mod tests {
         let function = Function::from(linear!(id)).powi(i32::MIN);
         let state = crate::v1::State::from_iter([(1, -1.0)]);
         let bounds = Bounds::from([(id, Bound::new(-1.0, -1.0).unwrap())]);
+        let atol = ATol::default();
 
-        let evaluated = function.evaluate(&state, ATol::default()).unwrap();
+        let evaluated = function.evaluate(&state, atol).unwrap();
         assert_eq!(evaluated, 1.0);
-        assert_contains(function.evaluate_bound(&bounds).unwrap(), evaluated);
+        assert_contains(function.evaluate_bound(&bounds, atol).unwrap(), evaluated);
     }
 
     #[test]
@@ -806,9 +973,10 @@ mod tests {
             let function = Function::from(linear!(id)).powi(exponent);
             let state = crate::v1::State::from_iter([(1, base)]);
             let bounds = Bounds::from([(id, Bound::new(base, base).unwrap())]);
-            let evaluated = function.evaluate(&state, ATol::default()).unwrap();
+            let atol = ATol::default();
+            let evaluated = function.evaluate(&state, atol).unwrap();
 
-            assert_contains(function.evaluate_bound(&bounds).unwrap(), evaluated);
+            assert_contains(function.evaluate_bound(&bounds, atol).unwrap(), evaluated);
         }
     }
 
@@ -827,7 +995,7 @@ mod tests {
         let evaluated = function.evaluate(&state, atol).unwrap();
 
         assert_eq!(evaluated, 1.0);
-        assert_contains(function.evaluate_bound(&bounds).unwrap(), evaluated);
+        assert_contains(function.evaluate_bound(&bounds, atol).unwrap(), evaluated);
     }
 
     #[test]
@@ -835,23 +1003,28 @@ mod tests {
         let id = VariableID::from(1);
         let x = Function::from(linear!(id));
         let bounds = Bounds::from([(id, Bound::new(1.0, f64::INFINITY).unwrap())]);
+        let atol = ATol::new(f64::from_bits(1)).unwrap();
 
         let reciprocal = (Function::one() / x.clone()).unwrap();
         let inverse_reciprocal = reciprocal.clone().powi(-1);
-        assert!(inverse_reciprocal.evaluate_bound(&bounds).is_ok());
+        assert!(inverse_reciprocal.evaluate_bound(&bounds, atol).is_ok());
 
         let zero_power = reciprocal.clone().powi(0);
         assert_eq!(
-            zero_power.evaluate_bound(&bounds).unwrap(),
+            zero_power.evaluate_bound(&bounds, atol).unwrap(),
             Bound::new(1.0, 1.0).unwrap()
         );
 
         let reciprocal_of_reciprocal = (Function::one() / reciprocal).unwrap();
-        assert!(reciprocal_of_reciprocal.evaluate_bound(&bounds).is_ok());
+        assert!(reciprocal_of_reciprocal
+            .evaluate_bound(&bounds, atol)
+            .is_ok());
 
         let zero_to_one = Bounds::from([(id, Bound::new(0.0, 1.0).unwrap())]);
         let undefined_reciprocal = x.powi(-1);
-        assert!(undefined_reciprocal.evaluate_bound(&zero_to_one).is_err());
+        assert!(undefined_reciprocal
+            .evaluate_bound(&zero_to_one, atol)
+            .is_err());
     }
 
     #[test]
@@ -859,7 +1032,77 @@ mod tests {
         let function = Function::from((coeff!(f64::MAX) * linear!(1)).unwrap());
         let bounds = Bounds::from([(VariableID::from(1), Bound::new(2.0, 2.0).unwrap())]);
 
-        assert!(function.evaluate_bound(&bounds).is_err());
+        assert!(function.evaluate_bound(&bounds, ATol::default()).is_err());
+    }
+
+    #[test]
+    fn mixed_finite_intervals_reject_non_finite_endpoint_results() {
+        let atol = ATol::default();
+        let addition =
+            (Function::from(linear!(1)) + Function::try_from(f64::MAX).unwrap()).unwrap();
+        let multiplication = (Function::from(linear!(1)) * Function::from(linear!(2))).unwrap();
+        let division = (Function::from(linear!(1)) / Function::try_from(0.5).unwrap()).unwrap();
+        let power = Function::from(linear!(1)).powi(2);
+
+        let cases = [
+            (
+                addition,
+                Bounds::from([(VariableID::from(1), Bound::new(0.0, f64::MAX).unwrap())]),
+                crate::v1::State::from_iter([(1, f64::MAX)]),
+            ),
+            (
+                multiplication,
+                Bounds::from([
+                    (VariableID::from(1), Bound::new(1.0, 2.0).unwrap()),
+                    (VariableID::from(2), Bound::new(f64::MAX, f64::MAX).unwrap()),
+                ]),
+                crate::v1::State::from_iter([(1, 2.0), (2, f64::MAX)]),
+            ),
+            (
+                division,
+                Bounds::from([(
+                    VariableID::from(1),
+                    Bound::new(f64::MAX / 2.0, f64::MAX).unwrap(),
+                )]),
+                crate::v1::State::from_iter([(1, f64::MAX)]),
+            ),
+            (
+                power,
+                Bounds::from([(VariableID::from(1), Bound::new(1.0, f64::MAX).unwrap())]),
+                crate::v1::State::from_iter([(1, f64::MAX)]),
+            ),
+        ];
+
+        for (function, bounds, state) in cases {
+            let evaluation_error = function.evaluate(&state, atol).unwrap_err();
+            assert!(matches!(
+                evaluation_error.downcast_ref::<FunctionEvaluationError>(),
+                Some(FunctionEvaluationError::NonFiniteResult { .. })
+            ));
+
+            let bound_error = function.evaluate_bound(&bounds, atol).unwrap_err();
+            assert!(matches!(
+                bound_error.downcast_ref::<FunctionEvaluationError>(),
+                Some(FunctionEvaluationError::NonFiniteResult { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn infinite_bound_endpoints_remain_unbounded_sentinels() {
+        let x = Function::from(linear!(1));
+        let functions = [
+            (x.clone() + Function::one()).unwrap(),
+            (x.clone() * Function::try_from(2.0).unwrap()).unwrap(),
+            (x.clone() / Function::try_from(2.0).unwrap()).unwrap(),
+            x.powi(2),
+        ];
+
+        for function in functions {
+            assert!(function
+                .evaluate_bound(&Bounds::new(), ATol::default())
+                .is_ok());
+        }
     }
 
     #[test]
@@ -874,7 +1117,7 @@ mod tests {
             (VariableID::from(1), Bound::new(lhs, lhs).unwrap()),
             (VariableID::from(2), Bound::new(rhs, rhs).unwrap()),
         ]);
-        let bound = function.evaluate_bound(&bounds).unwrap();
+        let bound = function.evaluate_bound(&bounds, ATol::default()).unwrap();
 
         assert!(bound.lower() <= rounded);
         assert!(bound.upper() >= rounded.next_up());
@@ -889,7 +1132,7 @@ mod tests {
         }
         let bounds = Bounds::from([(id, Bound::new(-1.0, 1.0).unwrap())]);
 
-        let bound = function.evaluate_bound(&bounds).unwrap();
+        let bound = function.evaluate_bound(&bounds, ATol::default()).unwrap();
         assert_contains(bound, 0.0);
         assert_contains(bound, 1.0);
     }

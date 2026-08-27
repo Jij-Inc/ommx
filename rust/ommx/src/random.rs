@@ -50,6 +50,13 @@ use proptest::{
 };
 use std::{collections::HashMap, ops::Deref};
 
+const TINY_NONZERO_COEFFICIENTS: [f64; 4] = [
+    f64::from_bits(1),
+    -f64::from_bits(1),
+    f64::MIN_POSITIVE,
+    -f64::MIN_POSITIVE,
+];
+
 /// Get random object based on [`Arbitrary`] trait with its [`Arbitrary::Parameters`].
 pub fn random<T: Arbitrary>(rng: &mut Rng, parameters: T::Parameters) -> T {
     sample(rng, T::arbitrary_with(parameters))
@@ -79,9 +86,14 @@ pub fn arbitrary_coefficient() -> BoxedStrategy<f64> {
 }
 
 pub fn arbitrary_coefficient_nonzero() -> BoxedStrategy<f64> {
-    prop_oneof![Just(1.0), Just(-1.0), -1.0..1.0]
-        .prop_filter("nonzero", |x: &f64| x.abs() > f64::EPSILON)
-        .boxed()
+    prop_oneof![
+        Just(1.0),
+        Just(-1.0),
+        proptest::sample::select(TINY_NONZERO_COEFFICIENTS.to_vec()),
+        -1.0..1.0,
+    ]
+    .prop_filter("nonzero", |x: &f64| *x != 0.0)
+    .boxed()
 }
 
 /// Generate a strategy for producing a vector of unique integers within a given range `min_id..=max_id`
@@ -296,6 +308,24 @@ pub fn arbitrary_integer_partition(sum: usize, n: usize) -> BoxedStrategy<Vec<us
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    proptest! {
+        #[test]
+        fn arbitrary_nonzero_coefficients_use_exact_zero_classification(
+            value in arbitrary_coefficient_nonzero()
+        ) {
+            prop_assert!(value.is_finite());
+            prop_assert_ne!(value, 0.0);
+        }
+    }
+
+    #[test]
+    fn arbitrary_nonzero_coefficient_space_includes_tiny_and_subnormal_values() {
+        for value in TINY_NONZERO_COEFFICIENTS {
+            assert_ne!(value, 0.0);
+            assert!(value.abs() <= f64::EPSILON);
+        }
+    }
 
     #[should_panic]
     #[test]

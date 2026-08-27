@@ -125,7 +125,7 @@ match instance.convert_inequality_to_equality_with_integer_slack(id, 32, atol) {
     Err(e) if e.is::<ommx::ExactIntegerSlackUnavailable>() => {
         // This operation keeps the relation as an inequality. It is not an
         // approximate representation of the original feasible set.
-        instance.add_integer_slack_to_inequality(id, 32)?;
+        instance.add_integer_slack_to_inequality(id, 32, atol)?;
     }
     Err(e) => return Err(e),
     Ok(()) => {}

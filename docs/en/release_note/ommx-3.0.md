@@ -15,6 +15,12 @@ compact polynomials. Python users can construct absolute values, sign
 functions, minima, maxima, divisions, and signed 32-bit integer powers directly:
 
 ```python
+from ommx import DecisionVariable, Function
+
+x = Function(DecisionVariable.continuous(1))
+y = Function(DecisionVariable.continuous(2))
+z = Function(DecisionVariable.continuous(3))
+
 f = abs(x - 2).maximum(y) / (z + 1)
 g = f**2
 h = f.powi(-2)
@@ -28,17 +34,26 @@ exponents and reverse exponentiation are not supported. At evaluation,
 returns `0`, while division by such a denominator and raising such a value to a
 negative integer power raise `ValueError`. Composed expressions are serialized
 as flat reverse Polish notation (RPN) instruction sequences in OMMX protobuf
-payloads. HiGHS,
-Python-MIP, and PySCIPOpt still reject composed expressions explicitly because
-their current adapter inputs remain polynomial-only.
+payloads. All bundled adapters—HiGHS, Python-MIP, PySCIPOpt, and OpenJij—
+currently declare polynomial-only input classes and therefore reject composed
+expressions in the function positions they accept.
 
 Zero-sensitive `Signum`, `Div`, and negative `Powi` nodes are retained through
 construction, substitution, and partial evaluation so that a later evaluation
 call supplies the `atol` that determines their result or domain error. In
 particular, dividing a `Function` by a constant or coefficient remains a
-composed expression. Exact polynomial normalization retains every finite
-nonzero coefficient and does not apply an implicit tolerance-based cleanup. A
-future approximate-cleanup API would be separate and explicit.
+composed expression. `Function.evaluate_bound(..., atol=...)` applies the same
+zero classification to interval bounds. Indicator Big-M conversion,
+special-constraint lowering, and integer-slack conversion also accept an
+optional `atol=` for bounds they derive. This aligns zero-sensitive Function
+body evaluation; algebraic lowering still assumes exact discrete values and
+does not canonicalize approximate solver output near 0 or 1. Omitting `atol`
+uses `DEFAULT_ATOL`. Integer-slack conversion classifies an inequality with the
+same strict rule used by evaluation, $f(x) < \mathtt{atol}$, before coefficient
+normalization, so a small positive value is not silently reclassified by
+scaling. Exact polynomial normalization retains every finite nonzero coefficient
+and does not apply an implicit tolerance-based cleanup. A future approximate-
+cleanup API would be separate and explicit.
 
 Because a `Function` is no longer necessarily a polynomial,
 {meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` return
@@ -47,6 +62,23 @@ Because a `Function` is no longer necessarily a polynomial,
 composed expression as an empty polynomial. See the
 [Function user guide](../user_guide/function.md) for operation ordering,
 evaluation errors, and serialization details.
+
+The instance-class API now names that polynomial requirement explicitly. This
+is a breaking rename from the API published in Python SDK 3.0.0 Beta 4:
+
+| Before | After |
+|---|---|
+| `DegreeBound` | `PolynomialRequirement` |
+| `DegreeBound.at_most(n)` | `PolynomialRequirement.at_most(n)` |
+| `DegreeBound.unbounded()` | `PolynomialRequirement.any_degree()` |
+| `bound.maximum` | `requirement.maximum_degree` |
+| `bound.includes(degree)` | `requirement.accepts_degree(degree)` |
+| `objective_degree_bound` | `objective_polynomial_requirement` |
+| `regular_constraint_degree_bounds` | `regular_constraint_polynomial_requirements` |
+| `indicator_constraint_degree_bounds` | `indicator_body_polynomial_requirements` |
+
+`PolynomialRequirement.any_degree()` accepts a polynomial of any degree; it
+does not admit a composed, non-polynomial `Function`.
 
 ### ⚠ `solve()` and `sample()` now prepare inputs automatically ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 

@@ -219,6 +219,25 @@ def test_convert_inequality_to_equality_with_integer_slack_trivial():
     assert 0 in instance.removed_constraints
 
 
+def test_convert_inequality_to_equality_with_integer_slack_uses_atol():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=0,
+        constraints={0: x + 0.5 <= 0},
+        sense=Instance.MINIMIZE,
+    )
+
+    instance.convert_inequality_to_equality_with_integer_slack(
+        constraint_id=0, max_integer_range=1, atol=1.0
+    )
+
+    constraint = instance.constraints[0]
+    slack_id = (constraint.function.required_ids() - {0}).pop()
+    assert constraint.evaluate({0: 0.0, slack_id: 0.0}, atol=1.0).feasible
+    assert not constraint.evaluate({0: 1.0, slack_id: 0.0}, atol=1.0).feasible
+
+
 def test_add_integer_slack_to_inequality_infeasible():
     x = [
         DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])

@@ -21,14 +21,23 @@ pub struct SpecialConstraintPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SpecialConstraintPreparation {
+    /// Configure lowering for the selected special-constraint families.
+    ///
+    /// ``atol`` is used when Indicator Function bodies require zero-sensitive
+    /// interval evaluation. If omitted, :attr:`DEFAULT_ATOL` is stored in the
+    /// preparation step.
     #[staticmethod]
-    #[pyo3(signature = (*, kinds))]
-    pub fn lower_special_constraints(kinds: HashSet<SpecialConstraintKind>) -> Self {
-        Self {
+    #[pyo3(signature = (*, kinds, atol=None))]
+    pub fn lower_special_constraints(
+        kinds: HashSet<SpecialConstraintKind>,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<Self> {
+        Ok(Self {
             inner: ommx::SpecialConstraintPreparation::LowerSpecialConstraints {
                 kinds: kinds.into_iter().map(Into::into).collect(),
+                atol: resolve_atol(atol)?,
             },
-        }
+        })
     }
 }
 

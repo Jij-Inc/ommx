@@ -2648,7 +2648,12 @@ class Function:
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Function: ...
-    def evaluate_bound(self, bounds: typing.Mapping[builtins.int, Bound]) -> Bound:
+    def evaluate_bound(
+        self,
+        bounds: typing.Mapping[builtins.int, Bound],
+        *,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> Bound:
         r"""
         Compute an interval bound of this function given variable bounds.
 
@@ -2657,6 +2662,9 @@ class Function:
         **Args:**
 
         - `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.
+        - `atol`: Absolute tolerance used by operations whose semantics depend on
+          whether a value is zero. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used.
+          Use the same tolerance when point-evaluating this function.
 
         **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
 
@@ -2669,8 +2677,9 @@ class Function:
         $x \in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but
         term-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
 
-        **Raises:** `RuntimeError` when an interval crosses an undefined
-        division or contains zero as the base of a negative integer power.
+        **Raises:** `RuntimeError` when an interval contains a value treated as
+        zero by `atol` in a denominator or as the base of a negative integer
+        power.
         Raises `ValueError` if valid bound endpoints cannot be constructed after
         numeric overflow.
 
@@ -3385,7 +3394,10 @@ class Instance:
         Add a SOS1 constraint to this instance.
         """
     def lower_special_constraints(
-        self, kinds_to_lower: builtins.set[SpecialConstraintKind]
+        self,
+        kinds_to_lower: builtins.set[SpecialConstraintKind],
+        *,
+        atol: typing.Optional[builtins.float] = None,
     ) -> builtins.set[SpecialConstraintKind]:
         r"""
         Lower selected active special constraint kinds into regular constraints.
@@ -3402,6 +3414,11 @@ class Instance:
         Returns the set of :class:`SpecialConstraintKind` values that were
         requested and active, and therefore actually lowered. Empty when no
         requested kind was active.
+
+        ``atol`` controls zero-sensitive interval bounds used while lowering
+        Indicator constraints. If omitted, :attr:`DEFAULT_ATOL` is used. This
+        aligns zero-sensitive Function body evaluation; lowering itself assumes
+        exact discrete variable values.
 
         Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each
         individual family conversion is atomic, but the whole operation is not:
@@ -4141,7 +4158,10 @@ class Instance:
         {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
         """
     def convert_indicator_to_constraint(
-        self, indicator_id: builtins.int
+        self,
+        indicator_id: builtins.int,
+        *,
+        atol: typing.Optional[builtins.float] = None,
     ) -> builtins.list[builtins.int]:
         r"""
         Convert an indicator constraint to regular constraints using the Big-M method.
@@ -4181,6 +4201,11 @@ class Instance:
         silently drop the upper side when $0 \notin [l, u]$). The instance is not
         mutated on error.
 
+        ``atol`` controls which Function-body values the bound evaluator treats
+        as zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes
+        the indicator variable is exactly binary; this does not canonicalize an
+        approximate solver value near 0 or 1.
+
         # Examples
 
         Convert an inequality indicator where the upper side is active:
@@ -4210,7 +4235,7 @@ class Instance:
         {0: Constraint(x0 + 3*x1 - 5 <= 0)}
         """
     def convert_all_indicators_to_constraints(
-        self,
+        self, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.dict[builtins.int, builtins.list[builtins.int]]:
         r"""
         Convert every active indicator constraint to regular constraints using Big-M.
@@ -4223,6 +4248,9 @@ class Instance:
         one is convertible are the conversions applied. If any indicator fails
         validation (non-finite bound on a required side), no mutation happens and
         the instance is left untouched.
+
+        ``atol`` has the same Function-body meaning as in the single-constraint
+        conversion. If omitted, :attr:`DEFAULT_ATOL` is used.
         """
     def log_encode(
         self,
@@ -4357,7 +4385,11 @@ class Instance:
         >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
         """
     def convert_inequality_to_equality_with_integer_slack(
-        self, constraint_id: builtins.int, max_integer_range: builtins.int
+        self,
+        constraint_id: builtins.int,
+        max_integer_range: builtins.int,
+        *,
+        atol: typing.Optional[builtins.float] = None,
     ) -> None:
         r"""
         Convert an inequality constraint $f(x) \leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.
@@ -4368,11 +4400,13 @@ class Instance:
 
         - Since this method evaluates the bound of $f(x)$, we may find that:
 
-          - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:
+          - The bound $[l, u]$ is infeasible at the selected tolerance, i.e.
+            $l \geq \text{atol}$:
             this means the instance is infeasible because this constraint never be satisfied,
             and an error is raised.
 
-          - The bound $[l, u]$ is always negative, i.e. $u \leq 0$:
+          - The bound is feasible everywhere at the selected tolerance, i.e.
+            $u < \text{atol}$:
             this means this constraint is trivially satisfied,
             the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,
             and this method returns without introducing slack variable or raising an error.
@@ -4409,9 +4443,16 @@ class Instance:
         range exceeds ``max_integer_range``. Raises
         {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
         infeasible.
+        ``atol`` controls zero-sensitive interval evaluation and the strict
+        inequality feasibility threshold. If omitted, :attr:`DEFAULT_ATOL` is
+        used.
         """
     def add_integer_slack_to_inequality(
-        self, constraint_id: builtins.int, slack_upper_bound: builtins.int
+        self,
+        constraint_id: builtins.int,
+        slack_upper_bound: builtins.int,
+        *,
+        atol: typing.Optional[builtins.float] = None,
     ) -> typing.Optional[builtins.float]:
         r"""
         Convert inequality $f(x) \leq 0$ to **inequality** $f(x) + b s \leq 0$ with an integer slack variable $s$.
@@ -4428,6 +4469,10 @@ class Instance:
 
         **Returns:**
         The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
+
+        ``atol`` controls zero-sensitive interval bounds and the inequality
+        feasibility threshold used to select the slack coefficient. If omitted,
+        :attr:`DEFAULT_ATOL` is used.
 
         # Examples
 
@@ -8579,8 +8624,17 @@ class SpecialConstraintPreparation:
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def lower_special_constraints(
-        *, kinds: builtins.set[SpecialConstraintKind]
-    ) -> SpecialConstraintPreparation: ...
+        *,
+        kinds: builtins.set[SpecialConstraintKind],
+        atol: typing.Optional[builtins.float] = None,
+    ) -> SpecialConstraintPreparation:
+        r"""
+        Configure lowering for the selected special-constraint families.
+
+        ``atol`` is used when Indicator Function bodies require zero-sensitive
+        interval evaluation. If omitted, :attr:`DEFAULT_ATOL` is stored in the
+        preparation step.
+        """
 
 @typing.final
 class State:

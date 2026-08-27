@@ -569,3 +569,21 @@ def test_function_evaluate_bound_is_not_tight():
     b = f.evaluate_bound({1: Bound(0.0, 1.0)})
     assert b.lower <= -1.0
     assert b.upper >= 1.0  # over-approximation, not the true [-0.25, 0]
+
+
+def test_function_evaluate_bound_uses_atol_for_zero_sensitive_operations():
+    x = Function(Linear(terms={1: 1.0}))
+    point = {1: Bound(1e-8, 1e-8)}
+
+    coarse_signum = x.signum().evaluate_bound(point, atol=1e-6)
+    assert coarse_signum == Bound(0.0, 0.0)
+
+    fine_signum = x.signum().evaluate_bound(point, atol=1e-12)
+    assert fine_signum == Bound(1.0, 1.0)
+
+    reciprocal = Function(1.0) / x
+    with pytest.raises(RuntimeError, match="denominator may be classified as zero"):
+        reciprocal.evaluate_bound(point, atol=1e-6)
+
+    fine_reciprocal = reciprocal.evaluate_bound(point, atol=1e-12)
+    assert fine_reciprocal.lower <= 1e8 <= fine_reciprocal.upper

@@ -65,6 +65,12 @@ that a later [`Evaluate::evaluate`](crate::Evaluate::evaluate) call chooses the
 tolerance. Closed operations whose result is independent of `ATol` may still be
 folded.
 
+[`Function::evaluate_bound`](crate::Function::evaluate_bound) applies the same
+classification to interval bounds and therefore requires an explicit `ATol`.
+Transformations that rely on such a bound take the same tolerance for their
+Function-body semantics. This is distinct from canonicalizing approximate
+discrete solver values.
+
 A composed [`Function`](crate::Function) uses a single
 [`Function::Expression`](crate::Function::Expression) variant backed by a
 validated, flat reverse-Polish expression program. Every associative instruction

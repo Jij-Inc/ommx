@@ -119,6 +119,8 @@ Python 組み込みの `min(fx, fy)` と `max(fx, fy)` は比較演算を行う�
 
 `atol` を省略した場合は、その評価処理で設定済みのデフォルト許容誤差を使います。式の構築、代入、部分評価では、ゼロに依存する演算を判定するためにデフォルト許容誤差を使いません。`Signum`、`Div`、負の `Powi` ノードは RPN 式に残り、後続の評価処理で指定された `atol` が適用されます。
 
+`evaluate_bound(bounds, atol=...)` も区間評価に同じゼロ判定を使います。この bound から制約や係数を導出する変換は tolerance を受け取り、Function body の意味論を明示します。これは近似的な離散 solver 出力を丸める処理とは別です。
+
 除算と負の整数べきによって `Function` は部分関数になり得ます。代数的な簡約でも定義域は保存されるため、例えば `0 * (1 / fx)` は $|\mathtt{fx}| \leq \mathtt{atol}$ の範囲で引き続き未定義です。
 
 ```{code-cell} ipython3
@@ -128,7 +130,7 @@ except ValueError as e:
     print(f"Error: {e}")
 ```
 
-多項式のメタデータは、`Function` がコンパクトな多項式表現を使っている場合に限って利用できます。複合式では `degree()` と `num_terms()` は `None` を返し、`terms` などの係数プロパティは `TypeError` を送出します。恒等演算や定数の畳み込みを除き、指数が非負でも整数べきは複合式のまま保持されます。展開済みのコンパクトな多項式が必要な場合は、明示的な乗算を使ってください。ソルバーアダプターも、宣言した input class が複合式をサポートしない場合は受け付けません。
+多項式のメタデータは、`Function` がコンパクトな多項式表現を使っている場合に限って利用できます。複合式では `degree()` と `num_terms()` は `None` を返し、`terms` などの係数プロパティは `TypeError` を送出します。恒等演算や定数の畳み込みを除き、指数が非負でも整数べきは複合式のまま保持されます。展開済みのコンパクトな多項式が必要な場合は、明示的な乗算を使ってください。現在の全ての `InstanceClassClause` は、objective と constraint body の function に polynomial を要求します。そのため、提供中の全 solver adapter は複合された objective と constraint body を拒否します。adapter を呼ぶ前に、それらの solver-input function をサポート対象の polynomial として再定式化してください。
 
 コンパクトな多項式の正規化は厳密です。打ち消しや浮動小数点のアンダーフローで実際にゼロになった項は削除しますが、有限かつ非ゼロの係数は大きさによらず保持します。小さな項を `atol` で取り除くことはありません。OMMX は近似的な cleanup を暗黙には行いません。cleanup が必要であれば、式の構築や評価とは別の明示的な API として提供する必要があります。
 

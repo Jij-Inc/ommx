@@ -642,6 +642,9 @@ impl Function {
     /// **Args:**
     ///
     /// - `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.
+    /// - `atol`: Absolute tolerance used by operations whose semantics depend on
+    ///   whether a value is zero. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used.
+    ///   Use the same tolerance when point-evaluating this function.
     ///
     /// **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
     ///
@@ -654,8 +657,9 @@ impl Function {
     /// $x \in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but
     /// term-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
     ///
-    /// **Raises:** `RuntimeError` when an interval crosses an undefined
-    /// division or contains zero as the base of a negative integer power.
+    /// **Raises:** `RuntimeError` when an interval contains a value treated as
+    /// zero by `atol` in a denominator or as the base of a negative integer
+    /// power.
     /// Raises `ValueError` if valid bound endpoints cannot be constructed after
     /// numeric overflow.
     ///
@@ -666,15 +670,21 @@ impl Function {
     /// >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
     /// >>> b.lower <= 3.0 and b.upper >= 7.0
     /// True
+    #[pyo3(signature = (bounds, *, atol=None))]
     pub fn evaluate_bound(
         &self,
         bounds: BTreeMap<u64, VariableBound>,
+        atol: Option<f64>,
     ) -> crate::error::OmmxPyResult<VariableBound> {
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
         let bounds: ommx::Bounds = bounds
             .into_iter()
             .map(|(id, b)| (ommx::VariableID::from(id), b.0))
             .collect();
-        Ok(VariableBound(self.0.evaluate_bound(&bounds)?))
+        Ok(VariableBound(self.0.evaluate_bound(&bounds, atol)?))
     }
 
     fn __copy__(&self) -> Self {

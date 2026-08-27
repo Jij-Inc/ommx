@@ -13,6 +13,8 @@ pub enum SpecialConstraintPreparation {
     LowerSpecialConstraints {
         /// Special-constraint kinds passed to the owner operation.
         kinds: SpecialConstraintKinds,
+        /// Absolute tolerance used when bounding tolerance-sensitive Indicator bodies.
+        atol: ATol,
     },
 }
 
@@ -231,6 +233,7 @@ impl PreparationPolicy {
                 ]
                 .into_iter()
                 .collect(),
+                atol: ATol::default(),
             }),
             objective: Some(ObjectivePreparation {
                 target: Sense::Minimize,
@@ -282,8 +285,8 @@ trait PreparationStep {
 impl PreparationStep for SpecialConstraintPreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
         match self {
-            Self::LowerSpecialConstraints { kinds } => {
-                instance.lower_special_constraints(kinds)?;
+            Self::LowerSpecialConstraints { kinds, atol } => {
+                instance.lower_special_constraints(kinds, *atol)?;
             }
         }
         Ok(())
@@ -318,7 +321,11 @@ impl PreparationStep for IntegerSlackPreparation {
                     let Some(slack_upper_bound) = self.slack_upper_bound else {
                         return Err(error);
                     };
-                    instance.add_integer_slack_to_inequality(id.into_inner(), slack_upper_bound)?;
+                    instance.add_integer_slack_to_inequality(
+                        id.into_inner(),
+                        slack_upper_bound,
+                        self.atol,
+                    )?;
                 }
                 Err(error) => return Err(error),
             }
@@ -833,6 +840,7 @@ mod tests {
         let policy = PreparationPolicy {
             special_constraints: Some(SpecialConstraintPreparation::LowerSpecialConstraints {
                 kinds: BTreeSet::from([SpecialConstraintKind::OneHot]),
+                atol: ATol::default(),
             }),
             objective: Some(ObjectivePreparation {
                 target: Sense::Minimize,
@@ -850,7 +858,7 @@ mod tests {
         assert!(matches!(
             error.downcast_ref::<InfeasibleDetected>(),
             Some(InfeasibleDetected::InequalityConstraintBound { id, bound })
-                if *id == infeasible_id && *bound == Bound::new(2.0, 3.0).unwrap()
+                if *id == infeasible_id && *bound == Bound::new(1.0, 1.5).unwrap()
         ));
         assert_eq!(instance.sense(), Sense::Minimize);
         assert_eq!(instance.removed_one_hot_constraints().len(), 1);
