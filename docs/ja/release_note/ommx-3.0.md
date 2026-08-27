@@ -8,18 +8,12 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### 🛠 dependent variable の復元値を正規化 ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
+### 🛠 SOS1のゼロ判定を統一 ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
 
-{meth}`~ommx.Instance.populate_state` に fixed / dependent coordinate を渡した場合、
-その値は整合性の assertion としてのみ扱われます。`atol` の範囲内として受理した後、
-返される {class}`~ommx.State` には、Instance が所有する正確な固定値または dependency
-から決定的に復元した値を格納します。これにより後続の dependency は、呼び出し側が
-渡した近似値ではなく canonical な coordinate を参照します。
-
-{meth}`~ommx.Instance.evaluate_samples` は、sample ID のgroupingを維持したまま、各unique
-input stateについてdependency DAG全体を解決します。またSOS1のactivity判定は、
-`Function.signum`と同じく境界を含む`abs(value) <= atol`をゼロとみなします。
-composed {class}`~ommx.Function`演算のサポートは、この変更とは別に下記の
+{meth}`~ommx.Instance.evaluate`と{meth}`~ommx.Instance.evaluate_samples`は、境界を含む
+`abs(value) <= atol`のSOS1 memberをゼロとみなすようになりました。これは
+`Function.signum`のゼロ判定と同じです。composed {class}`~ommx.Function`演算の
+サポートは、この変更とは別に下記の
 [#1158](https://github.com/Jij-Inc/ommx/pull/1158)で導入されています。
 
 ### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))

@@ -8,20 +8,12 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🛠 Canonicalize reconstructed decision-variable values ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
+### 🛠 Align SOS1 zero classification ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
 
-{meth}`~ommx.Instance.populate_state` treats caller-provided fixed and dependent
-coordinates only as consistency assertions. After accepting a value within
-`atol`, the returned {class}`~ommx.State` stores the exact fixed value owned by
-the Instance or the deterministic value reconstructed from the dependency.
-Downstream dependencies therefore observe canonical coordinates rather than an
-approximate assertion supplied by the caller.
-
-{meth}`~ommx.Instance.evaluate_samples` now resolves the complete dependency DAG
-for each unique input state while preserving its sample-ID grouping. SOS1
-activity now follows the same inclusive `abs(value) <= atol` zero
-classification as `Function.signum`. Support for composed
-{class}`~ommx.Function` operations is the separate
+{meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples` now
+treat an SOS1 member with `abs(value) <= atol` as zero, including the boundary.
+This matches the zero classification used by `Function.signum`. Support for
+composed {class}`~ommx.Function` operations is the separate
 [#1158](https://github.com/Jij-Inc/ommx/pull/1158) change described below.
 
 ### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))

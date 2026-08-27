@@ -77,12 +77,10 @@ impl AbsDiffEq for Instance {
         }
 
         // Compare raw output semantics rather than substituting fixed or
-        // dependent assignments. State population canonicalizes accepted
-        // assertions, so substitution would be sound for evaluation, but raw
-        // comparison deliberately remains a conservative sufficient test: two
-        // differently represented population environments need not be proved
-        // equivalent here. Structural absence is semantically the active pair
-        // with optimality transport.
+        // dependent assignments. State population accepts caller-provided
+        // values within tolerance, so symbolic substitution could amplify an
+        // accepted difference and produce a false positive here. Structural
+        // absence is semantically the active pair with optimality transport.
         let (self_output_sense, self_output, self_preserves_optimality) = output_semantics(self);
         let (other_output_sense, other_output, other_preserves_optimality) =
             output_semantics(other);
@@ -368,7 +366,7 @@ mod tests {
     }
 
     #[test]
-    fn fixed_population_is_canonicalized_while_approximation_remains_conservative() {
+    fn fixed_population_tolerance_is_not_symbolically_substituted() {
         let id = VariableID::from(1);
         let make_instance = |output| {
             let mut instance = Instance::builder()
@@ -392,7 +390,10 @@ mod tests {
         let scaled_value = *scaled.evaluate(&state, epsilon).unwrap().objective();
         let constant_value = *constant.evaluate(&state, epsilon).unwrap().objective();
 
-        assert_eq!(scaled_value, constant_value);
+        assert!(
+            (scaled_value - constant_value).abs() > epsilon.into_inner(),
+            "the accepted fixed-value perturbation must expose the old false positive",
+        );
         assert!(!scaled.abs_diff_eq(&constant, epsilon));
     }
 }
