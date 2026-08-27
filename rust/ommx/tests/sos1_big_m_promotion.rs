@@ -1,6 +1,6 @@
 use ommx::{
     coeff, v1, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance, Kind, Linear,
-    LinearMonomial, Sense, Sos1BigMPromotionWitness, Sos1BigMSelectorWitness, VariableID,
+    LinearMonomial, Sense, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim, VariableID,
 };
 use std::collections::BTreeMap;
 
@@ -49,12 +49,12 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
         ]),
     )
     .unwrap();
-    let witness = Sos1BigMPromotionWitness::new(
+    let request = Sos1BigMPromotionRequest::new(
         BTreeMap::from([
-            (VariableID::from(0), Sos1BigMSelectorWitness::Reused),
+            (VariableID::from(0), Sos1BigMSelectorClaim::Reused),
             (
                 VariableID::from(1),
-                Sos1BigMSelectorWitness::Fresh {
+                Sos1BigMSelectorClaim::Fresh {
                     selector: VariableID::from(10),
                     upper_link: Some(upper_id),
                     lower_link: Some(lower_id),
@@ -63,8 +63,9 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
         ]),
         cardinality_id,
     );
+    assert_eq!(request.selector_claims().len(), 2);
 
-    let promotion = instance.promote_sos1_big_m(&witness).unwrap();
+    let promotion = instance.promote_sos1_big_m(&request).unwrap();
 
     assert!(instance.constraints().is_empty());
     assert!(instance

@@ -1,8 +1,8 @@
 //! Checked promotion of canonical SOS1 Big-M formulations.
 //!
-//! The witness accepted here is deliberately untrusted. It identifies stable
-//! OMMX IDs and their claimed roles; the current [`Instance`] remains the sole
-//! source of truth for domains and row contents. A successful promotion
+//! The promotion request accepted here is deliberately untrusted. It identifies
+//! stable OMMX IDs and their claimed roles; the current [`Instance`] remains the
+//! sole source of truth for domains and row contents. A successful promotion
 //! compresses
 //!
 //! `Base(x) AND CanonicalSos1BigM(x, z)`
@@ -16,7 +16,7 @@
 //! become dependent variables reconstructed by a composed [`Function`].
 //!
 //! The reusable proof plan remains private and is applied only to a staged
-//! clone. This keeps witness rejection atomic and prevents a checked plan from
+//! clone. This keeps request rejection atomic and prevents a checked plan from
 //! being reused after the instance changes.
 
 use super::{
@@ -34,11 +34,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Claimed selector role for one member of a canonical SOS1 Big-M formulation.
 ///
-/// This is witness data, not a verified fact. [`Instance::promote_sos1_big_m`]
-/// checks the role against the current member domain and exact regular-row
-/// contents before changing the instance.
+/// This is an unchecked claim, not a verified fact.
+/// [`Instance::promote_sos1_big_m`] checks the role against the current member
+/// domain and exact regular-row contents before changing the instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Sos1BigMSelectorWitness {
+pub enum Sos1BigMSelectorClaim {
     /// The member itself is claimed to be a full-domain binary selector.
     Reused,
     /// A separate private binary selector is claimed for the member.
@@ -52,7 +52,7 @@ pub enum Sos1BigMSelectorWitness {
     },
 }
 
-/// Untrusted stable-ID witness for one canonical SOS1 Big-M promotion.
+/// Untrusted stable-ID request for one canonical SOS1 Big-M promotion.
 ///
 /// Map keys are the intended SOS1 members. Each value claims whether the
 /// member is reused as its selector or linked to a fresh selector. The final
@@ -60,30 +60,30 @@ pub enum Sos1BigMSelectorWitness {
 /// cardinality constraint over all claimed selectors.
 ///
 /// Bounds and coefficients are intentionally absent: validation always reads
-/// them from the current [`Instance`]. The witness is runtime-only and has no
+/// them from the current [`Instance`]. The request is runtime-only and has no
 /// serialization contract.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Sos1BigMPromotionWitness {
-    selector_roles: BTreeMap<VariableID, Sos1BigMSelectorWitness>,
+pub struct Sos1BigMPromotionRequest {
+    selector_claims: BTreeMap<VariableID, Sos1BigMSelectorClaim>,
     cardinality_constraint: ConstraintID,
 }
 
-impl Sos1BigMPromotionWitness {
-    /// Create untrusted witness data. No instance-dependent validation occurs
-    /// until [`Instance::promote_sos1_big_m`] is called.
+impl Sos1BigMPromotionRequest {
+    /// Create an untrusted promotion request. No instance-dependent validation
+    /// occurs until [`Instance::promote_sos1_big_m`] is called.
     pub fn new(
-        selector_roles: BTreeMap<VariableID, Sos1BigMSelectorWitness>,
+        selector_claims: BTreeMap<VariableID, Sos1BigMSelectorClaim>,
         cardinality_constraint: ConstraintID,
     ) -> Self {
         Self {
-            selector_roles,
+            selector_claims,
             cardinality_constraint,
         }
     }
 
     /// Claimed member-to-selector roles, keyed by intended SOS1 member ID.
-    pub fn selector_roles(&self) -> &BTreeMap<VariableID, Sos1BigMSelectorWitness> {
-        &self.selector_roles
+    pub fn selector_claims(&self) -> &BTreeMap<VariableID, Sos1BigMSelectorClaim> {
+        &self.selector_claims
     }
 
     /// Claimed canonical selector-cardinality row.
@@ -137,7 +137,7 @@ struct Sos1BigMPromotionPlan {
 impl Instance {
     /// Promote one exact canonical Big-M selector formulation to SOS1.
     ///
-    /// The witness is untrusted. This method validates all of the following
+    /// The request is untrusted. This method validates all of the following
     /// against the current instance before mutation:
     ///
     /// - a non-empty member set with finite supported domains;
@@ -156,7 +156,7 @@ impl Instance {
     /// valid history and are preserved unchanged. Unrelated nonlinear
     /// expressions and unrelated special constraints are preserved unchanged.
     /// Calling this family-specific method is the explicit request to add the
-    /// SOS1 capability to the instance; witness rejection means only that the
+    /// SOS1 capability to the instance; request rejection means only that the
     /// claimed formulation is outside this conservative checker.
     ///
     /// Canonical formulation recognition is exact. When evaluating a solver
@@ -181,9 +181,9 @@ impl Instance {
     /// applied to a staged clone before replacing `self`.
     pub fn promote_sos1_big_m(
         &mut self,
-        witness: &Sos1BigMPromotionWitness,
+        request: &Sos1BigMPromotionRequest,
     ) -> crate::Result<Sos1BigMPromotion> {
-        let plan = self.plan_sos1_big_m_promotion(witness)?;
+        let plan = self.plan_sos1_big_m_promotion(request)?;
         let mut staged = self.clone();
         for &id in &plan.result.relaxed_constraint_ids {
             staged.constraint_collection.relax(
@@ -233,14 +233,14 @@ impl Instance {
 
     fn plan_sos1_big_m_promotion(
         &self,
-        witness: &Sos1BigMPromotionWitness,
+        request: &Sos1BigMPromotionRequest,
     ) -> crate::Result<Sos1BigMPromotionPlan> {
-        if witness.selector_roles.is_empty() {
-            crate::bail!("SOS1 Big-M promotion witness must contain at least one member");
+        if request.selector_claims.is_empty() {
+            crate::bail!("SOS1 Big-M promotion request must contain at least one member");
         }
 
-        let members = witness
-            .selector_roles
+        let members = request
+            .selector_claims
             .keys()
             .copied()
             .collect::<VariableIDSet>();
@@ -248,7 +248,7 @@ impl Instance {
         let mut fresh_selector_ids = VariableIDSet::new();
         let mut relaxed_constraint_ids = BTreeSet::new();
 
-        for (&member, &role) in &witness.selector_roles {
+        for (&member, &claim) in &request.selector_claims {
             let variable = self.decision_variables().get(&member).ok_or_else(|| {
                 crate::error!(
                     { ?member },
@@ -282,8 +282,8 @@ impl Instance {
             }
 
             let is_full_binary = variable.kind() == Kind::Binary && bound == Bound::of_binary();
-            match role {
-                Sos1BigMSelectorWitness::Reused => {
+            match claim {
+                Sos1BigMSelectorClaim::Reused => {
                     if !is_full_binary {
                         crate::bail!(
                             { ?member, kind = ?variable.kind(), ?bound },
@@ -291,7 +291,7 @@ impl Instance {
                         );
                     }
                 }
-                Sos1BigMSelectorWitness::Fresh {
+                Sos1BigMSelectorClaim::Fresh {
                     selector,
                     upper_link,
                     lower_link,
@@ -357,22 +357,22 @@ impl Instance {
             }
         }
 
-        if !relaxed_constraint_ids.insert(witness.cardinality_constraint) {
+        if !relaxed_constraint_ids.insert(request.cardinality_constraint) {
             crate::bail!(
-                { cardinality = ?witness.cardinality_constraint },
+                { cardinality = ?request.cardinality_constraint },
                 "SOS1 cardinality constraint is also claimed as a member link"
             );
         }
-        let selector_ids = witness
-            .selector_roles
+        let selector_ids = request
+            .selector_claims
             .iter()
-            .map(|(&member, role)| match role {
-                Sos1BigMSelectorWitness::Reused => member,
-                Sos1BigMSelectorWitness::Fresh { selector, .. } => *selector,
+            .map(|(&member, claim)| match claim {
+                Sos1BigMSelectorClaim::Reused => member,
+                Sos1BigMSelectorClaim::Fresh { selector, .. } => *selector,
             });
         let expected_cardinality = canonical_sos1_big_m_cardinality(selector_ids)?;
         self.ensure_exact_sos1_formulation_row(
-            witness.cardinality_constraint,
+            request.cardinality_constraint,
             &expected_cardinality,
             "cardinality",
         )?;
@@ -449,7 +449,7 @@ impl Instance {
     }
 
     /// Prove that fresh selectors occur in current active solver input only in
-    /// the formulation rows claimed by the witness.
+    /// the formulation rows claimed by the request.
     ///
     /// Removed rows, named functions, and dependency RHS expressions are not
     /// solver input. They are intentionally allowed to retain references and
@@ -585,7 +585,7 @@ mod tests {
         .unwrap()
     }
 
-    fn mixed_instance() -> (Instance, Sos1BigMPromotionWitness) {
+    fn mixed_instance() -> (Instance, Sos1BigMPromotionRequest) {
         let constraints = BTreeMap::from([
             (
                 upper_row_id(),
@@ -612,12 +612,12 @@ mod tests {
             .constraints(constraints)
             .build()
             .unwrap();
-        let witness = Sos1BigMPromotionWitness::new(
+        let request = Sos1BigMPromotionRequest::new(
             BTreeMap::from([
-                (member_binary_id(), Sos1BigMSelectorWitness::Reused),
+                (member_binary_id(), Sos1BigMSelectorClaim::Reused),
                 (
                     member_integer_id(),
-                    Sos1BigMSelectorWitness::Fresh {
+                    Sos1BigMSelectorClaim::Fresh {
                         selector: selector_id(),
                         upper_link: Some(upper_row_id()),
                         lower_link: Some(lower_row_id()),
@@ -626,14 +626,14 @@ mod tests {
             ]),
             cardinality_row_id(),
         );
-        (instance, witness)
+        (instance, request)
     }
 
     fn fresh_instance(
         member: DecisionVariable,
         upper_link: Option<ConstraintID>,
         lower_link: Option<ConstraintID>,
-    ) -> (Instance, Sos1BigMPromotionWitness) {
+    ) -> (Instance, Sos1BigMPromotionRequest) {
         let bound = member.bound();
         let mut constraints = BTreeMap::new();
         if let Some(id) = upper_link {
@@ -664,10 +664,10 @@ mod tests {
             .constraints(constraints)
             .build()
             .unwrap();
-        let witness = Sos1BigMPromotionWitness::new(
+        let request = Sos1BigMPromotionRequest::new(
             BTreeMap::from([(
                 member_integer_id(),
-                Sos1BigMSelectorWitness::Fresh {
+                Sos1BigMSelectorClaim::Fresh {
                     selector: selector_id(),
                     upper_link,
                     lower_link,
@@ -675,16 +675,16 @@ mod tests {
             )]),
             cardinality_row_id(),
         );
-        (instance, witness)
+        (instance, request)
     }
 
     fn assert_atomic_rejection(
         mut instance: Instance,
-        witness: &Sos1BigMPromotionWitness,
+        request: &Sos1BigMPromotionRequest,
         expected: &str,
     ) {
         let before = instance.clone();
-        let error = instance.promote_sos1_big_m(witness).unwrap_err();
+        let error = instance.promote_sos1_big_m(request).unwrap_err();
         assert!(
             error.to_string().contains(expected),
             "expected {expected:?} in error, got: {error:#}"
@@ -694,8 +694,8 @@ mod tests {
 
     #[test]
     fn promotes_mixed_canonical_formulation_and_retains_history() {
-        let (mut instance, witness) = mixed_instance();
-        let promotion = instance.promote_sos1_big_m(&witness).unwrap();
+        let (mut instance, request) = mixed_instance();
+        let promotion = instance.promote_sos1_big_m(&request).unwrap();
 
         assert_eq!(promotion.sos1_constraint_id(), Sos1ConstraintID::from(0));
         assert_eq!(
@@ -752,9 +752,9 @@ mod tests {
             ATol::default(),
         )
         .unwrap();
-        let (mut instance, witness) =
+        let (mut instance, request) =
             fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
-        let promotion = instance.promote_sos1_big_m(&witness).unwrap();
+        let promotion = instance.promote_sos1_big_m(&request).unwrap();
         let atol = ATol::new(1.0e-6).unwrap();
 
         let near_zero = instance
@@ -865,11 +865,11 @@ mod tests {
             ]))
             .build()
             .unwrap();
-        let witness = Sos1BigMPromotionWitness::new(
+        let request = Sos1BigMPromotionRequest::new(
             BTreeMap::from([
                 (
                     first_member,
-                    Sos1BigMSelectorWitness::Fresh {
+                    Sos1BigMSelectorClaim::Fresh {
                         selector: first_selector,
                         upper_link: Some(first_link),
                         lower_link: None,
@@ -877,7 +877,7 @@ mod tests {
                 ),
                 (
                     second_member,
-                    Sos1BigMSelectorWitness::Fresh {
+                    Sos1BigMSelectorClaim::Fresh {
                         selector: second_selector,
                         upper_link: Some(second_link),
                         lower_link: None,
@@ -902,7 +902,7 @@ mod tests {
             .unwrap();
         assert!(original.feasible());
 
-        let _ = instance.promote_sos1_big_m(&witness).unwrap();
+        let _ = instance.promote_sos1_big_m(&request).unwrap();
         let promoted = instance
             .evaluate(
                 &crate::v1::State::from_iter([(1, 2.0e-6), (2, 2.0e-6)]),
@@ -917,13 +917,13 @@ mod tests {
 
     #[test]
     fn accepts_finite_member_bounds_that_exclude_zero() {
-        let (mut positive, witness) = fresh_instance(integer(1.0, 3.0), Some(upper_row_id()), None);
-        let _promotion = positive.promote_sos1_big_m(&witness).unwrap();
+        let (mut positive, request) = fresh_instance(integer(1.0, 3.0), Some(upper_row_id()), None);
+        let _promotion = positive.promote_sos1_big_m(&request).unwrap();
         assert_eq!(positive.sos1_constraints().len(), 1);
 
-        let (mut negative, witness) =
+        let (mut negative, request) =
             fresh_instance(integer(-3.0, -1.0), None, Some(lower_row_id()));
-        let _promotion = negative.promote_sos1_big_m(&witness).unwrap();
+        let _promotion = negative.promote_sos1_big_m(&request).unwrap();
         assert_eq!(negative.sos1_constraints().len(), 1);
     }
 
@@ -945,14 +945,14 @@ mod tests {
             )]),
         )
         .unwrap();
-        let witness = Sos1BigMPromotionWitness::new(
+        let request = Sos1BigMPromotionRequest::new(
             BTreeMap::from([
-                (VariableID::from(3), Sos1BigMSelectorWitness::Reused),
-                (VariableID::from(4), Sos1BigMSelectorWitness::Reused),
+                (VariableID::from(3), Sos1BigMSelectorClaim::Reused),
+                (VariableID::from(4), Sos1BigMSelectorClaim::Reused),
             ]),
             cardinality,
         );
-        let promotion = instance.promote_sos1_big_m(&witness).unwrap();
+        let promotion = instance.promote_sos1_big_m(&request).unwrap();
         assert!(promotion.fresh_selectors().is_empty());
         assert!(instance.decision_variable_dependency().is_empty());
         assert_eq!(instance.decision_variables().len(), 2);
@@ -962,7 +962,7 @@ mod tests {
 
     #[test]
     fn rejects_one_ulp_row_change_without_mutation() {
-        let (mut instance, witness) = mixed_instance();
+        let (mut instance, request) = mixed_instance();
         let changed_upper = f64::from_bits(3.0f64.to_bits() + 1);
         instance
             .constraint_collection
@@ -972,12 +972,12 @@ mod tests {
                     .unwrap(),
             )
             .unwrap();
-        assert_atomic_rejection(instance, &witness, "does not match");
+        assert_atomic_rejection(instance, &request, "does not match");
     }
 
     #[test]
     fn rejects_nonlinear_payload_with_canonical_looking_linear_terms() {
-        let (mut instance, witness) = mixed_instance();
+        let (mut instance, request) = mixed_instance();
         let linear_terms = (quadratic!(1) + (coeff!(-3.0) * quadratic!(10)).unwrap()).unwrap();
         let nonlinear = Function::from((linear_terms + quadratic!(1, 10)).unwrap());
         instance
@@ -988,7 +988,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_atomic_rejection(instance, &witness, "does not match");
+        assert_atomic_rejection(instance, &request, "does not match");
     }
 
     #[test]
@@ -996,8 +996,8 @@ mod tests {
         let fixed_binary =
             DecisionVariable::new(Kind::Binary, Bound::new(1.0, 1.0).unwrap(), ATol::default())
                 .unwrap();
-        let (instance, witness) = fresh_instance(fixed_binary, Some(upper_row_id()), None);
-        assert_atomic_rejection(instance, &witness, "Binary SOS1 member");
+        let (instance, request) = fresh_instance(fixed_binary, Some(upper_row_id()), None);
+        assert_atomic_rejection(instance, &request, "Binary SOS1 member");
 
         let semi = DecisionVariable::new(
             Kind::SemiContinuous,
@@ -1005,41 +1005,41 @@ mod tests {
             ATol::default(),
         )
         .unwrap();
-        let (instance, witness) = fresh_instance(semi, Some(upper_row_id()), Some(lower_row_id()));
-        assert_atomic_rejection(instance, &witness, "semi-variable");
+        let (instance, request) = fresh_instance(semi, Some(upper_row_id()), Some(lower_row_id()));
+        assert_atomic_rejection(instance, &request, "semi-variable");
     }
 
     #[test]
-    fn rejects_structurally_invalid_witnesses_without_mutation() {
+    fn rejects_structurally_invalid_requests_without_mutation() {
         let mut empty = Instance::default();
-        let empty_witness = Sos1BigMPromotionWitness::new(BTreeMap::new(), ConstraintID::from(0));
+        let empty_request = Sos1BigMPromotionRequest::new(BTreeMap::new(), ConstraintID::from(0));
         let before = empty.clone();
         assert!(empty
-            .promote_sos1_big_m(&empty_witness)
+            .promote_sos1_big_m(&empty_request)
             .unwrap_err()
             .to_string()
             .contains("at least one member"));
         assert_eq!(empty, before);
 
-        let (instance, mut collision) = mixed_instance();
-        collision.selector_roles.insert(
+        let (instance, mut collision_request) = mixed_instance();
+        collision_request.selector_claims.insert(
             member_integer_id(),
-            Sos1BigMSelectorWitness::Fresh {
+            Sos1BigMSelectorClaim::Fresh {
                 selector: member_binary_id(),
                 upper_link: Some(upper_row_id()),
                 lower_link: Some(lower_row_id()),
             },
         );
-        assert_atomic_rejection(instance, &collision, "collides");
+        assert_atomic_rejection(instance, &collision_request, "collides");
 
-        let (instance, mut duplicate_row) = mixed_instance();
-        duplicate_row.cardinality_constraint = upper_row_id();
-        assert_atomic_rejection(instance, &duplicate_row, "also claimed");
+        let (instance, mut duplicate_row_request) = mixed_instance();
+        duplicate_row_request.cardinality_constraint = upper_row_id();
+        assert_atomic_rejection(instance, &duplicate_row_request, "also claimed");
     }
 
     #[test]
     fn preserves_selector_labels_and_relaxed_row_context() {
-        let (mut instance, witness) = mixed_instance();
+        let (mut instance, request) = mixed_instance();
         instance
             .set_variable_label(
                 selector_id(),
@@ -1061,7 +1061,7 @@ mod tests {
                 },
             )
             .unwrap();
-        let _ = instance.promote_sos1_big_m(&witness).unwrap();
+        let _ = instance.promote_sos1_big_m(&request).unwrap();
 
         assert_eq!(
             instance.variable_labels().name(selector_id()),
@@ -1076,11 +1076,11 @@ mod tests {
 
     #[test]
     fn fresh_selector_isolation_rejects_retained_active_solver_usage() {
-        let (base, witness) = mixed_instance();
+        let (base, request) = mixed_instance();
 
         let mut instance = base.clone();
         instance.set_objective(Function::from(linear!(10))).unwrap();
-        assert_atomic_rejection(instance, &witness, "the objective");
+        assert_atomic_rejection(instance, &request, "the objective");
 
         let mut instance = base.clone();
         instance
@@ -1089,7 +1089,7 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
-        assert_atomic_rejection(instance, &witness, "retained active regular");
+        assert_atomic_rejection(instance, &request, "retained active regular");
 
         let mut instance = base.clone();
         instance
@@ -1102,7 +1102,7 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
-        assert_atomic_rejection(instance, &witness, "active Indicator");
+        assert_atomic_rejection(instance, &request, "active Indicator");
 
         let mut instance = base.clone();
         instance
@@ -1111,7 +1111,7 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
-        assert_atomic_rejection(instance, &witness, "active OneHot");
+        assert_atomic_rejection(instance, &request, "active OneHot");
 
         let mut instance = base.clone();
         instance
@@ -1120,24 +1120,24 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
-        assert_atomic_rejection(instance, &witness, "active SOS1");
+        assert_atomic_rejection(instance, &request, "active SOS1");
 
         let mut instance = base.clone();
         instance.decision_variable_dependency =
             AcyclicAssignments::new([(selector_id(), Function::Zero)]).unwrap();
-        assert_atomic_rejection(instance, &witness, "dependency target");
+        assert_atomic_rejection(instance, &request, "dependency target");
 
         let mut instance = base;
         instance
             .decision_variables
             .set_fixed_value(selector_id(), 0.0, ATol::default())
             .unwrap();
-        assert_atomic_rejection(instance, &witness, "is fixed");
+        assert_atomic_rejection(instance, &request, "is fixed");
     }
 
     #[test]
     fn removed_named_and_dependency_rhs_references_are_preserved() {
-        let (mut instance, witness) = mixed_instance();
+        let (mut instance, request) = mixed_instance();
 
         instance.output_objective = Some(crate::OutputObjective::new(
             Sense::Minimize,
@@ -1205,7 +1205,7 @@ mod tests {
         instance.decision_variable_dependency =
             AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)))]).unwrap();
 
-        let _ = instance.promote_sos1_big_m(&witness).unwrap();
+        let _ = instance.promote_sos1_big_m(&request).unwrap();
 
         assert!(instance.removed_constraints().contains_key(&regular_id));
         assert!(instance
@@ -1235,8 +1235,8 @@ mod tests {
 
     #[test]
     fn dependent_selector_reconstruction_validates_input_state() {
-        let (mut instance, witness) = mixed_instance();
-        let _ = instance.promote_sos1_big_m(&witness).unwrap();
+        let (mut instance, request) = mixed_instance();
+        let _ = instance.promote_sos1_big_m(&request).unwrap();
 
         let inconsistent = instance
             .populate_state(
