@@ -426,7 +426,15 @@ impl DecisionVariable {
     /// Reverse addition (lhs + self)
     #[gen_stub(skip)]
     pub fn __radd__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
-        self.py_add(py, lhs) // Addition is commutative
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs + ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_add(py, lhs),
+        }
     }
 
     /// Polymorphic subtraction. See `py_add`.
@@ -464,9 +472,19 @@ impl DecisionVariable {
     /// Reverse subtraction (lhs - self)
     #[gen_stub(skip)]
     pub fn __rsub__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
-        // lhs - self = -self + lhs
-        let neg = self.__neg__();
-        neg.py_add(py, lhs)
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs - ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => {
+                // lhs - self = -self + lhs for compact polynomial inputs.
+                let neg = self.__neg__();
+                neg.py_add(py, lhs)
+            }
+        }
     }
 
     /// Polymorphic multiplication. See `py_add`.
@@ -505,7 +523,15 @@ impl DecisionVariable {
     /// Reverse multiplication (lhs * self)
     #[gen_stub(skip)]
     pub fn __rmul__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
-        self.py_mul(py, lhs) // Multiplication is commutative
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs * ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_mul(py, lhs),
+        }
     }
 
     // =====================
@@ -903,7 +929,15 @@ impl AttachedDecisionVariable {
 
     #[gen_stub(skip)]
     pub fn __radd__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
-        self.py_add(py, lhs)
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs + ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_add(py, lhs),
+        }
     }
 
     #[gen_stub(skip)]
@@ -939,8 +973,18 @@ impl AttachedDecisionVariable {
 
     #[gen_stub(skip)]
     pub fn __rsub__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
-        let neg = self.__neg__();
-        neg.py_add(py, lhs)
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs - ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => {
+                let neg = self.__neg__();
+                neg.py_add(py, lhs)
+            }
+        }
     }
 
     #[gen_stub(skip)]
@@ -977,7 +1021,15 @@ impl AttachedDecisionVariable {
 
     #[gen_stub(skip)]
     pub fn __rmul__(&self, py: Python<'_>, lhs: crate::FunctionInput) -> OmmxPyResult<Py<PyAny>> {
-        self.py_mul(py, lhs)
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs * ommx::Function::from(self.as_linear()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_mul(py, lhs),
+        }
     }
 
     // =====================

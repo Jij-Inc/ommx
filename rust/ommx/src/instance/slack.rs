@@ -58,6 +58,8 @@ impl Instance {
     /// [`InfeasibleDetected`] when variable bounds prove the inequality
     /// infeasible. Missing constraints, unsupported variable kinds, allocation,
     /// and coefficient-arithmetic failures retain their ordinary error types.
+    /// Feasibility and triviality are classified with the supplied `atol`,
+    /// matching [`crate::EvaluatedConstraint`] semantics.
     pub fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
         constraint_id: u64,
@@ -90,27 +92,17 @@ impl Instance {
             }
         }
 
-        let a = function.content_factor().map_err(|source| {
-            source.context(ExactIntegerSlackUnavailable::coefficients_not_normalizable(
-                constraint_id,
-            ))
-        })?;
-        let af = (function.clone() * a)?;
-
-        let af_bound = af.evaluate_bound(&bounds);
-        let af_bound = af_bound.as_integer_bound(atol).ok_or(
-            InfeasibleDetected::InequalityConstraintBound {
-                id: constraint_id,
-                bound: af_bound,
-            },
-        )?;
-        if af_bound.lower() > 0.0 {
+        // Constraint feasibility is defined by `f(x) < atol`, not by exact
+        // comparison with zero. Classify the original (unscaled) function so
+        // coefficient normalization cannot change that tolerance boundary.
+        let f_bound = function.evaluate_bound(&bounds, atol)?;
+        if f_bound.lower() >= *atol {
             bail!(InfeasibleDetected::InequalityConstraintBound {
                 id: constraint_id,
-                bound: af_bound,
+                bound: f_bound,
             });
         }
-        if af_bound.upper() <= 0.0 {
+        if f_bound.upper() < *atol {
             self.relax_constraint(
                 constraint_id,
                 "ommx.Instance.convert_inequality_to_equality_with_integer_slack".to_string(),
@@ -119,7 +111,23 @@ impl Instance {
             return Ok(());
         }
 
-        let slack_bound = Bound::new(0.0, -af_bound.lower()).unwrap();
+        let a = function.content_factor().map_err(|source| {
+            source.context(ExactIntegerSlackUnavailable::coefficients_not_normalizable(
+                constraint_id,
+            ))
+        })?;
+        let af = (function.clone() * a)?;
+
+        let af_bound = af.evaluate_bound(&bounds, atol)?;
+        let af_bound = af_bound.as_integer_bound(atol).ok_or(
+            InfeasibleDetected::InequalityConstraintBound {
+                id: constraint_id,
+                bound: af_bound,
+            },
+        )?;
+        // A positive minimum can still be feasible when it is below `atol`.
+        // In that case s=0 preserves the original tolerance classification.
+        let slack_bound = Bound::new(0.0, (-af_bound.lower()).max(0.0)).unwrap();
         if slack_bound.width() > max_integer_range as f64 {
             return Err(ExactIntegerSlackUnavailable::range_too_large(
                 constraint_id,
@@ -171,10 +179,14 @@ impl Instance {
     /// Returns the coefficient $b = -\mathrm{lower}(f(x)) / \text{slack\_upper\_bound}$.
     /// Returns `None` if the constraint was trivially satisfied and was moved to
     /// removed_constraints.
+    /// `atol` controls both zero-sensitive operations while computing the
+    /// function bound and the inequality feasibility threshold used to classify
+    /// infeasible or trivial bounds.
     pub fn add_integer_slack_to_inequality(
         &mut self,
         constraint_id: u64,
         slack_upper_bound: u64,
+        atol: ATol,
     ) -> Result<Option<f64>> {
         let constraint_id = ConstraintID::from(constraint_id);
         let bounds = self.bounds();
@@ -202,14 +214,14 @@ impl Instance {
             }
         }
 
-        let f_bound = function.evaluate_bound(&bounds);
-        if f_bound.lower() > 0.0 {
+        let f_bound = function.evaluate_bound(&bounds, atol)?;
+        if f_bound.lower() >= *atol {
             bail!(InfeasibleDetected::InequalityConstraintBound {
                 id: constraint_id,
                 bound: f_bound,
             });
         }
-        if f_bound.upper() <= 0.0 {
+        if f_bound.upper() < *atol {
             self.relax_constraint(
                 constraint_id,
                 "add_integer_slack_to_inequality".to_string(),
@@ -218,15 +230,20 @@ impl Instance {
             return Ok(None);
         }
 
-        let b = -f_bound.lower() / slack_upper_bound as f64;
+        let slack_magnitude = (-f_bound.lower()).max(0.0);
+        let b = if slack_magnitude == 0.0 {
+            0.0
+        } else {
+            slack_magnitude / slack_upper_bound as f64
+        };
         let slack_bound = Bound::new(0.0, slack_upper_bound as f64).unwrap();
 
         // Validate the slack coefficient before mutating the instance so failures
         // (e.g. `slack_upper_bound == 0` giving `b = inf`) do not leave an orphan
-        // slack decision variable behind. `b` is non-negative in this branch (we
-        // bailed on lower > 0 and relaxed when upper <= 0). `b == 0` only when
-        // `f_bound.lower() == 0`, which is a boundary case; adding a zero-coefficient
-        // slack term is mathematically a no-op so we skip the term in that case,
+        // slack decision variable behind. `b` is non-negative in this branch.
+        // `b == 0` when every bounded value is non-negative but some are still
+        // feasible under `atol`; adding a zero-coefficient slack term is a no-op,
+        // so we skip the term in that case,
         // matching v1 observable behavior (where a zero coefficient is dropped on
         // insertion).
         let b_coeff = match Coefficient::try_from(b) {
@@ -244,7 +261,7 @@ impl Instance {
                 ..Default::default()
             },
             None,
-            ATol::default(),
+            atol,
         )?;
 
         let new_function = match b_coeff {
@@ -290,6 +307,22 @@ mod tests {
     use super::*;
     use crate::{coeff, linear, ConstraintID, DecisionVariable, Function, Sense, VariableID};
     use maplit::btreemap;
+    use std::collections::BTreeMap;
+
+    fn tolerance_boundary_instance() -> Instance {
+        let id = VariableID::from(1);
+        let function = ((coeff!(1.0) * linear!(id)).unwrap() + coeff!(0.5)).unwrap();
+        Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            btreemap! { id => DecisionVariable::binary() },
+            btreemap! {
+                ConstraintID::from(0) =>
+                    crate::Constraint::less_than_or_equal_to_zero(Function::from(function)),
+            },
+        )
+        .unwrap()
+    }
 
     #[test]
     fn converts_integer_inequality_to_equality_with_slack() {
@@ -331,6 +364,97 @@ mod tests {
             .decision_variables
             .keys()
             .any(|id| store.name(*id) == Some("ommx.slack")));
+    }
+
+    #[test]
+    fn exact_integer_slack_uses_constraint_atol_at_a_positive_lower_bound() {
+        // f(0)=0.5 is feasible and f(1)=1.5 is infeasible at atol=1. The
+        // integer-normalized bound is [1, 3], so an exact-zero check would
+        // incorrectly reject the whole constraint as infeasible.
+        let atol = ATol::new(1.0).unwrap();
+        let mut instance = tolerance_boundary_instance();
+
+        instance
+            .convert_inequality_to_equality_with_integer_slack(0, 1, atol)
+            .unwrap();
+
+        let slack_id = instance
+            .decision_variables()
+            .keys()
+            .copied()
+            .find(|id| instance.variable_labels().name(*id) == Some("ommx.slack"))
+            .unwrap();
+        let constraint = &instance.constraints()[&ConstraintID::from(0)];
+        let feasible = constraint
+            .evaluate(
+                &crate::v1::State::from_iter([(1, 0.0), (slack_id.into_inner(), 0.0)]),
+                atol,
+            )
+            .unwrap();
+        let infeasible = constraint
+            .evaluate(
+                &crate::v1::State::from_iter([(1, 1.0), (slack_id.into_inner(), 0.0)]),
+                atol,
+            )
+            .unwrap();
+        assert!(feasible.is_feasible_with_tolerance(atol));
+        assert!(!infeasible.is_feasible_with_tolerance(atol));
+    }
+
+    #[test]
+    fn inequality_preserving_slack_uses_constraint_atol_at_a_positive_lower_bound() {
+        let atol = ATol::new(1.0).unwrap();
+        let mut instance = tolerance_boundary_instance();
+
+        let coefficient = instance
+            .add_integer_slack_to_inequality(0, 1, atol)
+            .unwrap();
+        assert_eq!(coefficient, Some(0.0));
+
+        let constraint = &instance.constraints()[&ConstraintID::from(0)];
+        let feasible = constraint
+            .evaluate(&crate::v1::State::from_iter([(1, 0.0)]), atol)
+            .unwrap();
+        let infeasible = constraint
+            .evaluate(&crate::v1::State::from_iter([(1, 1.0)]), atol)
+            .unwrap();
+        assert!(feasible.is_feasible_with_tolerance(atol));
+        assert!(!infeasible.is_feasible_with_tolerance(atol));
+    }
+
+    #[test]
+    fn slack_conversion_relaxes_a_positive_but_tolerance_feasible_constraint() {
+        let atol = ATol::new(1.0).unwrap();
+        for exact in [true, false] {
+            let mut instance = Instance::new(
+                Sense::Minimize,
+                Function::Zero,
+                BTreeMap::new(),
+                btreemap! {
+                    ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(
+                        Function::try_from(0.5).unwrap()
+                    ),
+                },
+            )
+            .unwrap();
+
+            if exact {
+                instance
+                    .convert_inequality_to_equality_with_integer_slack(0, 1, atol)
+                    .unwrap();
+            } else {
+                assert_eq!(
+                    instance
+                        .add_integer_slack_to_inequality(0, 1, atol)
+                        .unwrap(),
+                    None
+                );
+            }
+            assert!(instance.constraints().is_empty());
+            assert!(instance
+                .removed_constraints()
+                .contains_key(&ConstraintID::from(0)));
+        }
     }
 
     #[test]
@@ -410,7 +534,7 @@ mod tests {
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
 
         let b = instance
-            .add_integer_slack_to_inequality(0, 2)
+            .add_integer_slack_to_inequality(0, 2, ATol::default())
             .unwrap()
             .expect("constraint should still be active");
         assert!(b > 0.0);
@@ -445,7 +569,9 @@ mod tests {
         };
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
 
-        let result = instance.add_integer_slack_to_inequality(0, 2).unwrap();
+        let result = instance
+            .add_integer_slack_to_inequality(0, 2, ATol::default())
+            .unwrap();
         assert!(result.is_none());
         assert!(instance.constraints().is_empty());
         assert_eq!(instance.removed_constraints().len(), 1);
@@ -472,7 +598,9 @@ mod tests {
         let mut instance = Instance::new(Sense::Minimize, objective, dv, constraints).unwrap();
         let before = instance.decision_variables.len();
 
-        let err = instance.add_integer_slack_to_inequality(0, 0).unwrap_err();
+        let err = instance
+            .add_integer_slack_to_inequality(0, 0, ATol::default())
+            .unwrap_err();
         assert!(err.to_string().to_lowercase().contains("finite"));
         // No slack variable should have been added on the failure path.
         assert_eq!(instance.decision_variables.len(), before);

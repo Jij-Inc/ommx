@@ -120,14 +120,18 @@ mod tests {
     use ommx::Parse as _;
     use proptest::{prelude::*, string::string_regex};
 
+    fn deeply_composed_function(operation_count: usize) -> ommx::Function {
+        (0..operation_count).fold(ommx::Function::from(ommx::linear!(1)), |function, level| {
+            if level % 2 == 0 {
+                function.abs()
+            } else {
+                function.signum()
+            }
+        })
+    }
+
     fn arbitrary_function() -> impl Strategy<Value = ommx::Function> {
-        prop_oneof![
-            Just(ommx::Function::Zero),
-            any::<ommx::Coefficient>().prop_map(ommx::Function::Constant),
-            any::<ommx::Linear>().prop_map(ommx::Function::Linear),
-            any::<ommx::Quadratic>().prop_map(ommx::Function::Quadratic),
-            any::<ommx::Polynomial>().prop_map(ommx::Function::Polynomial),
-        ]
+        ommx::Function::arbitrary()
     }
 
     fn arbitrary_constraint() -> impl Strategy<Value = ommx::Constraint> {
@@ -182,7 +186,7 @@ mod tests {
         #![proptest_config(ProptestConfig::with_cases(64))]
 
         #[test]
-        fn function_payload_preserves_all_function_variants(function in arbitrary_function()) {
+        fn function_payload_roundtrips_arbitrary_functions(function in arbitrary_function()) {
             let expected = function.clone();
             let payload = function_payload(function);
             let actual = ommx::Function::from_bytes(&payload).unwrap();
@@ -242,5 +246,25 @@ mod tests {
             let actual = ommx::Instance::from_v2_bytes(&payload).unwrap();
             prop_assert_eq!(actual, expected);
         }
+    }
+
+    #[test]
+    fn deep_function_and_constraint_payloads_roundtrip() {
+        let function = deeply_composed_function(4096);
+        let function_bytes = function_payload(function.clone());
+        assert_eq!(
+            ommx::Function::from_bytes(&function_bytes).unwrap(),
+            function
+        );
+
+        let constraint = ommx::Constraint::equal_to_zero(function);
+        let (constraint_bytes, _) = constraint_payloads(constraint.clone(), Default::default());
+        assert_eq!(
+            ommx::v2::RegularConstraint::decode(constraint_bytes.as_slice())
+                .unwrap()
+                .parse(&())
+                .unwrap(),
+            constraint,
+        );
     }
 }

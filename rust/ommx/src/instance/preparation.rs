@@ -13,6 +13,8 @@ pub enum SpecialConstraintPreparation {
     LowerSpecialConstraints {
         /// Special-constraint kinds passed to the owner operation.
         kinds: SpecialConstraintKinds,
+        /// Absolute tolerance used when bounding tolerance-sensitive Indicator bodies.
+        atol: ATol,
     },
 }
 
@@ -231,6 +233,7 @@ impl PreparationPolicy {
                 ]
                 .into_iter()
                 .collect(),
+                atol: ATol::default(),
             }),
             objective: Some(ObjectivePreparation {
                 target: Sense::Minimize,
@@ -282,8 +285,8 @@ trait PreparationStep {
 impl PreparationStep for SpecialConstraintPreparation {
     fn apply(&self, instance: &mut Instance) -> crate::Result<()> {
         match self {
-            Self::LowerSpecialConstraints { kinds } => {
-                instance.lower_special_constraints(kinds)?;
+            Self::LowerSpecialConstraints { kinds, atol } => {
+                instance.lower_special_constraints(kinds, *atol)?;
             }
         }
         Ok(())
@@ -318,7 +321,11 @@ impl PreparationStep for IntegerSlackPreparation {
                     let Some(slack_upper_bound) = self.slack_upper_bound else {
                         return Err(error);
                     };
-                    instance.add_integer_slack_to_inequality(id.into_inner(), slack_upper_bound)?;
+                    instance.add_integer_slack_to_inequality(
+                        id.into_inner(),
+                        slack_upper_bound,
+                        self.atol,
+                    )?;
                 }
                 Err(error) => return Err(error),
             }
@@ -486,8 +493,8 @@ mod tests {
     use super::*;
     use crate::{
         coeff, linear, quadratic, Bound, Constraint, DecisionVariable, DecisionVariableRole,
-        DegreeBound, Evaluate, ExactIntegerSlackUnavailable, Function, InfeasibleDetected,
-        InstanceClassClause, Kind, MonomialDyn, OneHotConstraint, OneHotConstraintID, Polynomial,
+        Evaluate, ExactIntegerSlackUnavailable, Function, InfeasibleDetected, InstanceClassClause,
+        Kind, MonomialDyn, OneHotConstraint, OneHotConstraintID, Polynomial, PolynomialRequirement,
         Sense, SpecialConstraintKind, VariableID,
     };
     use std::collections::BTreeSet;
@@ -495,12 +502,12 @@ mod tests {
     fn unconstrained_class(
         label: &str,
         allowed_variable_kinds: impl IntoIterator<Item = Kind>,
-        objective_degree_bound: DegreeBound,
+        objective_polynomial_requirement: PolynomialRequirement,
     ) -> InstanceClass {
         InstanceClassClause::new(
             label,
             allowed_variable_kinds.into_iter().collect(),
-            objective_degree_bound,
+            objective_polynomial_requirement,
             BTreeSet::from([Sense::Minimize]),
         )
         .into()
@@ -548,7 +555,7 @@ mod tests {
             .unwrap();
 
         assert!(InstanceClass::qubo().contains(&instance));
-        assert_eq!(instance.objective().degree(), crate::Degree::from(1));
+        assert_eq!(instance.objective().degree(), Some(crate::Degree::from(1)));
         assert_eq!(
             instance.objective().required_ids(),
             crate::VariableIDSet::from([variable])
@@ -638,7 +645,7 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        let target = unconstrained_class("constant", [], DegreeBound::at_most(0));
+        let target = unconstrained_class("constant", [], PolynomialRequirement::at_most(0));
         let policy = PreparationPolicy {
             fixed_penalty: Some(FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
                 weights: BTreeMap::from([(ConstraintID::from(999), 1.0)]),
@@ -660,10 +667,10 @@ mod tests {
         let target = InstanceClassClause::new(
             "integer equality",
             BTreeSet::from([Kind::Integer]),
-            DegreeBound::at_most(1),
+            PolynomialRequirement::at_most(1),
             BTreeSet::from([Sense::Minimize]),
         )
-        .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))
+        .with_regular_constraint(Equality::EqualToZero, PolynomialRequirement::at_most(1))
         .into();
         let policy = PreparationPolicy {
             integer_slack: Some(IntegerSlackPreparation {
@@ -685,10 +692,10 @@ mod tests {
         let target = InstanceClassClause::new(
             "integer equality",
             BTreeSet::from([Kind::Integer]),
-            DegreeBound::at_most(1),
+            PolynomialRequirement::at_most(1),
             BTreeSet::from([Sense::Minimize]),
         )
-        .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))
+        .with_regular_constraint(Equality::EqualToZero, PolynomialRequirement::at_most(1))
         .into();
         let policy = PreparationPolicy {
             integer_slack: Some(IntegerSlackPreparation {
@@ -710,10 +717,10 @@ mod tests {
         let target = InstanceClassClause::new(
             "integer equality",
             BTreeSet::from([Kind::Integer]),
-            DegreeBound::at_most(1),
+            PolynomialRequirement::at_most(1),
             BTreeSet::from([Sense::Minimize]),
         )
-        .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))
+        .with_regular_constraint(Equality::EqualToZero, PolynomialRequirement::at_most(1))
         .into();
         let policy = PreparationPolicy {
             integer_slack: Some(IntegerSlackPreparation {
@@ -764,10 +771,13 @@ mod tests {
         let target: InstanceClass = InstanceClassClause::new(
             "linear integer inequalities",
             BTreeSet::from([Kind::Integer]),
-            DegreeBound::at_most(0),
+            PolynomialRequirement::at_most(0),
             BTreeSet::from([Sense::Minimize]),
         )
-        .with_regular_constraint(Equality::LessThanOrEqualToZero, DegreeBound::at_most(1))
+        .with_regular_constraint(
+            Equality::LessThanOrEqualToZero,
+            PolynomialRequirement::at_most(1),
+        )
         .into();
         let policy = PreparationPolicy {
             integer_slack: Some(IntegerSlackPreparation {
@@ -822,11 +832,15 @@ mod tests {
             .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
             .build()
             .unwrap();
-        let target =
-            unconstrained_class("binary quadratic", [Kind::Binary], DegreeBound::at_most(2));
+        let target = unconstrained_class(
+            "binary quadratic",
+            [Kind::Binary],
+            PolynomialRequirement::at_most(2),
+        );
         let policy = PreparationPolicy {
             special_constraints: Some(SpecialConstraintPreparation::LowerSpecialConstraints {
                 kinds: BTreeSet::from([SpecialConstraintKind::OneHot]),
+                atol: ATol::default(),
             }),
             objective: Some(ObjectivePreparation {
                 target: Sense::Minimize,
@@ -844,7 +858,7 @@ mod tests {
         assert!(matches!(
             error.downcast_ref::<InfeasibleDetected>(),
             Some(InfeasibleDetected::InequalityConstraintBound { id, bound })
-                if *id == infeasible_id && *bound == Bound::new(2.0, 3.0).unwrap()
+                if *id == infeasible_id && *bound == Bound::new(1.0, 1.5).unwrap()
         ));
         assert_eq!(instance.sense(), Sense::Minimize);
         assert_eq!(instance.removed_one_hot_constraints().len(), 1);
@@ -870,7 +884,7 @@ mod tests {
         let target = unconstrained_class(
             "unconstrained binary",
             [Kind::Binary],
-            DegreeBound::at_most(1),
+            PolynomialRequirement::at_most(1),
         );
         let policy = PreparationPolicy {
             objective: Some(ObjectivePreparation {

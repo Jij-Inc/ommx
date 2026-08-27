@@ -510,7 +510,7 @@ ENDATA
     assert_eq!(instance.constraints().len(), 1);
 
     // The objective should be quadratic
-    assert_eq!(instance.objective().degree(), 2);
+    assert_eq!(instance.objective().degree(), Some(2.into()));
 
     // Get variables using the new helper method
     let (x1_id, _x1) = instance
@@ -571,7 +571,7 @@ ENDATA
 
     // The constraint should be quadratic
     let (_cid, constraint) = instance.constraints().iter().next().unwrap();
-    assert_eq!(constraint.function().degree(), 2);
+    assert_eq!(constraint.function().degree(), Some(2.into()));
 
     // Build expected constraint function: 2*x1 + 4*x2 + 0.5*x1^2 + x1*x2 - 10 <= 0
     // Note: RHS is moved to LHS, so the constant term is -10

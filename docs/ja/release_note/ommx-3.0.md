@@ -8,6 +8,72 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))
+
+{class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
+なりました。絶対値、符号関数、最小値、最大値、除算、符号付き32 bit整数による
+累乗をPythonから直接構築できます。
+
+```python
+from ommx import DecisionVariable, Function
+
+x = Function(DecisionVariable.continuous(1))
+y = Function(DecisionVariable.continuous(2))
+z = Function(DecisionVariable.continuous(3))
+
+f = abs(x - 2).maximum(y) / (z + 1)
+g = f**2
+h = f.powi(-2)
+```
+
+名前付きの演算には {meth}`~ommx.Function.signum`、
+{meth}`~ommx.Function.minimum`、{meth}`~ommx.Function.maximum` を使用します。
+`f**n` と {meth}`~ommx.Function.powi` は同じ演算です。浮動小数や関数値の指数、
+および反転累乗はサポートしません。評価時には、境界を含む
+`abs(value) <= atol`をゼロと判定します。`signum`は`0`を返し、そのように
+判定された値を分母にする除算や負の整数による累乗は`ValueError`になります。
+複合式はOMMX protobuf payloadへ
+flat な逆ポーランド記法（RPN）の命令列としてserializeされます。現在提供している
+HiGHS、Python-MIP、PySCIPOpt、OpenJijの全adapterはpolynomialのみを受け付ける
+input classを宣言しているため、各adapterが受け付けるfunction positionの複合式を
+拒否します。
+
+ゼロに依存する`Signum`、`Div`、負の`Powi`ノードは、式の構築、代入、部分評価を
+経ても保持されます。後続の評価処理に渡す`atol`が、結果または定義域エラーを
+決定します。特に、`Function`を定数や係数で除算した場合も複合式のままです。
+`Function.evaluate_bound(..., atol=...)`も同じゼロ判定を区間評価へ適用します。
+IndicatorのBig-M変換、特殊制約のlowering、integer slack変換も、導出するbound用の
+`atol=`を受け取ります。これによりFunction bodyのゼロ判定は整合しますが、代数的な
+loweringは離散値が厳密であることを仮定し、0や1に近いsolver出力を丸める処理は
+行いません。省略時は`DEFAULT_ATOL`が使われます。integer slack変換は係数の正規化前に、
+評価と同じ厳密な条件 $f(x) < \mathtt{atol}$ で不等式を分類するため、微小な正値が
+scaleによって暗黙に再分類されることはありません。厳密な多項式正規化は有限かつ
+非ゼロの係数をすべて保持し、許容誤差によるcleanupを暗黙には行いません。近似的な
+cleanupを将来提供する場合は、別の明示的なAPIになります。
+
+`Function`が常にpolynomialとは限らなくなったため、複合式に対する
+{meth}`~ommx.Function.degree` と {meth}`~ommx.Function.num_terms` は`None`を返します。
+polynomial termのaccessorと {meth}`~ommx.Function.content_factor` は、複合式を空の
+polynomialとして扱わず`TypeError`を送出します。演算順序、evaluation error、
+serializationの詳細は [Function user guide](../user_guide/function.md) を参照してください。
+
+Instance class APIでは、このpolynomial要件を名前から明示するようにしました。
+Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含まれます。
+
+| 変更前 | 変更後 |
+|---|---|
+| `DegreeBound` | `PolynomialRequirement` |
+| `DegreeBound.at_most(n)` | `PolynomialRequirement.at_most(n)` |
+| `DegreeBound.unbounded()` | `PolynomialRequirement.any_degree()` |
+| `bound.maximum` | `requirement.maximum_degree` |
+| `bound.includes(degree)` | `requirement.accepts_degree(degree)` |
+| `objective_degree_bound` | `objective_polynomial_requirement` |
+| `regular_constraint_degree_bounds` | `regular_constraint_polynomial_requirements` |
+| `indicator_constraint_degree_bounds` | `indicator_body_polynomial_requirements` |
+
+`PolynomialRequirement.any_degree()`が受け付けるのは任意次数のpolynomialであり、
+複合された非polynomialの`Function`は含みません。
+
 ### ⚠ `solve()`と`sample()`が入力を自動的にPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 
 `SolverAdapter.solve()`と`SamplerAdapter.sample()`は実行前にAdapterの推奨Preparationを

@@ -31,14 +31,14 @@ OMMX では、従来 Adapter Capability として一緒に説明されていた�
 `InstanceClass` は、条件を論理積でまとめた完全な {class}`~ommx.InstanceClassClause` の有限和です。membership は入力値そのものに対して評価され、入力の変更や preparation は行いません。
 
 ```{code-cell} ipython3
-from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
+from ommx import InstanceClass, InstanceClassClause, Kind, PolynomialRequirement, Sense
 
 binary_linear_with_one_hot = InstanceClass(
     [
         InstanceClassClause(
             label="binary-linear-with-one-hot",
             allowed_variable_kinds={Kind.Binary},
-            objective_degree_bound=DegreeBound.at_most(1),
+            objective_polynomial_requirement=PolynomialRequirement.at_most(1),
             allowed_senses={Sense.Maximize},
             allows_one_hot=True,
         )
@@ -81,6 +81,8 @@ assert binary_linear_with_one_hot.contains(instance)
 ## lower_special_constraints による明示的な lowering
 
 {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` は、明示的に呼び出す mutating operation です。このメソッドは `kinds_to_lower` として選択された特殊制約 family が active な場合に、対応する変換 API（後述）を使って通常制約に変換します。集合に含めなかった family は active なまま残り、空集合は no-op です。
+
+Indicator 制約を lowering する場合、複合 function の区間評価で使うゼロの意味論を `atol=` で指定します。省略時は {attr}`~ommx.DEFAULT_ATOL` が使われます。これにより Function body の評価は整合しますが、代数的な lowering は離散値が厳密であることを仮定しており、0 や 1 に近い solver 出力を丸める処理は行いません。
 
 ```{code-cell} ipython3
 lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
@@ -161,6 +163,8 @@ $$
 - 等式 $= 0$ の Indicator では上下両側を独立に判定し、$u > 0$ なら上側、$l < 0$ なら下側を追加します。
 
 全 Indicator の一括変換は {meth}`~ommx.Instance.convert_all_indicators_to_constraints` です。$f(x)$ の必要な側の境界が非有限だったり、semi-continuous / semi-integer 変数を含む場合は変換前にエラーを返し、インスタンスは変更されません。
+
+2つの Indicator 変換メソッドはいずれも `atol=` を受け取ります。この tolerance は、`signum`、除算、負の整数べきといったゼロに依存するノードの区間評価に渡されます。省略時は {attr}`~ommx.DEFAULT_ATOL` が使われます。Big-M の恒等式は indicator 値が厳密に binary であることを仮定します。近似的な solver 出力を丸めてから通常制約を評価する機能ではありません。
 
 ## 変換結果の監査
 
