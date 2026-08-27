@@ -474,6 +474,7 @@ mod tests {
         let err = proto.parse(&ATol::default()).unwrap_err();
 
         assert!(!error_chain_contains::<crate::RawParseError>(&err));
+        assert!(!error_chain_contains::<Sos1ConstraintError>(&err));
         assert!(
             err.to_string()
                 .contains("active_variable must be unset when feasible is false"),
@@ -498,6 +499,7 @@ mod tests {
         let err = proto.parse(&ATol::default()).unwrap_err();
 
         assert!(!error_chain_contains::<crate::RawParseError>(&err));
+        assert!(!error_chain_contains::<Sos1ConstraintError>(&err));
         assert!(
             err.to_string()
                 .contains("active_variable must be unset when feasible is false"),

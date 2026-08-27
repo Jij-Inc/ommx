@@ -1111,6 +1111,26 @@ mod tests {
             .unwrap()
     }
 
+    fn cyclic_dependency_test_instance() -> Instance {
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(0), DecisionVariable::binary()),
+                (VariableID::from(1), DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap()
+    }
+
+    fn cyclic_dependency_entries() -> [(u64, v1::Function); 2] {
+        [
+            (0, Function::from(crate::linear!(1)).into()),
+            (1, Function::from(crate::linear!(0)).into()),
+        ]
+    }
+
     fn assert_parameter_id_collision_source(error: crate::Error, expected_id: VariableID) {
         let parse_error = error
             .downcast_ref::<ParseError>()
@@ -1122,6 +1142,23 @@ mod tests {
             signal_source.downcast_ref::<crate::ParameterIDCollision>(),
             Some(crate::ParameterIDCollision { id }) if *id == expected_id
         ));
+    }
+
+    fn assert_cyclic_dependency_source(error: crate::Error, expected_root: &'static str) {
+        let parse_error = error
+            .chain()
+            .next()
+            .and_then(|outer| outer.downcast_ref::<ParseError>())
+            .expect("semantic byte decoding must retain ParseError as the outer owner");
+        assert!(matches!(
+            parse_error
+                .source()
+                .and_then(|source| source.downcast_ref::<crate::SubstitutionError>()),
+            Some(crate::SubstitutionError::CyclicAssignmentDetected)
+        ));
+        assert_eq!(parse_error.context.len(), 1);
+        assert_eq!(parse_error.context[0].message, expected_root);
+        assert_eq!(parse_error.context[0].field, "decision_variable_dependency");
     }
 
     fn binary_decision_variables() -> Vec<v1::DecisionVariable> {
@@ -1495,6 +1532,44 @@ mod tests {
         let error = ParametricInstance::from_v2_bytes(&proto.encode_to_vec()).unwrap_err();
 
         assert_parameter_id_collision_source(error, id);
+    }
+
+    #[test]
+    fn public_byte_decoders_preserve_cyclic_dependency_source_and_context() {
+        let instance = cyclic_dependency_test_instance();
+        let parametric_instance = ParametricInstance::from(instance.clone());
+
+        let mut v1_instance = v1::Instance::try_from(instance.clone()).unwrap();
+        v1_instance.decision_variable_dependency =
+            cyclic_dependency_entries().into_iter().collect();
+        let v1_instance_error = Instance::from_v1_bytes(&v1_instance.encode_to_vec()).unwrap_err();
+
+        let mut v2_instance = v2::Instance::from(instance);
+        v2_instance.decision_variable_dependency =
+            cyclic_dependency_entries().into_iter().collect();
+        let v2_instance_error = Instance::from_v2_bytes(&v2_instance.encode_to_vec()).unwrap_err();
+
+        let mut v1_parametric_instance =
+            v1::ParametricInstance::try_from(parametric_instance.clone()).unwrap();
+        v1_parametric_instance.decision_variable_dependency =
+            cyclic_dependency_entries().into_iter().collect();
+        let v1_parametric_instance_error =
+            ParametricInstance::from_v1_bytes(&v1_parametric_instance.encode_to_vec()).unwrap_err();
+
+        let mut v2_parametric_instance = v2::ParametricInstance::from(parametric_instance);
+        v2_parametric_instance.decision_variable_dependency =
+            cyclic_dependency_entries().into_iter().collect();
+        let v2_parametric_instance_error =
+            ParametricInstance::from_v2_bytes(&v2_parametric_instance.encode_to_vec()).unwrap_err();
+
+        for (error, expected_root) in [
+            (v1_instance_error, "ommx.v1.Instance"),
+            (v2_instance_error, "ommx.v2.Instance"),
+            (v1_parametric_instance_error, "ommx.v1.ParametricInstance"),
+            (v2_parametric_instance_error, "ommx.v2.ParametricInstance"),
+        ] {
+            assert_cyclic_dependency_source(error, expected_root);
+        }
     }
 
     #[test]

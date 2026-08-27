@@ -878,18 +878,10 @@ macro_rules! impl_parse_v2_evaluated_collection {
                 let context =
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
                 let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
-                validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
-                    let signal = crate::SolutionError::InvalidSidecar {
-                        message: e.to_string(),
-                    };
-                    ParseError::new(signal).context(message, "contexts")
-                })?;
-                EvaluatedCollection::with_context(entries, removed_reasons, context).map_err(|e| {
-                    let signal = crate::SolutionError::InvalidSidecar {
-                        message: e.to_string(),
-                    };
-                    ParseError::new(signal).context(message, "removed_reasons")
-                })
+                validate_context_reference_ids(&context, &owned_ids)
+                    .map_err(|e| ParseError::new(e).context(message, "contexts"))?;
+                EvaluatedCollection::with_context(entries, removed_reasons, context)
+                    .map_err(|e| ParseError::new(e).context(message, "removed_reasons"))
             }
         }
     };
@@ -919,18 +911,10 @@ macro_rules! impl_parse_v2_sampled_collection {
                 let context =
                     constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
                 let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
-                validate_context_reference_ids(&context, &owned_ids).map_err(|e| {
-                    let signal = crate::SampleSetError::InvalidSidecar {
-                        message: e.to_string(),
-                    };
-                    ParseError::new(signal).context(message, "contexts")
-                })?;
-                SampledCollection::with_context(entries, removed_reasons, context).map_err(|e| {
-                    let signal = crate::SampleSetError::InvalidSidecar {
-                        message: e.to_string(),
-                    };
-                    ParseError::new(signal).context(message, "removed_reasons")
-                })
+                validate_context_reference_ids(&context, &owned_ids)
+                    .map_err(|e| ParseError::new(e).context(message, "contexts"))?;
+                SampledCollection::with_context(entries, removed_reasons, context)
+                    .map_err(|e| ParseError::new(e).context(message, "removed_reasons"))
             }
         }
     };
@@ -1542,11 +1526,23 @@ mod tests {
         std::error::Error::source(error).expect("ParseError should expose its cause")
     }
 
-    fn error_chain_contains<T: std::error::Error + 'static>(
-        error: &(dyn std::error::Error + 'static),
-    ) -> bool {
-        error.downcast_ref::<T>().is_some()
-            || std::error::Error::source(error).is_some_and(error_chain_contains::<T>)
+    fn assert_ordinary_collection_sidecar_error(
+        error: &ParseError,
+        expected_message: &'static str,
+        expected_field: &'static str,
+    ) {
+        let source = parse_error_source(error);
+        assert!(source.downcast_ref::<crate::RawParseError>().is_none());
+        assert!(source.downcast_ref::<crate::SolutionError>().is_none());
+        assert!(source.downcast_ref::<crate::SampleSetError>().is_none());
+        assert!(source.to_string().contains("unknown constraint ID"));
+
+        assert_eq!(error.context.len(), 1);
+        assert_eq!(error.context[0].message, expected_message);
+        assert_eq!(error.context[0].field, expected_field);
+        assert!(error
+            .to_string()
+            .contains(&format!("{expected_message}[{expected_field}]")));
     }
 
     fn removed_reason() -> RemovedReason {
@@ -1923,11 +1919,11 @@ mod tests {
         .parse(&())
         .unwrap_err();
 
-        assert!(
-            err.to_string().contains("[contexts]"),
-            "unexpected error: {err}"
+        assert_ordinary_collection_sidecar_error(
+            &err,
+            "crate::v2::RegularConstraintCollection",
+            "contexts",
         );
-        assert!(!error_chain_contains::<crate::RawParseError>(&err));
     }
 
     #[test]
@@ -1951,11 +1947,11 @@ mod tests {
         .parse(&atol)
         .unwrap_err();
 
-        assert!(matches!(
-            parse_error_source(&err).downcast_ref::<crate::SolutionError>(),
-            Some(crate::SolutionError::InvalidSidecar { message })
-                if message.contains("unknown constraint ID")
-        ));
+        assert_ordinary_collection_sidecar_error(
+            &err,
+            "crate::v2::EvaluatedRegularConstraintCollection",
+            "contexts",
+        );
     }
 
     #[test]
@@ -1979,15 +1975,15 @@ mod tests {
         .parse(&atol)
         .unwrap_err();
 
-        assert!(matches!(
-            parse_error_source(&err).downcast_ref::<crate::SampleSetError>(),
-            Some(crate::SampleSetError::InvalidSidecar { message })
-                if message.contains("unknown constraint ID")
-        ));
+        assert_ordinary_collection_sidecar_error(
+            &err,
+            "crate::v2::SampledRegularConstraintCollection",
+            "contexts",
+        );
     }
 
     #[test]
-    fn parse_v2_evaluated_collection_preserves_invalid_removed_reason_signal() {
+    fn parse_v2_evaluated_collection_reports_invalid_removed_reason_as_ordinary_error() {
         let err = crate::v2::EvaluatedRegularConstraintCollection {
             removed_reasons: BTreeMap::from([(
                 1,
@@ -2001,15 +1997,15 @@ mod tests {
         .parse(&ATol::default())
         .unwrap_err();
 
-        assert!(matches!(
-            parse_error_source(&err).downcast_ref::<crate::SolutionError>(),
-            Some(crate::SolutionError::InvalidSidecar { message })
-                if message.contains("unknown constraint ID")
-        ));
+        assert_ordinary_collection_sidecar_error(
+            &err,
+            "crate::v2::EvaluatedRegularConstraintCollection",
+            "removed_reasons",
+        );
     }
 
     #[test]
-    fn parse_v2_sampled_collection_preserves_invalid_removed_reason_signal() {
+    fn parse_v2_sampled_collection_reports_invalid_removed_reason_as_ordinary_error() {
         let err = crate::v2::SampledRegularConstraintCollection {
             removed_reasons: BTreeMap::from([(
                 1,
@@ -2023,10 +2019,10 @@ mod tests {
         .parse(&ATol::default())
         .unwrap_err();
 
-        assert!(matches!(
-            parse_error_source(&err).downcast_ref::<crate::SampleSetError>(),
-            Some(crate::SampleSetError::InvalidSidecar { message })
-                if message.contains("unknown constraint ID")
-        ));
+        assert_ordinary_collection_sidecar_error(
+            &err,
+            "crate::v2::SampledRegularConstraintCollection",
+            "removed_reasons",
+        );
     }
 }

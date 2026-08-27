@@ -72,6 +72,14 @@ impl Parse for crate::v1::Solution {
                 crate::ConstraintContext,
                 Option<crate::RemovedReason>,
             ) = ec.parse_as(&(), message, "evaluated_constraints")?;
+            if evaluated_constraints.contains_key(&id) {
+                return Err(ParseError::new(SolutionError::InvalidConstraintStructure {
+                    constraint_family: "regular",
+                    constraint_id: format!("{id:?}"),
+                    message: "duplicated constraint ID in evaluated_constraints".to_string(),
+                })
+                .context(message, "evaluated_constraints"));
+            }
             if let Some(reason) = removed_reason {
                 removed_reasons.insert(id, reason);
             }
@@ -1302,6 +1310,48 @@ mod tests {
             } if *id == VariableID::from(42) && *constraint_id == ConstraintID::from(7)
         ));
         assert_eq!(error.context[0].field, "evaluated_constraints");
+    }
+
+    #[test]
+    fn from_v1_bytes_rejects_duplicated_evaluated_constraint_ids() {
+        let first = v1::EvaluatedConstraint {
+            id: 7,
+            equality: v1::Equality::EqualToZero as i32,
+            evaluated_value: 0.0,
+            removed_reason: Some("removed first row".to_string()),
+            ..Default::default()
+        };
+        let second = v1::EvaluatedConstraint {
+            id: 7,
+            equality: v1::Equality::EqualToZero as i32,
+            evaluated_value: 0.0,
+            name: Some("active second row".to_string()),
+            ..Default::default()
+        };
+        let proto = v1::Solution {
+            evaluated_constraints: vec![first, second],
+            feasible: true,
+            feasible_relaxed: Some(true),
+            ..Default::default()
+        };
+
+        let error = Solution::from_v1_bytes(&crate::Message::encode_to_vec(&proto)).unwrap_err();
+        let parse_error = error
+            .downcast_ref::<ParseError>()
+            .expect("semantic byte decoding must retain ParseError as the outer owner");
+
+        assert!(matches!(
+            parse_error_source(parse_error).downcast_ref::<SolutionError>(),
+            Some(SolutionError::InvalidConstraintStructure {
+                constraint_family: "regular",
+                constraint_id,
+                message,
+            }) if constraint_id == "ConstraintID(7)"
+                && message == "duplicated constraint ID in evaluated_constraints"
+        ));
+        assert_eq!(parse_error.context.len(), 1);
+        assert_eq!(parse_error.context[0].message, "ommx.v1.Solution");
+        assert_eq!(parse_error.context[0].field, "evaluated_constraints");
     }
 
     // Data produced by a future SDK whose format version exceeds what this SDK supports

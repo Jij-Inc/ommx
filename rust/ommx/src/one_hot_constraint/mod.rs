@@ -472,6 +472,7 @@ mod tests {
         let err = proto.parse(&ATol::default()).unwrap_err();
 
         assert!(!error_chain_contains::<crate::RawParseError>(&err));
+        assert!(!error_chain_contains::<OneHotConstraintError>(&err));
         assert!(err
             .to_string()
             .contains("active_variable must be a member of variables"));
