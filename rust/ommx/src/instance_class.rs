@@ -1,16 +1,18 @@
-//! Instance classes for adapter inputs.
+//! Instance classes for structural input capabilities.
 //!
-//! An adapter input is an [`crate::Instance`] value passed to an adapter. An
-//! [`InstanceClass`] is a set of [`crate::Instance`] values defined by OMMX
-//! structural conditions. An adapter input is classified by membership in
-//! that set. An [`InstanceClassClause`] is one conjunctive clause in the
-//! representation; an instance class is the finite union of its clauses.
+//! An [`InstanceClass`] is a set of [`crate::Instance`] values defined by OMMX
+//! structural conditions. Consumers such as adapters and format writers use
+//! membership in that set to describe the exact model structures they accept.
+//! An [`InstanceClassClause`] is one conjunctive clause in the representation;
+//! an instance class is the finite union of its clauses.
 //!
-//! Membership defines whether the exact input is applicable to an adapter. It
+//! For adapters, membership defines whether the exact input is applicable. It
 //! does not perform preparation or lowering, handle wire-format
 //! `ommx.v2.Feature` values, or guarantee that later conversion and backend
 //! operations succeed. If preparation produces another instance to use as
-//! input, membership must be checked on that value.
+//! input, membership must be checked on that value. Other consumers retain
+//! responsibility for side effects and information-loss policies outside
+//! these structural conditions.
 
 mod instance_facts;
 
@@ -767,7 +769,9 @@ impl InstanceClassClauseReport {
 ///
 /// An instance is a member when at least one complete clause contains it.
 /// Adapters use this membership report directly when checking applicability;
-/// they do not add another applicability condition.
+/// they do not add another applicability condition. Other consumers may turn
+/// the same report into operation-specific diagnostics without implementing a
+/// second structural validator.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceClassMembershipReport {
     clause_reports: Vec<InstanceClassClauseReport>,

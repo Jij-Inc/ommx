@@ -14,33 +14,30 @@ pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 /// This function does not automatically Gzip the output -- that is the
 /// responsibility of the Write implementation.
 ///
-/// Only polynomial objectives and regular constraints of degree at most two
-/// are supported. Active Indicator, OneHot, and SOS1 constraints must be
-/// lowered before export.
+/// Decision variables used by the objective or active constraints must be
+/// Binary, Integer, or Continuous. Polynomial objectives and regular
+/// constraints of degree at most two are supported. Active Indicator, OneHot,
+/// and SOS1 constraints must be lowered before export. Unused variables of
+/// other kinds are accepted and omitted as described below.
 ///
 /// ## Information Loss and Filtering
 ///
-/// Metadata like problem descriptions and variable/constraint names are not
-/// preserved.
+/// The active objective, active regular constraints, and used decision-variable
+/// kinds and bounds are exported. `description.name` is used as the MPS problem
+/// name. Other Instance state is not represented, including the remaining
+/// description fields, parameters, annotations, output objective, named
+/// functions, dependencies, fixed values, and modeling labels.
 ///
 /// **Removed Constraints**: All `removed_constraints` are completely ignored
 /// and not written to the MPS file. The MPS format cannot represent the
 /// concept of removed constraints, so this information is lost during export.
 ///
-/// **Variable Filtering**: Only decision variables that are actually used in
-/// the objective function, active constraints, or removed constraints are
-/// written to the MPS file. Variables defined in `decision_variables` but
-/// not referenced anywhere are omitted from the output. This is determined
-/// by the `required_ids()` method which includes:
-/// - Variables used in the objective function
-/// - Variables used in active constraints
-/// - Variables used in removed constraints (even though the constraints
-///   themselves are not exported)
-///
-/// This ensures that variables from removed constraints are preserved in
-/// the MPS output even though the constraint information is lost.
+/// **Variable Filtering**: Only decision variables used by the objective or
+/// active constraints are written. Variables defined in `decision_variables`
+/// but not used by the active model are omitted. This includes variables used
+/// only by removed constraints, because those constraints are not exported.
 pub fn format<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
-    preflight(instance)?;
+    super::preflight(instance)?;
     write_beginning(instance, out)?;
     write_rows(instance, out)?;
     write_columns(instance, out)?;
@@ -49,53 +46,6 @@ pub fn format<W: Write>(instance: &Instance, out: &mut W) -> crate::Result<()> {
     write_quadobj(instance, out)?;
     write_qcmatrix(instance, out)?;
     writeln!(out, "ENDATA\n")?;
-    Ok(())
-}
-
-/// Validate the complete export capability before writing any bytes so an
-/// unsupported model cannot leave a partial MPS document in `out`.
-pub(super) fn preflight(instance: &Instance) -> crate::Result<()> {
-    if !instance.indicator_constraints().is_empty() {
-        crate::bail!(
-            "MPS format does not support active indicator constraints; lower them before export"
-        );
-    }
-    if !instance.one_hot_constraints().is_empty() {
-        crate::bail!(
-            "MPS format does not support active one-hot constraints; lower them before export"
-        );
-    }
-    if !instance.sos1_constraints().is_empty() {
-        crate::bail!(
-            "MPS format does not support active SOS1 constraints; lower them before export"
-        );
-    }
-
-    let Some(objective_degree) = instance.objective().degree() else {
-        crate::bail!("MPS format does not support a non-polynomial objective function");
-    };
-    if objective_degree > 2 {
-        crate::bail!(
-            { degree = objective_degree.into_inner() },
-            "MPS format does not support nonlinear objective: objective has {objective_degree}-degree term",
-        );
-    }
-
-    for (constraint_id, constraint) in instance.constraints() {
-        let name = constr_name(*constraint_id);
-        let Some(degree) = constraint.function().degree() else {
-            crate::bail!(
-                { name = %name },
-                "MPS format does not support a non-polynomial constraint: constraint ({name})",
-            );
-        };
-        if degree > 2 {
-            crate::bail!(
-                { name = %name, degree = degree.into_inner() },
-                "MPS format does not support nonlinear constraint: constraint ({name}) has {degree}-degree term",
-            );
-        }
-    }
     Ok(())
 }
 
@@ -457,97 +407,97 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_polynomial_objective_before_writing() {
-        let objective = Function::from(linear!(VariableID::from(0))).abs();
-        let instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            btreemap! {
-                VariableID::from(0) => DecisionVariable::continuous(),
-            },
-            btreemap! {},
-        )
-        .unwrap();
-        let mut buffer = Vec::new();
-
-        let error = format(&instance, &mut buffer).unwrap_err();
-
-        assert!(error.to_string().contains("non-polynomial objective"));
-        assert!(buffer.is_empty());
-    }
-
-    #[test]
-    fn rejects_non_polynomial_constraint_before_writing() {
-        let constraint_id = ConstraintID::from(1);
-        let constraint_function = Function::from(linear!(VariableID::from(0))).abs();
-        let instance = Instance::new(
-            Sense::Minimize,
-            Function::from(linear!(VariableID::from(0))),
-            btreemap! {
-                VariableID::from(0) => DecisionVariable::continuous(),
-            },
-            btreemap! {
-                constraint_id => Constraint::equal_to_zero(constraint_function),
-            },
-        )
-        .unwrap();
-        let mut buffer = Vec::new();
-
-        let error = format(&instance, &mut buffer).unwrap_err();
-
-        assert!(error.to_string().contains("non-polynomial constraint"));
-        assert!(buffer.is_empty());
-    }
-
-    #[test]
-    fn rejects_active_special_constraints_before_writing() {
-        let id = VariableID::from(0);
-        let decision_variables = BTreeMap::from([(id, DecisionVariable::binary())]);
-
-        let indicator = Instance::builder()
+    fn reports_all_input_class_mismatches_before_writing() {
+        let semi_continuous = VariableID::from(1);
+        let semi_integer = VariableID::from(2);
+        let binary = VariableID::from(3);
+        let objective = (Function::from(linear!(semi_continuous))
+            + Function::from(linear!(semi_integer)))
+        .unwrap()
+        .abs();
+        let instance = Instance::builder()
             .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(decision_variables.clone())
-            .constraints(BTreeMap::new())
+            .objective(objective)
+            .decision_variables(BTreeMap::from([
+                (semi_continuous, DecisionVariable::semi_continuous()),
+                (semi_integer, DecisionVariable::semi_integer()),
+                (binary, DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::from([
+                (
+                    ConstraintID::from(1),
+                    Constraint::equal_to_zero(Function::from(linear!(semi_continuous)).signum()),
+                ),
+                (
+                    ConstraintID::from(2),
+                    Constraint::less_than_or_equal_to_zero(Function::from(crate::monomial!(
+                        semi_integer,
+                        semi_integer,
+                        semi_integer
+                    ))),
+                ),
+            ]))
             .indicator_constraints(BTreeMap::from([(
                 IndicatorConstraintID::from(1),
-                IndicatorConstraint::new(id, Equality::EqualToZero, Function::from(linear!(id))),
+                IndicatorConstraint::new(
+                    binary,
+                    Equality::EqualToZero,
+                    Function::from(linear!(binary)),
+                ),
             )]))
-            .build()
-            .unwrap();
-        let one_hot = Instance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(decision_variables.clone())
-            .constraints(BTreeMap::new())
             .one_hot_constraints(BTreeMap::from([(
                 OneHotConstraintID::from(1),
-                OneHotConstraint::new(BTreeSet::from([id])).unwrap(),
+                OneHotConstraint::new(BTreeSet::from([binary])).unwrap(),
             )]))
-            .build()
-            .unwrap();
-        let sos1 = Instance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(decision_variables)
-            .constraints(BTreeMap::new())
             .sos1_constraints(BTreeMap::from([(
                 Sos1ConstraintID::from(1),
-                Sos1Constraint::new(BTreeSet::from([id])).unwrap(),
+                Sos1Constraint::new(BTreeSet::from([binary])).unwrap(),
             )]))
             .build()
             .unwrap();
+        let mut buffer = b"unchanged".to_vec();
 
-        for (instance, expected) in [
-            (indicator, "active indicator constraints"),
-            (one_hot, "active one-hot constraints"),
-            (sos1, "active SOS1 constraints"),
-        ] {
-            let mut buffer = Vec::new();
-            let error = format(&instance, &mut buffer).unwrap_err();
-            assert!(error.to_string().contains(expected));
-            assert!(buffer.is_empty());
-        }
+        let error = format(&instance, &mut buffer).unwrap_err();
+
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Instance is outside the MPS input class:
+        Instance does not belong to any clause:
+        - clause 0 (`MPS`):
+          - variable kind SemiContinuous for IDs {VariableID(1)} is not allowed; allowed kinds are {Continuous, Integer, Binary}
+          - variable kind SemiInteger for IDs {VariableID(2)} is not allowed; allowed kinds are {Continuous, Integer, Binary}
+          - objective function is not polynomial
+          - regular EqualToZero constraint functions for IDs {ConstraintID(1)} are not polynomial
+          - regular LessThanOrEqualToZero constraint degrees {ConstraintID(2): Degree(3)} exceed degree <= 2
+          - indicator constraints {IndicatorConstraintID(1)} are not allowed
+          - one-hot constraints {OneHotConstraintID(1)} are not allowed
+          - SOS1 constraints {Sos1ConstraintID(1)} are not allowed
+        "###);
+        assert_eq!(buffer, b"unchanged");
+    }
+
+    #[test]
+    fn ignores_unused_semi_variable_kinds() {
+        let used = VariableID::from(1);
+        let unused_semi_continuous = VariableID::from(2);
+        let unused_semi_integer = VariableID::from(3);
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(used)),
+            BTreeMap::from([
+                (used, DecisionVariable::continuous()),
+                (unused_semi_continuous, DecisionVariable::semi_continuous()),
+                (unused_semi_integer, DecisionVariable::semi_integer()),
+            ]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let mut buffer = Vec::new();
+
+        format(&instance, &mut buffer).unwrap();
+
+        let output = String::from_utf8(buffer).unwrap();
+        assert!(!output.contains(&dvar_name(unused_semi_continuous)));
+        assert!(!output.contains(&dvar_name(unused_semi_integer)));
     }
 
     #[test]

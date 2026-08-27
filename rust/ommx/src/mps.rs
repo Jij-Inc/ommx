@@ -61,8 +61,34 @@ mod tests;
 pub use compressed::is_gzipped;
 pub use format::{format, to_string};
 
+use crate::{DegreeBound, Equality, InstanceClass, InstanceClassClause, Kind, Sense};
 use parser::*;
-use std::{io::Read, path::Path};
+use std::{collections::BTreeSet, io::Read, path::Path, sync::LazyLock};
+
+/// Validate that `instance` belongs to the exact structural class supported by
+/// the MPS writer before an output side effect starts.
+fn preflight(instance: &crate::Instance) -> crate::Result<()> {
+    static INPUT_CLASS: LazyLock<InstanceClass> = LazyLock::new(|| {
+        let quadratic = DegreeBound::at_most(2);
+        InstanceClassClause::new(
+            "MPS",
+            BTreeSet::from([Kind::Binary, Kind::Integer, Kind::Continuous]),
+            quadratic,
+            BTreeSet::from([Sense::Minimize, Sense::Maximize]),
+        )
+        .with_regular_constraint(Equality::EqualToZero, quadratic)
+        .with_regular_constraint(Equality::LessThanOrEqualToZero, quadratic)
+        .into()
+    });
+
+    let report = INPUT_CLASS.check_membership(instance);
+    crate::ensure!(
+        report.is_member(),
+        { report = %report },
+        "Instance is outside the MPS input class:\n{report}",
+    );
+    Ok(())
+}
 
 /// Reads and parses the MPS file from the given [`Read`] source with automatic gzipped detection.
 #[tracing::instrument(skip_all)]
@@ -101,7 +127,7 @@ pub fn save(
     // Reject unsupported model content before creating directories or
     // truncating an existing destination. `format` repeats this guard for
     // callers that provide their own writer.
-    format::preflight(instance)?;
+    preflight(instance)?;
     let path = std::path::absolute(out_path.as_ref())?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -127,23 +153,45 @@ mod save_tests {
     use crate::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
     use std::collections::BTreeMap;
 
-    #[test]
-    fn unsupported_model_does_not_truncate_existing_destination() {
+    fn unsupported_instance() -> Instance {
         let id = VariableID::from(1);
-        let instance = Instance::new(
+        Instance::new(
             Sense::Minimize,
             Function::from(linear!(id)).abs(),
             BTreeMap::from([(id, DecisionVariable::continuous())]),
             BTreeMap::new(),
         )
-        .unwrap();
+        .unwrap()
+    }
+
+    #[test]
+    fn unsupported_model_does_not_truncate_existing_destination() {
+        let instance = unsupported_instance();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("existing.mps");
         std::fs::write(&path, b"existing content").unwrap();
 
         let error = save(&instance, &path, false).unwrap_err();
 
-        assert!(error.to_string().contains("non-polynomial objective"));
+        assert!(error
+            .to_string()
+            .contains("objective function is not polynomial"));
         assert_eq!(std::fs::read(path).unwrap(), b"existing content");
+    }
+
+    #[test]
+    fn unsupported_model_does_not_create_destination() {
+        let instance = unsupported_instance();
+        let directory = tempfile::tempdir().unwrap();
+
+        for compress in [false, true] {
+            let parent = directory.path().join(format!("missing-{compress}"));
+            let path = parent.join("output.mps");
+
+            save(&instance, &path, compress).unwrap_err();
+
+            assert!(!parent.exists());
+            assert!(!path.exists());
+        }
     }
 }
