@@ -8,28 +8,19 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### 🛠 composed Function で dependent variable を復元 ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
+### 🛠 dependent variable の復元値を正規化 ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
 
 {meth}`~ommx.Instance.populate_state` に fixed / dependent coordinate を渡した場合、
-その値は整合性の assertion として扱われます。`atol` の範囲内なら受け入れますが、
-返される {class}`~ommx.State` には、Instance が所有する固定値または dependency から
-決定的に計算した値を格納します。これにより、後続の dependent reconstruction は、
-呼び出し側が渡した近似値ではなく canonical な coordinate を参照します。
+その値は整合性の assertion としてのみ扱われます。`atol` の範囲内として受理した後、
+返される {class}`~ommx.State` には、Instance が所有する正確な固定値または dependency
+から決定的に復元した値を格納します。これにより後続の dependency は、呼び出し側が
+渡した近似値ではなく canonical な coordinate を参照します。
 
-dependent variable の右辺には通常の composed {class}`~ommx.Function` を使います。
-たとえば符号付きSOS1 memberのfresh selectorは`abs(signum(member))`として復元します。
-SignumとSOS1 evaluationはいずれも境界を含む`abs(value) <= atol`をゼロと判定します。
-そのため既存のFunction-valued dependency mapをそのままv1/v2でround-tripでき、
-並行するexpression schemaやfeature flagは不要です。
-
-昇格が等価性を保証するのはexactな実数意味論についてであり、有限の`atol`で受理される
-state集合まで同一とは主張しません。regular constraintは既存の厳密な
-`residual < atol`を維持する一方、復元では決定的なzero/nonzero selectorを使います。
-たとえば厳密に`abs(member) == atol`となる境界では、昇格後のactive modelがfeasibleでも、
-保持したBig-M行により`Solution.feasible()`がfalseになることがあります。
-`Solution.feasible_relaxed()`はactive modelだけを報告します。また、元のBig-M modelが
-受理する近似selector coordinateと、復元したselectorが異なる場合もあります。
-元の行を保持して評価することで、この数値的な差を昇格時に捨てず可視化します。
+{meth}`~ommx.Instance.evaluate_samples` は、sample ID のgroupingを維持したまま、各unique
+input stateについてdependency DAG全体を解決します。またSOS1のactivity判定は、
+`Function.signum`と同じく境界を含む`abs(value) <= atol`をゼロとみなします。
+composed {class}`~ommx.Function`演算のサポートは、この変更とは別に下記の
+[#1158](https://github.com/Jij-Inc/ommx/pull/1158)で導入されています。
 
 ### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))
 

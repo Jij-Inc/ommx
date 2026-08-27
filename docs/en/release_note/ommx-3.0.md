@@ -8,32 +8,21 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🛠 Reconstruct dependent variables with composed Functions ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
+### 🛠 Canonicalize reconstructed decision-variable values ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
 
 {meth}`~ommx.Instance.populate_state` treats caller-provided fixed and dependent
-coordinates as consistency assertions. Values within `atol` are accepted, but
-the returned {class}`~ommx.State` now always contains the fixed value owned by
-the Instance or the deterministic value computed from the dependency. Later
-dependent reconstructions therefore observe canonical coordinates instead of
-an approximate assertion supplied by the caller.
+coordinates only as consistency assertions. After accepting a value within
+`atol`, the returned {class}`~ommx.State` stores the exact fixed value owned by
+the Instance or the deterministic value reconstructed from the dependency.
+Downstream dependencies therefore observe canonical coordinates rather than an
+approximate assertion supplied by the caller.
 
-Dependent-variable right-hand sides remain ordinary composed
-{class}`~ommx.Function` values. For example, a fresh selector for a signed SOS1
-member is reconstructed as `abs(signum(member))`. Signum and SOS1 evaluation
-both classify `abs(value) <= atol` as zero, including the boundary. The existing
-Function-valued dependency map therefore round-trips through both v1 and v2
-without a parallel expression schema or feature flag.
-
-Promotion establishes equivalence for exact real-valued semantics; it does not
-claim identical accepted-state sets under a finite `atol`. Regular constraints
-keep their existing strict `residual < atol` rule, while reconstruction uses a
-deterministic zero/nonzero selector. For example, exactly at
-`abs(member) == atol`, the active promoted model can be feasible while a
-retained Big-M row makes `Solution.feasible()` false;
-`Solution.feasible_relaxed()` reports only the active model. Approximate
-selector coordinates accepted by the original Big-M model can also differ from
-the reconstructed selector. Retaining and evaluating the original rows keeps
-this numerical distinction visible instead of discarding it during promotion.
+{meth}`~ommx.Instance.evaluate_samples` now resolves the complete dependency DAG
+for each unique input state while preserving its sample-ID grouping. SOS1
+activity now follows the same inclusive `abs(value) <= atol` zero
+classification as `Function.signum`. Support for composed
+{class}`~ommx.Function` operations is the separate
+[#1158](https://github.com/Jij-Inc/ommx/pull/1158) change described below.
 
 ### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))
 
