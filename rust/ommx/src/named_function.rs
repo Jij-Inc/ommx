@@ -624,6 +624,8 @@ where
 
 #[cfg(test)]
 mod table_tests {
+    use std::error::Error as _;
+
     use super::*;
 
     #[test]
@@ -656,10 +658,17 @@ mod table_tests {
         .unwrap_err();
 
         assert_eq!(
-            error.error.to_string(),
+            error
+                .source()
+                .expect("ParseError must expose the orphan-label cause")
+                .to_string(),
             "Modeling label references unknown named function ID NamedFunctionID(1)"
         );
-        assert!(error.error.downcast_ref::<RawParseError>().is_none());
+        let mut source = error.source();
+        while let Some(error) = source {
+            assert!(error.downcast_ref::<RawParseError>().is_none());
+            source = error.source();
+        }
         assert_eq!(error.context.len(), 1);
         assert_eq!(error.context[0].message, "ommx.v2.NamedFunctionTable");
         assert_eq!(error.context[0].field, "labels");

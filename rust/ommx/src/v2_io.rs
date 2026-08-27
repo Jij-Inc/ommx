@@ -80,77 +80,6 @@ pub fn validate_required_features(
     Ok(())
 }
 
-#[cfg(test)]
-mod required_features_tests {
-    use super::*;
-
-    #[test]
-    fn accepts_known_features() {
-        validate_required_features(
-            vec![
-                Feature::ConstraintIndicator as i32,
-                Feature::ConstraintOneHot as i32,
-                Feature::ConstraintSos1 as i32,
-                Feature::OutputObjective as i32,
-            ],
-            "test.Message",
-        )
-        .unwrap();
-    }
-
-    #[test]
-    fn rejects_unspecified_and_unknown_features() {
-        for feature in [Feature::Unspecified as i32, i32::MAX] {
-            assert!(validate_required_features(vec![feature], "test.Message").is_err());
-        }
-    }
-
-    #[test]
-    fn parse_feasibility_atol_preserves_atol_signals() {
-        for value in [0.0, -1.0] {
-            let err = parse_feasibility_atol(Some(value), "test.Message").unwrap_err();
-            assert!(matches!(
-                err.error.downcast_ref::<crate::AtolError>(),
-                Some(crate::AtolError::NonPositive { value: actual }) if *actual == value
-            ));
-        }
-
-        let err = parse_feasibility_atol(Some(f64::NAN), "test.Message").unwrap_err();
-        assert!(matches!(
-            err.error.downcast_ref::<crate::AtolError>(),
-            Some(crate::AtolError::NaN)
-        ));
-    }
-
-    #[test]
-    fn parse_feasibility_atol_keeps_infinity_as_an_ordinary_error() {
-        for value in [f64::NEG_INFINITY, f64::INFINITY] {
-            let err = parse_feasibility_atol(Some(value), "test.Message").unwrap_err();
-            assert!(err.error.downcast_ref::<crate::AtolError>().is_none());
-            assert!(err.error.downcast_ref::<RawParseError>().is_none());
-            assert!(err.to_string().contains("feasibility_atol must be finite"));
-        }
-    }
-
-    #[test]
-    fn non_finite_values_are_ordinary_semantic_errors() {
-        let err = validate_finite_f64(f64::NAN, "test.Message", "value").unwrap_err();
-        assert!(err.error.downcast_ref::<RawParseError>().is_none());
-
-        let values = Sampled::from((SampleID::from(7), f64::INFINITY));
-        let err = validate_sampled_f64_values(&values, "test.Message", "values").unwrap_err();
-        assert!(err.error.downcast_ref::<RawParseError>().is_none());
-        assert!(err.to_string().contains("SampleID(7)"));
-    }
-
-    #[test]
-    fn duplicated_variable_references_are_ordinary_semantic_errors() {
-        let err = variable_id_set_from_v2(vec![1, 1], "test.Message", "variables").unwrap_err();
-        assert!(err.error.downcast_ref::<RawParseError>().is_none());
-        assert!(err.to_string().contains("VariableID(1)"));
-    }
-}
-
 pub fn parse_feasibility_atol(
     value: Option<f64>,
     message: &'static str,
@@ -271,4 +200,84 @@ pub fn modeling_label_store_from_v2_map<ID: IDType>(
         store.insert(ID::from(id), label.into());
     }
     store
+}
+
+#[cfg(test)]
+mod required_features_tests {
+    use super::*;
+    use std::error::Error as _;
+
+    fn error_chain_contains<T: std::error::Error + 'static>(
+        error: &(dyn std::error::Error + 'static),
+    ) -> bool {
+        error.downcast_ref::<T>().is_some() || error.source().is_some_and(error_chain_contains::<T>)
+    }
+
+    #[test]
+    fn accepts_known_features() {
+        validate_required_features(
+            vec![
+                Feature::ConstraintIndicator as i32,
+                Feature::ConstraintOneHot as i32,
+                Feature::ConstraintSos1 as i32,
+                Feature::OutputObjective as i32,
+            ],
+            "test.Message",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn rejects_unspecified_and_unknown_features() {
+        for feature in [Feature::Unspecified as i32, i32::MAX] {
+            assert!(validate_required_features(vec![feature], "test.Message").is_err());
+        }
+    }
+
+    #[test]
+    fn parse_feasibility_atol_preserves_atol_signals() {
+        for value in [0.0, -1.0] {
+            let err = parse_feasibility_atol(Some(value), "test.Message").unwrap_err();
+            assert!(matches!(
+                err.source()
+                    .and_then(|error| error.downcast_ref::<crate::AtolError>()),
+                Some(crate::AtolError::NonPositive { value: actual }) if *actual == value
+            ));
+        }
+
+        let err = parse_feasibility_atol(Some(f64::NAN), "test.Message").unwrap_err();
+        assert!(matches!(
+            err.source()
+                .and_then(|error| error.downcast_ref::<crate::AtolError>()),
+            Some(crate::AtolError::NaN)
+        ));
+    }
+
+    #[test]
+    fn parse_feasibility_atol_keeps_infinity_as_an_ordinary_error() {
+        for value in [f64::NEG_INFINITY, f64::INFINITY] {
+            let err = parse_feasibility_atol(Some(value), "test.Message").unwrap_err();
+            assert!(!error_chain_contains::<crate::AtolError>(&err));
+            assert!(!error_chain_contains::<RawParseError>(&err));
+            assert!(err.to_string().contains("feasibility_atol must be finite"));
+        }
+    }
+
+    #[test]
+    fn non_finite_values_are_ordinary_semantic_errors() {
+        let err = validate_finite_f64(f64::NAN, "test.Message", "value").unwrap_err();
+        assert!(!error_chain_contains::<RawParseError>(&err));
+
+        let values = Sampled::from((SampleID::from(7), f64::INFINITY));
+        let err = validate_sampled_f64_values(&values, "test.Message", "values").unwrap_err();
+        assert!(!error_chain_contains::<RawParseError>(&err));
+        assert!(err.to_string().contains("SampleID(7)"));
+    }
+
+    #[test]
+    fn duplicated_variable_references_are_ordinary_semantic_errors() {
+        let err = variable_id_set_from_v2(vec![1, 1], "test.Message", "variables").unwrap_err();
+        assert!(!error_chain_contains::<RawParseError>(&err));
+        assert!(err.to_string().contains("VariableID(1)"));
+    }
 }

@@ -438,6 +438,8 @@ impl std::fmt::Display for IndicatorConstraint<Created> {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use super::*;
     use crate::{coeff, linear};
 
@@ -504,7 +506,11 @@ mod tests {
 
         let err = proto.parse(&ATol::default()).unwrap_err();
 
-        assert!(err.error.downcast_ref::<RawParseError>().is_none());
+        let mut source = err.source();
+        while let Some(error) = source {
+            assert!(error.downcast_ref::<RawParseError>().is_none());
+            source = error.source();
+        }
         assert!(err
             .to_string()
             .contains("Inconsistent indicator constraint feasibility"));

@@ -23,7 +23,7 @@ fn invalid_solution_sidecar(
     let signal = SolutionError::InvalidSidecar {
         message: error.to_string(),
     };
-    ParseError::new(error.context(signal)).context(message, field)
+    ParseError::new(signal).context(message, field)
 }
 
 impl Parse for crate::v1::Solution {
@@ -464,6 +464,10 @@ mod tests {
     use super::*;
     use crate::{v1, DecisionVariable, Parse};
 
+    fn parse_error_source(error: &ParseError) -> &(dyn std::error::Error + 'static) {
+        std::error::Error::source(error).expect("ParseError should expose its cause")
+    }
+
     fn empty_v2_solution() -> v2::Solution {
         let solution = Solution::builder()
             .objective(0.0)
@@ -574,8 +578,7 @@ mod tests {
         expected_constraint_id: &str,
         expected_message: &str,
     ) {
-        let error = error
-            .error
+        let error = parse_error_source(error)
             .downcast_ref::<SolutionError>()
             .expect("expected SolutionError");
         assert!(
@@ -607,8 +610,7 @@ mod tests {
 
         let error = invalid_solution_sidecar(source, "ommx.v1.Solution", "evaluated_constraints");
 
-        let solution_error = error
-            .error
+        let solution_error = parse_error_source(&error)
             .downcast_ref::<SolutionError>()
             .expect("expected SolutionError");
         assert!(matches!(
@@ -619,7 +621,6 @@ mod tests {
         assert_eq!(error.context.len(), 1);
         assert_eq!(error.context[0].message, "ommx.v1.Solution");
         assert_eq!(error.context[0].field, "evaluated_constraints");
-        assert_eq!(error.error.chain().count(), 2);
     }
 
     #[test]
@@ -643,8 +644,7 @@ mod tests {
 
         let error = Solution::try_from(proto).unwrap_err();
 
-        let solution_error = error
-            .error
+        let solution_error = parse_error_source(&error)
             .downcast_ref::<SolutionError>()
             .expect("expected SolutionError");
         assert!(matches!(
@@ -1074,8 +1074,7 @@ mod tests {
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
         let error = result.unwrap_err();
-        let solution_error = error
-            .error
+        let solution_error = parse_error_source(&error)
             .downcast_ref::<SolutionError>()
             .expect("expected SolutionError");
         assert!(matches!(
@@ -1183,8 +1182,7 @@ mod tests {
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
         let error = result.unwrap_err();
-        let solution_error = error
-            .error
+        let solution_error = parse_error_source(&error)
             .downcast_ref::<SolutionError>()
             .expect("expected SolutionError");
         assert!(matches!(
@@ -1224,8 +1222,7 @@ mod tests {
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
         let error = result.unwrap_err();
-        let solution_error = error
-            .error
+        let solution_error = parse_error_source(&error)
             .downcast_ref::<SolutionError>()
             .expect("expected SolutionError");
         assert!(matches!(
@@ -1259,8 +1256,7 @@ mod tests {
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
         let error = result.unwrap_err();
-        let solution_error = error
-            .error
+        let solution_error = parse_error_source(&error)
             .downcast_ref::<SolutionError>()
             .expect("expected SolutionError");
         assert!(matches!(
@@ -1295,8 +1291,7 @@ mod tests {
 
         let error = v1_solution.parse(&()).unwrap_err();
 
-        let solution_error = error
-            .error
+        let solution_error = parse_error_source(&error)
             .downcast_ref::<SolutionError>()
             .expect("expected SolutionError");
         assert!(matches!(

@@ -1115,14 +1115,6 @@ mod tests {
         let parse_error = error
             .downcast_ref::<ParseError>()
             .expect("semantic byte decoding must retain ParseError as the outer owner");
-        assert!(matches!(
-            parse_error
-                .error
-                .downcast_ref::<crate::ParameterIDCollision>(),
-            Some(crate::ParameterIDCollision { id })
-                if *id == expected_id
-        ));
-
         let signal_source = parse_error
             .source()
             .expect("ParseError must expose the parameter collision signal");

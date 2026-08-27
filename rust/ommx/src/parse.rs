@@ -30,7 +30,9 @@ pub trait Parse: Sized {
 ///
 /// ```rust
 /// let error = ommx::Instance::from_v1_bytes(&[0x80]).unwrap_err();
-/// assert!(error.downcast_ref::<ommx::ParseError>().is_some());
+/// let parse_error = error.downcast_ref::<ommx::ParseError>().unwrap();
+/// let cause = std::error::Error::source(parse_error).unwrap();
+/// assert!(cause.is::<ommx::RawParseError>());
 /// ```
 #[derive(Debug)]
 pub struct ParseError {
@@ -38,10 +40,9 @@ pub struct ParseError {
     /// The wire-format, domain-signal, or ordinary semantic error that caused
     /// parsing to fail.
     ///
-    /// Callers that recover from a domain signal can downcast this value
-    /// directly, for example with
-    /// `error.error.downcast_ref::<crate::SolutionError>()`.
-    pub error: crate::Error,
+    /// Public callers access this cause as `&dyn std::error::Error` through
+    /// [`std::error::Error::source`].
+    error: crate::Error,
 }
 
 impl fmt::Display for ParseError {
@@ -69,7 +70,9 @@ impl From<RawParseError> for ParseError {
 }
 
 impl ParseError {
-    /// Create a parse error whose cause remains available for downcasting.
+    /// Crate parsing modules use this constructor to attach their owning
+    /// domain cause while this module retains the protobuf breadcrumb
+    /// envelope.
     pub(crate) fn new(error: impl Into<crate::Error>) -> Self {
         ParseError {
             context: vec![],
@@ -92,8 +95,9 @@ pub struct ParseContext {
 /// Generic failures owned by the protobuf parsing boundary.
 ///
 /// Dedicated message-specific parse signals, domain validation signals, and
-/// ordinary semantic failures are stored directly in [`ParseError::error`],
-/// rather than being wrapped in this enum.
+/// ordinary semantic failures are exposed directly through
+/// [`ParseError`]'s [`std::error::Error::source`], rather than being wrapped in
+/// this enum.
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum RawParseError {

@@ -155,6 +155,8 @@ impl Parse for v1::SampledNamedFunction {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use super::*;
     use crate::{parse::Parse, v1, VariableID};
     use maplit::btreeset;
@@ -202,10 +204,17 @@ mod tests {
         let result: Result<(BTreeMap<NamedFunctionID, NamedFunction>, _), _> = nfs.parse(&());
         let error = result.unwrap_err();
         assert_eq!(
-            error.error.to_string(),
+            error
+                .source()
+                .expect("ParseError must expose the duplicate-ID cause")
+                .to_string(),
             "Duplicated named function ID is found in definition: NamedFunctionID(1)"
         );
-        assert!(error.error.downcast_ref::<RawParseError>().is_none());
+        let mut source = error.source();
+        while let Some(error) = source {
+            assert!(error.downcast_ref::<RawParseError>().is_none());
+            source = error.source();
+        }
         insta::assert_snapshot!(error, @r###"
         Traceback for OMMX Message parse error:
         Duplicated named function ID is found in definition: NamedFunctionID(1)

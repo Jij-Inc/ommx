@@ -396,6 +396,13 @@ impl std::fmt::Display for Sos1Constraint<Created> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error as _;
+
+    fn error_chain_contains<T: std::error::Error + 'static>(
+        error: &(dyn std::error::Error + 'static),
+    ) -> bool {
+        error.downcast_ref::<T>().is_some() || error.source().is_some_and(error_chain_contains::<T>)
+    }
 
     #[test]
     fn test_create_sos1_constraint() {
@@ -420,7 +427,9 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(
-            parse_error.error.downcast_ref::<Sos1ConstraintError>(),
+            parse_error
+                .source()
+                .and_then(|error| error.downcast_ref::<Sos1ConstraintError>()),
             Some(Sos1ConstraintError::EmptyVariables)
         ));
     }
@@ -432,7 +441,9 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(
-            parse_error.error.downcast_ref::<Sos1ConstraintError>(),
+            parse_error
+                .source()
+                .and_then(|error| error.downcast_ref::<Sos1ConstraintError>()),
             Some(Sos1ConstraintError::EmptyVariables)
         ));
     }
@@ -444,7 +455,9 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(
-            parse_error.error.downcast_ref::<Sos1ConstraintError>(),
+            parse_error
+                .source()
+                .and_then(|error| error.downcast_ref::<Sos1ConstraintError>()),
             Some(Sos1ConstraintError::EmptyVariables)
         ));
     }
@@ -460,7 +473,7 @@ mod tests {
 
         let err = proto.parse(&ATol::default()).unwrap_err();
 
-        assert!(err.error.downcast_ref::<crate::RawParseError>().is_none());
+        assert!(!error_chain_contains::<crate::RawParseError>(&err));
         assert!(
             err.to_string()
                 .contains("active_variable must be unset when feasible is false"),
@@ -484,7 +497,7 @@ mod tests {
 
         let err = proto.parse(&ATol::default()).unwrap_err();
 
-        assert!(err.error.downcast_ref::<crate::RawParseError>().is_none());
+        assert!(!error_chain_contains::<crate::RawParseError>(&err));
         assert!(
             err.to_string()
                 .contains("active_variable must be unset when feasible is false"),

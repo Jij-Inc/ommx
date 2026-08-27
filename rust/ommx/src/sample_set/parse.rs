@@ -10,7 +10,7 @@ fn invalid_sample_set_sidecar(
     let signal = crate::SampleSetError::InvalidSidecar {
         message: error.to_string(),
     };
-    ParseError::new(error.context(signal)).context(message, field)
+    ParseError::new(signal).context(message, field)
 }
 
 fn validate_sampled_indicator_structural_ids(
@@ -582,6 +582,10 @@ mod tests {
     use super::*;
     use crate::{v1, Parse};
 
+    fn parse_error_source(error: &ParseError) -> &(dyn std::error::Error + 'static) {
+        std::error::Error::source(error).expect("ParseError should expose its cause")
+    }
+
     fn sampled_decision_variables(kind: crate::Kind) -> crate::SampledDecisionVariableTable {
         let id = crate::VariableID::from(1);
         let decision_variable = crate::DecisionVariable::new(
@@ -614,7 +618,7 @@ mod tests {
         message: &str,
     ) {
         assert!(matches!(
-            error.error.downcast_ref::<crate::SampleSetError>(),
+            parse_error_source(error).downcast_ref::<crate::SampleSetError>(),
             Some(crate::SampleSetError::InvalidConstraintStructure {
                 constraint_family,
                 constraint_id: actual_constraint_id,
@@ -640,14 +644,13 @@ mod tests {
         let error = invalid_sample_set_sidecar(source, "ommx.v1.SampleSet", "constraints");
 
         assert!(matches!(
-            error.error.downcast_ref::<crate::SampleSetError>(),
+            parse_error_source(&error).downcast_ref::<crate::SampleSetError>(),
             Some(crate::SampleSetError::InvalidSidecar { message })
                 if message == "Constraint label/provenance references unknown constraint ID ConstraintID(7)"
         ));
         assert_eq!(error.context.len(), 1);
         assert_eq!(error.context[0].message, "ommx.v1.SampleSet");
         assert_eq!(error.context[0].field, "constraints");
-        assert_eq!(error.error.chain().count(), 2);
     }
 
     #[test]
@@ -1031,7 +1034,7 @@ mod tests {
         let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
         let error = result.unwrap_err();
         assert!(matches!(
-            error.error.downcast_ref::<crate::SampleSetError>(),
+            parse_error_source(&error).downcast_ref::<crate::SampleSetError>(),
             Some(crate::SampleSetError::DuplicatedVariableID { id })
                 if *id == crate::VariableID::from(1)
         ));
@@ -1077,7 +1080,7 @@ mod tests {
         let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
         let error = result.unwrap_err();
         assert!(matches!(
-            error.error.downcast_ref::<crate::SampleSetError>(),
+            parse_error_source(&error).downcast_ref::<crate::SampleSetError>(),
             Some(crate::SampleSetError::DuplicatedNamedFunctionID { id })
                 if *id == crate::NamedFunctionID::from(7)
         ));

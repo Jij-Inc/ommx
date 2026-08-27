@@ -882,13 +882,13 @@ macro_rules! impl_parse_v2_evaluated_collection {
                     let signal = crate::SolutionError::InvalidSidecar {
                         message: e.to_string(),
                     };
-                    ParseError::new(e.context(signal)).context(message, "contexts")
+                    ParseError::new(signal).context(message, "contexts")
                 })?;
                 EvaluatedCollection::with_context(entries, removed_reasons, context).map_err(|e| {
                     let signal = crate::SolutionError::InvalidSidecar {
                         message: e.to_string(),
                     };
-                    ParseError::new(e.context(signal)).context(message, "removed_reasons")
+                    ParseError::new(signal).context(message, "removed_reasons")
                 })
             }
         }
@@ -923,13 +923,13 @@ macro_rules! impl_parse_v2_sampled_collection {
                     let signal = crate::SampleSetError::InvalidSidecar {
                         message: e.to_string(),
                     };
-                    ParseError::new(e.context(signal)).context(message, "contexts")
+                    ParseError::new(signal).context(message, "contexts")
                 })?;
                 SampledCollection::with_context(entries, removed_reasons, context).map_err(|e| {
                     let signal = crate::SampleSetError::InvalidSidecar {
                         message: e.to_string(),
                     };
-                    ParseError::new(e.context(signal)).context(message, "removed_reasons")
+                    ParseError::new(signal).context(message, "removed_reasons")
                 })
             }
         }
@@ -1538,6 +1538,17 @@ mod tests {
     use super::*;
     use crate::{coeff, constraint::ConstraintID, linear, Equality, Function, ModelingLabel};
 
+    fn parse_error_source(error: &ParseError) -> &(dyn std::error::Error + 'static) {
+        std::error::Error::source(error).expect("ParseError should expose its cause")
+    }
+
+    fn error_chain_contains<T: std::error::Error + 'static>(
+        error: &(dyn std::error::Error + 'static),
+    ) -> bool {
+        error.downcast_ref::<T>().is_some()
+            || std::error::Error::source(error).is_some_and(error_chain_contains::<T>)
+    }
+
     fn removed_reason() -> RemovedReason {
         RemovedReason {
             reason: "test".to_string(),
@@ -1916,7 +1927,7 @@ mod tests {
             err.to_string().contains("[contexts]"),
             "unexpected error: {err}"
         );
-        assert!(err.error.downcast_ref::<crate::RawParseError>().is_none());
+        assert!(!error_chain_contains::<crate::RawParseError>(&err));
     }
 
     #[test]
@@ -1941,7 +1952,7 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(
-            err.error.downcast_ref::<crate::SolutionError>(),
+            parse_error_source(&err).downcast_ref::<crate::SolutionError>(),
             Some(crate::SolutionError::InvalidSidecar { message })
                 if message.contains("unknown constraint ID")
         ));
@@ -1969,7 +1980,7 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(
-            err.error.downcast_ref::<crate::SampleSetError>(),
+            parse_error_source(&err).downcast_ref::<crate::SampleSetError>(),
             Some(crate::SampleSetError::InvalidSidecar { message })
                 if message.contains("unknown constraint ID")
         ));
@@ -1991,7 +2002,7 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(
-            err.error.downcast_ref::<crate::SolutionError>(),
+            parse_error_source(&err).downcast_ref::<crate::SolutionError>(),
             Some(crate::SolutionError::InvalidSidecar { message })
                 if message.contains("unknown constraint ID")
         ));
@@ -2013,7 +2024,7 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(
-            err.error.downcast_ref::<crate::SampleSetError>(),
+            parse_error_source(&err).downcast_ref::<crate::SampleSetError>(),
             Some(crate::SampleSetError::InvalidSidecar { message })
                 if message.contains("unknown constraint ID")
         ));

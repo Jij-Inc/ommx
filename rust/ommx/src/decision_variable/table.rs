@@ -802,6 +802,8 @@ impl<'a, S: DecisionVariableTableStage> IntoIterator for &'a DecisionVariableTab
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use super::*;
     use crate::Bound;
 
@@ -1096,7 +1098,9 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(
-            err.error.to_string(),
+            err.source()
+                .expect("ParseError must expose the orphan-label cause")
+                .to_string(),
             "Modeling label references unknown decision variable ID VariableID(1)"
         );
         assert!(
@@ -1117,7 +1121,9 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(
-            err.error.to_string(),
+            err.source()
+                .expect("ParseError must expose the orphan-fixed-value cause")
+                .to_string(),
             "Fixed decision-variable value references unknown decision variable ID VariableID(1)"
         );
         assert!(
@@ -1145,7 +1151,9 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(
-            err.error.to_string(),
+            err.source()
+                .expect("ParseError must expose the orphan-label cause")
+                .to_string(),
             "Modeling label references unknown decision variable ID VariableID(1)"
         );
         assert!(
@@ -1173,7 +1181,9 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(
-            err.error.to_string(),
+            err.source()
+                .expect("ParseError must expose the orphan-label cause")
+                .to_string(),
             "Modeling label references unknown decision variable ID VariableID(1)"
         );
         assert!(
@@ -1194,7 +1204,9 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(
-            error.error.downcast_ref::<DecisionVariableError>(),
+            error
+                .source()
+                .and_then(|source| source.downcast_ref::<DecisionVariableError>()),
             Some(DecisionVariableError::SubstitutedValueInconsistent {
                 id,
                 substituted_value,
@@ -1217,7 +1229,9 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(
-            error.error.downcast_ref::<DecisionVariableError>(),
+            error
+                .source()
+                .and_then(|source| source.downcast_ref::<DecisionVariableError>()),
             Some(DecisionVariableError::NonFiniteValue { id, value })
                 if *id == VariableID::from(1) && value.is_infinite()
         ));

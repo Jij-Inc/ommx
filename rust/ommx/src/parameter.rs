@@ -225,6 +225,7 @@ impl LogicalMemoryProfile for ParameterTable {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error as _;
 
     #[test]
     fn rejects_orphan_labels() {
@@ -325,7 +326,9 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(
-            err.error.to_string(),
+            err.source()
+                .expect("ParseError must retain its cause")
+                .to_string(),
             "Duplicated parameter ID is found in ommx.v2.ParameterTable: VariableID(100)"
         );
         assert_eq!(err.context.len(), 1);
@@ -351,7 +354,9 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(
-            err.error.to_string(),
+            err.source()
+                .expect("ParseError must retain its cause")
+                .to_string(),
             "Modeling label references unknown parameter ID VariableID(100)"
         );
         assert!(

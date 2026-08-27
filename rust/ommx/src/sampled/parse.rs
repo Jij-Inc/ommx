@@ -92,6 +92,7 @@ impl From<Sampled<f64>> for v1::SampledValues {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::error::Error as _;
 
     #[test]
     fn parse_preserves_duplicated_sample_id_error() {
@@ -106,8 +107,8 @@ mod tests {
 
         assert_eq!(
             error
-                .error
-                .downcast_ref::<DuplicatedSampleIDError>()
+                .source()
+                .and_then(|error| error.downcast_ref::<DuplicatedSampleIDError>())
                 .map(DuplicatedSampleIDError::id),
             Some(SampleID::from(7))
         );

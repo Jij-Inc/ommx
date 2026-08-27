@@ -212,6 +212,8 @@ impl TryFrom<v1::SampledDecisionVariable> for SampledDecisionVariable {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use super::*;
 
     #[test]
@@ -228,7 +230,9 @@ mod tests {
         let res: Result<ParsedDecisionVariable, _> = dv.parse(&());
         let error = res.unwrap_err();
         assert!(matches!(
-            error.error.downcast_ref::<DecisionVariableError>(),
+            error
+                .source()
+                .and_then(|source| source.downcast_ref::<DecisionVariableError>()),
             Some(DecisionVariableError::InvalidDefinition { id, source })
                 if *id == VariableID::from(1)
                     && matches!(
@@ -260,7 +264,9 @@ mod tests {
             .unwrap_err();
 
         assert!(matches!(
-            error.error.downcast_ref::<DecisionVariableError>(),
+            error
+                .source()
+                .and_then(|source| source.downcast_ref::<DecisionVariableError>()),
             Some(DecisionVariableError::DuplicateID { id })
                 if *id == VariableID::from(1)
         ));

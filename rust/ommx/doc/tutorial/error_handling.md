@@ -141,15 +141,25 @@ ParametricInstance namespace collisions, and
 validation. This preserves the validation cause without changing the
 Python-visible parse contract.
 
-[`ParseError::error`](crate::ParseError::error) stores the underlying
-[`Error`](crate::Error) directly. Recoverable semantic failures can therefore
-be downcast to their domain signal without first matching a parse-layer
-wrapper. [`RawParseError`](crate::RawParseError) is reserved for generic
-protobuf-boundary failures such as missing fields, unknown enums, reserved
-annotation keys, and decode errors. Dedicated message-specific signals such as
-[`QuadraticParseError`](crate::QuadraticParseError) are also stored directly.
-Semantic failures without a caller recovery path remain ordinary `Error`
-values and still retain the `ParseError` breadcrumbs.
+[`ParseError`](crate::ParseError) exposes its immediate cause through
+[`std::error::Error::source`]. Recoverable semantic failures can therefore be
+downcast directly from that source to their domain signal without matching a
+`RawParseError` wrapper. [`RawParseError`](crate::RawParseError) is
+reserved for generic protobuf-boundary failures such as missing fields,
+unknown enums, reserved annotation keys, and decode errors. Dedicated
+message-specific parse signals such as
+[`QuadraticParseError`](crate::QuadraticParseError) are also exposed directly.
+Semantic failures without a caller recovery path remain ordinary errors and
+still retain the `ParseError` breadcrumbs.
+
+```ignore
+let parse_error = error.downcast_ref::<ommx::ParseError>().unwrap();
+let cause = std::error::Error::source(parse_error).unwrap();
+
+if let Some(solution_error) = cause.downcast_ref::<ommx::SolutionError>() {
+    // Inspect the Solution-owned signal and recover if appropriate.
+}
+```
 
 ## Fail-site macros
 

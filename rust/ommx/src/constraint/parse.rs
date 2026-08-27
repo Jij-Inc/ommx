@@ -267,6 +267,8 @@ impl Parse for v1::SampledConstraint {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use super::*;
     use crate::v1;
     use maplit::btreeset;
@@ -312,7 +314,11 @@ mod tests {
 
         let err = vec![constraint.clone(), constraint].parse(&()).unwrap_err();
 
-        assert!(err.error.downcast_ref::<RawParseError>().is_none());
+        let mut source = err.source();
+        while let Some(error) = source {
+            assert!(error.downcast_ref::<RawParseError>().is_none());
+            source = error.source();
+        }
         assert!(err.to_string().contains("ConstraintID(1)"));
     }
 

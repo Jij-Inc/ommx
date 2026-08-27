@@ -536,6 +536,8 @@ impl Arbitrary for Bound {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use approx::assert_abs_diff_eq;
 
     use super::*;
@@ -550,7 +552,9 @@ mod tests {
         .unwrap_err();
 
         assert!(matches!(
-            error.error.downcast_ref::<BoundError>(),
+            error
+                .source()
+                .and_then(|source| source.downcast_ref::<BoundError>()),
             Some(BoundError::UpperSmallerThanLower { lower, upper })
                 if *lower == 2.0 && *upper == 1.0
         ));

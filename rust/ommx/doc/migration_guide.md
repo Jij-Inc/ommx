@@ -352,12 +352,19 @@ an equality.
 
 **Semantic protobuf parse errors.** `RawParseError::InvalidInstance` and the
 domain-signal wrapper variants on `RawParseError` were removed during the 3.0
-beta. `ParseError::error` now stores `ommx::Error` directly. Match a curated
-signal on that value when the caller has a recovery path, for example
-`parse_error.error.downcast_ref::<SolutionError>()`; otherwise propagate the
-outer `ParseError` or render it for diagnostics. `RawParseError` now contains
-only generic protobuf-boundary failures. Dedicated message-specific parse
-signals, such as `QuadraticParseError`, are also stored directly.
+beta. The `ParseError::error` field is no longer public; `ParseError` exposes
+its immediate cause through `std::error::Error::source()` instead. Match a
+curated signal on that source when the caller has a recovery path:
+
+```rust,ignore
+let solution_error = std::error::Error::source(parse_error)
+    .and_then(|source| source.downcast_ref::<SolutionError>());
+```
+
+Otherwise propagate the outer `ParseError` or render it for diagnostics.
+`RawParseError` now contains only generic protobuf-boundary failures. Dedicated
+message-specific parse signals, such as `QuadraticParseError`, are also exposed
+directly as the source.
 
 **Key lookups now return `Option<T>`:**
 

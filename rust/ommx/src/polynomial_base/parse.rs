@@ -228,6 +228,7 @@ mod tests {
     use super::*;
     use crate::v1::linear::Term;
     use proptest::prelude::*;
+    use std::error::Error as _;
 
     #[test]
     fn test_parse_linear() {
@@ -303,7 +304,9 @@ mod tests {
         };
         let error = linear.parse(&()).unwrap_err();
         assert_eq!(
-            error.error.downcast_ref::<CoefficientError>(),
+            error
+                .source()
+                .and_then(|error| error.downcast_ref::<CoefficientError>()),
             Some(&CoefficientError::Infinite)
         );
         insta::assert_snapshot!(error, @r###"
@@ -375,7 +378,9 @@ mod tests {
         };
         let error = quadratic.parse(&()).unwrap_err();
         assert!(matches!(
-            error.error.downcast_ref::<QuadraticParseError>(),
+            error
+                .source()
+                .and_then(|error| error.downcast_ref::<QuadraticParseError>()),
             Some(QuadraticParseError::RowLengthMismatch { row: 2, value: 3 })
         ));
         insta::assert_snapshot!(error, @r###"

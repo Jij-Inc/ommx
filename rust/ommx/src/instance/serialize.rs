@@ -287,7 +287,10 @@ mod tests {
         ParameterTable, Sampled, Sos1Constraint, Sos1ConstraintID, VariableID,
     };
     use proptest::prelude::*;
-    use std::collections::{BTreeMap, BTreeSet, HashMap};
+    use std::{
+        collections::{BTreeMap, BTreeSet, HashMap},
+        error::Error as _,
+    };
 
     fn instance_with_special_constraints() -> Instance {
         let variable_1 = VariableID::from(1);
@@ -668,7 +671,8 @@ mod tests {
         let err = crate::Solution::try_from(proto).unwrap_err();
 
         assert!(matches!(
-            err.error.downcast_ref::<crate::SolutionError>(),
+            err.source()
+                .and_then(|error| error.downcast_ref::<crate::SolutionError>()),
             Some(crate::SolutionError::InvalidConstraintStructure {
                     constraint_family: "one-hot",
                     constraint_id,
