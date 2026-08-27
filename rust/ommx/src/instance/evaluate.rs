@@ -484,12 +484,13 @@ impl Instance {
     /// irrelevant, and dependent decision variables.
     ///
     /// Post-condition: the returned state contains exactly this instance's
-    /// decision-variable IDs. Caller-owned Binary values strictly within `atol`
-    /// of zero or one and Integer or SemiInteger values strictly within `atol` of
-    /// an integer are represented by that exact discrete value. Derived dependent
-    /// values use the same target-kind rule. Continuous and SemiContinuous values
-    /// are not rounded. Other finite solver values are preserved so kind and
-    /// bound violations remain available to Solution feasibility.
+    /// decision-variable IDs. For supplied coordinates that are neither fixed
+    /// nor dependent, Binary values strictly within `atol` of zero or one and
+    /// Integer or SemiInteger values strictly within `atol` of an integer are
+    /// represented by that exact discrete value. Derived dependent values use
+    /// the same target-kind rule. Continuous and SemiContinuous values are not
+    /// rounded. Other finite solver values are preserved so kind and bound
+    /// violations remain available to Solution feasibility.
     /// Caller-provided fixed or dependent values are treated as consistency
     /// assertions. The returned state uses the stored Instance-owned fixed value
     /// unchanged, or the canonicalized derived dependent value.

@@ -8,6 +8,25 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174))
+
+{meth}`~ommx.Instance.populate_state`、{meth}`~ommx.Instance.evaluate`、
+{meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
+dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
+canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
+未満のBinary値と、整数との差が`atol`未満のInteger / SemiInteger値は、対応する厳密な
+離散値として格納されます。差がちょうど`atol`の値は変更せず、既存のstrictなkind
+feasibility規則を維持します。ContinuousとSemiContinuousは丸めません。それ以外の
+有限値は、返された{class}`~ommx.Solution`がinfeasibleと判定できるように保持し、
+非有限なstate値は引き続き拒否します。
+
+呼び出し側がfixedまたはdependent variableの値を渡した場合、その値は引き続き
+整合性assertionとして扱います。検証後のstateには、Instanceが所有するfixed valueを
+変更せずに格納するか、dependencyから導出してtarget kindに従いcanonicalizeした値を
+格納します。dependencyはcanonicalized inputから評価するため、丸め前のsolver vectorを
+もとに明示したdependent assertionが、導出値の`atol`内に入らず拒否される場合があります。
+scalar / sample evaluationは同じ規則を使い、SampleIDの対応関係を保持します。
+
 ### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))
 
 {class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
