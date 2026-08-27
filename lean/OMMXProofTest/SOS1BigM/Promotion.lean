@@ -19,7 +19,9 @@ cardinality suffix:
 
 The rejection fixtures exercise the initial checker as a conservative
 sufficient-condition recognizer.  Rejection is intentionally not interpreted
-as evidence that no correct promotion exists.
+as evidence that no correct promotion exists. Additional fixtures distinguish
+sufficiently wide link bounds from bounds which do not contain the promoted
+member domains.
 -/
 
 namespace OMMXProof.Test.SOS1BigM.Promotion
@@ -34,6 +36,9 @@ def freshMembers : Finset {i // i ∈ members} :=
 def witness : Witness 2 where
   members := members
   freshMembers := freshMembers
+  linkBounds :=
+    { lower := fun i => if i.val = 0 then 0 else -2
+      upper := fun i => if i.val = 0 then 1 else 3 }
   retainedConstraintCount := 1
 
 example : witness.freshCount = 1 := by
@@ -154,7 +159,9 @@ def unboundedMemberSource : Instance (2 + witness.freshCount) :=
       else if i.val = 1 then .continuous
       else .binary }
 
-def badUpperSource : Instance (2 + witness.freshCount) :=
+/-- This source row uses upper link bound `4`, while `witness.linkBounds`
+records `3`. A separate witness recording `4` could accept this looser link. -/
+def mismatchedUpperSource : Instance (2 + witness.freshCount) :=
   { source with
     constraints :=
       [retainedRow, row 0 1 (-4) 0, lowerLink, cardinality] }
@@ -287,7 +294,7 @@ example : witness.validate selectorNonbinarySource = none := by
 example : witness.validate unboundedMemberSource = none := by
   native_decide
 
-example : witness.validate badUpperSource = none := by
+example : witness.validate mismatchedUpperSource = none := by
   native_decide
 
 example : witness.validate badCardinalitySource = none := by
@@ -314,6 +321,155 @@ example : witness.validate freshIndicatorTriggerSource = none := by
 example : witness.validate freshIndicatorBodySource = none := by
   native_decide
 
+/-! ## Link bounds larger than member bounds -/
+
+namespace SufficientlyLargeM
+
+def witness : Witness 2 where
+  members := Promotion.members
+  freshMembers := Promotion.freshMembers
+  linkBounds :=
+    { lower := fun _ => 0
+      upper := fun i => if i.val = 0 then 1 else 3 }
+  retainedConstraintCount := 0
+
+def domains : Fin (2 + witness.freshCount) → Domain :=
+  fun i =>
+    if i.val = 0 then .binary
+    else if i.val = 1 then .continuous (.finite 0 2 (by norm_num))
+    else .binary
+
+/-- The link coefficient `3` is larger than the declared upper bound `2`. -/
+def source : Instance (2 + witness.freshCount) where
+  domains := domains
+  constraints := [row 0 1 (-3) 0, row 1 0 1 (-1)]
+  oneHotConstraints := []
+  sos1Constraints := []
+  indicatorConstraints := []
+  objective := Affine.zero
+  sense := .minimize
+
+example : witness.MemberBoundsWithinLinkBounds source := by
+  native_decide
+
+theorem source_validate_isSome :
+    (witness.validate source).isSome = true := by
+  native_decide
+
+def validated : witness.Validated source :=
+  (witness.validate source).get source_validate_isSome
+
+def transform : Instance.Transform source :=
+  promotion witness source
+
+example : transform.IsReduction :=
+  promotion_isReduction validated
+
+example : transform.IsRelaxation :=
+  promotion_isRelaxation validated
+
+end SufficientlyLargeM
+
+/-! ## Link bounds smaller than member bounds -/
+
+namespace InsufficientM
+
+def witness : Witness 2 where
+  members := Promotion.members
+  freshMembers := Promotion.freshMembers
+  linkBounds :=
+    { lower := fun _ => 0
+      upper := fun i => if i.val = 0 then 1 else 2 }
+  retainedConstraintCount := 0
+
+def domains : Fin (2 + witness.freshCount) → Domain :=
+  fun i =>
+    if i.val = 0 then .binary
+    else if i.val = 1 then .continuous (.finite 0 3 (by norm_num))
+    else .binary
+
+/-- The rows match the witnessed `M = 2`, but the declared upper bound is `3`. -/
+def source : Instance (2 + witness.freshCount) where
+  domains := domains
+  constraints := [row 0 1 (-2) 0, row 1 0 1 (-1)]
+  oneHotConstraints := []
+  sos1Constraints := []
+  indicatorConstraints := []
+  objective := Affine.zero
+  sense := .minimize
+
+example : ¬witness.MemberBoundsWithinLinkBounds source := by
+  native_decide
+
+example : witness.validate source = none := by
+  native_decide
+
+end InsufficientM
+
+/-! ## Lower link bounds larger in magnitude than member bounds -/
+
+namespace SufficientlyWideLowerLink
+
+def witness : Witness 2 where
+  members := Promotion.members
+  freshMembers := Promotion.freshMembers
+  linkBounds :=
+    { lower := fun i => if i.val = 0 then 0 else -3
+      upper := fun i => if i.val = 0 then 1 else 3 }
+  retainedConstraintCount := 1
+
+/-- The lower link bound `-3` is looser than the declared lower bound `-2`. -/
+def source : Instance (2 + witness.freshCount) :=
+  { Promotion.source with
+    constraints :=
+      [retainedRow, upperLink, row 0 (-1) (-3) 0, cardinality] }
+
+example : witness.MemberBoundsWithinLinkBounds source := by
+  native_decide
+
+theorem source_validate_isSome :
+    (witness.validate source).isSome = true := by
+  native_decide
+
+def validated : witness.Validated source :=
+  (witness.validate source).get source_validate_isSome
+
+def transform : Instance.Transform source :=
+  promotion witness source
+
+example : transform.IsReduction :=
+  promotion_isReduction validated
+
+example : transform.IsRelaxation :=
+  promotion_isRelaxation validated
+
+end SufficientlyWideLowerLink
+
+namespace InsufficientLowerLink
+
+def witness : Witness 2 where
+  members := Promotion.members
+  freshMembers := Promotion.freshMembers
+  linkBounds :=
+    { lower := fun i => if i.val = 0 then 0 else -1
+      upper := fun i => if i.val = 0 then 1 else 3 }
+  retainedConstraintCount := 1
+
+/-- The rows match the witnessed lower link bound `-1`, but the declared lower
+bound is `-2`. -/
+def source : Instance (2 + witness.freshCount) :=
+  { Promotion.source with
+    constraints :=
+      [retainedRow, upperLink, row 0 (-1) (-1) 0, cardinality] }
+
+example : ¬witness.MemberBoundsWithinLinkBounds source := by
+  native_decide
+
+example : witness.validate source = none := by
+  native_decide
+
+end InsufficientLowerLink
+
 /-! ## Multiple sequential SOS1 promotions -/
 
 namespace MultipleSOS1
@@ -326,6 +482,9 @@ def freshMembers : Finset {i // i ∈ members} :=
 def witness : Witness 3 where
   members := members
   freshMembers := freshMembers
+  linkBounds :=
+    { lower := fun i => if i.val = 0 then 0 else -2
+      upper := fun i => if i.val = 0 then 1 else 3 }
   retainedConstraintCount := 0
 
 def domains : Fin (3 + witness.freshCount) → Domain :=
@@ -349,7 +508,7 @@ def skeleton : Instance (3 + witness.freshCount) where
 def source : Instance (3 + witness.freshCount) :=
   { skeleton with
     constraints :=
-      witness.selectorLayout.canonicalRows (witness.selectorBounds skeleton)
+      witness.selectorLayout.canonicalRows witness.linkBounds
     sos1Constraints := [{ members := {1, 2} }] }
 
 theorem source_validate_isSome :

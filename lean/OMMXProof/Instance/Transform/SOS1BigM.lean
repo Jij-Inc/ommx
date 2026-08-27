@@ -30,9 +30,11 @@ orders, and the reverse feasibility arguments traverse the same bridge backwards
   semantics as target rows. For the reverse feasibility implication, it
   interprets the target rows and projects the resulting selector semantics to
   SOS1.
-- Promotion recognizes and interprets the source row suffix, then projects the
-  resulting selector semantics to the promoted SOS1 constraint. Its canonical
-  decoding argument proceeds from SOS1 back to the source rows.
+- Promotion recognizes and interprets the source row suffix using witnessed
+  link bounds, checks that the promoted member domains are contained in those
+  bounds, then projects the resulting selector semantics to the promoted SOS1
+  constraint. Its canonical decoding argument proceeds from SOS1 back to the
+  source rows.
 
 The promotion checker deliberately accepts a conservative sufficient
 condition. Other valid formulations of SOS1 remain outside this Big-M-specific

@@ -17,10 +17,12 @@ The implementation follows a one-way dependency through these submodules:
 
 - `SOS1BigM.SelectorFormulation` defines the direction-independent selector
   semantics, layout, canonical Big-M rows, and their exact relationship;
-- `Promotion.Witness` defines the untrusted retained/fresh suffix layout;
+- `Promotion.Witness` defines the untrusted retained/fresh suffix layout and
+  link bounds;
 - `Promotion.Target` projects retained data and constructs the promoted Instance;
-- `Promotion.Validation` checks the supported source rows directly against the
-  shared canonical row specification and derives structural source equalities;
+- `Promotion.Validation` checks domain containment and the supported source rows
+  directly against the shared row specification, then derives structural source
+  equalities;
 - `Promotion.Semantics` derives feasibility, canonical-selector, and objective
   characterizations from validated evidence.
 
@@ -64,8 +66,10 @@ The sufficient condition is the proposition
 - reused selectors to be exactly the retained binary members;
 - every fresh selector in the source suffix to be binary;
 - a valid retained-constraint prefix whose rows do not depend on fresh selectors;
+- every promoted member's declared bounds to be contained in the link bounds
+  recorded by the witness;
 - the remaining ordered regular-constraint suffix to equal the canonical Big-M
-  link/cardinality rows generated from the witness and declared bounds;
+  link/cardinality rows generated from the witness's link bounds;
 - every existing OneHot and SOS1 constraint to contain only retained members;
 - every existing Indicator constraint to have a retained trigger and a body independent
   of fresh selectors; and
@@ -86,7 +90,7 @@ incorrect outside this sufficient-condition recognizer.
 
 ## Example
 
-For example, `x, z ∈ Binary, y ∈ [0, 2], x + z ≤ 1, y ≤ 2z` is promoted to
+For example, `x, z ∈ Binary, y ∈ [0, 2], y ≤ 3z, x + z ≤ 1` is promoted to
 `x ∈ Binary, y ∈ [0, 2], SOS1(x, y)`.
 
 This uses a `Witness 2` with the following data:
@@ -96,12 +100,14 @@ This uses a `Witness 2` with the following data:
 - `members = {x, y}` selects both retained components for the promoted SOS1 constraint.
 - `freshMembers = {y}` declares that `y` uses a fresh selector. Consequently `x` is the
   reused selector, `freshCount = 1`, and the appended source component is named `z`.
+- `linkBounds` records `[0, 1]` for `x` and `[0, 3]` for `y`. The latter contains
+  the declared domain `[0, 2]`, so the upper Big-M coefficient need not be tight.
 - `retainedConstraintCount = 0` declares that no regular row is retained. The entire
-  ordered constraint list is therefore the generated suffix `[y ≤ 2z, x + z ≤ 1]`.
+  ordered constraint list is therefore the generated suffix `[y ≤ 3z, x + z ≤ 1]`.
 
 Under this witness:
 
-- `y ≤ 2z` is recognized as the upper link obtained from the upper bound `2` and
+- `y ≤ 3z` is recognized as the upper link obtained from the witnessed link bound `3` and
   removed. No lower link is expected because the lower bound of `y` is zero.
 - `x + z ≤ 1` is recognized as the selector-cardinality row and removed.
 - `SOS1(x, y)` is added to the promoted target.
@@ -122,9 +128,9 @@ The untrusted witness always constructs a transform, but `witness.validate sourc
 
 - Replacing `x + z ≤ 1` with `x + z ≤ 2` is rejected. This row does not enforce the
   at-most-one selector condition and can project to a state violating `SOS1(x, y)`.
-- Replacing `y ≤ 2z` with `y ≤ 3z` is also rejected. Given `y ∈ [0, 2]`, this looser
-  coefficient can still describe a valid formulation, but the initial checker deliberately
-  requires the canonical row generated from the declared upper bound.
+- With `y ∈ [0, 3]`, witnessing and supplying `y ≤ 2z` is rejected because the link
+  upper bound does not contain the declared domain. In particular, the promoted state
+  `(x, y) = (0, 3)` cannot be decoded with the canonical selector `z = 1`.
 - Making an existing OneHot or SOS1 constraint contain `z`, or using `z` as an Indicator
   trigger or in its body, is rejected because that constraint cannot be preserved after
   removing `z`.

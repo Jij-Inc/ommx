@@ -12,9 +12,10 @@ validated witness. The initial accepted shape is deliberately conservative:
 - retained variables and regular constraints form left/prefix blocks,
 - fresh binary selectors and selector-formulation constraints form right/suffix
   blocks,
-- every selected member has finite declared bounds,
+- every selected member has finite declared bounds contained in the witnessed
+  link bounds,
 - the suffix is the standard upper/lower Big-M links followed by one
-  cardinality constraint,
+  cardinality constraint generated from those witnessed link bounds,
 - retained affine expressions do not depend on fresh selectors, and
 - every pre-existing special constraint is independent of fresh selectors and
   can therefore be preserved in the promoted Instance.
@@ -52,7 +53,7 @@ instance : Decidable (witness.FiniteMemberBounds source) := by
 The fallback zero keeps the expected-row specification total for untrusted
 witnesses. `StandardBigMForm.finiteMemberBounds` proves that it is unreachable
 for every accepted promotion. -/
-def selectorBounds : SelectorBounds witness.Member where
+def memberBounds : SelectorBounds witness.Member where
   lower := fun i =>
     if h : ((witness.target source).domains i).bound.IsFinite then
       ((witness.target source).domains i).bound.finiteLower h
@@ -62,17 +63,29 @@ def selectorBounds : SelectorBounds witness.Member where
       ((witness.target source).domains i).bound.finiteUpper h
     else 0
 
-theorem selectorBounds_exact
+theorem memberBounds_exact
     (hfinite : witness.FiniteMemberBounds source)
     (i : witness.Member) :
     ((witness.target source).domains i).bound.lower =
-        .finite ((witness.selectorBounds source).lower i) ∧
+        .finite ((witness.memberBounds source).lower i) ∧
       ((witness.target source).domains i).bound.upper =
-        .finite ((witness.selectorBounds source).upper i) := by
+        .finite ((witness.memberBounds source).upper i) := by
   have hi := hfinite i
-  simp only [selectorBounds, hi, ↓reduceDIte]
+  simp only [memberBounds, hi, ↓reduceDIte]
   exact ⟨Bound.lower_eq_finiteLower _ hi,
     Bound.upper_eq_finiteUpper _ hi⟩
+
+/-- The Big-M link interval witnessed for every member contains its declared
+domain interval. This permits link coefficients to be larger in magnitude than
+the tight bounds extracted from the source domains. -/
+def MemberBoundsWithinLinkBounds : Prop :=
+  ∀ i : witness.Member,
+    witness.linkBounds.lower i ≤ (witness.memberBounds source).lower i ∧
+      (witness.memberBounds source).upper i ≤ witness.linkBounds.upper i
+
+instance : Decidable (witness.MemberBoundsWithinLinkBounds source) := by
+  unfold MemberBoundsWithinLinkBounds
+  infer_instance
 
 /-- The witness classifies reused members exactly as retained binary members. -/
 def ReusedMembersMatchDomains : Prop :=
@@ -147,6 +160,8 @@ Failure therefore means "unsupported by this validator", not that the proposed
 promotion is mathematically invalid. -/
 structure StandardBigMForm : Prop where
   finiteMemberBounds : witness.FiniteMemberBounds source
+  memberBoundsWithinLinkBounds :
+    witness.MemberBoundsWithinLinkBounds source
   reusedMembersMatchDomains : witness.ReusedMembersMatchDomains source
   freshSelectorDomains :
     ∀ j, source.domains (Fin.natAdd n j) = .binary
@@ -158,7 +173,7 @@ structure StandardBigMForm : Prop where
   formulationSuffixMatches :
     RowsMatch
       (source.constraints.drop witness.retainedConstraintCount)
-      (witness.selectorLayout.canonicalRows (witness.selectorBounds source))
+      (witness.selectorLayout.canonicalRows witness.linkBounds)
   oneHotConstraintsFreshIndependent :
     source.oneHotConstraints.Forall witness.OneHotFreshIndependent
   sos1ConstraintsFreshIndependent :
@@ -170,6 +185,7 @@ structure StandardBigMForm : Prop where
 
 private def standardBigMFormConditions : Prop :=
   witness.FiniteMemberBounds source ∧
+    witness.MemberBoundsWithinLinkBounds source ∧
     witness.ReusedMembersMatchDomains source ∧
     (∀ j, source.domains (Fin.natAdd n j) = .binary) ∧
     witness.retainedConstraintCount ≤ source.constraints.length ∧
@@ -177,7 +193,7 @@ private def standardBigMFormConditions : Prop :=
       (fun constraint => witness.FreshIndependent constraint.expr) ∧
     RowsMatch
       (source.constraints.drop witness.retainedConstraintCount)
-      (witness.selectorLayout.canonicalRows (witness.selectorBounds source)) ∧
+      (witness.selectorLayout.canonicalRows witness.linkBounds) ∧
     source.oneHotConstraints.Forall witness.OneHotFreshIndependent ∧
     source.sos1Constraints.Forall witness.SOS1FreshIndependent ∧
     source.indicatorConstraints.Forall witness.IndicatorFreshIndependent ∧
@@ -192,15 +208,17 @@ private theorem standardBigMForm_iff_conditions :
       witness.standardBigMFormConditions source := by
   constructor
   · intro h
-    exact ⟨h.finiteMemberBounds, h.reusedMembersMatchDomains,
+    exact ⟨h.finiteMemberBounds, h.memberBoundsWithinLinkBounds,
+      h.reusedMembersMatchDomains,
       h.freshSelectorDomains, h.retainedConstraintCount_le,
       h.retainedConstraintsFreshIndependent, h.formulationSuffixMatches,
       h.oneHotConstraintsFreshIndependent, h.sos1ConstraintsFreshIndependent,
       h.indicatorConstraintsFreshIndependent, h.objectiveFreshIndependent⟩
-  · rintro ⟨hfinite, hlayout, hfreshDomains, hcount, hretained,
+  · rintro ⟨hfinite, hbounds, hlayout, hfreshDomains, hcount, hretained,
       hsuffix, honeHot, hsos1, hindicator, hobjective⟩
     exact
       { finiteMemberBounds := hfinite
+        memberBoundsWithinLinkBounds := hbounds
         reusedMembersMatchDomains := hlayout
         freshSelectorDomains := hfreshDomains
         retainedConstraintCount_le := hcount
@@ -268,7 +286,7 @@ theorem extendedPrefixConstraints_eq
 theorem formulationSuffix_eq
     (validated : witness.Validated source) :
     source.constraints.drop witness.retainedConstraintCount =
-      witness.selectorLayout.canonicalRows (witness.selectorBounds source) := by
+      witness.selectorLayout.canonicalRows witness.linkBounds := by
   exact rowsMatch_iff_eq.mp
     validated.standardBigMForm.formulationSuffixMatches
 
@@ -289,8 +307,7 @@ theorem sourceConstraints_eq
     source.constraints =
       ((witness.target source).constraints.map
         fun constraint => constraint.extend witness.freshCount) ++
-        witness.selectorLayout.canonicalRows
-          (witness.selectorBounds source) := by
+        witness.selectorLayout.canonicalRows witness.linkBounds := by
   calc
     source.constraints =
         source.constraints.take witness.retainedConstraintCount ++
@@ -299,14 +316,12 @@ theorem sourceConstraints_eq
         source.constraints).symm
     _ =
         source.constraints.take witness.retainedConstraintCount ++
-          witness.selectorLayout.canonicalRows
-            (witness.selectorBounds source) := by
+          witness.selectorLayout.canonicalRows witness.linkBounds := by
       rw [validated.formulationSuffix_eq]
     _ =
         ((witness.target source).constraints.map
           fun constraint => constraint.extend witness.freshCount) ++
-          witness.selectorLayout.canonicalRows
-            (witness.selectorBounds source) := by
+          witness.selectorLayout.canonicalRows witness.linkBounds := by
       rw [target, validated.extendedPrefixConstraints_eq]
 
 theorem sourceOneHotConstraints_eq

@@ -68,9 +68,9 @@ completeness of recognition or presolve algorithms remain outside this model.
 | `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Target` | Canonical-row instantiation, target Instance construction, and feasibility equivalence |
 | `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Basic` | Partial lowering, canonical encoding, source projection, and transformation correctness |
 | `OMMXProof.Instance.Transform.SOS1BigM.Lowering` | Entrypoint for complete SOS1 Big-M lowering |
-| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Witness` | Untrusted retained/fresh suffix layout supplied to the promotion checker |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Witness` | Untrusted retained/fresh suffix layout and link bounds supplied to the promotion checker |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target` | Retained-prefix projection, promoted target construction, and target feasibility characterization |
-| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Validation` | Direct canonical-row validation and structural source equalities derived from a validated witness |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Validation` | Direct witnessed-row and member-domain containment validation, plus derived structural source equalities |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Semantics` | Feasibility, canonical-selector, and objective characterizations for validated promotion |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Basic` | Total witnessed promotion plus correctness theorems under validated sufficient conditions |
 | `OMMXProof.Instance.Transform.SOS1BigM.Promotion` | Entrypoint for complete SOS1 Big-M promotion |

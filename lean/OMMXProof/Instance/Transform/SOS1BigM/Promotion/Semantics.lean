@@ -21,18 +21,32 @@ section Source
 variable (witness : Witness n)
 variable (source : Instance (n + witness.freshCount))
 
-theorem withinSelectorBounds_of_domains
+theorem withinMemberBounds_of_domains
     (hfinite : witness.FiniteMemberBounds source)
     {state : State n}
     (hdomains : ∀ i, state i ∈ (witness.target source).domains i) :
-    WithinSelectorBounds (witness.selectorBounds source)
+    WithinSelectorBounds (witness.memberBounds source)
       (witness.memberState state) := by
   intro i
   exact
     ⟨Domain.finite_lower_le (hdomains i)
-        (witness.selectorBounds_exact source hfinite i).1,
+        (witness.memberBounds_exact source hfinite i).1,
       Domain.le_finite_upper (hdomains i)
-        (witness.selectorBounds_exact source hfinite i).2⟩
+        (witness.memberBounds_exact source hfinite i).2⟩
+
+theorem withinLinkBounds_of_domains
+    (hfinite : witness.FiniteMemberBounds source)
+    (hwithin : witness.MemberBoundsWithinLinkBounds source)
+    {state : State n}
+    (hdomains : ∀ i, state i ∈ (witness.target source).domains i) :
+    WithinSelectorBounds witness.linkBounds
+      (witness.memberState state) := by
+  intro i
+  have hmember :=
+    witness.withinMemberBounds_of_domains source hfinite hdomains i
+  exact
+    ⟨le_trans (hwithin i).1 hmember.1,
+      le_trans hmember.2 (hwithin i).2⟩
 
 theorem reusedBinary_of_domains
     (hlayout : witness.ReusedMembersMatchDomains source)
@@ -67,34 +81,36 @@ theorem genericSOS1_memberState_iff_holds (state : State n) :
 
 theorem selectedHolds_of_plannedSelectorFormulation
     (hfinite : witness.FiniteMemberBounds source)
+    (hwithin : witness.MemberBoundsWithinLinkBounds source)
     {state : State n} {selectors : State witness.freshCount}
     (hdomains : ∀ i, state i ∈ (witness.target source).domains i)
     (hformulation :
       PlannedSelectorFormulationHolds witness.reusedMembers
-        (witness.selectorBounds source)
+        witness.linkBounds
         (witness.memberState state)
         (witness.freshSelectorState state selectors)) :
     witness.promotedConstraint.Holds state := by
   apply (witness.genericSOS1_memberState_iff_holds state).mp
   exact plannedSelectorFormulation_project_sos1
-    witness.reusedMembers (witness.selectorBounds source)
+    witness.reusedMembers witness.linkBounds
     (witness.memberState state)
     (witness.freshSelectorState state selectors)
-    (witness.withinSelectorBounds_of_domains source hfinite hdomains)
+    (witness.withinLinkBounds_of_domains source hfinite hwithin hdomains)
     hformulation
 
 theorem canonicalSelectorFormulation_of_selected
     (hfinite : witness.FiniteMemberBounds source)
+    (hwithin : witness.MemberBoundsWithinLinkBounds source)
     (hlayout : witness.ReusedMembersMatchDomains source)
     {state : State n}
     (hdomains : ∀ i, state i ∈ (witness.target source).domains i)
     (hselected : witness.promotedConstraint.Holds state) :
     PlannedSelectorFormulationHolds witness.reusedMembers
-      (witness.selectorBounds source)
+      witness.linkBounds
       (witness.memberState state)
       (canonicalSelector (witness.memberState state)) := by
   apply canonicalSelector_plannedFormulation
-  · exact witness.withinSelectorBounds_of_domains source hfinite hdomains
+  · exact witness.withinLinkBounds_of_domains source hfinite hwithin hdomains
   · exact witness.reusedBinary_of_domains source hlayout hdomains
   · exact (witness.genericSOS1_memberState_iff_holds state).mpr hselected
 
@@ -106,7 +122,7 @@ theorem source_feasible_append_iff_base_and_formulation
     source.Feasible (State.append state selectors) ↔
       witness.BaseFeasible source state ∧
         PlannedSelectorFormulationHolds witness.reusedMembers
-          (witness.selectorBounds source)
+          witness.linkBounds
           (witness.memberState state)
           (witness.freshSelectorState state selectors) := by
   have hretainedAt (i : Fin n) :
@@ -131,7 +147,7 @@ theorem source_feasible_append_iff_base_and_formulation
       ⟨hretained, hgenerated⟩, honeHot, hsos1, hindicator⟩
     have hformulation :=
       (witness.selectorLayout.canonicalRows_hold_iff_plannedSelectorFormulation
-        (witness.selectorBounds source) state selectors
+        witness.linkBounds state selectors
         (witness.reusedBinary_of_domains source
           validated.standardBigMForm.reusedMembersMatchDomains hdomains)
         hselectors).mp hgenerated
@@ -141,10 +157,10 @@ theorem source_feasible_append_iff_base_and_formulation
       ⟨⟨hdomains, hretained, honeHot, hsos1, hindicator⟩, hformulation⟩
     have hselectors :=
       witness.selectorLayout.freshSelectors_binary_of_plannedSelectorFormulation
-        (witness.selectorBounds source) state selectors hformulation
+        witness.linkBounds state selectors hformulation
     have hgenerated :=
       (witness.selectorLayout.canonicalRows_hold_iff_plannedSelectorFormulation
-        (witness.selectorBounds source) state selectors
+        witness.linkBounds state selectors
         (witness.reusedBinary_of_domains source
           validated.standardBigMForm.reusedMembersMatchDomains hdomains)
         hselectors).mpr hformulation
@@ -158,7 +174,7 @@ theorem source_feasible_iff_base_and_formulation
     source.Feasible flatState ↔
       witness.BaseFeasible source (State.source flatState) ∧
         PlannedSelectorFormulationHolds witness.reusedMembers
-          (witness.selectorBounds source)
+          witness.linkBounds
           (witness.memberState (State.source flatState))
           (witness.freshSelectorState (State.source flatState)
             (State.extendedPart flatState)) := by
@@ -173,12 +189,14 @@ theorem selectedHolds_of_plannedSelectorFormulation
     (hdomains : ∀ i, state i ∈ (witness.target source).domains i)
     (hformulation :
       PlannedSelectorFormulationHolds witness.reusedMembers
-        (witness.selectorBounds source)
+        witness.linkBounds
         (witness.memberState state)
         (witness.freshSelectorState state selectors)) :
     witness.promotedConstraint.Holds state :=
   witness.selectedHolds_of_plannedSelectorFormulation source
-    validated.standardBigMForm.finiteMemberBounds hdomains hformulation
+    validated.standardBigMForm.finiteMemberBounds
+    validated.standardBigMForm.memberBoundsWithinLinkBounds
+    hdomains hformulation
 
 theorem canonicalSelectorFormulation_of_selected
     (validated : witness.Validated source)
@@ -186,11 +204,12 @@ theorem canonicalSelectorFormulation_of_selected
     (hdomains : ∀ i, state i ∈ (witness.target source).domains i)
     (hselected : witness.promotedConstraint.Holds state) :
     PlannedSelectorFormulationHolds witness.reusedMembers
-      (witness.selectorBounds source)
+      witness.linkBounds
       (witness.memberState state)
       (canonicalSelector (witness.memberState state)) :=
   witness.canonicalSelectorFormulation_of_selected source
     validated.standardBigMForm.finiteMemberBounds
+    validated.standardBigMForm.memberBoundsWithinLinkBounds
     validated.standardBigMForm.reusedMembersMatchDomains
     hdomains hselected
 

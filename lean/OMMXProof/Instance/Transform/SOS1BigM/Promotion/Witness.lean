@@ -7,7 +7,9 @@ import Mathlib.Tactic
 An `SOS1BigM.Witness n` describes one standard Big-M selector formulation whose
 retained decision variables occupy the left `n` components of a flat Instance.
 Fresh selectors occupy the right block, and the regular constraints retained by
-the promotion precede the selector-formulation constraints.
+the promotion precede the selector-formulation constraints. The witness records
+the bounds used by the link rows; validation checks that these bounds contain the
+declared domains of the promoted members.
 
 The witness is intentionally untrusted.  It determines a promoted target and
 state maps unconditionally; `StandardBigMForm` in the validation module
@@ -27,11 +29,17 @@ namespace SOS1BigM
 fresh selectors.  Their order determines the order of the right selector block.
 Members outside `freshMembers` are claimed to be reused selectors.
 
+For fresh members, `linkBounds` records the lower and upper coefficients used
+by the Big-M link rows. They may be looser than the promoted members' declared
+bounds. Reused members have no link rows; their entries provide the semantic
+envelope required by the initial conservative checker.
+
 `retainedConstraintCount` splits the regular-constraint list into a retained
 prefix and a selector-formulation suffix. -/
 structure Witness (n : Nat) where
   members : Finset (Fin n)
   freshMembers : Finset {i // i ∈ members}
+  linkBounds : SelectorBounds {i // i ∈ members}
   retainedConstraintCount : Nat
 
 namespace Witness
