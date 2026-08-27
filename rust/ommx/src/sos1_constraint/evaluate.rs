@@ -194,6 +194,18 @@ mod tests {
     }
 
     #[test]
+    fn test_evaluate_treats_tolerance_boundary_as_zero() {
+        let c = make_sos1(1, &[1, 2, 3]);
+        let atol = ATol::new(1.0).unwrap();
+        let state = crate::v1::State::from(HashMap::from([(1, 1.0), (2, -1.0), (3, 0.0)]));
+
+        let result = c.evaluate(&state, atol).unwrap();
+
+        assert!(result.stage.feasible);
+        assert_eq!(result.stage.active_variable, None);
+    }
+
+    #[test]
     fn test_evaluate_infeasible_multiple_nonzero() {
         let c = make_sos1(1, &[1, 2, 3]);
         // x1=1, x2=2, x3=0 → infeasible

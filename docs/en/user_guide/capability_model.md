@@ -15,7 +15,7 @@ kernelspec:
 
 OMMX separates two concepts that were previously described together as adapter capabilities:
 
-- An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter declares its structural input condition with `INPUT_CLASS`, then evaluates adapter-owned preconditions to determine applicability.
+- An {class}`~ommx.InstanceClass` describes a set of exact `Instance` values. An adapter defines applicability by declaring that set as `INPUT_CLASS`.
 - {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` explicitly lowers selected special-constraint families on an instance. It does not declare an input class or establish adapter applicability.
 
 This page covers:
@@ -31,14 +31,14 @@ This page covers:
 An `InstanceClass` is a finite union of complete, conjunctive {class}`~ommx.InstanceClassClause` values. Membership is evaluated against the exact input without mutating or preparing it.
 
 ```{code-cell} ipython3
-from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
+from ommx import InstanceClass, InstanceClassClause, Kind, PolynomialRequirement, Sense
 
 binary_linear_with_one_hot = InstanceClass(
     [
         InstanceClassClause(
             label="binary-linear-with-one-hot",
             allowed_variable_kinds={Kind.Binary},
-            objective_degree_bound=DegreeBound.at_most(1),
+            objective_polynomial_requirement=PolynomialRequirement.at_most(1),
             allowed_senses={Sense.Maximize},
             allows_one_hot=True,
         )
@@ -46,7 +46,9 @@ binary_linear_with_one_hot = InstanceClass(
 )
 ```
 
-Adapters declare this first applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured result or `require_applicable()` to raise when membership or an adapter-owned precondition fails. Explicit preparation produces another input value, whose applicability must be checked again.
+Adapters declare their complete applicability condition as `INPUT_CLASS`. Use `check_applicability()` for a structured membership result or `require_applicable()` to raise when membership fails. Explicit preparation produces another input value, whose membership must be checked again.
+
+Applicability and solver-input construction are separate boundaries. Membership does not guarantee that every converter or backend operation succeeds. A converter may validate the representation consumed by a local helper, and a backend may reject a numeric value or implementation limit while solver input is built. Those failures are conversion or backend errors, not additional applicability conditions, and must not be reported as `AdapterNotApplicableError`.
 
 ## SpecialConstraintKind and active_special_constraint_kinds
 
@@ -80,6 +82,8 @@ assert binary_linear_with_one_hot.contains(instance)
 
 {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` is an explicit, mutating operation. For each family selected in `kinds_to_lower`, the corresponding conversion API (see below) is invoked when that family is active. Families omitted from the set remain active, and an empty set is a no-op.
 
+When lowering Indicator constraints, pass `atol=` to select the zero semantics used by composed functions in their interval bounds. Omitting it uses {attr}`~ommx.DEFAULT_ATOL`. This aligns evaluation of the Function body; the algebraic lowering assumes exact discrete values and does not snap approximate solver output near 0 or 1.
+
 ```{code-cell} ipython3
 lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
 assert lowered == {SpecialConstraintKind.OneHot}
@@ -91,7 +95,7 @@ assert instance.one_hot_constraints == {}
 assert len(instance.constraints) == 1
 ```
 
-The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `lower_special_constraints` mutates the instance in place and returns only the selected families that were active and actually lowered. The method returns an empty set when no selected family was active. Recheck `INPUT_CLASS` membership or adapter applicability on this resulting value.
+The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 - 1 = 0$ has been added in its place. `lower_special_constraints` mutates the instance in place and returns only the selected families that were active and actually lowered. The method returns an empty set when no selected family was active. Recheck Adapter applicability, equivalently `INPUT_CLASS` membership, on this resulting value.
 
 ## Manual conversion APIs
 
@@ -160,6 +164,8 @@ where $u \geq \sup f(x)$ and $l \leq \inf f(x)$.
 
 Use {meth}`~ommx.Instance.convert_all_indicators_to_constraints` to convert every indicator constraint in one call. If a required bound on $f(x)$ is non-finite, or if $f(x)$ references a semi-continuous / semi-integer variable, conversion fails before any mutation occurs.
 
+Both Indicator conversion methods accept `atol=`. This tolerance is passed to the interval evaluator for zero-sensitive `signum`, division, and negative-integer-power nodes; omitting it uses {attr}`~ommx.DEFAULT_ATOL`. The Big-M identities assume an exactly binary indicator value. They do not canonicalize an approximate solver value before evaluating the regular constraints.
+
 ## Auditing conversion results
 
 The original special constraints are not discarded; they are kept as "removed" entries in the following `removed_*_constraints` dicts.
@@ -200,8 +206,8 @@ for cid, c in instance2.constraints.items():
 | What you want to do | API |
 |---|---|
 | Describe a structural set of adapter inputs | {class}`~ommx.InstanceClass` |
-| Declare the first adapter applicability condition | `INPUT_CLASS` |
-| Check membership plus adapter-owned preconditions | `check_applicability()` / `require_applicable()` |
+| Define adapter applicability | `INPUT_CLASS` |
+| Report or enforce `INPUT_CLASS` membership | `check_applicability()` / `require_applicable()` |
 | Inspect active special-constraint families | {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` |
 | Explicitly lower selected special constraints | {meth}`Instance.lower_special_constraints <ommx.Instance.lower_special_constraints>` |
 | Convert individually to regular constraints | `convert_*_to_constraint(s)` / `convert_all_*_to_constraints` |

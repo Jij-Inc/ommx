@@ -8,6 +8,13 @@ use std::{
 
 use crate::ATol;
 
+const TINY_ARBITRARY_COEFFICIENTS: [f64; 4] = [
+    f64::from_bits(1),
+    -f64::from_bits(1),
+    f64::MIN_POSITIVE,
+    -f64::MIN_POSITIVE,
+];
+
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CoefficientError {
@@ -155,10 +162,15 @@ impl Arbitrary for Coefficient {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
     fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-        prop_oneof![Just(1.0), Just(-1.0), -10.0..10.0]
-            .prop_filter("nonzero", |x: &f64| x.abs() > f64::EPSILON)
-            .prop_map(|x| Coefficient::try_from(x).unwrap())
-            .boxed()
+        prop_oneof![
+            Just(1.0),
+            Just(-1.0),
+            proptest::sample::select(TINY_ARBITRARY_COEFFICIENTS.to_vec()),
+            -10.0..10.0,
+        ]
+        .prop_filter("nonzero", |x: &f64| *x != 0.0)
+        .prop_map(|x| Coefficient::try_from(x).unwrap())
+        .boxed()
     }
 }
 
@@ -230,6 +242,26 @@ mod tests {
         assert_eq!(unwrap_some(coeff!(2.0) * coeff!(3.0)), coeff!(6.0));
         assert_eq!(unwrap_some(coeff!(6.0) / coeff!(3.0)), coeff!(2.0));
         assert_eq!(coeff!(2.0).inv().unwrap(), coeff!(0.5));
+    }
+
+    proptest! {
+        #[test]
+        fn arbitrary_coefficients_respect_the_exact_nonzero_invariant(
+            coefficient in any::<Coefficient>()
+        ) {
+            let value = coefficient.into_inner();
+            prop_assert!(value.is_finite());
+            prop_assert_ne!(value, 0.0);
+        }
+    }
+
+    #[test]
+    fn arbitrary_coefficient_space_includes_tiny_and_subnormal_values() {
+        for value in TINY_ARBITRARY_COEFFICIENTS {
+            let coefficient = Coefficient::try_from(value).unwrap();
+            assert_eq!(coefficient.into_inner(), value);
+            assert!(value.abs() <= f64::EPSILON);
+        }
     }
 
     #[test]

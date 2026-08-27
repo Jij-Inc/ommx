@@ -15,17 +15,13 @@ use std::collections::BTreeMap;
 ///
 /// Create via DecisionVariable operations:
 ///
-/// ```python
 /// >>> x = DecisionVariable.integer(1)
 /// >>> y = DecisionVariable.integer(2)
 /// >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
-/// ```
 ///
 /// Note that `==`, `<=`, `>=` create Constraint objects:
 ///
-/// ```python
 /// >>> constraint = p == 0  # Returns Constraint
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
@@ -153,7 +149,15 @@ impl Polynomial {
         py: Python<'_>,
         lhs: crate::FunctionInput,
     ) -> crate::error::OmmxPyResult<Py<PyAny>> {
-        self.py_add(py, lhs) // Addition is commutative
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs + ommx::Function::from(self.0.clone()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_add(py, lhs),
+        }
     }
 
     /// Polymorphic subtraction. See `py_add`.
@@ -201,9 +205,18 @@ impl Polynomial {
         py: Python<'_>,
         lhs: crate::FunctionInput,
     ) -> crate::error::OmmxPyResult<Py<PyAny>> {
-        // lhs - self = -self + lhs
-        let neg = self.__neg__();
-        neg.py_add(py, lhs)
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs - ommx::Function::from(self.0.clone()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => {
+                let neg = self.__neg__();
+                neg.py_add(py, lhs)
+            }
+        }
     }
 
     pub fn add_assign(&mut self, rhs: &Polynomial) -> crate::error::OmmxPyResult<()> {
@@ -266,7 +279,15 @@ impl Polynomial {
         py: Python<'_>,
         lhs: crate::FunctionInput,
     ) -> crate::error::OmmxPyResult<Py<PyAny>> {
-        self.py_mul(py, lhs) // Multiplication is commutative
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs * ommx::Function::from(self.0.clone()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_mul(py, lhs),
+        }
     }
 
     pub fn add_scalar(&self, scalar: f64) -> crate::error::OmmxPyResult<Polynomial> {

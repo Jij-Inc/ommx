@@ -178,6 +178,43 @@ create_core_exception!(
     PyRuntimeError,
     "The mathematical model was proven infeasible."
 );
+pyo3::create_exception!(
+    ommx,
+    PreparationTargetNotReachedError,
+    PyRuntimeError,
+    "Configured Preparation phases were exhausted without reaching the target InstanceClass. The final membership report is available as ``report``."
+);
+impl pyo3_stub_gen::PyStubType for PreparationTargetNotReachedError {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::builtin("PreparationTargetNotReachedError")
+    }
+}
+pyo3_stub_gen::impl_py_runtime_type!(PreparationTargetNotReachedError);
+
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::type_info::PyClassInfo {
+        pyclass_name: "PreparationTargetNotReachedError",
+        struct_id: std::any::TypeId::of::<PreparationTargetNotReachedError>,
+        getters: &[
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "report",
+                r#type: <crate::InstanceClassMembershipReport as pyo3_stub_gen::PyStubType>::type_output,
+                doc: "Final membership report for the partially prepared Instance.",
+                default: None,
+                deprecated: None,
+            },
+        ],
+        setters: &[],
+        module: Some("ommx._ommx_rust"),
+        doc: "Configured Preparation phases were exhausted without reaching the target InstanceClass.",
+        bases: &[|| <PyRuntimeError as pyo3_stub_gen::PyStubType>::type_output()],
+        has_eq: false,
+        has_ord: false,
+        has_hash: false,
+        has_str: false,
+        subclass: true,
+    }
+}
 
 /// Binding-internal wrapper around an already classified Python exception.
 ///
@@ -394,6 +431,22 @@ fn infeasible_detected_to_pyerr(_: &ommx::InfeasibleDetected, message: String) -
     InfeasibleDetected::new_err(message)
 }
 
+fn preparation_target_not_reached_to_pyerr(
+    error: &ommx::PreparationTargetNotReached,
+    message: String,
+) -> PyErr {
+    let pyerr = PreparationTargetNotReachedError::new_err(message);
+    Python::attach(|py| {
+        let report = Py::new(
+            py,
+            crate::InstanceClassMembershipReport(error.report().clone()),
+        )?;
+        pyerr.value(py).setattr("report", report)
+    })
+    .expect("PreparationTargetNotReachedError supports a report attribute");
+    pyerr
+}
+
 define_ommx_error_mappings!(
     ommx::ParseError => parse_error_to_pyerr,
     ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
@@ -404,14 +457,18 @@ define_ommx_error_mappings!(
     ommx::LogEncodingUnavailable => log_encoding_unavailable_to_pyerr,
     ommx::ExactIntegerSlackUnavailable => exact_integer_slack_unavailable_to_pyerr,
     ommx::InfeasibleDetected => infeasible_detected_to_pyerr,
+    ommx::PreparationTargetNotReached => preparation_target_not_reached_to_pyerr,
     #[cfg(feature = "remote-artifact")]
     ommx::artifact::RemoteArtifactError => remote_artifact_error_to_pyerr,
     ommx::artifact::ImageRefParseError => image_ref_parse_error_to_pyerr,
     ommx::ParameterIDCollision => value_error,
     ommx::AtolError => value_error,
+    ommx::FixedPenaltyWeightIDMismatch => value_error,
+    ommx::InvalidPenaltyWeight => value_error,
     ommx::BoundError => value_error,
     ommx::SubstitutionError => value_error,
     ommx::CoefficientError => value_error,
+    ommx::FunctionEvaluationError => value_error,
     ommx::ContentFactorError => value_error,
     ommx::DuplicatedSampleIDError => value_error,
     ommx::OneHotConstraintError => value_error,
@@ -476,6 +533,10 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
         py.get_type::<ExactIntegerSlackError>(),
     )?;
     module.add("InfeasibleDetected", py.get_type::<InfeasibleDetected>())?;
+    module.add(
+        "PreparationTargetNotReachedError",
+        py.get_type::<PreparationTargetNotReachedError>(),
+    )?;
     module.add("RemoteArtifactError", py.get_type::<RemoteArtifactError>())?;
     module.add(
         "RemoteArtifactNotFoundError",
@@ -503,7 +564,9 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ommx::Parse as _;
     use pyo3::type_object::PyTypeInfo;
+    use std::error::Error as _;
 
     fn assert_exception<T>(error: OmmxPyError)
     where
@@ -551,6 +614,46 @@ mod tests {
             ommx::Error::from(ommx::SolutionError::MissingRequiredField { field: "objective" })
                 .into(),
         );
+    }
+
+    #[test]
+    fn parse_error_owner_precedes_domain_signals() {
+        let mut decision_variable = ommx::v1::DecisionVariable::default();
+        decision_variable.id = 1;
+        decision_variable.kind = ommx::v1::decision_variable::Kind::Continuous as i32;
+        let mut state = ommx::v1::State::default();
+        state.entries = [(1, 2.0)].into_iter().collect();
+        let mut solution = ommx::v1::Solution::default();
+        solution.state = Some(state);
+        solution.decision_variables = vec![decision_variable.clone(), decision_variable];
+        solution.feasible_relaxed = Some(true);
+        let solution_error = solution.parse(&()).unwrap_err();
+        assert!(solution_error
+            .source()
+            .is_some_and(|source| source.is::<ommx::SolutionError>()));
+        assert_exception::<PyValueError>(ommx::Error::from(solution_error).into());
+
+        let sample_id = ommx::SampleID::from(0);
+        let mut entry = ommx::v1::sampled_values::SampledValuesEntry::default();
+        entry.ids = vec![sample_id.into_inner()];
+        entry.value = 1.0;
+        let mut sampled_values = ommx::v1::SampledValues::default();
+        sampled_values.entries = vec![entry];
+        let mut first_named_function = ommx::v1::SampledNamedFunction::default();
+        first_named_function.id = 1;
+        first_named_function.evaluated_values = Some(sampled_values.clone());
+        let mut second_named_function = ommx::v1::SampledNamedFunction::default();
+        second_named_function.id = 1;
+        second_named_function.evaluated_values = Some(sampled_values.clone());
+        let mut sample_set = ommx::v1::SampleSet::default();
+        sample_set.objectives = Some(sampled_values);
+        sample_set.named_functions = vec![first_named_function, second_named_function];
+        sample_set.sense = ommx::v1::instance::Sense::Minimize as i32;
+        let sample_set_error = sample_set.parse(&()).unwrap_err();
+        assert!(sample_set_error
+            .source()
+            .is_some_and(|source| source.is::<ommx::SampleSetError>()));
+        assert_exception::<PyValueError>(ommx::Error::from(sample_set_error).into());
     }
 
     #[test]

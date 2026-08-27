@@ -220,20 +220,18 @@ impl Solution {
     ///
     /// # Examples
     ///
-    /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x + y,
     /// ...     objective=sum(x) + sum(y),
-    /// ...     constraints=[],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({i: 1 for i in range(5)})
     /// >>> sorted(solution.decision_variable_names)
     /// ['x', 'y']
-    /// ```
     #[getter]
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.inner.decision_variable_names()
@@ -261,19 +259,17 @@ impl Solution {
     ///
     /// # Examples
     ///
-    /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints=[sum(x) == 1],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={0: sum(x) == 1},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({i: 1 for i in range(3)})
     /// >>> solution.extract_decision_variables("x")
     /// {(0,): 1.0, (1,): 1.0, (2,): 1.0}
-    /// ```
     pub fn extract_decision_variables<'py>(
         &self,
         py: Python<'py>,
@@ -299,15 +295,14 @@ impl Solution {
     ///
     /// # Examples
     ///
-    /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x + y,
     /// ...     objective=sum(x) + sum(y),
-    /// ...     constraints=[],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({i: 1 for i in range(5)})
     /// >>> all_vars = solution.extract_all_decision_variables()
@@ -315,7 +310,6 @@ impl Solution {
     /// {(0,): 1.0, (1,): 1.0, (2,): 1.0}
     /// >>> all_vars["y"]
     /// {(0,): 1.0, (1,): 1.0}
-    /// ```
     pub fn extract_all_decision_variables<'py>(
         &self,
         py: Python<'py>,
@@ -341,21 +335,19 @@ impl Solution {
     ///
     /// # Examples
     ///
-    /// ```python
-    /// >>> from ommx import Instance, DecisionVariable
+    /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
     /// >>> c1 = (x[1] + x[2] == 1).set_name("c").add_subscripts([1])
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints=[c0, c1],
-    /// ...     sense=Instance.MAXIMIZE,
+    /// ...     constraints={0: c0, 1: c1},
+    /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
     /// >>> solution.extract_constraints("c")
     /// {(0,): 0.0, (1,): 0.0}
-    /// ```
     pub fn extract_constraints<'py>(
         &self,
         py: Python<'py>,

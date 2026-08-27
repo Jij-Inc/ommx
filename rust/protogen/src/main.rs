@@ -38,14 +38,6 @@ fn main() -> Result<()> {
     let mut cfg = Config::new();
     cfg.type_attribute(".", "#[non_exhaustive]");
     cfg.field_attribute("SampleSet.feasible_unrelaxed", "#[deprecated]");
-    cfg.field_attribute(
-        ".ommx.v2.Instance.decision_variable_dependency",
-        "#[deprecated]",
-    );
-    cfg.field_attribute(
-        ".ommx.v2.ParametricInstance.decision_variable_dependency",
-        "#[deprecated]",
-    );
     cfg.btree_map([".ommx.v2"]);
     cfg.out_dir(&out).compile_protos(&protos, &[proto_root])?;
 

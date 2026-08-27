@@ -43,7 +43,7 @@ fn normalize_dependency_partial_evaluation_error(
     id: VariableID,
     error: crate::Error,
 ) -> crate::Error {
-    if !error.is::<crate::CoefficientError>() {
+    if !error.is::<crate::CoefficientError>() && !error.is::<crate::FunctionEvaluationError>() {
         return error;
     }
 
@@ -55,6 +55,20 @@ fn normalize_dependency_partial_evaluation_error(
         { id = ?id, cause = %error },
         "failed to normalize dependent variable {id:?}: {error:#}",
     )
+}
+
+fn dependent_function_evaluation_error(id: VariableID, error: crate::Error) -> crate::Error {
+    if error.is::<crate::FunctionEvaluationError>() {
+        // A direct Function evaluation exposes FunctionEvaluationError so its
+        // caller can change the state or expression. At this Instance-owned
+        // boundary the value is internally derived, so exposing that signal
+        // would give Python the wrong ValueError recovery contract.
+        return crate::error!(
+            { id = ?id, cause = %error },
+            "failed to evaluate dependent variable {id:?}: {error:#}",
+        );
+    }
+    error.context(format!("failed to evaluate dependent variable {id:?}"))
 }
 
 fn ensure_instance_value_is_finite(var_id: VariableID, value: f64) -> Result<()> {
@@ -161,7 +175,7 @@ struct StatePopulationPlan<'a> {
     used: VariableIDSet,
     fixed: Vec<(VariableID, f64)>,
     irrelevant: Vec<(VariableID, Kind, Bound)>,
-    dependency: &'a DecisionVariableDependencies,
+    dependency: &'a AcyclicAssignments,
 }
 
 enum PartialEvaluatePlan {
@@ -351,7 +365,7 @@ impl StatePopulationPlan<'_> {
                     }
                     // Fixed values are instance-owned canonical coordinates.
                     // Keeping an atol-close assertion here would let a
-                    // discontinuous downstream DependentExpr observe the
+                    // discontinuous downstream Function observe the
                     // assertion instead of the fixed value.
                     entry.insert(*value);
                 }
@@ -376,9 +390,12 @@ impl StatePopulationPlan<'_> {
         }
 
         for (id, f) in self.dependency.evaluation_order_iter() {
-            let value = f.evaluate(&state, atol).inspect_err(|e| {
-                tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
-            })?;
+            let value = f
+                .evaluate(&state, atol)
+                .map_err(|error| dependent_function_evaluation_error(id, error))
+                .inspect_err(|e| {
+                    tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
+                })?;
             if !value.is_finite() {
                 crate::bail!(
                     { id = ?id, value },
@@ -564,7 +581,9 @@ impl Instance {
             let required_ids = function.required_ids();
 
             if required_ids.is_empty() {
-                let value = function.evaluate(&v1::State::default(), atol)?;
+                let value = function
+                    .evaluate(&v1::State::default(), atol)
+                    .map_err(|error| dependent_function_evaluation_error(id, error))?;
                 if !value.is_finite() {
                     crate::bail!(
                         { id = ?id, value },
@@ -598,8 +617,7 @@ impl Instance {
             }
         }
 
-        self.decision_variable_dependency =
-            DecisionVariableDependencies::new(remaining_assignments)?;
+        self.decision_variable_dependency = AcyclicAssignments::new(remaining_assignments)?;
         Ok(evaluation_state)
     }
 }
@@ -608,11 +626,40 @@ impl Evaluate for Instance {
     type Output = crate::Solution;
     type SampledOutput = crate::SampleSet;
 
+    /// # Postconditions
+    ///
+    /// Evaluation reports the preserved output sense and objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let state = State::from(HashMap::from([(1, 1.0)]));
+    ///
+    /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+    /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// ```
     #[tracing::instrument(skip_all)]
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
         let state = self.populate_state(state.clone(), atol)?;
 
-        let objective = self.objective.evaluate(&state, atol)?;
+        let (sense, output_objective) = self.objective_for_output();
+        let objective = output_objective.evaluate(&state, atol)?;
         let evaluated_constraints = self.constraint_collection.evaluate(&state, atol)?;
         let evaluated_indicator_constraints = self
             .indicator_constraint_collection
@@ -628,8 +675,6 @@ impl Evaluate for Instance {
         }
 
         let evaluated_named_functions = self.named_functions.evaluate(&state, atol)?;
-
-        let sense = self.sense();
 
         // SAFETY: Instance invariants guarantee Solution invariants
         let solution = unsafe {
@@ -650,6 +695,35 @@ impl Evaluate for Instance {
         Ok(solution)
     }
 
+    /// # Postconditions
+    ///
+    /// Sample evaluation reports the preserved output semantics for every sample.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sampled, Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(
+    ///         VariableID::from(1),
+    ///         DecisionVariable::binary(),
+    ///     )]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let samples = Sampled::from(State::from(HashMap::from([(1, 1.0)])));
+    ///
+    /// let sample_set = instance.evaluate_samples(&samples, ATol::default()).unwrap();
+    /// assert_eq!(*sample_set.sense(), Sense::Maximize);
+    /// let sample_id = sample_set.sample_ids().into_iter().next().unwrap();
+    /// assert_eq!(sample_set.objectives().get(sample_id), Some(&1.0));
+    /// ```
     #[tracing::instrument(skip_all)]
     fn evaluate_samples(
         &self,
@@ -687,7 +761,8 @@ impl Evaluate for Instance {
             .evaluate_samples(&samples, atol)?;
 
         // Objective
-        let objectives = self.objective().evaluate_samples(&samples, atol)?;
+        let (sense, output_objective) = self.objective_for_output();
+        let objectives = output_objective.evaluate_samples(&samples, atol)?;
 
         // Reconstruct decision variable values
         let mut decision_variables = std::collections::BTreeMap::new();
@@ -707,11 +782,41 @@ impl Evaluate for Instance {
             .one_hot_constraints_collection(sampled_one_hot_constraints)
             .sos1_constraints_collection(sampled_sos1_constraints)
             .named_function_table(named_functions)
-            .sense(self.sense)
+            .sense(sense)
             .feasibility_atol(atol)
             .build()?)
     }
 
+    /// # Postconditions
+    ///
+    /// Partial evaluation rewrites active data while preserving the output objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    ///     Sense, VariableID,
+    /// };
+    /// use std::collections::{BTreeMap, HashMap};
+    ///
+    /// let variable = VariableID::from(1);
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Maximize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(instance.convert_active_objective(Sense::Minimize));
+    /// let output = instance.output_objective().cloned();
+    ///
+    /// instance
+    ///     .partial_evaluate(&State::from(HashMap::from([(1, 1.0)])), ATol::default())
+    ///     .unwrap();
+    /// assert_eq!(instance.output_objective(), output.as_ref());
+    /// assert!(instance.required_ids().is_empty());
+    /// let solution = instance.evaluate(&State::default(), ATol::default()).unwrap();
+    /// assert_eq!(*solution.objective(), 1.0);
+    /// ```
     #[tracing::instrument(skip_all)]
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
         if let Some(plan) = PartialEvaluatePlan::prepare(self, state, atol)? {
@@ -850,6 +955,17 @@ mod tests {
     use proptest::prelude::*;
     use std::collections::HashMap;
 
+    fn polynomial_regular_parameters() -> crate::InstanceParameters {
+        let function =
+            crate::FunctionParameters::polynomial_only(crate::PolynomialParameters::default());
+        crate::InstanceParameters {
+            objective: function,
+            constraint: function,
+            named_function: function,
+            ..crate::InstanceParameters::regular_only()
+        }
+    }
+
     proptest! {
         #[test]
         fn test_evaluate_instance(
@@ -859,16 +975,31 @@ mod tests {
                     (Just(instance), state)
                 })
         ) {
-            let solution = instance.evaluate(&state, ATol::default()).unwrap();
-            // Must be populated
-            let ids: VariableIDSet = solution.state().entries.keys().map(|id| VariableID::from(*id)).collect();
-            let all: VariableIDSet = instance.decision_variables().keys().copied().collect();
-            prop_assert_eq!(ids, all);
+            match instance.evaluate(&state, ATol::default()) {
+                Ok(solution) => {
+                    // A successfully evaluated solution must contain the fully populated state.
+                    let ids: VariableIDSet = solution
+                        .state()
+                        .entries
+                        .keys()
+                        .map(|id| VariableID::from(*id))
+                        .collect();
+                    let all: VariableIDSet =
+                        instance.decision_variables().keys().copied().collect();
+                    prop_assert_eq!(ids, all);
+                }
+                Err(error) => {
+                    prop_assert!(
+                        error.is::<crate::FunctionEvaluationError>(),
+                        "arbitrary valid state produced a non-function evaluation error: {error:#}",
+                    );
+                }
+            }
         }
 
         #[test]
         fn partial_evaluate(
-            (instance, state, (u, v)) in Instance::arbitrary_with(crate::InstanceParameters::regular_only())
+            (instance, state, (u, v)) in Instance::arbitrary_with(polynomial_regular_parameters())
                 .prop_flat_map(|instance| {
                     let state = instance.arbitrary_state();
                     (Just(instance), state).prop_flat_map(|(instance, state)| {
@@ -1375,6 +1506,10 @@ mod tests {
                 .is_none()
         );
 
+        let mut with_output = instance.clone();
+        assert!(with_output.convert_active_objective(Sense::Maximize));
+        let output = with_output.output_objective().cloned().unwrap();
+
         let mut borrowed = instance.clone();
         borrowed.partial_evaluate(&state, ATol::default()).unwrap();
         let consumed = instance
@@ -1392,6 +1527,16 @@ mod tests {
                 (VariableID::from(3), 0.0),
             ])
         );
+
+        with_output
+            .partial_evaluate(&state, ATol::default())
+            .unwrap();
+        assert_eq!(with_output.output_objective(), Some(&output));
+        let solution = with_output
+            .evaluate(&v1::State::default(), ATol::default())
+            .unwrap();
+        assert_eq!(*solution.sense(), Some(Sense::Minimize));
+        assert_eq!(*solution.objective(), 1.0);
     }
 
     #[test]
@@ -1442,6 +1587,56 @@ mod tests {
         assert_eq!(chunks[1].0, 7.0);
         assert_eq!(chunks[1].1.len(), 1);
         assert!(chunks[1].1.contains(&crate::SampleID::from(1)));
+    }
+
+    #[test]
+    fn test_evaluate_samples_canonicalizes_a_composed_dependency_dag() {
+        let source = VariableID::from(1);
+        let first = VariableID::from(10);
+        let second = VariableID::from(11);
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (source, crate::DecisionVariable::continuous()),
+                (first, crate::DecisionVariable::binary()),
+                (second, crate::DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(
+                crate::AcyclicAssignments::new([
+                    (first, Function::from(linear!(1)).signum().abs()),
+                    (second, Function::from(linear!(10)).signum().abs()),
+                ])
+                .unwrap(),
+            )
+            .build()
+            .unwrap();
+        let samples = crate::Sampled::new(
+            [
+                vec![crate::SampleID::from(10), crate::SampleID::from(11)],
+                vec![crate::SampleID::from(20)],
+            ],
+            [
+                v1::State::from(HashMap::from([(1, 0.0), (10, 1.0e-7)])),
+                v1::State::from(HashMap::from([(1, -2.0)])),
+            ],
+        )
+        .unwrap();
+
+        let sample_set = instance
+            .evaluate_samples(&samples, ATol::new(1.0e-6).unwrap())
+            .unwrap();
+        let first_values = sample_set.decision_variables()[&first].samples();
+        let second_values = sample_set.decision_variables()[&second].samples();
+
+        for sample_id in [10, 11] {
+            let sample_id = crate::SampleID::from(sample_id);
+            assert_eq!(first_values.get(sample_id), Some(&0.0));
+            assert_eq!(second_values.get(sample_id), Some(&0.0));
+        }
+        assert_eq!(first_values.get(crate::SampleID::from(20)), Some(&1.0));
+        assert_eq!(second_values.get(crate::SampleID::from(20)), Some(&1.0));
     }
 
     fn dependent_instance_y_eq_2x() -> Instance {
@@ -1502,10 +1697,9 @@ mod tests {
     #[test]
     fn test_partial_evaluate_dependency_overflow_is_unclassified_and_atomic() {
         let mut instance = dependent_instance_y_eq_2x();
-        instance.decision_variable_dependency = (crate::assign! {
+        instance.decision_variable_dependency = crate::assign! {
             10 <- coeff!(f64::MAX) * linear!(1)
-        })
-        .into();
+        };
         let before = instance.clone();
 
         let error = instance
@@ -1601,15 +1795,9 @@ mod tests {
             ]))
             .constraints(BTreeMap::new())
             .decision_variable_dependency(
-                crate::DecisionVariableDependencies::new([
-                    (
-                        first,
-                        crate::DependentExpr::nonzero_indicator(Function::from(linear!(1))),
-                    ),
-                    (
-                        second,
-                        crate::DependentExpr::nonzero_indicator(Function::from(linear!(10))),
-                    ),
+                crate::AcyclicAssignments::new([
+                    (first, Function::from(linear!(1)).signum().abs()),
+                    (second, Function::from(linear!(10)).signum().abs()),
                 ])
                 .unwrap(),
             )
@@ -1643,9 +1831,9 @@ mod tests {
             .fixed_decision_variable_values(BTreeMap::from([(fixed, 0.0)]))
             .constraints(BTreeMap::new())
             .decision_variable_dependency(
-                crate::DecisionVariableDependencies::new([(
+                crate::AcyclicAssignments::new([(
                     dependent,
-                    crate::DependentExpr::nonzero_indicator(Function::from(linear!(2))),
+                    Function::from(linear!(2)).signum().abs(),
                 )])
                 .unwrap(),
             )
@@ -1742,10 +1930,9 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        instance.decision_variable_dependency = (crate::assign! {
+        instance.decision_variable_dependency = crate::assign! {
             10 <- linear!(1)
-        })
-        .into();
+        };
         let state = v1::State::from(HashMap::from([(1, 1.0), (10, f64::INFINITY)]));
 
         let err = instance.populate_state(state, ATol::default()).unwrap_err();
@@ -1765,10 +1952,9 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        instance.decision_variable_dependency = (crate::assign! {
+        instance.decision_variable_dependency = crate::assign! {
             10 <- coeff!(f64::MAX) * linear!(1)
-        })
-        .into();
+        };
         let state = v1::State::from(HashMap::from([(1, f64::MAX)]));
 
         let err = instance.populate_state(state, ATol::default()).unwrap_err();
@@ -1777,7 +1963,10 @@ mod tests {
         assert!(!err.is::<InconsistentDependentValue>());
         assert!(!err.is::<UnverifiableDependentAssertion>());
         assert!(!err.is::<DecisionVariableError>());
-        assert!(err.to_string().contains("evaluated to non-finite value"));
+        assert!(err
+            .to_string()
+            .contains("failed to evaluate dependent variable VariableID(10)"));
+        assert!(!err.is::<crate::FunctionEvaluationError>());
     }
 
     /// Test that named functions can reference fixed, dependent, and irrelevant variables
@@ -1844,7 +2033,7 @@ mod tests {
             .named_functions(named_functions)
             .build()
             .unwrap();
-        instance.decision_variable_dependency = decision_variable_dependency.into();
+        instance.decision_variable_dependency = decision_variable_dependency;
 
         // Verify the usage: x1 is used, x2 is fixed, x3 is dependent,
         // x4 and x5 should be irrelevant (named_functions don't contribute to "used")

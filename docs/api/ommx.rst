@@ -18,20 +18,29 @@ ommx
    _items/ommx.ExactIntegerSlackError
    _items/ommx.InfeasibleDetected
    _items/ommx.LogEncodingError
+   _items/ommx.PreparationTargetNotReachedError
    _items/ommx.Linear
    _items/ommx.Quadratic
    _items/ommx.Polynomial
    _items/ommx.Function
+   _items/ommx.OutputObjective
    _items/ommx.DecisionVariable
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
    _items/ommx.SpecialConstraintKind
-   _items/ommx.DegreeBound
+   _items/ommx.PolynomialRequirement
    _items/ommx.InstanceClassClause
    _items/ommx.InstanceClass
    _items/ommx.InstanceClassMismatch
    _items/ommx.InstanceClassClauseReport
    _items/ommx.InstanceClassMembershipReport
+   _items/ommx.SpecialConstraintPreparation
+   _items/ommx.ObjectivePreparation
+   _items/ommx.IntegerSlackPreparation
+   _items/ommx.IntegerEncodingPreparation
+   _items/ommx.BinaryPowerPreparation
+   _items/ommx.FixedPenaltyPreparation
+   _items/ommx.PreparationPolicy
    _items/ommx.Constraint
    _items/ommx.AttachedConstraint
    _items/ommx.IndicatorConstraint

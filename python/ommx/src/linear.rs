@@ -15,30 +15,22 @@ use std::collections::BTreeMap;
 ///
 /// Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
 ///
-/// ```python
 /// >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
-/// ```
 ///
 /// Or create via DecisionVariable arithmetic:
 ///
-/// ```python
 /// >>> x1 = DecisionVariable.integer(1)
 /// >>> x2 = DecisionVariable.integer(2)
 /// >>> g = 2*x1 + 3*x2 + 1
-/// ```
 ///
 /// Compare two linear functions with tolerance:
 ///
-/// ```python
 /// >>> f.almost_equal(g, atol=1e-12)
 /// True
-/// ```
 ///
 /// Note that `==` creates an equality Constraint, not a boolean:
 ///
-/// ```python
 /// >>> constraint = f == g  # Returns Constraint, not bool
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
@@ -248,7 +240,15 @@ impl Linear {
         py: Python<'_>,
         lhs: crate::FunctionInput,
     ) -> crate::error::OmmxPyResult<Py<PyAny>> {
-        self.py_add(py, lhs) // Addition is commutative
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs + ommx::Function::from(self.0.clone()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_add(py, lhs),
+        }
     }
 
     /// Polymorphic subtraction. See `py_add`.
@@ -296,9 +296,18 @@ impl Linear {
         py: Python<'_>,
         lhs: crate::FunctionInput,
     ) -> crate::error::OmmxPyResult<Py<PyAny>> {
-        // lhs - self = -self + lhs
-        let neg = self.__neg__();
-        neg.py_add(py, lhs)
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs - ommx::Function::from(self.0.clone()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => {
+                let neg = self.__neg__();
+                neg.py_add(py, lhs)
+            }
+        }
     }
 
     /// Polymorphic multiplication
@@ -346,7 +355,15 @@ impl Linear {
         py: Python<'_>,
         lhs: crate::FunctionInput,
     ) -> crate::error::OmmxPyResult<Py<PyAny>> {
-        self.py_mul(py, lhs) // Multiplication is commutative
+        match lhs {
+            crate::FunctionInput::Function(lhs) => {
+                Ok(Function((lhs * ommx::Function::from(self.0.clone()))?)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind())
+            }
+            lhs => self.py_mul(py, lhs),
+        }
     }
 
     pub fn add_assign(&mut self, rhs: &Linear) -> crate::error::OmmxPyResult<()> {

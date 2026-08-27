@@ -1,3 +1,6 @@
+use super::operation::{
+    associative_operation, unary_operation, AssociativeOperator, UnaryOperator,
+};
 use super::*;
 use crate::{CoefficientError, LinearMonomial, Monomial, MonomialDyn, QuadraticMonomial};
 use std::ops::{Add, Neg};
@@ -72,6 +75,7 @@ impl Function {
                     _ => Function::Constant(constant_term(&p)),
                 }
             }
+            Function::Expression(_) => self,
         }
     }
 
@@ -121,6 +125,7 @@ impl Function {
             (Function::Polynomial(lhs), Function::Polynomial(rhs)) => {
                 Function::Polynomial((lhs + rhs)?)
             }
+            (lhs, rhs) => associative_operation(AssociativeOperator::Add, lhs, rhs),
         };
         Ok(())
     }
@@ -197,7 +202,7 @@ impl Add<Function> for Coefficient {
     type Output = Result<Function, CoefficientError>;
 
     fn add(self, rhs: Function) -> Self::Output {
-        rhs + self
+        Function::Constant(self) + rhs
     }
 }
 
@@ -205,7 +210,7 @@ impl Add<&Function> for Coefficient {
     type Output = Result<Function, CoefficientError>;
 
     fn add(self, rhs: &Function) -> Self::Output {
-        rhs.clone() + self
+        Function::Constant(self) + rhs
     }
 }
 
@@ -259,17 +264,28 @@ impl Neg for Function {
     type Output = Self;
 
     fn neg(mut self) -> Self::Output {
-        self.values_mut().for_each(|v| *v = -(*v));
-        self
+        if self.is_polynomial() {
+            self.values_mut()
+                .expect("polynomial function has coefficient values")
+                .for_each(|v| *v = -(*v));
+            return self;
+        }
+        unary_operation(UnaryOperator::Neg, self)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, linear};
+    use crate::{coeff, linear, FunctionParameters, PolynomialParameters};
     use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
+
+    fn polynomial_function() -> BoxedStrategy<Function> {
+        Function::arbitrary_with(FunctionParameters::polynomial_only(
+            PolynomialParameters::default(),
+        ))
+    }
 
     proptest! {
         #[test]
@@ -287,18 +303,22 @@ mod tests {
         }
 
         #[test]
-        fn add_commutative(a in any::<Function>(), b in any::<Function>()) {
+        fn add_commutative(a in polynomial_function(), b in polynomial_function()) {
             assert_abs_diff_eq!((&a + &b).unwrap(), (&b + &a).unwrap());
         }
 
         #[test]
-        fn add_associative(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
+        fn add_nary(
+            a in polynomial_function(),
+            b in polynomial_function(),
+            c in polynomial_function(),
+        ) {
             assert_abs_diff_eq!((&a + (&b + &c).unwrap()).unwrap(), ((&a + &b).unwrap() + &c).unwrap());
         }
     }
 
     #[test]
-    fn arithmetic_normalizes_low_degree_results() {
+    fn arithmetic_normalizes_polynomials_but_keeps_division_composed() {
         let linear = Function::from(linear!(1));
         let constant = Function::from(coeff!(2.0));
 
@@ -312,7 +332,7 @@ mod tests {
         ));
         assert!(matches!(
             (linear.clone() / coeff!(2.0)).unwrap(),
-            Function::Linear(_)
+            Function::Expression(_)
         ));
         assert!(matches!((linear.clone() - linear).unwrap(), Function::Zero));
     }

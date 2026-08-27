@@ -151,9 +151,9 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.decision_variable_dependency;DecisionVariableDependencies.dependencies;FnvHashMap[stack] 32
-        Instance.decision_variable_dependency;DecisionVariableDependencies.graph 144
-        Instance.decision_variable_dependency;DecisionVariableDependencies.topological_order;Vec[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariableTable.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -181,6 +181,7 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -224,9 +225,9 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.decision_variable_dependency;DecisionVariableDependencies.dependencies;FnvHashMap[stack] 32
-        Instance.decision_variable_dependency;DecisionVariableDependencies.graph 144
-        Instance.decision_variable_dependency;DecisionVariableDependencies.topological_order;Vec[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key];VariableID.0 16
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
@@ -258,6 +259,7 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -314,9 +316,9 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.decision_variable_dependency;DecisionVariableDependencies.dependencies;FnvHashMap[stack] 32
-        Instance.decision_variable_dependency;DecisionVariableDependencies.graph 144
-        Instance.decision_variable_dependency;DecisionVariableDependencies.topological_order;Vec[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key];VariableID.0 16
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
@@ -348,6 +350,7 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -420,9 +423,9 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.decision_variable_dependency;DecisionVariableDependencies.dependencies;FnvHashMap[stack] 32
-        Instance.decision_variable_dependency;DecisionVariableDependencies.graph 144
-        Instance.decision_variable_dependency;DecisionVariableDependencies.topological_order;Vec[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key];VariableID.0 24
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
@@ -461,6 +464,7 @@ mod tests {
         Instance.one_hot_constraint_collection;one_hot_constraints;OneHotConstraint.variables;BTreeSet[stack] 24
         Instance.one_hot_constraint_collection;one_hot_constraints;OneHotConstraint.variables;VariableID.0 16
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -534,9 +538,9 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.decision_variable_dependency;DecisionVariableDependencies.dependencies;FnvHashMap[stack] 32
-        Instance.decision_variable_dependency;DecisionVariableDependencies.graph 144
-        Instance.decision_variable_dependency;DecisionVariableDependencies.topological_order;Vec[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key];VariableID.0 24
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
@@ -570,6 +574,7 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Option[stack] 48
         Instance.sense 1
         Instance.sos1_constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.description;FnvHashMap[stack] 32
@@ -626,9 +631,9 @@ mod tests {
         Instance.constraint_collection;context;ConstraintContextStore.labels;ModelingLabelStore.subscripts;FnvHashMap[stack] 32
         Instance.constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.constraint_collection;removed_constraints;BTreeMap[stack] 24
-        Instance.decision_variable_dependency;DecisionVariableDependencies.dependencies;FnvHashMap[stack] 32
-        Instance.decision_variable_dependency;DecisionVariableDependencies.graph 144
-        Instance.decision_variable_dependency;DecisionVariableDependencies.topological_order;Vec[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variable_dependency;AcyclicAssignments.topological_order;Vec[stack] 24
         Instance.decision_variables;DecisionVariableTable.columns;CreatedDecisionVariableColumns.fixed_values;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[key];VariableID.0 8
         Instance.decision_variables;DecisionVariableTable.entries;BTreeMap[stack] 24
@@ -664,6 +669,7 @@ mod tests {
         Instance.one_hot_constraint_collection;context;ConstraintContextStore.provenance;FnvHashMap[stack] 32
         Instance.one_hot_constraint_collection;one_hot_constraints;BTreeMap[stack] 24
         Instance.one_hot_constraint_collection;removed_one_hot_constraints;BTreeMap[stack] 24
+        Instance.output_objective;Option[stack] 48
         Instance.parameters;Parameters.entries 16
         Instance.parameters;Parameters.entries;HashMap[key] 16
         Instance.parameters;Parameters.entries;HashMap[stack] 48
@@ -676,5 +682,28 @@ mod tests {
         Instance.sos1_constraint_collection;removed_sos1_constraints;BTreeMap[stack] 24
         Instance.sos1_constraint_collection;sos1_constraints;BTreeMap[stack] 24
         "###);
+    }
+
+    #[test]
+    fn output_objective_profile_includes_atomic_pair() {
+        let mut instance = Instance::new(
+            crate::Sense::Maximize,
+            Function::from(linear!(1)),
+            BTreeMap::from([(VariableID::from(1), DecisionVariable::binary())]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        assert!(instance.convert_active_objective(crate::Sense::Minimize));
+
+        let profile = instance.logical_memory_profile();
+        assert!(profile
+            .entries()
+            .any(|(path, _)| path.contains(&"OutputObjective.sense")));
+        assert!(profile
+            .entries()
+            .any(|(path, _)| path.contains(&"OutputObjective.function")));
+        assert!(profile
+            .entries()
+            .any(|(path, _)| path.contains(&"OutputObjective.preserves_optimality")));
     }
 }

@@ -13,7 +13,8 @@ import tomlkit
 _docs_root = Path(__file__).parent.parent
 python_root = _docs_root.parent / "python"
 
-# Add the API docs directory to Python path for pyo3_stub_gen_ext
+# Add the API docs directory to Python path for the generated renderer and the
+# OMMX-specific wrapper loaded immediately after it.
 sys.path.insert(0, str(_docs_root / "api"))
 
 # -- Project information -----------------------------------------------------
@@ -37,6 +38,7 @@ extensions = [
     "sphinxcontrib.katex",
     "autoapi.extension",
     "pyo3_stub_gen_ext",
+    "ommx_pyo3_stub_gen_ext",
 ]
 
 source_suffix = {

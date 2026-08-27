@@ -41,7 +41,7 @@ pub struct ParametricInstanceBuilder {
     one_hot_constraint_context: ConstraintContextStore<crate::OneHotConstraintID>,
     sos1_constraints: BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>,
     sos1_constraint_context: ConstraintContextStore<crate::Sos1ConstraintID>,
-    decision_variable_dependency: DecisionVariableDependencies,
+    decision_variable_dependency: AcyclicAssignments,
     description: Option<v1::instance::Description>,
 }
 
@@ -209,9 +209,9 @@ impl ParametricInstanceBuilder {
     /// Sets the decision variable dependency.
     pub fn decision_variable_dependency(
         mut self,
-        decision_variable_dependency: impl Into<DecisionVariableDependencies>,
+        decision_variable_dependency: AcyclicAssignments,
     ) -> Self {
-        self.decision_variable_dependency = decision_variable_dependency.into();
+        self.decision_variable_dependency = decision_variable_dependency;
         self
     }
 
@@ -495,6 +495,7 @@ impl ParametricInstanceBuilder {
         Ok(ParametricInstance {
             sense,
             objective,
+            output_objective: None,
             decision_variables,
             parameters,
             constraint_collection: ConstraintCollection::with_context(
@@ -554,6 +555,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(*instance.sense(), Sense::Minimize);
+        assert!(instance.output_objective().is_none());
         assert!(instance.decision_variables().is_empty());
         assert!(instance.parameters().is_empty());
         assert!(instance.constraints().is_empty());

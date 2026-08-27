@@ -341,13 +341,30 @@ Unknown, fixed, or non-Integer variables and auxiliary-allocation or
 substitution failures remain ordinary errors. Exact integer-slack callers can
 similarly downcast to
 [`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) before
-selecting an explicitly approximate transformation.
+selecting a different operation that does not require the inequality to become
+an equality.
 
 **Moved / renamed error types:**
 
 - `ommx::QplibParseError` → `ommx::qplib::QplibParseError`. The type is
   slimmer (1-based `line_num` + rendered `message`, no variant enum),
   and no longer re-exported at the crate root.
+
+**Semantic protobuf parse errors.** `RawParseError::InvalidInstance` and the
+domain-signal wrapper variants on `RawParseError` were removed during the 3.0
+beta. The `ParseError::error` field is no longer public; `ParseError` exposes
+its immediate cause through `std::error::Error::source()` instead. Match a
+curated signal on that source when the caller has a recovery path:
+
+```rust,ignore
+let solution_error = std::error::Error::source(parse_error)
+    .and_then(|source| source.downcast_ref::<SolutionError>());
+```
+
+Otherwise propagate the outer `ParseError` or render it for diagnostics.
+`RawParseError` now contains only generic protobuf-boundary failures. Dedicated
+message-specific parse signals, such as `QuadraticParseError`, are also exposed
+directly as the source.
 
 **Key lookups now return `Option<T>`:**
 

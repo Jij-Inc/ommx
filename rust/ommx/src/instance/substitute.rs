@@ -135,12 +135,17 @@ impl Instance {
             .expect("replacement IDs were read from named functions");
     }
 
-    /// Apply a substitution together with prevalidated fresh decision variables.
+    /// Apply an exact encoding's active-formulation substitution together with
+    /// prevalidated fresh decision variables.
     ///
-    /// This owner-level operation is the narrow cross-module boundary used by
-    /// log encoding. The substitution plan cannot be detached from this
-    /// receiver and committed to another [`Instance`].
-    pub(super) fn substitute_acyclic_with_fresh_decision_variables(
+    /// This operation captures the pre-encoding active objective if and only if
+    /// the validated substitution targets it. Capture happens after the last
+    /// fallible operation, immediately before the planned rewrite is committed.
+    /// Whether the rewritten function happens to equal the original function is
+    /// irrelevant: ownership of the rewrite determines the capture boundary.
+    /// Generic [`Substitute`] operations do not use this path and retain their
+    /// existing output-objective semantics.
+    pub(super) fn apply_encoding_substitution(
         &mut self,
         acyclic: &crate::AcyclicAssignments,
         fresh_variables: Vec<(VariableID, DecisionVariable, ModelingLabel)>,
@@ -167,25 +172,61 @@ impl Instance {
         }
 
         let plan = self.plan_substitution(acyclic)?;
+        let objective_is_affected = plan.objective.is_some();
 
-        // This is the last fallible operation. Prepare the complete dependency
-        // rewrite before mutating any owner.
-        let decision_variable_dependency = self
-            .decision_variable_dependency
-            .clone()
-            .substitute_acyclic(acyclic)?;
-        self.decision_variable_dependency = decision_variable_dependency;
+        // This is the last fallible operation. It plans and validates the
+        // dependency update before mutating the table, and clones only the
+        // assignment functions affected by this substitution.
+        self.decision_variable_dependency
+            .substitute_acyclic_in_place_atomic(acyclic)?;
 
         for (id, variable, label) in fresh_variables {
             self.decision_variables
                 .insert(id, variable, label, None, atol)
                 .expect("fresh decision variable IDs were reserved from this instance");
         }
+        if objective_is_affected {
+            self.capture_output_objective();
+        }
         self.commit_substitution(plan);
         Ok(())
     }
 }
 
+/// # Postconditions
+///
+/// Substitution rewrites active functions while preserving the output objective.
+///
+/// ```
+/// use ommx::{
+///     linear, substitute, v1::State, ATol, DecisionVariable, Evaluate, Function,
+///     Instance, Sense, VariableID,
+/// };
+/// use std::collections::{BTreeMap, HashMap};
+///
+/// let original = VariableID::from(0);
+/// let replacement = VariableID::from(1);
+/// let mut instance = Instance::builder()
+///     .sense(Sense::Maximize)
+///     .objective(Function::from(linear!(0)))
+///     .decision_variables(BTreeMap::from([
+///         (original, DecisionVariable::binary()),
+///         (replacement, DecisionVariable::binary()),
+///     ]))
+///     .constraints(BTreeMap::new())
+///     .build()
+///     .unwrap();
+/// assert!(instance.convert_active_objective(Sense::Minimize));
+/// let output = instance.output_objective().cloned();
+///
+/// substitute(&mut instance, [(original, Function::from(linear!(1)))]).unwrap();
+/// assert_eq!(instance.output_objective(), output.as_ref());
+/// let state = State::from(HashMap::from([(1, 1.0)]));
+/// assert_eq!(instance.objective().evaluate(&state, ATol::default()).unwrap(), -1.0);
+/// let solution = instance.evaluate(&state, ATol::default()).unwrap();
+/// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+/// assert_eq!(*solution.objective(), 1.0);
+/// ```
 impl Substitute for Instance {
     type Output = Self;
 
@@ -398,7 +439,7 @@ mod tests {
         let before = instance.clone();
 
         let err = instance
-            .substitute_acyclic_with_fresh_decision_variables(&acyclic, Vec::new(), ATol::default())
+            .apply_encoding_substitution(&acyclic, Vec::new(), ATol::default())
             .unwrap_err();
 
         assert!(err.to_string().contains("unowned decision variable"));
@@ -445,6 +486,46 @@ mod tests {
             .evaluate(&state, crate::ATol::default())
             .unwrap();
         assert_eq!(value, 7.0);
+        let solution = instance.evaluate(&state, crate::ATol::default()).unwrap();
+        assert_eq!(*solution.objective(), 7.0);
+    }
+
+    #[test]
+    fn parametric_substitution_preserves_existing_output_objective() {
+        let decision_variables = BTreeMap::from([
+            (VariableID::from(0), DecisionVariable::continuous()),
+            (VariableID::from(1), DecisionVariable::continuous()),
+        ]);
+        let constraint = Constraint::equal_to_zero(Function::from(linear!(0) + coeff!(-1.0)));
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(0)),
+            decision_variables,
+            BTreeMap::from([(ConstraintID::from(0), constraint)]),
+        )
+        .unwrap();
+        assert!(instance.convert_active_objective(Sense::Maximize));
+        let parametric = instance.penalty_method().unwrap();
+        let output = parametric.output_objective().cloned().unwrap();
+
+        let substituted = parametric
+            .substitute_one(VariableID::from(0), &Function::from(linear!(1)))
+            .unwrap();
+
+        assert_eq!(substituted.output_objective(), Some(&output));
+        let parameters = crate::v1::Parameters {
+            entries: substituted
+                .parameters()
+                .keys()
+                .map(|id| (id.into_inner(), 2.0))
+                .collect(),
+        };
+        let materialized = substituted.with_parameters(parameters).unwrap();
+        assert_eq!(materialized.output_objective(), Some(&output));
+        let solution = materialized
+            .evaluate(&crate::v1::State::from_iter([(1, 1.0)]), ATol::default())
+            .unwrap();
+        assert_eq!(*solution.objective(), 1.0);
     }
 
     #[test]

@@ -26,8 +26,18 @@ returns the typed error directly):
 
 - [`InfeasibleDetected`](crate::InfeasibleDetected) — produced by [`Propagate`](crate::Propagate) when a constraint
   becomes infeasible after substitution.
-- [`CoefficientError`](crate::CoefficientError), [`BoundError`](crate::BoundError), [`AtolError`](crate::AtolError) — numeric-domain
-  validation failures.
+- [`CoefficientError`](crate::CoefficientError), [`BoundError`](crate::BoundError), [`AtolError`](crate::AtolError),
+  [`InvalidPenaltyWeight`](crate::InvalidPenaltyWeight) — numeric-domain validation failures.
+- [`FunctionEvaluationError`](crate::FunctionEvaluationError) — identifies
+  undefined division, a zero-classified value raised to a negative integer
+  power, and non-finite function results. At evaluation time, the caller's
+  [`ATol`](crate::ATol) classifies a value as zero when `abs(value) <= atol`,
+  including the boundary. A caller can change the state, expression, or
+  evaluation tolerance before retrying.
+- [`FixedPenaltyWeightIDMismatch`](crate::FixedPenaltyWeightIDMismatch) —
+  identifies the missing and unexpected active constraint IDs in a caller-owned
+  fixed-penalty weight map, so the caller can correct the keys and retry the
+  atomic operation on the unchanged [`Instance`](crate::Instance).
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
@@ -63,14 +73,22 @@ returns the typed error directly):
 - [`LogEncodingUnavailable`](crate::LogEncodingUnavailable) and
   [`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) — identify
   the narrow cases where an exact encoding operation is unavailable and a
-  caller may explicitly choose another mathematical operation. Contract,
-  allocation, substitution, and arithmetic failures are not folded into these
-  signals.
+  caller may explicitly choose another mathematical operation or postcondition.
+  Contract, allocation, substitution, and arithmetic failures are not folded
+  into these signals.
+- [`PreparationTargetNotReached`](crate::PreparationTargetNotReached) — reports
+  that all configured Preparation phases completed without establishing the
+  target [`InstanceClass`](crate::InstanceClass) membership. Callers can inspect
+  its typed membership report before adding phases, revising the target class,
+  or reporting the remaining mismatches.
 
-Evaluation does not define an umbrella error type. Caller-provided numeric
-validation reuses [`DecisionVariableError`](crate::DecisionVariableError), and
-failures without a stable caller recovery path remain ordinary [`Error`](crate::Error)
-values.
+Evaluation does not define an operation-wide umbrella error type.
+Caller-provided decision-variable validation reuses
+[`DecisionVariableError`](crate::DecisionVariableError), while
+[`FunctionEvaluationError`](crate::FunctionEvaluationError) covers the
+function-owned undefined-domain and non-finite-result conditions above.
+Failures without a stable caller recovery path remain ordinary
+[`Error`](crate::Error) values.
 
 Direct function and polynomial partial evaluation retain
 [`CoefficientError`](crate::CoefficientError), because the caller can change
@@ -79,6 +97,13 @@ the supplied state and retry. If the same arithmetic fails while an
 removed constraint against stored dependencies and fixed values, that signal
 no longer describes caller input and is converted to an ordinary
 [`Error`](crate::Error) with structured tracing context.
+
+The same ownership transition applies to
+[`FunctionEvaluationError`](crate::FunctionEvaluationError): direct function
+evaluation and evaluation of caller-owned
+[`AcyclicAssignments`](crate::AcyclicAssignments) retain the signal, while an
+internally derived, Instance-owned dependent-variable value converts it to
+ordinary owner-contextualized [`Error`](crate::Error).
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 
@@ -90,13 +115,17 @@ match instance.propagate(&state, atol) {
 }
 ```
 
-For example, an Adapter preparation can select an approximate slack only for
-the exact-operation signal while continuing to propagate unrelated failures:
+For example, a caller that does not require the inequality to become an
+equality can explicitly select the inequality-preserving Integer slack
+operation after the exact-operation signal, while continuing to propagate
+unrelated failures:
 
 ```ignore
 match instance.convert_inequality_to_equality_with_integer_slack(id, 32, atol) {
     Err(e) if e.is::<ommx::ExactIntegerSlackUnavailable>() => {
-        instance.add_integer_slack_to_inequality(id, 32)?;
+        // This operation keeps the relation as an inequality. It is not an
+        // approximate representation of the original feasible set.
+        instance.add_integer_slack_to_inequality(id, 32, atol)?;
     }
     Err(e) => return Err(e),
     Ok(()) => {}
@@ -107,8 +136,8 @@ If exact integer-slack conversion cannot normalize the coefficients, the same
 error chain retains both the outer
 [`ExactIntegerSlackUnavailable`](crate::ExactIntegerSlackUnavailable) signal
 and its inner [`ContentFactorError`](crate::ContentFactorError). Callers can
-therefore choose an approximate transformation from the outer operation signal
-or change the coefficients based on the narrower cause.
+therefore choose an inequality-preserving transformation from the outer
+operation signal or change the coefficients based on the narrower cause.
 
 Protobuf wire decoding and the [`Parse`](crate::Parse) trait share the
 [`ParseError`](crate::ParseError) signal. Public byte decoders preserve wire
@@ -127,6 +156,26 @@ ParametricInstance namespace collisions, and
 [`Sos1ConstraintError`](crate::Sos1ConstraintError) for v2 special-constraint
 validation. This preserves the validation cause without changing the
 Python-visible parse contract.
+
+[`ParseError`](crate::ParseError) exposes its immediate cause through
+[`std::error::Error::source`]. Recoverable semantic failures can therefore be
+downcast directly from that source to their domain signal without matching a
+`RawParseError` wrapper. [`RawParseError`](crate::RawParseError) is
+reserved for generic protobuf-boundary failures such as missing fields,
+unknown enums, reserved annotation keys, and decode errors. Dedicated
+message-specific parse signals such as
+[`QuadraticParseError`](crate::QuadraticParseError) are also exposed directly.
+Semantic failures without a caller recovery path remain ordinary errors and
+still retain the `ParseError` breadcrumbs.
+
+```ignore
+let parse_error = error.downcast_ref::<ommx::ParseError>().unwrap();
+let cause = std::error::Error::source(parse_error).unwrap();
+
+if let Some(solution_error) = cause.downcast_ref::<ommx::SolutionError>() {
+    // Inspect the Solution-owned signal and recover if appropriate.
+}
+```
 
 ## Fail-site macros
 

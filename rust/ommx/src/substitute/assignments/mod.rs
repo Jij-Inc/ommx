@@ -5,6 +5,7 @@ use crate::{
     check_self_assignment, decision_variable::VariableID, substitute_acyclic_via_one, v1::State,
     ATol, Evaluate, Function, Substitute, VariableIDSet,
 };
+use anyhow::Context;
 use fnv::FnvHashMap;
 use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
@@ -82,6 +83,64 @@ impl AcyclicAssignments {
 
     pub fn iter(&self) -> impl Iterator<Item = (&VariableID, &Function)> {
         self.assignments.iter()
+    }
+
+    /// Apply an acyclic substitution atomically without cloning unaffected assignments.
+    ///
+    /// Crate-internal root operations use this storage effect after planning
+    /// every other fallible owner-level rewrite. Only assignment functions
+    /// whose right-hand sides reference substituted variables are cloned and
+    /// rewritten; the dependency graph is rebuilt from borrowed unchanged rows.
+    pub(crate) fn substitute_acyclic_in_place_atomic(
+        &mut self,
+        acyclic: &AcyclicAssignments,
+    ) -> Result<(), SubstitutionError> {
+        if acyclic.is_empty() {
+            return Ok(());
+        }
+        if self.is_empty() {
+            *self = acyclic.clone();
+            return Ok(());
+        }
+
+        let substituted_variables = acyclic.keys().collect::<std::collections::BTreeSet<_>>();
+        let mut replacements = FnvHashMap::default();
+        for (&id, function) in &self.assignments {
+            // Incoming assignments replace rows with the same ID. Do not
+            // evaluate an obsolete right-hand side: besides wasting work, it
+            // could fail even though that row is absent from the final value.
+            if substituted_variables.contains(&id) {
+                continue;
+            }
+            if !function.required_ids().is_disjoint(&substituted_variables) {
+                replacements.insert(id, function.clone().substitute_acyclic(acyclic)?);
+            }
+        }
+
+        // The consuming implementation normalizes newly inserted assignments
+        // through later substitutions when `self` is non-empty. Preserve that
+        // representation while cloning only the incoming assignment set.
+        let incoming = acyclic
+            .assignments
+            .iter()
+            .map(|(&id, function)| Ok((id, function.clone().substitute_acyclic(acyclic)?)))
+            .collect::<Result<FnvHashMap<_, _>, SubstitutionError>>()?;
+
+        let mut final_assignments = Vec::with_capacity(self.assignments.len() + incoming.len());
+        for (&id, function) in &self.assignments {
+            if incoming.contains_key(&id) {
+                continue;
+            }
+            final_assignments.push((id, replacements.get(&id).unwrap_or(function)));
+        }
+        final_assignments.extend(incoming.iter().map(|(&id, function)| (id, function)));
+        let (dependency, topological_order) = build_dependency_graph(final_assignments)?;
+
+        self.assignments.extend(replacements);
+        self.assignments.extend(incoming);
+        self.dependency = dependency;
+        self.topological_order = topological_order;
+        Ok(())
     }
 
     /// Get the assignments in substitution order (variables that need to be replaced first).
@@ -240,7 +299,9 @@ impl Evaluate for AcyclicAssignments {
         // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
         // we first evaluate x1 = 3, then x4 = 5. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 5}.
         for (var_id, function) in self.evaluation_order_iter() {
-            let value = function.evaluate(&extended_state, atol)?;
+            let value = function.evaluate(&extended_state, atol).with_context(|| {
+                format!("failed to evaluate assignment for variable {var_id:?}")
+            })?;
             if !value.is_finite() {
                 return Err(crate::error!(
                     "Assignment for variable {var_id:?} evaluated to non-finite value: {value}"
@@ -271,14 +332,22 @@ impl Evaluate for AcyclicAssignments {
         samples: &crate::Sampled<State>,
         atol: ATol,
     ) -> crate::Result<Self::SampledOutput> {
+        // Evaluate each unique source state once. `try_map_ref` preserves the
+        // input SampleID grouping while every DAG evaluation extends its own
+        // state in dependency-first order.
+        let extended = samples.try_map_ref(|state| self.evaluate(state, atol))?;
         let mut result = FnvHashMap::default();
-
-        // For each assignment in topological order
-        for (var_id, function) in self.substitution_order_iter() {
-            let sampled_values = function.evaluate_samples(samples, atol)?;
-            result.insert(var_id, sampled_values);
+        for id in self.keys() {
+            let values = extended.try_map_ref(|state| {
+                state.entries.get(&id.into_inner()).copied().ok_or_else(|| {
+                    crate::error!(
+                        { id = ?id },
+                        "evaluated assignment state is missing variable {id:?}"
+                    )
+                })
+            })?;
+            result.insert(id, values);
         }
-
         Ok(result)
     }
 
@@ -331,7 +400,7 @@ impl Substitute for AcyclicAssignments {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assign, coeff, linear};
+    use crate::{assign, coeff, linear, SampleID, Sampled};
     use ::approx::assert_abs_diff_eq;
     use std::collections::BTreeSet;
 
@@ -384,6 +453,68 @@ mod tests {
     }
 
     #[test]
+    fn substitute_acyclic_in_place_atomic_matches_consuming_result() {
+        let initial = assign! {
+            1 <- linear!(2) + linear!(5),
+            2 <- linear!(6),
+            9 <- linear!(10)
+        };
+        let substitution = assign! {
+            2 <- linear!(3) + coeff!(1.0),
+            3 <- linear!(4)
+        };
+        let expected = initial.clone().substitute_acyclic(&substitution).unwrap();
+        let mut actual = initial;
+
+        actual
+            .substitute_acyclic_in_place_atomic(&substitution)
+            .unwrap();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn substitute_acyclic_in_place_atomic_preserves_value_on_error() {
+        let huge = crate::Coefficient::try_from(f64::MAX).unwrap();
+        let mut initial = AcyclicAssignments::new([(
+            VariableID::from(1),
+            Function::from((huge * linear!(2)).unwrap()),
+        )])
+        .unwrap();
+        let substitution = assign! {
+            2 <- (coeff!(2.0) * linear!(3)).unwrap()
+        };
+        let before = initial.clone();
+
+        let err = initial
+            .substitute_acyclic_in_place_atomic(&substitution)
+            .unwrap_err();
+
+        assert!(err.to_string().contains("Coefficient must be finite"));
+        assert_eq!(initial, before);
+    }
+
+    #[test]
+    fn substitute_acyclic_in_place_atomic_skips_overwritten_rhs() {
+        let huge = crate::Coefficient::try_from(f64::MAX).unwrap();
+        let mut initial = AcyclicAssignments::new([(
+            VariableID::from(1),
+            Function::from((huge * linear!(2)).unwrap()),
+        )])
+        .unwrap();
+        let substitution = assign! {
+            1 <- linear!(3),
+            2 <- (coeff!(2.0) * linear!(4)).unwrap()
+        };
+
+        initial
+            .substitute_acyclic_in_place_atomic(&substitution)
+            .unwrap();
+
+        assert_eq!(initial, substitution);
+    }
+
+    #[test]
     fn test_evaluate_topological_order() {
         // Test case based on the comment in evaluate method:
         // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
@@ -403,6 +534,48 @@ mod tests {
         assert_eq!(result.entries[&2], 1.0); // x2 = 1 (original)
         assert_eq!(result.entries[&3], 2.0); // x3 = 2 (original)
         assert_eq!(result.entries[&4], 5.0); // x4 = x1 + 2 = 3 + 2 = 5
+    }
+
+    #[test]
+    fn evaluate_samples_resolves_dag_and_preserves_groups() {
+        let assignments = AcyclicAssignments::new([
+            (
+                VariableID::from(1),
+                Function::from(linear!(2)).signum().abs(),
+            ),
+            (VariableID::from(2), Function::from(linear!(3))),
+        ])
+        .unwrap();
+        let samples = Sampled::new(
+            vec![
+                vec![SampleID::from(10), SampleID::from(11)],
+                vec![SampleID::from(20)],
+            ],
+            [State::from_iter([(3, 0.0)]), State::from_iter([(3, -2.0)])],
+        )
+        .unwrap();
+
+        let evaluated = assignments
+            .evaluate_samples(&samples, ATol::default())
+            .unwrap();
+
+        assert_eq!(evaluated[&VariableID::from(1)].num_samples(), 3);
+        assert_eq!(
+            evaluated[&VariableID::from(1)].get(SampleID::from(10)),
+            Some(&0.0)
+        );
+        assert_eq!(
+            evaluated[&VariableID::from(1)].get(SampleID::from(11)),
+            Some(&0.0)
+        );
+        assert_eq!(
+            evaluated[&VariableID::from(1)].get(SampleID::from(20)),
+            Some(&1.0)
+        );
+        assert_eq!(
+            evaluated[&VariableID::from(2)].get(SampleID::from(20)),
+            Some(&-2.0)
+        );
     }
 
     #[test]
@@ -427,6 +600,9 @@ mod tests {
         let state = State::from_iter([(2, f64::INFINITY)]);
 
         let err = assignments.evaluate(&state, ATol::default()).unwrap_err();
-        assert!(err.to_string().contains("evaluated to non-finite value"));
+        assert!(err
+            .to_string()
+            .contains("failed to evaluate assignment for variable VariableID(1)"));
+        assert!(err.is::<crate::FunctionEvaluationError>());
     }
 }

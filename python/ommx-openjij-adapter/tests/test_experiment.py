@@ -1,10 +1,7 @@
-from ommx import DecisionVariable, Instance, SampleSet, Sense
+from ommx import DecisionVariable, FixedPenaltyPreparation, Instance, SampleSet, Sense
 from ommx.experiment import Experiment
 
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 
 def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
@@ -15,12 +12,14 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
         constraints={7: x == 1},
         sense=Sense.Maximize,
     )
-    source_bytes = source.to_v2_bytes()
-    preparation = OMMXOpenJijSAAdapter.prepare(
-        source,
-        config=OpenJijPreparationConfig(uniform_penalty_weight=2.0),
+    input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
+    policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
+    policy.fixed_penalty = (
+        FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=2.0)
     )
-    adapter_input = preparation.input
+    source.prepare(input_class, policy)
+    adapter_input = source
+    assert adapter_input.sense == Sense.Minimize
     input_bytes = adapter_input.to_v2_bytes()
     experiment = Experiment.with_temp_local_registry()
     prepared_samples: SampleSet | None = None
@@ -34,24 +33,13 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
         )
 
     assert prepared_samples is not None
-    assert source.to_v2_bytes() == source_bytes
-    assert prepared_samples.sense == Sense.Minimize
+    assert prepared_samples.sense == Sense.Maximize
     for sample_id in prepared_samples.sample_ids():
         actual = prepared_samples.get(sample_id)
         expected = adapter_input.evaluate(actual.state)
         assert actual.objective == expected.objective
         assert actual.sense == expected.sense
         assert len(actual.constraints) == len(expected.constraints)
-
-    source_samples = preparation.evaluate_source(prepared_samples)
-    assert source_samples.sense == Sense.Maximize
-    assert len(source_samples.constraints) == 1
-    for sample_id in source_samples.sample_ids():
-        value = source_samples.extract_decision_variables("x", sample_id)[(0,)]
-        expected = source.evaluate({0: value})
-        actual = source_samples.get(sample_id)
-        assert actual.objective == expected.objective
-        assert actual.feasible == expected.feasible
 
     loaded = Experiment.from_artifact(experiment.commit())
     [sampling] = loaded.runs[0].samplings

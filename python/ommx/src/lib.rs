@@ -31,6 +31,7 @@ mod parameter;
 mod parameters;
 mod parametric_instance;
 mod polynomial;
+mod preparation;
 mod provenance;
 mod pyo3_bridge;
 mod quadratic;
@@ -71,6 +72,7 @@ pub use parameter::*;
 pub use parameters::*;
 pub use parametric_instance::*;
 pub use polynomial::*;
+pub use preparation::*;
 pub use provenance::*;
 pub use quadratic::*;
 pub use random::*;
@@ -188,18 +190,26 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Polynomial>()?;
     m.add_class::<Function>()?;
     m.add_class::<VariableBound>()?;
+    m.add_class::<OutputObjective>()?;
     m.add_class::<Instance>()?;
     m.add_class::<InstanceDescription>()?;
     m.add_class::<DecisionVariable>()?;
     m.add_class::<AttachedDecisionVariable>()?;
     m.add_class::<Parameter>()?;
     m.add_class::<SpecialConstraintKind>()?;
-    m.add_class::<DegreeBound>()?;
+    m.add_class::<PolynomialRequirement>()?;
     m.add_class::<InstanceClassClause>()?;
     m.add_class::<InstanceClass>()?;
     m.add_class::<InstanceClassMismatch>()?;
     m.add_class::<InstanceClassClauseReport>()?;
     m.add_class::<InstanceClassMembershipReport>()?;
+    m.add_class::<SpecialConstraintPreparation>()?;
+    m.add_class::<ObjectivePreparation>()?;
+    m.add_class::<IntegerSlackPreparation>()?;
+    m.add_class::<IntegerEncodingPreparation>()?;
+    m.add_class::<BinaryPowerPreparation>()?;
+    m.add_class::<FixedPenaltyPreparation>()?;
+    m.add_class::<PreparationPolicy>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<AttachedConstraint>()?;
     m.add_class::<IndicatorConstraint>()?;
@@ -280,23 +290,33 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "ExactIntegerSlackError",
     "InfeasibleDetected",
     "LogEncodingError",
+    "PreparationTargetNotReachedError",
     // Function types
     "Linear",
     "Quadratic",
     "Polynomial",
     "Function",
+    "OutputObjective",
     // Decision variable and parameter
     "DecisionVariable",
     "AttachedDecisionVariable",
     "Parameter",
     // Instance classes and explicit special-constraint lowering
     "SpecialConstraintKind",
-    "DegreeBound",
+    "PolynomialRequirement",
     "InstanceClassClause",
     "InstanceClass",
     "InstanceClassMismatch",
     "InstanceClassClauseReport",
     "InstanceClassMembershipReport",
+    // Preparation
+    "SpecialConstraintPreparation",
+    "ObjectivePreparation",
+    "IntegerSlackPreparation",
+    "IntegerEncodingPreparation",
+    "BinaryPowerPreparation",
+    "FixedPenaltyPreparation",
+    "PreparationPolicy",
     // Constraint and named function
     "Constraint",
     "AttachedConstraint",

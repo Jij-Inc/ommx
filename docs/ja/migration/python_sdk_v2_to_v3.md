@@ -175,7 +175,7 @@ for cid, c in instance.constraints.items():
 
 `Instance` / `ParametricInstance` の制約 dict は、v3 final では `AttachedX` handle を返します。`Solution.constraints` は評価結果の snapshot なので `EvaluatedConstraint` のままです。`SampleSet.constraints` / `.decision_variables` / `.named_functions` は `list` のままです。
 
-## 5. rename と signature 変更
+## 5. rename、signature、挙動の変更
 
 主な rename / signature 変更は次の通りです。
 
@@ -199,6 +199,59 @@ instance.save_mps("out.mps.gz")
 p = Parameter(3, name="w")
 pi.with_parameters({p.id: 1.0})
 ```
+
+### 5.6 `to_qubo()` / `to_hubo()`は入力objectiveを評価結果に保持 (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+Driver methodは引き続き利用でき、入力をin-placeに変更します。v3では変更後の
+`Instance`がQUBO/HUBO solverへ渡すminimization energyをactive objectiveとして保持し、
+`evaluate()`と`evaluate_samples()`は変換前のinstanceが公開していたobjective semanticsを
+保持します。Python SDK v2はactive senseを戻したうえで最終的なpenalty energyを評価しており、
+solver inputとuser-facing outputを混在させていました。
+
+したがって`Instance.objective`はsolver energyを、`Solution`と`SampleSet`は保持された入力
+objectiveを表します。実行可能な事後条件は{meth}`~ommx.Instance.to_qubo`、
+{meth}`~ommx.Instance.to_hubo`、{meth}`~ommx.Instance.evaluate`、
+{meth}`~ommx.Instance.evaluate_samples`に記載されています。
+
+明示的なoutput objectiveを持つ`Instance`または`ParametricInstance`は、v1 wire formatで
+losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`を送出するため、
+`to_v2_bytes()`を使用してください。
+
+同じpipelineは{meth}`~ommx.Instance.prepare`と
+{meth}`~ommx.Instance.as_qubo_format`または
+{meth}`~ommx.Instance.as_hubo_format`で明示的に実行できます。対応するtarget classと
+編集可能なpolicyは{meth}`~ommx.InstanceClass.qubo`、
+{meth}`~ommx.InstanceClass.hubo`、{meth}`~ommx.PreparationPolicy.for_qubo`、
+{meth}`~ommx.PreparationPolicy.for_hubo`が提供します。
+
+### 5.7 Adapterの`solve()` / `sample()`が入力を自動的にPrepare (`3.0.0`, [#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+通常は元のInstanceをそのまま`solve()`または`sample()`へ渡します。AdapterはそのInstanceを
+変更せずに推奨Preparationを適用します。
+
+```python
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)
+```
+
+application固有のPreparation Policyが必要な場合は、Instanceをin-placeでPrepareしてから
+preparation-free APIを使います。
+
+```python
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# 必要に応じてpolicyを調整する。
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_without_preparation(instance)
+```
+
+独自Adapterでは、`solve_without_preparation()`または`sample_without_preparation()`を実装します。
+追加optionは、それを公開する各APIで明示的な型付きsignatureとして宣言し、包括的な
+`**kwargs`は使いません。Preparationをまたいでも
+意味が変わらないoptionはeasy methodから転送できます。exactなprepared inputに
+意味が依存し、Preparation過程をまたぐtransportを定義しない場合、具体的なAdapterはそのoptionを
+preparation-free methodだけに公開できます。Adapter inputに
+`output_objective`がある場合、HiGHSとPython-MIPはdual valueを付与しません。
 
 ## 6. return type の変更
 
@@ -227,6 +280,31 @@ ids_list: list[int] = sample_set.sample_ids_list
 
 `evaluate` は、必要な decision variable ID が state にない場合や atol が不正な場合に、`RuntimeError` ではなく `ValueError` を投げます。`partial_evaluate` は不足 ID を許容しますが、与えた entry が不正な場合、atol が不正な場合、または dependent variable の assertion が不整合・検証不能な場合は `ValueError` を投げます。
 
+v2.5.1 の `Function` は常に polynomial だったため、`degree()` と
+`num_terms()` は常に `int` を返していました。v3 の `Function` は絶対値、
+点ごとの最小値・最大値、除算、符号付き整数べきなどの複合 scalar expression も
+表現できます。この表現では、両メソッドは `None` を返します。また、polynomial の
+係数 property（`terms`、`linear_terms`、`quadratic_terms`、`constant_term`）と
+`content_factor()` は `TypeError` を送出します。
+
+```python
+# v2.5.1
+degree: int = function.degree()
+terms = function.terms
+
+# v3
+degree: int | None = function.degree()
+if degree is None:
+    # 係数 map として扱わず、複合式のまま評価する
+    value = function.evaluate(state, atol=1e-6)
+else:
+    terms = function.terms
+```
+
+非負の整数べきを展開済み polynomial のまま保持したい場合は、明示的な乗算を
+使ってください。`function.powi(n)` と `function**n` は、`n >= 0` の場合も意図的に
+複合 power expression を構築します。
+
 ## 7. 削除された helper
 
 次の helper は削除または置き換えられました。
@@ -236,41 +314,45 @@ ids_list: list[int] = sample_set.sample_ids_list
 - `instance.constraint_hints` - `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に分かれました。
 - `ArtifactArchive` / `ArtifactDir` 系 - `Artifact` / `ArtifactDraft` に統合されました。
 - `ommx_openjij_adapter.response_to_samples(response)` - `decode_to_samples(response)` を使用します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
-- `ommx_openjij_adapter.sample_qubo_sa(...)` - 直接適用可能なinputでは `OMMXOpenJijSAAdapter.sample(...)` を使用します。置き換え後はraw `Samples` ではなく評価済みの `SampleSet` を返します。preparationが必要な場合は `OMMXOpenJijSAAdapter.prepare(...)` を呼び、`preparation.input` をsampleしてから、`preparation.evaluate_source(...)` でsource instanceに対して評価します（`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
+- `ommx_openjij_adapter.sample_qubo_sa(...)` -
+  `OMMXOpenJijSAAdapter.sample(instance)`を使います。置き換え後は`instance`を変更せず、
+  raw `Samples`ではなく評価済みの`SampleSet`を返します
+  （`3.0.0`: [#1087](https://github.com/Jij-Inc/ommx/pull/1087)）。
 
 v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `uniform_penalty_weight`、`penalty_weights`、
-`inequality_integer_slack_max_range` を直接受け取り、暗黙にpreparationを実行していました。
-v3では、これらを1つの不変な `OpenJijPreparationConfig` にまとめ、`config=` から
-`prepare()` に渡したうえで、得られた `preparation.input` をsampleします。通常制約ごとに
-異なるweightが必要な場合は、`uniform_penalty_weight` の代わりに `penalty_weights` を
-使います。v2はどちらのpenalty設定もない場合に一律weight `1.0` を選びましたが、v3では
-exact preparation後に制約が残る場合、有限penaltyを明示的に選択する必要があります。
+`inequality_integer_slack_max_range`を直接受け取っていました。v3ではこれらの選択を推奨
+`PreparationPolicy`へ移します。
 
-v2はexact integer slackへの変換に失敗すると、離散的なslack近似を自動的に試しました。
-このfallbackを維持するには、新しいfield
-`allow_approximate_integer_slack=True` を明示します。v3の既定値は `False` であり、
-既定のpreparation pathが使うのは利用可能なexact operationだけです。
+- `uniform_penalty_weight`と`penalty_weights`は`policy.fixed_penalty`へ移す。
+- `inequality_integer_slack_max_range`は`policy.integer_slack`へ移す。
+
+constructorを直接使う場合は自動的にPrepareされないため、あらかじめ
+`OMMXOpenJijSAAdapter.INPUT_CLASS`向けにPrepareしたInstanceを渡します。
+
+OpenJijの`initial_state`は、このexactなprepared inputのsolver変数表現に対して定義され、dictの
+keyはその変数IDです。そのためv3ではeasy methodではなく、exact-input constructor、
+`sample_without_preparation()`、`solve_without_preparation()`で受け取ります。
+
+通常の`sample()` / `solve()` workflowは§5.7で説明しています。固定penaltyが必要なmodelでは、
+applicationがそのmagnitudeを選ぶ必要があります。v3はv2の暗黙なuniform weight `1.0`を
+使用しません。customizeしたPolicyをInstanceへ適用し、preparation-free methodを呼びます。
 
 ```python
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx import FixedPenaltyPreparation
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-config = OpenJijPreparationConfig(
-    uniform_penalty_weight=20.0,
-    inequality_integer_slack_max_range=32,
-    allow_approximate_integer_slack=True,  # v2の近似fallbackを維持
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
+policy.fixed_penalty = (
+    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
 )
-preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+source.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(source)
 ```
 
-`preparation.report.config` は、正規化済みで実際に使われた不変の設定を記録します。
-その他のfieldは、source rejected、preparation phase rejected、準備したcandidateが
-Adapter applicabilityでrejected、successの4つの終端状態のいずれかを表します。
-`steps` はその終端状態までに完了したoperationのprefixであり、独立したoutcomeでは
-ありません。
+`prepare()`は`source`をin-placeで変更します。返される`SampleSet`のobjectiveとsenseは
+Preparation前に`source`が公開していたものです（§5.6）。Policyの詳細とpenaltyの選び方は
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter)を参照してください。
 
 ## 8. DataFrame accessor
 
@@ -446,8 +528,10 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] `Constraint.id` / `set_id()` / `id=` を削除し、host dict の key で ID を渡す。
 - [ ] `constraints=[...]` を `constraints={id: constraint}` に置き換える。
 - [ ] `constraint_hints` を `one_hot_constraints` / `sos1_constraints` / `indicator_constraints` に置き換える。
+- [ ] Adapterの推奨Preparationを使う場合は`solve()` / `sample()`を直接呼ぶ。Policyをcustomizeする場合は`Instance.prepare()`後に`solve_without_preparation()` / `sample_without_preparation()`を呼ぶ。独自Adapterにはpreparation-free methodを追加し、Adapter固有optionは公開するAPIごとに明示的な型付きsignatureとして宣言して、包括的な`**kwargs`は使わない。exactなprepared inputに依存するoptionのtransportを定義しない場合は、preparation-free methodだけに公開できる。
 - [ ] `*_df` accessor に `()` を付ける。
 - [ ] `RuntimeError` を捕捉していた `evaluate` / `partial_evaluate` 周辺を `ValueError` に変える。
+- [ ] `Function.degree()` / `num_terms()` の型注釈を `None` も受け取る形に変更し、複合式の可能性がある場合は polynomial 係数 property への access を分岐する。
 - [ ] `decision_variable_analysis()` を `decision_variable_roles()` / `decision_variable_role(id)` / `fixed_decision_variables()` / `dependent_decision_variable_ids()` / `irrelevant_decision_variable_ids()` / `decision_variables_df()["state_role"]` に置き換える。
 - [ ] element-level `to_bytes()` / `from_bytes()` を、所有者全体の round-trip に置き換える。新規 payload は `to_v2_bytes()`、legacy v1 互換または evaluate 用 DTO では `to_v1_bytes()` を使う。
 - [ ] Artifact archive API を `ArtifactDraft` / `Artifact.save` / `Artifact.import_archive` / `Artifact.inspect_archive` に移行する。

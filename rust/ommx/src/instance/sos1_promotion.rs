@@ -13,7 +13,7 @@
 //!
 //! while retaining the complete formulation history in the same [`Instance`].
 //! Verified Big-M rows move to the removed collection, and fresh selectors
-//! become dependent variables reconstructed by a [`crate::DependentExpr`].
+//! become dependent variables reconstructed by a composed [`Function`].
 //!
 //! The reusable proof plan remains private and is applied only to a staged
 //! clone. This keeps witness rejection atomic and prevents a checked plan from
@@ -27,8 +27,8 @@ use super::{
     Instance,
 };
 use crate::{
-    Bound, Constraint, ConstraintContext, ConstraintID, DependentExpr, Equality, Function, Kind,
-    RemovedReason, Sos1Constraint, Sos1ConstraintID, VariableID, VariableIDSet,
+    Bound, Constraint, ConstraintContext, ConstraintID, Equality, Function, Kind, RemovedReason,
+    Sos1Constraint, Sos1ConstraintID, VariableID, VariableIDSet,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -95,7 +95,7 @@ impl Sos1BigMPromotionWitness {
 /// Result of one checked SOS1 Big-M promotion.
 ///
 /// State reconstruction is owned by the mutated [`Instance`]: each fresh
-/// selector remains registered and is assigned a [`DependentExpr`] evaluated
+/// selector remains registered and is assigned a composed [`Function`] evaluated
 /// by [`Instance::populate_state`]. This result is therefore informational and
 /// does not represent an external project/lift boundary.
 #[must_use = "the result identifies the promoted constraint and retained history"]
@@ -164,6 +164,17 @@ impl Instance {
     /// zero classifier as the promoted SOS1 constraint so numerical residuals
     /// near zero do not reactivate retained selectors.
     ///
+    /// Promotion establishes equivalence for exact real-valued semantics. It
+    /// does not claim that the sets accepted under a finite `atol` are
+    /// identical: regular rows keep their strict `residual < atol` rule, while
+    /// selector reconstruction classifies `abs(member) <= atol` as zero. For
+    /// example, exactly at `abs(member) == atol`, the promoted active model may
+    /// be feasible while [`crate::Solution::feasible`] reports `false` because
+    /// it also checks retained formulation history;
+    /// [`crate::Solution::feasible_relaxed`] reports only the active model.
+    /// Approximate selector coordinates accepted by the original Big-M model
+    /// can likewise differ from the deterministic reconstructed selector.
+    ///
     /// On success the verified formulation rows are relaxed, fresh selectors
     /// remain registered as dependent variables, and a new active SOS1
     /// constraint is inserted. The operation is atomic: every change is
@@ -201,14 +212,13 @@ impl Instance {
                 .map(|(&member, &selector)| {
                     (
                         selector,
-                        DependentExpr::nonzero_indicator(Function::from(crate::linear!(
-                            member.into_inner()
-                        ))),
+                        Function::from(crate::linear!(member.into_inner()))
+                            .signum()
+                            .abs(),
                     )
                 }),
         );
-        staged.decision_variable_dependency =
-            crate::DecisionVariableDependencies::new(dependencies)?;
+        staged.decision_variable_dependency = crate::AcyclicAssignments::new(dependencies)?;
         staged
             .sos1_constraint_collection
             .insert_active_with_context(
@@ -712,10 +722,11 @@ mod tests {
             promotion.members()
         );
         assert!(instance.decision_variables().contains_key(&unrelated_id()));
-        assert!(matches!(
-            instance.decision_variable_dependency().get(&selector_id()),
-            Some(DependentExpr::NonzeroIndicator(_))
-        ));
+        assert!(!instance
+            .decision_variable_dependency()
+            .get(&selector_id())
+            .unwrap()
+            .is_polynomial());
 
         let zero = instance
             .populate_state(
@@ -735,12 +746,19 @@ mod tests {
 
     #[test]
     fn reconstructed_selector_uses_the_sos1_zero_tolerance() {
-        let (mut instance, witness) = mixed_instance();
+        let member = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(-2.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let (mut instance, witness) =
+            fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
         let promotion = instance.promote_sos1_big_m(&witness).unwrap();
         let atol = ATol::new(1.0e-6).unwrap();
 
         let near_zero = instance
-            .evaluate(&crate::v1::State::from_iter([(0, 0.0), (1, 5.0e-7)]), atol)
+            .evaluate(&crate::v1::State::from_iter([(1, 5.0e-7)]), atol)
             .unwrap();
         assert_eq!(near_zero.state().entries[&selector_id().into_inner()], 0.0);
         let evaluated = near_zero
@@ -749,20 +767,152 @@ mod tests {
             .unwrap();
         assert!(evaluated.stage.feasible);
         assert_eq!(evaluated.stage.active_variable, None);
+        assert!(near_zero.feasible());
+        assert!(near_zero.feasible_relaxed());
 
         let on_boundary = instance
-            .evaluate(&crate::v1::State::from_iter([(0, 0.0), (1, 1.0e-6)]), atol)
+            .evaluate(&crate::v1::State::from_iter([(1, 1.0e-6)]), atol)
             .unwrap();
         assert_eq!(
             on_boundary.state().entries[&selector_id().into_inner()],
-            1.0
+            0.0
         );
         let evaluated = on_boundary
             .evaluated_sos1_constraints()
             .get(&promotion.sos1_constraint_id())
             .unwrap();
         assert!(evaluated.stage.feasible);
-        assert_eq!(evaluated.stage.active_variable, Some(member_integer_id()));
+        assert_eq!(evaluated.stage.active_variable, None);
+        assert!(
+            !on_boundary
+                .evaluated_constraints()
+                .get(&upper_row_id())
+                .unwrap()
+                .stage
+                .feasible
+        );
+        assert!(!on_boundary.feasible());
+        assert!(on_boundary.feasible_relaxed());
+
+        let negative_boundary = instance
+            .evaluate(&crate::v1::State::from_iter([(1, -1.0e-6)]), atol)
+            .unwrap();
+        assert_eq!(
+            negative_boundary.state().entries[&selector_id().into_inner()],
+            0.0
+        );
+        assert_eq!(
+            negative_boundary
+                .evaluated_sos1_constraints()
+                .get(&promotion.sos1_constraint_id())
+                .unwrap()
+                .stage
+                .active_variable,
+            None
+        );
+        assert!(
+            !negative_boundary
+                .evaluated_constraints()
+                .get(&lower_row_id())
+                .unwrap()
+                .stage
+                .feasible
+        );
+        assert!(!negative_boundary.feasible());
+        assert!(negative_boundary.feasible_relaxed());
+    }
+
+    #[test]
+    fn finite_tolerance_does_not_define_the_exact_promotion_equivalence() {
+        let atol = ATol::new(1.0e-6).unwrap();
+        let first_member = VariableID::from(1);
+        let second_member = VariableID::from(2);
+        let first_selector = VariableID::from(10);
+        let second_selector = VariableID::from(11);
+        let first_link = ConstraintID::from(100);
+        let second_link = ConstraintID::from(101);
+        let cardinality = ConstraintID::from(102);
+        let member = || {
+            DecisionVariable::new(
+                Kind::Continuous,
+                Bound::new(0.0, 100.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap()
+        };
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([
+                (first_member, member()),
+                (second_member, member()),
+                (first_selector, DecisionVariable::binary()),
+                (second_selector, DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::from([
+                (
+                    first_link,
+                    canonical_sos1_big_m_upper_link(first_member, first_selector, 100.0).unwrap(),
+                ),
+                (
+                    second_link,
+                    canonical_sos1_big_m_upper_link(second_member, second_selector, 100.0).unwrap(),
+                ),
+                (
+                    cardinality,
+                    canonical_sos1_big_m_cardinality([first_selector, second_selector]).unwrap(),
+                ),
+            ]))
+            .build()
+            .unwrap();
+        let witness = Sos1BigMPromotionWitness::new(
+            BTreeMap::from([
+                (
+                    first_member,
+                    Sos1BigMSelectorWitness::Fresh {
+                        selector: first_selector,
+                        upper_link: Some(first_link),
+                        lower_link: None,
+                    },
+                ),
+                (
+                    second_member,
+                    Sos1BigMSelectorWitness::Fresh {
+                        selector: second_selector,
+                        upper_link: Some(second_link),
+                        lower_link: None,
+                    },
+                ),
+            ]),
+            cardinality,
+        );
+
+        // Finite-tolerance Big-M semantics can admit approximate selector
+        // coordinates that are not the exact nonzero indicators.
+        let original = instance
+            .evaluate(
+                &crate::v1::State::from_iter([
+                    (1, 2.0e-6),
+                    (2, 2.0e-6),
+                    (10, 5.0e-7),
+                    (11, 5.0e-7),
+                ]),
+                atol,
+            )
+            .unwrap();
+        assert!(original.feasible());
+
+        let _ = instance.promote_sos1_big_m(&witness).unwrap();
+        let promoted = instance
+            .evaluate(
+                &crate::v1::State::from_iter([(1, 2.0e-6), (2, 2.0e-6)]),
+                atol,
+            )
+            .unwrap();
+        assert_eq!(promoted.state().entries[&10], 1.0);
+        assert_eq!(promoted.state().entries[&11], 1.0);
+        assert!(!promoted.feasible_relaxed());
+        assert!(!promoted.feasible());
     }
 
     #[test]
@@ -974,9 +1124,7 @@ mod tests {
 
         let mut instance = base.clone();
         instance.decision_variable_dependency =
-            AcyclicAssignments::new([(selector_id(), Function::Zero)])
-                .unwrap()
-                .into();
+            AcyclicAssignments::new([(selector_id(), Function::Zero)]).unwrap();
         assert_atomic_rejection(instance, &witness, "dependency target");
 
         let mut instance = base;
@@ -990,6 +1138,12 @@ mod tests {
     #[test]
     fn removed_named_and_dependency_rhs_references_are_preserved() {
         let (mut instance, witness) = mixed_instance();
+
+        instance.output_objective = Some(crate::OutputObjective::new(
+            Sense::Minimize,
+            Function::from(linear!(10)),
+            true,
+        ));
 
         let regular_id = instance
             .add_constraint(
@@ -1049,9 +1203,7 @@ mod tests {
             )
             .unwrap();
         instance.decision_variable_dependency =
-            AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)))])
-                .unwrap()
-                .into();
+            AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)))]).unwrap();
 
         let _ = instance.promote_sos1_big_m(&witness).unwrap();
 
@@ -1072,12 +1224,13 @@ mod tests {
 
         let solution = instance
             .evaluate(
-                &crate::v1::State::from_iter([(0, 0.0), (1, 0.0)]),
+                &crate::v1::State::from_iter([(0, 0.0), (1, -2.0)]),
                 ATol::default(),
             )
             .unwrap();
-        assert_eq!(solution.state().entries[&selector_id().into_inner()], 0.0);
-        assert_eq!(solution.state().entries[&unrelated_id().into_inner()], 0.0);
+        assert_eq!(*solution.objective(), 1.0);
+        assert_eq!(solution.state().entries[&selector_id().into_inner()], 1.0);
+        assert_eq!(solution.state().entries[&unrelated_id().into_inner()], 1.0);
     }
 
     #[test]

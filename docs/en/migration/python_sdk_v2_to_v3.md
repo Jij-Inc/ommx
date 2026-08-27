@@ -230,7 +230,7 @@ The dict shape itself landed in 3.0.0a2 with snapshot `Constraint` values. In 3.
 
 `SampleSet.constraints` / `.decision_variables` / `.named_functions` remain `list`.
 
-## 5. Renames and signature changes
+## 5. Renames, signature changes, and behavior changes
 
 ### 5.1 `write_mps` → `save_mps` (`3.0.0a1`, [#775](https://github.com/Jij-Inc/ommx/pull/775))
 
@@ -298,6 +298,67 @@ Linear(
 from ommx import Linear
 Linear(terms={int(j): float(c) for j, c in enumerate(row)}, constant=float(-b))
 ```
+
+### 5.6 `to_qubo()` / `to_hubo()` preserve the input objective in evaluated output (`3.0.0`, [#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+The driver methods remain available and still mutate their input. In v3, the
+mutated `Instance` keeps the minimization energy sent to the QUBO or HUBO
+solver as its active objective, while `evaluate()` and `evaluate_samples()`
+retain the objective semantics that the instance exposed before conversion.
+Python SDK v2 instead restored the active sense and evaluated the final
+penalized energy, mixing solver input with user-facing output.
+
+Code that reads `Instance.objective` therefore sees the solver energy; code
+that consumes `Solution` or `SampleSet` sees the preserved input objective.
+The executable postconditions are documented on {meth}`~ommx.Instance.to_qubo`,
+{meth}`~ommx.Instance.to_hubo`, {meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples`.
+
+An `Instance` or `ParametricInstance` with an explicit output objective cannot
+be represented losslessly by the v1 wire format. Its `to_v1_bytes()` method
+raises `RuntimeError`; use `to_v2_bytes()` for these models.
+
+The same pipeline can be run explicitly with
+{meth}`~ommx.Instance.prepare` followed by
+{meth}`~ommx.Instance.as_qubo_format` or
+{meth}`~ommx.Instance.as_hubo_format`. The matching target classes and editable
+policies are provided by {meth}`~ommx.InstanceClass.qubo`,
+{meth}`~ommx.InstanceClass.hubo`,
+{meth}`~ommx.PreparationPolicy.for_qubo`, and
+{meth}`~ommx.PreparationPolicy.for_hubo`.
+
+### 5.7 Adapter `solve()` / `sample()` prepare inputs automatically (`3.0.0`, [#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+For the usual workflow, pass the original Instance directly to `solve()` or
+`sample()`. The Adapter applies its recommended Preparation without modifying
+that Instance:
+
+```python
+from ommx_highs_adapter import OMMXHighsAdapter
+
+solution = OMMXHighsAdapter.solve(instance)
+```
+
+When the application needs a custom Preparation policy, prepare the Instance
+in place and use the preparation-free API:
+
+```python
+policy = OMMXHighsAdapter.recommended_preparation_policy()
+# Customize policy here.
+instance.prepare(OMMXHighsAdapter.INPUT_CLASS, policy)
+solution = OMMXHighsAdapter.solve_without_preparation(instance)
+```
+
+Custom Adapter implementations must provide `solve_without_preparation()` or
+`sample_without_preparation()`. Declare every additional option with an
+explicit typed signature rather than a catch-all `**kwargs`. An easy method may
+forward an option whose meaning survives Preparation. When an option depends on
+the exact prepared Adapter input and the Adapter defines no way to transport it
+through Preparation, the concrete Adapter may instead expose that option only
+on its preparation-free method.
+
+HiGHS and Python-MIP no longer attach dual values when the Adapter input has an
+`output_objective`.
 
 ## 6. Return-type changes
 
@@ -392,6 +453,35 @@ parametric_instance.parameters            # -> list[Parameter]
 parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not property)
 ```
 
+### 6.7 `Function.degree()` / `num_terms()` are optional for composed functions (`3.0.0`, [#1158](https://github.com/Jij-Inc/ommx/pull/1158))
+
+In v2.5.1 every `Function` was a polynomial, so `degree()` and `num_terms()`
+always returned `int`. A v3 `Function` can also represent a composed scalar
+expression such as an absolute value, pointwise minimum or maximum, division,
+or signed integer power. These two methods return `None` for that representation.
+The polynomial coefficient properties (`terms`, `linear_terms`,
+`quadratic_terms`, and `constant_term`) and `content_factor()` raise `TypeError`
+for a composed function.
+
+```python
+# v2.5.1
+degree: int = function.degree()
+terms = function.terms
+
+# v3
+degree: int | None = function.degree()
+if degree is None:
+    # Inspect or evaluate the composed expression without treating it as a
+    # coefficient map.
+    value = function.evaluate(state, atol=1e-6)
+else:
+    terms = function.terms
+```
+
+Use explicit multiplication when you need a non-negative integer power to
+remain an expanded polynomial. `function.powi(n)` and `function**n` deliberately
+construct composed power expressions, including when `n >= 0`.
+
 ## 7. Removed helpers (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#776](https://github.com/Jij-Inc/ommx/pull/776), [#782](https://github.com/Jij-Inc/ommx/pull/782); `3.0.0a2`, [#798](https://github.com/Jij-Inc/ommx/pull/798); `3.0.0`, [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
 
 - `Linear.from_object(x)` — construct via `Linear.single_term(...)`, `Linear.constant(...)`, or the arithmetic operators.
@@ -400,43 +490,47 @@ parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not pr
 - `Parameters` / `OneHot` / `Sos1` / `ConstraintHints` — see §1.2.
 - `Artifact` low-level types (`ArtifactArchive`, `ArtifactDir`, `ArtifactArchiveBuilder`, `ArtifactDirBuilder`) — replaced by unified `Artifact` / `ArtifactDraft`.
 - `ommx_openjij_adapter.response_to_samples(response)` — use `decode_to_samples(response)`.
-- `ommx_openjij_adapter.sample_qubo_sa(...)` — use `OMMXOpenJijSAAdapter.sample(...)` for a directly applicable input. The replacement returns an evaluated `SampleSet`, rather than raw `Samples`. When preparation is required, call `OMMXOpenJijSAAdapter.prepare(...)`, sample `preparation.input`, and use `preparation.evaluate_source(...)` to evaluate the samples against the source instance.
+- `ommx_openjij_adapter.sample_qubo_sa(...)` — use
+  `OMMXOpenJijSAAdapter.sample(instance)`. The replacement leaves `instance`
+  unchanged and returns an evaluated `SampleSet`, rather than raw `Samples`.
 
 In v2, the OpenJij Adapter constructor, `sample()`, and `solve()` accepted
 `uniform_penalty_weight`, `penalty_weights`, and
-`inequality_integer_slack_max_range` directly and performed preparation
-implicitly. In v3, move those settings into one immutable
-`OpenJijPreparationConfig`, pass it to `prepare()` through `config=`, and sample
-the resulting `preparation.input`. Use `penalty_weights` instead of
-`uniform_penalty_weight` when each regular constraint needs its own weight. v2
-also selected a uniform weight of `1.0` when neither penalty setting was
-supplied; v3 requires finite penalties to be selected explicitly when
-constraints remain after exact preparation.
+`inequality_integer_slack_max_range` directly. In v3 these choices moved to the
+recommended `PreparationPolicy`:
 
-When exact integer slack conversion failed, v2 automatically attempted a
-discrete slack approximation. To retain that fallback, explicitly set the new
-`allow_approximate_integer_slack=True` field. Its v3 default is `False`, so the
-default preparation path uses only available exact operations.
+- `uniform_penalty_weight` and `penalty_weights` map to `policy.fixed_penalty`;
+- `inequality_integer_slack_max_range` maps to `policy.integer_slack`.
+
+Direct constructor calls remain preparation-free and must receive an Instance
+that has already been prepared for `OMMXOpenJijSAAdapter.INPUT_CLASS`.
+
+OpenJij `initial_state` is defined over the solver-variable representation of
+that exact prepared input; dictionary keys are those variable IDs. In v3 it is
+accepted by the exact-input constructor, `sample_without_preparation()`, and
+`solve_without_preparation()`, but not by the easy methods.
+
+The usual `sample()` / `solve()` workflow is described in §5.7. When a model
+requires a fixed penalty, the application must choose its magnitude; v3 no
+longer supplies v2's implicit uniform weight of `1.0`. Apply the customized
+policy to the Instance, then call the preparation-free method:
 
 ```python
-from ommx_openjij_adapter import (
-    OMMXOpenJijSAAdapter,
-    OpenJijPreparationConfig,
-)
+from ommx import FixedPenaltyPreparation
+from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-config = OpenJijPreparationConfig(
-    uniform_penalty_weight=20.0,
-    inequality_integer_slack_max_range=32,
-    allow_approximate_integer_slack=True,  # Retain v2's approximation fallback.
+policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
+policy.fixed_penalty = (
+    FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
 )
-preparation = OMMXOpenJijSAAdapter.prepare(source, config=config)
+source.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(source)
 ```
 
-`preparation.report.config` records the normalized, immutable settings actually
-used. The remaining fields encode one of four terminal states: source rejected,
-preparation phase rejected, prepared candidate rejected by Adapter
-applicability, or success. `steps` is the prefix of operations completed before
-that terminal state, not a separate outcome.
+`prepare()` modifies `source` in place. The returned `SampleSet` reports the
+objective and sense exposed by `source` before Preparation (§5.6). The
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) covers policy
+details and penalty selection.
 
 ```python
 # v2.5.1
@@ -861,11 +955,13 @@ expr = 2 * p + 3  # Linear
 - [ ] Rename `instance.used_decision_variable_ids()` / `function.used_decision_variable_ids()` → `required_ids()`.
 - [ ] Replace `Parameter.new(id=...)` with `Parameter(id, ...)`.
 - [ ] Replace `pi.with_parameters(Parameters(entries={...}))` with `pi.with_parameters({...})`.
+- [ ] Use Adapter `solve()` / `sample()` directly for recommended Preparation; when customizing the policy, call `Instance.prepare()` and then `solve_without_preparation()` / `sample_without_preparation()`. Add the preparation-free method to custom Adapters, and declare every Adapter-specific option with an explicit typed signature. A concrete Adapter may restrict an option to the preparation-free API when it depends on the exact prepared input and no transport through Preparation is defined.
 - [ ] Update `constraint.name` / `constraint.description` handling for `None` return (was `""`).
 - [ ] Update code that used `Linear.terms` / `Quadratic.terms` / `Polynomial.terms` as a property — they are methods now.
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.
 - [ ] Change `except RuntimeError` around `.evaluate(...)` / `.partial_evaluate(...)` calls to `except ValueError`.
 - [ ] Switch `parametric_instance.parameters` DataFrame reads to `parametric_instance.parameters_df()` (now a method; `.parameters` returns `list[Parameter]`).
+- [ ] Update `Function.degree()` / `num_terms()` annotations to accept `None`, and guard polynomial coefficient-property access when a function may be composed.
 - [ ] Audit chained `Constraint.add_name(...).add_subscripts(...)` calls — the chain operates on a clone after the first method, so only the first mutation lands in the original wrapper. Assign the chain to a fresh binding (`c = (...).add_name(...).add_subscripts(...)`), or use the live `AttachedConstraint` from `instance.constraints[id]` for write-through mutation.
 - [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.import_archive(...)` for code that needs archive contents, `Artifact.inspect_archive(...)` for read-only archive inspection, or `Artifact.load(...)` for remote / registry refs.
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.

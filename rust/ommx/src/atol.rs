@@ -82,14 +82,15 @@ impl ATol {
         self.0.into_inner()
     }
 
-    /// Return whether `value` is treated as zero by OMMX evaluation.
+    /// Return whether `value` is treated as zero by zero-sensitive functions
+    /// and SOS1 evaluation.
     ///
-    /// This uses the same strict absolute-tolerance boundary as constraint
-    /// feasibility: values with `abs(value) < atol` are zero, while values on
-    /// the boundary are non-zero. Callers that require finite inputs must
-    /// validate them before using this classifier.
+    /// Values with `abs(value) <= atol` are zero, including the boundary. This
+    /// is deliberately not the feasibility predicate for regular constraints,
+    /// whose strict inequalities retain their existing semantics. Callers that
+    /// require finite inputs must validate them before using this classifier.
     pub(crate) fn considers_zero(self, value: f64) -> bool {
-        value.abs() < self.into_inner()
+        value.abs() <= self.into_inner()
     }
 
     #[tracing::instrument(skip_all)]
@@ -222,14 +223,14 @@ mod tests {
     }
 
     #[test]
-    fn zero_classifier_uses_strict_absolute_tolerance() {
+    fn zero_classifier_includes_absolute_tolerance_boundary() {
         let atol = ATol::new(1.0).unwrap();
 
         assert!(atol.considers_zero(0.0));
         assert!(atol.considers_zero(-0.0));
         assert!(atol.considers_zero(0.5));
         assert!(atol.considers_zero(-0.5));
-        assert!(!atol.considers_zero(1.0));
-        assert!(!atol.considers_zero(-1.0));
+        assert!(atol.considers_zero(1.0));
+        assert!(atol.considers_zero(-1.0));
     }
 }
