@@ -1,8 +1,4 @@
-use crate::{
-    polynomial_base::QuadraticParseError, BoundError, CoefficientError, DecisionVariable,
-    DecisionVariableError, OneHotConstraintError, ParameterIDCollision, SampleID, SampleSetError,
-    SolutionError, Sos1ConstraintError, SubstitutionError, VariableID,
-};
+use crate::{DecisionVariable, VariableID};
 use prost::DecodeError;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -34,12 +30,19 @@ pub trait Parse: Sized {
 ///
 /// ```rust
 /// let error = ommx::Instance::from_v1_bytes(&[0x80]).unwrap_err();
-/// assert!(error.downcast_ref::<ommx::ParseError>().is_some());
+/// let parse_error = error.downcast_ref::<ommx::ParseError>().unwrap();
+/// let cause = std::error::Error::source(parse_error).unwrap();
+/// assert!(cause.is::<ommx::RawParseError>());
 /// ```
 #[derive(Debug)]
 pub struct ParseError {
     pub context: Vec<ParseContext>,
-    pub error: RawParseError,
+    /// The wire-format, domain-signal, or ordinary semantic error that caused
+    /// parsing to fail.
+    ///
+    /// Public callers access this cause as `&dyn std::error::Error` through
+    /// [`std::error::Error::source`].
+    error: crate::Error,
 }
 
 impl fmt::Display for ParseError {
@@ -56,20 +59,27 @@ impl fmt::Display for ParseError {
 
 impl std::error::Error for ParseError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.error)
+        Some(self.error.as_ref())
     }
 }
 
 impl From<RawParseError> for ParseError {
     fn from(error: RawParseError) -> Self {
-        ParseError {
-            context: vec![],
-            error,
-        }
+        Self::new(error)
     }
 }
 
 impl ParseError {
+    /// Crate parsing modules use this constructor to attach their owning
+    /// domain cause while this module retains the protobuf breadcrumb
+    /// envelope.
+    pub(crate) fn new(error: impl Into<crate::Error>) -> Self {
+        ParseError {
+            context: vec![],
+            error: error.into(),
+        }
+    }
+
     pub fn context(mut self, message: &'static str, field: &'static str) -> Self {
         self.context.push(ParseContext { message, field });
         self
@@ -82,7 +92,12 @@ pub struct ParseContext {
     pub field: &'static str,
 }
 
-/// Error occurred during parsing OMMX Message
+/// Generic failures owned by the protobuf parsing boundary.
+///
+/// Dedicated message-specific parse signals, domain validation signals, and
+/// ordinary semantic failures are exposed directly through
+/// [`ParseError`]'s [`std::error::Error::source`], rather than being wrapped in
+/// this enum.
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum RawParseError {
@@ -115,50 +130,11 @@ pub enum RawParseError {
     #[error("Unknown or unsupported enum value {value} for {enum_name}. This may be due to an unspecified value or a newer version of the protocol.")]
     UnknownEnumValue { enum_name: &'static str, value: i32 },
 
-    /// Catch-all for [`crate::Instance`] invariant violations discovered during
-    /// parsing that have no curated recovery signal. Conditions with a stable
-    /// recovery contract use dedicated source-bearing variants below.
-    #[error("{0}")]
-    InvalidInstance(String),
-
     /// Extension annotation maps must not carry OMMX-owned metadata.
     #[error(
         "Annotation key `{key}` is reserved for OMMX metadata and cannot be stored in extension annotations."
     )]
     ReservedAnnotationKey { key: String },
-
-    #[error(transparent)]
-    SolutionError(#[from] SolutionError),
-
-    #[error(transparent)]
-    SampleSetError(#[from] SampleSetError),
-
-    #[error(transparent)]
-    SubstitutionError(#[from] SubstitutionError),
-
-    #[error(transparent)]
-    InvalidCoefficient(#[from] CoefficientError),
-
-    #[error(transparent)]
-    QuadraticParseError(#[from] QuadraticParseError),
-
-    #[error(transparent)]
-    InvalidBound(#[from] BoundError),
-
-    #[error(transparent)]
-    InvalidDecisionVariable(#[from] DecisionVariableError),
-
-    #[error("{0}")]
-    ParameterIDCollision(#[from] ParameterIDCollision),
-
-    #[error("{0}")]
-    OneHotConstraintError(#[from] OneHotConstraintError),
-
-    #[error("{0}")]
-    Sos1ConstraintError(#[from] Sos1ConstraintError),
-
-    #[error("Duplicated sample ID: {id:?}")]
-    DuplicatedSampleID { id: SampleID },
 
     /// The wire format is invalid.
     #[error("Cannot decode as a Protobuf Message: {0}")]
@@ -167,10 +143,7 @@ pub enum RawParseError {
 
 impl RawParseError {
     pub fn context(self, message: &'static str, field: &'static str) -> ParseError {
-        ParseError {
-            context: vec![ParseContext { message, field }],
-            error: self,
-        }
+        ParseError::new(self).context(message, field)
     }
 }
 
@@ -210,10 +183,9 @@ pub(crate) fn as_variable_id(
 ) -> Result<VariableID, ParseError> {
     let id = VariableID::from(id);
     if !decision_variables.contains_key(&id) {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Undefined variable ID is used: {id:?}"
-        ))
-        .into());
+        )));
     }
     Ok(id)
 }

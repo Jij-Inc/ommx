@@ -294,7 +294,7 @@ fn validate_feasible_from_evaluated_value(
 ) -> Result<(), ParseError> {
     let computed_feasible = feasible_from_evaluated_value(equality, evaluated_value, atol);
     if provided_feasible != computed_feasible {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Inconsistent constraint feasibility: provided={provided_feasible}, computed={computed_feasible}",
         ))
         .context(message, "feasible"));
@@ -520,6 +520,8 @@ impl SampledConstraint {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use super::*;
     use crate::{Coefficient, Evaluate};
 
@@ -596,6 +598,28 @@ mod tests {
             err.to_string().contains("evaluated_value must be finite"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn parse_v2_evaluated_feasibility_mismatch_is_an_ordinary_error() {
+        let proto = crate::v2::EvaluatedRegularConstraint {
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_value: 1.0,
+            feasible: true,
+            used_decision_variable_ids: vec![],
+            dual_variable: None,
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        let mut source = err.source();
+        while let Some(error) = source {
+            assert!(error.downcast_ref::<RawParseError>().is_none());
+            source = error.source();
+        }
+        assert!(err
+            .to_string()
+            .contains("Inconsistent constraint feasibility"));
     }
 
     #[test]

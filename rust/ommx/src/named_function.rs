@@ -619,11 +619,13 @@ where
         .collect::<Result<BTreeMap<_, _>, ParseError>>()?;
     let labels = crate::v2_io::modeling_label_store_from_v2_map(labels);
     NamedFunctionTable::new(entries, labels)
-        .map_err(|e| RawParseError::InvalidInstance(e.to_string()).context(message, "labels"))
+        .map_err(|e| ParseError::new(e).context(message, "labels"))
 }
 
 #[cfg(test)]
 mod table_tests {
+    use std::error::Error as _;
+
     use super::*;
 
     #[test]
@@ -638,6 +640,38 @@ mod table_tests {
                 .contains("Modeling label references unknown named function ID"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn parse_v2_table_preserves_orphan_label_error() {
+        let error = crate::v2::NamedFunctionTable {
+            entries: BTreeMap::new(),
+            labels: BTreeMap::from([(
+                1,
+                crate::v2::ModelingLabel {
+                    name: Some("orphan".to_string()),
+                    ..Default::default()
+                },
+            )]),
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert_eq!(
+            error
+                .source()
+                .expect("ParseError must expose the orphan-label cause")
+                .to_string(),
+            "Modeling label references unknown named function ID NamedFunctionID(1)"
+        );
+        let mut source = error.source();
+        while let Some(error) = source {
+            assert!(error.downcast_ref::<RawParseError>().is_none());
+            source = error.source();
+        }
+        assert_eq!(error.context.len(), 1);
+        assert_eq!(error.context[0].message, "ommx.v2.NamedFunctionTable");
+        assert_eq!(error.context[0].field, "labels");
     }
 
     #[test]
