@@ -8,7 +8,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))
+### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178))
 
 {class}`~ommx.Function` can now represent composed expressions as well as
 compact polynomials. Python users can construct absolute values, sign
