@@ -1,9 +1,9 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, Bound, DecisionVariableError, Evaluate,
-    InconsistentDependentValue, Kind, MissingStateEntries, Propagate, PropagateOutcome,
-    UnknownStateEntries, UnverifiableDependentAssertion, VariableIDSet,
+    constraint::RemovedReason, ATol, DecisionVariableError, Evaluate, InconsistentDependentValue,
+    Kind, MissingStateEntries, Propagate, PropagateOutcome, UnknownStateEntries,
+    UnverifiableDependentAssertion, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -184,14 +184,15 @@ fn merge_state(
     Ok(())
 }
 
-struct StatePopulationPlan<'a> {
-    decision_variables: &'a DecisionVariableTable,
-    all: VariableIDSet,
-    used: VariableIDSet,
-    fixed: Vec<(VariableID, f64)>,
-    fixed_ids: VariableIDSet,
-    irrelevant: Vec<(VariableID, Kind, Bound)>,
-    dependency: &'a AcyclicAssignments,
+/// Instance-owned state population prepared for reuse across samples.
+///
+/// The Instance remains the source of truth for decision variables, fixed
+/// values, and dependencies. This type caches only derived data that would
+/// otherwise be recomputed for every sample.
+struct PreparedStatePopulation<'a> {
+    instance: &'a Instance,
+    required_ids: VariableIDSet,
+    irrelevant_defaults: Vec<(VariableID, f64)>,
 }
 
 enum PartialEvaluatePlan {
@@ -345,16 +346,52 @@ impl PartialEvaluatePlan {
     }
 }
 
-impl StatePopulationPlan<'_> {
+impl<'a> PreparedStatePopulation<'a> {
+    fn prepare(instance: &'a Instance) -> Self {
+        let required_ids = instance.used_decision_variable_ids();
+        let fixed_values = instance.fixed_decision_variable_values();
+        let dependency = &instance.decision_variable_dependency;
+
+        let irrelevant_defaults = instance
+            .decision_variables
+            .iter()
+            .filter(|(id, _)| {
+                !required_ids.contains(id)
+                    && !fixed_values.contains_key(id)
+                    && dependency.get(id).is_none()
+            })
+            .map(|(id, decision_variable)| {
+                let value = match decision_variable.kind() {
+                    Kind::Binary | Kind::Integer | Kind::Continuous => {
+                        decision_variable.bound().nearest_to_zero()
+                    }
+                    Kind::SemiInteger | Kind::SemiContinuous => 0.0,
+                };
+                (*id, value)
+            })
+            .collect();
+
+        Self {
+            instance,
+            required_ids,
+            irrelevant_defaults,
+        }
+    }
+
     fn populate(&self, mut state: v1::State, atol: ATol) -> Result<v1::State> {
         let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
 
-        let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
+        let unknown_ids: VariableIDSet = state_ids
+            .iter()
+            .filter(|id| self.instance.decision_variables.get(id).is_none())
+            .copied()
+            .collect();
         if !unknown_ids.is_empty() {
             return Err(UnknownStateEntries { ids: unknown_ids }.into());
         }
 
-        let missing_ids: VariableIDSet = self.used.difference(&state_ids).cloned().collect();
+        let missing_ids: VariableIDSet =
+            self.required_ids.difference(&state_ids).copied().collect();
         if !missing_ids.is_empty() {
             return Err(MissingStateEntries { ids: missing_ids }.into());
         }
@@ -363,20 +400,20 @@ impl StatePopulationPlan<'_> {
             ensure_state_value_is_finite(id, value)?;
         }
 
-        for (id, value) in &self.fixed {
-            ensure_instance_value_is_finite(*id, *value)?;
+        for (&id, &value) in self.instance.fixed_decision_variable_values() {
+            ensure_instance_value_is_finite(id, value)?;
             if let Some(&state_value) = state.entries.get(&id.into_inner()) {
-                if !values_are_consistent(state_value, *value, atol) {
+                if !values_are_consistent(state_value, value, atol) {
                     return Err(DecisionVariableError::SubstitutedValueOverwrite {
-                        id: *id,
-                        previous_value: *value,
+                        id,
+                        previous_value: value,
                         new_value: state_value,
                         atol,
                     }
                     .into());
                 }
             }
-            state.entries.insert(id.into_inner(), *value);
+            state.entries.insert(id.into_inner(), value);
         }
 
         // Canonicalize caller-owned coordinates before dependencies consume
@@ -384,31 +421,35 @@ impl StatePopulationPlan<'_> {
         // against the corresponding raw derived value below.
         for (&raw_id, value) in &mut state.entries {
             let id = VariableID::from(raw_id);
-            if self.fixed_ids.contains(&id) || self.dependency.get(&id).is_some() {
+            if self
+                .instance
+                .fixed_decision_variable_values()
+                .contains_key(&id)
+                || self
+                    .instance
+                    .decision_variable_dependency
+                    .get(&id)
+                    .is_some()
+            {
                 continue;
             }
             let decision_variable = self
+                .instance
                 .decision_variables
                 .get(&id)
                 .expect("state variable IDs were validated above");
             *value = canonicalize_state_value(decision_variable, *value, atol);
         }
 
-        for (id, kind, bound) in &self.irrelevant {
-            use std::collections::hash_map::Entry;
-            match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(_entry) => {}
-                Entry::Vacant(entry) => {
-                    let value = match kind {
-                        Kind::Binary | Kind::Integer | Kind::Continuous => bound.nearest_to_zero(),
-                        Kind::SemiInteger | Kind::SemiContinuous => 0.0,
-                    };
-                    entry.insert(value);
-                }
-            }
+        for (id, value) in &self.irrelevant_defaults {
+            state.entries.entry(id.into_inner()).or_insert(*value);
         }
 
-        for (id, f) in self.dependency.evaluation_order_iter() {
+        for (id, f) in self
+            .instance
+            .decision_variable_dependency
+            .evaluation_order_iter()
+        {
             let value = f
                 .evaluate(&state, atol)
                 .map_err(|error| dependent_function_evaluation_error(id, error))
@@ -431,7 +472,7 @@ impl StatePopulationPlan<'_> {
                     .into());
                 }
             }
-            let decision_variable = self.decision_variables.get(&id).ok_or_else(|| {
+            let decision_variable = self.instance.decision_variables.get(&id).ok_or_else(|| {
                 crate::error!("dependent variable {id:?} is not in decision_variables")
             })?;
             let value = canonicalize_state_value(decision_variable, value, atol);
@@ -443,40 +484,8 @@ impl StatePopulationPlan<'_> {
 }
 
 impl Instance {
-    fn state_population_plan(&self) -> StatePopulationPlan<'_> {
-        let all: VariableIDSet = self.decision_variables.keys().copied().collect();
-        let used = self.used_decision_variable_ids();
-
-        let fixed: Vec<_> = self
-            .fixed_decision_variable_values()
-            .iter()
-            .map(|(id, value)| (*id, *value))
-            .collect();
-        let fixed_ids: VariableIDSet = fixed.iter().map(|(id, _)| *id).collect();
-        let dependent_ids: VariableIDSet = self.decision_variable_dependency.keys().collect();
-        let relevant: VariableIDSet = used
-            .iter()
-            .chain(fixed_ids.iter())
-            .chain(dependent_ids.iter())
-            .copied()
-            .collect();
-
-        let irrelevant = self
-            .decision_variables
-            .iter()
-            .filter(|(id, _)| !relevant.contains(id))
-            .map(|(id, dv)| (*id, dv.kind(), dv.bound()))
-            .collect();
-
-        StatePopulationPlan {
-            decision_variables: &self.decision_variables,
-            all,
-            used,
-            fixed,
-            fixed_ids,
-            irrelevant,
-            dependency: &self.decision_variable_dependency,
-        }
+    fn prepare_state_population(&self) -> PreparedStatePopulation<'_> {
+        PreparedStatePopulation::prepare(self)
     }
 
     /// Check the state is valid for this instance, canonicalize values that are
@@ -495,7 +504,7 @@ impl Instance {
     /// assertions. The returned state uses the stored Instance-owned fixed value
     /// unchanged, or the canonicalized derived dependent value.
     pub fn populate_state(&self, state: v1::State, atol: ATol) -> Result<v1::State> {
-        self.state_population_plan().populate(state, atol)
+        self.prepare_state_population().populate(state, atol)
     }
 
     /// Partially evaluate this instance by consuming it.
@@ -756,7 +765,7 @@ impl Evaluate for Instance {
     ) -> Result<Self::SampledOutput> {
         // Populate the decision variables in the samples
         let samples = {
-            let population = self.state_population_plan();
+            let population = self.prepare_state_population();
             let mut samples = samples.clone();
             for state in samples.iter_mut() {
                 let taken = std::mem::take(state);
@@ -974,7 +983,7 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::random::arbitrary_split_state;
-    use crate::{coeff, linear};
+    use crate::{coeff, linear, Bound};
     use ::approx::AbsDiffEq;
     use proptest::prelude::*;
     use std::collections::HashMap;
