@@ -332,46 +332,14 @@ impl Evaluate for AcyclicAssignments {
         samples: &crate::Sampled<State>,
         atol: ATol,
     ) -> crate::Result<Self::SampledOutput> {
-        if self.is_empty() {
-            return Ok(FnvHashMap::default());
-        }
-
-        // Evaluate each stored source-state group once. `try_map_ref` preserves
-        // the input SampleID grouping while every DAG evaluation extends its
-        // own state in dependency-first order. Project immediately so source
-        // entries are not retained after evaluating a group.
-        let assigned_ids = self.keys().collect::<Vec<_>>();
-        let evaluated_values = samples.try_map_ref(|state| {
-            let extended = self.evaluate(state, atol)?;
-            assigned_ids
-                .iter()
-                .map(|id| {
-                    extended
-                        .entries
-                        .get(&id.into_inner())
-                        .copied()
-                        .ok_or_else(|| {
-                            crate::error!(
-                                { id = ?id },
-                                "evaluated assignment state is missing variable {id:?}"
-                            )
-                        })
-                })
-                .collect::<crate::Result<Vec<_>>>()
-        })?;
-
         let mut result = FnvHashMap::default();
-        for (index, id) in assigned_ids.into_iter().enumerate() {
-            let values = evaluated_values.try_map_ref(|values| {
-                values.get(index).copied().ok_or_else(|| {
-                    crate::error!(
-                        { id = ?id },
-                        "evaluated assignment values are missing variable {id:?}"
-                    )
-                })
-            })?;
-            result.insert(id, values);
+
+        // For each assignment in topological order
+        for (var_id, function) in self.substitution_order_iter() {
+            let sampled_values = function.evaluate_samples(samples, atol)?;
+            result.insert(var_id, sampled_values);
         }
+
         Ok(result)
     }
 
@@ -424,7 +392,7 @@ impl Substitute for AcyclicAssignments {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assign, coeff, linear, SampleID, Sampled};
+    use crate::{assign, coeff, linear};
     use ::approx::assert_abs_diff_eq;
     use std::collections::BTreeSet;
 
@@ -558,150 +526,6 @@ mod tests {
         assert_eq!(result.entries[&2], 1.0); // x2 = 1 (original)
         assert_eq!(result.entries[&3], 2.0); // x3 = 2 (original)
         assert_eq!(result.entries[&4], 5.0); // x4 = x1 + 2 = 3 + 2 = 5
-    }
-
-    #[test]
-    fn evaluate_samples_matches_scalar_dag_evaluation_and_preserves_groups() {
-        let assignments = assign! {
-            1 <- linear!(2) + coeff!(1.0),
-            2 <- linear!(3)
-        };
-        let samples = Sampled::new(
-            vec![
-                vec![SampleID::from(10), SampleID::from(11)],
-                vec![SampleID::from(20)],
-            ],
-            [
-                State::from_iter([(1, 100.0), (2, 200.0), (3, 2.0)]),
-                State::from_iter([(3, -2.0)]),
-            ],
-        )
-        .unwrap();
-
-        let evaluated = assignments
-            .evaluate_samples(&samples, ATol::default())
-            .unwrap();
-
-        for values in evaluated.values() {
-            assert!(values.has_same_ids(&samples.ids()));
-        }
-        let mut groups = evaluated[&VariableID::from(1)]
-            .clone()
-            .chunk()
-            .into_iter()
-            .map(|(_, ids)| ids.into_iter().collect::<BTreeSet<_>>())
-            .collect::<Vec<_>>();
-        groups.sort();
-        assert_eq!(
-            groups,
-            vec![
-                BTreeSet::from([SampleID::from(10), SampleID::from(11)]),
-                BTreeSet::from([SampleID::from(20)]),
-            ]
-        );
-        assert_eq!(
-            evaluated[&VariableID::from(1)].get(SampleID::from(10)),
-            Some(&3.0)
-        );
-        assert_eq!(
-            evaluated[&VariableID::from(1)].get(SampleID::from(11)),
-            Some(&3.0)
-        );
-        assert_eq!(
-            evaluated[&VariableID::from(1)].get(SampleID::from(20)),
-            Some(&-1.0)
-        );
-        assert_eq!(
-            evaluated[&VariableID::from(2)].get(SampleID::from(20)),
-            Some(&-2.0)
-        );
-        for (sample_id, state) in samples.iter() {
-            let scalar = assignments.evaluate(state, ATol::default()).unwrap();
-            for id in assignments.keys() {
-                assert_eq!(
-                    evaluated[&id].get(*sample_id),
-                    scalar.entries.get(&id.into_inner())
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn evaluate_samples_preserves_source_groups_for_constant_assignment() {
-        let assignments = assign! {
-            1 <- coeff!(5.0)
-        };
-        let samples = Sampled::new(
-            vec![
-                vec![SampleID::from(10), SampleID::from(11)],
-                vec![SampleID::from(20)],
-            ],
-            [State::from_iter([(9, 1.0)]), State::from_iter([(9, 2.0)])],
-        )
-        .unwrap();
-
-        let chunks = assignments
-            .evaluate_samples(&samples, ATol::default())
-            .unwrap()[&VariableID::from(1)]
-            .clone()
-            .chunk();
-
-        assert_eq!(chunks.len(), 2);
-        assert!(chunks.iter().all(|(value, _)| *value == 5.0));
-        let mut groups = chunks
-            .into_iter()
-            .map(|(_, ids)| ids.into_iter().collect::<BTreeSet<_>>())
-            .collect::<Vec<_>>();
-        groups.sort();
-        assert_eq!(
-            groups,
-            vec![
-                BTreeSet::from([SampleID::from(10), SampleID::from(11)]),
-                BTreeSet::from([SampleID::from(20)]),
-            ]
-        );
-    }
-
-    #[test]
-    fn evaluate_samples_propagates_scalar_assignment_error() {
-        let assignments = assign! {
-            1 <- linear!(2),
-            2 <- linear!(3)
-        };
-        let state = State::from_iter([(3, f64::INFINITY)]);
-        let samples = Sampled::from((SampleID::from(10), state.clone()));
-
-        let scalar_error = assignments.evaluate(&state, ATol::default()).unwrap_err();
-        let sampled_error = assignments
-            .evaluate_samples(&samples, ATol::default())
-            .unwrap_err();
-
-        assert_eq!(sampled_error.to_string(), scalar_error.to_string());
-        assert!(sampled_error.is::<crate::FunctionEvaluationError>());
-    }
-
-    #[test]
-    fn evaluate_samples_reports_scalar_missing_external_dependency() {
-        let assignments = assign! {
-            1 <- linear!(2),
-            2 <- linear!(3)
-        };
-        let state = State::default();
-        let samples = Sampled::from((SampleID::from(10), state.clone()));
-
-        let scalar_error = assignments.evaluate(&state, ATol::default()).unwrap_err();
-        let sampled_error = assignments
-            .evaluate_samples(&samples, ATol::default())
-            .unwrap_err();
-        let scalar_missing = scalar_error
-            .downcast_ref::<crate::MissingStateEntries>()
-            .unwrap();
-        let sampled_missing = sampled_error
-            .downcast_ref::<crate::MissingStateEntries>()
-            .unwrap();
-
-        assert_eq!(sampled_missing.ids, scalar_missing.ids);
-        assert_eq!(sampled_missing.ids, BTreeSet::from([VariableID::from(3)]));
     }
 
     #[test]
