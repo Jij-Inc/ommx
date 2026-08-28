@@ -26,8 +26,8 @@
 //
 // Input rationale: 1,000/8,000/32,000 expose the dominant term while keeping
 // the largest measured case below a 25 ms simulation budget. Lifecycle/run
-// policy: retain on main; run automatically on main/releases and manually on
-// performance PRs through the benchmark workflow.
+// policy: retain as a persistent guardrail; run automatically on ready PRs,
+// main, and releases.
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
