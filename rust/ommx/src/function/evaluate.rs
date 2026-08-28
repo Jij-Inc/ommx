@@ -130,6 +130,55 @@ fn expression_needs_partial_rebuild(expression: &Expression, state: &crate::v1::
     }) || expression_has_partial_fold_candidate(expression)
 }
 
+fn canonicalize_borrowed_linear(function: &crate::Linear) -> Function {
+    if function.is_zero() {
+        Function::Zero
+    } else {
+        Function::Constant(
+            function
+                .get(&crate::LinearMonomial::Constant)
+                .expect("non-zero degree-0 linear has a constant term"),
+        )
+    }
+}
+
+fn canonicalize_borrowed_quadratic(function: &crate::Quadratic) -> Function {
+    if function.is_zero() {
+        return Function::Zero;
+    }
+    match function.degree().into_inner() {
+        1 => Function::Linear(
+            crate::Linear::try_from(function).expect("degree-1 quadratic is linear"),
+        ),
+        0 => Function::Constant(
+            function
+                .get(&crate::QuadraticMonomial::Constant)
+                .expect("non-zero degree-0 quadratic has a constant term"),
+        ),
+        _ => unreachable!("canonical quadratic replacements have degree below two"),
+    }
+}
+
+fn canonicalize_borrowed_polynomial(function: &crate::Polynomial) -> Function {
+    if function.is_zero() {
+        return Function::Zero;
+    }
+    match function.degree().into_inner() {
+        2 => Function::Quadratic(
+            crate::Quadratic::try_from(function).expect("degree-2 polynomial is quadratic"),
+        ),
+        1 => Function::Linear(
+            crate::Linear::try_from(function).expect("degree-1 polynomial is linear"),
+        ),
+        0 => Function::Constant(
+            function
+                .get(&crate::MonomialDyn::default())
+                .expect("non-zero degree-0 polynomial has a constant term"),
+        ),
+        _ => unreachable!("canonical polynomial replacements have degree at most two"),
+    }
+}
+
 impl Function {
     /// Prepare a replacement for the `Instance`-owned atomic plan without
     /// mutating or cloning a function that needs no substitution,
@@ -144,21 +193,21 @@ impl Function {
             Function::Linear(function) => match function.partial_evaluate_replacement(state)? {
                 Some(function) => Some(Function::Linear(function).normalize()),
                 None if function.degree().into_inner() != 1 => {
-                    Some(Function::Linear(function.clone()).normalize())
+                    Some(canonicalize_borrowed_linear(function))
                 }
                 None => None,
             },
             Function::Quadratic(function) => match function.partial_evaluate_replacement(state)? {
                 Some(function) => Some(Function::Quadratic(function).normalize()),
                 None if function.degree().into_inner() != 2 => {
-                    Some(Function::Quadratic(function.clone()).normalize())
+                    Some(canonicalize_borrowed_quadratic(function))
                 }
                 None => None,
             },
             Function::Polynomial(function) => match function.partial_evaluate_replacement(state)? {
                 Some(function) => Some(Function::Polynomial(function).normalize()),
                 None if function.degree().into_inner() <= 2 => {
-                    Some(Function::Polynomial(function.clone()).normalize())
+                    Some(canonicalize_borrowed_polynomial(function))
                 }
                 None => None,
             },
@@ -741,6 +790,38 @@ mod tests {
             .partial_evaluate_replacement(&crate::v1::State::default(), crate::ATol::default())
             .unwrap();
         assert!(matches!(replacement, Some(Function::Linear(_))));
+
+        let cases = [
+            (Function::Linear(crate::Linear::zero()), Function::Zero),
+            (
+                Function::Linear(crate::Linear::single_term(
+                    crate::LinearMonomial::Constant,
+                    coeff!(2.0),
+                )),
+                Function::try_from(2.0).unwrap(),
+            ),
+            (
+                Function::Quadratic(crate::Quadratic::from(crate::Linear::from(linear!(1)))),
+                Function::from(linear!(1)),
+            ),
+            (
+                Function::Polynomial(crate::Polynomial::from(crate::Quadratic::from(quadratic!(
+                    1, 2
+                )))),
+                Function::from(quadratic!(1, 2)),
+            ),
+        ];
+        for (noncanonical, expected) in cases {
+            assert_eq!(
+                noncanonical
+                    .partial_evaluate_replacement(
+                        &crate::v1::State::default(),
+                        crate::ATol::default(),
+                    )
+                    .unwrap(),
+                Some(expected),
+            );
+        }
     }
 
     #[test]

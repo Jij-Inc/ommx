@@ -202,6 +202,16 @@ pub trait SampledConstraintBehavior {
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated>;
 }
 
+/// Storage effect produced by a by-value rewrite of an active constraint row.
+///
+/// The enclosing domain owner decides which effect applies. The collection only
+/// commits the corresponding lifecycle change while retaining the row ID and
+/// its context sidecars.
+pub(crate) enum ActiveRowRewrite<T> {
+    Active(T),
+    Removed(T, RemovedReason),
+}
+
 // ===== Blanket-like impls for Constraint<Evaluated> and Constraint<Sampled> =====
 // Both Constraint and IndicatorConstraint share EvaluatedData/SampledData in their stage,
 // so the implementations are identical.
@@ -551,6 +561,49 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         }
         debug_assert!(self.validate_context_ids().is_ok());
         Ok(())
+    }
+
+    /// Consume and rewrite every active row without cloning its payload.
+    ///
+    /// The caller owns the semantic rewrite and chooses whether each row stays
+    /// active or moves to the removed set. This collection-owned operation keeps
+    /// active/removed IDs disjoint and carries the existing context sidecars
+    /// through unchanged.
+    ///
+    /// This is intended for consuming root-object operations, or for operations
+    /// performed on a root-level rollback copy. Since the closure consumes each
+    /// row, an error consumes this collection rather than returning a partially
+    /// rewritten value.
+    pub(crate) fn rewrite_active_rows_by_value(
+        self,
+        mut rewrite: impl FnMut(T::ID, T::Created) -> crate::Result<ActiveRowRewrite<T::Created>>,
+    ) -> crate::Result<Self> {
+        let Self {
+            active,
+            mut removed,
+            context,
+        } = self;
+        let mut rewritten_active = BTreeMap::new();
+
+        for (id, row) in active {
+            match rewrite(id, row)? {
+                ActiveRowRewrite::Active(row) => {
+                    rewritten_active.insert(id, row);
+                }
+                ActiveRowRewrite::Removed(row, reason) => {
+                    let previous = removed.insert(id, (row, reason));
+                    debug_assert!(previous.is_none(), "active and removed IDs are disjoint");
+                }
+            }
+        }
+
+        let rewritten = Self {
+            active: rewritten_active,
+            removed,
+            context,
+        };
+        debug_assert!(rewritten.validate_context_ids().is_ok());
+        Ok(rewritten)
     }
 
     /// Replace active rows in place while preserving row identity and context.
@@ -1713,6 +1766,76 @@ mod tests {
         assert!(collection.removed().contains_key(&removed_id));
         assert_eq!(collection.context().name(removed_id), Some("original"));
         collection.validate_context_ids().unwrap();
+    }
+
+    #[test]
+    fn rewrite_active_rows_by_value_preserves_context_and_lifecycle() {
+        let removed_id = ConstraintID::from(1);
+        let active_id = ConstraintID::from(2);
+        let previously_removed_id = ConstraintID::from(3);
+        let active = BTreeMap::from([
+            (
+                removed_id,
+                Constraint::equal_to_zero(Function::from(linear!(1))),
+            ),
+            (
+                active_id,
+                Constraint::equal_to_zero(Function::from(linear!(2))),
+            ),
+        ]);
+        let removed = BTreeMap::from([(
+            previously_removed_id,
+            (
+                Constraint::equal_to_zero(Function::from(linear!(3))),
+                removed_reason(),
+            ),
+        )]);
+        let mut context = ConstraintContextStore::default();
+        context.set_name(removed_id, "moved");
+        context.set_name(active_id, "active");
+        context.set_name(previously_removed_id, "previously removed");
+        let collection =
+            ConstraintCollection::<Constraint>::with_context(active, removed, context).unwrap();
+
+        let collection = collection
+            .rewrite_active_rows_by_value(|id, row| {
+                Ok(if id == removed_id {
+                    ActiveRowRewrite::Removed(row, removed_reason())
+                } else {
+                    ActiveRowRewrite::Active(row)
+                })
+            })
+            .unwrap();
+
+        assert!(!collection.active().contains_key(&removed_id));
+        assert!(collection.active().contains_key(&active_id));
+        assert!(collection.removed().contains_key(&removed_id));
+        assert!(collection.removed().contains_key(&previously_removed_id));
+        assert_eq!(collection.context().name(removed_id), Some("moved"));
+        assert_eq!(collection.context().name(active_id), Some("active"));
+        assert_eq!(
+            collection.context().name(previously_removed_id),
+            Some("previously removed")
+        );
+        collection.validate_context_ids().unwrap();
+    }
+
+    #[test]
+    fn rewrite_active_rows_by_value_propagates_error_without_partial_value() {
+        let id = ConstraintID::from(1);
+        let collection = ConstraintCollection::<Constraint>::new(
+            BTreeMap::from([(id, Constraint::equal_to_zero(Function::from(linear!(1))))]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let error = collection
+            .rewrite_active_rows_by_value(|_id, _row| {
+                Err(crate::error!("owned row rewrite failed"))
+            })
+            .unwrap_err();
+
+        assert_eq!(error.to_string(), "owned row rewrite failed");
     }
 
     #[test]

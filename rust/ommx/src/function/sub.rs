@@ -94,6 +94,96 @@ impl Function {
             }
         })
     }
+
+    fn try_sub_linear_ref(self, rhs: &Linear) -> Result<Self, CoefficientError> {
+        Ok(match self {
+            Function::Zero => Function::Linear(-rhs.clone()),
+            Function::Constant(c) => Function::Linear((c - rhs)?),
+            Function::Linear(lhs) => Function::Linear((lhs - rhs)?),
+            Function::Quadratic(lhs) => Function::Quadratic((lhs - rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs - rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs,
+                -Function::Linear(rhs.clone()),
+            ),
+        })
+    }
+
+    fn try_sub_quadratic_ref(self, rhs: &Quadratic) -> Result<Self, CoefficientError> {
+        Ok(match self {
+            Function::Zero => Function::Quadratic(-rhs.clone()),
+            Function::Constant(c) => Function::Quadratic((c - rhs)?),
+            Function::Linear(lhs) => Function::Quadratic(((-rhs.clone()) + &lhs)?),
+            Function::Quadratic(lhs) => Function::Quadratic((lhs - rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs - rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs,
+                -Function::Quadratic(rhs.clone()),
+            ),
+        })
+    }
+
+    fn try_sub_polynomial_ref(self, rhs: &Polynomial) -> Result<Self, CoefficientError> {
+        Ok(match self {
+            Function::Zero => Function::Polynomial(-rhs.clone()),
+            Function::Constant(c) => Function::Polynomial((c - rhs)?),
+            Function::Linear(lhs) => Function::Polynomial(((-rhs.clone()) + &lhs)?),
+            Function::Quadratic(lhs) => Function::Polynomial(((-rhs.clone()) + &lhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs - rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs,
+                -Function::Polynomial(rhs.clone()),
+            ),
+        })
+    }
+
+    fn try_sub_linear_refs(lhs: &Self, rhs: &Linear) -> Result<Self, CoefficientError> {
+        Ok(match lhs {
+            Function::Zero => Function::Linear(-rhs.clone()),
+            Function::Constant(c) => Function::Linear((*c - rhs)?),
+            Function::Linear(lhs) => Function::Linear((lhs - rhs)?),
+            Function::Quadratic(lhs) => Function::Quadratic((lhs.clone() - rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs.clone() - rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs.clone(),
+                -Function::Linear(rhs.clone()),
+            ),
+        })
+    }
+
+    fn try_sub_quadratic_refs(lhs: &Self, rhs: &Quadratic) -> Result<Self, CoefficientError> {
+        Ok(match lhs {
+            Function::Zero => Function::Quadratic(-rhs.clone()),
+            Function::Constant(c) => Function::Quadratic((*c - rhs)?),
+            Function::Linear(lhs) => Function::Quadratic(((-rhs.clone()) + lhs)?),
+            Function::Quadratic(lhs) => Function::Quadratic((lhs - rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs.clone() - rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs.clone(),
+                -Function::Quadratic(rhs.clone()),
+            ),
+        })
+    }
+
+    fn try_sub_polynomial_refs(lhs: &Self, rhs: &Polynomial) -> Result<Self, CoefficientError> {
+        Ok(match lhs {
+            Function::Zero => Function::Polynomial(-rhs.clone()),
+            Function::Constant(c) => Function::Polynomial((*c - rhs)?),
+            Function::Linear(lhs) => Function::Polynomial(((-rhs.clone()) + lhs)?),
+            Function::Quadratic(lhs) => Function::Polynomial(((-rhs.clone()) + lhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs - rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs.clone(),
+                -Function::Polynomial(rhs.clone()),
+            ),
+        })
+    }
 }
 
 impl Sub for Function {
@@ -189,13 +279,12 @@ impl Sub<&Function> for Coefficient {
 }
 
 macro_rules! impl_sub_polynomial_rhs {
-    (& $rhs:ty) => {
+    ($rhs:ty, $owned_ref_method:ident, $refs_method:ident) => {
         impl Sub<&$rhs> for Function {
             type Output = Result<Function, CoefficientError>;
 
-            fn sub(mut self, rhs: &$rhs) -> Self::Output {
-                self.try_add_assign_in_place(-Function::from(rhs.clone()))?;
-                Ok(self.normalize())
+            fn sub(self, rhs: &$rhs) -> Self::Output {
+                Ok(self.$owned_ref_method(rhs)?.normalize())
             }
         }
 
@@ -203,11 +292,10 @@ macro_rules! impl_sub_polynomial_rhs {
             type Output = Result<Function, CoefficientError>;
 
             fn sub(self, rhs: &$rhs) -> Self::Output {
-                self - Function::from(rhs.clone())
+                Ok(Function::$refs_method(self, rhs)?.normalize())
             }
         }
-    };
-    ($rhs:ty) => {
+
         impl Sub<$rhs> for Function {
             type Output = Result<Function, CoefficientError>;
 
@@ -227,12 +315,9 @@ macro_rules! impl_sub_polynomial_rhs {
     };
 }
 
-impl_sub_polynomial_rhs!(Linear);
-impl_sub_polynomial_rhs!(&Linear);
-impl_sub_polynomial_rhs!(Quadratic);
-impl_sub_polynomial_rhs!(&Quadratic);
-impl_sub_polynomial_rhs!(Polynomial);
-impl_sub_polynomial_rhs!(&Polynomial);
+impl_sub_polynomial_rhs!(Linear, try_sub_linear_ref, try_sub_linear_refs);
+impl_sub_polynomial_rhs!(Quadratic, try_sub_quadratic_ref, try_sub_quadratic_refs);
+impl_sub_polynomial_rhs!(Polynomial, try_sub_polynomial_ref, try_sub_polynomial_refs);
 
 #[cfg(test)]
 mod tests {
@@ -271,6 +356,21 @@ mod tests {
         fn neg_sub(a in polynomial_function(), b in polynomial_function()) {
             assert_abs_diff_eq!(-(a.clone() - b.clone()).unwrap(), (b - a).unwrap());
         }
+
+        #[test]
+        fn fixed_rhs_refs_match_function_dispatch(
+            lhs in any::<Function>(),
+            linear in any::<Linear>(),
+            quadratic in any::<Quadratic>(),
+            polynomial in any::<Polynomial>(),
+        ) {
+            prop_assert_eq!(lhs.clone() - &linear, lhs.clone() - Function::Linear(linear.clone()));
+            prop_assert_eq!(&lhs - &linear, &lhs - Function::Linear(linear));
+            prop_assert_eq!(lhs.clone() - &quadratic, lhs.clone() - Function::Quadratic(quadratic.clone()));
+            prop_assert_eq!(&lhs - &quadratic, &lhs - Function::Quadratic(quadratic));
+            prop_assert_eq!(lhs.clone() - &polynomial, lhs.clone() - Function::Polynomial(polynomial.clone()));
+            prop_assert_eq!(&lhs - &polynomial, &lhs - Function::Polynomial(polynomial));
+        }
     }
 
     #[test]
@@ -279,6 +379,27 @@ mod tests {
         let negative_huge = -huge.clone();
         assert!(matches!(
             &huge - &negative_huge,
+            Err(CoefficientError::Infinite)
+        ));
+    }
+
+    #[test]
+    fn fixed_borrowed_subtraction_preserves_expression_order_and_coefficient_error() {
+        let lhs = Function::from(linear!(1)).abs();
+        let rhs = Linear::from(linear!(2));
+        let expected = (lhs.clone() - Function::Linear(rhs.clone())).unwrap();
+
+        assert!((lhs.clone() - &rhs).unwrap() == expected);
+        assert!((&lhs - &rhs).unwrap() == expected);
+
+        let huge = Function::Linear(Linear::single_term(linear!(1), coeff!(f64::MAX)));
+        let negative_huge_rhs = Linear::single_term(linear!(1), coeff!(-f64::MAX));
+        assert!(matches!(
+            huge.clone() - &negative_huge_rhs,
+            Err(CoefficientError::Infinite)
+        ));
+        assert!(matches!(
+            &huge - &negative_huge_rhs,
             Err(CoefficientError::Infinite)
         ));
     }

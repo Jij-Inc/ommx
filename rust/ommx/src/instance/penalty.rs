@@ -156,7 +156,7 @@ impl Instance {
         }
 
         let id_base = max_id + 1;
-        let mut objective = self.objective.clone();
+        let mut objective = self.take_or_clone_objective_for_penalty();
         let mut parameters = ParameterTable::default();
         let mut removal_reasons = BTreeMap::new();
         for (parameter_offset, (&constraint_id, constraint)) in
@@ -408,7 +408,7 @@ impl Instance {
         }
 
         let parameter_id = VariableID::from(max_id + 1);
-        let mut objective = self.objective.clone();
+        let mut objective = self.take_or_clone_objective_for_penalty();
         let parameter_label = ParameterLabel {
             name: Some("uniform_penalty_weight".to_string()),
             ..Default::default()
@@ -575,6 +575,20 @@ impl Instance {
             description: self.description,
             named_functions: self.named_functions,
             annotations: self.annotations,
+        }
+    }
+
+    /// Obtain an owned objective for a consuming penalty rewrite.
+    ///
+    /// The first formulation rewrite must retain the original objective in
+    /// `output_objective`, so it needs one storage copy. Once output semantics
+    /// have already been captured, the active objective can be moved into the
+    /// rewrite instead.
+    fn take_or_clone_objective_for_penalty(&mut self) -> Function {
+        if self.output_objective.is_some() {
+            std::mem::replace(&mut self.objective, Function::zero())
+        } else {
+            self.objective.clone()
         }
     }
 

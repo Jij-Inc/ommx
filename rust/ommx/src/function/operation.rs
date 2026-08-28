@@ -93,7 +93,7 @@ pub enum Atom {
     Polynomial(crate::Polynomial),
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 #[serde(tag = "type", content = "value", rename_all = "snake_case")]
 enum AtomSerde {
     Zero,
@@ -103,13 +103,34 @@ enum AtomSerde {
     Polynomial(Vec<(crate::MonomialDyn, Coefficient)>),
 }
 
-fn serialize_terms<M: crate::Monomial>(
-    polynomial: &crate::PolynomialBase<M>,
-) -> Vec<(M, Coefficient)> {
-    polynomial
-        .iter()
-        .map(|(monomial, coefficient)| (monomial.clone(), *coefficient))
-        .collect()
+struct SerializeTerms<'a, M: crate::Monomial>(&'a crate::PolynomialBase<M>);
+
+impl<M> serde::Serialize for SerializeTerms<'_, M>
+where
+    M: crate::Monomial + serde::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+
+        let mut sequence = serializer.serialize_seq(Some(self.0.num_terms()))?;
+        for (monomial, coefficient) in self.0.iter() {
+            sequence.serialize_element(&(monomial, coefficient))?;
+        }
+        sequence.end()
+    }
+}
+
+#[derive(serde::Serialize)]
+#[serde(tag = "type", content = "value", rename_all = "snake_case")]
+enum AtomSerialize<'a> {
+    Zero,
+    Constant(Coefficient),
+    Linear(SerializeTerms<'a, crate::LinearMonomial>),
+    Quadratic(SerializeTerms<'a, crate::QuadraticMonomial>),
+    Polynomial(SerializeTerms<'a, crate::MonomialDyn>),
 }
 
 impl serde::Serialize for Atom {
@@ -118,13 +139,13 @@ impl serde::Serialize for Atom {
         S: serde::Serializer,
     {
         let value = match self {
-            Self::Zero => AtomSerde::Zero,
-            Self::Constant(value) => AtomSerde::Constant(*value),
-            Self::Linear(value) => AtomSerde::Linear(serialize_terms(value)),
-            Self::Quadratic(value) => AtomSerde::Quadratic(serialize_terms(value)),
-            Self::Polynomial(value) => AtomSerde::Polynomial(serialize_terms(value)),
+            Self::Zero => AtomSerialize::Zero,
+            Self::Constant(value) => AtomSerialize::Constant(*value),
+            Self::Linear(value) => AtomSerialize::Linear(SerializeTerms(value)),
+            Self::Quadratic(value) => AtomSerialize::Quadratic(SerializeTerms(value)),
+            Self::Polynomial(value) => AtomSerialize::Polynomial(SerializeTerms(value)),
         };
-        value.serialize(serializer)
+        serde::Serialize::serialize(&value, serializer)
     }
 }
 

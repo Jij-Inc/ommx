@@ -1,9 +1,10 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, Bound, DecisionVariableError, Evaluate,
-    InconsistentDependentValue, Kind, MissingStateEntries, Propagate, PropagateOutcome,
-    UnknownStateEntries, UnverifiableDependentAssertion, VariableIDSet,
+    constraint::RemovedReason, constraint_type::ActiveRowRewrite, ATol, Bound,
+    DecisionVariableError, Evaluate, InconsistentDependentValue, Kind, MissingStateEntries,
+    Propagate, PropagateOutcome, UnknownStateEntries, UnverifiableDependentAssertion,
+    VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -321,11 +322,14 @@ impl PartialEvaluatePlan {
         instance: &Instance,
         fixed_values: &BTreeMap<VariableID, f64>,
     ) -> v1::State {
-        let mut merged = instance.fixed_decision_variable_values().clone();
+        let existing = instance.fixed_decision_variable_values();
+        let mut entries =
+            std::collections::HashMap::with_capacity(existing.len() + fixed_values.len());
+        entries.extend(existing.iter().map(|(id, value)| (id.into_inner(), *value)));
         for (&id, &value) in fixed_values {
-            merged.entry(id).or_insert(value);
+            entries.entry(id.into_inner()).or_insert(value);
         }
-        fixed_values_state(&merged)
+        v1::State { entries }
     }
 }
 
@@ -513,6 +517,12 @@ impl Instance {
         }
     }
 
+    /// Execute the consuming fallback on a discardable instance value.
+    ///
+    /// Some nested tables are moved out before fallible work to avoid a second
+    /// clone layer. Therefore callers must discard this instance on error. The
+    /// borrowed public API satisfies that contract by running this method on its
+    /// rollback copy; `into_partial_evaluated` consumes its instance outright.
     fn partial_evaluate_fallback_in_place(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
         // The input state belongs to Instance validation. Validate it before
         // special-constraint propagation so propagation errors only describe
@@ -565,11 +575,12 @@ impl Instance {
         let mut evaluation_state = fixed_values_state(self.fixed_decision_variable_values());
         let mut remaining_assignments = Vec::new();
 
-        for (id, function) in self.decision_variable_dependency.evaluation_order_iter() {
+        let dependency = std::mem::take(&mut self.decision_variable_dependency);
+        for (id, function) in dependency.into_evaluation_order() {
             let replacement = function
                 .partial_evaluate_replacement(&evaluation_state, atol)
                 .map_err(|error| normalize_dependency_partial_evaluation_error(id, error))?;
-            let function = replacement.unwrap_or_else(|| function.clone().normalize());
+            let function = replacement.unwrap_or_else(|| function.normalize());
             let required_ids = function.required_ids();
 
             if required_ids.is_empty() {
@@ -840,6 +851,9 @@ impl Instance {
     ///
     /// Consumed constraints are moved to the removed set.
     /// Promoted indicator constraints are inserted into the regular constraint collection.
+    /// This runs only on a root-level rollback copy or on a consumed `Instance`,
+    /// so the collection-owned by-value rewrites may consume their working
+    /// collection when propagation returns an error.
     fn propagate_special_constraints(
         &mut self,
         state: &v1::State,
@@ -857,77 +871,69 @@ impl Instance {
             changed = false;
 
             // --- OneHot constraints ---
-            let mut one_hot_replacements = BTreeMap::new();
-            let mut one_hot_removals = BTreeMap::new();
-            for (&id, oh) in self.one_hot_constraint_collection.active() {
-                let (outcome, additional) = oh.clone().propagate(&expanded, atol)?;
-                merge_state(&mut expanded, additional, atol, &mut changed)?;
-                match outcome {
-                    PropagateOutcome::Active(oh) => {
-                        one_hot_replacements.insert(id, oh);
-                    }
-                    PropagateOutcome::Consumed(oh) => {
-                        one_hot_removals.insert(id, (oh, propagation_reason.clone()));
-                    }
-                    PropagateOutcome::Transformed { new, .. } => match new {},
-                }
-            }
-            self.one_hot_constraint_collection
-                .replace_and_remove_active_rows(one_hot_replacements, one_hot_removals)?;
+            let one_hots = std::mem::take(&mut self.one_hot_constraint_collection);
+            self.one_hot_constraint_collection =
+                one_hots.rewrite_active_rows_by_value(|_id, one_hot| {
+                    let (outcome, additional) = one_hot.propagate(&expanded, atol)?;
+                    merge_state(&mut expanded, additional, atol, &mut changed)?;
+                    Ok(match outcome {
+                        PropagateOutcome::Active(one_hot) => ActiveRowRewrite::Active(one_hot),
+                        PropagateOutcome::Consumed(one_hot) => {
+                            ActiveRowRewrite::Removed(one_hot, propagation_reason.clone())
+                        }
+                        PropagateOutcome::Transformed { new, .. } => match new {},
+                    })
+                })?;
 
             // --- SOS1 constraints ---
-            let mut sos1_replacements = BTreeMap::new();
-            let mut sos1_removals = BTreeMap::new();
-            for (&id, sos1) in self.sos1_constraint_collection.active() {
-                let (outcome, additional) = sos1.clone().propagate(&expanded, atol)?;
+            let sos1s = std::mem::take(&mut self.sos1_constraint_collection);
+            self.sos1_constraint_collection = sos1s.rewrite_active_rows_by_value(|_id, sos1| {
+                let (outcome, additional) = sos1.propagate(&expanded, atol)?;
                 merge_state(&mut expanded, additional, atol, &mut changed)?;
-                match outcome {
-                    PropagateOutcome::Active(sos1) => {
-                        sos1_replacements.insert(id, sos1);
-                    }
+                Ok(match outcome {
+                    PropagateOutcome::Active(sos1) => ActiveRowRewrite::Active(sos1),
                     PropagateOutcome::Consumed(sos1) => {
-                        sos1_removals.insert(id, (sos1, propagation_reason.clone()));
+                        ActiveRowRewrite::Removed(sos1, propagation_reason.clone())
                     }
                     PropagateOutcome::Transformed { new, .. } => match new {},
-                }
-            }
-            self.sos1_constraint_collection
-                .replace_and_remove_active_rows(sos1_replacements, sos1_removals)?;
+                })
+            })?;
 
             // --- Indicator constraints ---
-            let indicator_context = self.indicator_constraint_collection.context();
-            let mut indicator_replacements = BTreeMap::new();
-            let mut indicator_removals = BTreeMap::new();
             let mut promoted_constraints = Vec::new();
-            for (&id, ic) in self.indicator_constraint_collection.active() {
-                let (outcome, additional) = ic.clone().propagate(&expanded, atol)?;
-                merge_state(&mut expanded, additional, atol, &mut changed)?;
-                match outcome {
-                    PropagateOutcome::Active(ic) => {
-                        indicator_replacements.insert(id, ic);
-                    }
-                    PropagateOutcome::Consumed(ic) => {
-                        indicator_removals.insert(id, (ic, propagation_reason.clone()));
-                    }
-                    PropagateOutcome::Transformed {
-                        original,
-                        new: constraint,
-                    } => {
-                        // Indicator=1 → promote inner constraint to regular constraint.
-                        // Carry over the indicator's context into the regular collection's
-                        // store and record the promotion in provenance.
-                        let mut new_context = indicator_context.collect_for(id);
-                        new_context
-                            .provenance
-                            .push(crate::constraint::Provenance::IndicatorConstraint(id));
-                        promoted_constraints.push((constraint, new_context));
-                        indicator_removals.insert(id, (original, propagation_reason.clone()));
-                    }
-                }
-            }
-            self.indicator_constraint_collection
-                .replace_and_remove_active_rows(indicator_replacements, indicator_removals)?;
-            for (constraint, context) in promoted_constraints {
+            let indicators = std::mem::take(&mut self.indicator_constraint_collection);
+            self.indicator_constraint_collection =
+                indicators.rewrite_active_rows_by_value(|id, indicator| {
+                    let (outcome, additional) = indicator.propagate(&expanded, atol)?;
+                    merge_state(&mut expanded, additional, atol, &mut changed)?;
+                    Ok(match outcome {
+                        PropagateOutcome::Active(indicator) => ActiveRowRewrite::Active(indicator),
+                        PropagateOutcome::Consumed(indicator) => {
+                            ActiveRowRewrite::Removed(indicator, propagation_reason.clone())
+                        }
+                        PropagateOutcome::Transformed {
+                            original,
+                            new: constraint,
+                        } => {
+                            promoted_constraints.push((id, constraint));
+                            ActiveRowRewrite::Removed(original, propagation_reason.clone())
+                        }
+                    })
+                })?;
+            for (indicator_id, constraint) in promoted_constraints {
+                // Indicator=1 → promote inner constraint to regular constraint.
+                // Carry over the indicator's context into the regular collection's
+                // store and record the promotion in provenance. The original
+                // context remains owned by the removed indicator row.
+                let mut context = self
+                    .indicator_constraint_collection
+                    .context()
+                    .collect_for(indicator_id);
+                context
+                    .provenance
+                    .push(crate::constraint::Provenance::IndicatorConstraint(
+                        indicator_id,
+                    ));
                 let id = self.constraint_collection.unused_id();
                 self.constraint_collection
                     .insert_active_with_context(id, constraint, context)?;

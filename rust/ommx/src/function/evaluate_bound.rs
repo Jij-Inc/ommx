@@ -392,10 +392,10 @@ fn evaluate_polynomial_terms_bound<'a, M: crate::Monomial>(
     bounds: &Bounds,
 ) -> crate::Result<Bound> {
     let mut bound = Bound::zero();
-    for (ids, coefficient) in terms {
-        let ids: MonomialDyn = ids.clone().into();
+    for (monomial, coefficient) in terms {
         let value = coefficient.into_inner();
-        if ids.is_empty() {
+        let mut ids = monomial.ids().peekable();
+        if ids.peek().is_none() {
             bound = add_bounds(bound, Bound::new(value, value)?)?;
             continue;
         }
@@ -404,7 +404,12 @@ fn evaluate_polynomial_terms_bound<'a, M: crate::Monomial>(
         // The per-variable power still preserves correlation (for example,
         // an even power across zero has lower bound zero), unlike naively
         // multiplying the same interval by itself.
-        for (id, exponent) in ids.chunks() {
+        while let Some(id) = ids.next() {
+            let mut exponent = 1_usize;
+            while ids.peek().is_some_and(|next| *next == id) {
+                ids.next();
+                exponent += 1;
+            }
             let variable_bound = bounds.get(&id).cloned().unwrap_or_default();
             let exponent = u64::try_from(exponent).map_err(|_| {
                 anyhow::anyhow!("monomial exponent is outside the supported integer range")
@@ -705,8 +710,8 @@ mod tests {
     fn bound_of_quadratic_with_squared_term() {
         // f = x1*x1 with x1 in [-2, 3].
         //
-        // `Function::evaluate_bound` collapses the monomial via
-        // `MonomialDyn::chunks()` and bounds its integer power. For an even
+        // `Function::evaluate_bound` collapses each repeated-ID run and bounds
+        // its integer power. For an even
         // exponent across zero this yields [0, max(|-2|^2, 3^2)] = [0, 9], not
         // a naive interval-square [-6, 9].
         let f = Function::from(quadratic!(1, 1));

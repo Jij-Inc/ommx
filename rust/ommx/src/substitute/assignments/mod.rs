@@ -216,6 +216,26 @@ impl AcyclicAssignments {
             })
     }
 
+    /// Consume the assignment table and return its functions in evaluation order.
+    ///
+    /// Crate-internal consuming root operations use this to transform dependency
+    /// functions by value after their rollback boundary has already been
+    /// established. The cached graph and order are consumed together, so no
+    /// assignment function needs to be cloned merely to rebuild the table.
+    pub(crate) fn into_evaluation_order(self) -> impl Iterator<Item = (VariableID, Function)> {
+        let Self {
+            mut assignments,
+            dependency: _,
+            topological_order,
+        } = self;
+        topological_order.into_iter().rev().map(move |id| {
+            let function = assignments
+                .remove(&id)
+                .expect("topological_order only contains assigned variables");
+            (id, function)
+        })
+    }
+
     pub fn keys(&self) -> impl Iterator<Item = VariableID> + '_ {
         self.assignments.keys().copied()
     }
@@ -536,6 +556,23 @@ mod tests {
             .unwrap();
 
         assert_eq!(initial, substitution);
+    }
+
+    #[test]
+    fn into_evaluation_order_moves_every_assignment_in_dependency_order() {
+        let assignments = assign! {
+            1 <- linear!(2) + linear!(3),
+            4 <- linear!(1) + coeff!(2.0),
+            8 <- linear!(9)
+        };
+        let expected = assignments
+            .evaluation_order_iter()
+            .map(|(id, function)| (id, function.clone()))
+            .collect::<Vec<_>>();
+
+        let actual = assignments.into_evaluation_order().collect::<Vec<_>>();
+
+        assert_eq!(actual, expected);
     }
 
     #[test]

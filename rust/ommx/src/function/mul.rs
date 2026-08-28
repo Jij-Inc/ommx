@@ -228,6 +228,51 @@ impl Function {
         })
     }
 
+    fn try_mul_linear_refs(lhs: &Self, rhs: &Linear) -> Result<Self, CoefficientError> {
+        Ok(match lhs {
+            Function::Zero => Function::Zero,
+            Function::Constant(c) => Function::Linear((rhs * *c)?),
+            Function::Linear(lhs) => Function::Quadratic((lhs * rhs)?),
+            Function::Quadratic(lhs) => Function::Polynomial((lhs * rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs * rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Mul,
+                lhs.clone(),
+                Function::Linear(rhs.clone()),
+            ),
+        })
+    }
+
+    fn try_mul_quadratic_refs(lhs: &Self, rhs: &Quadratic) -> Result<Self, CoefficientError> {
+        Ok(match lhs {
+            Function::Zero => Function::Zero,
+            Function::Constant(c) => Function::Quadratic((rhs * *c)?),
+            Function::Linear(lhs) => Function::Polynomial((lhs * rhs)?),
+            Function::Quadratic(lhs) => Function::Polynomial((lhs * rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs * rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Mul,
+                lhs.clone(),
+                Function::Quadratic(rhs.clone()),
+            ),
+        })
+    }
+
+    fn try_mul_polynomial_refs(lhs: &Self, rhs: &Polynomial) -> Result<Self, CoefficientError> {
+        Ok(match lhs {
+            Function::Zero => Function::Zero,
+            Function::Constant(c) => Function::Polynomial((rhs * *c)?),
+            Function::Linear(lhs) => Function::Polynomial((lhs * rhs)?),
+            Function::Quadratic(lhs) => Function::Polynomial((lhs * rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs * rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Mul,
+                lhs.clone(),
+                Function::Polynomial(rhs.clone()),
+            ),
+        })
+    }
+
     pub(crate) fn try_mul_polynomial_assign_in_place(
         &mut self,
         rhs: Polynomial,
@@ -389,7 +434,7 @@ impl Mul<&Function> for Function {
 }
 
 macro_rules! impl_mul_polynomial_rhs {
-    ($rhs:ty, $variant:ident, $ref_method:ident) => {
+    ($rhs:ty, $variant:ident, $ref_method:ident, $refs_method:ident) => {
         impl Mul<$rhs> for Function {
             type Output = Result<Function, CoefficientError>;
 
@@ -420,20 +465,29 @@ macro_rules! impl_mul_polynomial_rhs {
             type Output = Result<Function, CoefficientError>;
 
             fn mul(self, rhs: &$rhs) -> Self::Output {
-                let mut out = self.clone();
-                out.$ref_method(rhs)?;
-                Ok(out.normalize())
+                Ok(Function::$refs_method(self, rhs)?.normalize())
             }
         }
     };
 }
 
-impl_mul_polynomial_rhs!(Linear, Linear, try_mul_linear_assign_in_place);
-impl_mul_polynomial_rhs!(Quadratic, Quadratic, try_mul_quadratic_assign_in_place);
+impl_mul_polynomial_rhs!(
+    Linear,
+    Linear,
+    try_mul_linear_assign_in_place,
+    try_mul_linear_refs
+);
+impl_mul_polynomial_rhs!(
+    Quadratic,
+    Quadratic,
+    try_mul_quadratic_assign_in_place,
+    try_mul_quadratic_refs
+);
 impl_mul_polynomial_rhs!(
     Polynomial,
     Polynomial,
-    try_mul_polynomial_ref_assign_in_place
+    try_mul_polynomial_ref_assign_in_place,
+    try_mul_polynomial_refs
 );
 
 #[cfg(test)]
@@ -477,6 +531,21 @@ mod tests {
         ) {
             assert_abs_diff_eq!((&a * (&b * &c).unwrap()).unwrap(), ((&a * &b).unwrap() * &c).unwrap());
         }
+
+        #[test]
+        fn fixed_rhs_refs_match_function_dispatch(
+            lhs in any::<Function>(),
+            linear in any::<Linear>(),
+            quadratic in any::<Quadratic>(),
+            polynomial in any::<Polynomial>(),
+        ) {
+            prop_assert_eq!(lhs.clone() * &linear, lhs.clone() * Function::Linear(linear.clone()));
+            prop_assert_eq!(&lhs * &linear, &lhs * Function::Linear(linear));
+            prop_assert_eq!(lhs.clone() * &quadratic, lhs.clone() * Function::Quadratic(quadratic.clone()));
+            prop_assert_eq!(&lhs * &quadratic, &lhs * Function::Quadratic(quadratic));
+            prop_assert_eq!(lhs.clone() * &polynomial, lhs.clone() * Function::Polynomial(polynomial.clone()));
+            prop_assert_eq!(&lhs * &polynomial, &lhs * Function::Polynomial(polynomial));
+        }
     }
 
     #[test]
@@ -507,11 +576,29 @@ mod tests {
         assert!((&lhs * rhs.clone()).unwrap() == expected);
         assert!((lhs.clone() * &rhs).unwrap() == expected);
         assert!((&lhs * &rhs).unwrap() == expected);
+
+        let Function::Polynomial(rhs_polynomial) = &rhs else {
+            unreachable!("fixture is polynomial")
+        };
+        assert!((&lhs * rhs_polynomial).unwrap() == expected);
     }
 
     #[test]
     fn borrowed_multiplication_preserves_coefficient_error() {
         let huge = Function::Linear(Linear::single_term(linear!(1), coeff!(f64::MAX)));
         assert!(matches!(&huge * &huge, Err(CoefficientError::Infinite)));
+    }
+
+    #[test]
+    fn fixed_borrowed_multiplication_preserves_expression_order_and_coefficient_error() {
+        let lhs = Function::from(linear!(1)).abs();
+        let rhs = Linear::from(linear!(2));
+        let expected = (lhs.clone() * Function::Linear(rhs.clone())).unwrap();
+
+        assert!((&lhs * &rhs).unwrap() == expected);
+
+        let huge = Function::Linear(Linear::single_term(linear!(1), coeff!(f64::MAX)));
+        let huge_rhs = Linear::single_term(linear!(1), coeff!(f64::MAX));
+        assert!(matches!(&huge * &huge_rhs, Err(CoefficientError::Infinite)));
     }
 }
