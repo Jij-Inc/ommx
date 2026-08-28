@@ -210,7 +210,9 @@ def test_instance_canonicalizes_discrete_solver_values():
     }
 
     assert instance.populate_state(state, atol=0.125).entries == expected
-    assert instance.evaluate(state, atol=0.125).state.entries == expected
+    solution = instance.evaluate(state, atol=0.125)
+    assert solution.state.entries == expected
+    assert solution.objective == 1.0
 
     sample_set = instance.evaluate_samples(
         {
@@ -227,6 +229,8 @@ def test_instance_canonicalizes_discrete_solver_values():
     )
     assert sample_set.get(7).state.entries == expected
     assert sample_set.get(8).state.entries == expected
+    assert sample_set.objectives[7] == 1.0
+    assert sample_set.objectives[8] == 1.0
 
     boundary = state | {0: 1.125, 1: -2.125, 2: -1.875}
     assert instance.populate_state(boundary, atol=0.125).entries == boundary

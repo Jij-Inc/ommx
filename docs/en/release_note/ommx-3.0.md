@@ -18,10 +18,10 @@ dependent targets, according to each decision-variable kind and the caller's
 strictly less than `atol`, and Integer or SemiInteger values whose distance from
 an integer is strictly less than `atol`, are stored as the corresponding exact
 discrete value. Values exactly at the tolerance boundary remain unchanged,
-matching the existing strict kind-feasibility rule. Continuous and
-SemiContinuous values are never rounded. Other finite values are preserved so
-a returned {class}`~ommx.Solution` can report them as infeasible, while
-non-finite state values remain rejected.
+while kind and bound feasibility continue to be checked separately under their
+existing rules. Continuous and SemiContinuous values are never rounded. Other
+finite values are preserved so a returned {class}`~ommx.Solution` can report
+their feasibility, while non-finite state values remain rejected.
 
 A caller-supplied fixed or dependent value remains a consistency assertion.
 After validation, the returned state uses the Instance-owned fixed value

@@ -3708,7 +3708,9 @@ class Instance:
 
         # Postconditions
 
-        Evaluation populates the full state before applying preserved output objective semantics.
+        Evaluation first applies the canonicalization, population, and consistency
+        assertion rules documented by {meth}`~ommx.Instance.populate_state`, then
+        applies preserved output objective semantics to the populated state.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -3752,7 +3754,10 @@ class Instance:
         available for feasibility checks. A caller-provided fixed or dependent
         value is a consistency assertion; after validation, the returned state uses
         the stored fixed value unchanged or the canonicalized derived dependent
-        value.
+        value. Dependencies consume canonicalized non-fixed, non-dependent inputs.
+        A supplied dependent assertion is compared with the value derived from those
+        inputs before target-kind canonicalization, so an assertion computed from the
+        uncanonicalized solver vector can be rejected as inconsistent.
 
         # Postconditions
 
@@ -3816,7 +3821,9 @@ class Instance:
 
         # Postconditions
 
-        Every sample restores fixed variables before applying preserved output objective semantics.
+        Every sample uses the canonicalization, population, and consistency assertion
+        rules documented by {meth}`~ommx.Instance.populate_state` before applying
+        preserved output objective semantics. SampleID membership is preserved.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)

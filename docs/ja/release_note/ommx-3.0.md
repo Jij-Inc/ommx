@@ -15,10 +15,11 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
 canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
 未満のBinary値と、整数との差が`atol`未満のInteger / SemiInteger値は、対応する厳密な
-離散値として格納されます。差がちょうど`atol`の値は変更せず、既存のstrictなkind
-feasibility規則を維持します。ContinuousとSemiContinuousは丸めません。それ以外の
-有限値は、返された{class}`~ommx.Solution`がinfeasibleと判定できるように保持し、
-非有限なstate値は引き続き拒否します。
+離散値として格納されます。差がちょうど`atol`の値は変更しません。canonicalizationとは
+別に、kindとboundのfeasibilityを既存の規則で判定します。
+ContinuousとSemiContinuousは丸めません。それ以外の有限値は、返された
+{class}`~ommx.Solution`がfeasibilityを判定できるように保持し、非有限なstate値は
+引き続き拒否します。
 
 呼び出し側がfixedまたはdependent variableの値を渡した場合、その値は引き続き
 整合性assertionとして扱います。検証後のstateには、Instanceが所有するfixed valueを

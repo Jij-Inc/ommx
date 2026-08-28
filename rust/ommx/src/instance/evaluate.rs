@@ -485,7 +485,10 @@ impl Instance {
     /// violations remain available to Solution feasibility.
     /// Caller-provided fixed or dependent values are treated as consistency
     /// assertions. The returned state uses the stored Instance-owned fixed value
-    /// unchanged, or the canonicalized derived dependent value.
+    /// unchanged, or the canonicalized derived dependent value. Dependencies
+    /// consume canonicalized non-fixed, non-dependent inputs. A dependent
+    /// assertion is compared with the value derived from those inputs before the
+    /// target kind is canonicalized.
     pub fn populate_state(&self, state: v1::State, atol: ATol) -> Result<v1::State> {
         self.prepare_state_population().populate(state, atol)
     }
@@ -1061,6 +1064,7 @@ mod tests {
 
         let solution = instance.evaluate(&state, atol).unwrap();
         assert_eq!(solution.state(), populated);
+        assert_eq!(*solution.objective(), 1.0);
         assert!(solution.feasible_decision_variables());
     }
 
@@ -1078,6 +1082,22 @@ mod tests {
         let solution = instance.evaluate(&state, atol).unwrap();
         assert_eq!(solution.state(), populated);
         assert!(!solution.feasible_decision_variables());
+    }
+
+    #[test]
+    fn canonicalization_boundary_is_separate_from_solution_feasibility() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(1.0).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+
+        let populated = instance.populate_state(state.clone(), atol).unwrap();
+        assert_eq!(populated.entries.get(&1), Some(&2.0));
+
+        // Canonicalization is strict relative to the nearest Binary value, while
+        // Solution feasibility independently applies the existing kind and bound
+        // checks under the same (deliberately large) tolerance.
+        let solution = instance.evaluate(&state, atol).unwrap();
+        assert!(solution.feasible_decision_variables());
     }
 
     #[test]
@@ -1117,6 +1137,43 @@ mod tests {
         }
     }
 
+    #[test]
+    fn evaluate_samples_normalizes_negative_zero_and_regroups_sample_ids() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(0.5).unwrap();
+        let negative = v1::State::from(HashMap::from([(1, 0.0), (2, -0.25)]));
+        let positive = v1::State::from(HashMap::from([(1, 0.0), (2, 0.25)]));
+
+        let populated = instance.populate_state(negative.clone(), atol).unwrap();
+        assert_eq!(populated.entries[&2].to_bits(), 0.0_f64.to_bits());
+
+        let samples = crate::Sampled::new(
+            [
+                vec![crate::SampleID::from(7)],
+                vec![crate::SampleID::from(8)],
+            ],
+            [negative, positive],
+        )
+        .unwrap();
+        let sample_set = instance.evaluate_samples(&samples, atol).unwrap();
+        let integer_samples = sample_set
+            .decision_variables()
+            .get(&VariableID::from(2))
+            .unwrap()
+            .samples();
+
+        for sample_id in [crate::SampleID::from(7), crate::SampleID::from(8)] {
+            assert_eq!(
+                integer_samples.get(sample_id).unwrap().to_bits(),
+                0.0_f64.to_bits()
+            );
+        }
+        let chunks = integer_samples.clone().chunk();
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].0.to_bits(), 0.0_f64.to_bits());
+        assert_eq!(chunks[0].1.len(), 2);
+    }
+
     fn fixed_and_dependent_canonicalization_instance() -> Instance {
         Instance::builder()
             .sense(Sense::Minimize)
@@ -1124,6 +1181,7 @@ mod tests {
             .decision_variables(BTreeMap::from([
                 (VariableID::from(1), crate::DecisionVariable::integer()),
                 (VariableID::from(10), crate::DecisionVariable::integer()),
+                (VariableID::from(11), crate::DecisionVariable::continuous()),
                 (VariableID::from(20), crate::DecisionVariable::continuous()),
                 (VariableID::from(30), crate::DecisionVariable::continuous()),
                 (VariableID::from(40), crate::DecisionVariable::integer()),
@@ -1134,6 +1192,7 @@ mod tests {
             ]))
             .decision_variable_dependency(crate::assign! {
                 10 <- coeff!(2.0 + 5e-7) * linear!(1),
+                11 <- coeff!(1_000_000.0) * linear!(10),
                 30 <- coeff!(2.0) * linear!(20)
             })
             .constraints(BTreeMap::new())
@@ -1150,7 +1209,14 @@ mod tests {
         let populated = instance.populate_state(state, atol).unwrap();
         assert_eq!(
             populated.entries,
-            HashMap::from([(1, 1.0), (10, 2.0), (20, 4.0), (30, 8.0), (40, 5.0 + 5e-7),])
+            HashMap::from([
+                (1, 1.0),
+                (10, 2.0),
+                (11, 2_000_000.0),
+                (20, 4.0),
+                (30, 8.0),
+                (40, 5.0 + 5e-7),
+            ])
         );
 
         let fixed_error = instance
@@ -1208,10 +1274,23 @@ mod tests {
                 crate::SampleID::from(9),
             ])
         );
+        assert_eq!(
+            sample_set.objectives().get(crate::SampleID::from(7)),
+            Some(&1.0)
+        );
+        assert_eq!(
+            sample_set.objectives().get(crate::SampleID::from(9)),
+            Some(&1.0)
+        );
+        assert_eq!(
+            sample_set.objectives().get(crate::SampleID::from(8)),
+            Some(&2.0)
+        );
 
         for (id, shared_value, distinct_value) in [
             (1, 1.0, 2.0),
             (10, 2.0, 4.0),
+            (11, 2_000_000.0, 4_000_000.0),
             (20, 4.0, 4.0),
             (30, 8.0, 8.0),
             (40, 5.0 + 5e-7, 5.0 + 5e-7),

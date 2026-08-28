@@ -744,6 +744,12 @@ mod tests {
             None
         );
 
+        let zero_atol = ATol::new(0.5).unwrap();
+        for kind in [Kind::Integer, Kind::SemiInteger] {
+            let zero = kind.canonical_discrete_value(-0.25, zero_atol).unwrap();
+            assert_eq!(zero.to_bits(), 0.0_f64.to_bits());
+        }
+
         let large_atol = ATol::new(2.0).unwrap();
         assert_eq!(
             Kind::Binary.canonical_discrete_value(1.5, large_atol),
