@@ -1464,7 +1464,7 @@ mod tests {
             SpecialConstraintKind::Sos1,
         ]);
         lowered
-            .convert_indicator_to_constraint(crate::IndicatorConstraintID::from(1))
+            .convert_indicator_to_constraint(crate::IndicatorConstraintID::from(1), ATol::default())
             .unwrap();
         lowered
             .convert_one_hot_to_constraint(crate::OneHotConstraintID::from(1))

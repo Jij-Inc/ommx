@@ -114,6 +114,10 @@ impl Instance {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
+    /// Deserialize an instance from v1 protobuf bytes.
+    ///
+    /// Raises {class}`ValueError` if the protobuf payload is malformed or
+    /// semantically invalid.
     #[staticmethod]
     pub fn from_v1_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -122,6 +126,10 @@ impl Instance {
         })
     }
 
+    /// Deserialize an instance from v2 protobuf bytes.
+    ///
+    /// Raises {class}`ValueError` if the protobuf payload is malformed or
+    /// semantically invalid.
     #[staticmethod]
     pub fn from_v2_bytes(py: Python<'_>, bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -832,21 +840,34 @@ impl Instance {
     /// requested and active, and therefore actually lowered. Empty when no
     /// requested kind was active.
     ///
+    /// ``atol`` controls zero-sensitive interval bounds used while lowering
+    /// Indicator constraints. If omitted, :attr:`DEFAULT_ATOL` is used. This
+    /// aligns zero-sensitive Function body evaluation; lowering itself assumes
+    /// exact discrete variable values.
+    ///
     /// Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each
     /// individual family conversion is atomic, but the whole operation is not:
     /// an error in a later family does not roll back families already lowered.
     ///
     /// Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
     /// with a non-finite bound).
+    #[pyo3(signature = (kinds_to_lower, *, atol=None))]
     pub fn lower_special_constraints(
         &mut self,
         py: Python<'_>,
         kinds_to_lower: std::collections::HashSet<crate::SpecialConstraintKind>,
+        atol: Option<f64>,
     ) -> OmmxPyResult<std::collections::HashSet<crate::SpecialConstraintKind>> {
         let _guard = crate::TRACING.attach_parent_context(py);
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
         let rust_kinds_to_lower: ommx::SpecialConstraintKinds =
             kinds_to_lower.into_iter().map(|kind| kind.into()).collect();
-        let lowered = self.inner.lower_special_constraints(&rust_kinds_to_lower)?;
+        let lowered = self
+            .inner
+            .lower_special_constraints(&rust_kinds_to_lower, atol)?;
         Ok(lowered.into_iter().map(|kind| kind.into()).collect())
     }
 
@@ -1837,6 +1858,11 @@ impl Instance {
     /// silently drop the upper side when $0 \notin [l, u]$). The instance is not
     /// mutated on error.
     ///
+    /// ``atol`` controls which Function-body values the bound evaluator treats
+    /// as zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes
+    /// the indicator variable is exactly binary; this does not canonicalize an
+    /// approximate solver value near 0 or 1.
+    ///
     /// # Examples
     ///
     /// Convert an inequality indicator where the upper side is active:
@@ -1864,10 +1890,19 @@ impl Instance {
     /// {}
     /// >>> instance.constraints
     /// {0: Constraint(x0 + 3*x1 - 5 <= 0)}
-    pub fn convert_indicator_to_constraint(&mut self, indicator_id: u64) -> OmmxPyResult<Vec<u64>> {
+    #[pyo3(signature = (indicator_id, *, atol=None))]
+    pub fn convert_indicator_to_constraint(
+        &mut self,
+        indicator_id: u64,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<Vec<u64>> {
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
         let new_ids = self
             .inner
-            .convert_indicator_to_constraint(indicator_id.into())?;
+            .convert_indicator_to_constraint(indicator_id.into(), atol)?;
         Ok(new_ids.into_iter().map(|id| id.into_inner()).collect())
     }
 
@@ -1881,10 +1916,19 @@ impl Instance {
     /// one is convertible are the conversions applied. If any indicator fails
     /// validation (non-finite bound on a required side), no mutation happens and
     /// the instance is left untouched.
+    ///
+    /// ``atol`` has the same Function-body meaning as in the single-constraint
+    /// conversion. If omitted, :attr:`DEFAULT_ATOL` is used.
+    #[pyo3(signature = (*, atol=None))]
     pub fn convert_all_indicators_to_constraints(
         &mut self,
+        atol: Option<f64>,
     ) -> OmmxPyResult<BTreeMap<u64, Vec<u64>>> {
-        let result = self.inner.convert_all_indicators_to_constraints()?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        let result = self.inner.convert_all_indicators_to_constraints(atol)?;
         Ok(result
             .into_iter()
             .map(|(id, ids)| {
@@ -2094,11 +2138,13 @@ impl Instance {
     ///
     /// - Since this method evaluates the bound of $f(x)$, we may find that:
     ///
-    ///   - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:
+    ///   - The bound $[l, u]$ is infeasible at the selected tolerance, i.e.
+    ///     $l \geq \text{atol}$:
     ///     this means the instance is infeasible because this constraint never be satisfied,
     ///     and an error is raised.
     ///
-    ///   - The bound $[l, u]$ is always negative, i.e. $u \leq 0$:
+    ///   - The bound is feasible everywhere at the selected tolerance, i.e.
+    ///     $u < \text{atol}$:
     ///     this means this constraint is trivially satisfied,
     ///     the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,
     ///     and this method returns without introducing slack variable or raising an error.
@@ -2135,16 +2181,25 @@ impl Instance {
     /// range exceeds ``max_integer_range``. Raises
     /// {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
     /// infeasible.
+    /// ``atol`` controls zero-sensitive interval evaluation and the strict
+    /// inequality feasibility threshold. If omitted, :attr:`DEFAULT_ATOL` is
+    /// used.
+    #[pyo3(signature = (constraint_id, max_integer_range, *, atol=None))]
     pub fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
+        atol: Option<f64>,
     ) -> OmmxPyResult<()> {
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
         self.inner
             .convert_inequality_to_equality_with_integer_slack(
                 constraint_id,
                 max_integer_range,
-                ommx::ATol::default(),
+                atol,
             )?;
         Ok(())
     }
@@ -2163,6 +2218,10 @@ impl Instance {
     ///
     /// **Returns:**
     /// The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
+    ///
+    /// ``atol`` controls zero-sensitive interval bounds and the inequality
+    /// feasibility threshold used to select the slack coefficient. If omitted,
+    /// :attr:`DEFAULT_ATOL` is used.
     ///
     /// # Examples
     ///
@@ -2191,14 +2250,20 @@ impl Instance {
     /// ...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0
     /// ... }
     /// >>> assert instance.constraints[0].equality == Equality.LessThanOrEqualToZero
+    #[pyo3(signature = (constraint_id, slack_upper_bound, *, atol=None))]
     pub fn add_integer_slack_to_inequality(
         &mut self,
         constraint_id: u64,
         slack_upper_bound: u64,
+        atol: Option<f64>,
     ) -> OmmxPyResult<Option<f64>> {
-        let result = self
-            .inner
-            .add_integer_slack_to_inequality(constraint_id, slack_upper_bound)?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        let result =
+            self.inner
+                .add_integer_slack_to_inequality(constraint_id, slack_upper_bound, atol)?;
         Ok(result)
     }
 

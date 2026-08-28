@@ -4,7 +4,6 @@ import pytest
 
 from ommx import (
     DecisionVariable,
-    DegreeBound,
     ExactIntegerSlackError,
     FixedPenaltyPreparation,
     Instance,
@@ -17,6 +16,7 @@ from ommx import (
     OneHotConstraint,
     PreparationPolicy,
     PreparationTargetNotReachedError,
+    PolynomialRequirement,
     Sense,
     SpecialConstraintKind,
     SpecialConstraintPreparation,
@@ -34,7 +34,9 @@ def unconstrained_class(
             InstanceClassClause(
                 label="target",
                 allowed_variable_kinds=allowed_variable_kinds,
-                objective_degree_bound=DegreeBound.at_most(objective_degree),
+                objective_polynomial_requirement=PolynomialRequirement.at_most(
+                    objective_degree
+                ),
                 allowed_senses={sense},
             )
         ]
@@ -74,6 +76,20 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
     assert not target.contains(instance)
     assert instance.prepare(target, policy) is None
     assert target.contains(alias)
+
+
+def test_special_constraint_preparation_stores_bound_atol() -> None:
+    preparation = SpecialConstraintPreparation.lower_special_constraints(
+        kinds={SpecialConstraintKind.Indicator}, atol=0.125
+    )
+    same = SpecialConstraintPreparation.lower_special_constraints(
+        kinds={SpecialConstraintKind.Indicator}, atol=0.125
+    )
+    different = SpecialConstraintPreparation.lower_special_constraints(
+        kinds={SpecialConstraintKind.Indicator}, atol=0.25
+    )
+    assert preparation == same
+    assert preparation != different
 
 
 def test_prepare_preserves_owner_signal_and_earlier_commits() -> None:

@@ -3,9 +3,9 @@ use crate::{
     arbitrary_constraints, arbitrary_decision_variables, arbitrary_named_functions, linear,
     random::{arbitrary_samples, SamplesParameters},
     v1::State,
-    Bounds, ConstraintIDParameters, Equality, Evaluate, IndicatorConstraintID, Kind,
-    KindParameters, NamedFunctionIDParameters, OneHotConstraintID, PolynomialParameters, Sampled,
-    Sos1ConstraintID,
+    Bounds, ConstraintIDParameters, Equality, Evaluate, FunctionParameters, IndicatorConstraintID,
+    Kind, KindParameters, NamedFunctionIDParameters, OneHotConstraintID, PolynomialParameters,
+    Sampled, Sos1ConstraintID,
 };
 use fnv::FnvHashSet;
 use proptest::prelude::*;
@@ -132,9 +132,9 @@ pub enum InstanceSpace {
 pub struct InstanceParameters {
     pub space: InstanceSpace,
     pub constraint_ids: ConstraintIDParameters,
-    pub objective: PolynomialParameters,
-    pub constraint: PolynomialParameters,
-    pub named_function: PolynomialParameters,
+    pub objective: FunctionParameters,
+    pub constraint: FunctionParameters,
+    pub named_function: FunctionParameters,
     pub named_function_ids: NamedFunctionIDParameters,
     pub kinds: KindParameters,
     pub max_irrelevant_ids: usize,
@@ -143,8 +143,9 @@ pub struct InstanceParameters {
 impl InstanceParameters {
     /// Parameters for the full V3 [`Instance`] space. This is the default.
     ///
-    /// The objective, regular constraints, named functions, and decision
-    /// variables are sampled from strategies. The V3-specific structure —
+    /// The objective, regular constraints, and named functions use the default
+    /// [`crate::Function`] strategy, including composed expressions, and
+    /// decision variables are sampled from their strategies. The V3-specific structure —
     /// fixed and dependent variables, removed constraints, indicator,
     /// one-hot, and SOS1 families, parameters, description, and annotations
     /// plus an output objective with an active-independent function and no
@@ -159,9 +160,9 @@ impl InstanceParameters {
             space: InstanceSpace::FullV3,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
-            objective: PolynomialParameters::default(),
-            constraint: PolynomialParameters::default(),
-            named_function: PolynomialParameters::default(),
+            objective: FunctionParameters::default(),
+            constraint: FunctionParameters::default(),
+            named_function: FunctionParameters::default(),
             kinds: KindParameters::new(&[
                 Kind::Binary,
                 Kind::Integer,
@@ -176,14 +177,16 @@ impl InstanceParameters {
 
     /// Parameters for the regular-constraint subspace: no special constraint
     /// families, no removed constraints, and no fixed or dependent variables.
+    /// Function-valued components still use the full composed-function space;
+    /// this constructor restricts instance structure, not function algebra.
     pub fn regular_only() -> Self {
         Self {
             space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
-            objective: PolynomialParameters::default(),
-            constraint: PolynomialParameters::default(),
-            named_function: PolynomialParameters::default(),
+            objective: FunctionParameters::default(),
+            constraint: FunctionParameters::default(),
+            named_function: FunctionParameters::default(),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -214,9 +217,11 @@ impl InstanceParameters {
             space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
-            named_function: PolynomialParameters::default_linear(),
-            objective: PolynomialParameters::default_linear(),
-            constraint: PolynomialParameters::default_linear(),
+            named_function: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_linear(),
+            ),
+            objective: FunctionParameters::polynomial_only(PolynomialParameters::default_linear()),
+            constraint: FunctionParameters::polynomial_only(PolynomialParameters::default_linear()),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -228,9 +233,13 @@ impl InstanceParameters {
             space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
-            objective: PolynomialParameters::default_quadratic(),
-            constraint: PolynomialParameters::default_linear(),
-            named_function: PolynomialParameters::default_linear(),
+            objective: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_quadratic(),
+            ),
+            constraint: FunctionParameters::polynomial_only(PolynomialParameters::default_linear()),
+            named_function: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_linear(),
+            ),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -242,9 +251,15 @@ impl InstanceParameters {
             space: InstanceSpace::RegularOnly,
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
-            objective: PolynomialParameters::default_quadratic(),
-            constraint: PolynomialParameters::default_quadratic(),
-            named_function: PolynomialParameters::default_quadratic(),
+            objective: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_quadratic(),
+            ),
+            constraint: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_quadratic(),
+            ),
+            named_function: FunctionParameters::polynomial_only(
+                PolynomialParameters::default_quadratic(),
+            ),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -594,10 +609,8 @@ mod tests {
     proptest! {
         #[test]
         fn test_variable_id_is_defined(instance in Instance::arbitrary()) {
-            for ids in instance.objective.keys() {
-                for id in ids {
-                    prop_assert!(instance.decision_variables.contains_key(&id));
-                }
+            for id in instance.objective.required_ids() {
+                prop_assert!(instance.decision_variables.contains_key(&id));
             }
             if let Some(output) = instance.output_objective() {
                 for id in output.function().required_ids() {
@@ -605,10 +618,8 @@ mod tests {
                 }
             }
             for c in instance.constraints().values() {
-                for ids in c.function().keys() {
-                    for id in ids {
-                        prop_assert!(instance.decision_variables.contains_key(&id));
-                    }
+                for id in c.function().required_ids() {
+                    prop_assert!(instance.decision_variables.contains_key(&id));
                 }
             }
             for (c, _) in instance.removed_constraints().values() {
