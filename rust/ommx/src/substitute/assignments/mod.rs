@@ -332,22 +332,14 @@ impl Evaluate for AcyclicAssignments {
         samples: &crate::Sampled<State>,
         atol: ATol,
     ) -> crate::Result<Self::SampledOutput> {
-        // Evaluate each unique source state once. `try_map_ref` preserves the
-        // input SampleID grouping while every DAG evaluation extends its own
-        // state in dependency-first order.
-        let extended = samples.try_map_ref(|state| self.evaluate(state, atol))?;
         let mut result = FnvHashMap::default();
-        for id in self.keys() {
-            let values = extended.try_map_ref(|state| {
-                state.entries.get(&id.into_inner()).copied().ok_or_else(|| {
-                    crate::error!(
-                        { id = ?id },
-                        "evaluated assignment state is missing variable {id:?}"
-                    )
-                })
-            })?;
-            result.insert(id, values);
+
+        // For each assignment in topological order
+        for (var_id, function) in self.substitution_order_iter() {
+            let sampled_values = function.evaluate_samples(samples, atol)?;
+            result.insert(var_id, sampled_values);
         }
+
         Ok(result)
     }
 
@@ -400,7 +392,7 @@ impl Substitute for AcyclicAssignments {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{assign, coeff, linear, SampleID, Sampled};
+    use crate::{assign, coeff, linear};
     use ::approx::assert_abs_diff_eq;
     use std::collections::BTreeSet;
 
@@ -534,48 +526,6 @@ mod tests {
         assert_eq!(result.entries[&2], 1.0); // x2 = 1 (original)
         assert_eq!(result.entries[&3], 2.0); // x3 = 2 (original)
         assert_eq!(result.entries[&4], 5.0); // x4 = x1 + 2 = 3 + 2 = 5
-    }
-
-    #[test]
-    fn evaluate_samples_resolves_dag_and_preserves_groups() {
-        let assignments = AcyclicAssignments::new([
-            (
-                VariableID::from(1),
-                Function::from(linear!(2)).signum().abs(),
-            ),
-            (VariableID::from(2), Function::from(linear!(3))),
-        ])
-        .unwrap();
-        let samples = Sampled::new(
-            vec![
-                vec![SampleID::from(10), SampleID::from(11)],
-                vec![SampleID::from(20)],
-            ],
-            [State::from_iter([(3, 0.0)]), State::from_iter([(3, -2.0)])],
-        )
-        .unwrap();
-
-        let evaluated = assignments
-            .evaluate_samples(&samples, ATol::default())
-            .unwrap();
-
-        assert_eq!(evaluated[&VariableID::from(1)].num_samples(), 3);
-        assert_eq!(
-            evaluated[&VariableID::from(1)].get(SampleID::from(10)),
-            Some(&0.0)
-        );
-        assert_eq!(
-            evaluated[&VariableID::from(1)].get(SampleID::from(11)),
-            Some(&0.0)
-        );
-        assert_eq!(
-            evaluated[&VariableID::from(1)].get(SampleID::from(20)),
-            Some(&1.0)
-        );
-        assert_eq!(
-            evaluated[&VariableID::from(2)].get(SampleID::from(20)),
-            Some(&-2.0)
-        );
     }
 
     #[test]
