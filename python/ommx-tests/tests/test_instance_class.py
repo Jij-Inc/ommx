@@ -6,8 +6,8 @@ import pytest
 
 from ommx import (
     DecisionVariable,
+    DegreeBound,
     Equality,
-    Function,
     IndicatorConstraint,
     Instance,
     InstanceClass,
@@ -18,7 +18,6 @@ from ommx import (
     ObjectivePreparation,
     OneHotConstraint,
     PreparationPolicy,
-    PolynomialRequirement,
     Sense,
     Sos1Constraint,
     SpecialConstraintKind,
@@ -33,26 +32,20 @@ def clause(
     label: str,
     *,
     allowed_variable_kinds: set[Kind],
-    objective_polynomial_requirement: PolynomialRequirement,
+    objective_degree_bound: DegreeBound,
     allowed_senses: set[Sense] | None = None,
-    regular_constraint_polynomial_requirements: (
-        dict[Equality, PolynomialRequirement] | None
-    ) = None,
-    indicator_body_polynomial_requirements: (
-        dict[Equality, PolynomialRequirement] | None
-    ) = None,
+    regular_constraint_degree_bounds: dict[Equality, DegreeBound] | None = None,
+    indicator_constraint_degree_bounds: dict[Equality, DegreeBound] | None = None,
     allows_one_hot: bool = False,
     allows_sos1: bool = False,
 ) -> InstanceClassClause:
     return InstanceClassClause(
         label=label,
         allowed_variable_kinds=allowed_variable_kinds,
-        objective_polynomial_requirement=objective_polynomial_requirement,
+        objective_degree_bound=objective_degree_bound,
         allowed_senses=({Sense.Minimize} if allowed_senses is None else allowed_senses),
-        regular_constraint_polynomial_requirements=(
-            regular_constraint_polynomial_requirements
-        ),
-        indicator_body_polynomial_requirements=(indicator_body_polynomial_requirements),
+        regular_constraint_degree_bounds=regular_constraint_degree_bounds,
+        indicator_constraint_degree_bounds=indicator_constraint_degree_bounds,
         allows_one_hot=allows_one_hot,
         allows_sos1=allows_sos1,
     )
@@ -73,32 +66,28 @@ def binary_linear_input_class(*, allows_one_hot: bool = False) -> InstanceClass:
             clause(
                 "binary-linear",
                 allowed_variable_kinds={Kind.Binary},
-                objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+                objective_degree_bound=DegreeBound.at_most(1),
                 allows_one_hot=allows_one_hot,
             )
         ]
     )
 
 
-def test_polynomial_requirement_and_clause_declaration() -> None:
-    linear = PolynomialRequirement.at_most(1)
-    assert linear.maximum_degree == 1
-    assert linear.accepts_degree(0)
-    assert linear.accepts_degree(1)
-    assert not linear.accepts_degree(2)
-    assert repr(linear) == "PolynomialRequirement.at_most(1)"
-
-    any_degree = PolynomialRequirement.any_degree()
-    assert any_degree.maximum_degree is None
-    assert any_degree.accepts_degree(10_000)
-    assert repr(any_degree) == "PolynomialRequirement.any_degree()"
+def test_degree_bound_and_clause_declaration() -> None:
+    linear = DegreeBound.at_most(1)
+    assert linear.maximum == 1
+    assert linear.includes(0)
+    assert linear.includes(1)
+    assert not linear.includes(2)
+    assert DegreeBound.unbounded().maximum is None
+    assert DegreeBound.unbounded().includes(10_000)
 
     declared = clause(
         "linear",
         allowed_variable_kinds={Kind.Binary, Kind.Integer},
-        objective_polynomial_requirement=linear,
+        objective_degree_bound=linear,
         allowed_senses={Sense.Minimize, Sense.Maximize},
-        regular_constraint_polynomial_requirements={
+        regular_constraint_degree_bounds={
             Equality.EqualToZero: linear,
             Equality.LessThanOrEqualToZero: linear,
         },
@@ -106,13 +95,13 @@ def test_polynomial_requirement_and_clause_declaration() -> None:
     )
     assert declared.label == "linear"
     assert declared.allowed_variable_kinds == {Kind.Binary, Kind.Integer}
-    assert declared.objective_polynomial_requirement == linear
+    assert declared.objective_degree_bound == linear
     assert declared.allowed_senses == {Sense.Minimize, Sense.Maximize}
-    assert declared.regular_constraint_polynomial_requirements == {
+    assert declared.regular_constraint_degree_bounds == {
         Equality.EqualToZero: linear,
         Equality.LessThanOrEqualToZero: linear,
     }
-    assert declared.indicator_body_polynomial_requirements == {}
+    assert declared.indicator_constraint_degree_bounds == {}
     assert declared.allows_one_hot
     assert not declared.allows_sos1
 
@@ -126,7 +115,7 @@ def test_empty_classes_duplicate_labels_and_membership_is_side_effect_free() -> 
     empty_clause = clause(
         "empty",
         allowed_variable_kinds={Kind.Binary},
-        objective_polynomial_requirement=PolynomialRequirement.any_degree(),
+        objective_degree_bound=DegreeBound.unbounded(),
         allowed_senses=set(),
     )
     assert not InstanceClass([empty_clause]).contains(instance)
@@ -134,7 +123,7 @@ def test_empty_classes_duplicate_labels_and_membership_is_side_effect_free() -> 
     duplicate = clause(
         "duplicate",
         allowed_variable_kinds={Kind.Binary},
-        objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+        objective_degree_bound=DegreeBound.at_most(1),
     )
     report = InstanceClass([duplicate, duplicate]).check_membership(instance)
     assert report.is_member
@@ -148,22 +137,22 @@ def test_empty_classes_duplicate_labels_and_membership_is_side_effect_free() -> 
 
 def test_complete_clauses_do_not_cross_combine_into_miqp_membership() -> None:
     relations = {
-        Equality.EqualToZero: PolynomialRequirement.at_most(1),
-        Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
+        Equality.EqualToZero: DegreeBound.at_most(1),
+        Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
     }
     input_class = InstanceClass(
         [
             clause(
                 "milp",
                 allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
-                objective_polynomial_requirement=PolynomialRequirement.at_most(1),
-                regular_constraint_polynomial_requirements=relations,
+                objective_degree_bound=DegreeBound.at_most(1),
+                regular_constraint_degree_bounds=relations,
             ),
             clause(
                 "continuous-qp",
                 allowed_variable_kinds={Kind.Continuous},
-                objective_polynomial_requirement=PolynomialRequirement.at_most(2),
-                regular_constraint_polynomial_requirements=relations,
+                objective_degree_bound=DegreeBound.at_most(2),
+                regular_constraint_degree_bounds=relations,
             ),
         ]
     )
@@ -220,13 +209,11 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
     limited = clause(
         "limited",
         allowed_variable_kinds={Kind.Binary},
-        objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+        objective_degree_bound=DegreeBound.at_most(1),
         allowed_senses={Sense.Minimize},
-        regular_constraint_polynomial_requirements={
-            Equality.EqualToZero: PolynomialRequirement.at_most(1)
-        },
-        indicator_body_polynomial_requirements={
-            Equality.EqualToZero: PolynomialRequirement.at_most(1)
+        regular_constraint_degree_bounds={Equality.EqualToZero: DegreeBound.at_most(1)},
+        indicator_constraint_degree_bounds={
+            Equality.EqualToZero: DegreeBound.at_most(1)
         },
     )
     mismatches = (
@@ -242,7 +229,7 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
     objective = mismatches[1]
     assert isinstance(objective, InstanceClassMismatch.ObjectiveDegreeExceedsBound)
     assert objective.actual_degree == 2
-    assert objective.bound == PolynomialRequirement.at_most(1)
+    assert objective.bound == DegreeBound.at_most(1)
 
     regular_degree = mismatches[2]
     assert isinstance(
@@ -250,7 +237,7 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
     )
     assert regular_degree.relation == Equality.EqualToZero
     assert regular_degree.actual_degrees == {10: 2}
-    assert regular_degree.bound == PolynomialRequirement.at_most(1)
+    assert regular_degree.bound == DegreeBound.at_most(1)
 
     regular_relation = mismatches[3]
     assert isinstance(
@@ -287,11 +274,11 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
     no_indicator_support = clause(
         "no-indicator-support",
         allowed_variable_kinds={Kind.Binary, Kind.Continuous},
-        objective_polynomial_requirement=PolynomialRequirement.any_degree(),
+        objective_degree_bound=DegreeBound.unbounded(),
         allowed_senses={Sense.Minimize, Sense.Maximize},
-        regular_constraint_polynomial_requirements={
-            Equality.EqualToZero: PolynomialRequirement.any_degree(),
-            Equality.LessThanOrEqualToZero: PolynomialRequirement.any_degree(),
+        regular_constraint_degree_bounds={
+            Equality.EqualToZero: DegreeBound.unbounded(),
+            Equality.LessThanOrEqualToZero: DegreeBound.unbounded(),
         },
         allows_one_hot=True,
         allows_sos1=True,
@@ -305,57 +292,6 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
         if isinstance(mismatch, InstanceClassMismatch.IndicatorConstraintsNotAllowed)
     )
     assert unsupported_indicator.constraint_ids == {20, 21}
-
-
-def test_non_polynomial_mismatches_preserve_function_location() -> None:
-    x = DecisionVariable.binary(1)
-    absolute_x = abs(Function(x))
-    instance = Instance.from_components(
-        sense=Sense.Minimize,
-        objective=absolute_x,
-        decision_variables=[x],
-        constraints={10: absolute_x == 0},
-        indicator_constraints={
-            20: IndicatorConstraint(
-                indicator_variable=x,
-                function=absolute_x,
-                equality=Equality.EqualToZero,
-            )
-        },
-    )
-    polynomial_only = clause(
-        "polynomial-only",
-        allowed_variable_kinds={Kind.Binary},
-        objective_polynomial_requirement=PolynomialRequirement.any_degree(),
-        regular_constraint_polynomial_requirements={
-            Equality.EqualToZero: PolynomialRequirement.any_degree()
-        },
-        indicator_body_polynomial_requirements={
-            Equality.EqualToZero: PolynomialRequirement.any_degree()
-        },
-    )
-
-    mismatches = (
-        InstanceClass([polynomial_only])
-        .check_membership(instance)
-        .clause_reports[0]
-        .mismatches
-    )
-
-    assert isinstance(
-        mismatches[0], InstanceClassMismatch.ObjectiveFunctionNotPolynomial
-    )
-    assert isinstance(
-        mismatches[1],
-        InstanceClassMismatch.RegularConstraintFunctionNotPolynomial,
-    )
-    assert mismatches[1].relation == Equality.EqualToZero
-    assert mismatches[1].constraint_ids == {10}
-    assert isinstance(
-        mismatches[2], InstanceClassMismatch.IndicatorBodyFunctionNotPolynomial
-    )
-    assert mismatches[2].relation == Equality.EqualToZero
-    assert mismatches[2].constraint_ids == {20}
 
 
 def test_membership_is_recomputed_after_explicit_lowering() -> None:
@@ -372,9 +308,9 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
             clause(
                 "binary-linear-equality",
                 allowed_variable_kinds={Kind.Binary},
-                objective_polynomial_requirement=PolynomialRequirement.at_most(1),
-                regular_constraint_polynomial_requirements={
-                    Equality.EqualToZero: PolynomialRequirement.at_most(1)
+                objective_degree_bound=DegreeBound.at_most(1),
+                regular_constraint_degree_bounds={
+                    Equality.EqualToZero: DegreeBound.at_most(1)
                 },
             )
         ]

@@ -28,12 +28,6 @@ returns the typed error directly):
   becomes infeasible after substitution.
 - [`CoefficientError`](crate::CoefficientError), [`BoundError`](crate::BoundError), [`AtolError`](crate::AtolError),
   [`InvalidPenaltyWeight`](crate::InvalidPenaltyWeight) — numeric-domain validation failures.
-- [`FunctionEvaluationError`](crate::FunctionEvaluationError) — identifies
-  undefined division, a zero-classified value raised to a negative integer
-  power, and non-finite function results. At evaluation time, the caller's
-  [`ATol`](crate::ATol) classifies a value as zero when `abs(value) <= atol`,
-  including the boundary. A caller can change the state, expression, or
-  evaluation tolerance before retrying.
 - [`FixedPenaltyWeightIDMismatch`](crate::FixedPenaltyWeightIDMismatch) —
   identifies the missing and unexpected active constraint IDs in a caller-owned
   fixed-penalty weight map, so the caller can correct the keys and retry the
@@ -82,13 +76,10 @@ returns the typed error directly):
   its typed membership report before adding phases, revising the target class,
   or reporting the remaining mismatches.
 
-Evaluation does not define an operation-wide umbrella error type.
-Caller-provided decision-variable validation reuses
-[`DecisionVariableError`](crate::DecisionVariableError), while
-[`FunctionEvaluationError`](crate::FunctionEvaluationError) covers the
-function-owned undefined-domain and non-finite-result conditions above.
-Failures without a stable caller recovery path remain ordinary
-[`Error`](crate::Error) values.
+Evaluation does not define an umbrella error type. Caller-provided numeric
+validation reuses [`DecisionVariableError`](crate::DecisionVariableError), and
+failures without a stable caller recovery path remain ordinary [`Error`](crate::Error)
+values.
 
 Direct function and polynomial partial evaluation retain
 [`CoefficientError`](crate::CoefficientError), because the caller can change
@@ -97,13 +88,6 @@ the supplied state and retry. If the same arithmetic fails while an
 removed constraint against stored dependencies and fixed values, that signal
 no longer describes caller input and is converted to an ordinary
 [`Error`](crate::Error) with structured tracing context.
-
-The same ownership transition applies to
-[`FunctionEvaluationError`](crate::FunctionEvaluationError): direct function
-evaluation and evaluation of caller-owned
-[`AcyclicAssignments`](crate::AcyclicAssignments) retain the signal, while an
-internally derived, Instance-owned dependent-variable value converts it to
-ordinary owner-contextualized [`Error`](crate::Error).
 
 Recover them with [`Error::downcast_ref`](crate::Error::downcast_ref) / [`Error::is`](crate::Error::is):
 
@@ -125,7 +109,7 @@ match instance.convert_inequality_to_equality_with_integer_slack(id, 32, atol) {
     Err(e) if e.is::<ommx::ExactIntegerSlackUnavailable>() => {
         // This operation keeps the relation as an inequality. It is not an
         // approximate representation of the original feasible set.
-        instance.add_integer_slack_to_inequality(id, 32, atol)?;
+        instance.add_integer_slack_to_inequality(id, 32)?;
     }
     Err(e) => return Err(e),
     Ok(()) => {}

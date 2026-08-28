@@ -708,11 +708,6 @@ impl Instance {
     /// omitted from `kinds_to_lower` remain active. Passing an empty set is a
     /// no-op. This operation does not establish membership in an
     /// [`crate::InstanceClass`]; check the resulting instance separately.
-    /// `atol` is passed to the interval bound used while lowering Indicator
-    /// constraints so zero-sensitive Function-body semantics are explicit.
-    /// The algebraic special-constraint conversions assume exact discrete
-    /// variable values; this operation does not canonicalize approximate
-    /// solver output near 0 or 1.
     ///
     /// Returns the set of families that were requested and active, and therefore
     /// actually lowered. Families are processed in the deterministic order
@@ -731,7 +726,6 @@ impl Instance {
     pub fn lower_special_constraints(
         &mut self,
         kinds_to_lower: &SpecialConstraintKinds,
-        atol: crate::ATol,
     ) -> crate::Result<SpecialConstraintKinds> {
         let mut lowered = SpecialConstraintKinds::new();
         // Iterate in a fixed order so logs / callers see deterministic output.
@@ -748,7 +742,7 @@ impl Instance {
                     if self.indicator_constraint_collection.active().is_empty() {
                         false
                     } else {
-                        self.convert_all_indicators_to_constraints(atol)?;
+                        self.convert_all_indicators_to_constraints()?;
                         true
                     }
                 }
@@ -1155,7 +1149,7 @@ mod lower_special_constraints_tests {
         linear,
         one_hot_constraint::{OneHotConstraint, OneHotConstraintID},
         sos1_constraint::{Sos1Constraint, Sos1ConstraintID},
-        ATol, Bound, DecisionVariable, Equality, Function, Kind, VariableID,
+        Bound, DecisionVariable, Equality, Function, Kind, VariableID,
     };
     use maplit::btreemap;
     use std::collections::{BTreeMap, BTreeSet};
@@ -1210,9 +1204,7 @@ mod lower_special_constraints_tests {
         let before_one_hots = instance.one_hot_constraints().clone();
         let before_sos1 = instance.sos1_constraints().clone();
 
-        let lowered = instance
-            .lower_special_constraints(&kinds_to_lower, ATol::default())
-            .unwrap();
+        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
 
         assert!(lowered.is_empty());
         assert_eq!(instance.indicator_constraints(), &before_indicators);
@@ -1230,9 +1222,7 @@ mod lower_special_constraints_tests {
         .into_iter()
         .collect();
 
-        let lowered = instance
-            .lower_special_constraints(&kinds_to_lower, ATol::default())
-            .unwrap();
+        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
 
         assert_eq!(lowered, kinds_to_lower);
         assert!(instance.indicator_constraints().is_empty());
@@ -1255,9 +1245,7 @@ mod lower_special_constraints_tests {
         .into_iter()
         .collect();
 
-        let lowered = instance
-            .lower_special_constraints(&kinds_to_lower, ATol::default())
-            .unwrap();
+        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
 
         assert_eq!(lowered, kinds_to_lower);
         assert!(instance.active_special_constraint_kinds().is_empty());
@@ -1291,9 +1279,7 @@ mod lower_special_constraints_tests {
         .into_iter()
         .collect();
 
-        let lowered = instance
-            .lower_special_constraints(&kinds_to_lower, ATol::default())
-            .unwrap();
+        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
 
         let expected: SpecialConstraintKinds =
             [SpecialConstraintKind::OneHot].into_iter().collect();
@@ -1320,7 +1306,7 @@ mod lower_special_constraints_tests {
             [SpecialConstraintKind::Sos1].into_iter().collect();
 
         let err = instance
-            .lower_special_constraints(&kinds_to_lower, ATol::default())
+            .lower_special_constraints(&kinds_to_lower)
             .unwrap_err();
         assert!(err.to_string().contains("non-finite"));
     }
@@ -1355,7 +1341,7 @@ mod lower_special_constraints_tests {
                 .collect();
 
         let err = instance
-            .lower_special_constraints(&kinds_to_lower, ATol::default())
+            .lower_special_constraints(&kinds_to_lower)
             .unwrap_err();
 
         assert!(err.to_string().contains("non-finite"));
@@ -1393,9 +1379,7 @@ mod lower_special_constraints_tests {
 
         let kinds_to_lower: SpecialConstraintKinds =
             [SpecialConstraintKind::Sos1].into_iter().collect();
-        let lowered = instance
-            .lower_special_constraints(&kinds_to_lower, ATol::default())
-            .unwrap();
+        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
 
         assert_eq!(lowered, kinds_to_lower);
         // Fresh binary indicator was allocated → decision variable count went up.

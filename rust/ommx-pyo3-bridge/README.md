@@ -47,11 +47,6 @@ release pairs are compatible. Callers must install a Python OMMX release that
 provides the exact v0 capabilities expected by this crate. A missing endpoint
 produces an `ImportError` with the required capability name.
 
-The endpoint may exist while the sender uses a protobuf variant introduced by
-a newer OMMX release. In that case an older Python receiver rejects the payload
-as incompatible; callers must upgrade the Python OMMX package to a release that
-understands the sender's Function variants.
-
 When a Python SDK exposes a v0 capability, its endpoint signature and payload
 interpretation have the fixed meaning recorded in
 `tests/data/protocol_v0.json`. An incompatible change must add a new protocol

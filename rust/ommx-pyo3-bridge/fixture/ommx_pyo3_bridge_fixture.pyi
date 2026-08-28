@@ -3,8 +3,6 @@
 
 import ommx
 __all__ = [
-    "composed_constraint",
-    "composed_function",
     "constraint",
     "decision_variable",
     "function",
@@ -13,10 +11,6 @@ __all__ = [
     "sample_set",
     "solution",
 ]
-
-def composed_constraint() -> ommx.Constraint: ...
-
-def composed_function() -> ommx.Function: ...
 
 def constraint() -> ommx.Constraint: ...
 

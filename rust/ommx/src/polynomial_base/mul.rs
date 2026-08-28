@@ -29,6 +29,13 @@ impl<M: Monomial> PolynomialBase<M> {
     ) -> Result<(), CoefficientError> {
         self.try_map_coefficients_in_place(|coefficient| coefficient * rhs)
     }
+
+    pub(crate) fn try_div_assign_in_place(
+        &mut self,
+        rhs: Coefficient,
+    ) -> Result<(), CoefficientError> {
+        self.try_map_coefficients_in_place(|coefficient| coefficient / rhs)
+    }
 }
 
 impl<M: Monomial> Mul<Coefficient> for PolynomialBase<M> {

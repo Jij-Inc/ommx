@@ -453,35 +453,6 @@ parametric_instance.parameters            # -> list[Parameter]
 parametric_instance.parameters_df()       # -> pandas.DataFrame  (method, not property)
 ```
 
-### 6.7 `Function.degree()` / `num_terms()` are optional for composed functions (`3.0.0`, [#1158](https://github.com/Jij-Inc/ommx/pull/1158))
-
-In v2.5.1 every `Function` was a polynomial, so `degree()` and `num_terms()`
-always returned `int`. A v3 `Function` can also represent a composed scalar
-expression such as an absolute value, pointwise minimum or maximum, division,
-or signed integer power. These two methods return `None` for that representation.
-The polynomial coefficient properties (`terms`, `linear_terms`,
-`quadratic_terms`, and `constant_term`) and `content_factor()` raise `TypeError`
-for a composed function.
-
-```python
-# v2.5.1
-degree: int = function.degree()
-terms = function.terms
-
-# v3
-degree: int | None = function.degree()
-if degree is None:
-    # Inspect or evaluate the composed expression without treating it as a
-    # coefficient map.
-    value = function.evaluate(state, atol=1e-6)
-else:
-    terms = function.terms
-```
-
-Use explicit multiplication when you need a non-negative integer power to
-remain an expanded polynomial. `function.powi(n)` and `function**n` deliberately
-construct composed power expressions, including when `n >= 0`.
-
 ## 7. Removed helpers (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#776](https://github.com/Jij-Inc/ommx/pull/776), [#782](https://github.com/Jij-Inc/ommx/pull/782); `3.0.0a2`, [#798](https://github.com/Jij-Inc/ommx/pull/798); `3.0.0`, [#1087](https://github.com/Jij-Inc/ommx/pull/1087))
 
 - `Linear.from_object(x)` — construct via `Linear.single_term(...)`, `Linear.constant(...)`, or the arithmetic operators.
@@ -961,7 +932,6 @@ expr = 2 * p + 3  # Linear
 - [ ] `SampleSet.sample_ids` is a method returning `set[int]`; use `sample_set.sample_ids_list` if you need a `list`.
 - [ ] Change `except RuntimeError` around `.evaluate(...)` / `.partial_evaluate(...)` calls to `except ValueError`.
 - [ ] Switch `parametric_instance.parameters` DataFrame reads to `parametric_instance.parameters_df()` (now a method; `.parameters` returns `list[Parameter]`).
-- [ ] Update `Function.degree()` / `num_terms()` annotations to accept `None`, and guard polynomial coefficient-property access when a function may be composed.
 - [ ] Audit chained `Constraint.add_name(...).add_subscripts(...)` calls — the chain operates on a clone after the first method, so only the first mutation lands in the original wrapper. Assign the chain to a fresh binding (`c = (...).add_name(...).add_subscripts(...)`), or use the live `AttachedConstraint` from `instance.constraints[id]` for write-through mutation.
 - [ ] Replace `ArtifactArchive` / `ArtifactDir` usage with `Artifact.import_archive(...)` for code that needs archive contents, `Artifact.inspect_archive(...)` for read-only archive inspection, or `Artifact.load(...)` for remote / registry refs.
 - [ ] Remove any `Linear.from_object(...)` / `Linear.equals_to(...)` calls.

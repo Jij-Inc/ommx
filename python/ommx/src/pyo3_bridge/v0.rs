@@ -100,17 +100,6 @@ pub(super) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ommx::Message as _;
-
-    fn deeply_composed_function(operation_count: usize) -> ommx::Function {
-        (0..operation_count).fold(ommx::Function::from(ommx::linear!(1)), |function, level| {
-            if level % 2 == 0 {
-                function.abs()
-            } else {
-                function.signum()
-            }
-        })
-    }
 
     #[test]
     fn invalid_payload_is_a_bridge_runtime_error() {
@@ -129,21 +118,6 @@ mod tests {
                     .contains("invalid OMMX PyO3 bridge v0 payload"),
                 "{error}"
             );
-        });
-    }
-
-    #[test]
-    fn constraint_receiver_accepts_deep_flat_expression() {
-        Python::initialize();
-        Python::attach(|py| {
-            let expected = ommx::Constraint::equal_to_zero(deeply_composed_function(4096));
-            let constraint = ommx::v2::RegularConstraint::from(expected.clone()).encode_to_vec();
-            let context = ommx::v2::ConstraintContext::default().encode_to_vec();
-            let constraint = PyBytes::new(py, &constraint);
-            let context = PyBytes::new(py, &context);
-
-            let actual = _pyo3_bridge_v0_constraint_from_bytes(&constraint, &context).unwrap();
-            assert_eq!(actual.0, expected);
         });
     }
 }

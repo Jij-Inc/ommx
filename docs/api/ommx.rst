@@ -28,7 +28,7 @@ ommx
    _items/ommx.AttachedDecisionVariable
    _items/ommx.Parameter
    _items/ommx.SpecialConstraintKind
-   _items/ommx.PolynomialRequirement
+   _items/ommx.DegreeBound
    _items/ommx.InstanceClassClause
    _items/ommx.InstanceClass
    _items/ommx.InstanceClassMismatch

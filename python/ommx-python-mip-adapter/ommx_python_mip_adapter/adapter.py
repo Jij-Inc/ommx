@@ -16,13 +16,13 @@ from ommx.adapter import (
 from ommx import (
     Constraint,
     DecisionVariable,
+    DegreeBound,
     Equality,
     Function,
     Instance,
     InstanceClass,
     InstanceClassClause,
     Kind,
-    PolynomialRequirement,
     PreparationPolicy,
     Sense,
     Solution,
@@ -35,9 +35,9 @@ from .exception import OMMXPythonMIPAdapterError
 
 _tracer = trace.get_tracer("ommx.adapter.python_mip")
 
-_LINEAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS = {
-    Equality.EqualToZero: PolynomialRequirement.at_most(1),
-    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
+_LINEAR_CONSTRAINT_DEGREE_BOUNDS = {
+    Equality.EqualToZero: DegreeBound.at_most(1),
+    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
 }
 
 
@@ -47,10 +47,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             InstanceClassClause(
                 label="python-mip-linear-mip",
                 allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
-                objective_polynomial_requirement=PolynomialRequirement.at_most(1),
-                regular_constraint_polynomial_requirements=(
-                    _LINEAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS
-                ),
+                objective_degree_bound=DegreeBound.at_most(1),
+                regular_constraint_degree_bounds=_LINEAR_CONSTRAINT_DEGREE_BOUNDS,
                 allowed_senses={Sense.Minimize, Sense.Maximize},
             )
         ]
@@ -449,11 +447,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         Translate ommx.Function to `mip.LinExpr` or `float`.
         """
         degree = f.degree()
-        if degree is None:
-            raise OMMXPythonMIPAdapterError(
-                "Non-polynomial functions are not supported. "
-                "Only linear (degree 1) and constant (degree 0) functions are supported."
-            )
         constant = f.constant_term
         if degree > 1:
             raise OMMXPythonMIPAdapterError(

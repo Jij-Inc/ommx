@@ -217,15 +217,7 @@ impl Parameter {
         py: Python<'_>,
         lhs: crate::FunctionInput,
     ) -> crate::error::OmmxPyResult<Py<PyAny>> {
-        match lhs {
-            crate::FunctionInput::Function(lhs) => {
-                Ok(Function((lhs + ommx::Function::from(self.as_linear()))?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind())
-            }
-            lhs => self.py_add(py, lhs),
-        }
+        self.py_add(py, lhs) // Addition is commutative
     }
 
     /// Polymorphic subtraction. See `py_add`.
@@ -271,18 +263,8 @@ impl Parameter {
         py: Python<'_>,
         lhs: crate::FunctionInput,
     ) -> crate::error::OmmxPyResult<Py<PyAny>> {
-        match lhs {
-            crate::FunctionInput::Function(lhs) => {
-                Ok(Function((lhs - ommx::Function::from(self.as_linear()))?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind())
-            }
-            lhs => {
-                let neg = self.__neg__();
-                neg.py_add(py, lhs)
-            }
-        }
+        let neg = self.__neg__();
+        neg.py_add(py, lhs)
     }
 
     /// Polymorphic multiplication. See `py_add`.
@@ -329,15 +311,7 @@ impl Parameter {
         py: Python<'_>,
         lhs: crate::FunctionInput,
     ) -> crate::error::OmmxPyResult<Py<PyAny>> {
-        match lhs {
-            crate::FunctionInput::Function(lhs) => {
-                Ok(Function((lhs * ommx::Function::from(self.as_linear()))?)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind())
-            }
-            lhs => self.py_mul(py, lhs),
-        }
+        self.py_mul(py, lhs) // Multiplication is commutative
     }
 
     // =====================

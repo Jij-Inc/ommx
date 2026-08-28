@@ -4,27 +4,11 @@ use crate::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Structural polynomial classification of one [`crate::Function`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FunctionClassification {
-    Polynomial(Degree),
-    NonPolynomial,
-}
-
-impl From<&crate::Function> for FunctionClassification {
-    fn from(function: &crate::Function) -> Self {
-        match function.degree() {
-            Some(degree) => Self::Polynomial(degree),
-            None => Self::NonPolynomial,
-        }
-    }
-}
-
 /// Membership-relevant facts for one active regular or indicator constraint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConstraintFacts {
     relation: Equality,
-    classification: FunctionClassification,
+    degree: Degree,
 }
 
 impl ConstraintFacts {
@@ -32,8 +16,8 @@ impl ConstraintFacts {
         self.relation
     }
 
-    pub fn classification(&self) -> FunctionClassification {
-        self.classification
+    pub fn degree(&self) -> Degree {
+        self.degree
     }
 }
 
@@ -48,7 +32,7 @@ impl ConstraintFacts {
 pub struct InstanceFacts {
     sense: Sense,
     used_variables_by_kind: BTreeMap<Kind, VariableIDSet>,
-    objective_classification: FunctionClassification,
+    objective_degree: Degree,
     regular_constraints: BTreeMap<ConstraintID, ConstraintFacts>,
     indicator_constraints: BTreeMap<IndicatorConstraintID, ConstraintFacts>,
     one_hot_constraint_ids: BTreeSet<OneHotConstraintID>,
@@ -72,8 +56,8 @@ impl InstanceFacts {
             .collect()
     }
 
-    pub fn objective_classification(&self) -> FunctionClassification {
-        self.objective_classification
+    pub fn objective_degree(&self) -> Degree {
+        self.objective_degree
     }
 
     pub fn regular_constraints(&self) -> &BTreeMap<ConstraintID, ConstraintFacts> {
@@ -106,7 +90,7 @@ impl From<&Instance> for InstanceFacts {
         Self {
             sense: instance.sense(),
             used_variables_by_kind,
-            objective_classification: instance.objective().into(),
+            objective_degree: instance.objective().degree(),
             regular_constraints: instance
                 .constraints()
                 .iter()
@@ -115,7 +99,7 @@ impl From<&Instance> for InstanceFacts {
                         *id,
                         ConstraintFacts {
                             relation: constraint.equality,
-                            classification: constraint.function().into(),
+                            degree: constraint.function().degree(),
                         },
                     )
                 })
@@ -128,7 +112,7 @@ impl From<&Instance> for InstanceFacts {
                         *id,
                         ConstraintFacts {
                             relation: constraint.equality,
-                            classification: constraint.function().into(),
+                            degree: constraint.function().degree(),
                         },
                     )
                 })
@@ -156,10 +140,7 @@ mod tests {
             let facts = InstanceFacts::from(&instance);
 
             prop_assert_eq!(facts.sense(), instance.sense());
-            prop_assert_eq!(
-                facts.objective_classification(),
-                FunctionClassification::from(instance.objective())
-            );
+            prop_assert_eq!(facts.objective_degree(), instance.objective().degree());
             prop_assert_eq!(facts.used_variable_ids(), instance.used_decision_variable_ids());
             for (id, variable) in instance.used_decision_variables() {
                 prop_assert!(facts
@@ -175,10 +156,7 @@ mod tests {
             for (id, constraint) in instance.constraints() {
                 let fact = facts.regular_constraints().get(id).unwrap();
                 prop_assert_eq!(fact.relation(), constraint.equality);
-                prop_assert_eq!(
-                    fact.classification(),
-                    FunctionClassification::from(constraint.function())
-                );
+                prop_assert_eq!(fact.degree(), constraint.function().degree());
             }
 
             prop_assert_eq!(
@@ -188,10 +166,7 @@ mod tests {
             for (id, constraint) in instance.indicator_constraints() {
                 let fact = facts.indicator_constraints().get(id).unwrap();
                 prop_assert_eq!(fact.relation(), constraint.equality);
-                prop_assert_eq!(
-                    fact.classification(),
-                    FunctionClassification::from(constraint.function())
-                );
+                prop_assert_eq!(fact.degree(), constraint.function().degree());
             }
 
             prop_assert_eq!(
@@ -239,7 +214,7 @@ mod tests {
             after.regular_constraints().get(&regular_id),
             Some(&ConstraintFacts {
                 relation: Equality::EqualToZero,
-                classification: FunctionClassification::Polynomial(1.into()),
+                degree: 1.into(),
             })
         );
         assert_eq!(after.used_variable_ids(), before.used_variable_ids());

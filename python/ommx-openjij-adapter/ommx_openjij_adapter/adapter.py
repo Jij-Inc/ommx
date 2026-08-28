@@ -8,6 +8,7 @@ from typing import ClassVar
 
 import openjij as oj
 from ommx import (
+    DegreeBound,
     IntegerEncodingPreparation,
     IntegerSlackPreparation,
     Instance,
@@ -15,7 +16,6 @@ from ommx import (
     InstanceClassClause,
     Kind,
     ObjectivePreparation,
-    PolynomialRequirement,
     PreparationPolicy,
     Sense,
     Samples,
@@ -52,7 +52,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             InstanceClassClause(
                 label="openjij-binary-hubo",
                 allowed_variable_kinds={Kind.Binary},
-                objective_polynomial_requirement=PolynomialRequirement.any_degree(),
+                objective_degree_bound=DegreeBound.unbounded(),
                 allowed_senses={Sense.Minimize},
             )
         ]

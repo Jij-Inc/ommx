@@ -686,10 +686,9 @@ impl LocalRegistry {
     }
 
     pub fn store_instance_layer(&self, instance: &crate::Instance) -> Result<StoredDescriptor<'_>> {
-        let bytes = instance.to_v2_bytes();
         self.store_layer_blob(
             media_types::v2_instance(),
-            &bytes,
+            &instance.to_v2_bytes(),
             crate::FlatAnnotations::flat_annotations(instance),
         )
     }
@@ -698,10 +697,9 @@ impl LocalRegistry {
         &self,
         instance: &crate::ParametricInstance,
     ) -> Result<StoredDescriptor<'_>> {
-        let bytes = instance.to_v2_bytes();
         self.store_layer_blob(
             media_types::v2_parametric_instance(),
-            &bytes,
+            &instance.to_v2_bytes(),
             crate::FlatAnnotations::flat_annotations(instance),
         )
     }

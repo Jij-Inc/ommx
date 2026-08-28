@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use crate::{random::unique_integers, Function, FunctionParameters};
+use crate::{random::unique_integers, Function, PolynomialParameters};
 use anyhow::{anyhow, Result};
 use proptest::prelude::*;
 
@@ -19,7 +19,7 @@ impl Arbitrary for Equality {
 }
 
 impl Arbitrary for Constraint<Created> {
-    type Parameters = FunctionParameters;
+    type Parameters = PolynomialParameters;
     type Strategy = BoxedStrategy<Self>;
     fn arbitrary_with(params: Self::Parameters) -> Self::Strategy {
         (Function::arbitrary_with(params), Equality::arbitrary())
@@ -61,7 +61,7 @@ impl Default for ConstraintIDParameters {
 
 pub fn arbitrary_constraints(
     id_parameters: ConstraintIDParameters,
-    parameters: FunctionParameters,
+    parameters: PolynomialParameters,
 ) -> impl Strategy<Value = BTreeMap<ConstraintID, Constraint<Created>>> {
     let unique_ids_strategy = unique_integers(0, id_parameters.max_id.0, id_parameters.size);
     let constraints_strategy =
