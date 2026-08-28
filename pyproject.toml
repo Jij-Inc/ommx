@@ -79,6 +79,6 @@ dev = [
 [tool.pytest.ini_options]
 markers = [
   "benchmark: performance benchmark collected by pytest-codspeed",
-  "benchmark_guardrail: persistent regression guardrail run on main and release tags",
+  "benchmark_guardrail: persistent regression guardrail run on ready PRs, main, and release tags",
   "benchmark_diagnostic: profiling workload run only by the full manual benchmark suite",
 ]
