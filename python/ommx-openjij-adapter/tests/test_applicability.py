@@ -4,6 +4,7 @@ import pytest
 
 from ommx import (
     DecisionVariable,
+    DegreeBound,
     Equality,
     FixedPenaltyPreparation,
     IndicatorConstraint,
@@ -12,7 +13,6 @@ from ommx import (
     Kind,
     ObjectivePreparation,
     OneHotConstraint,
-    PolynomialRequirement,
     PreparationTargetNotReachedError,
     Sense,
     Sos1Constraint,
@@ -58,9 +58,9 @@ def test_declares_binary_polynomial_input_class() -> None:
     [clause] = input_class.clauses
     assert clause.label == "openjij-binary-hubo"
     assert clause.allowed_variable_kinds == {Kind.Binary}
-    assert clause.objective_polynomial_requirement == PolynomialRequirement.any_degree()
-    assert clause.regular_constraint_polynomial_requirements == {}
-    assert clause.indicator_body_polynomial_requirements == {}
+    assert clause.objective_degree_bound == DegreeBound.unbounded()
+    assert clause.regular_constraint_degree_bounds == {}
+    assert clause.indicator_constraint_degree_bounds == {}
     assert not clause.allows_one_hot
     assert not clause.allows_sos1
     assert clause.allowed_senses == {Sense.Minimize}

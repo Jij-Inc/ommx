@@ -31,14 +31,14 @@ This page covers:
 An `InstanceClass` is a finite union of complete, conjunctive {class}`~ommx.InstanceClassClause` values. Membership is evaluated against the exact input without mutating or preparing it.
 
 ```{code-cell} ipython3
-from ommx import InstanceClass, InstanceClassClause, Kind, PolynomialRequirement, Sense
+from ommx import DegreeBound, InstanceClass, InstanceClassClause, Kind, Sense
 
 binary_linear_with_one_hot = InstanceClass(
     [
         InstanceClassClause(
             label="binary-linear-with-one-hot",
             allowed_variable_kinds={Kind.Binary},
-            objective_polynomial_requirement=PolynomialRequirement.at_most(1),
+            objective_degree_bound=DegreeBound.at_most(1),
             allowed_senses={Sense.Maximize},
             allows_one_hot=True,
         )
@@ -81,8 +81,6 @@ assert binary_linear_with_one_hot.contains(instance)
 ## Explicit lowering via lower_special_constraints
 
 {meth}`Instance.lower_special_constraints() <ommx.Instance.lower_special_constraints>` is an explicit, mutating operation. For each family selected in `kinds_to_lower`, the corresponding conversion API (see below) is invoked when that family is active. Families omitted from the set remain active, and an empty set is a no-op.
-
-When lowering Indicator constraints, pass `atol=` to select the zero semantics used by composed functions in their interval bounds. Omitting it uses {attr}`~ommx.DEFAULT_ATOL`. This aligns evaluation of the Function body; the algebraic lowering assumes exact discrete values and does not snap approximate solver output near 0 or 1.
 
 ```{code-cell} ipython3
 lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
@@ -163,8 +161,6 @@ where $u \geq \sup f(x)$ and $l \leq \inf f(x)$.
 - For equality ($= 0$) indicators, the upper and lower sides are considered independently: the upper is emitted if $u > 0$, and the lower is emitted if $l < 0$.
 
 Use {meth}`~ommx.Instance.convert_all_indicators_to_constraints` to convert every indicator constraint in one call. If a required bound on $f(x)$ is non-finite, or if $f(x)$ references a semi-continuous / semi-integer variable, conversion fails before any mutation occurs.
-
-Both Indicator conversion methods accept `atol=`. This tolerance is passed to the interval evaluator for zero-sensitive `signum`, division, and negative-integer-power nodes; omitting it uses {attr}`~ommx.DEFAULT_ATOL`. The Big-M identities assume an exactly binary indicator value. They do not canonicalize an approximate solver value before evaluating the regular constraints.
 
 ## Auditing conversion results
 

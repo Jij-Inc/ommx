@@ -468,7 +468,6 @@ define_ommx_error_mappings!(
     ommx::BoundError => value_error,
     ommx::SubstitutionError => value_error,
     ommx::CoefficientError => value_error,
-    ommx::FunctionEvaluationError => value_error,
     ommx::ContentFactorError => value_error,
     ommx::DuplicatedSampleIDError => value_error,
     ommx::OneHotConstraintError => value_error,

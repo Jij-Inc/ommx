@@ -61,34 +61,8 @@ mod tests;
 pub use compressed::is_gzipped;
 pub use format::{format, to_string};
 
-use crate::{Equality, InstanceClass, InstanceClassClause, Kind, PolynomialRequirement, Sense};
 use parser::*;
-use std::{collections::BTreeSet, io::Read, path::Path, sync::LazyLock};
-
-/// Validate that `instance` belongs to the exact structural class supported by
-/// the MPS writer before an output side effect starts.
-fn preflight(instance: &crate::Instance) -> crate::Result<()> {
-    static INPUT_CLASS: LazyLock<InstanceClass> = LazyLock::new(|| {
-        let quadratic = PolynomialRequirement::at_most(2);
-        InstanceClassClause::new(
-            "MPS",
-            BTreeSet::from([Kind::Binary, Kind::Integer, Kind::Continuous]),
-            quadratic,
-            BTreeSet::from([Sense::Minimize, Sense::Maximize]),
-        )
-        .with_regular_constraint(Equality::EqualToZero, quadratic)
-        .with_regular_constraint(Equality::LessThanOrEqualToZero, quadratic)
-        .into()
-    });
-
-    let report = INPUT_CLASS.check_membership(instance);
-    crate::ensure!(
-        report.is_member(),
-        { report = %report },
-        "Instance is outside the MPS input class:\n{report}",
-    );
-    Ok(())
-}
+use std::{io::Read, path::Path};
 
 /// Reads and parses the MPS file from the given [`Read`] source with automatic gzipped detection.
 #[tracing::instrument(skip_all)]
@@ -113,9 +87,8 @@ pub fn load(path: impl AsRef<Path>) -> crate::Result<crate::Instance> {
 ///
 /// Limitation
 /// ----------
-/// Only the model family described by [`format()`] is supported. See it for
-/// detailed information about required lowering, information loss, removed
-/// constraints handling, and variable filtering behavior.
+/// Only linear problems are supported. See [`format()`] for detailed information about information loss,
+/// removed constraints handling, and variable filtering behavior.
 // Note: the caller's output path is intentionally not recorded as a span
 // field to avoid leaking local directory structure through exported telemetry.
 #[tracing::instrument(skip_all, fields(compress))]
@@ -124,10 +97,6 @@ pub fn save(
     out_path: impl AsRef<Path>,
     compress: bool,
 ) -> crate::Result<()> {
-    // Reject unsupported model content before creating directories or
-    // truncating an existing destination. `format` repeats this guard for
-    // callers that provide their own writer.
-    preflight(instance)?;
     let path = std::path::absolute(out_path.as_ref())?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -145,53 +114,4 @@ pub fn save(
         format::format(instance, &mut file)?;
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod save_tests {
-    use super::*;
-    use crate::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
-    use std::collections::BTreeMap;
-
-    fn unsupported_instance() -> Instance {
-        let id = VariableID::from(1);
-        Instance::new(
-            Sense::Minimize,
-            Function::from(linear!(id)).abs(),
-            BTreeMap::from([(id, DecisionVariable::continuous())]),
-            BTreeMap::new(),
-        )
-        .unwrap()
-    }
-
-    #[test]
-    fn unsupported_model_does_not_truncate_existing_destination() {
-        let instance = unsupported_instance();
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("existing.mps");
-        std::fs::write(&path, b"existing content").unwrap();
-
-        let error = save(&instance, &path, false).unwrap_err();
-
-        assert!(error
-            .to_string()
-            .contains("objective function is not polynomial"));
-        assert_eq!(std::fs::read(path).unwrap(), b"existing content");
-    }
-
-    #[test]
-    fn unsupported_model_does_not_create_destination() {
-        let instance = unsupported_instance();
-        let directory = tempfile::tempdir().unwrap();
-
-        for compress in [false, true] {
-            let parent = directory.path().join(format!("missing-{compress}"));
-            let path = parent.join("output.mps");
-
-            save(&instance, &path, compress).unwrap_err();
-
-            assert!(!parent.exists());
-            assert!(!path.exists());
-        }
-    }
 }

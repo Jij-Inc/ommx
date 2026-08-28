@@ -5,20 +5,14 @@ use crate::{
 
 use approx::AbsDiffEq;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate, LinearMonomial};
-use pyo3::{
-    exceptions::PyTypeError,
-    prelude::*,
-    types::{PyDict, PyTuple},
-    Bound, PyAny,
-};
+use pyo3::{exceptions::PyTypeError, prelude::*, types::PyDict, Bound, PyAny};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// General mathematical function of decision variables.
 ///
 /// Function is a unified type that can represent constant, linear, quadratic,
-/// and polynomial functions as well as composed expressions such as absolute
-/// values, minima, divisions, and integer powers. It is used as the objective
-/// function and constraint functions in optimization problems.
+/// or polynomial functions. It is used as the objective function and constraint
+/// functions in optimization problems.
 ///
 /// # Examples
 ///
@@ -247,23 +241,15 @@ pyo3_stub_gen::type_alias!(
         | Function
 );
 
-// Manual stubs for methods whose Python protocol signatures differ from the
-// Rust callbacks understood by pyo3-stub-gen. PyO3's in-place operator wrapper
-// returns the mutated self object to Python when the Rust callback succeeds.
+// Manual stub for __iadd__. PyO3's in-place operator wrapper returns the
+// mutated self object to Python when the Rust callback succeeds.
 pyo3_stub_gen::inventory::submit! {
     pyo3_stub_gen::derive::gen_methods_from_python! {
         r#"
         class Function:
             def __iadd__(self, rhs: ToFunction) -> Function: ...
-            def __pow__(self, exponent: int, modulo: None = None) -> Function: ...
         "#
     }
-}
-
-fn polynomial_only_error(attribute: &str) -> PyErr {
-    PyTypeError::new_err(format!(
-        "Function.{attribute} is only available for polynomial functions"
-    ))
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -333,20 +319,18 @@ impl Function {
 
     /// Get the degree of this function.
     ///
-    /// Returns the highest degree of any term in a polynomial function.
+    /// Returns the highest degree of any term in the function.
     /// Zero function has degree 0, constant function has degree 0,
     /// linear function has degree 1, quadratic function has degree 2, etc.
-    /// Returns None for non-polynomial expression functions.
-    pub fn degree(&self) -> Option<u32> {
-        self.0.degree().map(|degree| degree.into_inner())
+    pub fn degree(&self) -> u32 {
+        self.0.degree().into_inner()
     }
 
     /// Get the number of terms in this function.
     ///
     /// Zero function has 0 terms, constant function has 1 term,
     /// and polynomial functions have the number of non-zero coefficient terms.
-    /// Returns None for non-polynomial expression functions.
-    pub fn num_terms(&self) -> Option<usize> {
+    pub fn num_terms(&self) -> usize {
         self.0.num_terms()
     }
 
@@ -364,26 +348,6 @@ impl Function {
         Function(-self.0.clone())
     }
 
-    /// Absolute value operator
-    pub fn __abs__(&self) -> Function {
-        Function(self.0.clone().abs())
-    }
-
-    /// Sign of the function value
-    pub fn signum(&self) -> Function {
-        Function(self.0.clone().signum())
-    }
-
-    /// Pointwise minimum
-    pub fn minimum(&self, rhs: Function) -> Function {
-        Function(self.0.clone().min(rhs.0))
-    }
-
-    /// Pointwise maximum
-    pub fn maximum(&self, rhs: Function) -> Function {
-        Function(self.0.clone().max(rhs.0))
-    }
-
     /// Addition
     pub fn __add__(&self, rhs: Function) -> crate::error::OmmxPyResult<Function> {
         Ok(Function((&self.0 + &rhs.0)?))
@@ -391,7 +355,7 @@ impl Function {
 
     /// Reverse addition (lhs + self)
     pub fn __radd__(&self, lhs: Function) -> crate::error::OmmxPyResult<Function> {
-        Ok(Function((&lhs.0 + &self.0)?))
+        Ok(Function((&self.0 + &lhs.0)?))
     }
 
     /// Subtraction
@@ -426,33 +390,7 @@ impl Function {
 
     /// Reverse multiplication (lhs * self)
     pub fn __rmul__(&self, lhs: Function) -> crate::error::OmmxPyResult<Function> {
-        Ok(Function((&lhs.0 * &self.0)?))
-    }
-
-    /// Division
-    pub fn __truediv__(&self, rhs: Function) -> crate::error::OmmxPyResult<Function> {
-        Ok(Function((self.0.clone() / rhs.0)?))
-    }
-
-    /// Reverse division (lhs / self)
-    pub fn __rtruediv__(&self, lhs: Function) -> crate::error::OmmxPyResult<Function> {
-        Ok(Function((lhs.0 / self.0.clone())?))
-    }
-
-    /// Raise this function to a signed 32-bit integer power.
-    pub fn powi(&self, exponent: i32) -> Function {
-        Function(self.0.clone().powi(exponent))
-    }
-
-    /// Integer exponentiation
-    #[gen_stub(skip)]
-    pub fn __pow__(&self, exponent: i32, modulo: Option<&Bound<'_, PyAny>>) -> PyResult<Function> {
-        if modulo.is_some() {
-            return Err(PyTypeError::new_err(
-                "modular exponentiation is not supported for Function",
-            ));
-        }
-        Ok(self.powi(exponent))
+        Ok(Function((&self.0 * &lhs.0)?))
     }
 
     pub fn add_scalar(&self, scalar: f64) -> crate::error::OmmxPyResult<Function> {
@@ -478,10 +416,7 @@ impl Function {
     pub fn mul_scalar(&self, scalar: f64) -> crate::error::OmmxPyResult<Function> {
         match TryInto::<Coefficient>::try_into(scalar) {
             Ok(coeff) => Ok(Function((&self.0 * coeff)?)),
-            // Keep the domain of a partial expression: `0 * (1 / x)` is still
-            // undefined at x = 0. The Rust Function multiplication fast path
-            // reduces polynomial zero-products while retaining composite ones.
-            Err(CoefficientError::Zero) => Ok(Function((&self.0 * ommx::Function::default())?)),
+            Err(CoefficientError::Zero) => Ok(Function(ommx::Function::default())), // Return zero if scalar is zero
             Err(e) => Err(e.into()), // Return error for NaN or infinite
         }
     }
@@ -498,13 +433,7 @@ impl Function {
         Ok(Function((&self.0 * &polynomial.0)?))
     }
 
-    /// Return the minimal positive factor that makes all coefficients integers.
-    ///
-    /// Raises `TypeError` for a composed, non-polynomial Function.
     pub fn content_factor(&self) -> crate::error::OmmxPyResult<f64> {
-        if !self.0.is_polynomial() {
-            return Err(polynomial_only_error("content_factor").into());
-        }
         Ok(self.0.content_factor()?.into_inner())
     }
 
@@ -516,24 +445,10 @@ impl Function {
             .collect()
     }
 
-    /// Get all polynomial terms as a dictionary mapping monomial tuples to coefficients.
-    ///
-    /// Raises TypeError if this is a non-polynomial expression function.
     #[getter]
     pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let terms = self
-            .0
-            .iter()
-            .ok_or_else(|| polynomial_only_error("terms"))?;
-        let result = PyDict::new(py);
-        for (monomial, coefficient) in terms {
-            let ids = monomial
-                .iter()
-                .map(|id| id.into_inner())
-                .collect::<Vec<_>>();
-            result.set_item(PyTuple::new(py, ids)?, coefficient.into_inner())?;
-        }
-        Ok(result)
+        let obj = serde_pyobject::to_pyobject(py, &self.0)?;
+        Ok(obj.cast::<PyDict>()?.clone())
     }
 
     /// Get linear terms as a dictionary mapping variable id to coefficient.
@@ -541,15 +456,12 @@ impl Function {
     /// Returns dictionary mapping variable IDs to their linear coefficients.
     /// Returns empty dict if function has no linear terms.
     /// Works for all polynomial functions by filtering only degree-1 terms.
-    /// Raises TypeError if this is a non-polynomial expression function.
     #[getter]
-    pub fn linear_terms(&self) -> PyResult<BTreeMap<u64, f64>> {
-        Ok(self
-            .0
+    pub fn linear_terms(&self) -> BTreeMap<u64, f64> {
+        self.0
             .linear_terms()
-            .ok_or_else(|| polynomial_only_error("linear_terms"))?
             .map(|(id, coeff)| (id.into_inner(), coeff.into_inner()))
-            .collect())
+            .collect()
     }
 
     /// Get quadratic terms as a dictionary mapping (row, col) to coefficient.
@@ -557,32 +469,26 @@ impl Function {
     /// Returns dictionary mapping variable ID pairs to their quadratic coefficients.
     /// Returns empty dict if function has no quadratic terms.
     /// Works for all polynomial functions by filtering only degree-2 terms.
-    /// Raises TypeError if this is a non-polynomial expression function.
     #[getter]
-    pub fn quadratic_terms(&self) -> PyResult<BTreeMap<(u64, u64), f64>> {
-        Ok(self
-            .0
+    pub fn quadratic_terms(&self) -> BTreeMap<(u64, u64), f64> {
+        self.0
             .quadratic_terms()
-            .ok_or_else(|| polynomial_only_error("quadratic_terms"))?
             .map(|(pair, coeff)| {
                 (
                     (pair.lower().into_inner(), pair.upper().into_inner()),
                     coeff.into_inner(),
                 )
             })
-            .collect())
+            .collect()
     }
 
     /// Get the constant term of the function.
     ///
     /// Returns the constant term. Returns 0.0 if function has no constant term.
     /// Works for all polynomial functions by filtering the degree-0 term.
-    /// Raises TypeError if this is a non-polynomial expression function.
     #[getter]
-    pub fn constant_term(&self) -> PyResult<f64> {
-        self.0
-            .constant_term()
-            .ok_or_else(|| polynomial_only_error("constant_term"))
+    pub fn constant_term(&self) -> f64 {
+        self.0.constant_term()
     }
 
     #[staticmethod]
@@ -601,11 +507,7 @@ impl Function {
         let mut rng = rng.lock()?;
         let inner: ommx::Function = ommx::random::random(
             &mut rng,
-            ommx::FunctionParameters::polynomial_only(ommx::PolynomialParameters::new(
-                num_terms,
-                max_degree.into(),
-                max_id.into(),
-            )?),
+            ommx::PolynomialParameters::new(num_terms, max_degree.into(), max_id.into())?,
         );
         Ok(Self(inner))
     }
@@ -642,49 +544,30 @@ impl Function {
     /// **Args:**
     ///
     /// - `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.
-    /// - `atol`: Absolute tolerance used by operations whose semantics depend on
-    ///   whether a value is zero. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used.
-    ///   Use the same tolerance when point-evaluating this function.
     ///
     /// **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
     ///
-    /// **Tightness:** Polynomial leaves are bounded **term by term**
-    /// (monomial-wise), and composed expression operations combine their operand
-    /// bounds with interval arithmetic. The result is a **sound
+    /// **Tightness:** This evaluates the bound **term by term** (monomial-wise)
+    /// and sums the per-term intervals. The result is a **sound
     /// over-approximation** of the true range $[\inf f, \sup f]$ but is **not
     /// guaranteed to be tight**, because it ignores dependencies between terms
-    /// or operands that share variables. For example, $f = x^2 - x$ with
-    /// $x \in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but
-    /// term-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
-    ///
-    /// **Raises:** `RuntimeError` when an interval contains a value treated as
-    /// zero by `atol` in a denominator or as the base of a negative integer
-    /// power.
-    /// Raises `ValueError` if valid bound endpoints cannot be constructed after
-    /// numeric overflow.
+    /// that share variables. For example, $f = x^2 - x$ with $x \in [0, 1]$
+    /// has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but term-wise
+    /// evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
     ///
     /// # Examples
     ///
     /// >>> from ommx import Function, Linear, Bound
     /// >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
     /// >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
-    /// >>> b.lower <= 3.0 and b.upper >= 7.0
-    /// True
-    #[pyo3(signature = (bounds, *, atol=None))]
-    pub fn evaluate_bound(
-        &self,
-        bounds: BTreeMap<u64, VariableBound>,
-        atol: Option<f64>,
-    ) -> crate::error::OmmxPyResult<VariableBound> {
-        let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
-            None => ommx::ATol::default(),
-        };
+    /// >>> (b.lower, b.upper)
+    /// (3.0, 7.0)
+    pub fn evaluate_bound(&self, bounds: BTreeMap<u64, VariableBound>) -> VariableBound {
         let bounds: ommx::Bounds = bounds
             .into_iter()
             .map(|(id, b)| (ommx::VariableID::from(id), b.0))
             .collect();
-        Ok(VariableBound(self.0.evaluate_bound(&bounds, atol)?))
+        VariableBound(self.0.evaluate_bound(&bounds))
     }
 
     fn __copy__(&self) -> Self {
@@ -706,7 +589,6 @@ impl Function {
             ommx::Function::Linear(_) => "Linear",
             ommx::Function::Quadratic(_) => "Quadratic",
             ommx::Function::Polynomial(_) => "Polynomial",
-            ommx::Function::Expression(_) => "Expression",
         }
     }
 

@@ -14,14 +14,6 @@ fn component_function() -> ommx::Function {
     ommx::Function::from(linear)
 }
 
-fn composed_component_function() -> ommx::Function {
-    let base = component_function();
-    let two = ommx::Function::from(ommx::coeff!(2.0));
-    let numerator = base.clone().abs().powi(2).min(two.clone());
-    let denominator = (base.signum() + two).expect("the fixture addition is finite");
-    (numerator / denominator).expect("the fixture division constructs a formal expression")
-}
-
 fn modeling_label(name: &str) -> ommx::ModelingLabel {
     ommx::ModelingLabel {
         name: Some(name.to_owned()),
@@ -70,12 +62,6 @@ fn function() -> PyFunction {
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-fn composed_function() -> PyFunction {
-    composed_component_function().into()
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pyfunction]
-#[pyfunction]
 fn constraint() -> PyConstraint {
     PyConstraint::new(
         ommx::Constraint::less_than_or_equal_to_zero(component_function()),
@@ -85,15 +71,6 @@ fn constraint() -> PyConstraint {
                 ommx::OneHotConstraintID::from(23),
             )],
         },
-    )
-}
-
-#[pyo3_stub_gen::derive::gen_stub_pyfunction]
-#[pyfunction]
-fn composed_constraint() -> PyConstraint {
-    PyConstraint::new(
-        ommx::Constraint::less_than_or_equal_to_zero(composed_component_function()),
-        ommx::ConstraintContext::default(),
     )
 }
 
@@ -140,9 +117,7 @@ fn sample_set() -> PySampleSet {
 #[pymodule(gil_used = false)]
 fn ommx_pyo3_bridge_fixture(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(function, module)?)?;
-    module.add_function(wrap_pyfunction!(composed_function, module)?)?;
     module.add_function(wrap_pyfunction!(constraint, module)?)?;
-    module.add_function(wrap_pyfunction!(composed_constraint, module)?)?;
     module.add_function(wrap_pyfunction!(decision_variable, module)?)?;
     module.add_function(wrap_pyfunction!(instance, module)?)?;
     module.add_function(wrap_pyfunction!(parametric_instance, module)?)?;

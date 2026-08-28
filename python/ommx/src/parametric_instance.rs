@@ -28,10 +28,6 @@ impl_instance_annotations!(ParametricInstance);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl ParametricInstance {
-    /// Deserialize a parametric instance from v1 protobuf bytes.
-    ///
-    /// Raises {class}`ValueError` if the protobuf payload is malformed or
-    /// semantically invalid.
     #[staticmethod]
     pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
@@ -40,10 +36,6 @@ impl ParametricInstance {
         })
     }
 
-    /// Deserialize a parametric instance from v2 protobuf bytes.
-    ///
-    /// Raises {class}`ValueError` if the protobuf payload is malformed or
-    /// semantically invalid.
     #[staticmethod]
     pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());

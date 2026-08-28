@@ -58,7 +58,7 @@ fn test_unused_variable_filtering() {
 }
 
 #[test]
-fn test_removed_constraint_variable_filtering() {
+fn test_removed_constraint_variable_preservation() {
     // Create instance with variables and constraints, then relax one
     let decision_variables = btreemap! {
         VariableID::from(0) => DecisionVariable::new(

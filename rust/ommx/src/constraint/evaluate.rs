@@ -89,23 +89,11 @@ mod tests {
     proptest! {
         #[test]
         fn test_evaluate_samples((c, samples) in constraint_and_samples()) {
-            let atol = crate::ATol::default();
-            match c.evaluate_samples(&samples, atol) {
-                Ok(evaluated) => {
-                    for (sample_id, state) in samples.iter() {
-                        let expected = c.evaluate(state, atol).unwrap();
-                        let extracted = evaluated.get(*sample_id).unwrap();
-                        prop_assert_eq!(extracted, expected);
-                    }
-                }
-                Err(_) => {
-                    prop_assert!(
-                        samples
-                            .iter()
-                            .any(|(_, state)| c.evaluate(state, atol).is_err()),
-                        "sample evaluation failed although every scalar evaluation succeeded",
-                    );
-                }
+            let evaluated = c.evaluate_samples(&samples, crate::ATol::default()).unwrap();
+            for (sample_id, state) in samples.iter() {
+                let expected = c.evaluate(state, crate::ATol::default()).unwrap();
+                let extracted = evaluated.get(*sample_id).unwrap();
+                prop_assert_eq!(extracted, expected);
             }
         }
     }

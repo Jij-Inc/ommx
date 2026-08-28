@@ -7,7 +7,6 @@ from ommx import (
     DecisionVariable,
     IndicatorConstraint,
     Equality,
-    Function,
 )
 
 
@@ -68,23 +67,6 @@ def test_convert_equality_emits_both_sides():
     assert removed.removed_reason_parameters["constraint_ids"] == ",".join(
         str(i) for i in new_ids
     )
-
-
-def test_convert_equality_uses_explicit_atol_for_composed_body():
-    x = DecisionVariable.continuous(0, lower=1e-8, upper=1e-8)
-    y = DecisionVariable.binary(1)
-    ic = IndicatorConstraint(
-        indicator_variable=y,
-        function=Function(x).signum() - 0.5,
-        equality=Equality.EqualToZero,
-    )
-    instance = _instance(ic, x_lower=1e-8, x_upper=1e-8)
-
-    new_ids = instance.convert_indicator_to_constraint(7, atol=1e-6)
-    assert len(new_ids) == 1
-    assert instance.constraints[new_ids[0]].function.evaluate(
-        {0: 1e-8, 1: 1.0}, atol=1e-6
-    ) == pytest.approx(0.5)
 
 
 def test_redundant_indicator_emits_no_constraint():

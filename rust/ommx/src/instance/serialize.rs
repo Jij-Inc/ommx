@@ -292,47 +292,6 @@ mod tests {
         error::Error as _,
     };
 
-    fn deeply_composed_function(depth: usize) -> Function {
-        (0..depth).fold(Function::from(linear!(1)), |function, level| {
-            if level % 2 == 0 {
-                function.abs()
-            } else {
-                function.signum()
-            }
-        })
-    }
-
-    #[test]
-    fn deeply_composed_function_roundtrips_in_instance_roots() {
-        let instance = Instance::builder()
-            .sense(Sense::Minimize)
-            .objective(deeply_composed_function(4096))
-            .decision_variables(BTreeMap::from([(
-                VariableID::from(1),
-                DecisionVariable::continuous(),
-            )]))
-            .constraints(BTreeMap::new())
-            .build()
-            .unwrap();
-
-        let v1_bytes = instance.to_v1_bytes().unwrap();
-        assert_eq!(Instance::from_v1_bytes(&v1_bytes).unwrap(), instance);
-        let v2_bytes = instance.to_v2_bytes();
-        assert_eq!(Instance::from_v2_bytes(&v2_bytes).unwrap(), instance);
-
-        let parametric: ParametricInstance = instance.into();
-        let v1_bytes = parametric.to_v1_bytes().unwrap();
-        assert_eq!(
-            ParametricInstance::from_v1_bytes(&v1_bytes).unwrap(),
-            parametric
-        );
-        let v2_bytes = parametric.to_v2_bytes();
-        assert_eq!(
-            ParametricInstance::from_v2_bytes(&v2_bytes).unwrap(),
-            parametric
-        );
-    }
-
     fn instance_with_special_constraints() -> Instance {
         let variable_1 = VariableID::from(1);
         let variable_2 = VariableID::from(2);

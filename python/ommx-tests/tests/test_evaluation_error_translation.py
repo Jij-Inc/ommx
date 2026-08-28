@@ -158,7 +158,7 @@ def test_non_binary_value_without_indicator_semantics_remains_infeasible() -> No
 def test_non_finite_dependent_evaluation_falls_back_to_runtime_error() -> None:
     instance = _dependent_instance_y_eq_scaled_x(sys.float_info.max)
 
-    with pytest.raises(RuntimeError, match="failed to evaluate dependent variable"):
+    with pytest.raises(RuntimeError, match="evaluated to non-finite"):
         instance.populate_state({1: sys.float_info.max})
 
 

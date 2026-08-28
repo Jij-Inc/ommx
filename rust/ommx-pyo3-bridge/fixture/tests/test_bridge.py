@@ -127,24 +127,8 @@ def test_function_is_canonical_and_preserves_terms() -> None:
     assert_component_function(fixture.function())
 
 
-def test_composed_function_crosses_the_extension_boundary() -> None:
-    value = fixture.composed_function()
-
-    assert type(value) is ommx.Function
-    assert value.degree() is None
-    assert value.evaluate({7: 4.0}) == 1.0 / 3.0
-
-
 def test_constraint_is_canonical_and_preserves_context() -> None:
     assert_component_constraint(fixture.constraint())
-
-
-def test_composed_constraint_crosses_the_extension_boundary() -> None:
-    value = fixture.composed_constraint()
-
-    assert type(value) is ommx.Constraint
-    assert value.function.degree() is None
-    assert value.function.evaluate({7: 4.0}) == 1.0 / 3.0
 
 
 def test_decision_variable_is_canonical_and_preserves_owner_side_data() -> None:

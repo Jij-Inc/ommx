@@ -16,7 +16,6 @@ from ommx import (
     Constraint,
     DecisionVariable,
     Equality,
-    Function,
     IndicatorConstraint,
     Instance,
     OneHotConstraint,
@@ -130,21 +129,6 @@ def test_instance_constraints_df_unknown_kind():
     depth fallback for callers without a type checker."""
     with pytest.raises(ValueError, match="unknown constraint kind"):
         _instance_all_kinds().constraints_df(kind="bogus")  # type: ignore[arg-type]
-
-
-def test_instance_constraints_df_reports_composed_function_type():
-    variable = DecisionVariable.continuous(0)
-    function = Function(variable)
-    constraint = abs(function) <= 1
-    assert isinstance(constraint, Constraint)
-    instance = Instance.from_components(
-        decision_variables=[variable],
-        objective=variable,
-        constraints={10: constraint},
-        sense=Instance.MINIMIZE,
-    )
-
-    assert instance.constraints_df().loc[10, "type"] == "Expression"
 
 
 def test_instance_constraints_df_unknown_include_flag():

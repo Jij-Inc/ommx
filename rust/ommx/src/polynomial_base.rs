@@ -307,13 +307,13 @@ mod tests {
                 Variable(
                     VariableID(7),
                 ),
-                Coefficient(5.172665375934163),
+                Coefficient(-0.27550031881072173),
             ),
             (
                 Variable(
                     VariableID(10),
                 ),
-                Coefficient(-1),
+                Coefficient(4.520657493715473),
             ),
         ]
         "###);

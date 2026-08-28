@@ -36,6 +36,7 @@ __all__ = [
     "Constraint",
     "DecisionVariable",
     "DecisionVariableRole",
+    "DegreeBound",
     "Descriptor",
     "DiagnosticCollector",
     "Equality",
@@ -79,7 +80,6 @@ __all__ = [
     "Parameters",
     "ParametricInstance",
     "Polynomial",
-    "PolynomialRequirement",
     "PreparationPolicy",
     "PreparationTargetNotReachedError",
     "Provenance",
@@ -1672,6 +1672,33 @@ class DecisionVariable:
         """
 
 @typing.final
+class DegreeBound:
+    r"""
+    Cumulative polynomial-degree bound in an :class:`InstanceClassClause`.
+    """
+    @property
+    def maximum(self) -> typing.Optional[builtins.int]:
+        r"""
+        Inclusive maximum degree, or ``None`` when unbounded.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def at_most(maximum: builtins.int) -> DegreeBound:
+        r"""
+        Include every degree up to and including ``maximum``.
+        """
+    @staticmethod
+    def unbounded() -> DegreeBound:
+        r"""
+        Include every polynomial degree representable by OMMX.
+        """
+    def includes(self, actual_degree: builtins.int) -> builtins.bool:
+        r"""
+        Return whether ``actual_degree`` satisfies this bound.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class Descriptor:
     r"""
     Descriptor of a blob stored in the local registry.
@@ -2463,12 +2490,7 @@ class Function:
     General mathematical function of decision variables.
     """
     @property
-    def terms(self) -> dict:
-        r"""
-        Get all polynomial terms as a dictionary mapping monomial tuples to coefficients.
-
-        Raises TypeError if this is a non-polynomial expression function.
-        """
+    def terms(self) -> dict: ...
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
@@ -2477,7 +2499,6 @@ class Function:
         Returns dictionary mapping variable IDs to their linear coefficients.
         Returns empty dict if function has no linear terms.
         Works for all polynomial functions by filtering only degree-1 terms.
-        Raises TypeError if this is a non-polynomial expression function.
         """
     @property
     def quadratic_terms(
@@ -2489,7 +2510,6 @@ class Function:
         Returns dictionary mapping variable ID pairs to their quadratic coefficients.
         Returns empty dict if function has no quadratic terms.
         Works for all polynomial functions by filtering only degree-2 terms.
-        Raises TypeError if this is a non-polynomial expression function.
         """
     @property
     def constant_term(self) -> builtins.float:
@@ -2498,12 +2518,10 @@ class Function:
 
         Returns the constant term. Returns 0.0 if function has no constant term.
         Works for all polynomial functions by filtering the degree-0 term.
-        Raises TypeError if this is a non-polynomial expression function.
         """
     @property
     def type_name(self) -> builtins.str: ...
     def __iadd__(self, rhs: ToFunction) -> Function: ...
-    def __pow__(self, exponent: int, modulo: None = None) -> Function: ...
     def __new__(cls, inner: ToFunction) -> Function:
         r"""
         Create a Function from various types.
@@ -2542,22 +2560,20 @@ class Function:
         Returns Some(Quadratic) if the function can be represented as quadratic,
         None otherwise.
         """
-    def degree(self) -> typing.Optional[builtins.int]:
+    def degree(self) -> builtins.int:
         r"""
         Get the degree of this function.
 
-        Returns the highest degree of any term in a polynomial function.
+        Returns the highest degree of any term in the function.
         Zero function has degree 0, constant function has degree 0,
         linear function has degree 1, quadratic function has degree 2, etc.
-        Returns None for non-polynomial expression functions.
         """
-    def num_terms(self) -> typing.Optional[builtins.int]:
+    def num_terms(self) -> builtins.int:
         r"""
         Get the number of terms in this function.
 
         Zero function has 0 terms, constant function has 1 term,
         and polynomial functions have the number of non-zero coefficient terms.
-        Returns None for non-polynomial expression functions.
         """
     def almost_equal(
         self, other: ToFunction, atol: builtins.float = 1e-06
@@ -2566,22 +2582,6 @@ class Function:
     def __neg__(self) -> Function:
         r"""
         Negation operator
-        """
-    def __abs__(self) -> Function:
-        r"""
-        Absolute value operator
-        """
-    def signum(self) -> Function:
-        r"""
-        Sign of the function value
-        """
-    def minimum(self, rhs: ToFunction) -> Function:
-        r"""
-        Pointwise minimum
-        """
-    def maximum(self, rhs: ToFunction) -> Function:
-        r"""
-        Pointwise maximum
         """
     def __add__(self, rhs: ToFunction) -> Function:
         r"""
@@ -2608,18 +2608,6 @@ class Function:
         r"""
         Reverse multiplication (lhs * self)
         """
-    def __truediv__(self, rhs: ToFunction) -> Function:
-        r"""
-        Division
-        """
-    def __rtruediv__(self, lhs: ToFunction) -> Function:
-        r"""
-        Reverse division (lhs / self)
-        """
-    def powi(self, exponent: builtins.int) -> Function:
-        r"""
-        Raise this function to a signed 32-bit integer power.
-        """
     def add_scalar(self, scalar: builtins.float) -> Function: ...
     def add_linear(self, linear: Linear) -> Function: ...
     def add_quadratic(self, quadratic: Quadratic) -> Function: ...
@@ -2628,12 +2616,7 @@ class Function:
     def mul_linear(self, linear: Linear) -> Function: ...
     def mul_quadratic(self, quadratic: Quadratic) -> Function: ...
     def mul_polynomial(self, polynomial: Polynomial) -> Function: ...
-    def content_factor(self) -> builtins.float:
-        r"""
-        Return the minimal positive factor that makes all coefficients integers.
-
-        Raises `TypeError` for a composed, non-polynomial Function.
-        """
+    def content_factor(self) -> builtins.float: ...
     def required_ids(self) -> builtins.set[builtins.int]: ...
     @staticmethod
     def random(
@@ -2648,12 +2631,7 @@ class Function:
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Function: ...
-    def evaluate_bound(
-        self,
-        bounds: typing.Mapping[builtins.int, Bound],
-        *,
-        atol: typing.Optional[builtins.float] = None,
-    ) -> Bound:
+    def evaluate_bound(self, bounds: typing.Mapping[builtins.int, Bound]) -> Bound:
         r"""
         Compute an interval bound of this function given variable bounds.
 
@@ -2662,34 +2640,24 @@ class Function:
         **Args:**
 
         - `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.
-        - `atol`: Absolute tolerance used by operations whose semantics depend on
-          whether a value is zero. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used.
-          Use the same tolerance when point-evaluating this function.
 
         **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
 
-        **Tightness:** Polynomial leaves are bounded **term by term**
-        (monomial-wise), and composed expression operations combine their operand
-        bounds with interval arithmetic. The result is a **sound
+        **Tightness:** This evaluates the bound **term by term** (monomial-wise)
+        and sums the per-term intervals. The result is a **sound
         over-approximation** of the true range $[\inf f, \sup f]$ but is **not
         guaranteed to be tight**, because it ignores dependencies between terms
-        or operands that share variables. For example, $f = x^2 - x$ with
-        $x \in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but
-        term-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
-
-        **Raises:** `RuntimeError` when an interval contains a value treated as
-        zero by `atol` in a denominator or as the base of a negative integer
-        power.
-        Raises `ValueError` if valid bound endpoints cannot be constructed after
-        numeric overflow.
+        that share variables. For example, $f = x^2 - x$ with $x \in [0, 1]$
+        has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but term-wise
+        evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.
 
         # Examples
 
         >>> from ommx import Function, Linear, Bound
         >>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3
         >>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})
-        >>> b.lower <= 3.0 and b.upper >= 7.0
-        True
+        >>> (b.lower, b.upper)
+        (3.0, 7.0)
         """
     def __copy__(self) -> Function: ...
     def __deepcopy__(self, _memo: typing.Any) -> Function: ...
@@ -3206,21 +3174,9 @@ class Instance:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     @staticmethod
-    def from_v1_bytes(bytes: bytes) -> Instance:
-        r"""
-        Deserialize an instance from v1 protobuf bytes.
-
-        Raises {class}`ValueError` if the protobuf payload is malformed or
-        semantically invalid.
-        """
+    def from_v1_bytes(bytes: bytes) -> Instance: ...
     @staticmethod
-    def from_v2_bytes(bytes: bytes) -> Instance:
-        r"""
-        Deserialize an instance from v2 protobuf bytes.
-
-        Raises {class}`ValueError` if the protobuf payload is malformed or
-        semantically invalid.
-        """
+    def from_v2_bytes(bytes: bytes) -> Instance: ...
     @staticmethod
     def from_components(
         *,
@@ -3394,10 +3350,7 @@ class Instance:
         Add a SOS1 constraint to this instance.
         """
     def lower_special_constraints(
-        self,
-        kinds_to_lower: builtins.set[SpecialConstraintKind],
-        *,
-        atol: typing.Optional[builtins.float] = None,
+        self, kinds_to_lower: builtins.set[SpecialConstraintKind]
     ) -> builtins.set[SpecialConstraintKind]:
         r"""
         Lower selected active special constraint kinds into regular constraints.
@@ -3414,11 +3367,6 @@ class Instance:
         Returns the set of :class:`SpecialConstraintKind` values that were
         requested and active, and therefore actually lowered. Empty when no
         requested kind was active.
-
-        ``atol`` controls zero-sensitive interval bounds used while lowering
-        Indicator constraints. If omitted, :attr:`DEFAULT_ATOL` is used. This
-        aligns zero-sensitive Function body evaluation; lowering itself assumes
-        exact discrete variable values.
 
         Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each
         individual family conversion is atomic, but the whole operation is not:
@@ -4168,10 +4116,7 @@ class Instance:
         {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
         """
     def convert_indicator_to_constraint(
-        self,
-        indicator_id: builtins.int,
-        *,
-        atol: typing.Optional[builtins.float] = None,
+        self, indicator_id: builtins.int
     ) -> builtins.list[builtins.int]:
         r"""
         Convert an indicator constraint to regular constraints using the Big-M method.
@@ -4211,11 +4156,6 @@ class Instance:
         silently drop the upper side when $0 \notin [l, u]$). The instance is not
         mutated on error.
 
-        ``atol`` controls which Function-body values the bound evaluator treats
-        as zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes
-        the indicator variable is exactly binary; this does not canonicalize an
-        approximate solver value near 0 or 1.
-
         # Examples
 
         Convert an inequality indicator where the upper side is active:
@@ -4245,7 +4185,7 @@ class Instance:
         {0: Constraint(x0 + 3*x1 - 5 <= 0)}
         """
     def convert_all_indicators_to_constraints(
-        self, *, atol: typing.Optional[builtins.float] = None
+        self,
     ) -> builtins.dict[builtins.int, builtins.list[builtins.int]]:
         r"""
         Convert every active indicator constraint to regular constraints using Big-M.
@@ -4258,9 +4198,6 @@ class Instance:
         one is convertible are the conversions applied. If any indicator fails
         validation (non-finite bound on a required side), no mutation happens and
         the instance is left untouched.
-
-        ``atol`` has the same Function-body meaning as in the single-constraint
-        conversion. If omitted, :attr:`DEFAULT_ATOL` is used.
         """
     def log_encode(
         self,
@@ -4395,11 +4332,7 @@ class Instance:
         >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
         """
     def convert_inequality_to_equality_with_integer_slack(
-        self,
-        constraint_id: builtins.int,
-        max_integer_range: builtins.int,
-        *,
-        atol: typing.Optional[builtins.float] = None,
+        self, constraint_id: builtins.int, max_integer_range: builtins.int
     ) -> None:
         r"""
         Convert an inequality constraint $f(x) \leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.
@@ -4410,13 +4343,11 @@ class Instance:
 
         - Since this method evaluates the bound of $f(x)$, we may find that:
 
-          - The bound $[l, u]$ is infeasible at the selected tolerance, i.e.
-            $l \geq \text{atol}$:
+          - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:
             this means the instance is infeasible because this constraint never be satisfied,
             and an error is raised.
 
-          - The bound is feasible everywhere at the selected tolerance, i.e.
-            $u < \text{atol}$:
+          - The bound $[l, u]$ is always negative, i.e. $u \leq 0$:
             this means this constraint is trivially satisfied,
             the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,
             and this method returns without introducing slack variable or raising an error.
@@ -4453,16 +4384,9 @@ class Instance:
         range exceeds ``max_integer_range``. Raises
         {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
         infeasible.
-        ``atol`` controls zero-sensitive interval evaluation and the strict
-        inequality feasibility threshold. If omitted, :attr:`DEFAULT_ATOL` is
-        used.
         """
     def add_integer_slack_to_inequality(
-        self,
-        constraint_id: builtins.int,
-        slack_upper_bound: builtins.int,
-        *,
-        atol: typing.Optional[builtins.float] = None,
+        self, constraint_id: builtins.int, slack_upper_bound: builtins.int
     ) -> typing.Optional[builtins.float]:
         r"""
         Convert inequality $f(x) \leq 0$ to **inequality** $f(x) + b s \leq 0$ with an integer slack variable $s$.
@@ -4479,10 +4403,6 @@ class Instance:
 
         **Returns:**
         The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
-
-        ``atol`` controls zero-sensitive interval bounds and the inequality
-        feasibility threshold used to select the slack coefficient. If omitted,
-        :attr:`DEFAULT_ATOL` is used.
 
         # Examples
 
@@ -5049,15 +4969,15 @@ class InstanceClassClause:
     @property
     def allowed_variable_kinds(self) -> builtins.set[Kind]: ...
     @property
-    def objective_polynomial_requirement(self) -> PolynomialRequirement: ...
+    def objective_degree_bound(self) -> DegreeBound: ...
     @property
-    def regular_constraint_polynomial_requirements(
+    def regular_constraint_degree_bounds(
         self,
-    ) -> builtins.dict[Equality, PolynomialRequirement]: ...
+    ) -> builtins.dict[Equality, DegreeBound]: ...
     @property
-    def indicator_body_polynomial_requirements(
+    def indicator_constraint_degree_bounds(
         self,
-    ) -> builtins.dict[Equality, PolynomialRequirement]: ...
+    ) -> builtins.dict[Equality, DegreeBound]: ...
     @property
     def allows_one_hot(self) -> builtins.bool: ...
     @property
@@ -5069,13 +4989,13 @@ class InstanceClassClause:
         *,
         label: builtins.str,
         allowed_variable_kinds: builtins.set[Kind],
-        objective_polynomial_requirement: PolynomialRequirement,
+        objective_degree_bound: DegreeBound,
         allowed_senses: builtins.set[Sense],
-        regular_constraint_polynomial_requirements: typing.Optional[
-            typing.Mapping[Equality, PolynomialRequirement]
+        regular_constraint_degree_bounds: typing.Optional[
+            typing.Mapping[Equality, DegreeBound]
         ] = None,
-        indicator_body_polynomial_requirements: typing.Optional[
-            typing.Mapping[Equality, PolynomialRequirement]
+        indicator_constraint_degree_bounds: typing.Optional[
+            typing.Mapping[Equality, DegreeBound]
         ] = None,
         allows_one_hot: builtins.bool = False,
         allows_sos1: builtins.bool = False,
@@ -5146,15 +5066,10 @@ class InstanceClassMismatch:
         @property
         def actual_degree(self) -> builtins.int: ...
         @property
-        def bound(self) -> PolynomialRequirement: ...
+        def bound(self) -> DegreeBound: ...
         def __new__(
-            cls, actual_degree: builtins.int, bound: PolynomialRequirement
+            cls, actual_degree: builtins.int, bound: DegreeBound
         ) -> InstanceClassMismatch.ObjectiveDegreeExceedsBound: ...
-
-    @typing.final
-    class ObjectiveFunctionNotPolynomial(InstanceClassMismatch):
-        __match_args__ = ()
-        def __new__(cls) -> InstanceClassMismatch.ObjectiveFunctionNotPolynomial: ...
 
     @typing.final
     class RegularConstraintRelationNotAllowed(InstanceClassMismatch):
@@ -5188,27 +5103,13 @@ class InstanceClassMismatch:
         @property
         def actual_degrees(self) -> builtins.dict[builtins.int, builtins.int]: ...
         @property
-        def bound(self) -> PolynomialRequirement: ...
+        def bound(self) -> DegreeBound: ...
         def __new__(
             cls,
             relation: Equality,
             actual_degrees: typing.Mapping[builtins.int, builtins.int],
-            bound: PolynomialRequirement,
+            bound: DegreeBound,
         ) -> InstanceClassMismatch.RegularConstraintDegreeExceedsBound: ...
-
-    @typing.final
-    class RegularConstraintFunctionNotPolynomial(InstanceClassMismatch):
-        __match_args__ = (
-            "relation",
-            "constraint_ids",
-        )
-        @property
-        def relation(self) -> Equality: ...
-        @property
-        def constraint_ids(self) -> builtins.set[builtins.int]: ...
-        def __new__(
-            cls, relation: Equality, constraint_ids: builtins.set[builtins.int]
-        ) -> InstanceClassMismatch.RegularConstraintFunctionNotPolynomial: ...
 
     @typing.final
     class IndicatorConstraintsNotAllowed(InstanceClassMismatch):
@@ -5251,27 +5152,13 @@ class InstanceClassMismatch:
         @property
         def actual_degrees(self) -> builtins.dict[builtins.int, builtins.int]: ...
         @property
-        def bound(self) -> PolynomialRequirement: ...
+        def bound(self) -> DegreeBound: ...
         def __new__(
             cls,
             relation: Equality,
             actual_degrees: typing.Mapping[builtins.int, builtins.int],
-            bound: PolynomialRequirement,
+            bound: DegreeBound,
         ) -> InstanceClassMismatch.IndicatorBodyDegreeExceedsBound: ...
-
-    @typing.final
-    class IndicatorBodyFunctionNotPolynomial(InstanceClassMismatch):
-        __match_args__ = (
-            "relation",
-            "constraint_ids",
-        )
-        @property
-        def relation(self) -> Equality: ...
-        @property
-        def constraint_ids(self) -> builtins.set[builtins.int]: ...
-        def __new__(
-            cls, relation: Equality, constraint_ids: builtins.set[builtins.int]
-        ) -> InstanceClassMismatch.IndicatorBodyFunctionNotPolynomial: ...
 
     @typing.final
     class OneHotConstraintsNotAllowed(InstanceClassMismatch):
@@ -6123,21 +6010,9 @@ class ParametricInstance:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     @staticmethod
-    def from_v1_bytes(bytes: bytes) -> ParametricInstance:
-        r"""
-        Deserialize a parametric instance from v1 protobuf bytes.
-
-        Raises {class}`ValueError` if the protobuf payload is malformed or
-        semantically invalid.
-        """
+    def from_v1_bytes(bytes: bytes) -> ParametricInstance: ...
     @staticmethod
-    def from_v2_bytes(bytes: bytes) -> ParametricInstance:
-        r"""
-        Deserialize a parametric instance from v2 protobuf bytes.
-
-        Raises {class}`ValueError` if the protobuf payload is malformed or
-        semantically invalid.
-        """
+    def from_v2_bytes(bytes: bytes) -> ParametricInstance: ...
     def to_v1_bytes(self) -> bytes:
         r"""
         Serialize this parametric instance in the OMMX v1 wire format.
@@ -6572,34 +6447,6 @@ class Polynomial:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
-
-@typing.final
-class PolynomialRequirement:
-    r"""
-    Polynomial requirement for one function position in an
-    :class:`InstanceClassClause`.
-    """
-    @property
-    def maximum_degree(self) -> typing.Optional[builtins.int]:
-        r"""
-        Inclusive maximum degree, or ``None`` when any degree is accepted.
-        """
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
-    @staticmethod
-    def at_most(maximum: builtins.int) -> PolynomialRequirement:
-        r"""
-        Require a polynomial whose degree is at most ``maximum``.
-        """
-    @staticmethod
-    def any_degree() -> PolynomialRequirement:
-        r"""
-        Require a polynomial of any degree.
-        """
-    def accepts_degree(self, actual_degree: builtins.int) -> builtins.bool:
-        r"""
-        Return whether ``actual_degree`` satisfies this requirement.
-        """
-    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class PreparationPolicy:
@@ -8634,17 +8481,8 @@ class SpecialConstraintPreparation:
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def lower_special_constraints(
-        *,
-        kinds: builtins.set[SpecialConstraintKind],
-        atol: typing.Optional[builtins.float] = None,
-    ) -> SpecialConstraintPreparation:
-        r"""
-        Configure lowering for the selected special-constraint families.
-
-        ``atol`` is used when Indicator Function bodies require zero-sensitive
-        interval evaluation. If omitted, :attr:`DEFAULT_ATOL` is stored in the
-        preparation step.
-        """
+        *, kinds: builtins.set[SpecialConstraintKind]
+    ) -> SpecialConstraintPreparation: ...
 
 @typing.final
 class State:

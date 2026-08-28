@@ -280,31 +280,6 @@ ids_list: list[int] = sample_set.sample_ids_list
 
 `evaluate` は、必要な decision variable ID が state にない場合や atol が不正な場合に、`RuntimeError` ではなく `ValueError` を投げます。`partial_evaluate` は不足 ID を許容しますが、与えた entry が不正な場合、atol が不正な場合、または dependent variable の assertion が不整合・検証不能な場合は `ValueError` を投げます。
 
-v2.5.1 の `Function` は常に polynomial だったため、`degree()` と
-`num_terms()` は常に `int` を返していました。v3 の `Function` は絶対値、
-点ごとの最小値・最大値、除算、符号付き整数べきなどの複合 scalar expression も
-表現できます。この表現では、両メソッドは `None` を返します。また、polynomial の
-係数 property（`terms`、`linear_terms`、`quadratic_terms`、`constant_term`）と
-`content_factor()` は `TypeError` を送出します。
-
-```python
-# v2.5.1
-degree: int = function.degree()
-terms = function.terms
-
-# v3
-degree: int | None = function.degree()
-if degree is None:
-    # 係数 map として扱わず、複合式のまま評価する
-    value = function.evaluate(state, atol=1e-6)
-else:
-    terms = function.terms
-```
-
-非負の整数べきを展開済み polynomial のまま保持したい場合は、明示的な乗算を
-使ってください。`function.powi(n)` と `function**n` は、`n >= 0` の場合も意図的に
-複合 power expression を構築します。
-
 ## 7. 削除された helper
 
 次の helper は削除または置き換えられました。
@@ -531,7 +506,6 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] Adapterの推奨Preparationを使う場合は`solve()` / `sample()`を直接呼ぶ。Policyをcustomizeする場合は`Instance.prepare()`後に`solve_without_preparation()` / `sample_without_preparation()`を呼ぶ。独自Adapterにはpreparation-free methodを追加し、Adapter固有optionは公開するAPIごとに明示的な型付きsignatureとして宣言して、包括的な`**kwargs`は使わない。exactなprepared inputに依存するoptionのtransportを定義しない場合は、preparation-free methodだけに公開できる。
 - [ ] `*_df` accessor に `()` を付ける。
 - [ ] `RuntimeError` を捕捉していた `evaluate` / `partial_evaluate` 周辺を `ValueError` に変える。
-- [ ] `Function.degree()` / `num_terms()` の型注釈を `None` も受け取る形に変更し、複合式の可能性がある場合は polynomial 係数 property への access を分岐する。
 - [ ] `decision_variable_analysis()` を `decision_variable_roles()` / `decision_variable_role(id)` / `fixed_decision_variables()` / `dependent_decision_variable_ids()` / `irrelevant_decision_variable_ids()` / `decision_variables_df()["state_role"]` に置き換える。
 - [ ] element-level `to_bytes()` / `from_bytes()` を、所有者全体の round-trip に置き換える。新規 payload は `to_v2_bytes()`、legacy v1 互換または evaluate 用 DTO では `to_v1_bytes()` を使う。
 - [ ] Artifact archive API を `ArtifactDraft` / `Artifact.save` / `Artifact.import_archive` / `Artifact.inspect_archive` に移行する。
