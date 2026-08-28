@@ -31,6 +31,14 @@ dependent assertion computed from the raw solver vector can now be rejected if
 it is not within `atol` of that derived value. Scalar and sample evaluation use
 the same rule while preserving SampleID membership.
 
+{meth}`~ommx.Instance.partial_evaluate` applies the same rule to its validated
+input before special-constraint propagation, expression substitution, and
+constant dependency evaluation. Evaluating the rewritten Instance therefore
+uses the same canonical coordinates as directly evaluating the original
+Instance. Existing Instance-owned fixed values remain unchanged, and values
+outside partial evaluation's existing kind and bound acceptance contract remain
+rejected.
+
 ### ⚠ `solve()` and `sample()` now prepare inputs automatically ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 
 `SolverAdapter.solve()` and `SamplerAdapter.sample()` now apply the Adapter's

@@ -279,6 +279,8 @@ impl PartialEvaluatePlan {
         atol: ATol,
     ) -> Result<BTreeMap<VariableID, f64>> {
         Self::validate_state(instance, state, atol)?;
+        let mut state = state.clone();
+        instance.canonicalize_supplied_state_values(&mut state, atol);
         Ok(state
             .entries
             .iter()
@@ -402,30 +404,8 @@ impl<'a> PreparedStatePopulation<'a> {
             state.entries.insert(id.into_inner(), value);
         }
 
-        // Canonicalize caller-owned coordinates before dependencies consume
-        // them. Keep dependent coordinates raw until their assertion is checked
-        // against the corresponding raw derived value below.
-        for (&raw_id, value) in &mut state.entries {
-            let id = VariableID::from(raw_id);
-            if self
-                .instance
-                .fixed_decision_variable_values()
-                .contains_key(&id)
-                || self
-                    .instance
-                    .decision_variable_dependency
-                    .get(&id)
-                    .is_some()
-            {
-                continue;
-            }
-            let decision_variable = self
-                .instance
-                .decision_variables
-                .get(&id)
-                .expect("state variable IDs were validated above");
-            *value = canonicalize_state_value(decision_variable, *value, atol);
-        }
+        self.instance
+            .canonicalize_supplied_state_values(&mut state, atol);
 
         for (id, value) in &self.irrelevant_defaults {
             state.entries.entry(id.into_inner()).or_insert(*value);
@@ -467,6 +447,31 @@ impl<'a> PreparedStatePopulation<'a> {
 }
 
 impl Instance {
+    /// Select the Instance-owned representation of already-validated supplied
+    /// state entries.
+    ///
+    /// Existing fixed values remain authoritative, dependent values remain raw
+    /// consistency assertions, and all other coordinates use their kind-owned
+    /// discrete canonicalization rule. Callers must validate state IDs, numeric
+    /// values, and fixed-value assertions before invoking this helper.
+    fn canonicalize_supplied_state_values(&self, state: &mut v1::State, atol: ATol) {
+        for (&raw_id, value) in &mut state.entries {
+            let id = VariableID::from(raw_id);
+            if let Some(fixed_value) = self.decision_variables.fixed_value(id) {
+                *value = fixed_value;
+                continue;
+            }
+            if self.decision_variable_dependency.get(&id).is_some() {
+                continue;
+            }
+            let decision_variable = self
+                .decision_variables
+                .get(&id)
+                .expect("state variable IDs were validated before canonicalization");
+            *value = canonicalize_state_value(decision_variable, *value, atol);
+        }
+    }
+
     fn prepare_state_population(&self) -> PreparedStatePopulation<'_> {
         PreparedStatePopulation::prepare(self)
     }
@@ -499,6 +504,10 @@ impl Instance {
     /// [`Evaluate::partial_evaluate`], but returns the rewritten instance instead
     /// of mutating a borrowed one. Because the original instance is consumed, an
     /// error does not need to preserve an observable rollback state.
+    /// Validated supplied coordinates use the same Instance-owned
+    /// canonicalization as [`Self::populate_state`] before propagation and
+    /// substitution. This does not change partial evaluation's existing
+    /// kind/bound validation and rejection contract.
     pub fn into_partial_evaluated(mut self, state: &v1::State, atol: ATol) -> Result<Self> {
         self.partial_evaluate_in_place(state, atol)?;
         Ok(self)
@@ -545,9 +554,11 @@ impl Instance {
         // special-constraint propagation so propagation errors only describe
         // failures in the derived state or the constraints themselves.
         PartialEvaluatePlan::validate_state(self, state, atol)?;
+        let mut state = state.clone();
+        self.canonicalize_supplied_state_values(&mut state, atol);
 
         // Phase 1: Propagate through special constraints (unit propagation).
-        let expanded_state = self.propagate_special_constraints(state, atol)?;
+        let expanded_state = self.propagate_special_constraints(&state, atol)?;
 
         // Phase 2: Store fixed values in the decision-variable table. Values for
         // dependent keys are consistency assertions checked during dependency
@@ -565,9 +576,13 @@ impl Instance {
             if self.decision_variable_dependency.get(&var_id).is_some() {
                 dependent_assertions.insert(var_id, *value);
             } else {
+                let value = self
+                    .decision_variables
+                    .fixed_value(var_id)
+                    .unwrap_or_else(|| canonicalize_state_value(dv, *value, atol));
                 self.decision_variables
-                    .ensure_fixed_value(var_id, *value, atol)
-                    .map_err(|error| invalid_propagated_value(var_id, *value, error))?;
+                    .ensure_fixed_value(var_id, value, atol)
+                    .map_err(|error| invalid_propagated_value(var_id, value, error))?;
             }
         }
 
@@ -623,6 +638,7 @@ impl Instance {
                     )
                 })?;
                 dv.check_value_consistency(id, value, atol)?;
+                let value = canonicalize_state_value(dv, value, atol);
                 self.decision_variables
                     .ensure_fixed_value(id, value, atol)?;
                 evaluation_state.entries.insert(id.into_inner(), value);
@@ -806,7 +822,12 @@ impl Evaluate for Instance {
 
     /// # Postconditions
     ///
-    /// Partial evaluation rewrites active data while preserving the output objective.
+    /// Partial evaluation canonicalizes validated supplied coordinates before
+    /// propagation and substitution, rewrites active data, and preserves the
+    /// output objective. Existing fixed values remain authoritative, while
+    /// dependent assertions are checked before their derived targets are
+    /// canonicalized. Values outside partial evaluation's existing kind/bound
+    /// acceptance contract remain rejected.
     ///
     /// ```
     /// use ommx::{
@@ -826,12 +847,14 @@ impl Evaluate for Instance {
     /// assert!(instance.convert_active_objective(Sense::Minimize));
     /// let output = instance.output_objective().cloned();
     ///
+    /// let atol = ATol::new(0.125).unwrap();
     /// instance
-    ///     .partial_evaluate(&State::from(HashMap::from([(1, 1.0)])), ATol::default())
+    ///     .partial_evaluate(&State::from(HashMap::from([(1, 1.0625)])), atol)
     ///     .unwrap();
     /// assert_eq!(instance.output_objective(), output.as_ref());
     /// assert!(instance.required_ids().is_empty());
-    /// let solution = instance.evaluate(&State::default(), ATol::default()).unwrap();
+    /// assert_eq!(instance.fixed_decision_variable_value(variable), Some(1.0));
+    /// let solution = instance.evaluate(&State::default(), atol).unwrap();
     /// assert_eq!(*solution.objective(), 1.0);
     /// ```
     #[tracing::instrument(skip_all)]
@@ -1069,6 +1092,61 @@ mod tests {
     }
 
     #[test]
+    fn partial_evaluate_matches_direct_canonical_evaluation() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([
+            (1, 1.0625),
+            (2, -2.0625),
+            (3, -1.9375),
+            (4, 2.125),
+            (5, -2.125),
+        ]));
+
+        assert!(PartialEvaluatePlan::prepare(&instance, &state, atol)
+            .unwrap()
+            .is_none());
+        let direct = instance.evaluate(&state, atol).unwrap();
+
+        let mut rewritten = instance.clone();
+        rewritten.partial_evaluate(&state, atol).unwrap();
+        let rewritten_solution = rewritten.evaluate(&v1::State::default(), atol).unwrap();
+
+        assert_eq!(rewritten_solution.state(), direct.state());
+        assert_eq!(rewritten_solution.objective(), direct.objective());
+        assert_eq!(
+            rewritten.fixed_decision_variable_values(),
+            &BTreeMap::from([
+                (VariableID::from(1), 1.0),
+                (VariableID::from(2), -2.0),
+                (VariableID::from(3), -2.0),
+                (VariableID::from(4), 2.125),
+                (VariableID::from(5), -2.125),
+            ])
+        );
+    }
+
+    #[test]
+    fn partial_evaluate_preserves_strict_atol_rejection_and_is_atomic() {
+        let mut instance = state_canonicalization_instance();
+        let before = instance.clone();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.125)]));
+
+        let error = instance.partial_evaluate(&state, atol).unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::SubstitutedValueInconsistent {
+                id,
+                substituted_value,
+                ..
+            }) if *id == VariableID::from(1) && *substituted_value == 1.125
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
     fn populate_state_preserves_discrete_values_at_the_atol_boundary() {
         let instance = state_canonicalization_instance();
         let atol = ATol::new(0.125).unwrap();
@@ -1098,6 +1176,16 @@ mod tests {
         // checks under the same (deliberately large) tolerance.
         let solution = instance.evaluate(&state, atol).unwrap();
         assert!(solution.feasible_decision_variables());
+
+        let mut rewritten = instance.clone();
+        rewritten.partial_evaluate(&state, atol).unwrap();
+        assert_eq!(
+            rewritten.fixed_decision_variable_value(VariableID::from(1)),
+            Some(2.0)
+        );
+        let rewritten_solution = rewritten.evaluate(&v1::State::default(), atol).unwrap();
+        assert_eq!(rewritten_solution.state(), populated);
+        assert!(rewritten_solution.feasible_decision_variables());
     }
 
     #[test]
@@ -1247,6 +1335,67 @@ mod tests {
                 && *state_value == 3.0
                 && *dependency_value == 2.0 + 5e-7
         ));
+    }
+
+    #[test]
+    fn partial_evaluate_propagates_canonical_values_through_dependencies() {
+        let instance = fixed_and_dependent_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.0625), (10, 2.0), (20, 4.125)]));
+
+        let direct = instance.evaluate(&state, atol).unwrap();
+        let mut rewritten = instance.clone();
+        rewritten.partial_evaluate(&state, atol).unwrap();
+        let rewritten_solution = rewritten.evaluate(&v1::State::default(), atol).unwrap();
+
+        assert_eq!(rewritten_solution.state(), direct.state());
+        assert_eq!(rewritten_solution.objective(), direct.objective());
+        assert_eq!(
+            rewritten.fixed_decision_variable_values(),
+            &BTreeMap::from([
+                (VariableID::from(1), 1.0),
+                (VariableID::from(10), 2.0),
+                (VariableID::from(11), 2_000_000.0),
+                (VariableID::from(20), 4.0),
+                (VariableID::from(30), 8.0),
+                (VariableID::from(40), 5.0 + 5e-7),
+            ])
+        );
+        assert!(rewritten.decision_variable_dependency.is_empty());
+    }
+
+    #[test]
+    fn partial_evaluate_checks_dependent_assertion_before_target_canonicalization() {
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), crate::DecisionVariable::continuous()),
+                (VariableID::from(10), crate::DecisionVariable::integer()),
+            ]))
+            .decision_variable_dependency(crate::assign! {
+                10 <- coeff!(2.1) * linear!(1)
+            })
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let before = instance.clone();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.0), (10, 1.9)]));
+
+        let error = instance.partial_evaluate(&state, atol).unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<InconsistentDependentValue>(),
+            Some(InconsistentDependentValue {
+                id,
+                state_value,
+                dependency_value,
+            }) if *id == VariableID::from(10)
+                && *state_value == 1.9
+                && *dependency_value == 2.1
+        ));
+        assert_eq!(instance, before);
     }
 
     #[test]
@@ -1484,6 +1633,31 @@ mod tests {
     }
 
     #[test]
+    fn test_partial_evaluate_fixed_values_only_fast_path_canonicalizes_new_values() {
+        let var_id = VariableID::from(1);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(
+                var_id,
+                crate::DecisionVariable::binary(),
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.0625)]));
+
+        assert!(matches!(
+            PartialEvaluatePlan::prepare(&instance, &state, atol).unwrap(),
+            Some(PartialEvaluatePlan::FixedValuesOnly { .. })
+        ));
+        instance.partial_evaluate(&state, atol).unwrap();
+
+        assert_eq!(instance.fixed_decision_variable_value(var_id), Some(1.0));
+    }
+
+    #[test]
     fn test_partial_evaluate_removed_only_fast_path_preserves_restore_semantics() {
         let (mut instance, constraint_id) = removed_only_instance(BTreeMap::new());
         let removed_before = instance.removed_constraints().clone();
@@ -1610,7 +1784,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from((linear!(1) + linear!(3)).unwrap()))
             .decision_variables(BTreeMap::from([
-                (VariableID::from(1), crate::DecisionVariable::continuous()),
+                (VariableID::from(1), crate::DecisionVariable::integer()),
                 (VariableID::from(2), crate::DecisionVariable::continuous()),
                 (VariableID::from(3), crate::DecisionVariable::continuous()),
             ]))
@@ -1647,18 +1821,19 @@ mod tests {
     #[test]
     fn test_partial_evaluate_regular_plan_matches_consuming_path() {
         let instance = regular_plan_instance();
-        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 2.0625)]));
 
         assert!(matches!(
-            PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
+            PartialEvaluatePlan::prepare(&instance, &state, atol).unwrap(),
             Some(PartialEvaluatePlan::RegularReplacement { .. })
         ));
 
         let mut borrowed = instance.clone();
-        borrowed.partial_evaluate(&state, ATol::default()).unwrap();
+        borrowed.partial_evaluate(&state, atol).unwrap();
         let consumed = instance
             .clone()
-            .into_partial_evaluated(&state, ATol::default())
+            .into_partial_evaluated(&state, atol)
             .unwrap();
 
         assert_eq!(borrowed, consumed);
@@ -1681,12 +1856,12 @@ mod tests {
 
         let original_solution = instance
             .evaluate(
-                &v1::State::from(HashMap::from([(1, 2.0), (3, 5.0)])),
-                ATol::default(),
+                &v1::State::from(HashMap::from([(1, 2.0625), (3, 5.0)])),
+                atol,
             )
             .unwrap();
         let rewritten_solution = borrowed
-            .evaluate(&v1::State::from(HashMap::from([(3, 5.0)])), ATol::default())
+            .evaluate(&v1::State::from(HashMap::from([(3, 5.0)])), atol)
             .unwrap();
         assert_eq!(
             original_solution.objective(),
@@ -2453,9 +2628,11 @@ mod tests {
             )
             .unwrap();
 
-        // Fix x2 = 1 → OneHot propagation should fix x1=0, x3=0
-        let state = v1::State::from(HashMap::from([(2, 1.0)]));
-        instance.partial_evaluate(&state, ATol::default()).unwrap();
+        // Fix x2 approximately to 1. Canonicalization precedes OneHot
+        // propagation, so x2 is stored as 1 and x1/x3 are fixed to 0.
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(2, 1.0625)]));
+        instance.partial_evaluate(&state, atol).unwrap();
 
         // All three variables should be substituted
         assert_eq!(
@@ -2639,6 +2816,74 @@ mod tests {
                 IndicatorConstraintID::from(100)
             )]
         );
+    }
+
+    #[test]
+    fn test_partial_evaluate_indicator_promotion_uses_canonical_state() {
+        use crate::{constraint::Equality, DecisionVariable, IndicatorConstraintID};
+        use maplit::btreemap;
+
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::integer(),
+            VariableID::from(10) => DecisionVariable::binary(),
+        };
+        let scaled_x = (coeff!(1_000_000.0) * linear!(1)).unwrap();
+        let inner_function = Function::from((scaled_x + coeff!(-2_000_000.0)).unwrap());
+        let indicator_id = IndicatorConstraintID::from(100);
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .indicator_constraints(BTreeMap::from([(
+                indicator_id,
+                crate::IndicatorConstraint::new(
+                    VariableID::from(10),
+                    Equality::LessThanOrEqualToZero,
+                    inner_function,
+                ),
+            )]))
+            .build()
+            .unwrap();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 2.0625), (10, 1.0625)]));
+
+        let direct = instance.evaluate(&state, atol).unwrap();
+        assert_eq!(direct.state().entries.get(&1), Some(&2.0));
+        assert_eq!(direct.state().entries.get(&10), Some(&1.0));
+        assert_eq!(
+            direct
+                .evaluated_indicator_constraints()
+                .get(&indicator_id)
+                .unwrap()
+                .stage
+                .evaluated_value,
+            0.0
+        );
+        assert!(direct.feasible_constraints());
+
+        let mut rewritten = instance.clone();
+        rewritten.partial_evaluate(&state, atol).unwrap();
+        let promoted_id = *rewritten
+            .constraint_collection
+            .active()
+            .keys()
+            .next()
+            .unwrap();
+        let rewritten_solution = rewritten.evaluate(&v1::State::default(), atol).unwrap();
+
+        assert_eq!(rewritten_solution.state(), direct.state());
+        assert_eq!(rewritten_solution.objective(), direct.objective());
+        assert_eq!(
+            rewritten_solution
+                .evaluated_constraints()
+                .get(&promoted_id)
+                .unwrap()
+                .stage
+                .evaluated_value,
+            0.0
+        );
+        assert!(rewritten_solution.feasible_constraints());
     }
 
     #[test]

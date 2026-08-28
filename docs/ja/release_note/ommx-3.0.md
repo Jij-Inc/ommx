@@ -28,6 +28,12 @@ ContinuousとSemiContinuousは丸めません。それ以外の有限値は、�
 もとに明示したdependent assertionが、導出値の`atol`内に入らず拒否される場合があります。
 scalar / sample evaluationは同じ規則を使い、SampleIDの対応関係を保持します。
 
+{meth}`~ommx.Instance.partial_evaluate`も、入力を検証した後、special constraintのpropagation、
+expressionへの代入、定数化したdependencyの評価より前に同じ規則を適用します。そのため、
+書き換え後のInstanceを評価した結果は、元のInstanceを直接評価した場合と同じcanonical
+coordinateを使います。Instanceが既に所有するfixed valueは変更せず、既存のkind / bound
+検証でpartial evaluationの受理範囲外となる値は引き続き拒否します。
+
 ### ⚠ `solve()`と`sample()`が入力を自動的にPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 
 `SolverAdapter.solve()`と`SamplerAdapter.sample()`は実行前にAdapterの推奨Preparationを

@@ -214,6 +214,12 @@ def test_instance_canonicalizes_discrete_solver_values():
     assert solution.state.entries == expected
     assert solution.objective == 1.0
 
+    rewritten = instance.partial_evaluate(state, atol=0.125)
+    assert rewritten.fixed_decision_variables() == expected
+    rewritten_solution = rewritten.evaluate({}, atol=0.125)
+    assert rewritten_solution.state.entries == expected
+    assert rewritten_solution.objective == solution.objective
+
     sample_set = instance.evaluate_samples(
         {
             7: state,

@@ -3777,11 +3777,11 @@ class Instance:
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Instance:
         r"""
-        Creates a new instance with specific decision variables fixed to given values.
+        Creates a new instance by fixing decision variables from a supplied state.
 
-        This method substitutes the specified decision variables with their provided values,
-        creating a new problem instance where these variables are fixed. This is useful for
-        scenarios such as:
+        This method validates supplied values, selects their Instance-owned representations
+        under the rules below, and substitutes the specified decision variables. This creates
+        a new problem instance where these variables are fixed and is useful for scenarios such as:
 
         - Creating simplified sub-problems with some variables fixed
         - Incrementally solving a problem by fixing some variables and optimizing the rest
@@ -3793,11 +3793,19 @@ class Instance:
         - `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
 
         **Returns:**
-        A new instance with the specified decision variables fixed to their given values.
+        A new instance with the specified decision variables fixed to values selected by the
+        canonicalization and ownership rules below.
 
         # Postconditions
 
-        The new instance rewrites only active expressions while retaining fixed values for output evaluation.
+        After the existing kind and bound validation, accepted supplied coordinates
+        use the same Instance-owned canonicalization rules as
+        {meth}`~ommx.Instance.populate_state` before propagation and substitution.
+        Non-fixed, non-dependent Continuous and SemiContinuous values are not rounded.
+        Existing fixed values remain authoritative, dependent inputs remain consistency
+        assertions, and values outside the existing partial-evaluation acceptance contract
+        remain rejected. The new instance rewrites only active expressions while retaining
+        canonical fixed values for output evaluation.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -3805,7 +3813,7 @@ class Instance:
         ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
-        >>> fixed = instance.partial_evaluate({0: 1})
+        >>> fixed = instance.partial_evaluate({0: 1.0000005}, atol=1e-6)
         >>> assert instance.required_ids() == {0}
         >>> assert fixed.required_ids() == set()
         >>> assert fixed.objective.evaluate({}) == -3.0
