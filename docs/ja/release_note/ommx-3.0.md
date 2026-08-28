@@ -74,6 +74,32 @@ Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含
 `PolynomialRequirement.any_degree()`が受け付けるのは任意次数のpolynomialであり、
 複合された非polynomialの`Function`は含みません。
 
+### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174))
+
+{meth}`~ommx.Instance.populate_state`、{meth}`~ommx.Instance.evaluate`、
+{meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
+dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
+canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
+未満のBinary値と、整数との差が`atol`未満のInteger / SemiInteger値は、対応する厳密な
+離散値として格納されます。差がちょうど`atol`の値は変更しません。canonicalizationとは
+別に、kindとboundのfeasibilityを既存の規則で判定します。
+ContinuousとSemiContinuousは丸めません。それ以外の有限値は、返された
+{class}`~ommx.Solution`がfeasibilityを判定できるように保持し、非有限なstate値は
+引き続き拒否します。
+
+呼び出し側がfixedまたはdependent variableの値を渡した場合、その値は引き続き
+整合性assertionとして扱います。検証後のstateには、Instanceが所有するfixed valueを
+変更せずに格納するか、dependencyから導出してtarget kindに従いcanonicalizeした値を
+格納します。dependencyはcanonicalized inputから評価するため、丸め前のsolver vectorを
+もとに明示したdependent assertionが、導出値の`atol`内に入らず拒否される場合があります。
+scalar / sample evaluationは同じ規則を使い、SampleIDの対応関係を保持します。
+
+{meth}`~ommx.Instance.partial_evaluate`も、入力を検証した後、special constraintのpropagation、
+expressionへの代入、定数化したdependencyの評価より前に同じ規則を適用します。そのため、
+書き換え後のInstanceを評価した結果は、元のInstanceを直接評価した場合と同じcanonical
+coordinateを使います。Instanceが既に所有するfixed valueは変更せず、既存のkind / bound
+検証でpartial evaluationの受理範囲外となる値は引き続き拒否します。
+
 ### ⚠ `solve()`と`sample()`が入力を自動的にPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 
 `SolverAdapter.solve()`と`SamplerAdapter.sample()`は実行前にAdapterの推奨Preparationを

@@ -1,10 +1,9 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, constraint_type::ActiveRowRewrite, ATol, Bound,
-    DecisionVariableError, Evaluate, InconsistentDependentValue, Kind, MissingStateEntries,
-    Propagate, PropagateOutcome, UnknownStateEntries, UnverifiableDependentAssertion,
-    VariableIDSet,
+    constraint::RemovedReason, constraint_type::ActiveRowRewrite, ATol, DecisionVariableError,
+    Evaluate, InconsistentDependentValue, Kind, MissingStateEntries, Propagate, PropagateOutcome,
+    UnknownStateEntries, UnverifiableDependentAssertion, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -84,6 +83,20 @@ fn ensure_instance_value_is_finite(var_id: VariableID, value: f64) -> Result<()>
 
 fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
     left.is_finite() && right.is_finite() && (left - right).abs() <= *atol
+}
+
+/// Canonicalize a finite state value only when it represents the variable's
+/// discrete kind under the caller's tolerance.
+///
+/// Values outside the discrete tolerance remain unchanged so evaluation can
+/// return an infeasible [`Solution`](crate::Solution) instead of rejecting
+/// solver output. Bound feasibility remains a separate concern. Continuous and
+/// semi-continuous values are never rounded.
+fn canonicalize_state_value(decision_variable: &DecisionVariable, value: f64, atol: ATol) -> f64 {
+    decision_variable
+        .kind()
+        .canonical_discrete_value(value, atol)
+        .unwrap_or(value)
 }
 
 fn fixed_values_state(fixed_values: &BTreeMap<VariableID, f64>) -> v1::State {
@@ -171,12 +184,15 @@ fn merge_state(
     Ok(())
 }
 
-struct StatePopulationPlan<'a> {
-    all: VariableIDSet,
-    used: VariableIDSet,
-    fixed: Vec<(VariableID, f64)>,
-    irrelevant: Vec<(VariableID, Kind, Bound)>,
-    dependency: &'a AcyclicAssignments,
+/// Instance-owned state population prepared for reuse across samples.
+///
+/// The Instance remains the source of truth for decision variables, fixed
+/// values, and dependencies. This type caches only derived data that would
+/// otherwise be recomputed for every sample.
+struct PreparedStatePopulation<'a> {
+    instance: &'a Instance,
+    required_ids: VariableIDSet,
+    irrelevant_defaults: Vec<(VariableID, f64)>,
 }
 
 enum PartialEvaluatePlan {
@@ -277,6 +293,8 @@ impl PartialEvaluatePlan {
         atol: ATol,
     ) -> Result<BTreeMap<VariableID, f64>> {
         Self::validate_state(instance, state, atol)?;
+        let mut state = state.clone();
+        instance.canonicalize_supplied_state_values(&mut state, atol);
         Ok(state
             .entries
             .iter()
@@ -333,16 +351,52 @@ impl PartialEvaluatePlan {
     }
 }
 
-impl StatePopulationPlan<'_> {
+impl<'a> PreparedStatePopulation<'a> {
+    fn prepare(instance: &'a Instance) -> Self {
+        let required_ids = instance.used_decision_variable_ids();
+        let fixed_values = instance.fixed_decision_variable_values();
+        let dependency = &instance.decision_variable_dependency;
+
+        let irrelevant_defaults = instance
+            .decision_variables
+            .iter()
+            .filter(|(id, _)| {
+                !required_ids.contains(id)
+                    && !fixed_values.contains_key(id)
+                    && dependency.get(id).is_none()
+            })
+            .map(|(id, decision_variable)| {
+                let value = match decision_variable.kind() {
+                    Kind::Binary | Kind::Integer | Kind::Continuous => {
+                        decision_variable.bound().nearest_to_zero()
+                    }
+                    Kind::SemiInteger | Kind::SemiContinuous => 0.0,
+                };
+                (*id, value)
+            })
+            .collect();
+
+        Self {
+            instance,
+            required_ids,
+            irrelevant_defaults,
+        }
+    }
+
     fn populate(&self, mut state: v1::State, atol: ATol) -> Result<v1::State> {
         let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
 
-        let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
+        let unknown_ids: VariableIDSet = state_ids
+            .iter()
+            .filter(|id| self.instance.decision_variables.get(id).is_none())
+            .copied()
+            .collect();
         if !unknown_ids.is_empty() {
             return Err(UnknownStateEntries { ids: unknown_ids }.into());
         }
 
-        let missing_ids: VariableIDSet = self.used.difference(&state_ids).cloned().collect();
+        let missing_ids: VariableIDSet =
+            self.required_ids.difference(&state_ids).copied().collect();
         if !missing_ids.is_empty() {
             return Err(MissingStateEntries { ids: missing_ids }.into());
         }
@@ -351,44 +405,34 @@ impl StatePopulationPlan<'_> {
             ensure_state_value_is_finite(id, value)?;
         }
 
-        // Bound and kind checking is intentionally left to Solution::feasible().
-        for (id, value) in &self.fixed {
-            ensure_instance_value_is_finite(*id, *value)?;
-            use std::collections::hash_map::Entry;
-            match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(entry) => {
-                    let state_value = *entry.get();
-                    if !values_are_consistent(state_value, *value, atol) {
-                        return Err(DecisionVariableError::SubstitutedValueOverwrite {
-                            id: *id,
-                            previous_value: *value,
-                            new_value: state_value,
-                            atol,
-                        }
-                        .into());
+        for (&id, &value) in self.instance.fixed_decision_variable_values() {
+            ensure_instance_value_is_finite(id, value)?;
+            if let Some(&state_value) = state.entries.get(&id.into_inner()) {
+                if !values_are_consistent(state_value, value, atol) {
+                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
+                        id,
+                        previous_value: value,
+                        new_value: state_value,
+                        atol,
                     }
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(*value);
+                    .into());
                 }
             }
+            state.entries.insert(id.into_inner(), value);
         }
 
-        for (id, kind, bound) in &self.irrelevant {
-            use std::collections::hash_map::Entry;
-            match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(_entry) => {}
-                Entry::Vacant(entry) => {
-                    let value = match kind {
-                        Kind::Binary | Kind::Integer | Kind::Continuous => bound.nearest_to_zero(),
-                        Kind::SemiInteger | Kind::SemiContinuous => 0.0,
-                    };
-                    entry.insert(value);
-                }
-            }
+        self.instance
+            .canonicalize_supplied_state_values(&mut state, atol);
+
+        for (id, value) in &self.irrelevant_defaults {
+            state.entries.entry(id.into_inner()).or_insert(*value);
         }
 
-        for (id, f) in self.dependency.evaluation_order_iter() {
+        for (id, f) in self
+            .instance
+            .decision_variable_dependency
+            .evaluation_order_iter()
+        {
             let value = f
                 .evaluate(&state, atol)
                 .map_err(|error| dependent_function_evaluation_error(id, error))
@@ -401,23 +445,21 @@ impl StatePopulationPlan<'_> {
                     "dependent variable {id:?} evaluated to non-finite value: {value}",
                 );
             }
-            use std::collections::hash_map::Entry;
-            match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(entry) => {
-                    let state_value = *entry.get();
-                    if !values_are_consistent(state_value, value, atol) {
-                        return Err(InconsistentDependentValue {
-                            id,
-                            state_value,
-                            dependency_value: value,
-                        }
-                        .into());
+            if let Some(&state_value) = state.entries.get(&id.into_inner()) {
+                if !values_are_consistent(state_value, value, atol) {
+                    return Err(InconsistentDependentValue {
+                        id,
+                        state_value,
+                        dependency_value: value,
                     }
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(value);
+                    .into());
                 }
             }
+            let decision_variable = self.instance.decision_variables.get(&id).ok_or_else(|| {
+                crate::error!("dependent variable {id:?} is not in decision_variables")
+            })?;
+            let value = canonicalize_state_value(decision_variable, value, atol);
+            state.entries.insert(id.into_inner(), value);
         }
 
         Ok(state)
@@ -425,47 +467,55 @@ impl StatePopulationPlan<'_> {
 }
 
 impl Instance {
-    fn state_population_plan(&self) -> StatePopulationPlan<'_> {
-        let all: VariableIDSet = self.decision_variables.keys().copied().collect();
-        let used = self.used_decision_variable_ids();
-
-        let fixed: Vec<_> = self
-            .fixed_decision_variable_values()
-            .iter()
-            .map(|(id, value)| (*id, *value))
-            .collect();
-        let fixed_ids: VariableIDSet = fixed.iter().map(|(id, _)| *id).collect();
-        let dependent_ids: VariableIDSet = self.decision_variable_dependency.keys().collect();
-        let relevant: VariableIDSet = used
-            .iter()
-            .chain(fixed_ids.iter())
-            .chain(dependent_ids.iter())
-            .copied()
-            .collect();
-
-        let irrelevant = self
-            .decision_variables
-            .iter()
-            .filter(|(id, _)| !relevant.contains(id))
-            .map(|(id, dv)| (*id, dv.kind(), dv.bound()))
-            .collect();
-
-        StatePopulationPlan {
-            all,
-            used,
-            fixed,
-            irrelevant,
-            dependency: &self.decision_variable_dependency,
+    /// Select the Instance-owned representation of already-validated supplied
+    /// state entries.
+    ///
+    /// Existing fixed values remain authoritative, dependent values remain raw
+    /// consistency assertions, and all other coordinates use their kind-owned
+    /// discrete canonicalization rule. Callers must validate state IDs, numeric
+    /// values, and fixed-value assertions before invoking this helper.
+    fn canonicalize_supplied_state_values(&self, state: &mut v1::State, atol: ATol) {
+        for (&raw_id, value) in &mut state.entries {
+            let id = VariableID::from(raw_id);
+            if let Some(fixed_value) = self.decision_variables.fixed_value(id) {
+                *value = fixed_value;
+                continue;
+            }
+            if self.decision_variable_dependency.get(&id).is_some() {
+                continue;
+            }
+            let decision_variable = self
+                .decision_variables
+                .get(&id)
+                .expect("state variable IDs were validated before canonicalization");
+            *value = canonicalize_state_value(decision_variable, *value, atol);
         }
     }
 
-    /// Check the state is valid for this instance and populate fixed,
+    fn prepare_state_population(&self) -> PreparedStatePopulation<'_> {
+        PreparedStatePopulation::prepare(self)
+    }
+
+    /// Check the state is valid for this instance, canonicalize values that are
+    /// consistent with discrete decision-variable kinds, and populate fixed,
     /// irrelevant, and dependent decision variables.
     ///
     /// Post-condition: the returned state contains exactly this instance's
-    /// decision-variable IDs.
+    /// decision-variable IDs. For supplied coordinates that are neither fixed
+    /// nor dependent, Binary values strictly within `atol` of zero or one and
+    /// Integer or SemiInteger values strictly within `atol` of an integer are
+    /// represented by that exact discrete value. Derived dependent values use
+    /// the same target-kind rule. Continuous and SemiContinuous values are not
+    /// rounded. Other finite solver values are preserved so kind and bound
+    /// violations remain available to Solution feasibility.
+    /// Caller-provided fixed or dependent values are treated as consistency
+    /// assertions. The returned state uses the stored Instance-owned fixed value
+    /// unchanged, or the canonicalized derived dependent value. Dependencies
+    /// consume canonicalized non-fixed, non-dependent inputs. A dependent
+    /// assertion is compared with the value derived from those inputs before the
+    /// target kind is canonicalized.
     pub fn populate_state(&self, state: v1::State, atol: ATol) -> Result<v1::State> {
-        self.state_population_plan().populate(state, atol)
+        self.prepare_state_population().populate(state, atol)
     }
 
     /// Partially evaluate this instance by consuming it.
@@ -474,6 +524,10 @@ impl Instance {
     /// [`Evaluate::partial_evaluate`], but returns the rewritten instance instead
     /// of mutating a borrowed one. Because the original instance is consumed, an
     /// error does not need to preserve an observable rollback state.
+    /// Validated supplied coordinates use the same Instance-owned
+    /// canonicalization as [`Self::populate_state`] before propagation and
+    /// substitution. This does not change partial evaluation's existing
+    /// kind/bound validation and rejection contract.
     pub fn into_partial_evaluated(mut self, state: &v1::State, atol: ATol) -> Result<Self> {
         self.partial_evaluate_in_place(state, atol)?;
         Ok(self)
@@ -528,9 +582,11 @@ impl Instance {
         // special-constraint propagation so propagation errors only describe
         // failures in the derived state or the constraints themselves.
         PartialEvaluatePlan::validate_state(self, state, atol)?;
+        let mut state = state.clone();
+        self.canonicalize_supplied_state_values(&mut state, atol);
 
         // Phase 1: Propagate through special constraints (unit propagation).
-        let expanded_state = self.propagate_special_constraints(state, atol)?;
+        let expanded_state = self.propagate_special_constraints(&state, atol)?;
 
         // Phase 2: Store fixed values in the decision-variable table. Values for
         // dependent keys are consistency assertions checked during dependency
@@ -548,9 +604,13 @@ impl Instance {
             if self.decision_variable_dependency.get(&var_id).is_some() {
                 dependent_assertions.insert(var_id, *value);
             } else {
+                let value = self
+                    .decision_variables
+                    .fixed_value(var_id)
+                    .unwrap_or_else(|| canonicalize_state_value(dv, *value, atol));
                 self.decision_variables
-                    .ensure_fixed_value(var_id, *value, atol)
-                    .map_err(|error| invalid_propagated_value(var_id, *value, error))?;
+                    .ensure_fixed_value(var_id, value, atol)
+                    .map_err(|error| invalid_propagated_value(var_id, value, error))?;
             }
         }
 
@@ -609,6 +669,7 @@ impl Instance {
                     )
                 })?;
                 dv.check_value_consistency(id, value, atol)?;
+                let value = canonicalize_state_value(dv, value, atol);
                 self.decision_variables
                     .ensure_fixed_value(id, value, atol)?;
                 evaluation_state.entries.insert(id.into_inner(), value);
@@ -735,7 +796,7 @@ impl Evaluate for Instance {
     ) -> Result<Self::SampledOutput> {
         // Populate the decision variables in the samples
         let samples = {
-            let population = self.state_population_plan();
+            let population = self.prepare_state_population();
             let mut samples = samples.clone();
             for state in samples.iter_mut() {
                 let taken = std::mem::take(state);
@@ -792,7 +853,12 @@ impl Evaluate for Instance {
 
     /// # Postconditions
     ///
-    /// Partial evaluation rewrites active data while preserving the output objective.
+    /// Partial evaluation canonicalizes validated supplied coordinates before
+    /// propagation and substitution, rewrites active data, and preserves the
+    /// output objective. Existing fixed values remain authoritative, while
+    /// dependent assertions are checked before their derived targets are
+    /// canonicalized. Values outside partial evaluation's existing kind/bound
+    /// acceptance contract remain rejected.
     ///
     /// ```
     /// use ommx::{
@@ -812,12 +878,14 @@ impl Evaluate for Instance {
     /// assert!(instance.convert_active_objective(Sense::Minimize));
     /// let output = instance.output_objective().cloned();
     ///
+    /// let atol = ATol::new(0.125).unwrap();
     /// instance
-    ///     .partial_evaluate(&State::from(HashMap::from([(1, 1.0)])), ATol::default())
+    ///     .partial_evaluate(&State::from(HashMap::from([(1, 1.0625)])), atol)
     ///     .unwrap();
     /// assert_eq!(instance.output_objective(), output.as_ref());
     /// assert!(instance.required_ids().is_empty());
-    /// let solution = instance.evaluate(&State::default(), ATol::default()).unwrap();
+    /// assert_eq!(instance.fixed_decision_variable_value(variable), Some(1.0));
+    /// let solution = instance.evaluate(&State::default(), atol).unwrap();
     /// assert_eq!(*solution.objective(), 1.0);
     /// ```
     #[tracing::instrument(skip_all)]
@@ -948,7 +1016,7 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::random::arbitrary_split_state;
-    use crate::{coeff, linear};
+    use crate::{coeff, linear, Bound};
     use ::approx::AbsDiffEq;
     use proptest::prelude::*;
     use std::collections::HashMap;
@@ -1030,6 +1098,451 @@ mod tests {
             .constraints(BTreeMap::new())
             .build()
             .unwrap()
+    }
+
+    fn state_canonicalization_instance() -> Instance {
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), crate::DecisionVariable::binary()),
+                (VariableID::from(2), crate::DecisionVariable::integer()),
+                (VariableID::from(3), crate::DecisionVariable::semi_integer()),
+                (VariableID::from(4), crate::DecisionVariable::continuous()),
+                (
+                    VariableID::from(5),
+                    crate::DecisionVariable::semi_continuous(),
+                ),
+            ]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn populate_state_canonicalizes_discrete_values_strictly_within_atol() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([
+            (1, 1.0625),
+            (2, -2.0625),
+            (3, -1.9375),
+            (4, 2.125),
+            (5, -2.125),
+        ]));
+
+        let populated = instance.populate_state(state.clone(), atol).unwrap();
+        assert_eq!(
+            populated.entries,
+            HashMap::from([(1, 1.0), (2, -2.0), (3, -2.0), (4, 2.125), (5, -2.125),])
+        );
+
+        let solution = instance.evaluate(&state, atol).unwrap();
+        assert_eq!(solution.state(), populated);
+        assert_eq!(*solution.objective(), 1.0);
+        assert!(solution.feasible_decision_variables());
+    }
+
+    #[test]
+    fn partial_evaluate_matches_direct_canonical_evaluation() {
+        let mut instance = state_canonicalization_instance();
+        // Keep this fixture on the fallback path: canonicalization must happen
+        // before a special constraint consumes the supplied discrete value.
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                crate::OneHotConstraintID::from(1),
+                crate::OneHotConstraint::new(std::collections::BTreeSet::from([VariableID::from(
+                    1,
+                )]))
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([
+            (1, 1.0625),
+            (2, -2.0625),
+            (3, -1.9375),
+            (4, 2.125),
+            (5, -2.125),
+        ]));
+
+        assert!(PartialEvaluatePlan::prepare(&instance, &state, atol)
+            .unwrap()
+            .is_none());
+        let direct = instance.evaluate(&state, atol).unwrap();
+
+        let mut rewritten = instance.clone();
+        rewritten.partial_evaluate(&state, atol).unwrap();
+        let rewritten_solution = rewritten.evaluate(&v1::State::default(), atol).unwrap();
+
+        assert_eq!(rewritten_solution.state(), direct.state());
+        assert_eq!(rewritten_solution.objective(), direct.objective());
+        assert_eq!(
+            rewritten.fixed_decision_variable_values(),
+            &BTreeMap::from([
+                (VariableID::from(1), 1.0),
+                (VariableID::from(2), -2.0),
+                (VariableID::from(3), -2.0),
+                (VariableID::from(4), 2.125),
+                (VariableID::from(5), -2.125),
+            ])
+        );
+    }
+
+    #[test]
+    fn partial_evaluate_preserves_strict_atol_rejection_and_is_atomic() {
+        let mut instance = state_canonicalization_instance();
+        let before = instance.clone();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.125)]));
+
+        let error = instance.partial_evaluate(&state, atol).unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::SubstitutedValueInconsistent {
+                id,
+                substituted_value,
+                ..
+            }) if *id == VariableID::from(1) && *substituted_value == 1.125
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn populate_state_preserves_discrete_values_at_the_atol_boundary() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.125), (2, -2.125), (3, -1.875)]));
+
+        let populated = instance.populate_state(state.clone(), atol).unwrap();
+        assert_eq!(populated.entries.get(&1), Some(&1.125));
+        assert_eq!(populated.entries.get(&2), Some(&-2.125));
+        assert_eq!(populated.entries.get(&3), Some(&-1.875));
+
+        let solution = instance.evaluate(&state, atol).unwrap();
+        assert_eq!(solution.state(), populated);
+        assert!(!solution.feasible_decision_variables());
+    }
+
+    #[test]
+    fn canonicalization_boundary_is_separate_from_solution_feasibility() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(1.0).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+
+        let populated = instance.populate_state(state.clone(), atol).unwrap();
+        assert_eq!(populated.entries.get(&1), Some(&2.0));
+
+        // Canonicalization is strict relative to the nearest Binary value, while
+        // Solution feasibility independently applies the existing kind and bound
+        // checks under the same (deliberately large) tolerance.
+        let solution = instance.evaluate(&state, atol).unwrap();
+        assert!(solution.feasible_decision_variables());
+
+        let mut rewritten = instance.clone();
+        rewritten.partial_evaluate(&state, atol).unwrap();
+        assert_eq!(
+            rewritten.fixed_decision_variable_value(VariableID::from(1)),
+            Some(2.0)
+        );
+        let rewritten_solution = rewritten.evaluate(&v1::State::default(), atol).unwrap();
+        assert_eq!(rewritten_solution.state(), populated);
+        assert!(rewritten_solution.feasible_decision_variables());
+    }
+
+    #[test]
+    fn populate_state_preserves_finite_values_outside_discrete_tolerance() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 0.5), (2, -2.25), (3, 1.5)]));
+
+        let populated = instance.populate_state(state.clone(), atol).unwrap();
+        assert_eq!(populated.entries.get(&1), Some(&0.5));
+        assert_eq!(populated.entries.get(&2), Some(&-2.25));
+        assert_eq!(populated.entries.get(&3), Some(&1.5));
+
+        let solution = instance.evaluate(&state, atol).unwrap();
+        assert_eq!(solution.state().entries.get(&1), Some(&0.5));
+        assert_eq!(solution.state().entries.get(&2), Some(&-2.25));
+        assert_eq!(solution.state().entries.get(&3), Some(&1.5));
+        assert!(!solution.feasible_decision_variables());
+    }
+
+    #[test]
+    fn populate_state_rejects_non_finite_solver_values() {
+        let instance = state_canonicalization_instance();
+
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let error = instance
+                .populate_state(
+                    v1::State::from(HashMap::from([(1, value)])),
+                    ATol::default(),
+                )
+                .unwrap_err();
+            assert!(matches!(
+                error.downcast_ref::<DecisionVariableError>(),
+                Some(DecisionVariableError::NonFiniteValue { id, value })
+                    if *id == VariableID::from(1) && !value.is_finite()
+            ));
+        }
+    }
+
+    #[test]
+    fn evaluate_samples_normalizes_negative_zero_and_regroups_sample_ids() {
+        let instance = state_canonicalization_instance();
+        let atol = ATol::new(0.5).unwrap();
+        let negative = v1::State::from(HashMap::from([(1, 0.0), (2, -0.25)]));
+        let positive = v1::State::from(HashMap::from([(1, 0.0), (2, 0.25)]));
+
+        let populated = instance.populate_state(negative.clone(), atol).unwrap();
+        assert_eq!(populated.entries[&2].to_bits(), 0.0_f64.to_bits());
+
+        let samples = crate::Sampled::new(
+            [
+                vec![crate::SampleID::from(7)],
+                vec![crate::SampleID::from(8)],
+            ],
+            [negative, positive],
+        )
+        .unwrap();
+        let sample_set = instance.evaluate_samples(&samples, atol).unwrap();
+        let integer_samples = sample_set
+            .decision_variables()
+            .get(&VariableID::from(2))
+            .unwrap()
+            .samples();
+
+        for sample_id in [crate::SampleID::from(7), crate::SampleID::from(8)] {
+            assert_eq!(
+                integer_samples.get(sample_id).unwrap().to_bits(),
+                0.0_f64.to_bits()
+            );
+        }
+        let chunks = integer_samples.clone().chunk();
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].0.to_bits(), 0.0_f64.to_bits());
+        assert_eq!(chunks[0].1.len(), 2);
+    }
+
+    fn fixed_and_dependent_canonicalization_instance() -> Instance {
+        Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), crate::DecisionVariable::integer()),
+                (VariableID::from(10), crate::DecisionVariable::integer()),
+                (VariableID::from(11), crate::DecisionVariable::continuous()),
+                (VariableID::from(20), crate::DecisionVariable::continuous()),
+                (VariableID::from(30), crate::DecisionVariable::continuous()),
+                (VariableID::from(40), crate::DecisionVariable::integer()),
+            ]))
+            .fixed_decision_variable_values(BTreeMap::from([
+                (VariableID::from(20), 4.0),
+                (VariableID::from(40), 5.0 + 5e-7),
+            ]))
+            .decision_variable_dependency(crate::assign! {
+                10 <- coeff!(2.0 + 5e-7) * linear!(1),
+                11 <- coeff!(1_000_000.0) * linear!(10),
+                30 <- coeff!(2.0) * linear!(20)
+            })
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn populate_state_uses_authoritative_fixed_and_canonical_dependent_values() {
+        let instance = fixed_and_dependent_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.0625), (10, 2.0), (20, 4.125)]));
+
+        let populated = instance.populate_state(state, atol).unwrap();
+        assert_eq!(
+            populated.entries,
+            HashMap::from([
+                (1, 1.0),
+                (10, 2.0),
+                (11, 2_000_000.0),
+                (20, 4.0),
+                (30, 8.0),
+                (40, 5.0 + 5e-7),
+            ])
+        );
+
+        let fixed_error = instance
+            .populate_state(v1::State::from(HashMap::from([(1, 1.0), (20, 4.25)])), atol)
+            .unwrap_err();
+        assert!(matches!(
+            fixed_error.downcast_ref::<DecisionVariableError>(),
+            Some(DecisionVariableError::SubstitutedValueOverwrite {
+                id,
+                previous_value,
+                new_value,
+                ..
+            }) if *id == VariableID::from(20)
+                && *previous_value == 4.0
+                && *new_value == 4.25
+        ));
+
+        let dependent_error = instance
+            .populate_state(v1::State::from(HashMap::from([(1, 1.0), (10, 3.0)])), atol)
+            .unwrap_err();
+        assert!(matches!(
+            dependent_error.downcast_ref::<InconsistentDependentValue>(),
+            Some(InconsistentDependentValue {
+                id,
+                state_value,
+                dependency_value,
+            }) if *id == VariableID::from(10)
+                && *state_value == 3.0
+                && *dependency_value == 2.0 + 5e-7
+        ));
+    }
+
+    #[test]
+    fn partial_evaluate_propagates_canonical_values_through_dependencies() {
+        let instance = fixed_and_dependent_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.0625), (10, 2.0), (20, 4.125)]));
+
+        let direct = instance.evaluate(&state, atol).unwrap();
+        let mut rewritten = instance.clone();
+        rewritten.partial_evaluate(&state, atol).unwrap();
+        let rewritten_solution = rewritten.evaluate(&v1::State::default(), atol).unwrap();
+
+        assert_eq!(rewritten_solution.state(), direct.state());
+        assert_eq!(rewritten_solution.objective(), direct.objective());
+        assert_eq!(
+            rewritten.fixed_decision_variable_values(),
+            &BTreeMap::from([
+                (VariableID::from(1), 1.0),
+                (VariableID::from(10), 2.0),
+                (VariableID::from(11), 2_000_000.0),
+                (VariableID::from(20), 4.0),
+                (VariableID::from(30), 8.0),
+                (VariableID::from(40), 5.0 + 5e-7),
+            ])
+        );
+        assert!(rewritten.decision_variable_dependency.is_empty());
+    }
+
+    #[test]
+    fn partial_evaluate_checks_dependent_assertion_before_target_canonicalization() {
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), crate::DecisionVariable::continuous()),
+                (VariableID::from(10), crate::DecisionVariable::integer()),
+            ]))
+            .decision_variable_dependency(crate::assign! {
+                10 <- coeff!(2.1) * linear!(1)
+            })
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let before = instance.clone();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.0), (10, 1.9)]));
+
+        let error = instance.partial_evaluate(&state, atol).unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<InconsistentDependentValue>(),
+            Some(InconsistentDependentValue {
+                id,
+                state_value,
+                dependency_value,
+            }) if *id == VariableID::from(10)
+                && *state_value == 1.9
+                && *dependency_value == 2.1
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn evaluate_samples_canonicalizes_values_and_preserves_sample_ids() {
+        let instance = fixed_and_dependent_canonicalization_instance();
+        let atol = ATol::new(0.125).unwrap();
+        let samples = crate::Sampled::new(
+            [
+                vec![crate::SampleID::from(7), crate::SampleID::from(9)],
+                vec![crate::SampleID::from(8)],
+            ],
+            [
+                v1::State::from(HashMap::from([(1, 1.0625), (10, 2.0), (20, 4.125)])),
+                v1::State::from(HashMap::from([(1, 1.9375), (10, 4.0), (20, 3.875)])),
+            ],
+        )
+        .unwrap();
+
+        let sample_set = instance.evaluate_samples(&samples, atol).unwrap();
+        assert_eq!(
+            sample_set.sample_ids(),
+            crate::SampleIDSet::from([
+                crate::SampleID::from(7),
+                crate::SampleID::from(8),
+                crate::SampleID::from(9),
+            ])
+        );
+        assert_eq!(
+            sample_set.objectives().get(crate::SampleID::from(7)),
+            Some(&1.0)
+        );
+        assert_eq!(
+            sample_set.objectives().get(crate::SampleID::from(9)),
+            Some(&1.0)
+        );
+        assert_eq!(
+            sample_set.objectives().get(crate::SampleID::from(8)),
+            Some(&2.0)
+        );
+
+        for (id, shared_value, distinct_value) in [
+            (1, 1.0, 2.0),
+            (10, 2.0, 4.0),
+            (11, 2_000_000.0, 4_000_000.0),
+            (20, 4.0, 4.0),
+            (30, 8.0, 8.0),
+            (40, 5.0 + 5e-7, 5.0 + 5e-7),
+        ] {
+            let sampled = sample_set
+                .decision_variables()
+                .get(&VariableID::from(id))
+                .unwrap()
+                .samples();
+            assert_eq!(sampled.get(crate::SampleID::from(7)), Some(&shared_value));
+            assert_eq!(sampled.get(crate::SampleID::from(9)), Some(&shared_value));
+            assert_eq!(sampled.get(crate::SampleID::from(8)), Some(&distinct_value));
+
+            let chunks = sampled.clone().chunk();
+            if shared_value == distinct_value {
+                assert_eq!(chunks.len(), 1);
+                assert_eq!(chunks[0].0, shared_value);
+                assert_eq!(chunks[0].1.len(), 3);
+            } else {
+                assert_eq!(chunks.len(), 2);
+                let shared_ids = &chunks
+                    .iter()
+                    .find(|(value, _)| *value == shared_value)
+                    .unwrap()
+                    .1;
+                assert_eq!(shared_ids.len(), 2);
+                assert!(shared_ids.contains(&crate::SampleID::from(7)));
+                assert!(shared_ids.contains(&crate::SampleID::from(9)));
+
+                let distinct_ids = &chunks
+                    .iter()
+                    .find(|(value, _)| *value == distinct_value)
+                    .unwrap()
+                    .1;
+                assert_eq!(distinct_ids.len(), 1);
+                assert!(distinct_ids.contains(&crate::SampleID::from(8)));
+            }
+        }
     }
 
     #[test]
@@ -1182,6 +1695,31 @@ mod tests {
             instance.fixed_decision_variable_value(var_id),
             Some(existing_value)
         );
+    }
+
+    #[test]
+    fn test_partial_evaluate_fixed_values_only_fast_path_canonicalizes_new_values() {
+        let var_id = VariableID::from(1);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(
+                var_id,
+                crate::DecisionVariable::binary(),
+            )]))
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 1.0625)]));
+
+        assert!(matches!(
+            PartialEvaluatePlan::prepare(&instance, &state, atol).unwrap(),
+            Some(PartialEvaluatePlan::FixedValuesOnly { .. })
+        ));
+        instance.partial_evaluate(&state, atol).unwrap();
+
+        assert_eq!(instance.fixed_decision_variable_value(var_id), Some(1.0));
     }
 
     #[test]
@@ -1361,7 +1899,7 @@ mod tests {
             .sense(Sense::Minimize)
             .objective(Function::from((linear!(1) + linear!(3)).unwrap()))
             .decision_variables(BTreeMap::from([
-                (VariableID::from(1), crate::DecisionVariable::continuous()),
+                (VariableID::from(1), crate::DecisionVariable::integer()),
                 (VariableID::from(2), crate::DecisionVariable::continuous()),
                 (VariableID::from(3), crate::DecisionVariable::continuous()),
             ]))
@@ -1428,18 +1966,19 @@ mod tests {
     #[test]
     fn test_partial_evaluate_regular_plan_matches_consuming_path() {
         let instance = regular_plan_instance();
-        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 2.0625)]));
 
         assert!(matches!(
-            PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
+            PartialEvaluatePlan::prepare(&instance, &state, atol).unwrap(),
             Some(PartialEvaluatePlan::RegularReplacement { .. })
         ));
 
         let mut borrowed = instance.clone();
-        borrowed.partial_evaluate(&state, ATol::default()).unwrap();
+        borrowed.partial_evaluate(&state, atol).unwrap();
         let consumed = instance
             .clone()
-            .into_partial_evaluated(&state, ATol::default())
+            .into_partial_evaluated(&state, atol)
             .unwrap();
 
         assert_eq!(borrowed, consumed);
@@ -1462,12 +2001,12 @@ mod tests {
 
         let original_solution = instance
             .evaluate(
-                &v1::State::from(HashMap::from([(1, 2.0), (3, 5.0)])),
-                ATol::default(),
+                &v1::State::from(HashMap::from([(1, 2.0625), (3, 5.0)])),
+                atol,
             )
             .unwrap();
         let rewritten_solution = borrowed
-            .evaluate(&v1::State::from(HashMap::from([(3, 5.0)])), ATol::default())
+            .evaluate(&v1::State::from(HashMap::from([(3, 5.0)])), atol)
             .unwrap();
         assert_eq!(
             original_solution.objective(),
@@ -2353,9 +2892,11 @@ mod tests {
             )
             .unwrap();
 
-        // Fix x2 = 1 → OneHot propagation should fix x1=0, x3=0
-        let state = v1::State::from(HashMap::from([(2, 1.0)]));
-        instance.partial_evaluate(&state, ATol::default()).unwrap();
+        // Fix x2 approximately to 1. Canonicalization precedes OneHot
+        // propagation, so x2 is stored as 1 and x1/x3 are fixed to 0.
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(2, 1.0625)]));
+        instance.partial_evaluate(&state, atol).unwrap();
 
         // All three variables should be substituted
         assert_eq!(
@@ -2539,6 +3080,74 @@ mod tests {
                 IndicatorConstraintID::from(100)
             )]
         );
+    }
+
+    #[test]
+    fn test_partial_evaluate_indicator_promotion_uses_canonical_state() {
+        use crate::{constraint::Equality, DecisionVariable, IndicatorConstraintID};
+        use maplit::btreemap;
+
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::integer(),
+            VariableID::from(10) => DecisionVariable::binary(),
+        };
+        let scaled_x = (coeff!(1_000_000.0) * linear!(1)).unwrap();
+        let inner_function = Function::from((scaled_x + coeff!(-2_000_000.0)).unwrap());
+        let indicator_id = IndicatorConstraintID::from(100);
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .indicator_constraints(BTreeMap::from([(
+                indicator_id,
+                crate::IndicatorConstraint::new(
+                    VariableID::from(10),
+                    Equality::LessThanOrEqualToZero,
+                    inner_function,
+                ),
+            )]))
+            .build()
+            .unwrap();
+        let atol = ATol::new(0.125).unwrap();
+        let state = v1::State::from(HashMap::from([(1, 2.0625), (10, 1.0625)]));
+
+        let direct = instance.evaluate(&state, atol).unwrap();
+        assert_eq!(direct.state().entries.get(&1), Some(&2.0));
+        assert_eq!(direct.state().entries.get(&10), Some(&1.0));
+        assert_eq!(
+            direct
+                .evaluated_indicator_constraints()
+                .get(&indicator_id)
+                .unwrap()
+                .stage
+                .evaluated_value,
+            0.0
+        );
+        assert!(direct.feasible_constraints());
+
+        let mut rewritten = instance.clone();
+        rewritten.partial_evaluate(&state, atol).unwrap();
+        let promoted_id = *rewritten
+            .constraint_collection
+            .active()
+            .keys()
+            .next()
+            .unwrap();
+        let rewritten_solution = rewritten.evaluate(&v1::State::default(), atol).unwrap();
+
+        assert_eq!(rewritten_solution.state(), direct.state());
+        assert_eq!(rewritten_solution.objective(), direct.objective());
+        assert_eq!(
+            rewritten_solution
+                .evaluated_constraints()
+                .get(&promoted_id)
+                .unwrap()
+                .stage
+                .evaluated_value,
+            0.0
+        );
+        assert!(rewritten_solution.feasible_constraints());
     }
 
     #[test]

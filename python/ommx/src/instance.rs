@@ -1313,7 +1313,9 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Evaluation populates the full state before applying preserved output objective semantics.
+    /// Evaluation first applies the canonicalization, population, and consistency
+    /// assertion rules documented by {meth}`~ommx.Instance.populate_state`, then
+    /// applies preserved output objective semantics to the populated state.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -1354,11 +1356,24 @@ impl Instance {
         Ok(Solution { inner: solution })
     }
 
-    /// Populate fixed, irrelevant, and dependent decision variables in a state.
+    /// Canonicalize a solver state and populate fixed, irrelevant, and dependent
+    /// decision variables.
     ///
     /// The input state must contain all decision variables that are actually used
     /// by this instance's objective and active constraints. The returned
     /// {class}`~ommx.State` contains every decision variable in the instance.
+    /// For finite supplied coordinates that are neither fixed nor dependent,
+    /// Binary values strictly within ``atol`` of zero or one and Integer or
+    /// SemiInteger values strictly within ``atol`` of an integer are represented
+    /// exactly. Derived dependent values use the same target-kind rule. Continuous
+    /// and SemiContinuous values are not rounded. Other finite solver values remain
+    /// available for feasibility checks. A caller-provided fixed or dependent
+    /// value is a consistency assertion; after validation, the returned state uses
+    /// the stored fixed value unchanged or the canonicalized derived dependent
+    /// value. Dependencies consume canonicalized non-fixed, non-dependent inputs.
+    /// A supplied dependent assertion is compared with the value derived from those
+    /// inputs before target-kind canonicalization, so an assertion computed from the
+    /// uncanonicalized solver vector can be rejected as inconsistent.
     ///
     /// # Postconditions
     ///
@@ -1389,11 +1404,11 @@ impl Instance {
         Ok(State(state))
     }
 
-    /// Creates a new instance with specific decision variables fixed to given values.
+    /// Creates a new instance by fixing decision variables from a supplied state.
     ///
-    /// This method substitutes the specified decision variables with their provided values,
-    /// creating a new problem instance where these variables are fixed. This is useful for
-    /// scenarios such as:
+    /// This method validates supplied values, selects their Instance-owned representations
+    /// under the rules below, and substitutes the specified decision variables. This creates
+    /// a new problem instance where these variables are fixed and is useful for scenarios such as:
     ///
     /// - Creating simplified sub-problems with some variables fixed
     /// - Incrementally solving a problem by fixing some variables and optimizing the rest
@@ -1405,11 +1420,19 @@ impl Instance {
     /// - `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
     ///
     /// **Returns:**
-    /// A new instance with the specified decision variables fixed to their given values.
+    /// A new instance with the specified decision variables fixed to values selected by the
+    /// canonicalization and ownership rules below.
     ///
     /// # Postconditions
     ///
-    /// The new instance rewrites only active expressions while retaining fixed values for output evaluation.
+    /// After the existing kind and bound validation, accepted supplied coordinates
+    /// use the same Instance-owned canonicalization rules as
+    /// {meth}`~ommx.Instance.populate_state` before propagation and substitution.
+    /// Non-fixed, non-dependent Continuous and SemiContinuous values are not rounded.
+    /// Existing fixed values remain authoritative, dependent inputs remain consistency
+    /// assertions, and values outside the existing partial-evaluation acceptance contract
+    /// remain rejected. The new instance rewrites only active expressions while retaining
+    /// canonical fixed values for output evaluation.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -1417,7 +1440,7 @@ impl Instance {
     /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
     /// ... )
     /// >>> assert instance.convert_active_objective(Sense.Minimize)
-    /// >>> fixed = instance.partial_evaluate({0: 1})
+    /// >>> fixed = instance.partial_evaluate({0: 1.0000005}, atol=1e-6)
     /// >>> assert instance.required_ids() == {0}
     /// >>> assert fixed.required_ids() == set()
     /// >>> assert fixed.objective.evaluate({}) == -3.0
@@ -1445,7 +1468,9 @@ impl Instance {
     ///
     /// # Postconditions
     ///
-    /// Every sample restores fixed variables before applying preserved output objective semantics.
+    /// Every sample uses the canonicalization, population, and consistency assertion
+    /// rules documented by {meth}`~ommx.Instance.populate_state` before applying
+    /// preserved output objective semantics. SampleID membership is preserved.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
