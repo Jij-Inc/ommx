@@ -21,6 +21,31 @@ fn ensure_finite_result(operation: &'static str, value: f64) -> crate::Result<f6
     }
 }
 
+fn ensure_finite_sampled_results(
+    operation: &'static str,
+    mut values: Sampled<f64>,
+) -> crate::Result<Sampled<f64>> {
+    for value in values.iter_mut() {
+        ensure_finite_result(operation, *value)?;
+    }
+    Ok(values)
+}
+
+fn ensure_required_state_entries(
+    required_ids: VariableIDSet,
+    state: &crate::v1::State,
+) -> crate::Result<()> {
+    let missing_ids = required_ids
+        .into_iter()
+        .filter(|id| !state.entries.contains_key(&id.into_inner()))
+        .collect::<VariableIDSet>();
+    if missing_ids.is_empty() {
+        Ok(())
+    } else {
+        Err(crate::MissingStateEntries { ids: missing_ids }.into())
+    }
+}
+
 fn is_zero(value: f64, atol: crate::ATol) -> bool {
     value.abs() <= *atol
 }
@@ -234,15 +259,6 @@ impl Evaluate for Function {
         solution: &crate::v1::State,
         atol: crate::ATol,
     ) -> crate::Result<Self::Output> {
-        let state_ids: VariableIDSet = solution.entries.keys().map(|id| (*id).into()).collect();
-        let missing_ids: VariableIDSet = self
-            .required_ids()
-            .difference(&state_ids)
-            .copied()
-            .collect();
-        if !missing_ids.is_empty() {
-            return Err(crate::MissingStateEntries { ids: missing_ids }.into());
-        }
         match self {
             Function::Zero => Ok(0.0),
             Function::Constant(c) => Ok(c.into_inner()),
@@ -256,6 +272,7 @@ impl Evaluate for Function {
                 ensure_finite_result("polynomial function", f.evaluate(solution, atol)?)
             }
             Function::Expression(expression) => {
+                ensure_required_state_entries(self.required_ids(), solution)?;
                 let mut values = Vec::new();
                 for instruction in instructions(expression) {
                     match instruction {
@@ -340,10 +357,19 @@ impl Evaluate for Function {
                 samples.ids().into_iter(),
                 c.into_inner(),
             )),
-            Function::Linear(_)
-            | Function::Quadratic(_)
-            | Function::Polynomial(_)
-            | Function::Expression(_) => samples.try_map_ref(|state| self.evaluate(state, atol)),
+            Function::Linear(f) => ensure_finite_sampled_results(
+                "polynomial function",
+                f.evaluate_samples(samples, atol)?,
+            ),
+            Function::Quadratic(f) => ensure_finite_sampled_results(
+                "polynomial function",
+                f.evaluate_samples(samples, atol)?,
+            ),
+            Function::Polynomial(f) => ensure_finite_sampled_results(
+                "polynomial function",
+                f.evaluate_samples(samples, atol)?,
+            ),
+            Function::Expression(_) => samples.try_map_ref(|state| self.evaluate(state, atol)),
         }
     }
 }
@@ -535,6 +561,25 @@ mod tests {
             .downcast_ref::<crate::MissingStateEntries>()
             .expect("missing state entries must remain a typed signal");
         assert_eq!(missing.ids, crate::variable_ids!(1, 2));
+    }
+
+    #[test]
+    fn composite_evaluation_reports_missing_ids_before_domain_errors() {
+        let undefined = (Function::from(linear!(1)) / Function::zero())
+            .expect("division by a Function is representable");
+        let function = (undefined + Function::from(linear!(2)))
+            .expect("addition of composed Functions is representable");
+
+        let error = function
+            .evaluate(
+                &crate::v1::State::from_iter([(1, 1.0)]),
+                crate::ATol::default(),
+            )
+            .unwrap_err();
+        let missing = error
+            .downcast_ref::<crate::MissingStateEntries>()
+            .expect("expression shape validation precedes domain evaluation");
+        assert_eq!(missing.ids, crate::variable_ids!(2));
     }
 
     #[test]

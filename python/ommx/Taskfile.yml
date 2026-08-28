@@ -33,9 +33,9 @@ tasks:
     dir: ../..
 
   pytest-bench:
-    desc: Run only benchmark tests
+    desc: Run persistent benchmark guardrails as tests
     cmds:
-      - uv run pytest -vv python/ommx-tests/tests/test_bench_*.py
+      - uv run pytest -vv python/ommx-tests/tests/test_bench_*.py -m benchmark_guardrail
     dir: ../..
 
   pytest-unit:

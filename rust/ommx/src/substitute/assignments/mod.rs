@@ -663,7 +663,7 @@ mod tests {
     }
 
     #[test]
-    fn evaluate_samples_propagates_scalar_assignment_error() {
+    fn evaluate_samples_propagates_scalar_function_error() {
         let assignments = assign! {
             1 <- linear!(2),
             2 <- linear!(3)
@@ -678,7 +678,10 @@ mod tests {
 
         let sampled_message = sampled_error.to_string();
         assert_eq!(sampled_message, scalar_error.to_string());
-        assert!(sampled_message.contains("evaluated to non-finite value"));
+        assert!(matches!(
+            sampled_error.downcast_ref::<crate::FunctionEvaluationError>(),
+            Some(crate::FunctionEvaluationError::NonFiniteResult { .. })
+        ));
     }
 
     #[test]
