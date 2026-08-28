@@ -184,7 +184,7 @@ enum PartialEvaluatePlan {
     },
     RegularReplacement {
         fixed_values: BTreeMap<VariableID, f64>,
-        objective: Function,
+        objective: Option<Function>,
         active_constraint_replacements: BTreeMap<ConstraintID, Constraint>,
         named_function_replacements: BTreeMap<NamedFunctionID, NamedFunction>,
     },
@@ -205,21 +205,28 @@ impl PartialEvaluatePlan {
         let fixed_values = Self::prepare_fixed_values(instance, state, atol)?;
         let evaluation_state = Self::evaluation_state(instance, &fixed_values);
 
-        let mut objective = instance.objective.clone();
-        objective.partial_evaluate(&evaluation_state, atol)?;
+        let objective = instance
+            .objective
+            .partial_evaluate_replacement(&evaluation_state, atol)?;
 
         let mut active_constraint_replacements = BTreeMap::new();
         for (&id, constraint) in instance.constraint_collection.active() {
-            let mut constraint = constraint.clone();
-            constraint.partial_evaluate(&evaluation_state, atol)?;
-            active_constraint_replacements.insert(id, constraint);
+            let Some(replacement) =
+                constraint.partial_evaluate_replacement(&evaluation_state, atol)?
+            else {
+                continue;
+            };
+            active_constraint_replacements.insert(id, replacement);
         }
 
         let mut named_function_replacements = BTreeMap::new();
         for (&id, named_function) in instance.named_functions.entries() {
-            let mut named_function = named_function.clone();
-            named_function.partial_evaluate(&evaluation_state, atol)?;
-            named_function_replacements.insert(id, named_function);
+            let Some(replacement) =
+                named_function.partial_evaluate_replacement(&evaluation_state, atol)?
+            else {
+                continue;
+            };
+            named_function_replacements.insert(id, replacement);
         }
 
         Ok(Some(Self::RegularReplacement {
@@ -260,14 +267,7 @@ impl PartialEvaluatePlan {
 
     fn supports_regular_replacement_shape(instance: &Instance) -> bool {
         Self::has_no_active_special_constraints(instance)
-            && instance
-                .indicator_constraint_collection
-                .removed()
-                .is_empty()
-            && instance.one_hot_constraint_collection.removed().is_empty()
-            && instance.sos1_constraint_collection.removed().is_empty()
             && instance.decision_variable_dependency.is_empty()
-            && !instance.constraint_collection.removed().is_empty()
     }
 
     fn prepare_fixed_values(
@@ -498,7 +498,9 @@ impl Instance {
             } => {
                 self.decision_variables
                     .merge_validated_fixed_values(fixed_values, atol);
-                self.objective = objective;
+                if let Some(objective) = objective {
+                    self.objective = objective;
+                }
                 self.constraint_collection
                     .replace_active_rows(active_constraint_replacements)
                     .expect(
@@ -564,10 +566,10 @@ impl Instance {
         let mut remaining_assignments = Vec::new();
 
         for (id, function) in self.decision_variable_dependency.evaluation_order_iter() {
-            let mut function = function.clone();
-            function
-                .partial_evaluate(&evaluation_state, atol)
+            let replacement = function
+                .partial_evaluate_replacement(&evaluation_state, atol)
                 .map_err(|error| normalize_dependency_partial_evaluation_error(id, error))?;
+            let function = replacement.unwrap_or_else(|| function.clone().normalize());
             let required_ids = function.required_ids();
 
             if required_ids.is_empty() {
@@ -1290,6 +1292,56 @@ mod tests {
         assert_eq!(instance.removed_one_hot_constraints(), &removed_before);
     }
 
+    #[test]
+    fn test_partial_evaluate_regular_plan_allows_removed_special_rows() {
+        use crate::{DecisionVariable, OneHotConstraint, OneHotConstraintID};
+
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::binary()),
+                (VariableID::from(2), DecisionVariable::binary()),
+                (VariableID::from(3), DecisionVariable::binary()),
+                (VariableID::from(4), DecisionVariable::continuous()),
+            ]))
+            .constraints(BTreeMap::from([(
+                ConstraintID::from(10),
+                Constraint::equal_to_zero(Function::from(linear!(4))),
+            )]))
+            .build()
+            .unwrap();
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                OneHotConstraintID::from(1),
+                OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect())
+                    .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        instance
+            .partial_evaluate(&v1::State::from(HashMap::from([(2, 1.0)])), ATol::default())
+            .unwrap();
+
+        let removed_before = instance.removed_one_hot_constraints().clone();
+        let state = v1::State::from(HashMap::from([(4, 2.0)]));
+        assert!(matches!(
+            PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
+            Some(PartialEvaluatePlan::RegularReplacement { .. })
+        ));
+
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert_eq!(instance.removed_one_hot_constraints(), &removed_before);
+        assert!(instance
+            .constraints()
+            .get(&ConstraintID::from(10))
+            .unwrap()
+            .required_ids()
+            .is_empty());
+    }
+
     fn regular_plan_instance() -> Instance {
         let named_function_id = crate::NamedFunctionID::from(1);
         let constraint_id = ConstraintID::from(1);
@@ -1335,6 +1387,36 @@ mod tests {
             )]))
             .build()
             .unwrap()
+    }
+
+    #[test]
+    fn test_partial_evaluate_active_regular_shape_uses_replacement_plan() {
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(),
+            )]))
+            .constraints(BTreeMap::from([(
+                ConstraintID::from(1),
+                Constraint::equal_to_zero(Function::from(linear!(1))),
+            )]))
+            .build()
+            .unwrap();
+        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+
+        assert!(matches!(
+            PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
+            Some(PartialEvaluatePlan::RegularReplacement { .. })
+        ));
+
+        let mut borrowed = instance.clone();
+        borrowed.partial_evaluate(&state, ATol::default()).unwrap();
+        let consumed = instance
+            .into_partial_evaluated(&state, ATol::default())
+            .unwrap();
+        assert_eq!(borrowed, consumed);
     }
 
     #[test]
@@ -1396,6 +1478,122 @@ mod tests {
                 .get(&crate::NamedFunctionID::from(1))
                 .unwrap()
                 .evaluated_value()
+        );
+    }
+
+    #[test]
+    fn test_partial_evaluate_regular_plan_replaces_only_overlapping_functions() {
+        let changed_constraint_id = ConstraintID::from(1);
+        let unchanged_constraint_id = ConstraintID::from(2);
+        let changed_named_function_id = NamedFunctionID::from(1);
+        let unchanged_named_function_id = NamedFunctionID::from(2);
+        let removed_reason = RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
+        };
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(3)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), crate::DecisionVariable::continuous()),
+                (VariableID::from(2), crate::DecisionVariable::continuous()),
+                (VariableID::from(3), crate::DecisionVariable::continuous()),
+            ]))
+            .constraints(BTreeMap::from([
+                (
+                    changed_constraint_id,
+                    Constraint::less_than_or_equal_to_zero(Function::from(
+                        (linear!(1) + linear!(3)).unwrap(),
+                    )),
+                ),
+                (
+                    unchanged_constraint_id,
+                    Constraint::equal_to_zero(Function::from(linear!(3))),
+                ),
+            ]))
+            .removed_constraints(BTreeMap::from([(
+                ConstraintID::from(10),
+                (
+                    Constraint::equal_to_zero(Function::from(linear!(2))),
+                    removed_reason,
+                ),
+            )]))
+            .named_functions(BTreeMap::from([
+                (
+                    changed_named_function_id,
+                    NamedFunction {
+                        function: Function::from((linear!(1) + linear!(3)).unwrap()),
+                    },
+                ),
+                (
+                    unchanged_named_function_id,
+                    NamedFunction {
+                        function: Function::from(linear!(3)),
+                    },
+                ),
+            ]))
+            .build()
+            .unwrap();
+        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+
+        let Some(PartialEvaluatePlan::RegularReplacement {
+            objective,
+            active_constraint_replacements,
+            named_function_replacements,
+            ..
+        }) = PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap()
+        else {
+            panic!("regular-only shape with removed rows must use replacement planning");
+        };
+
+        assert!(objective.is_none());
+        assert_eq!(
+            active_constraint_replacements
+                .keys()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![changed_constraint_id]
+        );
+        assert_eq!(
+            named_function_replacements
+                .keys()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![changed_named_function_id]
+        );
+
+        let original_objective = instance.objective().clone();
+        let original_unchanged_constraint = instance
+            .constraints()
+            .get(&unchanged_constraint_id)
+            .unwrap()
+            .clone();
+        let original_unchanged_named_function = instance
+            .named_functions()
+            .get(&unchanged_named_function_id)
+            .unwrap()
+            .clone();
+        let mut rewritten = instance;
+        rewritten.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert_eq!(rewritten.objective(), &original_objective);
+        assert_eq!(
+            rewritten.constraints().get(&unchanged_constraint_id),
+            Some(&original_unchanged_constraint)
+        );
+        assert_eq!(
+            rewritten
+                .named_functions()
+                .get(&unchanged_named_function_id),
+            Some(&original_unchanged_named_function)
+        );
+        assert_eq!(
+            rewritten
+                .constraints()
+                .get(&changed_constraint_id)
+                .unwrap()
+                .equality,
+            crate::Equality::LessThanOrEqualToZero
         );
     }
 

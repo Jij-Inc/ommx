@@ -469,6 +469,19 @@ impl Instance {
         ));
     }
 
+    /// Replace the active objective while preserving the previous objective
+    /// pair for output reconstruction, without cloning an already planned
+    /// replacement or the objective it supersedes.
+    fn replace_active_objective_preserving_output(&mut self, replacement: Function) {
+        if self.output_objective.is_some() {
+            self.objective = replacement;
+            return;
+        }
+
+        let original = std::mem::replace(&mut self.objective, replacement);
+        self.output_objective = Some(OutputObjective::new(self.sense, original, true));
+    }
+
     /// Record that the active formulation no longer provides an optimality
     /// proof for the reconstructed output semantics. Once lost, later rewrites
     /// cannot infer that guarantee again.

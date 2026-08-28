@@ -1,6 +1,6 @@
 use super::operation::{
-    as_constant, from_instructions_exact, instructions, into_expression_instructions,
-    into_instructions, AssociativeOperator, Atom, BinaryOperator, Instruction, UnaryOperator,
+    as_constant, from_instructions_exact, instructions, into_instructions, AssociativeOperator,
+    Atom, BinaryOperator, Instruction, UnaryOperator,
 };
 use super::*;
 use crate::{Evaluate, Sampled, VariableIDSet};
@@ -58,28 +58,116 @@ fn unary_partial_fold_is_atol_independent(operator: UnaryOperator) -> bool {
     }
 }
 
+fn polynomial_has_state_overlap<M: crate::Monomial>(
+    function: &crate::PolynomialBase<M>,
+    state: &crate::v1::State,
+) -> bool {
+    function.keys().any(|monomial| {
+        monomial
+            .ids()
+            .any(|id| state.entries.contains_key(&id.into_inner()))
+    })
+}
+
+fn expression_has_partial_fold_candidate(expression: &Expression) -> bool {
+    let mut constant_operands = Vec::new();
+    for instruction in instructions(expression) {
+        match instruction {
+            Instruction::Push(Atom::Zero | Atom::Constant(_)) => constant_operands.push(true),
+            Instruction::Push(_) => constant_operands.push(false),
+            Instruction::Unary(operator) => {
+                let operand = constant_operands
+                    .pop()
+                    .expect("validated unary instruction has an operand");
+                if operand && unary_partial_fold_is_atol_independent(*operator) {
+                    return true;
+                }
+                constant_operands.push(false);
+            }
+            Instruction::Associative(_) => {
+                let rhs = constant_operands
+                    .pop()
+                    .expect("validated associative instruction has a right operand");
+                let lhs = constant_operands
+                    .pop()
+                    .expect("validated associative instruction has a left operand");
+                if lhs && rhs {
+                    return true;
+                }
+                constant_operands.push(false);
+            }
+            Instruction::Binary(_) => {
+                constant_operands
+                    .pop()
+                    .expect("validated binary instruction has a right operand");
+                constant_operands
+                    .pop()
+                    .expect("validated binary instruction has a left operand");
+                constant_operands.push(false);
+            }
+        }
+    }
+    false
+}
+
+fn expression_needs_partial_rebuild(expression: &Expression, state: &crate::v1::State) -> bool {
+    instructions(expression).iter().any(|instruction| {
+        let Instruction::Push(atom) = instruction else {
+            return false;
+        };
+        match atom {
+            Atom::Linear(function) => {
+                polynomial_has_state_overlap(function, state) || function.degree().into_inner() != 1
+            }
+            Atom::Quadratic(function) => {
+                polynomial_has_state_overlap(function, state) || function.degree().into_inner() != 2
+            }
+            Atom::Polynomial(function) => {
+                polynomial_has_state_overlap(function, state) || function.degree().into_inner() <= 2
+            }
+            Atom::Zero | Atom::Constant(_) => false,
+        }
+    }) || expression_has_partial_fold_candidate(expression)
+}
+
 impl Function {
-    fn partially_evaluated(
-        self,
+    /// Prepare a replacement for the `Instance`-owned atomic plan without
+    /// mutating or cloning a function that needs no substitution,
+    /// canonicalization, or closed-expression folding.
+    pub(crate) fn partial_evaluate_replacement(
+        &self,
         state: &crate::v1::State,
         atol: crate::ATol,
-    ) -> crate::Result<Self> {
+    ) -> crate::Result<Option<Self>> {
         Ok(match self {
-            Function::Zero | Function::Constant(_) => self,
-            Function::Linear(mut function) => {
-                function.partial_evaluate(state, atol)?;
-                Function::Linear(function).normalize()
-            }
-            Function::Quadratic(mut function) => {
-                function.partial_evaluate(state, atol)?;
-                Function::Quadratic(function).normalize()
-            }
-            Function::Polynomial(mut function) => {
-                function.partial_evaluate(state, atol)?;
-                Function::Polynomial(function).normalize()
-            }
+            Function::Zero | Function::Constant(_) => None,
+            Function::Linear(function) => match function.partial_evaluate_replacement(state)? {
+                Some(function) => Some(Function::Linear(function).normalize()),
+                None if function.degree().into_inner() != 1 => {
+                    Some(Function::Linear(function.clone()).normalize())
+                }
+                None => None,
+            },
+            Function::Quadratic(function) => match function.partial_evaluate_replacement(state)? {
+                Some(function) => Some(Function::Quadratic(function).normalize()),
+                None if function.degree().into_inner() != 2 => {
+                    Some(Function::Quadratic(function.clone()).normalize())
+                }
+                None => None,
+            },
+            Function::Polynomial(function) => match function.partial_evaluate_replacement(state)? {
+                Some(function) => Some(Function::Polynomial(function).normalize()),
+                None if function.degree().into_inner() <= 2 => {
+                    Some(Function::Polynomial(function.clone()).normalize())
+                }
+                None => None,
+            },
             Function::Expression(expression) => {
-                partially_evaluate_expression(expression, state, atol)?
+                if expression_needs_partial_rebuild(expression, state) {
+                    Some(partially_evaluate_expression(expression, state, atol)?)
+                } else {
+                    None
+                }
             }
         })
     }
@@ -168,21 +256,42 @@ fn replace_partial_operand_with_value(
 }
 
 fn partially_evaluate_expression(
-    expression: Expression,
+    expression: &Expression,
     state: &crate::v1::State,
     atol: crate::ATol,
 ) -> crate::Result<Function> {
-    let mut instructions = Vec::with_capacity(instructions(&expression).len());
+    let mut output_instructions = Vec::with_capacity(instructions(expression).len());
     let mut operands = Vec::new();
 
-    for instruction in into_expression_instructions(expression) {
+    for instruction in instructions(expression) {
         match instruction {
             Instruction::Push(atom) => {
-                let evaluated = atom.into_function().partially_evaluated(state, atol)?;
+                let evaluated = match atom {
+                    Atom::Zero => Function::Zero,
+                    Atom::Constant(value) => Function::Constant(value.to_owned()),
+                    Atom::Linear(function) => Function::Linear(
+                        function
+                            .partial_evaluate_replacement(state)?
+                            .unwrap_or_else(|| function.clone()),
+                    )
+                    .normalize(),
+                    Atom::Quadratic(function) => Function::Quadratic(
+                        function
+                            .partial_evaluate_replacement(state)?
+                            .unwrap_or_else(|| function.clone()),
+                    )
+                    .normalize(),
+                    Atom::Polynomial(function) => Function::Polynomial(
+                        function
+                            .partial_evaluate_replacement(state)?
+                            .unwrap_or_else(|| function.clone()),
+                    )
+                    .normalize(),
+                };
                 let value = as_constant(&evaluated);
                 debug_assert_eq!(value.is_some(), evaluated.required_ids().is_empty());
-                let start = instructions.len();
-                instructions.extend(into_instructions(evaluated));
+                let start = output_instructions.len();
+                output_instructions.extend(into_instructions(evaluated));
                 operands.push(PartialOperand { start, value });
             }
             Instruction::Unary(operator) => {
@@ -191,16 +300,16 @@ fn partially_evaluate_expression(
                     .expect("validated unary instruction has an operand");
                 if let Some(value) = operand
                     .value
-                    .filter(|_| unary_partial_fold_is_atol_independent(operator))
+                    .filter(|_| unary_partial_fold_is_atol_independent(*operator))
                 {
-                    let value = evaluate_unary(operator, value, atol)?;
+                    let value = evaluate_unary(*operator, value, atol)?;
                     operands.push(replace_partial_operand_with_value(
-                        &mut instructions,
+                        &mut output_instructions,
                         operand.start,
                         value,
                     ));
                 } else {
-                    instructions.push(Instruction::Unary(operator));
+                    output_instructions.push(Instruction::Unary(*operator));
                     operands.push(PartialOperand {
                         start: operand.start,
                         value: None,
@@ -215,14 +324,14 @@ fn partially_evaluate_expression(
                     .pop()
                     .expect("validated associative instruction has a left operand");
                 if let (Some(lhs_value), Some(rhs_value)) = (lhs.value, rhs.value) {
-                    let value = evaluate_associative(operator, lhs_value, rhs_value)?;
+                    let value = evaluate_associative(*operator, lhs_value, rhs_value)?;
                     operands.push(replace_partial_operand_with_value(
-                        &mut instructions,
+                        &mut output_instructions,
                         lhs.start,
                         value,
                     ));
                 } else {
-                    instructions.push(Instruction::Associative(operator));
+                    output_instructions.push(Instruction::Associative(*operator));
                     operands.push(PartialOperand {
                         start: lhs.start,
                         value: None,
@@ -236,7 +345,7 @@ fn partially_evaluate_expression(
                 let lhs = operands
                     .pop()
                     .expect("validated binary instruction has a left operand");
-                instructions.push(Instruction::Binary(operator));
+                output_instructions.push(Instruction::Binary(*operator));
                 operands.push(PartialOperand {
                     start: lhs.start,
                     value: None,
@@ -246,7 +355,7 @@ fn partially_evaluate_expression(
     }
 
     debug_assert_eq!(operands.len(), 1);
-    Ok(from_instructions_exact(instructions)
+    Ok(from_instructions_exact(output_instructions)
         .expect("folding closed operands preserves expression validity"))
 }
 
@@ -317,8 +426,22 @@ impl Evaluate for Function {
         state: &crate::v1::State,
         atol: crate::ATol,
     ) -> crate::Result<()> {
-        let evaluated = self.clone().partially_evaluated(state, atol)?;
-        *self = evaluated;
+        match self {
+            Function::Zero | Function::Constant(_) => return Ok(()),
+            Function::Linear(function) => function.partial_evaluate(state, atol)?,
+            Function::Quadratic(function) => function.partial_evaluate(state, atol)?,
+            Function::Polynomial(function) => function.partial_evaluate(state, atol)?,
+            Function::Expression(expression) => {
+                if !expression_needs_partial_rebuild(expression, state) {
+                    return Ok(());
+                }
+                let evaluated = partially_evaluate_expression(expression, state, atol)?;
+                *self = evaluated;
+                return Ok(());
+            }
+        }
+
+        *self = std::mem::take(self).normalize();
         Ok(())
     }
 
@@ -378,7 +501,7 @@ impl Evaluate for Function {
 mod tests {
     use super::*;
     use crate::random::*;
-    use crate::{coeff, linear};
+    use crate::{coeff, linear, monomial, quadratic};
     use ::approx::AbsDiffEq;
     use proptest::prelude::*;
 
@@ -546,6 +669,152 @@ mod tests {
             error.downcast_ref::<FunctionEvaluationError>(),
             Some(FunctionEvaluationError::NonFiniteResult { .. })
         ));
+    }
+
+    #[test]
+    fn compact_partial_evaluation_preserves_coefficient_error_and_is_atomic() {
+        let functions = [
+            Function::Linear(crate::Linear::single_term(linear!(1), coeff!(f64::MAX))),
+            Function::Quadratic(crate::Quadratic::single_term(
+                quadratic!(1, 2),
+                coeff!(f64::MAX),
+            )),
+            Function::Polynomial(crate::Polynomial::single_term(
+                monomial!(1, 2, 3),
+                coeff!(f64::MAX),
+            )),
+        ];
+        let state = crate::v1::State::from_iter([(1, f64::MAX)]);
+
+        for mut function in functions {
+            let original = function.clone();
+            let error = function
+                .partial_evaluate(&state, crate::ATol::default())
+                .unwrap_err();
+
+            assert!(error.is::<crate::CoefficientError>());
+            assert_eq!(function, original);
+        }
+    }
+
+    #[test]
+    fn compact_partial_evaluation_normalizes_after_success() {
+        let state = crate::v1::State::from_iter([(1, 2.0)]);
+
+        let mut linear = Function::Linear(crate::Linear::single_term(linear!(1), coeff!(3.0)));
+        linear
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+        assert_eq!(linear, Function::try_from(6.0).unwrap());
+
+        let mut quadratic =
+            Function::Quadratic(crate::Quadratic::single_term(quadratic!(1, 2), coeff!(3.0)));
+        quadratic
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+        assert!(matches!(quadratic, Function::Linear(_)));
+
+        let mut polynomial = Function::Polynomial(crate::Polynomial::single_term(
+            monomial!(1, 2, 3),
+            coeff!(3.0),
+        ));
+        polynomial
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+        assert!(matches!(polynomial, Function::Quadratic(_)));
+    }
+
+    #[test]
+    fn borrowed_replacement_preserves_disjoint_compact_canonicalization() {
+        let canonical = Function::Polynomial(crate::Polynomial::single_term(
+            monomial!(1, 2, 3),
+            coeff!(1.0),
+        ));
+        assert!(canonical
+            .partial_evaluate_replacement(&crate::v1::State::default(), crate::ATol::default())
+            .unwrap()
+            .is_none());
+
+        let noncanonical =
+            Function::Polynomial(crate::Polynomial::from(crate::Linear::from(linear!(1))));
+        let replacement = noncanonical
+            .partial_evaluate_replacement(&crate::v1::State::default(), crate::ATol::default())
+            .unwrap();
+        assert!(matches!(replacement, Some(Function::Linear(_))));
+    }
+
+    #[test]
+    fn expression_partial_evaluation_skips_disjoint_state_without_rebuilding() {
+        let mut function = Function::from(linear!(2)).abs();
+        let original = function.clone();
+        let (instructions_pointer, instructions_len) = match &function {
+            Function::Expression(expression) => {
+                let instructions = instructions(expression);
+                (instructions.as_ptr(), instructions.len())
+            }
+            _ => panic!("absolute value of a variable must be an expression"),
+        };
+
+        function
+            .partial_evaluate(
+                &crate::v1::State::from_iter([(1, 3.0)]),
+                crate::ATol::default(),
+            )
+            .unwrap();
+
+        assert_eq!(function, original);
+        let Function::Expression(expression) = &function else {
+            panic!("a disjoint state must preserve the expression variant");
+        };
+        assert_eq!(instructions(expression).len(), instructions_len);
+        assert_eq!(instructions(expression).as_ptr(), instructions_pointer);
+    }
+
+    #[test]
+    fn expression_partial_evaluation_normalizes_disjoint_compact_atoms() {
+        let mut function =
+            Function::Polynomial(crate::Polynomial::from(crate::Linear::from(linear!(1)))).abs();
+
+        function
+            .partial_evaluate(&crate::v1::State::default(), crate::ATol::default())
+            .unwrap();
+
+        assert_eq!(function, Function::from(linear!(1)).abs());
+    }
+
+    #[test]
+    fn expression_partial_evaluation_folds_disjoint_closed_subexpressions() {
+        let mut function = crate::function::operation::associative_expression(
+            AssociativeOperator::Add,
+            Function::try_from(1.0).unwrap(),
+            Function::try_from(2.0).unwrap(),
+        );
+
+        function
+            .partial_evaluate(&crate::v1::State::default(), crate::ATol::default())
+            .unwrap();
+
+        assert_eq!(function, Function::try_from(3.0).unwrap());
+    }
+
+    #[test]
+    fn expression_partial_evaluation_reports_disjoint_closed_overflow_atomically() {
+        let mut function = crate::function::operation::associative_expression(
+            AssociativeOperator::Mul,
+            Function::try_from(f64::MAX).unwrap(),
+            Function::try_from(2.0).unwrap(),
+        );
+        let original = function.clone();
+
+        let error = function
+            .partial_evaluate(&crate::v1::State::default(), crate::ATol::default())
+            .unwrap_err();
+
+        assert!(matches!(
+            error.downcast_ref::<FunctionEvaluationError>(),
+            Some(FunctionEvaluationError::NonFiniteResult { .. })
+        ));
+        assert_eq!(function, original);
     }
 
     #[test]
@@ -765,6 +1034,7 @@ mod tests {
             overflowing_operation,
             later_overflowing_push,
         );
+        let original = function.clone();
 
         let error = function
             .partial_evaluate(
@@ -776,6 +1046,7 @@ mod tests {
             error.downcast_ref::<FunctionEvaluationError>(),
             Some(FunctionEvaluationError::NonFiniteResult { .. })
         ));
+        assert_eq!(function, original);
     }
 
     #[test]

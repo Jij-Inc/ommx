@@ -1,6 +1,26 @@
 use super::*;
 use crate::{Evaluate, VariableIDSet};
 
+impl Constraint<Created> {
+    /// Prepare an intrinsic row replacement for the `Instance`-owned atomic
+    /// partial-evaluation plan while preserving this constraint's equality.
+    pub(crate) fn partial_evaluate_replacement(
+        &self,
+        state: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> crate::Result<Option<Self>> {
+        self.stage
+            .function
+            .partial_evaluate_replacement(state, atol)
+            .map(|replacement| {
+                replacement.map(|function| Self {
+                    equality: self.equality,
+                    stage: CreatedData { function },
+                })
+            })
+    }
+}
+
 impl Evaluate for Constraint<Created> {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;

@@ -160,10 +160,6 @@ impl Atom {
         }
     }
 
-    pub fn to_function(&self) -> Function {
-        self.clone().into_function()
-    }
-
     fn from_function(function: Function) -> Result<Self, Function> {
         match function {
             Function::Zero => Ok(Self::Zero),
@@ -173,6 +169,183 @@ impl Atom {
             Function::Polynomial(value) => Ok(Self::Polynomial(value)),
             Function::Expression(expression) => Err(Function::Expression(expression)),
         }
+    }
+}
+
+/// Borrowed view of a monomial stored in a compact polynomial.
+///
+/// The view keeps dynamic monomials borrowed even when their degree exceeds
+/// the inline capacity of [`crate::MonomialDyn`].
+#[derive(Clone, Copy)]
+pub(crate) enum MonomialRef<'a> {
+    Constant,
+    Linear(&'a crate::LinearMonomial),
+    Quadratic(&'a crate::QuadraticMonomial),
+    Polynomial(&'a crate::MonomialDyn),
+}
+
+impl<'a> MonomialRef<'a> {
+    fn as_linear(self) -> Option<crate::LinearMonomial> {
+        match self {
+            Self::Constant => Some(crate::LinearMonomial::Constant),
+            Self::Linear(monomial) => Some(*monomial),
+            Self::Quadratic(monomial) => crate::LinearMonomial::try_from(monomial).ok(),
+            Self::Polynomial(monomial) => crate::LinearMonomial::try_from(monomial).ok(),
+        }
+    }
+
+    fn as_quadratic(self) -> Option<crate::QuadraticMonomial> {
+        match self {
+            Self::Constant => Some(crate::QuadraticMonomial::Constant),
+            Self::Linear(monomial) => Some((*monomial).into()),
+            Self::Quadratic(monomial) => Some(*monomial),
+            Self::Polynomial(monomial) => crate::QuadraticMonomial::try_from(monomial).ok(),
+        }
+    }
+
+    fn with_dynamic<R>(self, get: impl FnOnce(&crate::MonomialDyn) -> R) -> R {
+        match self {
+            Self::Constant => get(&crate::MonomialDyn::default()),
+            Self::Linear(monomial) => get(&(*monomial).into()),
+            Self::Quadratic(monomial) => get(&(*monomial).into()),
+            Self::Polynomial(monomial) => get(monomial),
+        }
+    }
+
+    pub(crate) fn len(self) -> usize {
+        match self {
+            Self::Constant => 0,
+            Self::Linear(monomial) => monomial.iter().count(),
+            Self::Quadratic(monomial) => monomial.iter().count(),
+            Self::Polynomial(monomial) => monomial.len(),
+        }
+    }
+
+    pub(crate) fn ids(self) -> impl Iterator<Item = crate::VariableID> + 'a {
+        MonomialIds {
+            monomial: self,
+            index: 0,
+        }
+    }
+}
+
+struct MonomialIds<'a> {
+    monomial: MonomialRef<'a>,
+    index: usize,
+}
+
+impl Iterator for MonomialIds<'_> {
+    type Item = crate::VariableID;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let id = match self.monomial {
+            MonomialRef::Constant => None,
+            MonomialRef::Linear(crate::LinearMonomial::Constant) => None,
+            MonomialRef::Linear(crate::LinearMonomial::Variable(id)) => {
+                (self.index == 0).then_some(*id)
+            }
+            MonomialRef::Quadratic(crate::QuadraticMonomial::Constant) => None,
+            MonomialRef::Quadratic(crate::QuadraticMonomial::Linear(id)) => {
+                (self.index == 0).then_some(*id)
+            }
+            MonomialRef::Quadratic(crate::QuadraticMonomial::Pair(pair)) => match self.index {
+                0 => Some(pair.lower()),
+                1 => Some(pair.upper()),
+                _ => None,
+            },
+            MonomialRef::Polynomial(monomial) => monomial.get(self.index).copied(),
+        };
+        self.index += 1;
+        id
+    }
+}
+
+/// Borrowed view of a compact polynomial [`Function`] or expression [`Atom`].
+///
+/// Comparison and formatting cross the `Function`/expression boundary but only
+/// need read access to the stored coefficient map. Keeping this view
+/// crate-private lets those paths share variant dispatch without constructing
+/// an owned `Function` or exposing expression internals through the SDK API.
+#[derive(Clone, Copy)]
+pub(crate) enum PolynomialRef<'a> {
+    Zero,
+    Constant(&'a Coefficient),
+    Linear(&'a crate::Linear),
+    Quadratic(&'a crate::Quadratic),
+    Polynomial(&'a crate::Polynomial),
+}
+
+impl<'a> PolynomialRef<'a> {
+    pub(crate) fn from_function(function: &'a Function) -> Option<Self> {
+        match function {
+            Function::Zero => Some(Self::Zero),
+            Function::Constant(value) => Some(Self::Constant(value)),
+            Function::Linear(value) => Some(Self::Linear(value)),
+            Function::Quadratic(value) => Some(Self::Quadratic(value)),
+            Function::Polynomial(value) => Some(Self::Polynomial(value)),
+            Function::Expression(_) => None,
+        }
+    }
+
+    pub(crate) fn from_atom(atom: &'a Atom) -> Self {
+        match atom {
+            Atom::Zero => Self::Zero,
+            Atom::Constant(value) => Self::Constant(value),
+            Atom::Linear(value) => Self::Linear(value),
+            Atom::Quadratic(value) => Self::Quadratic(value),
+            Atom::Polynomial(value) => Self::Polynomial(value),
+        }
+    }
+
+    pub(crate) fn num_terms(self) -> usize {
+        match self {
+            Self::Zero => 0,
+            Self::Constant(_) => 1,
+            Self::Linear(value) => value.num_terms(),
+            Self::Quadratic(value) => value.num_terms(),
+            Self::Polynomial(value) => value.num_terms(),
+        }
+    }
+
+    pub(crate) fn coefficient(self, monomial: MonomialRef<'_>) -> Option<Coefficient> {
+        match self {
+            Self::Zero => None,
+            Self::Constant(value) => (monomial.len() == 0).then_some(*value),
+            Self::Linear(value) => monomial
+                .as_linear()
+                .and_then(|monomial| value.get(&monomial)),
+            Self::Quadratic(value) => monomial
+                .as_quadratic()
+                .and_then(|monomial| value.get(&monomial)),
+            Self::Polynomial(value) => monomial.with_dynamic(|monomial| value.get(monomial)),
+        }
+    }
+
+    pub(crate) fn all_terms(
+        self,
+        mut predicate: impl FnMut(MonomialRef<'a>, Coefficient) -> bool,
+    ) -> bool {
+        match self {
+            Self::Zero => true,
+            Self::Constant(value) => predicate(MonomialRef::Constant, *value),
+            Self::Linear(value) => value.iter().all(|(monomial, coefficient)| {
+                predicate(MonomialRef::Linear(monomial), *coefficient)
+            }),
+            Self::Quadratic(value) => value.iter().all(|(monomial, coefficient)| {
+                predicate(MonomialRef::Quadratic(monomial), *coefficient)
+            }),
+            Self::Polynomial(value) => value.iter().all(|(monomial, coefficient)| {
+                predicate(MonomialRef::Polynomial(monomial), *coefficient)
+            }),
+        }
+    }
+
+    pub(crate) fn for_each_term(self, mut visit: impl FnMut(MonomialRef<'a>, Coefficient)) {
+        let completed = self.all_terms(|monomial, coefficient| {
+            visit(monomial, coefficient);
+            true
+        });
+        debug_assert!(completed);
     }
 }
 

@@ -171,7 +171,7 @@ impl Instance {
             }
         }
 
-        let plan = self.plan_substitution(acyclic)?;
+        let mut plan = self.plan_substitution(acyclic)?;
         let objective_is_affected = plan.objective.is_some();
 
         // This is the last fallible operation. It plans and validates the
@@ -186,7 +186,11 @@ impl Instance {
                 .expect("fresh decision variable IDs were reserved from this instance");
         }
         if objective_is_affected {
-            self.capture_output_objective();
+            let replacement = plan
+                .objective
+                .take()
+                .expect("affected objective has a planned replacement");
+            self.replace_active_objective_preserving_output(replacement);
         }
         self.commit_substitution(plan);
         Ok(())

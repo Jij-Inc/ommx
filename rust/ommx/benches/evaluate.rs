@@ -72,6 +72,7 @@ fn evaluate_compact_function_with_unrelated_state(c: &mut Criterion) {
     let mut group = c.benchmark_group("evaluate-compact-function-unrelated-state");
     group.plot_config(plot_config);
     let function = Function::from(linear!(0));
+    let atol = ommx::ATol::default();
     for num_state_entries in [100, 1_000, 10_000] {
         let state = (0..num_state_entries as u64)
             .map(|id| (id, 0.0))
@@ -82,7 +83,7 @@ fn evaluate_compact_function_with_unrelated_state(c: &mut Criterion) {
                 num_state_entries.to_string(),
             ),
             &state,
-            |b, state| b.iter(|| function.evaluate(state, ommx::ATol::default()).unwrap()),
+            |b, state| b.iter(|| function.evaluate(state, atol).unwrap()),
         );
     }
     group.finish();

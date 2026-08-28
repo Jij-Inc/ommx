@@ -47,33 +47,31 @@ impl Instance {
         }
 
         // Plan: compute the rewritten objective and active-constraint
-        // replacements on copies of only the touched fields, without cloning
+        // replacements from borrowed values, without cloning unchanged rows,
         // removed constraints, special constraints, named functions, or
         // metadata. All fallible steps happen here, before `self` is
         // mutated, so a `CoefficientError` never leaves `self` partially
         // rewritten.
-        let mut new_objective = self.objective.clone();
-        let objective_changed = new_objective.reduce_binary_power(&binary_ids)?;
-        let mut changed = objective_changed;
+        let objective_replacement = self.objective.plan_binary_power_reduction(&binary_ids)?;
         let mut replacements = BTreeMap::new();
         for (&id, constraint) in self.constraint_collection.active() {
-            let mut constraint = constraint.clone();
-            if constraint.reduce_binary_power(&binary_ids)? {
-                changed = true;
-                replacements.insert(id, constraint);
+            if let Some(replacement) = constraint.plan_binary_power_reduction(&binary_ids)? {
+                replacements.insert(id, replacement);
             }
         }
+        let changed = objective_replacement.is_some() || !replacements.is_empty();
 
         // Commit: only the touched fields are written, so this drops just
         // the old objective and the old versions of the touched active
         // constraints, not the whole instance.
-        if objective_changed {
-            self.capture_output_objective();
-            self.objective = new_objective;
+        if let Some(replacement) = objective_replacement {
+            self.replace_active_objective_preserving_output(replacement);
         }
-        self.constraint_collection
-            .replace_active_rows(replacements)
-            .expect("replacement IDs were read from active constraints");
+        if !replacements.is_empty() {
+            self.constraint_collection
+                .replace_active_rows(replacements)
+                .expect("replacement IDs were read from active constraints");
+        }
         // Note: We don't need to reduce in removed_constraints since they are not active
         Ok(changed)
     }
@@ -206,6 +204,35 @@ mod tests {
 
         assert_eq!(instance.objective(), &objective);
         assert!(instance.output_objective().is_none());
+    }
+
+    #[test]
+    fn reduce_binary_power_moves_original_expression_to_output_objective() {
+        let variable = VariableID::from(1);
+        let objective = Function::from(linear!(1)).powi(2);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            BTreeMap::from([(variable, DecisionVariable::binary())]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let Function::Expression(expression) = instance.objective() else {
+            panic!("powi(2) must create an expression")
+        };
+        let original_instructions = crate::function::operation::instructions(expression).as_ptr();
+
+        assert!(instance.reduce_binary_power().unwrap());
+
+        let Function::Expression(expression) = instance.output_objective().unwrap().function()
+        else {
+            panic!("output objective must preserve the original expression")
+        };
+        assert_eq!(
+            crate::function::operation::instructions(expression).as_ptr(),
+            original_instructions
+        );
+        assert_eq!(instance.objective(), &Function::from(linear!(1)));
     }
 
     #[test]

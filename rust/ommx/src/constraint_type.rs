@@ -570,12 +570,30 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         self.replace_active_rows(BTreeMap::from([(id, constraint)]))
     }
 
-    /// Move active rows to the removed map with precomputed payloads and reasons.
-    pub(crate) fn move_active_rows_to_removed(
+    /// Move existing active payloads to the removed set with host-planned reasons.
+    ///
+    /// Crate-internal root operations use this storage effect after completing
+    /// all fallible semantic work, so unchanged payloads are moved rather than
+    /// cloned into a replacement map.
+    pub(crate) fn move_active_rows_to_removed_with_reasons(
         &mut self,
-        removals: BTreeMap<T::ID, (T::Created, RemovedReason)>,
+        reasons: BTreeMap<T::ID, RemovedReason>,
     ) -> crate::Result<()> {
-        self.replace_and_remove_active_rows(BTreeMap::new(), removals)
+        for id in reasons.keys() {
+            if !self.active.contains_key(id) {
+                crate::bail!({ ?id }, "Active constraint with ID {id:?} not found");
+            }
+        }
+
+        for (id, reason) in reasons {
+            let constraint = self
+                .active
+                .remove(&id)
+                .expect("active row was validated before removal");
+            self.removed.insert(id, (constraint, reason));
+        }
+        debug_assert!(self.validate_context_ids().is_ok());
+        Ok(())
     }
 
     /// Insert an active constraint along with its context in one step.
@@ -1684,15 +1702,87 @@ mod tests {
 
         let removed = collection.active().get(&removed_id).unwrap().clone();
         collection
-            .move_active_rows_to_removed(BTreeMap::from([(
-                removed_id,
-                (removed, removed_reason()),
-            )]))
+            .replace_and_remove_active_rows(
+                BTreeMap::new(),
+                BTreeMap::from([(removed_id, (removed, removed_reason()))]),
+            )
             .unwrap();
 
         assert!(!collection.active().contains_key(&removed_id));
         assert!(collection.active().contains_key(&active_id));
         assert!(collection.removed().contains_key(&removed_id));
+        assert_eq!(collection.context().name(removed_id), Some("original"));
+        collection.validate_context_ids().unwrap();
+    }
+
+    #[test]
+    fn move_active_rows_with_reasons_rejects_unknown_id_before_mutation() {
+        let active_id = ConstraintID::from(1);
+        let unknown_id = ConstraintID::from(99);
+        let mut collection = ConstraintCollection::<Constraint>::new(
+            BTreeMap::from([(
+                active_id,
+                Constraint::equal_to_zero(Function::from(linear!(1)).abs()),
+            )]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let original = collection.clone();
+
+        let error = collection
+            .move_active_rows_to_removed_with_reasons(BTreeMap::from([
+                (active_id, removed_reason()),
+                (unknown_id, removed_reason()),
+            ]))
+            .unwrap_err();
+
+        assert!(error.to_string().contains("not found"));
+        assert_eq!(collection, original);
+    }
+
+    #[test]
+    fn move_active_rows_with_reasons_moves_payload_and_preserves_context() {
+        let removed_id = ConstraintID::from(1);
+        let active_id = ConstraintID::from(2);
+        let active = BTreeMap::from([
+            (
+                removed_id,
+                Constraint::equal_to_zero(Function::from(linear!(1)).abs()),
+            ),
+            (
+                active_id,
+                Constraint::equal_to_zero(Function::from(linear!(1))),
+            ),
+        ]);
+        let mut context = ConstraintContextStore::default();
+        context.set_name(removed_id, "original");
+        let mut collection =
+            ConstraintCollection::<Constraint>::with_context(active, BTreeMap::new(), context)
+                .unwrap();
+        let Function::Expression(expression) =
+            collection.active().get(&removed_id).unwrap().function()
+        else {
+            panic!("absolute value must use expression storage")
+        };
+        let original_instructions = crate::function::operation::instructions(expression).as_ptr();
+
+        collection
+            .move_active_rows_to_removed_with_reasons(BTreeMap::from([(
+                removed_id,
+                removed_reason(),
+            )]))
+            .unwrap();
+
+        let Function::Expression(expression) =
+            collection.removed().get(&removed_id).unwrap().0.function()
+        else {
+            panic!("moved constraint must preserve expression storage")
+        };
+        assert_eq!(
+            crate::function::operation::instructions(expression).as_ptr(),
+            original_instructions
+        );
+        assert!(collection.active().contains_key(&active_id));
         assert_eq!(collection.context().name(removed_id), Some("original"));
         collection.validate_context_ids().unwrap();
     }
