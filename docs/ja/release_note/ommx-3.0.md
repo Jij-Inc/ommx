@@ -8,6 +8,210 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🛠 境界を含む `atol` 判定 ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+絶対許容誤差の比較は、差がちょうど`atol`となる境界を一貫して含むようになりました。
+等式のresidualは $|f(x)| \leq \mathtt{atol}$ のときfeasible、不等式のresidualは
+$f(x) < 0$ または $|f(x)| \leq \mathtt{atol}$ のときfeasibleです。scalar / sample
+evaluation、regular / Indicator constraint、`Solution` / `SampleSet`の検証、v1 / v2の
+deserializeで同じ規則を使います。
+
+Functionのゼロ依存演算、Indicatorのactivation、OneHot / SOS1の分類、solver stateの
+離散値canonicalization、fixed valueの整合性検証でも、targetとの差がちょうど`atol`の
+値を含みます。境界をわずかに超える値は引き続き範囲外です。有限値の検証を所有するAPIは、
+domain errorや整合性errorを返す前にNaNと無限大を引き続き拒否します。
+
+### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+{class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
+なりました。絶対値、符号関数、最小値、最大値、除算、符号付き32 bit整数による
+累乗をPythonから直接構築できます。
+
+```python
+from ommx import DecisionVariable, Function
+
+x = Function(DecisionVariable.continuous(1))
+y = Function(DecisionVariable.continuous(2))
+z = Function(DecisionVariable.continuous(3))
+
+f = abs(x - 2).maximum(y) / (z + 1)
+g = f**2
+h = f.powi(-2)
+```
+
+名前付きの演算には {meth}`~ommx.Function.signum`、
+{meth}`~ommx.Function.minimum`、{meth}`~ommx.Function.maximum` を使用します。
+`f**n` と {meth}`~ommx.Function.powi` は同じ演算です。浮動小数や関数値の指数、
+および反転累乗はサポートしません。評価時には、境界を含む
+`abs(value) <= atol`をゼロと判定します。`signum`は`0`を返し、そのように
+判定された値を分母にする除算や負の整数による累乗は`ValueError`になります。
+複合式はOMMX protobuf payloadへ
+flat な逆ポーランド記法（RPN）の命令列としてserializeされます。現在提供している
+HiGHS、Python-MIP、PySCIPOpt、OpenJijの全adapterはpolynomialのみを受け付ける
+input classを宣言しているため、各adapterが受け付けるfunction positionの複合式を
+拒否します。
+
+ゼロに依存する`Signum`、`Div`、負の`Powi`ノードは、式の構築、代入、部分評価を
+経ても保持されます。後続の評価処理に渡す`atol`が、結果または定義域エラーを
+決定します。特に、`Function`を定数や係数で除算した場合も複合式のままです。
+`Function.evaluate_bound(..., atol=...)`も同じゼロ判定を区間評価へ適用します。
+IndicatorのBig-M変換、特殊制約のlowering、integer slack変換も、導出するbound用の
+`atol=`を受け取ります。これによりFunction bodyのゼロ判定は整合しますが、代数的な
+loweringは離散値が厳密であることを仮定し、0や1に近いsolver出力を丸める処理は
+行いません。省略時は`DEFAULT_ATOL`が使われます。integer slack変換は係数の正規化前に、
+評価と同じ境界を含む条件 $f(x) < 0$ または
+$|f(x)| \leq \mathtt{atol}$ で不等式を分類するため、微小な正値が
+scaleによって暗黙に再分類されることはありません。厳密な多項式正規化は有限かつ
+非ゼロの係数をすべて保持し、許容誤差によるcleanupを暗黙には行いません。近似的な
+cleanupを将来提供する場合は、別の明示的なAPIになります。
+
+`Function`が常にpolynomialとは限らなくなったため、複合式に対する
+{meth}`~ommx.Function.degree` と {meth}`~ommx.Function.num_terms` は`None`を返します。
+polynomial termのaccessorと {meth}`~ommx.Function.content_factor` は、複合式を空の
+polynomialとして扱わず`TypeError`を送出します。演算順序、evaluation error、
+serializationの詳細は [Function user guide](../user_guide/function.md) を参照してください。
+
+Instance class APIでは、このpolynomial要件を名前から明示するようにしました。
+Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含まれます。
+
+| 変更前 | 変更後 |
+|---|---|
+| `DegreeBound` | `PolynomialRequirement` |
+| `DegreeBound.at_most(n)` | `PolynomialRequirement.at_most(n)` |
+| `DegreeBound.unbounded()` | `PolynomialRequirement.any_degree()` |
+| `bound.maximum` | `requirement.maximum_degree` |
+| `bound.includes(degree)` | `requirement.accepts_degree(degree)` |
+| `objective_degree_bound` | `objective_polynomial_requirement` |
+| `regular_constraint_degree_bounds` | `regular_constraint_polynomial_requirements` |
+| `indicator_constraint_degree_bounds` | `indicator_body_polynomial_requirements` |
+
+`PolynomialRequirement.any_degree()`が受け付けるのは任意次数のpolynomialであり、
+複合された非polynomialの`Function`は含みません。
+
+### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+{meth}`~ommx.Instance.populate_state`、{meth}`~ommx.Instance.evaluate`、
+{meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
+dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
+canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
+以下のBinary値と、整数との差が`atol`以下のInteger / SemiInteger値は、境界上の値も含めて
+対応する厳密な離散値として格納されます。canonicalizationとは
+別に、kindとboundのfeasibilityを既存の規則で判定します。
+ContinuousとSemiContinuousは丸めません。それ以外の有限値は、返された
+{class}`~ommx.Solution`がfeasibilityを判定できるように保持し、非有限なstate値は
+引き続き拒否します。
+
+呼び出し側がfixedまたはdependent variableの値を渡した場合、その値は引き続き
+整合性assertionとして扱います。検証後のstateには、Instanceが所有するfixed valueを
+変更せずに格納するか、dependencyから導出してtarget kindに従いcanonicalizeした値を
+格納します。dependencyはcanonicalized inputから評価するため、丸め前のsolver vectorを
+もとに明示したdependent assertionが、導出値の`atol`内に入らず拒否される場合があります。
+scalar / sample evaluationは同じ規則を使い、SampleIDの対応関係を保持します。
+
+{meth}`~ommx.Instance.partial_evaluate`も、入力を検証した後、special constraintのpropagation、
+expressionへの代入、定数化したdependencyの評価より前に同じ規則を適用します。そのため、
+書き換え後のInstanceを評価した結果は、元のInstanceを直接評価した場合と同じcanonical
+coordinateを使います。Instanceが既に所有するfixed valueは変更せず、既存のkind / bound
+検証でpartial evaluationの受理範囲外となる値は引き続き拒否します。
+
+### ⚠ `solve()`と`sample()`が入力を自動的にPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()`と`SamplerAdapter.sample()`は実行前にAdapterの推奨Preparationを
+適用し、渡された{class}`~ommx.Instance`自体は変更しないようになりました。
+Preparationをcustomizeするapplicationでは、Instanceをin-placeでPrepareし、代わりに
+`solve_without_preparation()`または`sample_without_preparation()`を呼びます。
+
+既存コードで移行が必要な破壊的変更は次の2点です。
+
+- `OMMXOpenJijSAAdapter.sample(..., initial_state=...)`と
+  `OMMXOpenJijSAAdapter.solve(..., initial_state=...)`は利用できなくなりました。Instanceを
+  明示的にPrepareしてから、
+  `OMMXOpenJijSAAdapter.sample_without_preparation(instance, initial_state=...)`または
+  `OMMXOpenJijSAAdapter.solve_without_preparation(instance, initial_state=...)`を呼びます。
+- 独自Adapterは`solve_without_preparation()`または`sample_without_preparation()`を実装し、
+  backendの実行処理をそこへ移します。Adapter固有optionを`solve()`または`sample()`でも
+  提供する場合、これらのmethodではcopyをPrepareし、optionをpreparation-free methodへ
+  転送します。
+
+Adapter inputに`output_objective`がある場合、HiGHSとPython-MIPはdual valueを省略します。
+2つの呼び出し方は
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+### ⚠ Solver Preparationで入力objectiveを保持 ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+`to_qubo()`と`to_hubo()`は、変換後のactive `Instance`にsolverが使う
+minimization energyを保持しつつ、`Solution`と`SampleSet`には入力instanceが
+公開していたobjective semanticsを保持するようになりました。
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+
+instance.to_qubo(uniform_penalty_weight=2.0)
+state = {0: 0.0}
+
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == 2.0
+assert instance.evaluate(state).sense == Sense.Maximize
+assert instance.evaluate(state).objective == 0.0
+assert instance.evaluate_samples({0: state}).sense == Sense.Maximize
+assert instance.evaluate_samples({0: state}).objectives[0] == 0.0
+```
+
+従来のdriverはactive senseを戻し、penalized solver energyを評価結果に使っていたため、
+これは最新stable Python SDKからのbreakingな修正です。返すQUBO/HUBO係数の
+意味は変わりません。
+
+明示的なoutput objectiveを持つ`Instance`または`ParametricInstance`は、v1 wire formatで
+losslessに表現できません。この場合`to_v1_bytes()`は`RuntimeError`を送出するため、
+`to_v2_bytes()`を使用してください。
+
+Penalty変換後のoptimalityも保守的に変換され、active formulationのproofを
+移せない評価結果は`Optimality.Unspecified`のままです。実行可能な事後条件は
+{meth}`~ommx.Instance.to_qubo`、{meth}`~ommx.Instance.to_hubo`、
+{meth}`~ommx.Instance.evaluate`、{meth}`~ommx.Instance.evaluate_samples`に記載されています。
+明示的なPreparation workflowは
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+### ⚠ Adapter applicability を `INPUT_CLASS` だけで定義 ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
+
+`SolverAdapter.check_applicability()` と `require_applicable()` は、完全な
+applicability 条件として `INPUT_CLASS` membership だけを使うようになりました。
+Adapter が所有していた第2の precondition 層は廃止し、
+`AdapterPreconditionViolation`、`ConstraintRef`、`_check_preconditions()`、report の
+`preconditions_checked` と `precondition_violations` field を削除しました。
+
+両 method は `InstanceClassMembershipReport` を直接返すようになり、
+`AdapterApplicabilityReport` wrapper は削除されました。`report.is_applicable` は
+`report.is_member`、`report.input_membership` は `report` に置き換えてください。
+`AdapterNotApplicableError` では、`error.report` が membership report そのものであり、
+Adapter identity は `error.adapter` から取得できます。
+
+Adapter 実装は、受け入れる model の条件をすべて `INPUT_CLASS` で表現する必要があります。
+Converter 固有の表現検査や backend の上限検査は solver input の構築経路に残りますが、
+その失敗は `AdapterNotApplicableError` ではなく conversion または backend の error です。
+特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
+行われるようになりました。責務境界の詳細は
+[Adapterのexact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)と
+[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
+
+### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
+
+具体的な `SolverAdapter` / `SamplerAdapter` 実装では、`INPUT_CLASS` を
+非 Optional の `ClassVar[InstanceClass]` として宣言する必要があり、`None` は
+有効な宣言ではありません。リポジトリ内の Adapter も `InstanceClass` を直接公開するため、
+呼び出し側は `is not None` の確認なしで `Adapter.INPUT_CLASS` を
+{meth}`~ommx.Instance.prepare` に渡せます。宣言がない場合は、applicability の確認時に
+引き続き明確な `TypeError` を送出します。契約の全体像は
+[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
+
 ## 3.0.0 Beta 3
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)

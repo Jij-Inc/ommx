@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import copy
 import math
 from dataclasses import asdict, dataclass, fields
 from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Mapping, Optional, cast
@@ -18,13 +20,13 @@ from ommx.adapter import (
 from ommx import (
     Constraint,
     DecisionVariable,
-    DegreeBound,
     Equality,
     Function,
     Instance,
     InstanceClass,
     InstanceClassClause,
     Kind,
+    PolynomialRequirement,
     PreparationPolicy,
     Sense,
     Solution,
@@ -42,13 +44,13 @@ if TYPE_CHECKING:
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 _SCIP_TERMINATION_EVENT = "TERMINATION"
 
-_QUADRATIC_REGULAR_CONSTRAINT_DEGREE_BOUNDS = {
-    Equality.EqualToZero: DegreeBound.at_most(2),
-    Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
+_QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS = {
+    Equality.EqualToZero: PolynomialRequirement.at_most(2),
+    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(2),
 }
-_LINEAR_INDICATOR_CONSTRAINT_DEGREE_BOUNDS = {
-    Equality.EqualToZero: DegreeBound.at_most(1),
-    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+_LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS = {
+    Equality.EqualToZero: PolynomialRequirement.at_most(1),
+    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
 }
 
 
@@ -503,17 +505,17 @@ def _dataframe(
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    INPUT_CLASS: ClassVar[InstanceClass | None] = InstanceClass(
+    INPUT_CLASS: ClassVar[InstanceClass] = InstanceClass(
         [
             InstanceClassClause(
                 label="pyscipopt-quadratic-mip",
                 allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
-                objective_degree_bound=DegreeBound.at_most(2),
-                regular_constraint_degree_bounds=(
-                    _QUADRATIC_REGULAR_CONSTRAINT_DEGREE_BOUNDS
+                objective_polynomial_requirement=PolynomialRequirement.at_most(2),
+                regular_constraint_polynomial_requirements=(
+                    _QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS
                 ),
-                indicator_constraint_degree_bounds=(
-                    _LINEAR_INDICATOR_CONSTRAINT_DEGREE_BOUNDS
+                indicator_body_polynomial_requirements=(
+                    _LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS
                 ),
                 allows_sos1=True,
                 allowed_senses={Sense.Minimize, Sense.Maximize},
@@ -527,8 +529,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         PySCIPOpt accepts Indicator and SOS1 constraints directly, so this
         recommendation preserves those families and lowers only OneHot
-        constraints. The returned policy is fresh and may be edited by the
-        caller before :meth:`Instance.prepare` is invoked.
+        constraints. The easy API applies a fresh policy to an isolated copy;
+        callers may instead edit and apply one before invoking
+        :meth:`solve_without_preparation`.
         """
         return PreparationPolicy(
             special_constraints=SpecialConstraintPreparation.lower_special_constraints(
@@ -571,7 +574,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         """
         Solve the given ommx.Instance using PySCIPopt, returning an ommx.Solution.
 
-        :param ommx_instance: The ommx.Instance to solve.
+        The input instance is not modified. An isolated copy is prepared with
+        the recommended PySCIPOpt policy before preparation-free execution.
+
+        :param ommx_instance: The ommx.Instance to prepare and solve.
         :param initial_state: Optional initial solution state.
 
         Examples
@@ -655,6 +661,23 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
+        prepared = copy.copy(ommx_instance)
+        prepared.prepare(cls.INPUT_CLASS, cls.recommended_preparation_policy())
+        return cls.solve_without_preparation(
+            prepared,
+            initial_state=initial_state,
+            diagnostics=diagnostics,
+        )
+
+    @classmethod
+    def solve_without_preparation(
+        cls,
+        ommx_instance: Instance,
+        *,
+        initial_state: Optional[ToState] = None,
+        diagnostics: DiagnosticsSink | None = None,
+    ) -> Solution:
+        """Solve an exact PySCIPOpt Adapter input without preparing it."""
         with _tracer.start_as_current_span("solve") as span:
             span.set_attribute("adapter", f"{cls.__module__}.{cls.__qualname__}")
             adapter = cls(ommx_instance, initial_state=initial_state)
@@ -674,8 +697,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     SCIPProgressSnapshot.from_termination_report(termination_report)
                 )
                 diagnostics.record(termination_report)
-            solution = adapter.decode(model)
-            return solution
+            return adapter.decode(model)
 
     @property
     def solver_input(self) -> pyscipopt.Model:
@@ -693,6 +715,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         incompatible -- decoding will only work if the model still describes
         effectively the same problem as the OMMX instance used to create the
         adapter.
+
+        Backend optimality is mapped through the instance's output-objective
+        semantics. It remains unspecified when active-formulation optimality
+        does not transport to that objective.
 
         Examples
         =========
@@ -732,7 +758,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             if (
                 data.getStatus() == "optimal"
             ):  # pyscipopt does not appear to have an enum or constant for this
-                solution.optimality = Solution.OPTIMAL
+                solution.optimality = self.instance.map_active_optimality(
+                    Solution.OPTIMAL
+                )
 
             return solution
 
@@ -821,7 +849,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         # Check if objective is quadratic to add auxiliary variable
         degree = self.instance.objective.degree()
-        if degree > 2:
+        if degree is None or degree > 2:
             raise OMMXPySCIPOptAdapterError(
                 f"Objective function degree {degree} is not supported. "
                 "Only constant, linear, and quadratic objectives are supported."

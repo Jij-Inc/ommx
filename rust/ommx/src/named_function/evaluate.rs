@@ -1,6 +1,20 @@
 use super::*;
 use crate::{Evaluate, VariableIDSet};
 
+impl NamedFunction {
+    /// Prepare a row replacement for root-object atomic plans without cloning
+    /// the modeling row when its function does not need rewriting.
+    pub(crate) fn partial_evaluate_replacement(
+        &self,
+        state: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> crate::Result<Option<Self>> {
+        self.function
+            .partial_evaluate_replacement(state, atol)
+            .map(|replacement| replacement.map(|function| Self { function }))
+    }
+}
+
 impl Evaluate for NamedFunction {
     type Output = EvaluatedNamedFunction;
     type SampledOutput = SampledNamedFunction;
@@ -64,15 +78,19 @@ impl Evaluate for NamedFunctionTable<NamedFunction> {
         state: &crate::v1::State,
         atol: crate::ATol,
     ) -> crate::Result<()> {
-        let mut updated = self.clone();
-        for (id, named_function) in updated.entries.iter_mut() {
-            named_function
-                .partial_evaluate(state, atol)
+        let mut replacements = std::collections::BTreeMap::new();
+        for (id, named_function) in &self.entries {
+            if let Some(function) = named_function
+                .partial_evaluate_replacement(state, atol)
                 .inspect_err(|e| {
                     tracing::error!(?id, error = %e, "failed to partial_evaluate named function");
-                })?;
+                })?
+            {
+                replacements.insert(*id, function);
+            }
         }
-        *self = updated;
+        self.replace_rows(replacements)
+            .expect("partial-evaluate replacements use existing named-function IDs");
         Ok(())
     }
 
@@ -156,6 +174,65 @@ mod tests {
 
         let ids = nf.required_ids();
         assert_eq!(ids, btreeset! { VariableID::from(1), VariableID::from(2) });
+    }
+
+    #[test]
+    fn test_table_partial_evaluate_is_atomic_on_later_error() {
+        let mut table = NamedFunctionTable::from_entries(std::collections::BTreeMap::from([
+            (
+                NamedFunctionID::from(1),
+                NamedFunction {
+                    function: Function::from(linear!(1)),
+                },
+            ),
+            (
+                NamedFunctionID::from(2),
+                NamedFunction {
+                    function: Function::from((coeff!(f64::MAX) * linear!(2)).unwrap()),
+                },
+            ),
+        ]));
+        let original = table.clone();
+        let state = crate::v1::State::from_iter([(1, 2.0), (2, f64::MAX)]);
+
+        let error = table
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap_err();
+
+        assert!(error.is::<crate::CoefficientError>());
+        assert_eq!(table, original);
+    }
+
+    #[test]
+    fn test_table_partial_evaluate_keeps_disjoint_expression_storage() {
+        let id = NamedFunctionID::from(1);
+        let mut table = NamedFunctionTable::from_entries(std::collections::BTreeMap::from([(
+            id,
+            NamedFunction {
+                function: Function::from(linear!(2)).abs(),
+            },
+        )]));
+        let instructions_pointer = match &table.get(&id).unwrap().function {
+            Function::Expression(expression) => {
+                crate::function::operation::instructions(expression).as_ptr()
+            }
+            _ => panic!("absolute value of a variable must be an expression"),
+        };
+
+        table
+            .partial_evaluate(
+                &crate::v1::State::from_iter([(1, 3.0)]),
+                crate::ATol::default(),
+            )
+            .unwrap();
+
+        let Function::Expression(expression) = &table.get(&id).unwrap().function else {
+            panic!("a disjoint state must preserve the expression variant");
+        };
+        assert_eq!(
+            crate::function::operation::instructions(expression).as_ptr(),
+            instructions_pointer
+        );
     }
 
     #[test]

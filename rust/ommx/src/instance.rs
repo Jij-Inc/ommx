@@ -19,7 +19,7 @@ mod parametric_builder;
 mod parse;
 mod pass;
 mod penalty;
-pub use penalty::InvalidPenaltyWeight;
+pub use penalty::{FixedPenaltyWeightIDMismatch, InvalidPenaltyWeight};
 mod preparation;
 mod qubo;
 mod reduce_binary_power;
@@ -37,8 +37,9 @@ pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
 pub use preparation::{
-    FixedPenaltyPreparation, IntegerEncodingPreparation, IntegerSlackPreparation,
-    PreparationPolicy, PreparationTargetNotReached, SensePreparation, SpecialConstraintPreparation,
+    BinaryPowerPreparation, FixedPenaltyPreparation, IntegerEncodingPreparation,
+    IntegerSlackPreparation, ObjectivePreparation, PreparationPolicy, PreparationTargetNotReached,
+    SpecialConstraintPreparation,
 };
 pub use stats::*;
 
@@ -114,6 +115,77 @@ pub enum Sense {
     Maximize,
 }
 
+/// Objective semantics used when evaluating solver output.
+///
+/// # Invariants
+///
+/// The sense, function, and optimality-transport flag are installed and
+/// observed as one value owned by an [`Instance`] or [`ParametricInstance`].
+///
+/// ```
+/// use ommx::{linear, DecisionVariable, Function, Instance, Sense, VariableID};
+/// use std::collections::BTreeMap;
+///
+/// let original = Function::from(linear!(1));
+/// let mut instance = Instance::builder()
+///     .sense(Sense::Maximize)
+///     .objective(original.clone())
+///     .decision_variables(BTreeMap::from([(
+///         VariableID::from(1),
+///         DecisionVariable::binary(),
+///     )]))
+///     .constraints(BTreeMap::new())
+///     .build()
+///     .unwrap();
+///
+/// assert!(instance.convert_active_objective(Sense::Minimize));
+/// let output = instance.output_objective().unwrap();
+/// assert_eq!(output.sense(), Sense::Maximize);
+/// assert_eq!(output.function(), &original);
+/// assert!(output.preserves_optimality());
+/// ```
+#[derive(Debug, Clone, PartialEq, crate::logical_memory::LogicalMemoryProfile)]
+pub struct OutputObjective {
+    sense: Sense,
+    function: Function,
+    preserves_optimality: bool,
+}
+
+impl OutputObjective {
+    fn new(sense: Sense, function: Function, preserves_optimality: bool) -> Self {
+        Self {
+            sense,
+            function,
+            preserves_optimality,
+        }
+    }
+
+    /// Optimization sense used for output objective values.
+    pub fn sense(&self) -> Sense {
+        self.sense
+    }
+
+    /// Function evaluated to produce output objective values.
+    pub fn function(&self) -> &Function {
+        &self.function
+    }
+
+    /// Whether active-formulation optimality transports to this output objective.
+    ///
+    /// This compares the active and output objective orderings over candidate
+    /// states of the active formulation after state reconstruction. It does
+    /// not assert feasibility or optimality with respect to removed
+    /// constraints.
+    ///
+    /// `false` means that no such proof is available. It does not assert that
+    /// a reconstructed state is suboptimal. Use
+    /// [`Instance::map_active_optimality`] when attaching a solver status to
+    /// an evaluated output.
+    pub fn preserves_optimality(&self) -> bool {
+        self.preserves_optimality
+    }
+}
+
 /// Instance, represents a mathematical optimization problem.
 ///
 /// # Multi-type constraint architecture
@@ -174,10 +246,13 @@ pub enum Sense {
 ///   kind/bound.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
-///   but must NOT be used in the objective function or constraints.
+///   but must NOT be used in the active objective or active constraints.
 ///   These are "dependent variables" whose values are computed from other variables.
+/// - Every variable ID in [`Self::output_objective`] belongs to
+///   [`Self::decision_variables`]. The output objective does not contribute to
+///   the solver-used variable set and is evaluated after state population.
 /// - Decision variables are classified into mutually exclusive roles:
-///   - **used**: Variable IDs appearing in the objective function or active constraints
+///   - **used**: Variable IDs appearing in the active objective or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
@@ -196,6 +271,42 @@ pub enum Sense {
 ///   [`DecisionVariableTable`], not by individual [`DecisionVariable`]
 ///   values. The root [`Instance`] owns the host-level invariant that fixed
 ///   IDs are disjoint from solver-used and dependent variables.
+///
+/// The output objective remains evaluable when one of its variables is removed
+/// from the active formulation by partial evaluation:
+///
+/// ```
+/// use ommx::{
+///     linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+///     Sense, VariableID,
+/// };
+/// use std::collections::{BTreeMap, HashMap};
+///
+/// let variable = VariableID::from(1);
+/// let mut instance = Instance::builder()
+///     .sense(Sense::Maximize)
+///     .objective(Function::from(linear!(1)))
+///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+///     .constraints(BTreeMap::new())
+///     .build()
+///     .unwrap();
+/// assert!(instance.convert_active_objective(Sense::Minimize));
+///
+/// instance
+///     .partial_evaluate(&State::from(HashMap::from([(1, 1.0)])), ATol::default())
+///     .unwrap();
+/// assert!(instance.required_ids().is_empty());
+/// assert!(instance
+///     .output_objective()
+///     .unwrap()
+///     .function()
+///     .required_ids()
+///     .contains(&variable));
+///
+/// let solution = instance.evaluate(&State::default(), ATol::default()).unwrap();
+/// assert_eq!(*solution.sense(), Some(Sense::Maximize));
+/// assert_eq!(*solution.objective(), 1.0);
+/// ```
 ///
 /// ## Special-constraint invariants
 ///
@@ -243,6 +354,13 @@ pub struct Instance {
     sense: Sense,
     #[getset(get = "pub")]
     objective: Function,
+    /// Objective semantics presented by Solution and SampleSet evaluation.
+    ///
+    /// `None` means that evaluation directly uses the active [`Self::sense`] /
+    /// [`Self::objective`] pair and active optimality implicitly transports.
+    /// A present value remains explicit even when its sense/function pair
+    /// equals the active pair; equality is not a canonicalization rule.
+    output_objective: Option<OutputObjective>,
     /// Created decision-variable rows, modeling labels, and fixed values.
     decision_variables: DecisionVariableTable,
 
@@ -275,6 +393,115 @@ pub struct Instance {
 }
 
 impl Instance {
+    /// Return the preserved objective semantics used for solver output.
+    ///
+    /// [`None`] identifies an instance whose active objective is also its
+    /// output objective. [`Some`] returns the complete root-owned output value.
+    /// See the [`OutputObjective`] invariants for an executable construction.
+    pub fn output_objective(&self) -> Option<&OutputObjective> {
+        self.output_objective.as_ref()
+    }
+
+    /// Map an optimality status proved for the active formulation to the
+    /// status that is valid for the output objective.
+    ///
+    /// # Postconditions
+    ///
+    /// Active optimality is retained exactly while its proof transports to the
+    /// output objective.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, v1::Optimality, ATol, Constraint, ConstraintID,
+    ///     DecisionVariable, Function, Instance, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let mut instance = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    /// assert_eq!(
+    ///     instance.map_active_optimality(Optimality::Optimal),
+    ///     Optimality::Optimal,
+    /// );
+    ///
+    /// instance
+    ///     .uniform_penalty_method_with_fixed_weight(1.0, ATol::default())
+    ///     .unwrap();
+    /// assert_eq!(
+    ///     instance.map_active_optimality(Optimality::Optimal),
+    ///     Optimality::Unspecified,
+    /// );
+    /// assert_eq!(
+    ///     instance.map_active_optimality(Optimality::NotOptimal),
+    ///     Optimality::Unspecified,
+    /// );
+    /// ```
+    pub fn map_active_optimality(&self, active: crate::v1::Optimality) -> crate::v1::Optimality {
+        if self
+            .output_objective
+            .as_ref()
+            .is_none_or(|output| output.preserves_optimality)
+        {
+            active
+        } else {
+            crate::v1::Optimality::Unspecified
+        }
+    }
+
+    /// Preserve the current active objective pair when no output pair exists.
+    fn capture_output_objective(&mut self) {
+        if self.output_objective.is_some() {
+            return;
+        }
+        self.output_objective = Some(OutputObjective::new(
+            self.sense,
+            self.objective.clone(),
+            true,
+        ));
+    }
+
+    /// Replace the active objective while preserving the previous objective
+    /// pair for output reconstruction, without cloning an already planned
+    /// replacement or the objective it supersedes.
+    fn replace_active_objective_preserving_output(&mut self, replacement: Function) {
+        if self.output_objective.is_some() {
+            self.objective = replacement;
+            return;
+        }
+
+        let original = std::mem::replace(&mut self.objective, replacement);
+        self.output_objective = Some(OutputObjective::new(self.sense, original, true));
+    }
+
+    /// Record that the active formulation no longer provides an optimality
+    /// proof for the reconstructed output semantics. Once lost, later rewrites
+    /// cannot infer that guarantee again.
+    ///
+    /// Returns whether the guarantee changed from available to unavailable.
+    fn invalidate_output_objective_optimality(&mut self) -> bool {
+        let Some(output) = self.output_objective.as_mut() else {
+            return false;
+        };
+        std::mem::replace(&mut output.preserves_optimality, false)
+    }
+
+    /// Objective pair that Solution and SampleSet evaluation must expose.
+    fn objective_for_output(&self) -> (Sense, &Function) {
+        self.output_objective
+            .as_ref()
+            .map(|output| (output.sense, &output.function))
+            .unwrap_or((self.sense, &self.objective))
+    }
+
     /// Access the decision-variable definition table.
     pub fn decision_variable_table(&self) -> &DecisionVariableTable {
         &self.decision_variables
@@ -494,6 +721,11 @@ impl Instance {
     /// omitted from `kinds_to_lower` remain active. Passing an empty set is a
     /// no-op. This operation does not establish membership in an
     /// [`crate::InstanceClass`]; check the resulting instance separately.
+    /// `atol` is passed to the interval bound used while lowering Indicator
+    /// constraints so zero-sensitive Function-body semantics are explicit.
+    /// The algebraic special-constraint conversions assume exact discrete
+    /// variable values; this operation does not canonicalize approximate
+    /// solver output near 0 or 1.
     ///
     /// Returns the set of families that were requested and active, and therefore
     /// actually lowered. Families are processed in the deterministic order
@@ -515,6 +747,7 @@ impl Instance {
     pub fn lower_special_constraints(
         &mut self,
         kinds_to_lower: &SpecialConstraintKinds,
+        atol: crate::ATol,
     ) -> crate::Result<SpecialConstraintKinds> {
         let mut lowered = SpecialConstraintKinds::new();
         // Iterate in a fixed order so logs / callers see deterministic output.
@@ -531,7 +764,7 @@ impl Instance {
                     if self.indicator_constraint_collection.active().is_empty() {
                         false
                     } else {
-                        self.convert_all_indicators_to_constraints()?;
+                        self.convert_all_indicators_to_constraints(atol)?;
                         true
                     }
                 }
@@ -593,21 +826,28 @@ impl Instance {
 ///   algebraic expressions cannot distinguish decision-variable references
 ///   from parameter references without the enclosing root.
 /// - [`Self::decision_variables`] and [`Self::parameters`] together contain
-///   every ID that may appear in the objective, regular/indicator constraint
-///   bodies, named functions, and dependency RHS expressions.
+///   every ID that may appear in the objective, output objective,
+///   regular/indicator constraint bodies, named functions, and dependency RHS
+///   expressions.
 /// - The IDs of [`Self::decision_variables`] and [`Self::parameters`] are
 ///   disjoint sets. This shared-namespace invariant is host-level state and
 ///   is validated by [`ParametricInstance::builder`] / protobuf parsing, not
 ///   by [`ParameterTable`] alone.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
-///   but must NOT be used in the objective function or constraints.
+///   but must NOT be used in the active objective or active constraints.
 ///   The RHS expressions of [`Self::decision_variable_dependency`] may
 ///   reference IDs from [`Self::decision_variables`] or [`Self::parameters`],
 ///   and may not reference undefined IDs. Parameter IDs in RHS expressions are
 ///   evaluated by [`Self::with_parameters`].
+/// - [`Self::output_objective`] has the same atomic sense/function/optimality
+///   semantics as [`Instance::output_objective`]. Its function may reference
+///   decision-variable or parameter IDs, including fixed, dependent, or
+///   otherwise inactive decision variables. Parameter references are
+///   specialized by [`Self::with_parameters`] before the pair is installed on
+///   the resulting [`Instance`].
 /// - Decision variables are classified into mutually exclusive roles:
-///   - **used**: Variable IDs appearing in the objective function or active constraints
+///   - **used**: Variable IDs appearing in the active objective or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
@@ -660,13 +900,14 @@ impl Instance {
 ///
 /// [`Self::with_parameters`] partially evaluates parameter IDs out of every
 /// expression that could contain one when materializing a parametric
-/// instance into an [`Instance`]: the objective, active and removed regular
-/// constraint bodies, active and removed indicator constraint function
-/// bodies, named functions, and `decision_variable_dependency` RHS
-/// expressions. OneHot/SOS1 collections (active and removed) pass through
-/// unchanged because their variable sets are required to be real decision
-/// variables at construction time. The resulting [`Instance`] satisfies its
-/// own (stricter) invariants — no parameter IDs survive anywhere.
+/// instance into an [`Instance`]: the active objective, output objective,
+/// active and removed regular constraint bodies, active and removed indicator
+/// constraint function bodies, named functions, and
+/// `decision_variable_dependency` RHS expressions. OneHot/SOS1 collections
+/// (active and removed) pass through unchanged because their variable sets are
+/// required to be real decision variables at construction time. The resulting
+/// [`Instance`] satisfies its own (stricter) invariants — no parameter IDs
+/// survive anywhere.
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {
@@ -674,6 +915,15 @@ pub struct ParametricInstance {
     sense: Sense,
     #[getset(get = "pub")]
     objective: Function,
+    /// Objective semantics presented after parameter specialization and
+    /// evaluation.
+    ///
+    /// `None` means the specialized active [`Self::sense`] /
+    /// [`Self::objective`] pair is also the output pair. A present function may
+    /// reference both decision-variable and parameter IDs owned by this root,
+    /// and the value remains explicit even if specialization makes its pair
+    /// equal to the active pair.
+    output_objective: Option<OutputObjective>,
     /// Created decision-variable rows, modeling labels, and fixed values.
     decision_variables: DecisionVariableTable,
     #[getset(get = "pub")]
@@ -707,6 +957,14 @@ pub struct ParametricInstance {
 }
 
 impl ParametricInstance {
+    /// Return the preserved objective semantics used after specialization.
+    ///
+    /// `None` means the active [`Self::sense`] and [`Self::objective`] define
+    /// the output semantics directly.
+    pub fn output_objective(&self) -> Option<&OutputObjective> {
+        self.output_objective.as_ref()
+    }
+
     /// Access the decision-variable definition table.
     pub fn decision_variable_table(&self) -> &DecisionVariableTable {
         &self.decision_variables
@@ -913,7 +1171,7 @@ mod lower_special_constraints_tests {
         linear,
         one_hot_constraint::{OneHotConstraint, OneHotConstraintID},
         sos1_constraint::{Sos1Constraint, Sos1ConstraintID},
-        Bound, DecisionVariable, Equality, Function, Kind, VariableID,
+        ATol, Bound, DecisionVariable, Equality, Function, Kind, VariableID,
     };
     use maplit::btreemap;
     use std::collections::{BTreeMap, BTreeSet};
@@ -968,7 +1226,9 @@ mod lower_special_constraints_tests {
         let before_one_hots = instance.one_hot_constraints().clone();
         let before_sos1 = instance.sos1_constraints().clone();
 
-        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
+        let lowered = instance
+            .lower_special_constraints(&kinds_to_lower, ATol::default())
+            .unwrap();
 
         assert!(lowered.is_empty());
         assert_eq!(instance.indicator_constraints(), &before_indicators);
@@ -986,7 +1246,9 @@ mod lower_special_constraints_tests {
         .into_iter()
         .collect();
 
-        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
+        let lowered = instance
+            .lower_special_constraints(&kinds_to_lower, ATol::default())
+            .unwrap();
 
         assert_eq!(lowered, kinds_to_lower);
         assert!(instance.indicator_constraints().is_empty());
@@ -1009,7 +1271,9 @@ mod lower_special_constraints_tests {
         .into_iter()
         .collect();
 
-        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
+        let lowered = instance
+            .lower_special_constraints(&kinds_to_lower, ATol::default())
+            .unwrap();
 
         assert_eq!(lowered, kinds_to_lower);
         assert!(instance.active_special_constraint_kinds().is_empty());
@@ -1043,7 +1307,9 @@ mod lower_special_constraints_tests {
         .into_iter()
         .collect();
 
-        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
+        let lowered = instance
+            .lower_special_constraints(&kinds_to_lower, ATol::default())
+            .unwrap();
 
         let expected: SpecialConstraintKinds =
             [SpecialConstraintKind::OneHot].into_iter().collect();
@@ -1070,7 +1336,7 @@ mod lower_special_constraints_tests {
             [SpecialConstraintKind::Sos1].into_iter().collect();
 
         let err = instance
-            .lower_special_constraints(&kinds_to_lower)
+            .lower_special_constraints(&kinds_to_lower, ATol::default())
             .unwrap_err();
         assert!(err.to_string().contains("non-finite"));
     }
@@ -1105,7 +1371,7 @@ mod lower_special_constraints_tests {
                 .collect();
 
         let err = instance
-            .lower_special_constraints(&kinds_to_lower)
+            .lower_special_constraints(&kinds_to_lower, ATol::default())
             .unwrap_err();
 
         assert!(err.to_string().contains("non-finite"));
@@ -1143,7 +1409,9 @@ mod lower_special_constraints_tests {
 
         let kinds_to_lower: SpecialConstraintKinds =
             [SpecialConstraintKind::Sos1].into_iter().collect();
-        let lowered = instance.lower_special_constraints(&kinds_to_lower).unwrap();
+        let lowered = instance
+            .lower_special_constraints(&kinds_to_lower, ATol::default())
+            .unwrap();
 
         assert_eq!(lowered, kinds_to_lower);
         // Fresh binary indicator was allocated → decision variable count went up.

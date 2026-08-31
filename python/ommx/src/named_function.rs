@@ -148,7 +148,7 @@ impl NamedFunction {
 
     /// Reverse addition: returns other + self.function
     pub fn __radd__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
-        self.function().__add__(other)
+        other.__add__(self.function())
     }
 
     /// Subtraction: returns self.function - other
@@ -168,7 +168,7 @@ impl NamedFunction {
 
     /// Reverse multiplication: returns other * self.function
     pub fn __rmul__(&self, other: Function) -> crate::error::OmmxPyResult<Function> {
-        self.function().__mul__(other)
+        other.__mul__(self.function())
     }
 
     /// Negation: returns -self.function

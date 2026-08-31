@@ -4,8 +4,8 @@ use crate::{
         constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
         PyDataFrame, ToPandasEntry,
     },
-    Constraint, DecisionVariable, Function, Instance, NamedFunction, Parameter, RemovedConstraint,
-    Sense,
+    Constraint, DecisionVariable, Function, Instance, NamedFunction, OutputObjective, Parameter,
+    RemovedConstraint, Sense,
 };
 use ommx::{ConstraintID, NamedFunctionID, VariableID};
 use pyo3::{
@@ -28,6 +28,10 @@ impl_instance_annotations!(ParametricInstance);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl ParametricInstance {
+    /// Deserialize a parametric instance from v1 protobuf bytes.
+    ///
+    /// Raises {class}`ValueError` if the protobuf payload is malformed or
+    /// semantically invalid.
     #[staticmethod]
     pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
@@ -36,6 +40,10 @@ impl ParametricInstance {
         })
     }
 
+    /// Deserialize a parametric instance from v2 protobuf bytes.
+    ///
+    /// Raises {class}`ValueError` if the protobuf payload is malformed or
+    /// semantically invalid.
     #[staticmethod]
     pub fn from_v2_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
@@ -44,11 +52,50 @@ impl ParametricInstance {
         })
     }
 
+    /// Serialize this parametric instance in the OMMX v1 wire format.
+    ///
+    /// # Errors
+    ///
+    /// Serialization raises ``RuntimeError`` whenever an output objective is present because v1 cannot represent it.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> assert instance.convert_active_objective(Sense.Minimize)
+    /// >>> assert instance.convert_active_objective(Sense.Maximize)
+    /// >>> parametric = instance.as_parametric_instance()
+    /// >>> try:
+    /// ...     parametric.to_v1_bytes()
+    /// ... except RuntimeError:
+    /// ...     pass
+    /// ... else:
+    /// ...     raise AssertionError("v1 serialization accepted an output objective")
     pub fn to_v1_bytes<'py>(&self, py: Python<'py>) -> OmmxPyResult<Bound<'py, PyBytes>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         Ok(PyBytes::new(py, &self.inner.to_v1_bytes()?))
     }
 
+    /// Serialize this parametric instance in the OMMX v2 wire format.
+    ///
+    /// # Postconditions
+    ///
+    /// A v2 round-trip preserves both active and output objective semantics through materialization.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ... )
+    /// >>> parametric = source.uniform_penalty_method()
+    /// >>> parameter_id = parametric.parameters[0].id
+    /// >>> restored = ParametricInstance.from_v2_bytes(parametric.to_v2_bytes())
+    /// >>> materialized = restored.with_parameters({parameter_id: 2.0})
+    /// >>> assert materialized.sense == Sense.Minimize
+    /// >>> assert materialized.objective.evaluate({0: 0}) == 2.0
+    /// >>> solution = materialized.evaluate({0: 0})
+    /// >>> assert (solution.sense, solution.objective) == (Sense.Minimize, 0.0)
     pub fn to_v2_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let _guard = crate::TRACING.attach_parent_context(py);
         PyBytes::new(py, &self.inner.to_v2_bytes())
@@ -219,6 +266,22 @@ impl ParametricInstance {
     /// Substitute parameters to yield an instance.
     ///
     /// Parameters can be provided as a dict mapping parameter IDs to their values.
+    ///
+    /// # Postconditions
+    ///
+    /// Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists. Materialization substitutes parameters in the active energy, and an existing output objective remains explicit even if specialization makes it structurally equal to the active objective.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
+    /// ... )
+    /// >>> parametric = source.uniform_penalty_method()
+    /// >>> parameter_id = parametric.parameters[0].id
+    /// >>> materialized = parametric.with_parameters({parameter_id: 2.0})
+    /// >>> assert materialized.objective.evaluate({0: 0}) == 2.0
+    /// >>> solution = materialized.evaluate({0: 0})
+    /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
     pub fn with_parameters(&self, parameters: HashMap<u64, f64>) -> OmmxPyResult<Instance> {
         let mut v1_params = ommx::v1::Parameters::default();
         v1_params.entries = parameters;
@@ -296,6 +359,25 @@ impl ParametricInstance {
     /// IDs, when a parameter ID is used as an assignment target, or when
     /// substituting a variable that is a member of an indicator, one-hot, or
     /// SOS1 constraint.
+    ///
+    /// # Postconditions
+    ///
+    /// Substitution rewrites active expressions while materialized output evaluation restores the substituted variable.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> b = DecisionVariable.binary(1)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x, b], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> assert source.convert_active_objective(Sense.Minimize)
+    /// >>> parametric = source.as_parametric_instance()
+    /// >>> parametric.substitute({0: b})
+    /// >>> materialized = parametric.with_parameters({})
+    /// >>> assert materialized.required_ids() == {1}
+    /// >>> assert materialized.objective.evaluate({1: 1}) == -1.0
+    /// >>> solution = materialized.evaluate({1: 1})
+    /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 1.0)
     #[pyo3(signature = (assignments))]
     pub fn substitute(
         &mut self,
@@ -318,6 +400,31 @@ impl ParametricInstance {
     #[getter]
     pub fn objective(&self) -> Function {
         Function(self.inner.objective().clone())
+    }
+
+    /// Read-only output objective retained through parameter materialization,
+    /// if one has been captured.
+    ///
+    /// # Postconditions
+    ///
+    /// Conversion preserves both absence and an explicit output objective equal to the active pair.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> source = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Maximize
+    /// ... )
+    /// >>> assert source.as_parametric_instance().output_objective is None
+    /// >>> assert source.convert_active_objective(Sense.Minimize)
+    /// >>> assert source.convert_active_objective(Sense.Maximize)
+    /// >>> parametric = source.as_parametric_instance()
+    /// >>> output = parametric.output_objective
+    /// >>> assert output is not None
+    /// >>> assert output.sense == parametric.sense
+    /// >>> assert output.function.almost_equal(parametric.objective)
+    #[getter]
+    pub fn output_objective(&self) -> Option<OutputObjective> {
+        self.inner.output_objective().cloned().map(Into::into)
     }
 
     /// List of all decision variables in the parametric instance sorted by

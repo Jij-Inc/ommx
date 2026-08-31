@@ -25,7 +25,7 @@ impl AbsDiffEq for DecisionVariable {
         // We regard point bound Continuous[a, a] and Integer[a, a] are identical mathematically.
         if let Some(lower) = self.bound.is_point(epsilon) {
             // If both are point bounds and they are [0, 0], they are considered equal for any kind.
-            if lower.abs() < epsilon {
+            if epsilon.approx_is_zero(lower) {
                 return true;
             }
 

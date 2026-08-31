@@ -71,11 +71,11 @@ The active entries for each constraint type are available through these properti
 
 ## Native Support and Lowering
 
-Each Adapter's `INPUT_CLASS` declares exactly which special constraints it accepts without conversion. For example, the PySCIPOpt Adapter sends linear Indicator and SOS1 constraints to SCIP's specialized APIs, but it does not accept OneHot constraints directly.
+Each Adapter's `INPUT_CLASS` declares exactly which special constraints its preparation-free API accepts. The easy `solve()` and `sample()` APIs may first lower unsupported families on an isolated copy according to the Adapter's recommended Policy. For example, the PySCIPOpt Adapter's exact input includes linear Indicator and SOS1 constraints but not OneHot constraints; its recommendation lowers OneHot constraints before the strict solve.
 
-- See [Solve Special Constraints Directly with the PySCIPOpt Adapter](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md) for passing special constraints to a supporting Adapter.
-- See [Prepare an Instance for an Adapter](../tutorial/prepare_instance_for_adapter.md) for lowering special constraints to regular constraints for an Adapter that does not accept them.
-- See [Adapter Exact Inputs (`INPUT_CLASS`)](./adapter_input_class.md) and [Instance Preparation and `PreparationPolicy`](./preparation_policy.md) for the responsibility boundary between exact inputs and Preparation.
+- See [Solve Special Constraints Directly with the PySCIPOpt Adapter](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md) for passing exact special constraints to a supporting Adapter.
+- See [Prepare an Instance for an Adapter](../tutorial/prepare_instance_for_adapter.md) for automatic Preparation and the equivalent explicit preparation-free workflow.
+- See [Adapter Exact Inputs (`INPUT_CLASS`)](./adapter_input_class.md) and [Instance Preparation and `PreparationPolicy`](./preparation_policy.md) for the boundary between exact inputs and Preparation.
 
 The following APIs perform individual lowering operations explicitly.
 
@@ -85,7 +85,7 @@ The following APIs perform individual lowering operations explicitly.
 | OneHot | {meth}`~ommx.Instance.convert_one_hot_to_constraint` | {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` |
 | SOS1 | {meth}`~ommx.Instance.convert_sos1_to_constraints` | {meth}`~ommx.Instance.convert_all_sos1_to_constraints` |
 
-The API Reference above owns the exact generated formulas, variable creation and reuse, validity conditions, returned IDs, and mutation contract on failure. In the standard Adapter workflow, use the recommended Policy and {meth}`~ommx.Instance.prepare` instead of manually composing individual conversion APIs.
+The API Reference above owns the exact generated formulas, variable creation and reuse, validity conditions, returned IDs, and mutation contract on failure. For the standard recommended workflow, call the Adapter's easy API. When the application customizes Preparation, edit a fresh recommended Policy, prepare the chosen Instance, and call the corresponding `*_without_preparation()` method. Use the individual lowering APIs when the application needs direct control over one transformation.
 
 The source constraint remains in the Instance as a removed entry after lowering. [Removed Constraints and Feasibility](./removed_constraints.md) explains the active/removed lifecycle, removal reasons, provenance, and feasibility with respect to the pre-transformation constraints.
 

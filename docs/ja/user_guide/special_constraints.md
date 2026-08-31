@@ -71,10 +71,12 @@ Instanceは制約の追加時に、参照された決定変数が存在するこ
 
 ## Native supportとlowering
 
-どの特殊制約を変換なしで受け取れるかはAdapterごとに異なり、Adapterの`INPUT_CLASS`がそのexactな条件を宣言します。例えばPySCIPOpt Adapterは線形IndicatorとSOS1をSCIPの専用APIへ渡しますが、OneHotは直接受け取りません。
+どの特殊制約を変換なしで受け取れるかはAdapterごとに異なり、必須の`INPUT_CLASS`がそのexactな条件を宣言します。Applicabilityはこのmembershipだけで決まります。例えばPySCIPOpt Adapterは線形IndicatorとSOS1をSCIPの専用APIへ渡しますが、OneHotは直接受け取りません。
+
+通常の`solve()`と`sample()`は、入力を変更せずに内部でコピーを作り、Adapterの推奨PolicyでPreparationしてから解きます。PySCIPOpt Adapterの場合、推奨PolicyはOneHotだけを通常制約へloweringし、直接扱えるIndicatorとSOS1は保持します。`solve_without_preparation()`、`sample_without_preparation()`、Adapter constructorへ渡すInstanceは、呼び出し前から`INPUT_CLASS`に入っている必要があります。
 
 - 対応Adapterに特殊制約をそのまま渡す例は[PySCIPOpt Adapterで特殊制約をそのまま解く](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md)を参照してください。
-- 特殊制約を受け取らないAdapter向けに通常制約へ変換する例は[Adapter向けにInstanceを準備する](../tutorial/prepare_instance_for_adapter.md)を参照してください。
+- 推奨Preparationと厳格な実行経路の関係は[Adapter向けにInstanceを準備する](../tutorial/prepare_instance_for_adapter.md)を参照してください。
 - `INPUT_CLASS`とPreparationの責任境界は[Adapterのexact input（INPUT_CLASS）](./adapter_input_class.md)と[Instance PreparationとPreparationPolicy](./preparation_policy.md)を参照してください。
 
 個別のloweringを明示的に実行するAPIは次の通りです。
@@ -85,7 +87,7 @@ Instanceは制約の追加時に、参照された決定変数が存在するこ
 | OneHot | {meth}`~ommx.Instance.convert_one_hot_to_constraint` | {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` |
 | SOS1 | {meth}`~ommx.Instance.convert_sos1_to_constraints` | {meth}`~ommx.Instance.convert_all_sos1_to_constraints` |
 
-各変換で生成される制約の式、変数の追加・再利用、成立条件、返されるID、失敗時のmutation contractは、上のAPI Referenceが所有します。Adapterの標準workflowでは個別APIを直接組み合わせず、推奨Policyと{meth}`~ommx.Instance.prepare`を使います。
+各変換で生成される制約の式、変数の追加・再利用、成立条件、返されるID、失敗時のmutation contractは、上のAPI Referenceが所有します。Adapterの標準workflowでは個別APIを直接組み合わせず、`solve()`または`sample()`に推奨Policyの適用を任せます。Policyをapplication固有に編集するときは、コピーへ{meth}`~ommx.Instance.prepare`を明示的に適用して厳格な実行APIへ渡します。
 
 loweringされた元の制約はremovedなentryとしてInstanceに残ります。active/removedのlifecycle、変換理由、provenance、変換前の制約を含むfeasibilityは[Removed constraintsと実行可能性](./removed_constraints.md)で説明しています。
 

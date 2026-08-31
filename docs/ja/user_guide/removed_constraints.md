@@ -15,7 +15,7 @@ kernelspec:
 
 OMMX では、制約をモデルから単に消去する代わりに、active から removed へ lifecycle を移すことができます。removed constraint は Backend に渡す現在の数学的問題からは除外されますが、変換前の制約と削除理由を保持し、{class}`~ommx.Solution` や {class}`~ommx.SampleSet` の評価に使われます。
 
-この仕組みにより、Preparation 後の Instance は Adapter の exact input だけを active に持ちながら、得られた解が変換前の制約も満たすかを検査できます。Preparation 全体の責任境界は [Instance Preparation と PreparationPolicy](./preparation_policy.md) を参照してください。
+この仕組みにより、Preparation後のInstanceはAdapterのexact inputだけをactiveに持ちながら、得られた解が変換前の制約も満たすかを検査できます。通常のAdapter APIがcopyへ自動適用するPreparationと、呼び出し側が明示的に行うPreparationの責任境界は[Instance PreparationとPreparationPolicy](./preparation_policy.md)を参照してください。
 
 ## Active と removed
 
@@ -170,4 +170,4 @@ restored_solution = instance.evaluate({0: 1, 1: 0})
 assert not restored_solution.feasible_relaxed
 ```
 
-Preparation が途中で失敗した場合の部分的な変更も、restore で一括して巻き戻すことはできません。変換前の Instance を保持する必要がある場合は、Preparation の前に明示的にコピーしてください。
+Preparationが途中で失敗した場合の部分的な変更も、restoreで一括して巻き戻すことはできません。通常の`solve()`と`sample()`は内部copyをPreparationするため、呼び出し元のInstanceは変更されません。明示的な`prepare()`で変換前のInstanceを保持する必要がある場合は、先にcopyしてください。

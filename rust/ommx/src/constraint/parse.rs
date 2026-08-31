@@ -112,10 +112,9 @@ impl Parse for Vec<v1::Constraint> {
             let (id, c, context): (ConstraintID, Constraint<Created>, ConstraintContext) =
                 c.parse(&())?;
             if constraints.insert(id, c).is_some() {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Duplicated constraint ID is found in definition: {id:?}"
-                ))
-                .into());
+                )));
             }
             context_store.insert(id, context);
         }
@@ -131,19 +130,17 @@ impl Parse for Vec<v1::RemovedConstraint> {
         for c in self {
             let (id, constraint, context, reason) = c.parse(&())?;
             if constraints.contains_key(&id) {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Duplicated constraint ID is found in definition: {id:?}"
-                ))
-                .into());
+                )));
             }
             if removed_constraints
                 .insert(id, (constraint, context, reason))
                 .is_some()
             {
-                return Err(RawParseError::InvalidInstance(format!(
+                return Err(ParseError::new(crate::error!(
                     "Duplicated constraint ID is found in definition: {id:?}"
-                ))
-                .into());
+                )));
             }
         }
         Ok(removed_constraints)
@@ -174,10 +171,7 @@ impl Parse for v1::EvaluatedConstraint {
             provenance: Vec::new(),
         };
 
-        let feasible = match equality {
-            Equality::EqualToZero => self.evaluated_value.abs() < *crate::ATol::default(),
-            Equality::LessThanOrEqualToZero => self.evaluated_value < *crate::ATol::default(),
-        };
+        let feasible = equality.is_satisfied(self.evaluated_value, crate::ATol::default());
 
         let removed_reason = self.removed_reason.map(|reason| RemovedReason {
             reason,
@@ -270,6 +264,8 @@ impl Parse for v1::SampledConstraint {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use super::*;
     use crate::v1;
     use maplit::btreeset;
@@ -302,6 +298,25 @@ mod tests {
           └─ommx.v1.Constraint[function]
         Unsupported ommx.v1.Function is found. It is created by a newer version of OMMX SDK.
         "###);
+    }
+
+    #[test]
+    fn duplicate_constraint_ids_are_ordinary_semantic_errors() {
+        let constraint = v1::Constraint {
+            id: 1,
+            function: Some(Function::Zero.into()),
+            equality: v1::Equality::EqualToZero as i32,
+            ..Default::default()
+        };
+
+        let err = vec![constraint.clone(), constraint].parse(&()).unwrap_err();
+
+        let mut source = err.source();
+        while let Some(error) = source {
+            assert!(error.downcast_ref::<RawParseError>().is_none());
+            source = error.source();
+        }
+        assert!(err.to_string().contains("ConstraintID(1)"));
     }
 
     #[test]
@@ -349,5 +364,24 @@ mod tests {
         assert_eq!(context.label.subscripts, vec![10, 20]);
         // feasible should be false because 1.5 > ATol::default() for EqualToZero constraint
         assert!(!parsed.stage.feasible);
+    }
+
+    #[test]
+    fn v1_evaluated_constraint_parse_includes_default_atol_boundary() {
+        for equality in [
+            v1::Equality::EqualToZero,
+            v1::Equality::LessThanOrEqualToZero,
+        ] {
+            let proto = v1::EvaluatedConstraint {
+                equality: equality as i32,
+                evaluated_value: *crate::ATol::default(),
+                ..Default::default()
+            };
+
+            let (_, parsed, _, _): (ConstraintID, EvaluatedConstraint, ConstraintContext, _) =
+                proto.parse(&()).unwrap();
+
+            assert!(parsed.stage.feasible);
+        }
     }
 }

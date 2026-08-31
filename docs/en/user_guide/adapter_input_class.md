@@ -13,10 +13,10 @@ kernelspec:
 
 # Adapter Exact Inputs (`INPUT_CLASS`)
 
-Each OMMX Adapter declares the set of {class}`~ommx.Instance` values it accepts directly, without conversion, as `INPUT_CLASS`. This is not a broad capability model that includes problems the Adapter could handle after conversion. It is an exact condition on **the value about to be passed to the Adapter**.
+Each OMMX Adapter must declare the set of {class}`~ommx.Instance` values its strict conversion path accepts, without further Preparation, as a non-optional `INPUT_CLASS`. This is not a broad capability model that includes problems the Adapter could handle after conversion. It is the exact condition on the solver-facing `Instance` delivered to `solve_without_preparation()` or `sample_without_preparation()`.
 
 ```{important}
-Checking `INPUT_CLASS` does not transform an Instance. The Instance checked before Preparation and the Instance produced by Preparation are different inputs, so check membership for the value you actually pass to the Adapter.
+Checking `INPUT_CLASS` does not transform an Instance. The easy `solve()` and `sample()` APIs may accept a source Instance outside this class because they prepare an isolated copy first. Preparation-free APIs require the value they receive to be a member already.
 ```
 
 ## The Set Represented by InstanceClass
@@ -52,7 +52,6 @@ instance = Instance.from_components(
 )
 
 input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
-assert input_class is not None
 assert not input_class.contains(instance)
 
 report = input_class.check_membership(instance)
@@ -67,21 +66,17 @@ See the API Reference for {class}`~ommx.InstanceClassMismatch` and {class}`~ommx
 Membership is determined from the objective and the decision variables actually used by the four active constraint families: regular, Indicator, OneHot, and SOS1. The following variables are not included in the variable-kind check because they are not part of {attr}`~ommx.Instance.used_decision_variables`.
 
 - Fixed, dependent, or irrelevant variables
+- Variables referenced only by the output objective
 - Variables referenced only by removed constraints
 - Variables referenced only by named functions
 
 Likewise, removed constraints are excluded when checking relations, degrees, and the presence of special constraints. An Instance whose special constraints have been lowered to regular constraints can therefore belong to an `INPUT_CLASS` that disallows those special constraints while still retaining the source constraints as removed entries. See [Removed Constraints and Feasibility](./removed_constraints.md) for the distinction between active and removed constraints.
 
-## `INPUT_CLASS` and Adapter Applicability
+## `INPUT_CLASS` Is Adapter Applicability
 
-`INPUT_CLASS` membership is the first condition for Adapter applicability, but the two are not identical.
+`INPUT_CLASS` membership is the complete applicability condition. {meth}`~ommx.adapter.SolverAdapter.check_applicability` returns the same structured membership report as `INPUT_CLASS.check_membership()`. {meth}`~ommx.adapter.SolverAdapter.require_applicable` returns that report for a member and raises {class}`~ommx.adapter.AdapterNotApplicableError` with it for a non-member. There is no second Adapter-owned precondition layer.
 
-| Check | Owner | API |
-|---|---|---|
-| Exact input structure represented by OMMX | `InstanceClass` | `contains()` / `check_membership()` |
-| Applicability including Backend-specific conditions | Adapter | `check_applicability()` / `require_applicable()` |
-
-{meth}`~ommx.adapter.SolverAdapter.check_applicability` first checks `INPUT_CLASS` membership. Only for a member does it check Adapter-specific preconditions, such as the range of IDs accepted by the Backend. {meth}`~ommx.adapter.SolverAdapter.require_applicable` performs the same checks and raises {class}`~ommx.adapter.AdapterNotApplicableError` when the Instance is not applicable.
+Converter-local representation checks and Backend limits may still fail after an Instance has passed applicability. Such a failure belongs to solver-input construction or Backend execution; it does not retroactively make the Instance a non-member of `INPUT_CLASS`.
 
 These checks do not perform any of the following operations.
 
@@ -89,4 +84,4 @@ These checks do not perform any of the following operations.
 - Backend execution
 - A guarantee that the Backend will return a solution or samples
 
-Neither `solve()`, `sample()`, nor an Adapter constructor prepares its input implicitly. If an Instance is not in `INPUT_CLASS`, the caller prepares a different input by following [Instance Preparation and `PreparationPolicy`](./preparation_policy.md). See [Prepare an Instance for an Adapter](../tutorial/prepare_instance_for_adapter.md) for the complete workflow.
+The easy `solve()` and `sample()` APIs copy their source Instance, apply the Adapter's recommended Policy to that copy, and call the corresponding preparation-free API. The source is not modified. In contrast, `solve_without_preparation()`, `sample_without_preparation()`, and direct Adapter constructors require an exact member and do not run Preparation. If the application needs different Preparation choices, it prepares a copy explicitly and passes that exact value to the preparation-free API. See [Instance Preparation and `PreparationPolicy`](./preparation_policy.md) and [Prepare an Instance for an Adapter](../tutorial/prepare_instance_for_adapter.md).

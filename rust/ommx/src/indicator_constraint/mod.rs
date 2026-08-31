@@ -273,10 +273,7 @@ fn indicator_feasible_from_evaluated_value(
     if !indicator_active {
         return true;
     }
-    match equality {
-        Equality::EqualToZero => evaluated_value.abs() < *atol,
-        Equality::LessThanOrEqualToZero => evaluated_value < *atol,
-    }
+    equality.is_satisfied(evaluated_value, atol)
 }
 
 fn validate_indicator_feasible_from_evaluated_value(
@@ -290,7 +287,7 @@ fn validate_indicator_feasible_from_evaluated_value(
     let computed_feasible =
         indicator_feasible_from_evaluated_value(equality, evaluated_value, indicator_active, atol);
     if provided_feasible != computed_feasible {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Inconsistent indicator constraint feasibility: provided={provided_feasible}, computed={computed_feasible}",
         ))
         .context(message, "feasible"));
@@ -438,6 +435,8 @@ impl std::fmt::Display for IndicatorConstraint<Created> {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use super::*;
     use crate::{coeff, linear};
 
@@ -489,6 +488,29 @@ mod tests {
             err.to_string().contains("evaluated_value must be finite"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn parse_v2_evaluated_feasibility_mismatch_is_an_ordinary_error() {
+        let proto = crate::v2::EvaluatedIndicatorConstraint {
+            indicator_variable: 1,
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_value: 0.0,
+            feasible: false,
+            indicator_active: false,
+            used_decision_variable_ids: vec![],
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        let mut source = err.source();
+        while let Some(error) = source {
+            assert!(error.downcast_ref::<RawParseError>().is_none());
+            source = error.source();
+        }
+        assert!(err
+            .to_string()
+            .contains("Inconsistent indicator constraint feasibility"));
     }
 
     #[test]

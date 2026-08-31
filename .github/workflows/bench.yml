@@ -1,6 +1,9 @@
-# Since most PRs do not affect performance, benchmarks do not run on PRs by default.
-# `main` and release tags run persistent guardrails. Performance PRs can run the
-# full suite, including diagnostic profiles, via `task codspeed:trigger`.
+# Pull requests run persistent guardrails once when they become ready for review.
+# PRs opened as ready run immediately; draft PRs wait for `ready_for_review`.
+# Pushes after that do not retrigger benchmarks: return the PR to draft and mark
+# it ready again to measure the new head commit. The full suite, including
+# diagnostic profiles, remains available via `task codspeed:trigger`.
+# `main` and release tags also run persistent guardrails.
 # Release tags (rust-*, python-*) also trigger benchmarks so each release has a
 # comparison baseline against the previous release.
 
@@ -12,6 +15,10 @@ on:
     tags:
       - rust-*
       - python-*
+  pull_request:
+    types:
+      - opened
+      - ready_for_review
   workflow_dispatch:
     inputs:
       suite:
@@ -25,10 +32,12 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   rust:
     name: Benchmarks for Rust SDK
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -42,18 +51,18 @@ jobs:
         uses: CodSpeedHQ/action@v5.0.3
         with:
           run: cargo codspeed run -p ommx
-          token: ${{ secrets.CODSPEED_TOKEN }}
           mode: simulation
 
   python:
     name: Benchmarks for Python SDK
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     env:
       UV_PYTHON: "3.13"
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           # CodSpeed looks working with `sys.monitoring`, which has been introduced in 3.12,
           # but updates in 3.13 seems to be required for generating trace information.
@@ -83,5 +92,4 @@ jobs:
             else
               uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py --codspeed -m benchmark_guardrail
             fi
-          token: ${{ secrets.CODSPEED_TOKEN }}
           mode: simulation

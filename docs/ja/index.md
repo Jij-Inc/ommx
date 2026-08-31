@@ -12,9 +12,9 @@ Adapterを利用する人と実装する人で、必要な知識と読む順序�
 |---|---|---|---|
 | 1 | [PySCIPOpt Adapterで0-1ナップサック問題を解く](./tutorial/solve_with_ommx_adapter) | Instanceをそのまま`solve()`へ渡し、pandasで結果を読む | 特殊制約、`INPUT_CLASS`、Preparation |
 | 2 | [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter) | IndicatorとSOS1、対応Adapterなら変換不要であること | exact inputの定義、loweringの変換式と前提条件 |
-| 3 | [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter) | `INPUT_CLASS`の確認、推奨Policyの取得、ユーザーがcopyを`prepare()`する流れ | phase順序と責任境界、失敗時の状態、各変換APIの正確な契約 |
+| 3 | [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter) | `solve()`にprivate copyを準備させ、同じPolicyを明示的に適用して厳格に解く流れ | phase順序、失敗時の状態、各変換APIの正確な契約 |
 | 4 | [OpenJij Adapterでサンプリングする](./tutorial/tsp_sampling_with_openjij_adapter) | QUBO向け変換もPreparationであること、penaltyの選択とfeasibility確認 | Policyの全field、penaltyの展開式、個々の変換API |
-| 5 | [複数のAdapterで結果を比較する](./tutorial/switching_adapters) | 共通のexact inputは同じInstanceで比較し、必要ならAdapterごとにcopyを準備する | diagnostics、initial stateなどAdapter固有の機能 |
+| 5 | [複数のAdapterで結果を比較する](./tutorial/switching_adapters) | 1つのsource Instanceを再利用し、各Adapterがprivate copyを準備すること | custom Preparation、diagnostics、initial stateなどAdapter固有の機能 |
 
 ### OMMX Adapterを実装する
 

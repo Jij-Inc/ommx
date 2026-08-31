@@ -68,7 +68,7 @@ source
 
 ## PySCIPOpt Adapterで解く
 
-PySCIPOpt Adapterは、線形なIndicator制約とSOS1制約を直接受け取れます。このモデルには事前の変換が必要ないので、`source` をそのまま `solve()` に渡します。
+PySCIPOpt Adapterは、線形なIndicator制約とSOS1制約を直接受け取れます。`solve()`は`source`のcopyを推奨Policyで準備しますが、このモデルは最初からexact inputなので変換は行われません。呼び出し元の`source`をそのまま渡せます。
 
 ```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -82,4 +82,4 @@ solution.decision_variables_df()
 
 この解では `enabled = 1`、`option_a = 1`、`option_b = 0`、`option_c = 1` となり、Indicator制約とSOS1制約をどちらも満たします。呼び出し前に通常制約へ書き換える必要はありませんでした。
 
-同じモデルを特殊制約に直接対応していないAdapterで解く場合は、次の[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md)に進んでください。各特殊制約の意味と、個別APIの参照先は[特殊制約型](../user_guide/special_constraints.md)にまとめています。
+exact inputがこれらの特殊制約を含まないAdapterでも、easy APIはprivate copy上でloweringできる場合があります。次の[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md)で、自動workflowと、それと等価な明示的preparation-free workflowを確認します。各特殊制約の意味と個別APIの参照先は[特殊制約型](../user_guide/special_constraints.md)にまとめています。

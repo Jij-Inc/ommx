@@ -386,7 +386,9 @@ impl PyAutosavePolicy {
 ///
 /// If the experiment has only one run, open the experiment and the run in
 /// one `with` statement. On normal exit, the run is finished first and then
-/// the experiment is committed:
+/// the experiment is committed. The following workflow uses the caller's
+/// persistent Local Registry and a remote registry, so it is not executed by
+/// doctest:
 ///
 /// >>> with Experiment() as exp, exp.run() as run:  # doctest: +SKIP
 /// ...     solution = run.log_solve(adapter, instance, time_limit=10.0)
@@ -523,13 +525,12 @@ impl PyExperiment {
     ///
     /// If `image_name` is omitted, OMMX generates an anonymous local
     /// Experiment name for the child. The returned Experiment can be used as
-    /// a context manager:
+    /// a context manager. This requires an already committed parent in a
+    /// caller-owned Local Registry, so it is not executed by doctest:
     ///
-    /// ```python
-    /// with parent.fork() as child:
-    ///     with child.run() as run:
-    ///         run.log_parameter("capacity", 56)
-    /// ```
+    /// >>> with parent.fork() as child:  # doctest: +SKIP
+    /// ...     with child.run() as run:
+    /// ...         run.log_parameter("capacity", 56)
     ///
     /// Raises an error if this Experiment has not been committed yet.
     ///
@@ -821,12 +822,12 @@ impl PyExperiment {
     /// Start a new Run in this unsealed Experiment.
     ///
     /// The returned `Run` must be closed before `commit()`. Use it as a
-    /// context manager to close it automatically on normal or exceptional exit:
+    /// context manager to close it automatically on normal or exceptional
+    /// exit. This requires a caller-owned unsealed Experiment and writes to
+    /// its Local Registry, so it is not executed by doctest:
     ///
-    /// ```python
-    /// with experiment.run() as run:
-    ///     run.log_parameter("capacity", 47)
-    /// ```
+    /// >>> with experiment.run() as run:  # doctest: +SKIP
+    /// ...     run.log_parameter("capacity", 47)
     ///
     /// Closing a Run records its status as `"finished"`, `"failed"`, or
     /// `"interrupted"`. It also publishes a best-effort draft checkpoint when
@@ -2107,9 +2108,11 @@ impl PyRun {
 
     /// Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
     ///
-    /// The input Instance is cloned before calling the adapter, so adapter-side
-    /// capability reductions do not mutate the caller's object. The original
-    /// input is always stored as the Solve input.
+    /// The input Instance is cloned before calling the Adapter's easy
+    /// ``solve()`` API. That API may prepare another isolated copy with the
+    /// Adapter's recommended Policy, so neither step mutates the caller's
+    /// object. The original caller input, before any recommended Preparation,
+    /// is always stored as the Solve input.
     ///
     /// `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
     /// arguments are passed to `adapter.solve(...)` and recorded as
@@ -2289,6 +2292,10 @@ impl PyRun {
     /// construction or the context body fails before `decode` succeeds, a failed
     /// or interrupted Solve is recorded when possible and the exception is
     /// re-raised.
+    ///
+    /// This is the strict exact-input path: it does not apply the Adapter's
+    /// recommended Preparation Policy. The supplied Instance must already
+    /// belong to the Adapter's ``INPUT_CLASS``.
     #[pyo3(signature = (adapter, instance, *, store_diagnostics = false, **kwargs))]
     pub fn open_solve(
         slf: Bound<'_, Self>,
@@ -4302,7 +4309,7 @@ impl PySolve {
     }
 
     #[getter]
-    /// Input `Instance` passed to the solver.
+    /// Source `Instance` supplied by the caller, before Adapter Preparation.
     pub fn input(&self) -> OmmxPyResult<crate::Instance> {
         let inner = self.0.input_instance()?;
         Ok(crate::Instance { inner })
@@ -4390,7 +4397,7 @@ impl PySampling {
     }
 
     #[getter]
-    /// Input `Instance` passed to the sampler.
+    /// Source `Instance` supplied by the caller, before Adapter Preparation.
     pub fn input(&self) -> OmmxPyResult<crate::Instance> {
         Ok(crate::Instance {
             inner: self.0.input_instance()?,

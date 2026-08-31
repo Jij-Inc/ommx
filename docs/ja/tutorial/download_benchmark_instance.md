@@ -25,7 +25,7 @@ pip install ommx-pyscipopt-adapter
 
 MIPLIB 2017は混合整数線形計画問題のベンチマークです。OMMX形式のArtifactは[GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017)で公開されています。
 
-`dataset.miplib2017()`に問題名を渡すとダウンロードできます。ここで使う[`neos-1122047`](https://miplib.zib.de/instance_details_neos-1122047.html)はPySCIPOpt Adapterがそのまま受け取れるため、Preparationなしで解けます。
+`dataset.miplib2017()`に問題名を渡すとダウンロードできます。ここで使う[`neos-1122047`](https://miplib.zib.de/instance_details_neos-1122047.html)はPySCIPOpt Adapterがそのまま受け取れるため、モデルを変換せずに解けます。
 
 ```{code-cell} ipython3
 from ommx import dataset

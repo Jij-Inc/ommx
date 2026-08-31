@@ -15,11 +15,11 @@ kernelspec:
 
 In [Solve Special Constraints Directly with the PySCIPOpt Adapter](./solve_special_constraints_with_pyscipopt_adapter.md), we passed Indicator and SOS1 constraints directly to SCIP. Not every Adapter accepts the same kinds of Instance directly.
 
-In this tutorial, we prepare the same model for the HiGHS Adapter and solve it. Remember these three steps:
+In this tutorial, we solve the same model with the HiGHS Adapter in two ways. Remember these three facts:
 
-1. Check the Adapter's `INPUT_CLASS` to determine whether the Instance can be passed directly.
-2. Obtain the Adapter's recommended Policy, and choose the Instance to prepare.
-3. Call `Instance.prepare()` yourself, then pass the prepared Instance to the Adapter.
+1. `INPUT_CLASS` is the exact set accepted by the preparation-free API.
+2. `solve()` applies the Adapter's recommended Policy to an isolated copy automatically.
+3. For custom choices, prepare a copy yourself and call `solve_without_preparation()`.
 
 ## Installing the Required Library
 
@@ -65,17 +65,30 @@ Each Adapter's `INPUT_CLASS` is the **set of Instance values that it accepts dir
 from ommx_highs_adapter import OMMXHighsAdapter
 
 highs_input_class = OMMXHighsAdapter.INPUT_CLASS
-assert highs_input_class is not None
 assert not highs_input_class.contains(source)
 ```
 
-The HiGHS Adapter accepts regular linear constraints, but it does not accept Indicator or SOS1 constraints directly. Therefore, `source` is not yet an input for the HiGHS Adapter.
+The HiGHS Adapter accepts regular linear constraints, but its strict input does not include Indicator or SOS1 constraints. Therefore, `source` cannot be passed to `solve_without_preparation()` yet.
 
-## Prepare with the Recommended Policy
+## Let `solve()` Apply the Recommendation
 
-An Adapter's `recommended_preparation_policy()` proposes conversions that are generally useful for reaching its `INPUT_CLASS`. The HiGHS Adapter's recommendation converts Indicator and SOS1 constraints to regular linear constraints.
+The usual `solve()` workflow accepts the source model. It makes an isolated copy, applies `recommended_preparation_policy()` to reach `INPUT_CLASS`, and solves the copy. The HiGHS recommendation converts Indicator and SOS1 constraints to regular linear constraints.
 
-Obtaining a recommended Policy does not change an Instance. The user chooses which Instance to convert and calls `prepare()`. To preserve the original model, we prepare a copy made with `copy.copy()`.
+```{code-cell} ipython3
+solution = OMMXHighsAdapter.solve(source)
+
+assert solution.feasible
+assert abs(solution.objective - 20.0) < 1e-8
+
+# The easy API did not mutate the source model.
+assert source.indicator_constraints
+assert source.sos1_constraints
+solution.decision_variables_df()
+```
+
+## Run the Same Preparation Explicitly
+
+When the application needs to inspect or edit the Policy, obtain a fresh recommendation, prepare a chosen Instance, and use the strict `solve_without_preparation()` method. To preserve the source model, prepare a copy made with `copy.copy()`.
 
 ```{code-cell} ipython3
 import copy
@@ -94,7 +107,7 @@ assert source.sos1_constraints
 assert not prepared.indicator_constraints
 assert not prepared.sos1_constraints
 
-prepared_solution = OMMXHighsAdapter.solve(prepared)
+prepared_solution = OMMXHighsAdapter.solve_without_preparation(prepared)
 assert prepared_solution.feasible
 assert abs(prepared_solution.objective - 20.0) < 1e-8
 prepared_solution.decision_variables_df()
@@ -102,10 +115,9 @@ prepared_solution.decision_variables_df()
 
 ## Summary
 
-- If an Adapter accepts an Instance directly, pass it to `solve()` as-is.
-- `INPUT_CLASS` is the set of inputs an Adapter accepts directly without conversion.
-- A recommended Policy proposes conversions; it does not perform Preparation.
-- The user chooses which Instance to convert and calls `Instance.prepare()`.
-- To preserve the original model, prepare a copy before passing it to the Adapter.
+- `INPUT_CLASS` is the exact set accepted by `solve_without_preparation()`.
+- `solve()` prepares an isolated copy with the Adapter's fresh recommended Policy and leaves the source unchanged.
+- The recommendation method only creates a Policy; it does not inspect or mutate an Instance by itself.
+- For custom Preparation, copy the source, edit and apply the Policy, then call `solve_without_preparation()`.
 
 For more details, see [Adapter Exact Inputs (`INPUT_CLASS`)](../user_guide/adapter_input_class.md), [Instance Preparation and `PreparationPolicy`](../user_guide/preparation_policy.md), [Special Constraint Types](../user_guide/special_constraints.md), and [Removed Constraints and Feasibility](../user_guide/removed_constraints.md).

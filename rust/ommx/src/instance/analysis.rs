@@ -297,9 +297,9 @@ impl Instance {
     ///
     /// The set contains IDs referenced by the objective or by active regular,
     /// Indicator, OneHot, or SOS1 constraints. It excludes references that occur
-    /// only in named functions, removed constraints, or on the right-hand side of
-    /// a decision-variable dependency. Fixed, dependent, and irrelevant variables
-    /// are therefore not included.
+    /// only in the output objective, named functions, removed constraints, or on
+    /// the right-hand side of a decision-variable dependency. Fixed, dependent,
+    /// and irrelevant variables are therefore not included.
     pub fn used_decision_variable_ids(&self) -> VariableIDSet {
         let mut used = self.objective.required_ids();
         used.extend(self.constraint_collection.required_ids());

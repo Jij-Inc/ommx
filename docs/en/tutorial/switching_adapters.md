@@ -14,9 +14,9 @@ kernelspec:
 Solve with Multiple Adapters and Compare the Results
 =====================================================
 
-OMMX Adapters share a common API, so you can solve the same problem with multiple solvers and compare their results. In [Solve Special Constraints Directly with the PySCIPOpt Adapter](./solve_special_constraints_with_pyscipopt_adapter.md) and [Prepare an Instance for an Adapter](./prepare_instance_for_adapter.md), we saw that different Adapters may accept different Instances directly. On this page, we use a simple model that both HiGHS and PySCIPOpt accept without conversion.
+OMMX Adapters share a common API, so you can solve the same problem with multiple solvers and compare their results. In [Solve Special Constraints Directly with the PySCIPOpt Adapter](./solve_special_constraints_with_pyscipopt_adapter.md) and [Prepare an Instance for an Adapter](./prepare_instance_for_adapter.md), we saw that different Adapters have different exact inputs. On this page, we use a simple model that both HiGHS and PySCIPOpt accept without conversion.
 
-Each Adapter describes the inputs it accepts directly without conversion through its `INPUT_CLASS`. You can reuse the same `Instance` for a comparison only when it belongs to every Adapter's `INPUT_CLASS`. Otherwise, make a copy and prepare it separately for each Adapter.
+The easy `solve()` API makes and prepares a private copy, so the same source `Instance` can be reused across Adapters without cross-contamination. In this example the source already belongs to both `INPUT_CLASS` values, so neither Adapter needs a conversion. If a comparison requires application-specific Preparation, make one source copy per Adapter, prepare each toward its own `INPUT_CLASS`, and call `solve_without_preparation()`.
 
 Consider the following knapsack problem, which both HiGHS and SCIP accept directly:
 
@@ -60,7 +60,7 @@ adapters = {
     "scip": OMMXPySCIPOptAdapter,
 }
 
-# Solve the same exact input through each Adapter.
+# Each Adapter receives the same source and owns its private working copy.
 solutions = {
     name: adapter.solve(instance) for name, adapter in adapters.items()
 }

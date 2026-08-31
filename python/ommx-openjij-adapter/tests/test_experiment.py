@@ -13,13 +13,13 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
         sense=Sense.Maximize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
-    assert input_class is not None
     policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
     policy.fixed_penalty = (
         FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=2.0)
     )
     source.prepare(input_class, policy)
     adapter_input = source
+    assert adapter_input.sense == Sense.Minimize
     input_bytes = adapter_input.to_v2_bytes()
     experiment = Experiment.with_temp_local_registry()
     prepared_samples: SampleSet | None = None
@@ -33,7 +33,7 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
         )
 
     assert prepared_samples is not None
-    assert prepared_samples.sense == Sense.Minimize
+    assert prepared_samples.sense == Sense.Maximize
     for sample_id in prepared_samples.sample_ids():
         actual = prepared_samples.get(sample_id)
         expected = adapter_input.evaluate(actual.state)

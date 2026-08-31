@@ -4,7 +4,6 @@ import pytest
 
 from ommx import (
     DecisionVariable,
-    DegreeBound,
     ExactIntegerSlackError,
     FixedPenaltyPreparation,
     Instance,
@@ -13,11 +12,12 @@ from ommx import (
     IntegerEncodingPreparation,
     IntegerSlackPreparation,
     Kind,
+    ObjectivePreparation,
     OneHotConstraint,
     PreparationPolicy,
     PreparationTargetNotReachedError,
+    PolynomialRequirement,
     Sense,
-    SensePreparation,
     SpecialConstraintKind,
     SpecialConstraintPreparation,
 )
@@ -34,7 +34,9 @@ def unconstrained_class(
             InstanceClassClause(
                 label="target",
                 allowed_variable_kinds=allowed_variable_kinds,
-                objective_degree_bound=DegreeBound.at_most(objective_degree),
+                objective_polynomial_requirement=PolynomialRequirement.at_most(
+                    objective_degree
+                ),
                 allowed_senses={sense},
             )
         ]
@@ -60,7 +62,7 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
     policy.special_constraints = SpecialConstraintPreparation.lower_special_constraints(
         kinds={SpecialConstraintKind.OneHot}
     )
-    policy.sense = SensePreparation.as_minimization_problem()
+    policy.objective = ObjectivePreparation(target=Sense.Minimize)
     policy.integer_slack = IntegerSlackPreparation(
         max_integer_range=1,
         slack_upper_bound=2,
@@ -76,6 +78,20 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
     assert target.contains(alias)
 
 
+def test_special_constraint_preparation_stores_bound_atol() -> None:
+    preparation = SpecialConstraintPreparation.lower_special_constraints(
+        kinds={SpecialConstraintKind.Indicator}, atol=0.125
+    )
+    same = SpecialConstraintPreparation.lower_special_constraints(
+        kinds={SpecialConstraintKind.Indicator}, atol=0.125
+    )
+    different = SpecialConstraintPreparation.lower_special_constraints(
+        kinds={SpecialConstraintKind.Indicator}, atol=0.25
+    )
+    assert preparation == same
+    assert preparation != different
+
+
 def test_prepare_preserves_owner_signal_and_earlier_commits() -> None:
     x = DecisionVariable.integer(0, lower=0, upper=3)
     instance = Instance.from_components(
@@ -89,7 +105,7 @@ def test_prepare_preserves_owner_signal_and_earlier_commits() -> None:
         objective_degree=1,
     )
     policy = PreparationPolicy(
-        sense=SensePreparation.as_minimization_problem(),
+        objective=ObjectivePreparation(target=Sense.Minimize),
         integer_slack=IntegerSlackPreparation(max_integer_range=1),
     )
 

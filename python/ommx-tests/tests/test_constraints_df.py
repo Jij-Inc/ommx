@@ -16,6 +16,7 @@ from ommx import (
     Constraint,
     DecisionVariable,
     Equality,
+    Function,
     IndicatorConstraint,
     Instance,
     OneHotConstraint,
@@ -131,6 +132,21 @@ def test_instance_constraints_df_unknown_kind():
         _instance_all_kinds().constraints_df(kind="bogus")  # type: ignore[arg-type]
 
 
+def test_instance_constraints_df_reports_composed_function_type():
+    variable = DecisionVariable.continuous(0)
+    function = Function(variable)
+    constraint = abs(function) <= 1
+    assert isinstance(constraint, Constraint)
+    instance = Instance.from_components(
+        decision_variables=[variable],
+        objective=variable,
+        constraints={10: constraint},
+        sense=Instance.MINIMIZE,
+    )
+
+    assert instance.constraints_df().loc[10, "type"] == "Expression"
+
+
 def test_instance_constraints_df_unknown_include_flag():
     """Unknown `include=` flag raises ValueError."""
     with pytest.raises(ValueError, match="unknown include flag"):
@@ -225,9 +241,9 @@ def test_instance_constraints_df_removed_reason_active_only_keeps_column(
 
 def test_instance_constraints_df_one_hot_removed_true(snapshot):
     """`removed=True` on `kind="one_hot"` exercises the merge-sort and
-    reason-column path on a special-kind constraint. The capability-
-    model docs advertise this surface for auditing OneHot →
-    regular-constraint conversion (see capability_model.md), so it
+    reason-column path on a special-kind constraint. The removed-constraints
+    guide advertises this surface for auditing OneHot → regular-constraint
+    conversion (see removed_constraints.md), so it
     deserves its own snapshot anchor."""
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(

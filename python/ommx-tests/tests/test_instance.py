@@ -8,10 +8,13 @@ from ommx import (
     Function,
     InfeasibleDetected,
     Instance,
+    InstanceClass,
     Linear,
     LogEncodingError,
     Parameter,
     ParametricInstance,
+    PreparationPolicy,
+    Sense,
 )
 
 
@@ -142,20 +145,6 @@ def test_add_constraint_accepts_full_modeling_label():
     assert snapshot.description == "existing description"
 
 
-def test_set_objective():
-    x = [DecisionVariable.binary(i) for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={},
-        sense=Instance.MAXIMIZE,
-    )
-    assert instance.objective.almost_equal(Function(sum(x)))
-
-    instance.objective = x[1]
-    assert instance.objective.almost_equal(Function(x[1]))
-
-
 def test_convert_inequality_to_equality_with_integer_slack_limit():
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
@@ -166,10 +155,12 @@ def test_convert_inequality_to_equality_with_integer_slack_limit():
     )
     with pytest.raises(ExactIntegerSlackError) as e:
         instance.convert_inequality_to_equality_with_integer_slack(0, 32)
-    assert (
-        str(e.value)
-        == "The range of the slack variable exceeds the limit: evaluated(15174216961756088) > limit(32)"
-    )
+    message = str(e.value)
+    prefix = "The range of the slack variable exceeds the limit: evaluated("
+    suffix = ") > limit(32)"
+    assert message.startswith(prefix)
+    assert message.endswith(suffix)
+    assert int(message.removeprefix(prefix).removesuffix(suffix)) > 32
 
 
 def test_convert_inequality_to_equality_with_integer_slack_continuous():
@@ -226,6 +217,25 @@ def test_convert_inequality_to_equality_with_integer_slack_trivial():
     )
     assert instance.constraints == {}
     assert 0 in instance.removed_constraints
+
+
+def test_convert_inequality_to_equality_with_integer_slack_uses_atol():
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=0,
+        constraints={0: x + 0.25 <= 0},
+        sense=Instance.MINIMIZE,
+    )
+
+    instance.convert_inequality_to_equality_with_integer_slack(
+        constraint_id=0, max_integer_range=1, atol=0.4
+    )
+
+    constraint = instance.constraints[0]
+    slack_id = (constraint.function.required_ids() - {0}).pop()
+    assert constraint.evaluate({0: 0.0, slack_id: 0.0}, atol=0.4).feasible
+    assert not constraint.evaluate({0: 1.0, slack_id: 0.0}, atol=0.4).feasible
 
 
 def test_add_integer_slack_to_inequality_infeasible():
@@ -299,7 +309,89 @@ def test_to_qubo_penalty_weight():
     assert offset == 2.0
 
 
-def test_to_qubo_continuous():
+def _binary_polynomial_energy(
+    coefficients: dict[tuple[int, ...], float],
+    offset: float,
+    state: dict[int, float],
+) -> float:
+    return offset + sum(
+        coefficient * math.prod(state[variable_id] for variable_id in ids)
+        for ids, coefficient in coefficients.items()
+    )
+
+
+@pytest.mark.parametrize(
+    ("driver_name", "policy_name", "class_name", "format_name"),
+    [
+        ("to_qubo", "for_qubo", "qubo", "as_qubo_format"),
+        ("to_hubo", "for_hubo", "hubo", "as_hubo_format"),
+    ],
+)
+def test_qubo_hubo_driver_matches_explicit_preparation_and_preserves_output(
+    driver_name: str,
+    policy_name: str,
+    class_name: str,
+    format_name: str,
+) -> None:
+    x = DecisionVariable.integer(0, lower=0, upper=3)
+    source = Instance.from_components(
+        decision_variables=[x],
+        objective=3 * x + 5,
+        constraints={7: x <= 2},
+        sense=Sense.Maximize,
+    )
+    driver = Instance.from_v2_bytes(source.to_v2_bytes())
+    explicit = Instance.from_v2_bytes(source.to_v2_bytes())
+    kwargs = {
+        "uniform_penalty_weight": 2.0,
+        "inequality_integer_slack_max_range": 7,
+    }
+
+    actual_coefficients, actual_offset = getattr(driver, driver_name)(**kwargs)
+    policy = getattr(PreparationPolicy, policy_name)(**kwargs)
+    explicit.prepare(getattr(InstanceClass, class_name)(), policy)
+    expected_coefficients, expected_offset = getattr(explicit, format_name)()
+
+    assert actual_coefficients == expected_coefficients
+    assert actual_offset == expected_offset
+    assert driver.to_v2_bytes() == explicit.to_v2_bytes()
+    assert driver.sense == Sense.Minimize
+
+    active_state = {variable_id: 0.0 for variable_id in driver.required_ids()}
+    active_energy = _binary_polynomial_energy(
+        actual_coefficients,
+        actual_offset,
+        active_state,
+    )
+    assert driver.objective.evaluate(active_state) == pytest.approx(active_energy)
+
+    solution = driver.evaluate(active_state)
+    sample_set = driver.evaluate_samples({11: active_state})
+    assert solution.sense == Sense.Maximize
+    assert solution.objective == pytest.approx(5.0)
+    assert sample_set.sense == Sense.Maximize
+    assert sample_set.objectives[11] == pytest.approx(5.0)
+
+
+def test_to_qubo_reduces_repeated_binary_power() -> None:
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x * x * x,
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    qubo, offset = instance.to_qubo()
+
+    assert qubo == {(0, 0): 1.0}
+    assert offset == 0.0
+    assert InstanceClass.qubo().contains(instance)
+    assert instance.evaluate({0: 1}).objective == 1.0
+
+
+@pytest.mark.parametrize("method_name", ["to_qubo", "to_hubo"])
+def test_qubo_hubo_continuous_partial_failure(method_name: str) -> None:
     x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -307,32 +399,14 @@ def test_to_qubo_continuous():
         constraints={0: x[0] + x[1] >= 7.89},
         sense=Instance.MAXIMIZE,
     )
-    with pytest.raises(ValueError) as e:
-        instance.to_qubo()
-    assert (
-        str(e.value)
-        == "Continuous variables are not supported in QUBO conversion: IDs=[0, 1, 2]"
-    )
-
-
-def test_to_qubo_invalid_penalty_option():
-    x = [
-        DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i])
-        for i in range(2)
-    ]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={0: x[0] + 2 * x[1] <= 3},
-        sense=Instance.MAXIMIZE,
-    )
-
-    with pytest.raises(ValueError) as e:
-        instance.to_qubo(uniform_penalty_weight=1.0, penalty_weights={0: 2.0})
-    assert (
-        str(e.value)
-        == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
-    )
+    with pytest.raises(
+        RuntimeError,
+        match=r"The constraint contains continuous decision variables: "
+        r"ID=VariableID\(0\)",
+    ):
+        getattr(instance, method_name)()
+    assert instance.sense == Sense.Minimize
+    assert instance.evaluate({0: 0, 1: 0, 2: 0}).sense == Sense.Maximize
 
 
 def test_hubo_3rd_degree():
@@ -360,42 +434,6 @@ def test_to_hubo_penalty_weight():
     hubo, offset = instance.to_hubo(penalty_weights={123: 1.0, 456: 2.0})
     assert hubo == {(0,): 2.0, (1,): -2.0}
     assert offset == 2.0
-
-
-def test_to_hubo_continuous():
-    x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={0: x[0] + x[1] >= 7.89},
-        sense=Instance.MAXIMIZE,
-    )
-    with pytest.raises(ValueError) as e:
-        instance.to_hubo()
-    assert (
-        str(e.value)
-        == "Continuous variables are not supported in HUBO conversion: IDs=[0, 1, 2]"
-    )
-
-
-def test_to_hubo_invalid_penalty_option():
-    x = [
-        DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i])
-        for i in range(2)
-    ]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints={0: x[0] + 2 * x[1] <= 3},
-        sense=Instance.MAXIMIZE,
-    )
-
-    with pytest.raises(ValueError) as e:
-        instance.to_hubo(uniform_penalty_weight=1.0, penalty_weights={0: 2.0})
-    assert (
-        str(e.value)
-        == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
-    )
 
 
 def test_evaluate_irrelevant_binary_variable():

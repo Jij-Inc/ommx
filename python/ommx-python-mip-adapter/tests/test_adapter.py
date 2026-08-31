@@ -2,13 +2,14 @@ import pytest
 
 from ommx import (
     DecisionVariable,
-    DegreeBound,
     Equality,
+    Function,
     IndicatorConstraint,
     Instance,
     InstanceClassMismatch,
     Kind,
     OneHotConstraint,
+    PolynomialRequirement,
     Sense,
     Sos1Constraint,
 )
@@ -18,7 +19,6 @@ from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
 def test_declares_linear_mip_input_class() -> None:
     input_class = OMMXPythonMIPAdapter.INPUT_CLASS
-    assert input_class is not None
     [clause] = input_class.clauses
 
     assert clause.label == "python-mip-linear-mip"
@@ -27,12 +27,12 @@ def test_declares_linear_mip_input_class() -> None:
         Kind.Integer,
         Kind.Continuous,
     }
-    assert clause.objective_degree_bound == DegreeBound.at_most(1)
-    assert clause.regular_constraint_degree_bounds == {
-        Equality.EqualToZero: DegreeBound.at_most(1),
-        Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+    assert clause.objective_polynomial_requirement == PolynomialRequirement.at_most(1)
+    assert clause.regular_constraint_polynomial_requirements == {
+        Equality.EqualToZero: PolynomialRequirement.at_most(1),
+        Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
     }
-    assert clause.indicator_constraint_degree_bounds == {}
+    assert clause.indicator_body_polynomial_requirements == {}
     assert not clause.allows_one_hot
     assert not clause.allows_sos1
     assert clause.allowed_senses == {Sense.Minimize, Sense.Maximize}
@@ -52,10 +52,8 @@ def test_input_class_accepts_complete_linear_mip_boundary(sense: Sense) -> None:
 
     report = OMMXPythonMIPAdapter.check_applicability(instance)
 
-    assert report.is_applicable
-    assert report.input_membership.matching_clauses == [(0, "python-mip-linear-mip")]
-    assert report.preconditions_checked
-    assert report.precondition_violations == ()
+    assert report.is_member
+    assert report.matching_clauses == [(0, "python-mip-linear-mip")]
 
 
 def test_error_nonlinear_objective():
@@ -71,9 +69,25 @@ def test_error_nonlinear_objective():
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(ommx_instance)
     assert isinstance(
-        e.value.report.input_membership.clause_reports[0].mismatches[0],
+        e.value.report.clause_reports[0].mismatches[0],
         InstanceClassMismatch.ObjectiveDegreeExceedsBound,
     )
+
+
+def test_error_non_polynomial_objective() -> None:
+    x = DecisionVariable.continuous(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=abs(Function(x)),
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    with pytest.raises(AdapterNotApplicableError) as error:
+        OMMXPythonMIPAdapter(instance)
+
+    [mismatch] = error.value.report.clause_reports[0].mismatches
+    assert isinstance(mismatch, InstanceClassMismatch.ObjectiveFunctionNotPolynomial)
 
 
 def test_error_nonlinear_constraint():
@@ -90,7 +104,7 @@ def test_error_nonlinear_constraint():
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(ommx_instance)
     assert isinstance(
-        e.value.report.input_membership.clause_reports[0].mismatches[0],
+        e.value.report.clause_reports[0].mismatches[0],
         InstanceClassMismatch.RegularConstraintDegreeExceedsBound,
     )
 
@@ -118,7 +132,7 @@ def test_rejects_used_unsupported_variable_kinds(
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(instance)
 
-    mismatch = e.value.report.input_membership.clause_reports[0].mismatches[0]
+    mismatch = e.value.report.clause_reports[0].mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.VariableKindNotAllowed)
     assert mismatch.kind == kind
     assert mismatch.variable_ids == {0}
@@ -137,14 +151,14 @@ def test_ignores_unused_unsupported_variable_kind() -> None:
     report = OMMXPythonMIPAdapter.check_applicability(instance)
     adapter = OMMXPythonMIPAdapter(instance)
 
-    assert report.is_applicable
+    assert report.is_member
     assert adapter.instance is instance
     assert [variable.name for variable in adapter.solver_input.vars] == ["0"]
 
 
 def test_rejects_special_constraints_without_mutating_input() -> None:
     x = DecisionVariable.binary(0)
-    y = DecisionVariable.continuous(1)
+    y = DecisionVariable.continuous(1, lower=0, upper=2)
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
@@ -165,11 +179,19 @@ def test_rejects_special_constraints_without_mutating_input() -> None:
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPythonMIPAdapter(instance)
 
-    mismatches = e.value.report.input_membership.clause_reports[0].mismatches
+    mismatches = e.value.report.clause_reports[0].mismatches
     mismatch_types = {type(mismatch) for mismatch in mismatches}
     assert InstanceClassMismatch.IndicatorConstraintsNotAllowed in mismatch_types
     assert InstanceClassMismatch.OneHotConstraintsNotAllowed in mismatch_types
     assert InstanceClassMismatch.Sos1ConstraintsNotAllowed in mismatch_types
+    assert instance.to_v2_bytes() == before
+
+    with pytest.raises(AdapterNotApplicableError):
+        OMMXPythonMIPAdapter.solve_without_preparation(instance)
+    assert instance.to_v2_bytes() == before
+
+    solution = OMMXPythonMIPAdapter.solve(instance)
+    assert solution.feasible
     assert instance.to_v2_bytes() == before
 
 
@@ -192,16 +214,15 @@ def test_recommended_preparation_reaches_the_python_mip_input_class() -> None:
         sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     input_class = OMMXPythonMIPAdapter.INPUT_CLASS
-    assert input_class is not None
     assert not input_class.contains(instance)
 
     policy = OMMXPythonMIPAdapter.recommended_preparation_policy()
     assert policy.special_constraints is not None
-    assert policy.sense is None
+    assert policy.objective is None
     assert policy.integer_slack is None
     assert policy.integer_encoding is None
     assert policy.fixed_penalty is None
 
     assert instance.prepare(input_class, policy) is None
     assert input_class.contains(instance)
-    assert OMMXPythonMIPAdapter.check_applicability(instance).is_applicable
+    assert OMMXPythonMIPAdapter.check_applicability(instance).is_member

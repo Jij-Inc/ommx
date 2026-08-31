@@ -18,7 +18,7 @@ Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers
 | Solve Special Constraints Directly with the PySCIPOpt Adapter | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/solve_special_constraints_with_pyscipopt_adapter.html) |
 | Prepare an Instance for an Adapter | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/prepare_instance_for_adapter.html) |
 | Sample with the OpenJij Adapter | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/tsp_sampling_with_openjij_adapter.html) |
-| Comparing Results from Multiple Adapters | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/switching_adapters.html) |
+| Solve with Multiple Adapters and Compare the Results | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/switching_adapters.html) |
 | Recording and Sharing Experiments | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/experiment_management.html) |
 | Sharing Various Types of Data in an OMMX Artifact | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/share_in_ommx_artifact.html) |
 | Download Benchmark Instances | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/download_benchmark_instance.html) |

@@ -15,11 +15,11 @@ kernelspec:
 
 前の[PySCIPOpt Adapterで特殊制約をそのまま解く](./solve_special_constraints_with_pyscipopt_adapter.md)では、Indicator制約とSOS1制約をSCIPへ直接渡しました。しかし、すべてのAdapterが同じ種類のInstanceを直接受け取れるわけではありません。
 
-このチュートリアルでは、同じモデルをHiGHS Adapter向けに変換して解きます。覚えておく流れは次の3つです。
+このチュートリアルでは、同じモデルをHiGHS Adapterで2通りに解きます。覚えておくことは次の3つです。
 
-1. Adapterの `INPUT_CLASS` で、Instanceをそのまま渡せるか確認する。
-2. Adapterの推奨Policyを取得し、変換するInstanceをユーザーが選ぶ。
-3. ユーザーが `Instance.prepare()` を呼び、変換後のInstanceをAdapterへ渡す。
+1. `INPUT_CLASS`はpreparation-free APIが直接受け取るexactな集合である。
+2. `solve()`はcopyを作り、Adapterの推奨Policyで自動的にPreparationする。
+3. customな選択が必要なら、自分でcopyをPreparationして`solve_without_preparation()`へ渡す。
 
 ## 必要なライブラリのインストール
 
@@ -65,17 +65,31 @@ source.add_sos1_constraint(
 from ommx_highs_adapter import OMMXHighsAdapter
 
 highs_input_class = OMMXHighsAdapter.INPUT_CLASS
-assert highs_input_class is not None
 assert not highs_input_class.contains(source)
 ```
 
-HiGHS Adapterは通常の線形制約を受け取れますが、Indicator制約やSOS1制約は直接受け取りません。したがって、この時点の `source` はHiGHS Adapterの入力にはなりません。
+HiGHS Adapterは通常の線形制約を受け取れますが、Indicator制約やSOS1制約は直接受け取りません。したがって、この時点の`source`を`solve_without_preparation()`へ渡すことはできません。
 
-## 推奨PolicyでPreparationする
+## `solve()`にPreparationを任せる
 
-Adapterの `recommended_preparation_policy()` は、その `INPUT_CLASS` に入るために一般的に有用な変換をPolicyとして提案します。HiGHS Adapterの推奨Policyは、Indicator制約とSOS1制約を通常の線形制約へ変換します。
+通常の`solve()`は`source`のcopyを内部で作り、そのcopyを推奨PolicyでPreparationしてから解きます。HiGHS Adapterの推奨Policyは、Indicator制約とSOS1制約を通常の線形制約へ変換します。
 
-推奨Policyを取得しただけではInstanceは変わりません。どのInstanceを変換するかを決め、`prepare()` を呼ぶのはユーザーです。元のモデルを残すため、ここでは `copy.copy()` で作ったコピーをPreparationします。
+```{code-cell} ipython3
+solution = OMMXHighsAdapter.solve(source)
+
+assert solution.feasible
+assert abs(solution.objective - 20.0) < 1e-8
+
+# 呼び出し元のInstanceは変更されない
+assert source.indicator_constraints
+assert source.sos1_constraints
+
+solution.decision_variables_df()
+```
+
+## 同じPreparationを明示的に行う
+
+applicationがPolicyを確認・編集する必要がある場合は、新しい推奨Policyを取得し、選んだInstanceをPreparationして、厳格な`solve_without_preparation()`を使います。元のモデルを残すため、ここでは`copy.copy()`で作ったcopyへ、`solve()`の内部と同じ推奨Policyを明示的に適用します。
 
 ```{code-cell} ipython3
 import copy
@@ -94,7 +108,7 @@ assert source.sos1_constraints
 assert not prepared.indicator_constraints
 assert not prepared.sos1_constraints
 
-prepared_solution = OMMXHighsAdapter.solve(prepared)
+prepared_solution = OMMXHighsAdapter.solve_without_preparation(prepared)
 assert prepared_solution.feasible
 assert abs(prepared_solution.objective - 20.0) < 1e-8
 prepared_solution.decision_variables_df()
@@ -102,10 +116,9 @@ prepared_solution.decision_variables_df()
 
 ## まとめ
 
-- Adapterが直接受け取れるInstanceは、そのまま `solve()` に渡せます。
-- `INPUT_CLASS` は、Adapterが変換なしで直接受け取れる入力の集合です。
-- 推奨Policyは変換の提案であり、Preparationの実行ではありません。
-- 変換するInstanceを選び、`Instance.prepare()` を呼ぶのはユーザーです。
-- 元のモデルを残したい場合は、コピーをPreparationしてからAdapterへ渡します。
+- `INPUT_CLASS`は`solve_without_preparation()`が変換なしで直接受け取れる入力の集合です。
+- `solve()`は入力のcopyを推奨PolicyでPreparationするため、元のInstanceを変更しません。
+- 推奨Policy自体は変換の提案であり、取得しただけではInstanceを変更しません。
+- Policyを編集するときは、copyを`prepare()`して`solve_without_preparation()`へ渡します。
 
 `INPUT_CLASS` の詳しい読み方は[Adapter の exact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)、Policyの選択とPreparationの詳しい動作は[Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md)を参照してください。Indicator、OneHot、SOS1の数学的な意味は[特殊制約型](../user_guide/special_constraints.md)、Preparationで取り除いた制約を使って元のモデルを評価できる仕組みは[Removed constraints と実行可能性](../user_guide/removed_constraints.md)で説明しています。

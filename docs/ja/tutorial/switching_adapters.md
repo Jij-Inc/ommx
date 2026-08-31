@@ -14,9 +14,9 @@ kernelspec:
 複数のAdapterで最適化問題を解いて結果を比較する
 =========================================
 
-OMMX Adapterは共通化されたAPIを持つため、同じ問題を複数のソルバーで解いて結果を比較できます。[PySCIPOpt Adapterで特殊制約をそのまま解く](./solve_special_constraints_with_pyscipopt_adapter.md)と[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md)では、Adapterによって直接受け取れるInstanceが異なる例を見ました。このページでは、HiGHSとPySCIPOptのどちらにも変換なしで渡せる簡単なモデルを使います。
+OMMX Adapterは共通化されたAPIを持つため、同じ問題を複数のソルバーで解いて結果を比較できます。[PySCIPOpt Adapterで特殊制約をそのまま解く](./solve_special_constraints_with_pyscipopt_adapter.md)と[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md)では、Adapterによって直接受け取れるInstanceと推奨Preparationが異なる例を見ました。このページでは、HiGHSとPySCIPOptのどちらにも変換なしで渡せる簡単なモデルを使います。
 
-各Adapterは、変換なしで直接受け取れる入力を `INPUT_CLASS` として示します。同じ `Instance` をそのまま比較に使えるのは、そのInstanceがすべてのAdapterの `INPUT_CLASS` に入る場合です。入らない場合は、Adapterごとにコピーを作ってPreparationしてください。
+easy APIの`solve()`はprivate copyを作ってPreparationするため、1つのsource `Instance`を複数のAdapterで再利用しても、変換が互いに影響しません。この例のsourceは両方の`INPUT_CLASS`に最初から入るため、どちらのAdapterでも変換は不要です。比較にapplication固有のPreparationが必要なら、Adapterごとにsourceのcopyを作り、それぞれの`INPUT_CLASS`へPreparationして`solve_without_preparation()`へ渡します。
 
 ここでは、HiGHSとSCIPのどちらも直接受け取れる簡単なナップザック問題を考えましょう：
 

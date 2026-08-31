@@ -21,7 +21,7 @@ fn indicator_is_active(
                 "indicator variable {indicator_variable:?} has an invalid activation value"
             ),
         })?;
-    Ok((value - 1.0).abs() < *atol)
+    Ok(atol.approx_eq(value, 1.0))
 }
 
 impl Propagate for IndicatorConstraint<Created> {
@@ -96,10 +96,7 @@ impl Evaluate for IndicatorConstraint<Created> {
 
         let feasible = if indicator_on {
             // Indicator ON → check constraint as usual
-            match self.equality {
-                Equality::EqualToZero => evaluated_value.abs() < *atol,
-                Equality::LessThanOrEqualToZero => evaluated_value < *atol,
-            }
+            self.equality.is_satisfied(evaluated_value, atol)
         } else {
             // Indicator OFF → always feasible
             true
@@ -155,10 +152,7 @@ impl Evaluate for IndicatorConstraint<Created> {
             )?;
 
             let f = if indicator_on {
-                match self.equality {
-                    Equality::EqualToZero => ev.abs() < *atol,
-                    Equality::LessThanOrEqualToZero => ev < *atol,
-                }
+                self.equality.is_satisfied(ev, atol)
             } else {
                 true
             };
@@ -204,6 +198,58 @@ mod tests {
     use super::*;
     use crate::{coeff, linear, Evaluate, Function, Propagate, PropagateOutcome};
     use std::collections::HashMap;
+
+    #[test]
+    fn activation_and_residual_include_the_atol_boundary() {
+        let atol = ATol::new(0.125).unwrap();
+        let outside = f64::from_bits(0.125_f64.to_bits() + 1);
+        let indicator_boundary = 1.0 + *atol;
+        let indicator_id = VariableID::from(10);
+        let boundary_constraint = IndicatorConstraint::new(
+            indicator_id,
+            Equality::EqualToZero,
+            Function::Constant(crate::Coefficient::try_from(*atol).unwrap()),
+        );
+        let boundary_state = crate::v1::State::from(HashMap::from([(10, indicator_boundary)]));
+
+        let evaluated = boundary_constraint.evaluate(&boundary_state, atol).unwrap();
+        assert!(evaluated.stage.indicator_active);
+        assert!(evaluated.stage.feasible);
+
+        let sample_id = crate::SampleID::from(7);
+        let sampled = boundary_constraint
+            .evaluate_samples(
+                &crate::Sampled::from((sample_id, boundary_state.clone())),
+                atol,
+            )
+            .unwrap();
+        assert_eq!(sampled.stage.indicator_active.get(&sample_id), Some(&true));
+        assert_eq!(sampled.stage.feasible.get(&sample_id), Some(&true));
+
+        let (outcome, _) = boundary_constraint
+            .clone()
+            .propagate(&boundary_state, atol)
+            .unwrap();
+        assert!(matches!(outcome, PropagateOutcome::Transformed { .. }));
+
+        let outside_constraint = IndicatorConstraint::new(
+            indicator_id,
+            Equality::EqualToZero,
+            Function::Constant(crate::Coefficient::try_from(outside).unwrap()),
+        );
+        let exact_on = crate::v1::State::from(HashMap::from([(10, 1.0)]));
+        assert!(
+            !outside_constraint
+                .evaluate(&exact_on, atol)
+                .unwrap()
+                .stage
+                .feasible
+        );
+
+        let outside_indicator = f64::from_bits(indicator_boundary.to_bits() + 1);
+        let invalid_state = crate::v1::State::from(HashMap::from([(10, outside_indicator)]));
+        assert!(boundary_constraint.evaluate(&invalid_state, atol).is_err());
+    }
 
     #[test]
     fn test_evaluate_indicator_on_feasible() {

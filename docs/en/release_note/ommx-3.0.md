@@ -8,6 +8,231 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Inclusive `atol` boundaries ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+Absolute-tolerance comparisons now include the exact boundary consistently.
+Equality residuals are feasible when $|f(x)| \leq \mathtt{atol}$, while
+inequality residuals are feasible when $f(x) < 0$ or
+$|f(x)| \leq \mathtt{atol}$. The same rule is used by scalar and sample
+evaluation, regular and Indicator constraints, `Solution` and `SampleSet`
+validation, and v1/v2 deserialization.
+
+Function zero-sensitive operations, Indicator activation, OneHot and SOS1
+classification, discrete solver-state canonicalization, and fixed-value
+consistency checks also include values exactly `atol` from their target.
+Values just outside the boundary remain outside. APIs that own finite-value
+validation continue to reject NaN and infinity before reporting domain or
+consistency errors.
+
+### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+{class}`~ommx.Function` can now represent composed expressions as well as
+compact polynomials. Python users can construct absolute values, sign
+functions, minima, maxima, divisions, and signed 32-bit integer powers directly:
+
+```python
+from ommx import DecisionVariable, Function
+
+x = Function(DecisionVariable.continuous(1))
+y = Function(DecisionVariable.continuous(2))
+z = Function(DecisionVariable.continuous(3))
+
+f = abs(x - 2).maximum(y) / (z + 1)
+g = f**2
+h = f.powi(-2)
+```
+
+Use {meth}`~ommx.Function.signum`, {meth}`~ommx.Function.minimum`, and
+{meth}`~ommx.Function.maximum` for the named operations. `f**n` and
+{meth}`~ommx.Function.powi` are equivalent; floating-point or function-valued
+exponents and reverse exponentiation are not supported. At evaluation,
+`abs(value) <= atol` is classified as zero, including the boundary: `signum`
+returns `0`, while division by such a denominator and raising such a value to a
+negative integer power raise `ValueError`. Composed expressions are serialized
+as flat reverse Polish notation (RPN) instruction sequences in OMMX protobuf
+payloads. All bundled adapters—HiGHS, Python-MIP, PySCIPOpt, and OpenJij—
+currently declare polynomial-only input classes and therefore reject composed
+expressions in the function positions they accept.
+
+Zero-sensitive `Signum`, `Div`, and negative `Powi` nodes are retained through
+construction, substitution, and partial evaluation so that a later evaluation
+call supplies the `atol` that determines their result or domain error. In
+particular, dividing a `Function` by a constant or coefficient remains a
+composed expression. `Function.evaluate_bound(..., atol=...)` applies the same
+zero classification to interval bounds. Indicator Big-M conversion,
+special-constraint lowering, and integer-slack conversion also accept an
+optional `atol=` for bounds they derive. This aligns zero-sensitive Function
+body evaluation; algebraic lowering still assumes exact discrete values and
+does not canonicalize approximate solver output near 0 or 1. Omitting `atol`
+uses `DEFAULT_ATOL`. Integer-slack conversion classifies an inequality with the
+same inclusive rule used by evaluation, $f(x) < 0$ or
+$|f(x)| \leq \mathtt{atol}$, before coefficient normalization, so a small
+positive value is not silently reclassified by scaling. Exact polynomial
+normalization retains every finite nonzero coefficient and does not apply an
+implicit tolerance-based cleanup. A future approximate-cleanup API would be
+separate and explicit.
+
+Because a `Function` is no longer necessarily a polynomial,
+{meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` return
+`None` for composed expressions. Polynomial-term accessors and
+{meth}`~ommx.Function.content_factor` raise `TypeError` instead of treating a
+composed expression as an empty polynomial. See the
+[Function user guide](../user_guide/function.md) for operation ordering,
+evaluation errors, and serialization details.
+
+The instance-class API now names that polynomial requirement explicitly. This
+is a breaking rename from the API published in Python SDK 3.0.0 Beta 4:
+
+| Before | After |
+|---|---|
+| `DegreeBound` | `PolynomialRequirement` |
+| `DegreeBound.at_most(n)` | `PolynomialRequirement.at_most(n)` |
+| `DegreeBound.unbounded()` | `PolynomialRequirement.any_degree()` |
+| `bound.maximum` | `requirement.maximum_degree` |
+| `bound.includes(degree)` | `requirement.accepts_degree(degree)` |
+| `objective_degree_bound` | `objective_polynomial_requirement` |
+| `regular_constraint_degree_bounds` | `regular_constraint_polynomial_requirements` |
+| `indicator_constraint_degree_bounds` | `indicator_body_polynomial_requirements` |
+
+`PolynomialRequirement.any_degree()` accepts a polynomial of any degree; it
+does not admit a composed, non-polynomial `Function`.
+
+### 🛠 Canonical solver states during evaluation ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+{meth}`~ommx.Instance.populate_state`, {meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples` now canonicalize finite supplied
+coordinates that are neither fixed nor dependent, as well as values derived for
+dependent targets, according to each decision-variable kind and the caller's
+`atol`. For those coordinates, Binary values whose distance from `0` or `1` is
+at most `atol`, and Integer or SemiInteger values whose distance from an integer
+is at most `atol`, are stored as the corresponding exact discrete value,
+including values exactly at the tolerance boundary. Kind and bound feasibility
+continue to be checked separately under their existing rules. Continuous and
+SemiContinuous values are never rounded. Other
+finite values are preserved so a returned {class}`~ommx.Solution` can report
+their feasibility, while non-finite state values remain rejected.
+
+A caller-supplied fixed or dependent value remains a consistency assertion.
+After validation, the returned state uses the Instance-owned fixed value
+unchanged or the dependency-derived value canonicalized for its target kind.
+Dependencies are evaluated from canonicalized inputs, so an explicitly supplied
+dependent assertion computed from the raw solver vector can now be rejected if
+it is not within `atol` of that derived value. Scalar and sample evaluation use
+the same rule while preserving SampleID membership.
+
+{meth}`~ommx.Instance.partial_evaluate` applies the same rule to its validated
+input before special-constraint propagation, expression substitution, and
+constant dependency evaluation. Evaluating the rewritten Instance therefore
+uses the same canonical coordinates as directly evaluating the original
+Instance. Existing Instance-owned fixed values remain unchanged, and values
+outside partial evaluation's existing kind and bound acceptance contract remain
+rejected.
+
+### ⚠ `solve()` and `sample()` now prepare inputs automatically ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
+
+`SolverAdapter.solve()` and `SamplerAdapter.sample()` now apply the Adapter's
+recommended Preparation before execution and leave the supplied
+{class}`~ommx.Instance` unchanged. Applications that customize Preparation
+should prepare the Instance in place and call
+`solve_without_preparation()` or `sample_without_preparation()` instead.
+
+The breaking changes that require updates to existing code are:
+
+- `OMMXOpenJijSAAdapter.sample(..., initial_state=...)` and
+  `OMMXOpenJijSAAdapter.solve(..., initial_state=...)` are no longer accepted.
+  Prepare the Instance explicitly, then call
+  `OMMXOpenJijSAAdapter.sample_without_preparation(instance, initial_state=...)`
+  or `OMMXOpenJijSAAdapter.solve_without_preparation(instance, initial_state=...)`.
+- Custom Adapters must implement `solve_without_preparation()` or
+  `sample_without_preparation()` and move backend execution there. If
+  Adapter-specific options remain available on `solve()` or `sample()`, those
+  methods prepare a copy and forward the options to the preparation-free
+  method.
+
+HiGHS and Python-MIP omit dual values when the Adapter input has an
+`output_objective`. See the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the two calling workflows.
+
+### ⚠ Preserve input objectives across solver Preparation ([#1167](https://github.com/Jij-Inc/ommx/pull/1167))
+
+`to_qubo()` and `to_hubo()` now leave the active `Instance` as the minimization
+energy used by a solver, while `Solution` and `SampleSet` retain the objective
+semantics exposed by the input instance:
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.binary(0)
+instance = Instance.from_components(
+    sense=Sense.Maximize,
+    objective=x,
+    decision_variables=[x],
+    constraints={0: x == 1},
+)
+
+instance.to_qubo(uniform_penalty_weight=2.0)
+state = {0: 0.0}
+
+assert instance.sense == Sense.Minimize
+assert instance.objective.evaluate(state) == 2.0
+assert instance.evaluate(state).sense == Sense.Maximize
+assert instance.evaluate(state).objective == 0.0
+assert instance.evaluate_samples({0: state}).sense == Sense.Maximize
+assert instance.evaluate_samples({0: state}).objectives[0] == 0.0
+```
+
+This is a breaking correction from the latest stable Python SDK, whose drivers
+restored the active sense and used
+the penalized solver energy as the evaluated objective. The returned QUBO/HUBO
+coefficients keep the same meaning.
+
+An `Instance` or `ParametricInstance` with an explicit output objective cannot
+be represented losslessly by the v1 wire format. Its `to_v1_bytes()` method
+therefore raises `RuntimeError`; use `to_v2_bytes()` for these models.
+
+Penalty rewrites also map solver-reported optimality conservatively: when an
+active-formulation proof does not transport, evaluated output remains
+`Optimality.Unspecified`. Executable postconditions are documented on
+{meth}`~ommx.Instance.to_qubo`, {meth}`~ommx.Instance.to_hubo`,
+{meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples`. See the
+[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
+the explicit Preparation workflow.
+
+### ⚠ Adapter applicability is defined only by `INPUT_CLASS` ([#1163](https://github.com/Jij-Inc/ommx/pull/1163))
+
+`SolverAdapter.check_applicability()` and `require_applicable()` now use
+`INPUT_CLASS` membership as the complete applicability condition. The secondary
+adapter-owned precondition layer has been removed, including
+`AdapterPreconditionViolation`, `ConstraintRef`, `_check_preconditions()`, and
+the `preconditions_checked` and `precondition_violations` report fields.
+
+Both methods now return `InstanceClassMembershipReport` directly, and the
+`AdapterApplicabilityReport` wrapper has been removed. Replace
+`report.is_applicable` with `report.is_member` and `report.input_membership`
+with `report`. For `AdapterNotApplicableError`, `error.report` is the membership
+report itself and the Adapter identity is available as `error.adapter`.
+
+Adapter implementations must express every accepted-model condition in
+`INPUT_CLASS`. Converter-local representation checks and backend limits remain
+in the solver-input construction path; their failures are conversion or backend
+errors rather than `AdapterNotApplicableError`. In particular, OpenJij signed-ID
+and finite-coefficient validation now occurs when sampler input is built. See
+[Adapter exact inputs](../user_guide/adapter_input_class.md) and the
+[Adapter Developer Guide](../developer_guide/adapter.md) for the responsibility
+boundary.
+
+### Adapter input classes are required ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
+
+Concrete `SolverAdapter` and `SamplerAdapter` implementations must declare
+`INPUT_CLASS` as a non-optional `ClassVar[InstanceClass]`; `None` is not a valid
+declaration. In-repository adapters now expose `InstanceClass` directly, so
+callers can pass `Adapter.INPUT_CLASS` to {meth}`~ommx.Instance.prepare` without
+an `is not None` guard. A missing declaration still produces a clear `TypeError`
+when applicability is checked. See the [Adapter Developer Guide](../developer_guide/adapter.md)
+for the complete contract.
+
 ## 3.0.0 Beta 3
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b3-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b3)

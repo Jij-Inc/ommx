@@ -12,9 +12,9 @@ Adapter users and Adapter authors need different knowledge and should follow dif
 |---|---|---|---|
 | 1 | [Solve a 0-1 Knapsack Problem with the PySCIPOpt Adapter](./tutorial/solve_with_ommx_adapter) | Pass an `Instance` directly to `solve()` and inspect the result with pandas | Special constraints, `INPUT_CLASS`, and Preparation |
 | 2 | [Solve Special Constraints Directly with the PySCIPOpt Adapter](./tutorial/solve_special_constraints_with_pyscipopt_adapter) | What Indicator and SOS1 constraints mean, and that a supporting Adapter needs no conversion | The exact-input definition and the formulas and preconditions for lowering |
-| 3 | [Prepare an Instance for an Adapter](./tutorial/prepare_instance_for_adapter) | Check `INPUT_CLASS`, obtain the recommended Policy, copy the model, and call `prepare()` yourself | Phase ordering, responsibility boundaries, failure state, and exact conversion contracts |
+| 3 | [Prepare an Instance for an Adapter](./tutorial/prepare_instance_for_adapter) | Let `solve()` prepare its private copy, then run the same Policy explicitly before a strict solve | Phase ordering, failure state, and exact conversion contracts |
 | 4 | [Sample with the OpenJij Adapter](./tutorial/tsp_sampling_with_openjij_adapter) | Treat QUBO conversion as Preparation, choose a penalty, and check feasibility | Every Policy field, the expanded penalty formula, and individual conversion APIs |
-| 5 | [Compare Results Across Adapters](./tutorial/switching_adapters) | Reuse the same `Instance` when it is an exact input for every Adapter; otherwise prepare a copy per Adapter | Adapter-specific features such as diagnostics and initial states |
+| 5 | [Compare Results Across Adapters](./tutorial/switching_adapters) | Reuse one source `Instance` while each Adapter prepares its own private copy | Custom Preparation and Adapter-specific features such as diagnostics and initial states |
 
 ### Implement an OMMX Adapter
 

@@ -1,16 +1,18 @@
-//! Instance classes for adapter inputs.
+//! Instance classes for structural input capabilities.
 //!
-//! An adapter input is an [`crate::Instance`] value passed to an adapter. An
-//! [`InstanceClass`] is a set of [`crate::Instance`] values defined by OMMX
-//! structural conditions. An adapter input is classified by membership in
-//! that set. An [`InstanceClassClause`] is one conjunctive clause in the
-//! representation; an instance class is the finite union of its clauses.
+//! An [`InstanceClass`] is a set of [`crate::Instance`] values defined by OMMX
+//! structural conditions. Consumers such as adapters and format writers use
+//! membership in that set to describe the exact model structures they accept.
+//! An [`InstanceClassClause`] is one conjunctive clause in the representation;
+//! an instance class is the finite union of its clauses.
 //!
-//! Membership describes only the input's OMMX-defined structure. It does not
-//! include preparation or lowering, adapter-specific preconditions,
-//! wire-format `ommx.v2.Feature` handling, or whether the adapter returns an
-//! output successfully. If preparation produces another instance to use as
-//! input, membership must be checked on that value.
+//! For adapters, membership defines whether the exact input is applicable. It
+//! does not perform preparation or lowering, handle wire-format
+//! `ommx.v2.Feature` values, or guarantee that later conversion and backend
+//! operations succeed. If preparation produces another instance to use as
+//! input, membership must be checked on that value. Other consumers retain
+//! responsibility for side effects and information-loss policies outside
+//! these structural conditions.
 
 mod instance_facts;
 
@@ -18,70 +20,75 @@ use crate::{
     ConstraintID, Degree, Equality, IndicatorConstraintID, Instance, Kind, OneHotConstraintID,
     Sense, Sos1ConstraintID, VariableIDSet,
 };
-use instance_facts::{ConstraintFacts, InstanceFacts};
+use instance_facts::{ConstraintFacts, FunctionClassification, InstanceFacts};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Cumulative polynomial-degree bound in an [`InstanceClassClause`].
+/// Polynomial requirement in an [`InstanceClassClause`].
 ///
 /// `AtMost(n)` includes every polynomial degree up to and including `n`.
-/// `Unbounded` includes every degree representable by the current
-/// [`crate::Function`] domain.
+/// `AnyDegree` includes every polynomial degree. Neither variant includes
+/// non-polynomial [`crate::Function`] values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum DegreeBound {
+pub enum PolynomialRequirement {
     AtMost(Degree),
-    Unbounded,
+    AnyDegree,
 }
 
-impl DegreeBound {
-    /// Construct an inclusive upper bound from a polynomial degree.
+impl PolynomialRequirement {
+    /// Require a polynomial degree up to and including `degree`.
     pub fn at_most(degree: u32) -> Self {
         Self::AtMost(degree.into())
     }
 
-    /// Return whether `actual` satisfies this bound.
-    pub fn includes(self, actual: Degree) -> bool {
+    /// Require any polynomial degree representable by OMMX.
+    pub fn any_degree() -> Self {
+        Self::AnyDegree
+    }
+
+    /// Return whether `actual` satisfies this polynomial requirement.
+    pub fn accepts_degree(self, actual: Degree) -> bool {
         match self {
             Self::AtMost(maximum) => actual <= maximum,
-            Self::Unbounded => true,
+            Self::AnyDegree => true,
         }
     }
 
-    /// Return the inclusive upper bound, or `None` when unbounded.
-    pub fn maximum(self) -> Option<Degree> {
+    /// Return the inclusive maximum degree, or `None` for any degree.
+    pub fn maximum_degree(self) -> Option<Degree> {
         match self {
             Self::AtMost(maximum) => Some(maximum),
-            Self::Unbounded => None,
+            Self::AnyDegree => None,
         }
     }
 }
 
-impl std::fmt::Display for DegreeBound {
+impl std::fmt::Display for PolynomialRequirement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AtMost(maximum) => write!(f, "degree <= {maximum}"),
-            Self::Unbounded => f.write_str("unbounded polynomial degree"),
+            Self::AnyDegree => f.write_str("any polynomial degree"),
         }
     }
 }
 
-/// Degree bounds for the allowed relations of one constraint family.
+/// Polynomial requirements for the allowed relations of one constraint family.
 ///
 /// An empty value excludes every constraint in that family. Absence of one
 /// [`Equality`] excludes that relation.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct RelationDegreeBounds(BTreeMap<Equality, DegreeBound>);
+struct RelationPolynomialRequirements(BTreeMap<Equality, PolynomialRequirement>);
 
-impl RelationDegreeBounds {
+impl RelationPolynomialRequirements {
     fn new() -> Self {
         Self::default()
     }
 
-    fn with(mut self, relation: Equality, bound: DegreeBound) -> Self {
-        self.0.insert(relation, bound);
+    fn with(mut self, relation: Equality, requirement: PolynomialRequirement) -> Self {
+        self.0.insert(relation, requirement);
         self
     }
 
-    fn bound_for(&self, relation: Equality) -> Option<DegreeBound> {
+    fn requirement_for(&self, relation: Equality) -> Option<PolynomialRequirement> {
         self.0.get(&relation).copied()
     }
 
@@ -89,8 +96,10 @@ impl RelationDegreeBounds {
         self.0.keys().copied().collect()
     }
 
-    fn iter(&self) -> impl Iterator<Item = (Equality, DegreeBound)> + '_ {
-        self.0.iter().map(|(relation, bound)| (*relation, *bound))
+    fn iter(&self) -> impl Iterator<Item = (Equality, PolynomialRequirement)> + '_ {
+        self.0
+            .iter()
+            .map(|(relation, requirement)| (*relation, *requirement))
     }
 
     fn is_empty(&self) -> bool {
@@ -98,8 +107,8 @@ impl RelationDegreeBounds {
     }
 }
 
-impl FromIterator<(Equality, DegreeBound)> for RelationDegreeBounds {
-    fn from_iter<T: IntoIterator<Item = (Equality, DegreeBound)>>(iter: T) -> Self {
+impl FromIterator<(Equality, PolynomialRequirement)> for RelationPolynomialRequirements {
+    fn from_iter<T: IntoIterator<Item = (Equality, PolynomialRequirement)>>(iter: T) -> Self {
         Self(iter.into_iter().collect())
     }
 }
@@ -117,9 +126,9 @@ impl FromIterator<(Equality, DegreeBound)> for RelationDegreeBounds {
 pub struct InstanceClassClause {
     label: String,
     allowed_variable_kinds: BTreeSet<Kind>,
-    objective_degree_bound: DegreeBound,
-    regular_constraints: RelationDegreeBounds,
-    indicator_constraints: RelationDegreeBounds,
+    objective_polynomial_requirement: PolynomialRequirement,
+    regular_constraints: RelationPolynomialRequirements,
+    indicator_constraints: RelationPolynomialRequirements,
     allows_one_hot: bool,
     allows_sos1: bool,
     allowed_senses: BTreeSet<Sense>,
@@ -133,38 +142,40 @@ impl InstanceClassClause {
     pub fn new(
         label: impl Into<String>,
         allowed_variable_kinds: BTreeSet<Kind>,
-        objective_degree_bound: DegreeBound,
+        objective_polynomial_requirement: PolynomialRequirement,
         allowed_senses: BTreeSet<Sense>,
     ) -> Self {
         Self {
             label: label.into(),
             allowed_variable_kinds,
-            objective_degree_bound,
-            regular_constraints: RelationDegreeBounds::new(),
-            indicator_constraints: RelationDegreeBounds::new(),
+            objective_polynomial_requirement,
+            regular_constraints: RelationPolynomialRequirements::new(),
+            indicator_constraints: RelationPolynomialRequirements::new(),
             allows_one_hot: false,
             allows_sos1: false,
             allowed_senses,
         }
     }
 
-    /// Include one regular-constraint relation up to `degree_bound`.
+    /// Include one regular-constraint relation whose function is polynomial
+    /// and satisfies `requirement`.
     pub fn with_regular_constraint(
         mut self,
         relation: Equality,
-        degree_bound: DegreeBound,
+        requirement: PolynomialRequirement,
     ) -> Self {
-        self.regular_constraints = self.regular_constraints.with(relation, degree_bound);
+        self.regular_constraints = self.regular_constraints.with(relation, requirement);
         self
     }
 
-    /// Include one Indicator body relation up to `degree_bound`.
+    /// Include one Indicator body relation whose function is polynomial and
+    /// satisfies `body_requirement`.
     pub fn with_indicator_constraint(
         mut self,
         relation: Equality,
-        degree_bound: DegreeBound,
+        body_requirement: PolynomialRequirement,
     ) -> Self {
-        self.indicator_constraints = self.indicator_constraints.with(relation, degree_bound);
+        self.indicator_constraints = self.indicator_constraints.with(relation, body_requirement);
         self
     }
 
@@ -191,22 +202,22 @@ impl InstanceClassClause {
         &self.allowed_variable_kinds
     }
 
-    /// Return the objective's cumulative degree bound.
-    pub fn objective_degree_bound(&self) -> DegreeBound {
-        self.objective_degree_bound
+    /// Return the objective's polynomial requirement.
+    pub fn objective_polynomial_requirement(&self) -> PolynomialRequirement {
+        self.objective_polynomial_requirement
     }
 
-    /// Iterate over admitted regular-constraint relations and degree bounds.
-    pub fn regular_constraint_degree_bounds(
+    /// Iterate over admitted regular-constraint relations and polynomial requirements.
+    pub fn regular_constraint_polynomial_requirements(
         &self,
-    ) -> impl Iterator<Item = (Equality, DegreeBound)> + '_ {
+    ) -> impl Iterator<Item = (Equality, PolynomialRequirement)> + '_ {
         self.regular_constraints.iter()
     }
 
-    /// Iterate over admitted Indicator-body relations and degree bounds.
-    pub fn indicator_constraint_degree_bounds(
+    /// Iterate over admitted Indicator-body relations and polynomial requirements.
+    pub fn indicator_body_polynomial_requirements(
         &self,
-    ) -> impl Iterator<Item = (Equality, DegreeBound)> + '_ {
+    ) -> impl Iterator<Item = (Equality, PolynomialRequirement)> + '_ {
         self.indicator_constraints.iter()
     }
 
@@ -238,14 +249,21 @@ impl InstanceClassClause {
             }
         }
 
-        if !self
-            .objective_degree_bound
-            .includes(facts.objective_degree())
-        {
-            mismatches.push(InstanceClassMismatch::ObjectiveDegreeExceedsBound {
-                actual_degree: facts.objective_degree(),
-                bound: self.objective_degree_bound,
-            });
+        match facts.objective_classification() {
+            FunctionClassification::Polynomial(actual_degree)
+                if !self
+                    .objective_polynomial_requirement
+                    .accepts_degree(actual_degree) =>
+            {
+                mismatches.push(InstanceClassMismatch::ObjectiveDegreeExceedsBound {
+                    actual_degree,
+                    bound: self.objective_polynomial_requirement,
+                });
+            }
+            FunctionClassification::NonPolynomial => {
+                mismatches.push(InstanceClassMismatch::ObjectiveFunctionNotPolynomial);
+            }
+            FunctionClassification::Polynomial(_) => {}
         }
 
         check_regular_constraints(
@@ -286,13 +304,13 @@ impl InstanceClassClause {
 
 fn group_constraint_facts<ID: Copy + Ord>(
     facts: &BTreeMap<ID, ConstraintFacts>,
-) -> BTreeMap<Equality, BTreeMap<ID, Degree>> {
-    let mut grouped = BTreeMap::<Equality, BTreeMap<ID, Degree>>::new();
+) -> BTreeMap<Equality, BTreeMap<ID, FunctionClassification>> {
+    let mut grouped = BTreeMap::<Equality, BTreeMap<ID, FunctionClassification>>::new();
     for (id, fact) in facts {
         grouped
             .entry(fact.relation())
             .or_default()
-            .insert(*id, fact.degree());
+            .insert(*id, fact.classification());
     }
     grouped
 }
@@ -300,10 +318,10 @@ fn group_constraint_facts<ID: Copy + Ord>(
 fn check_regular_constraints(
     mismatches: &mut Vec<InstanceClassMismatch>,
     facts: &BTreeMap<ConstraintID, ConstraintFacts>,
-    allowed: &RelationDegreeBounds,
+    allowed: &RelationPolynomialRequirements,
 ) {
     for (relation, constraints) in group_constraint_facts(facts) {
-        let Some(bound) = allowed.bound_for(relation) else {
+        let Some(requirement) = allowed.requirement_for(relation) else {
             mismatches.push(InstanceClassMismatch::RegularConstraintRelationNotAllowed {
                 relation,
                 constraint_ids: constraints.keys().copied().collect(),
@@ -311,15 +329,33 @@ fn check_regular_constraints(
             });
             continue;
         };
+        let non_polynomial_ids = constraints
+            .iter()
+            .filter_map(|(id, classification)| {
+                matches!(classification, FunctionClassification::NonPolynomial).then_some(*id)
+            })
+            .collect::<BTreeSet<_>>();
+        if !non_polynomial_ids.is_empty() {
+            mismatches.push(
+                InstanceClassMismatch::RegularConstraintFunctionNotPolynomial {
+                    relation,
+                    constraint_ids: non_polynomial_ids,
+                },
+            );
+        }
         let actual_degrees = constraints
             .into_iter()
-            .filter(|(_, degree)| !bound.includes(*degree))
+            .filter_map(|(id, classification)| match classification {
+                FunctionClassification::Polynomial(degree) => Some((id, degree)),
+                FunctionClassification::NonPolynomial => None,
+            })
+            .filter(|(_, degree)| !requirement.accepts_degree(*degree))
             .collect::<BTreeMap<_, _>>();
         if !actual_degrees.is_empty() {
             mismatches.push(InstanceClassMismatch::RegularConstraintDegreeExceedsBound {
                 relation,
                 actual_degrees,
-                bound,
+                bound: requirement,
             });
         }
     }
@@ -328,7 +364,7 @@ fn check_regular_constraints(
 fn check_indicator_constraints(
     mismatches: &mut Vec<InstanceClassMismatch>,
     facts: &BTreeMap<IndicatorConstraintID, ConstraintFacts>,
-    allowed: &RelationDegreeBounds,
+    allowed: &RelationPolynomialRequirements,
 ) {
     if facts.is_empty() {
         return;
@@ -340,7 +376,7 @@ fn check_indicator_constraints(
         return;
     }
     for (relation, constraints) in group_constraint_facts(facts) {
-        let Some(bound) = allowed.bound_for(relation) else {
+        let Some(requirement) = allowed.requirement_for(relation) else {
             mismatches.push(
                 InstanceClassMismatch::IndicatorConstraintRelationNotAllowed {
                     relation,
@@ -350,15 +386,31 @@ fn check_indicator_constraints(
             );
             continue;
         };
+        let non_polynomial_ids = constraints
+            .iter()
+            .filter_map(|(id, classification)| {
+                matches!(classification, FunctionClassification::NonPolynomial).then_some(*id)
+            })
+            .collect::<BTreeSet<_>>();
+        if !non_polynomial_ids.is_empty() {
+            mismatches.push(InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
+                relation,
+                constraint_ids: non_polynomial_ids,
+            });
+        }
         let actual_degrees = constraints
             .into_iter()
-            .filter(|(_, degree)| !bound.includes(*degree))
+            .filter_map(|(id, classification)| match classification {
+                FunctionClassification::Polynomial(degree) => Some((id, degree)),
+                FunctionClassification::NonPolynomial => None,
+            })
+            .filter(|(_, degree)| !requirement.accepts_degree(*degree))
             .collect::<BTreeMap<_, _>>();
         if !actual_degrees.is_empty() {
             mismatches.push(InstanceClassMismatch::IndicatorBodyDegreeExceedsBound {
                 relation,
                 actual_degrees,
-                bound,
+                bound: requirement,
             });
         }
     }
@@ -380,6 +432,141 @@ impl InstanceClass {
     /// Construct the finite union of `clauses`.
     pub fn new(clauses: Vec<InstanceClassClause>) -> Self {
         Self { clauses }
+    }
+
+    /// Return the class of QUBO solver inputs.
+    ///
+    /// # Postconditions
+    ///
+    /// The returned class admits only unconstrained minimization models over
+    /// Binary variables whose objective degree is at most two.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, monomial, Constraint, ConstraintID, DecisionVariable, Function,
+    ///     Instance, InstanceClass, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let binary = BTreeMap::from([(variable, DecisionVariable::binary())]);
+    /// let build = |sense, objective, constraints| {
+    ///     Instance::builder()
+    ///         .sense(sense)
+    ///         .objective(objective)
+    ///         .decision_variables(binary.clone())
+    ///         .constraints(constraints)
+    ///         .build()
+    ///         .unwrap()
+    /// };
+    /// let linear = build(Sense::Minimize, Function::from(linear!(1)), BTreeMap::new());
+    /// let quadratic = build(
+    ///     Sense::Minimize,
+    ///     Function::from(monomial!(1, 1)),
+    ///     BTreeMap::new(),
+    /// );
+    /// let cubic = build(
+    ///     Sense::Minimize,
+    ///     Function::from(monomial!(1, 1, 1)),
+    ///     BTreeMap::new(),
+    /// );
+    /// let maximizing = build(Sense::Maximize, Function::from(linear!(1)), BTreeMap::new());
+    /// let constrained = build(
+    ///     Sense::Minimize,
+    ///     Function::from(linear!(1)),
+    ///     BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]),
+    /// );
+    /// let non_binary = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::continuous())]))
+    ///     .constraints(BTreeMap::new())
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let class = InstanceClass::qubo();
+    /// assert!(class.contains(&linear));
+    /// assert!(class.contains(&quadratic));
+    /// assert!(!class.contains(&cubic));
+    /// assert!(!class.contains(&maximizing));
+    /// assert!(!class.contains(&constrained));
+    /// assert!(!class.contains(&non_binary));
+    /// ```
+    pub fn qubo() -> Self {
+        InstanceClassClause::new(
+            "qubo",
+            BTreeSet::from([Kind::Binary]),
+            PolynomialRequirement::at_most(2),
+            BTreeSet::from([Sense::Minimize]),
+        )
+        .into()
+    }
+
+    /// Return the class of Binary HUBO solver inputs.
+    ///
+    /// # Postconditions
+    ///
+    /// The returned class admits unconstrained minimization models over Binary
+    /// variables with any polynomial objective degree.
+    ///
+    /// ```
+    /// use ommx::{
+    ///     linear, monomial, Constraint, ConstraintID, DecisionVariable, Function,
+    ///     Instance, InstanceClass, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
+    ///
+    /// let variable = VariableID::from(1);
+    /// let build = |sense, objective, decision_variable| {
+    ///     Instance::builder()
+    ///         .sense(sense)
+    ///         .objective(objective)
+    ///         .decision_variables(BTreeMap::from([(variable, decision_variable)]))
+    ///         .constraints(BTreeMap::new())
+    ///         .build()
+    ///         .unwrap()
+    /// };
+    /// let linear = build(Sense::Minimize, Function::from(linear!(1)), DecisionVariable::binary());
+    /// let cubic = build(
+    ///     Sense::Minimize,
+    ///     Function::from(monomial!(1, 1, 1)),
+    ///     DecisionVariable::binary(),
+    /// );
+    /// let maximizing = build(Sense::Maximize, Function::from(linear!(1)), DecisionVariable::binary());
+    /// let non_binary = build(
+    ///     Sense::Minimize,
+    ///     Function::from(linear!(1)),
+    ///     DecisionVariable::continuous(),
+    /// );
+    /// let constrained = Instance::builder()
+    ///     .sense(Sense::Minimize)
+    ///     .objective(Function::from(linear!(1)))
+    ///     .decision_variables(BTreeMap::from([(variable, DecisionVariable::binary())]))
+    ///     .constraints(BTreeMap::from([(
+    ///         ConstraintID::from(1),
+    ///         Constraint::equal_to_zero(Function::from(linear!(1))),
+    ///     )]))
+    ///     .build()
+    ///     .unwrap();
+    ///
+    /// let class = InstanceClass::hubo();
+    /// assert!(class.contains(&linear));
+    /// assert!(class.contains(&cubic));
+    /// assert!(!class.contains(&maximizing));
+    /// assert!(!class.contains(&non_binary));
+    /// assert!(!class.contains(&constrained));
+    /// ```
+    pub fn hubo() -> Self {
+        InstanceClassClause::new(
+            "hubo",
+            BTreeSet::from([Kind::Binary]),
+            PolynomialRequirement::any_degree(),
+            BTreeSet::from([Sense::Minimize]),
+        )
+        .into()
     }
 
     /// Return the clauses representing this class.
@@ -439,8 +626,9 @@ pub enum InstanceClassMismatch {
     },
     ObjectiveDegreeExceedsBound {
         actual_degree: Degree,
-        bound: DegreeBound,
+        bound: PolynomialRequirement,
     },
+    ObjectiveFunctionNotPolynomial,
     RegularConstraintRelationNotAllowed {
         relation: Equality,
         constraint_ids: BTreeSet<ConstraintID>,
@@ -449,7 +637,11 @@ pub enum InstanceClassMismatch {
     RegularConstraintDegreeExceedsBound {
         relation: Equality,
         actual_degrees: BTreeMap<ConstraintID, Degree>,
-        bound: DegreeBound,
+        bound: PolynomialRequirement,
+    },
+    RegularConstraintFunctionNotPolynomial {
+        relation: Equality,
+        constraint_ids: BTreeSet<ConstraintID>,
     },
     IndicatorConstraintsNotAllowed {
         constraint_ids: BTreeSet<IndicatorConstraintID>,
@@ -462,7 +654,11 @@ pub enum InstanceClassMismatch {
     IndicatorBodyDegreeExceedsBound {
         relation: Equality,
         actual_degrees: BTreeMap<IndicatorConstraintID, Degree>,
-        bound: DegreeBound,
+        bound: PolynomialRequirement,
+    },
+    IndicatorBodyFunctionNotPolynomial {
+        relation: Equality,
+        constraint_ids: BTreeSet<IndicatorConstraintID>,
     },
     OneHotConstraintsNotAllowed {
         constraint_ids: BTreeSet<OneHotConstraintID>,
@@ -491,6 +687,9 @@ impl std::fmt::Display for InstanceClassMismatch {
                 actual_degree,
                 bound,
             } => write!(f, "objective degree {actual_degree} exceeds {bound}"),
+            Self::ObjectiveFunctionNotPolynomial => {
+                f.write_str("objective function is not polynomial")
+            }
             Self::RegularConstraintRelationNotAllowed {
                 relation,
                 constraint_ids,
@@ -506,6 +705,13 @@ impl std::fmt::Display for InstanceClassMismatch {
             } => write!(
                 f,
                 "regular {relation:?} constraint degrees {actual_degrees:?} exceed {bound}"
+            ),
+            Self::RegularConstraintFunctionNotPolynomial {
+                relation,
+                constraint_ids,
+            } => write!(
+                f,
+                "regular {relation:?} constraint functions for IDs {constraint_ids:?} are not polynomial"
             ),
             Self::IndicatorConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "indicator constraints {constraint_ids:?} are not allowed")
@@ -525,6 +731,13 @@ impl std::fmt::Display for InstanceClassMismatch {
             } => write!(
                 f,
                 "indicator {relation:?} body degrees {actual_degrees:?} exceed {bound}"
+            ),
+            Self::IndicatorBodyFunctionNotPolynomial {
+                relation,
+                constraint_ids,
+            } => write!(
+                f,
+                "indicator {relation:?} body functions for IDs {constraint_ids:?} are not polynomial"
             ),
             Self::OneHotConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "one-hot constraints {constraint_ids:?} are not allowed")
@@ -576,8 +789,10 @@ impl InstanceClassClauseReport {
 /// Side-effect-free [`InstanceClass`] membership report.
 ///
 /// An instance is a member when at least one complete clause contains it.
-/// Adapter identity and adapter-specific preconditions belong to an adapter
-/// applicability report layered on top of this result.
+/// Adapters use this membership report directly when checking applicability;
+/// they do not add another applicability condition. Other consumers may turn
+/// the same report into operation-specific diagnostics without implementing a
+/// second structural validator.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstanceClassMembershipReport {
     clause_reports: Vec<InstanceClassClauseReport>,
@@ -634,53 +849,65 @@ impl std::fmt::Display for InstanceClassMembershipReport {
 mod tests {
     use super::*;
     use crate::{
-        linear, quadratic, Constraint, DecisionVariable, Function, IndicatorConstraint,
-        InstanceParameters, OneHotConstraint, OneHotConstraintID, Sos1Constraint, Sos1ConstraintID,
-        VariableID,
+        linear, quadratic, Constraint, DecisionVariable, Function, FunctionParameters,
+        IndicatorConstraint, InstanceParameters, OneHotConstraint, OneHotConstraintID,
+        PolynomialParameters, Sos1Constraint, Sos1ConstraintID, VariableID,
     };
     use proptest::prelude::*;
 
     fn clause(
         label: &str,
         allowed_variable_kinds: &[Kind],
-        objective_degree_bound: DegreeBound,
+        objective_polynomial_requirement: PolynomialRequirement,
     ) -> InstanceClassClause {
         InstanceClassClause::new(
             label,
             allowed_variable_kinds.iter().copied().collect(),
-            objective_degree_bound,
+            objective_polynomial_requirement,
             BTreeSet::from([Sense::Minimize, Sense::Maximize]),
         )
     }
 
-    fn covering_clause(facts: &InstanceFacts) -> InstanceClassClause {
+    fn covering_clause(facts: &InstanceFacts) -> Option<InstanceClassClause> {
+        let FunctionClassification::Polynomial(objective_degree) = facts.objective_classification()
+        else {
+            return None;
+        };
         let mut clause = InstanceClassClause::new(
             "covering",
             facts.used_variables_by_kind().keys().copied().collect(),
-            DegreeBound::AtMost(facts.objective_degree()),
+            PolynomialRequirement::AtMost(objective_degree),
             BTreeSet::from([facts.sense()]),
         );
 
         let mut regular = BTreeMap::<Equality, Degree>::new();
         for fact in facts.regular_constraints().values() {
+            let FunctionClassification::Polynomial(fact_degree) = fact.classification() else {
+                return None;
+            };
             regular
                 .entry(fact.relation())
-                .and_modify(|degree| *degree = (*degree).max(fact.degree()))
-                .or_insert(fact.degree());
+                .and_modify(|degree| *degree = (*degree).max(fact_degree))
+                .or_insert(fact_degree);
         }
         for (relation, degree) in regular {
-            clause = clause.with_regular_constraint(relation, DegreeBound::AtMost(degree));
+            clause =
+                clause.with_regular_constraint(relation, PolynomialRequirement::AtMost(degree));
         }
 
         let mut indicator = BTreeMap::<Equality, Degree>::new();
         for fact in facts.indicator_constraints().values() {
+            let FunctionClassification::Polynomial(fact_degree) = fact.classification() else {
+                return None;
+            };
             indicator
                 .entry(fact.relation())
-                .and_modify(|degree| *degree = (*degree).max(fact.degree()))
-                .or_insert(fact.degree());
+                .and_modify(|degree| *degree = (*degree).max(fact_degree))
+                .or_insert(fact_degree);
         }
         for (relation, degree) in indicator {
-            clause = clause.with_indicator_constraint(relation, DegreeBound::AtMost(degree));
+            clause =
+                clause.with_indicator_constraint(relation, PolynomialRequirement::AtMost(degree));
         }
         if !facts.one_hot_constraint_ids().is_empty() {
             clause = clause.with_one_hot();
@@ -688,18 +915,28 @@ mod tests {
         if !facts.sos1_constraint_ids().is_empty() {
             clause = clause.with_sos1();
         }
-        clause
+        Some(clause)
+    }
+
+    fn polynomial_full_v3_parameters() -> InstanceParameters {
+        let function = FunctionParameters::polynomial_only(PolynomialParameters::default());
+        InstanceParameters {
+            objective: function,
+            constraint: function,
+            named_function: function,
+            ..InstanceParameters::full_v3()
+        }
     }
 
     #[test]
-    fn degree_bound_is_cumulative_and_inclusive() {
-        let linear = DegreeBound::at_most(1);
-        assert!(linear.includes(0.into()));
-        assert!(linear.includes(1.into()));
-        assert!(!linear.includes(2.into()));
-        assert_eq!(linear.maximum(), Some(1.into()));
-        assert!(DegreeBound::Unbounded.includes(10_000.into()));
-        assert_eq!(DegreeBound::Unbounded.maximum(), None);
+    fn polynomial_requirement_is_cumulative_and_inclusive() {
+        let linear = PolynomialRequirement::at_most(1);
+        assert!(linear.accepts_degree(0.into()));
+        assert!(linear.accepts_degree(1.into()));
+        assert!(!linear.accepts_degree(2.into()));
+        assert_eq!(linear.maximum_degree(), Some(1.into()));
+        assert!(PolynomialRequirement::any_degree().accepts_degree(10_000.into()));
+        assert_eq!(PolynomialRequirement::any_degree().maximum_degree(), None);
     }
 
     #[test]
@@ -716,17 +953,23 @@ mod tests {
         let milp = clause(
             "milp",
             &[Kind::Binary, Kind::Integer, Kind::Continuous],
-            DegreeBound::at_most(1),
+            PolynomialRequirement::at_most(1),
         )
-        .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))
-        .with_regular_constraint(Equality::LessThanOrEqualToZero, DegreeBound::at_most(1));
+        .with_regular_constraint(Equality::EqualToZero, PolynomialRequirement::at_most(1))
+        .with_regular_constraint(
+            Equality::LessThanOrEqualToZero,
+            PolynomialRequirement::at_most(1),
+        );
         let continuous_qp = clause(
             "continuous-qp",
             &[Kind::Continuous],
-            DegreeBound::at_most(2),
+            PolynomialRequirement::at_most(2),
         )
-        .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))
-        .with_regular_constraint(Equality::LessThanOrEqualToZero, DegreeBound::at_most(1));
+        .with_regular_constraint(Equality::EqualToZero, PolynomialRequirement::at_most(1))
+        .with_regular_constraint(
+            Equality::LessThanOrEqualToZero,
+            PolynomialRequirement::at_most(1),
+        );
         let instance_class = InstanceClass::new(vec![milp, continuous_qp]);
 
         let report = instance_class.check_membership(&instance);
@@ -798,11 +1041,11 @@ mod tests {
         let limited = InstanceClassClause::new(
             "limited",
             BTreeSet::from([Kind::Binary]),
-            DegreeBound::at_most(1),
+            PolynomialRequirement::at_most(1),
             BTreeSet::from([Sense::Minimize]),
         )
-        .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1))
-        .with_indicator_constraint(Equality::EqualToZero, DegreeBound::at_most(1));
+        .with_regular_constraint(Equality::EqualToZero, PolynomialRequirement::at_most(1))
+        .with_indicator_constraint(Equality::EqualToZero, PolynomialRequirement::at_most(1));
         let report = InstanceClass::new(vec![limited]).check_membership(&instance);
 
         assert!(!report.is_member());
@@ -816,12 +1059,12 @@ mod tests {
                 },
                 InstanceClassMismatch::ObjectiveDegreeExceedsBound {
                     actual_degree: 2.into(),
-                    bound: DegreeBound::at_most(1),
+                    bound: PolynomialRequirement::at_most(1),
                 },
                 InstanceClassMismatch::RegularConstraintDegreeExceedsBound {
                     relation: Equality::EqualToZero,
                     actual_degrees: BTreeMap::from([(regular_eq, 2.into())]),
-                    bound: DegreeBound::at_most(1),
+                    bound: PolynomialRequirement::at_most(1),
                 },
                 InstanceClassMismatch::RegularConstraintRelationNotAllowed {
                     relation: Equality::LessThanOrEqualToZero,
@@ -831,7 +1074,7 @@ mod tests {
                 InstanceClassMismatch::IndicatorBodyDegreeExceedsBound {
                     relation: Equality::EqualToZero,
                     actual_degrees: BTreeMap::from([(indicator_eq, 2.into())]),
-                    bound: DegreeBound::at_most(1),
+                    bound: PolynomialRequirement::at_most(1),
                 },
                 InstanceClassMismatch::IndicatorConstraintRelationNotAllowed {
                     relation: Equality::LessThanOrEqualToZero,
@@ -854,6 +1097,57 @@ mod tests {
     }
 
     #[test]
+    fn every_polynomial_requirement_rejects_non_polynomial_functions() {
+        let x = VariableID::from(1);
+        let regular_id = ConstraintID::from(10);
+        let indicator_id = IndicatorConstraintID::from(20);
+        let absolute_x = || Function::from(linear!(x)).abs();
+        let instance = crate::Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(absolute_x())
+            .decision_variables(BTreeMap::from([(x, DecisionVariable::binary())]))
+            .constraints(BTreeMap::from([(
+                regular_id,
+                Constraint::equal_to_zero(absolute_x()),
+            )]))
+            .indicator_constraints(BTreeMap::from([(
+                indicator_id,
+                IndicatorConstraint::new(x, Equality::EqualToZero, absolute_x()),
+            )]))
+            .build()
+            .unwrap();
+
+        for requirement in [
+            PolynomialRequirement::at_most(2),
+            PolynomialRequirement::any_degree(),
+        ] {
+            let polynomial_only = InstanceClass::from(
+                clause("polynomial-only", &[Kind::Binary], requirement)
+                    .with_regular_constraint(Equality::EqualToZero, requirement)
+                    .with_indicator_constraint(Equality::EqualToZero, requirement),
+            );
+
+            let report = polynomial_only.check_membership(&instance);
+            assert_eq!(
+                report.clause_reports()[0].mismatches(),
+                &[
+                    InstanceClassMismatch::ObjectiveFunctionNotPolynomial,
+                    InstanceClassMismatch::RegularConstraintFunctionNotPolynomial {
+                        relation: Equality::EqualToZero,
+                        constraint_ids: BTreeSet::from([regular_id]),
+                    },
+                    InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
+                        relation: Equality::EqualToZero,
+                        constraint_ids: BTreeSet::from([indicator_id]),
+                    },
+                ]
+            );
+            assert!(!report.is_member());
+            assert!(!polynomial_only.contains(&instance));
+        }
+    }
+
+    #[test]
     fn omitted_constraint_relations_include_unconstrained_instances() {
         let x = VariableID::from(1);
         let instance = crate::Instance::new(
@@ -863,7 +1157,7 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        let qubo = clause("qubo", &[Kind::Binary], DegreeBound::at_most(2));
+        let qubo = clause("qubo", &[Kind::Binary], PolynomialRequirement::at_most(2));
         let report = InstanceClass::from(qubo).check_membership(&instance);
         assert!(report.is_member());
         assert_eq!(report.matching_clauses().collect::<Vec<_>>(), [(0, "qubo")]);
@@ -889,8 +1183,12 @@ mod tests {
             .build()
             .unwrap();
         let linear_binary = InstanceClass::from(
-            clause("linear-binary", &[Kind::Binary], DegreeBound::at_most(1))
-                .with_regular_constraint(Equality::EqualToZero, DegreeBound::at_most(1)),
+            clause(
+                "linear-binary",
+                &[Kind::Binary],
+                PolynomialRequirement::at_most(1),
+            )
+            .with_regular_constraint(Equality::EqualToZero, PolynomialRequirement::at_most(1)),
         );
 
         assert!(!linear_binary.contains(&instance));
@@ -912,7 +1210,7 @@ mod tests {
         let empty_clause = InstanceClassClause::new(
             "empty",
             BTreeSet::new(),
-            DegreeBound::Unbounded,
+            PolynomialRequirement::any_degree(),
             BTreeSet::new(),
         );
         assert!(!InstanceClass::from(empty_clause).contains(&instance));
@@ -935,12 +1233,15 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        let binary_class =
-            InstanceClass::from(clause("linear", &[Kind::Binary], DegreeBound::at_most(1)));
+        let binary_class = InstanceClass::from(clause(
+            "linear",
+            &[Kind::Binary],
+            PolynomialRequirement::at_most(1),
+        ));
         let continuous_class = InstanceClass::from(clause(
             "linear",
             &[Kind::Continuous],
-            DegreeBound::at_most(1),
+            PolynomialRequirement::at_most(1),
         ));
         let union = binary_class.clone().union(continuous_class.clone());
 
@@ -976,12 +1277,12 @@ mod tests {
             let binary = InstanceClass::from(clause(
                 "binary-linear",
                 &[Kind::Binary],
-                DegreeBound::at_most(1),
+                PolynomialRequirement::at_most(1),
             ));
             let continuous = InstanceClass::from(clause(
                 "continuous-quadratic",
                 &[Kind::Continuous],
-                DegreeBound::at_most(2),
+                PolynomialRequirement::at_most(2),
             ));
             let expected = binary.contains(&instance) || continuous.contains(&instance);
             let union = binary.union(continuous);
@@ -990,11 +1291,13 @@ mod tests {
         }
 
         #[test]
-        fn covering_clause_contains_every_current_instance(
-            instance in any_with::<crate::Instance>(InstanceParameters::full_v3())
+        fn covering_clause_contains_every_polynomial_instance(
+            instance in any_with::<crate::Instance>(polynomial_full_v3_parameters())
         ) {
             let facts = InstanceFacts::from(&instance);
-            let instance_class = InstanceClass::from(covering_clause(&facts));
+            let clause = covering_clause(&facts)
+                .expect("polynomial-only parameters must produce a covering clause");
+            let instance_class = InstanceClass::from(clause);
             let report = instance_class.check_membership(&instance);
             prop_assert!(report.is_member(), "{report}");
             prop_assert!(instance_class.contains(&instance));

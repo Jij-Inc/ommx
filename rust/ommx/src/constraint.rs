@@ -30,6 +30,24 @@ pub enum Equality {
     LessThanOrEqualToZero,
 }
 
+impl Equality {
+    /// Apply the shared residual-feasibility convention used across regular
+    /// and special constraints and their scalar, sampled, and serialized
+    /// lifecycle hosts.
+    ///
+    /// Crate-internal because this classifies an already-evaluated residual;
+    /// public callers use the owning constraint, [`crate::Solution`], or
+    /// [`crate::SampleSet`] APIs that also preserve their host invariants.
+    pub(crate) fn is_satisfied(self, evaluated_value: f64, atol: ATol) -> bool {
+        match self {
+            Self::EqualToZero => atol.approx_is_zero(evaluated_value),
+            Self::LessThanOrEqualToZero => {
+                evaluated_value < 0.0 || atol.approx_is_zero(evaluated_value)
+            }
+        }
+    }
+}
+
 /// ID for constraint
 #[derive(
     Clone,
@@ -279,10 +297,7 @@ impl std::fmt::Display for Constraint<Created> {
 pub type EvaluatedConstraint = Constraint<Evaluated>;
 
 fn feasible_from_evaluated_value(equality: Equality, evaluated_value: f64, atol: ATol) -> bool {
-    match equality {
-        Equality::EqualToZero => evaluated_value.abs() < *atol,
-        Equality::LessThanOrEqualToZero => evaluated_value < *atol,
-    }
+    equality.is_satisfied(evaluated_value, atol)
 }
 
 fn validate_feasible_from_evaluated_value(
@@ -294,7 +309,7 @@ fn validate_feasible_from_evaluated_value(
 ) -> Result<(), ParseError> {
     let computed_feasible = feasible_from_evaluated_value(equality, evaluated_value, atol);
     if provided_feasible != computed_feasible {
-        return Err(RawParseError::InvalidInstance(format!(
+        return Err(ParseError::new(crate::error!(
             "Inconsistent constraint feasibility: provided={provided_feasible}, computed={computed_feasible}",
         ))
         .context(message, "feasible"));
@@ -360,12 +375,13 @@ impl Parse for crate::v2::EvaluatedRegularConstraint {
 }
 
 impl EvaluatedConstraint {
-    /// Check if this constraint is feasible given a specific tolerance
+    /// Check whether this constraint is feasible at a specific tolerance.
+    ///
+    /// Equality residuals are feasible when approximately zero, including
+    /// `abs(value) == atol`. Inequality residuals are feasible when negative or
+    /// approximately zero, so a finite `value == atol` is also feasible.
     pub fn is_feasible_with_tolerance(&self, atol: crate::ATol) -> bool {
-        match self.equality {
-            Equality::EqualToZero => self.stage.evaluated_value.abs() < *atol,
-            Equality::LessThanOrEqualToZero => self.stage.evaluated_value < *atol,
-        }
+        self.equality.is_satisfied(self.stage.evaluated_value, atol)
     }
 
     /// Calculate the violation (constraint breach) value for this constraint
@@ -469,14 +485,14 @@ impl Parse for crate::v2::SampledRegularConstraint {
 impl SampledConstraint {
     /// Check feasibility for a specific sample.
     ///
+    /// This uses the same inclusive equality and inequality boundaries as
+    /// [`EvaluatedConstraint::is_feasible_with_tolerance`].
+    ///
     /// Returns [`None`] if `sample_id` is not present in the sampled data.
     pub fn is_feasible(&self, sample_id: SampleID, atol: crate::ATol) -> Option<bool> {
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
 
-        Some(match self.equality {
-            Equality::EqualToZero => evaluated_value.abs() < *atol,
-            Equality::LessThanOrEqualToZero => evaluated_value < *atol,
-        })
+        Some(self.equality.is_satisfied(evaluated_value, atol))
     }
 
     /// Get all sample IDs that are feasible
@@ -485,10 +501,7 @@ impl SampledConstraint {
             .evaluated_values
             .iter()
             .filter_map(|(sample_id, evaluated_value)| {
-                let feasible = match self.equality {
-                    Equality::EqualToZero => evaluated_value.abs() < *atol,
-                    Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
-                };
+                let feasible = self.equality.is_satisfied(*evaluated_value, atol);
                 if feasible {
                     Some(*sample_id)
                 } else {
@@ -504,10 +517,7 @@ impl SampledConstraint {
             .evaluated_values
             .iter()
             .filter_map(|(sample_id, evaluated_value)| {
-                let feasible = match self.equality {
-                    Equality::EqualToZero => evaluated_value.abs() < *atol,
-                    Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
-                };
+                let feasible = self.equality.is_satisfied(*evaluated_value, atol);
                 if !feasible {
                     Some(*sample_id)
                 } else {
@@ -520,6 +530,8 @@ impl SampledConstraint {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use super::*;
     use crate::{Coefficient, Evaluate};
 
@@ -596,6 +608,85 @@ mod tests {
             err.to_string().contains("evaluated_value must be finite"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn parse_v2_evaluated_feasibility_mismatch_is_an_ordinary_error() {
+        let proto = crate::v2::EvaluatedRegularConstraint {
+            equality: crate::v1::Equality::EqualToZero.into(),
+            evaluated_value: 1.0,
+            feasible: true,
+            used_decision_variable_ids: vec![],
+            dual_variable: None,
+        };
+
+        let err = proto.parse(&ATol::default()).unwrap_err();
+
+        let mut source = err.source();
+        while let Some(error) = source {
+            assert!(error.downcast_ref::<RawParseError>().is_none());
+            source = error.source();
+        }
+        assert!(err
+            .to_string()
+            .contains("Inconsistent constraint feasibility"));
+    }
+
+    #[test]
+    fn parse_v2_includes_atol_boundary_for_evaluated_and_sampled_constraints() {
+        let atol = ATol::new(0.125).unwrap();
+        let sample_id = SampleID::from(7);
+
+        for equality in [
+            crate::v1::Equality::EqualToZero,
+            crate::v1::Equality::LessThanOrEqualToZero,
+        ] {
+            let evaluated = crate::v2::EvaluatedRegularConstraint {
+                equality: equality.into(),
+                evaluated_value: *atol,
+                feasible: true,
+                used_decision_variable_ids: vec![],
+                dual_variable: None,
+            }
+            .parse(&atol)
+            .unwrap();
+            assert!(evaluated.stage.feasible);
+
+            let sampled = crate::v2::SampledRegularConstraint {
+                equality: equality.into(),
+                evaluated_values: Some(crate::v1::SampledValues {
+                    entries: vec![crate::v1::sampled_values::SampledValuesEntry {
+                        ids: vec![sample_id.into_inner()],
+                        value: *atol,
+                    }],
+                }),
+                feasible: std::collections::BTreeMap::from([(sample_id.into_inner(), true)]),
+                used_decision_variable_ids: vec![],
+                dual_variables: None,
+            }
+            .parse(&atol)
+            .unwrap();
+            assert_eq!(sampled.stage.feasible.get(&sample_id), Some(&true));
+        }
+    }
+
+    #[test]
+    fn parse_v2_inequality_rejects_non_finite_values_before_feasibility() {
+        for evaluated_value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let proto = crate::v2::EvaluatedRegularConstraint {
+                equality: crate::v1::Equality::LessThanOrEqualToZero.into(),
+                evaluated_value,
+                feasible: evaluated_value.is_sign_negative(),
+                used_decision_variable_ids: vec![],
+                dual_variable: None,
+            };
+
+            let err = proto.parse(&ATol::default()).unwrap_err();
+            assert!(
+                err.to_string().contains("evaluated_value must be finite"),
+                "unexpected error for {evaluated_value}: {err}"
+            );
+        }
     }
 
     #[test]

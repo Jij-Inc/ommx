@@ -2,10 +2,15 @@ use super::*;
 use crate::{v2, Parse, ParseError, RawParseError};
 use std::collections::{BTreeMap, BTreeSet};
 
-fn sampled_collection_has_payload<T: crate::ConstraintType>(
-    collection: &crate::constraint_type::SampledCollection<T>,
-) -> bool {
-    !collection.is_empty()
+fn invalid_sample_set_sidecar(
+    error: crate::Error,
+    message: &'static str,
+    field: &'static str,
+) -> ParseError {
+    let signal = crate::SampleSetError::InvalidSidecar {
+        message: error.to_string(),
+    };
+    ParseError::new(signal).context(message, field)
 }
 
 fn validate_sampled_indicator_structural_ids(
@@ -16,16 +21,24 @@ fn validate_sampled_indicator_structural_ids(
     for (constraint_id, constraint) in constraints.inner() {
         let id = constraint.indicator_variable;
         let Some(variable) = decision_variables.get(&id) else {
-            return Err(RawParseError::InvalidInstance(format!(
-                "Indicator variable {id:?} in constraint {constraint_id:?} is not defined in decision_variables",
-            ))
-            .context(message, "sampled_indicator_constraints"));
+            return Err(
+                ParseError::new(crate::SampleSetError::InvalidConstraintStructure {
+                    constraint_family: "indicator",
+                    constraint_id: format!("{constraint_id:?}"),
+                    message: format!("indicator variable {id:?} is not in decision_variables"),
+                })
+                .context(message, "sampled_indicator_constraints"),
+            );
         };
         if *variable.kind() != crate::decision_variable::Kind::Binary {
-            return Err(RawParseError::InvalidInstance(format!(
-                "Indicator variable {id:?} in constraint {constraint_id:?} must be binary",
-            ))
-            .context(message, "sampled_indicator_constraints"));
+            return Err(
+                ParseError::new(crate::SampleSetError::InvalidConstraintStructure {
+                    constraint_family: "indicator",
+                    constraint_id: format!("{constraint_id:?}"),
+                    message: format!("indicator variable {id:?} must be binary"),
+                })
+                .context(message, "sampled_indicator_constraints"),
+            );
         }
     }
     Ok(())
@@ -39,16 +52,24 @@ fn validate_sampled_one_hot_structural_ids(
     for (constraint_id, constraint) in constraints.inner() {
         for id in &constraint.variables {
             let Some(variable) = decision_variables.get(id) else {
-                return Err(RawParseError::InvalidInstance(format!(
-                    "One-hot variable {id:?} in constraint {constraint_id:?} is not defined in decision_variables",
-                ))
-                .context(message, "sampled_one_hot_constraints"));
+                return Err(
+                    ParseError::new(crate::SampleSetError::InvalidConstraintStructure {
+                        constraint_family: "one-hot",
+                        constraint_id: format!("{constraint_id:?}"),
+                        message: format!("variable {id:?} is not in decision_variables"),
+                    })
+                    .context(message, "sampled_one_hot_constraints"),
+                );
             };
             if *variable.kind() != crate::decision_variable::Kind::Binary {
-                return Err(RawParseError::InvalidInstance(format!(
-                    "One-hot variable {id:?} in constraint {constraint_id:?} must be binary",
-                ))
-                .context(message, "sampled_one_hot_constraints"));
+                return Err(
+                    ParseError::new(crate::SampleSetError::InvalidConstraintStructure {
+                        constraint_family: "one-hot",
+                        constraint_id: format!("{constraint_id:?}"),
+                        message: format!("variable {id:?} must be binary"),
+                    })
+                    .context(message, "sampled_one_hot_constraints"),
+                );
             }
         }
     }
@@ -63,10 +84,14 @@ fn validate_sampled_sos1_structural_ids(
     for (constraint_id, constraint) in constraints.inner() {
         for id in &constraint.variables {
             if !decision_variables.contains_key(id) {
-                return Err(RawParseError::InvalidInstance(format!(
-                    "SOS1 variable {id:?} in constraint {constraint_id:?} is not defined in decision_variables",
-                ))
-                .context(message, "sampled_sos1_constraints"));
+                return Err(
+                    ParseError::new(crate::SampleSetError::InvalidConstraintStructure {
+                        constraint_family: "SOS1",
+                        constraint_id: format!("{constraint_id:?}"),
+                        message: format!("variable {id:?} is not in decision_variables"),
+                    })
+                    .context(message, "sampled_sos1_constraints"),
+                );
             }
         }
     }
@@ -96,7 +121,7 @@ fn validate_sample_bool_map_ids(
     let found = map.keys().copied().collect::<SampleIDSet>();
     if &found != expected {
         return Err(
-            RawParseError::SampleSetError(crate::SampleSetError::InconsistentSampleIDs {
+            ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
                 expected: expected.clone(),
                 found,
             })
@@ -124,10 +149,10 @@ impl Parse for crate::v1::SampleSet {
             let dv_id = parsed.id;
             variable_labels.insert(dv_id, parsed.label);
             if decision_variables.insert(dv_id, parsed.variable).is_some() {
-                return Err(crate::RawParseError::SampleSetError(
-                    crate::SampleSetError::DuplicatedVariableID { id: dv_id },
-                )
-                .context(message, "decision_variables"));
+                return Err(
+                    ParseError::new(crate::SampleSetError::DuplicatedVariableID { id: dv_id })
+                        .context(message, "decision_variables"),
+                );
             }
         }
 
@@ -155,6 +180,16 @@ impl Parse for crate::v1::SampleSet {
                 crate::ConstraintContext,
                 Option<crate::RemovedReason>,
             ) = v1_constraint.parse_as(&(), message, "constraints")?;
+            if constraints.contains_key(&id) {
+                return Err(
+                    ParseError::new(crate::SampleSetError::InvalidConstraintStructure {
+                        constraint_family: "regular",
+                        constraint_id: format!("{id:?}"),
+                        message: "duplicated constraint ID in constraints".to_string(),
+                    })
+                    .context(message, "constraints"),
+                );
+            }
             if let Some(reason) = removed_reason {
                 constraint_removed_reasons.insert(id, reason);
             }
@@ -173,10 +208,10 @@ impl Parse for crate::v1::SampleSet {
                 .insert(id, parsed.sampled_named_function)
                 .is_some()
             {
-                return Err(crate::RawParseError::SampleSetError(
-                    crate::SampleSetError::DuplicatedNamedFunctionID { id },
-                )
-                .context(message, "named_functions"));
+                return Err(
+                    ParseError::new(crate::SampleSetError::DuplicatedNamedFunctionID { id })
+                        .context(message, "named_functions"),
+                );
             }
             named_function_labels.insert(id, parsed.label);
         }
@@ -200,16 +235,13 @@ impl Parse for crate::v1::SampleSet {
                     constraint_removed_reasons,
                     constraint_context,
                 )
-                .map_err(|e| {
-                    crate::RawParseError::InvalidInstance(e.to_string())
-                        .context(message, "constraints")
-                })?,
+                .map_err(|error| invalid_sample_set_sidecar(error, message, "constraints"))?,
             )
             .named_functions(named_functions)
             .named_function_labels(named_function_labels)
             .sense(sense)
             .build()
-            .map_err(crate::RawParseError::SampleSetError)?;
+            .map_err(ParseError::new)?;
         let mut sample_set = sample_set;
         sample_set.metadata = self.metadata;
         sample_set.annotations = self.annotations;
@@ -219,14 +251,14 @@ impl Parse for crate::v1::SampleSet {
             let sample_id = crate::SampleID::from(sample_id_u64);
             if let Some(computed_feasible) = sample_set.is_sample_feasible(sample_id) {
                 if provided_feasible != computed_feasible {
-                    return Err(crate::RawParseError::SampleSetError(
-                        crate::SampleSetError::InconsistentFeasibility {
+                    return Err(
+                        ParseError::new(crate::SampleSetError::InconsistentFeasibility {
                             sample_id: sample_id_u64,
                             provided_feasible,
                             computed_feasible,
-                        },
-                    )
-                    .context(message, "feasible"));
+                        })
+                        .context(message, "feasible"),
+                    );
                 }
             }
         }
@@ -238,7 +270,7 @@ impl Parse for crate::v1::SampleSet {
                 sample_set.is_sample_feasible_relaxed(sample_id)
             {
                 if provided_feasible_relaxed != computed_feasible_relaxed {
-                    return Err(crate::RawParseError::SampleSetError(
+                    return Err(ParseError::new(
                         crate::SampleSetError::InconsistentFeasibilityRelaxed {
                             sample_id: sample_id_u64,
                             provided_feasible_relaxed,
@@ -260,8 +292,7 @@ impl Parse for v2::SampleSet {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.SampleSet";
-        let required_features =
-            crate::v2_io::parse_required_features(self.required_features, message)?;
+        crate::v2_io::validate_required_features(self.required_features, message)?;
         let feasibility_atol =
             crate::v2_io::parse_feasibility_atol(self.feasibility_atol, message)?;
         let annotations =
@@ -304,28 +335,6 @@ impl Parse for v2::SampleSet {
             .transpose()?
             .unwrap_or_default();
 
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::ConstraintIndicator,
-            sampled_collection_has_payload(&indicator_constraints),
-            message,
-            "sampled_indicator_constraints",
-        )?;
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::ConstraintOneHot,
-            sampled_collection_has_payload(&one_hot_constraints),
-            message,
-            "sampled_one_hot_constraints",
-        )?;
-        crate::v2_io::validate_feature_payload(
-            &required_features,
-            v2::Feature::ConstraintSos1,
-            sampled_collection_has_payload(&sos1_constraints),
-            message,
-            "sampled_sos1_constraints",
-        )?;
-
         let named_functions = self
             .sampled_named_functions
             .map(|value| value.parse_as(&(), message, "sampled_named_functions"))
@@ -336,19 +345,19 @@ impl Parse for v2::SampleSet {
         let objective_sample_ids = objectives.ids();
         for sampled_dv in decision_variables.values() {
             if !sampled_dv.samples().has_same_ids(&objective_sample_ids) {
-                return Err(RawParseError::SampleSetError(
-                    crate::SampleSetError::InconsistentSampleIDs {
+                return Err(
+                    ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
                         expected: objective_sample_ids.clone(),
                         found: sampled_dv.samples().ids(),
-                    },
-                )
-                .context(message, "decision_variables"));
+                    })
+                    .context(message, "decision_variables"),
+                );
             }
         }
         constraints
             .validate_sample_ids(&objective_sample_ids)
             .map_err(|found| {
-                RawParseError::SampleSetError(crate::SampleSetError::InconsistentSampleIDs {
+                ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
                     expected: objective_sample_ids.clone(),
                     found,
                 })
@@ -357,7 +366,7 @@ impl Parse for v2::SampleSet {
         indicator_constraints
             .validate_sample_ids(&objective_sample_ids)
             .map_err(|found| {
-                RawParseError::SampleSetError(crate::SampleSetError::InconsistentSampleIDs {
+                ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
                     expected: objective_sample_ids.clone(),
                     found,
                 })
@@ -366,7 +375,7 @@ impl Parse for v2::SampleSet {
         one_hot_constraints
             .validate_sample_ids(&objective_sample_ids)
             .map_err(|found| {
-                RawParseError::SampleSetError(crate::SampleSetError::InconsistentSampleIDs {
+                ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
                     expected: objective_sample_ids.clone(),
                     found,
                 })
@@ -375,7 +384,7 @@ impl Parse for v2::SampleSet {
         sos1_constraints
             .validate_sample_ids(&objective_sample_ids)
             .map_err(|found| {
-                RawParseError::SampleSetError(crate::SampleSetError::InconsistentSampleIDs {
+                ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
                     expected: objective_sample_ids.clone(),
                     found,
                 })
@@ -384,29 +393,21 @@ impl Parse for v2::SampleSet {
 
         let decision_variable_ids = decision_variables.keys().copied().collect::<BTreeSet<_>>();
         validate_sampled_constraint_used_ids("regular", &constraints, &decision_variable_ids)
-            .map_err(|e| {
-                RawParseError::SampleSetError(e).context(message, "sampled_regular_constraints")
-            })?;
+            .map_err(|e| ParseError::new(e).context(message, "sampled_regular_constraints"))?;
         validate_sampled_constraint_used_ids(
             "indicator",
             &indicator_constraints,
             &decision_variable_ids,
         )
-        .map_err(|e| {
-            RawParseError::SampleSetError(e).context(message, "sampled_indicator_constraints")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "sampled_indicator_constraints"))?;
         validate_sampled_constraint_used_ids(
             "one-hot",
             &one_hot_constraints,
             &decision_variable_ids,
         )
-        .map_err(|e| {
-            RawParseError::SampleSetError(e).context(message, "sampled_one_hot_constraints")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "sampled_one_hot_constraints"))?;
         validate_sampled_constraint_used_ids("SOS1", &sos1_constraints, &decision_variable_ids)
-            .map_err(|e| {
-                RawParseError::SampleSetError(e).context(message, "sampled_sos1_constraints")
-            })?;
+            .map_err(|e| ParseError::new(e).context(message, "sampled_sos1_constraints"))?;
         validate_sampled_indicator_structural_ids(
             &indicator_constraints,
             &decision_variables,
@@ -423,42 +424,36 @@ impl Parse for v2::SampleSet {
             &indicator_constraints,
             feasibility_atol,
         )
-        .map_err(|e| {
-            RawParseError::SampleSetError(e).context(message, "sampled_indicator_constraints")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "sampled_indicator_constraints"))?;
         validate_sampled_one_hot_stage_values(
             &decision_variables,
             &one_hot_constraints,
             feasibility_atol,
         )
-        .map_err(|e| {
-            RawParseError::SampleSetError(e).context(message, "sampled_one_hot_constraints")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "sampled_one_hot_constraints"))?;
         validate_sampled_sos1_stage_values(
             &decision_variables,
             &sos1_constraints,
             feasibility_atol,
         )
-        .map_err(|e| {
-            RawParseError::SampleSetError(e).context(message, "sampled_sos1_constraints")
-        })?;
+        .map_err(|e| ParseError::new(e).context(message, "sampled_sos1_constraints"))?;
 
         for (named_function_id, sampled_named_function) in named_functions.iter() {
             if !sampled_named_function
                 .evaluated_values()
                 .has_same_ids(&objective_sample_ids)
             {
-                return Err(RawParseError::SampleSetError(
-                    crate::SampleSetError::InconsistentSampleIDs {
+                return Err(
+                    ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
                         expected: objective_sample_ids.clone(),
                         found: sampled_named_function.evaluated_values().ids(),
-                    },
-                )
-                .context(message, "sampled_named_functions"));
+                    })
+                    .context(message, "sampled_named_functions"),
+                );
             }
             for var_id in sampled_named_function.used_decision_variable_ids() {
                 if !decision_variables.contains_key(var_id) {
-                    return Err(RawParseError::SampleSetError(
+                    return Err(ParseError::new(
                         crate::SampleSetError::UndefinedVariableInNamedFunction {
                             id: *var_id,
                             named_function_id: *named_function_id,
@@ -481,14 +476,14 @@ impl Parse for v2::SampleSet {
         if let Some((sample_id, provided_feasible, computed_feasible)) =
             first_feasibility_mismatch(&feasible, &computed_feasible)
         {
-            return Err(RawParseError::SampleSetError(
-                crate::SampleSetError::InconsistentFeasibility {
+            return Err(
+                ParseError::new(crate::SampleSetError::InconsistentFeasibility {
                     sample_id: sample_id.into_inner(),
                     provided_feasible,
                     computed_feasible,
-                },
-            )
-            .context(message, "feasible"));
+                })
+                .context(message, "feasible"),
+            );
         }
         let feasible_relaxed = crate::v2_io::sample_bool_map_from_v2(self.feasible_relaxed);
         validate_sample_bool_map_ids(
@@ -500,14 +495,14 @@ impl Parse for v2::SampleSet {
         if let Some((sample_id, provided_feasible_relaxed, computed_feasible_relaxed)) =
             first_feasibility_mismatch(&feasible_relaxed, &computed_feasible_relaxed)
         {
-            return Err(RawParseError::SampleSetError(
-                crate::SampleSetError::InconsistentFeasibilityRelaxed {
+            return Err(
+                ParseError::new(crate::SampleSetError::InconsistentFeasibilityRelaxed {
                     sample_id: sample_id.into_inner(),
                     provided_feasible_relaxed,
                     computed_feasible_relaxed,
-                },
-            )
-            .context(message, "feasible_relaxed"));
+                })
+                .context(message, "feasible_relaxed"),
+            );
         }
 
         Ok(SampleSet {
@@ -596,6 +591,569 @@ impl From<SampleSet> for crate::v1::SampleSet {
 mod tests {
     use super::*;
     use crate::{v1, Parse};
+
+    fn parse_error_source(error: &ParseError) -> &(dyn std::error::Error + 'static) {
+        std::error::Error::source(error).expect("ParseError should expose its cause")
+    }
+
+    fn sampled_decision_variables(kind: crate::Kind) -> crate::SampledDecisionVariableTable {
+        let id = crate::VariableID::from(1);
+        let decision_variable = crate::DecisionVariable::new(
+            kind,
+            if kind == crate::Kind::Binary {
+                crate::Bound::of_binary()
+            } else {
+                crate::Bound::default()
+            },
+            crate::ATol::default(),
+        )
+        .unwrap();
+        let row = crate::SampledDecisionVariable::new(
+            id,
+            decision_variable,
+            crate::Sampled::from((crate::SampleID::from(0), 0.0)),
+        )
+        .unwrap();
+        crate::SampledDecisionVariableTable::new(
+            BTreeMap::from([(id, row)]),
+            crate::VariableLabelStore::default(),
+        )
+        .unwrap()
+    }
+
+    fn empty_v2_sample_set() -> v2::SampleSet {
+        let sample_id = crate::SampleID::from(0);
+        SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(crate::Sampled::from((sample_id, 0.0)))
+            .constraints(BTreeMap::new())
+            .sense(crate::Sense::Minimize)
+            .build()
+            .unwrap()
+            .into()
+    }
+
+    fn v2_sample_set_with_indicator_constraint() -> v2::SampleSet {
+        use crate::indicator_constraint::{IndicatorSampledData, SampledIndicatorConstraint};
+
+        let variable_id = crate::VariableID::from(1);
+        let sample_id = crate::SampleID::from(0);
+        let decision_variable = crate::SampledDecisionVariable::new(
+            variable_id,
+            crate::DecisionVariable::binary(),
+            crate::Sampled::from((sample_id, 1.0)),
+        )
+        .unwrap();
+        let constraint = SampledIndicatorConstraint {
+            indicator_variable: variable_id,
+            equality: crate::Equality::EqualToZero,
+            stage: IndicatorSampledData {
+                evaluated_values: crate::Sampled::from((sample_id, 0.0)),
+                feasible: BTreeMap::from([(sample_id, true)]),
+                indicator_active: BTreeMap::from([(sample_id, true)]),
+                used_decision_variable_ids: [variable_id].into_iter().collect(),
+            },
+        };
+        SampleSet::builder()
+            .decision_variables(BTreeMap::from([(variable_id, decision_variable)]))
+            .objectives(crate::Sampled::from((sample_id, 0.0)))
+            .constraints(BTreeMap::new())
+            .indicator_constraints(BTreeMap::from([(
+                crate::IndicatorConstraintID::from(1),
+                constraint,
+            )]))
+            .sense(crate::Sense::Minimize)
+            .build()
+            .unwrap()
+            .into()
+    }
+
+    fn v2_sample_set_with_one_hot_constraint() -> v2::SampleSet {
+        use crate::one_hot_constraint::{OneHotSampledData, SampledOneHotConstraint};
+
+        let variable_id = crate::VariableID::from(1);
+        let sample_id = crate::SampleID::from(0);
+        let decision_variable = crate::SampledDecisionVariable::new(
+            variable_id,
+            crate::DecisionVariable::binary(),
+            crate::Sampled::from((sample_id, 1.0)),
+        )
+        .unwrap();
+        let constraint = SampledOneHotConstraint {
+            variables: BTreeSet::from([variable_id]),
+            stage: OneHotSampledData {
+                feasible: BTreeMap::from([(sample_id, true)]),
+                active_variable: BTreeMap::from([(sample_id, Some(variable_id))]),
+                used_decision_variable_ids: [variable_id].into_iter().collect(),
+            },
+        };
+        SampleSet::builder()
+            .decision_variables(BTreeMap::from([(variable_id, decision_variable)]))
+            .objectives(crate::Sampled::from((sample_id, 0.0)))
+            .constraints(BTreeMap::new())
+            .one_hot_constraints(BTreeMap::from([(
+                crate::OneHotConstraintID::from(1),
+                constraint,
+            )]))
+            .sense(crate::Sense::Minimize)
+            .build()
+            .unwrap()
+            .into()
+    }
+
+    fn v2_sample_set_with_sos1_constraint() -> v2::SampleSet {
+        use crate::sos1_constraint::{SampledSos1Constraint, Sos1SampledData};
+
+        let variable_id = crate::VariableID::from(1);
+        let sample_id = crate::SampleID::from(0);
+        let decision_variable = crate::SampledDecisionVariable::new(
+            variable_id,
+            crate::DecisionVariable::binary(),
+            crate::Sampled::from((sample_id, 0.0)),
+        )
+        .unwrap();
+        let constraint = SampledSos1Constraint {
+            variables: BTreeSet::from([variable_id]),
+            stage: Sos1SampledData {
+                feasible: BTreeMap::from([(sample_id, true)]),
+                active_variable: BTreeMap::from([(sample_id, None)]),
+                used_decision_variable_ids: [variable_id].into_iter().collect(),
+            },
+        };
+        SampleSet::builder()
+            .decision_variables(BTreeMap::from([(variable_id, decision_variable)]))
+            .objectives(crate::Sampled::from((sample_id, 0.0)))
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(
+                crate::Sos1ConstraintID::from(1),
+                constraint,
+            )]))
+            .sense(crate::Sense::Minimize)
+            .build()
+            .unwrap()
+            .into()
+    }
+
+    fn assert_undefined_variable_in_constraint(
+        error: &ParseError,
+        expected_variable_id: crate::VariableID,
+        expected_family: &str,
+        expected_constraint_id: &str,
+    ) {
+        assert!(matches!(
+            parse_error_source(error).downcast_ref::<crate::SampleSetError>(),
+            Some(crate::SampleSetError::UndefinedVariableInConstraint {
+                id,
+                constraint_family,
+                constraint_id,
+            }) if *id == expected_variable_id
+                && *constraint_family == expected_family
+                && constraint_id == expected_constraint_id
+        ));
+    }
+
+    fn assert_invalid_constraint_structure(
+        error: &ParseError,
+        family: &str,
+        constraint_id: &str,
+        message: &str,
+    ) {
+        assert!(matches!(
+            parse_error_source(error).downcast_ref::<crate::SampleSetError>(),
+            Some(crate::SampleSetError::InvalidConstraintStructure {
+                constraint_family,
+                constraint_id: actual_constraint_id,
+                message: actual_message,
+            }) if *constraint_family == family
+                && actual_constraint_id == constraint_id
+                && actual_message == message
+        ));
+    }
+
+    #[test]
+    fn invalid_sample_set_sidecar_preserves_sample_set_error() {
+        let constraint_id = crate::ConstraintID::from(7);
+        let mut context = crate::ConstraintContextStore::default();
+        context.set_name(constraint_id, "orphan");
+        let source = crate::constraint_type::SampledCollection::<crate::Constraint>::with_context(
+            BTreeMap::new(),
+            BTreeMap::new(),
+            context,
+        )
+        .unwrap_err();
+
+        let error = invalid_sample_set_sidecar(source, "ommx.v1.SampleSet", "constraints");
+
+        assert!(matches!(
+            parse_error_source(&error).downcast_ref::<crate::SampleSetError>(),
+            Some(crate::SampleSetError::InvalidSidecar { message })
+                if message == "Constraint label/provenance references unknown constraint ID ConstraintID(7)"
+        ));
+        assert_eq!(error.context.len(), 1);
+        assert_eq!(error.context[0].message, "ommx.v1.SampleSet");
+        assert_eq!(error.context[0].field, "constraints");
+    }
+
+    #[test]
+    fn sampled_indicator_structural_checks_preserve_sample_set_error() {
+        use crate::indicator_constraint::{IndicatorSampledData, SampledIndicatorConstraint};
+
+        let variable_id = crate::VariableID::from(1);
+        let constraint_id = crate::IndicatorConstraintID::from(3);
+        let constraint = SampledIndicatorConstraint {
+            indicator_variable: crate::VariableID::from(2),
+            equality: crate::Equality::EqualToZero,
+            stage: IndicatorSampledData {
+                evaluated_values: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
+                feasible: BTreeMap::from([(crate::SampleID::from(0), true)]),
+                indicator_active: BTreeMap::from([(crate::SampleID::from(0), false)]),
+                used_decision_variable_ids: [variable_id].into_iter().collect(),
+            },
+        };
+        let constraints = crate::SampledCollection::new(
+            BTreeMap::from([(constraint_id, constraint)]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let binary = sampled_decision_variables(crate::Kind::Binary);
+        let error =
+            validate_sampled_indicator_structural_ids(&constraints, &binary, "ommx.v2.SampleSet")
+                .unwrap_err();
+        assert_invalid_constraint_structure(
+            &error,
+            "indicator",
+            "IndicatorConstraintID(3)",
+            "indicator variable VariableID(2) is not in decision_variables",
+        );
+
+        let mut constraint = constraints.inner().get(&constraint_id).unwrap().clone();
+        constraint.indicator_variable = variable_id;
+        let constraints = crate::SampledCollection::new(
+            BTreeMap::from([(constraint_id, constraint)]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let continuous = sampled_decision_variables(crate::Kind::Continuous);
+        let error = validate_sampled_indicator_structural_ids(
+            &constraints,
+            &continuous,
+            "ommx.v2.SampleSet",
+        )
+        .unwrap_err();
+        assert_invalid_constraint_structure(
+            &error,
+            "indicator",
+            "IndicatorConstraintID(3)",
+            "indicator variable VariableID(1) must be binary",
+        );
+    }
+
+    #[test]
+    fn sampled_one_hot_structural_checks_preserve_sample_set_error() {
+        use crate::one_hot_constraint::{OneHotSampledData, SampledOneHotConstraint};
+
+        let variable_id = crate::VariableID::from(1);
+        let constraint_id = crate::OneHotConstraintID::from(4);
+        let make_constraints = |structural_id| {
+            crate::SampledCollection::new(
+                BTreeMap::from([(
+                    constraint_id,
+                    SampledOneHotConstraint {
+                        variables: [structural_id].into_iter().collect(),
+                        stage: OneHotSampledData {
+                            feasible: BTreeMap::from([(crate::SampleID::from(0), true)]),
+                            active_variable: BTreeMap::from([(
+                                crate::SampleID::from(0),
+                                Some(structural_id),
+                            )]),
+                            used_decision_variable_ids: [variable_id].into_iter().collect(),
+                        },
+                    },
+                )]),
+                BTreeMap::new(),
+            )
+            .unwrap()
+        };
+
+        let error = validate_sampled_one_hot_structural_ids(
+            &make_constraints(crate::VariableID::from(2)),
+            &sampled_decision_variables(crate::Kind::Binary),
+            "ommx.v2.SampleSet",
+        )
+        .unwrap_err();
+        assert_invalid_constraint_structure(
+            &error,
+            "one-hot",
+            "OneHotConstraintID(4)",
+            "variable VariableID(2) is not in decision_variables",
+        );
+
+        let error = validate_sampled_one_hot_structural_ids(
+            &make_constraints(variable_id),
+            &sampled_decision_variables(crate::Kind::Continuous),
+            "ommx.v2.SampleSet",
+        )
+        .unwrap_err();
+        assert_invalid_constraint_structure(
+            &error,
+            "one-hot",
+            "OneHotConstraintID(4)",
+            "variable VariableID(1) must be binary",
+        );
+    }
+
+    #[test]
+    fn sampled_sos1_structural_check_preserves_sample_set_error() {
+        use crate::sos1_constraint::{SampledSos1Constraint, Sos1SampledData};
+
+        let constraint_id = crate::Sos1ConstraintID::from(5);
+        let undefined_id = crate::VariableID::from(2);
+        let constraint = SampledSos1Constraint {
+            variables: [undefined_id].into_iter().collect(),
+            stage: Sos1SampledData {
+                feasible: BTreeMap::from([(crate::SampleID::from(0), true)]),
+                active_variable: BTreeMap::from([(crate::SampleID::from(0), None)]),
+                used_decision_variable_ids: [crate::VariableID::from(1)].into_iter().collect(),
+            },
+        };
+        let constraints = crate::SampledCollection::new(
+            BTreeMap::from([(constraint_id, constraint)]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+        let error = validate_sampled_sos1_structural_ids(
+            &constraints,
+            &sampled_decision_variables(crate::Kind::Continuous),
+            "ommx.v2.SampleSet",
+        )
+        .unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "SOS1",
+            "Sos1ConstraintID(5)",
+            "variable VariableID(2) is not in decision_variables",
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_classifies_undefined_used_id_in_regular_constraint() {
+        let mut proto = empty_v2_sample_set();
+        proto
+            .sampled_regular_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .insert(
+                7,
+                v2::SampledRegularConstraint {
+                    equality: v1::Equality::EqualToZero as i32,
+                    evaluated_values: Some(v1::SampledValues {
+                        entries: vec![v1::sampled_values::SampledValuesEntry {
+                            ids: vec![0],
+                            value: 0.0,
+                        }],
+                    }),
+                    feasible: BTreeMap::from([(0, true)]),
+                    used_decision_variable_ids: vec![42],
+                    dual_variables: None,
+                },
+            );
+
+        let error = SampleSet::try_from(proto).unwrap_err();
+
+        assert_undefined_variable_in_constraint(
+            &error,
+            crate::VariableID::from(42),
+            "regular",
+            "ConstraintID(7)",
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_classifies_undefined_used_id_in_indicator_constraint() {
+        let mut proto = v2_sample_set_with_indicator_constraint();
+        proto
+            .sampled_indicator_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .used_decision_variable_ids
+            .push(2);
+
+        let error = SampleSet::try_from(proto).unwrap_err();
+
+        assert_undefined_variable_in_constraint(
+            &error,
+            crate::VariableID::from(2),
+            "indicator",
+            "IndicatorConstraintID(1)",
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_classifies_undefined_used_id_in_one_hot_constraint() {
+        let mut proto = v2_sample_set_with_one_hot_constraint();
+        proto
+            .sampled_one_hot_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .used_decision_variable_ids
+            .push(2);
+
+        let error = SampleSet::try_from(proto).unwrap_err();
+
+        assert_undefined_variable_in_constraint(
+            &error,
+            crate::VariableID::from(2),
+            "one-hot",
+            "OneHotConstraintID(1)",
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_classifies_undefined_used_id_in_sos1_constraint() {
+        let mut proto = v2_sample_set_with_sos1_constraint();
+        proto
+            .sampled_sos1_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .used_decision_variable_ids
+            .push(2);
+
+        let error = SampleSet::try_from(proto).unwrap_err();
+
+        assert_undefined_variable_in_constraint(
+            &error,
+            crate::VariableID::from(2),
+            "SOS1",
+            "Sos1ConstraintID(1)",
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_classifies_undefined_indicator_variable() {
+        let mut proto = v2_sample_set_with_indicator_constraint();
+        proto
+            .sampled_indicator_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .indicator_variable = 2;
+
+        let error = SampleSet::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "indicator",
+            "IndicatorConstraintID(1)",
+            "indicator variable VariableID(2) is not in decision_variables",
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_classifies_non_binary_indicator_variable() {
+        let mut proto = v2_sample_set_with_indicator_constraint();
+        proto
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .kind = v1::decision_variable::Kind::Continuous as i32;
+
+        let error = SampleSet::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "indicator",
+            "IndicatorConstraintID(1)",
+            "indicator variable VariableID(1) must be binary",
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_classifies_undefined_one_hot_variable() {
+        let mut proto = v2_sample_set_with_one_hot_constraint();
+        let row = proto
+            .sampled_one_hot_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        row.variables = vec![2];
+        row.active_variable.insert(
+            0,
+            v2::SampledActiveVariable {
+                variable_id: Some(2),
+            },
+        );
+
+        let error = SampleSet::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "one-hot",
+            "OneHotConstraintID(1)",
+            "variable VariableID(2) is not in decision_variables",
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_classifies_non_binary_one_hot_variable() {
+        let mut proto = v2_sample_set_with_one_hot_constraint();
+        proto
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .kind = v1::decision_variable::Kind::Continuous as i32;
+
+        let error = SampleSet::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "one-hot",
+            "OneHotConstraintID(1)",
+            "variable VariableID(1) must be binary",
+        );
+    }
+
+    #[test]
+    fn test_v2_sample_set_parse_classifies_undefined_sos1_variable() {
+        let mut proto = v2_sample_set_with_sos1_constraint();
+        proto
+            .sampled_sos1_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .variables = vec![2];
+
+        let error = SampleSet::try_from(proto).unwrap_err();
+
+        assert_invalid_constraint_structure(
+            &error,
+            "SOS1",
+            "Sos1ConstraintID(1)",
+            "variable VariableID(2) is not in decision_variables",
+        );
+    }
 
     #[test]
     fn test_sample_set_parse_rejects_reserved_annotation_key() {
@@ -785,6 +1343,56 @@ mod tests {
         "###);
     }
 
+    #[test]
+    fn from_v1_bytes_rejects_duplicated_sampled_constraint_ids() {
+        let sampled_values = v1::SampledValues {
+            entries: vec![v1::sampled_values::SampledValuesEntry {
+                ids: vec![0],
+                value: 0.0,
+            }],
+        };
+        let first = v1::SampledConstraint {
+            id: 7,
+            equality: v1::Equality::EqualToZero as i32,
+            evaluated_values: Some(sampled_values.clone()),
+            feasible: std::collections::HashMap::from([(0, true)]),
+            removed_reason: Some("removed first row".to_string()),
+            ..Default::default()
+        };
+        let second = v1::SampledConstraint {
+            id: 7,
+            equality: v1::Equality::EqualToZero as i32,
+            evaluated_values: Some(sampled_values.clone()),
+            feasible: std::collections::HashMap::from([(0, true)]),
+            name: Some("active second row".to_string()),
+            ..Default::default()
+        };
+        let proto = v1::SampleSet {
+            objectives: Some(sampled_values),
+            constraints: vec![first, second],
+            sense: v1::instance::Sense::Minimize as i32,
+            ..Default::default()
+        };
+
+        let error = SampleSet::from_v1_bytes(&crate::Message::encode_to_vec(&proto)).unwrap_err();
+        let parse_error = error
+            .downcast_ref::<ParseError>()
+            .expect("semantic byte decoding must retain ParseError as the outer owner");
+
+        assert!(matches!(
+            parse_error_source(parse_error).downcast_ref::<crate::SampleSetError>(),
+            Some(crate::SampleSetError::InvalidConstraintStructure {
+                constraint_family: "regular",
+                constraint_id,
+                message,
+            }) if constraint_id == "ConstraintID(7)"
+                && message == "duplicated constraint ID in constraints"
+        ));
+        assert_eq!(parse_error.context.len(), 1);
+        assert_eq!(parse_error.context[0].message, "ommx.v1.SampleSet");
+        assert_eq!(parse_error.context[0].field, "constraints");
+    }
+
     // Data produced by a future SDK whose format version exceeds what this SDK supports
     // must be rejected with a clear upgrade-the-SDK error rather than silently misread.
     #[test]
@@ -836,9 +1444,9 @@ mod tests {
         let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
         let error = result.unwrap_err();
         assert!(matches!(
-            error.error,
-            crate::RawParseError::SampleSetError(crate::SampleSetError::DuplicatedVariableID { id })
-                if id == crate::VariableID::from(1)
+            parse_error_source(&error).downcast_ref::<crate::SampleSetError>(),
+            Some(crate::SampleSetError::DuplicatedVariableID { id })
+                if *id == crate::VariableID::from(1)
         ));
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
@@ -882,10 +1490,9 @@ mod tests {
         let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
         let error = result.unwrap_err();
         assert!(matches!(
-            error.error,
-            crate::RawParseError::SampleSetError(
-                crate::SampleSetError::DuplicatedNamedFunctionID { id }
-            ) if id == crate::NamedFunctionID::from(7)
+            parse_error_source(&error).downcast_ref::<crate::SampleSetError>(),
+            Some(crate::SampleSetError::DuplicatedNamedFunctionID { id })
+                if *id == crate::NamedFunctionID::from(7)
         ));
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
@@ -1060,6 +1667,66 @@ mod tests {
                 .contains("Inconsistent constraint feasibility"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn v2_special_constraint_stage_validation_includes_the_atol_boundary() {
+        let atol = ATol::new(0.125).unwrap();
+
+        let mut indicator = v2_sample_set_with_indicator_constraint();
+        indicator.feasibility_atol = Some(*atol);
+        indicator
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .samples
+            .as_mut()
+            .unwrap()
+            .entries[0]
+            .value = 1.0 + *atol;
+        let indicator_row = indicator
+            .sampled_indicator_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        indicator_row.evaluated_values.as_mut().unwrap().entries[0].value = *atol;
+        indicator_row.feasible.insert(0, true);
+        indicator_row.indicator_active.insert(0, true);
+        SampleSet::try_from(indicator).unwrap();
+
+        let mut one_hot = v2_sample_set_with_one_hot_constraint();
+        one_hot.feasibility_atol = Some(*atol);
+        one_hot
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .samples
+            .as_mut()
+            .unwrap()
+            .entries[0]
+            .value = 1.0 + *atol;
+        SampleSet::try_from(one_hot).unwrap();
+
+        let mut sos1 = v2_sample_set_with_sos1_constraint();
+        sos1.feasibility_atol = Some(*atol);
+        let sos1_variable = sos1
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        sos1_variable.kind = v1::decision_variable::Kind::Continuous as i32;
+        sos1_variable.samples.as_mut().unwrap().entries[0].value = *atol;
+        SampleSet::try_from(sos1).unwrap();
     }
 
     #[test]

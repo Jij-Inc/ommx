@@ -1,6 +1,6 @@
 use crate::{
     macros::{impl_add_inverse, impl_mul_inverse},
-    parse::{Parse, ParseError, RawParseError},
+    parse::{Parse, ParseError},
     v1, ATol, VariableID,
 };
 use approx::AbsDiffEq;
@@ -37,7 +37,7 @@ impl BoundError {
 
 impl From<BoundError> for ParseError {
     fn from(e: BoundError) -> Self {
-        RawParseError::from(e).into()
+        ParseError::new(e)
     }
 }
 
@@ -298,8 +298,8 @@ impl AbsDiffEq for Bound {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         // Since `abs_diff_eq` for f64::INFINITY returns false, check it first
-        (self.lower == other.lower || self.lower.abs_diff_eq(&other.lower, *epsilon))
-            && (self.upper == other.upper || self.upper.abs_diff_eq(&other.upper, *epsilon))
+        (self.lower == other.lower || epsilon.approx_eq(self.lower, other.lower))
+            && (self.upper == other.upper || epsilon.approx_eq(self.upper, other.upper))
     }
 }
 
@@ -404,7 +404,7 @@ impl Bound {
 
     /// Check if the bound is a point, i.e. `lower == upper`
     pub fn is_point(&self, atol: ATol) -> Option<f64> {
-        if self.lower.abs_diff_eq(&self.upper, atol.into_inner()) {
+        if atol.approx_eq(self.lower, self.upper) {
             Some(self.lower)
         } else {
             None
@@ -536,9 +536,29 @@ impl Arbitrary for Bound {
 
 #[cfg(test)]
 mod tests {
+    use std::error::Error as _;
+
     use approx::assert_abs_diff_eq;
 
     use super::*;
+
+    #[test]
+    fn parse_preserves_bound_error() {
+        let error = v1::Bound {
+            lower: 2.0,
+            upper: 1.0,
+        }
+        .parse(&())
+        .unwrap_err();
+
+        assert!(matches!(
+            error
+                .source()
+                .and_then(|source| source.downcast_ref::<BoundError>()),
+            Some(BoundError::UpperSmallerThanLower { lower, upper })
+                if *lower == 2.0 && *upper == 1.0
+        ));
+    }
 
     #[test]
     fn partial_ord() {

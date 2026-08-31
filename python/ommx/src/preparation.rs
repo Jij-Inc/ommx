@@ -1,5 +1,6 @@
 use crate::error::OmmxPyResult;
-use crate::{Instance, InstanceClass, SpecialConstraintKind};
+use crate::{Instance, InstanceClass, Sense, SpecialConstraintKind};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, HashSet};
 
@@ -30,14 +31,22 @@ impl SpecialConstraintPreparation {
     /// families to lower. See the owner operation and its per-family conversion
     /// methods for formulas, prerequisites, generated artifacts, stored removal
     /// reasons and provenance, and failure semantics.
+    ///
+    /// ``atol`` is used when Indicator Function bodies require zero-sensitive
+    /// interval evaluation. If omitted, :attr:`DEFAULT_ATOL` is stored in the
+    /// preparation step.
     #[staticmethod]
-    #[pyo3(signature = (*, kinds))]
-    pub fn lower_special_constraints(kinds: HashSet<SpecialConstraintKind>) -> Self {
-        Self {
+    #[pyo3(signature = (*, kinds, atol=None))]
+    pub fn lower_special_constraints(
+        kinds: HashSet<SpecialConstraintKind>,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<Self> {
+        Ok(Self {
             inner: ommx::SpecialConstraintPreparation::LowerSpecialConstraints {
                 kinds: kinds.into_iter().map(Into::into).collect(),
+                atol: resolve_atol(atol)?,
             },
-        }
+        })
     }
 }
 
@@ -53,37 +62,56 @@ impl From<ommx::SpecialConstraintPreparation> for SpecialConstraintPreparation {
     }
 }
 
-/// Selection for the optimization-sense Preparation phase.
+/// Selection for the active-objective Preparation phase.
 ///
-/// Construct a value with an owner-operation factory. Validation and mutation
-/// semantics remain owned by that {class}`~ommx.Instance` operation.
+/// The phase invokes {meth}`~ommx.Instance.convert_active_objective`. When the
+/// target differs from the active sense, that owner operation changes only the
+/// solver-facing objective and preserves the previous pair as
+/// {attr}`~ommx.Instance.output_objective`, so solution and sample evaluation
+/// continue to report the entry objective semantics.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SensePreparation {
-    inner: ommx::SensePreparation,
+/// Convert the active objective to ``target`` during Preparation.
+///
+/// # Invariants
+///
+/// The immutable target records the solver-facing sense requested by Preparation.
+///
+/// >>> from ommx import ObjectivePreparation, Sense
+/// >>> preparation = ObjectivePreparation(target=Sense.Minimize)
+/// >>> assert preparation.target == Sense.Minimize
+pub struct ObjectivePreparation {
+    inner: ommx::ObjectivePreparation,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl SensePreparation {
-    /// Select {meth}`~ommx.Instance.as_minimization_problem`.
-    #[staticmethod]
-    pub fn as_minimization_problem() -> Self {
+impl ObjectivePreparation {
+    #[new]
+    #[pyo3(signature = (*, target))]
+    pub fn new(target: Sense) -> Self {
         Self {
-            inner: ommx::SensePreparation::AsMinimizationProblem,
+            inner: ommx::ObjectivePreparation {
+                target: target.into(),
+            },
         }
+    }
+
+    #[getter]
+    pub fn target(&self) -> Sense {
+        self.inner.target.into()
     }
 }
 
-impl From<SensePreparation> for ommx::SensePreparation {
-    fn from(value: SensePreparation) -> Self {
+impl From<ObjectivePreparation> for ommx::ObjectivePreparation {
+    fn from(value: ObjectivePreparation) -> Self {
         value.inner
     }
 }
 
-impl From<ommx::SensePreparation> for SensePreparation {
-    fn from(inner: ommx::SensePreparation) -> Self {
+impl From<ommx::ObjectivePreparation> for ObjectivePreparation {
+    fn from(inner: ommx::ObjectivePreparation) -> Self {
         Self { inner }
     }
 }
@@ -215,11 +243,46 @@ impl From<ommx::IntegerEncodingPreparation> for IntegerEncodingPreparation {
     }
 }
 
+/// Reduce powers of active Binary variables during Preparation.
+///
+/// This phase invokes {meth}`~ommx.Instance.reduce_binary_power`, using
+/// $x^n=x$ for Binary variables. If it rewrites the active objective, the
+/// unreduced expression is preserved in
+/// {attr}`~ommx.Instance.output_objective` for solution and sample evaluation.
+/// A coefficient error leaves the instance unchanged.
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
+#[pyclass(eq, frozen)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BinaryPowerPreparation {
+    inner: ommx::BinaryPowerPreparation,
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl BinaryPowerPreparation {
+    #[new]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl From<BinaryPowerPreparation> for ommx::BinaryPowerPreparation {
+    fn from(value: BinaryPowerPreparation) -> Self {
+        value.inner
+    }
+}
+
+impl From<ommx::BinaryPowerPreparation> for BinaryPowerPreparation {
+    fn from(inner: ommx::BinaryPowerPreparation) -> Self {
+        Self { inner }
+    }
+}
+
 /// Selection for the fixed-weight penalty Preparation phase.
 ///
-/// Let $F(x)$ be the objective and $g_i(x)$ the body of each active regular
-/// constraint. With normalized nonnegative penalty magnitudes $w_i$, the keyed
-/// operation replaces the objective by
+/// Let $F(x)$ be the active objective and $g_i(x)$ the body of each active
+/// regular constraint. With normalized nonnegative penalty magnitudes $w_i$,
+/// the keyed operation replaces the active objective by
 ///
 /// $$
 /// F(x) + \sum_i w_i g_i(x)^2
@@ -232,12 +295,16 @@ impl From<ommx::IntegerEncodingPreparation> for IntegerEncodingPreparation {
 ///
 /// On success, every active regular constraint moves to
 /// {attr}`~ommx.Instance.removed_constraints`, while existing removed
-/// constraints are preserved. Active Indicator, OneHot, or SOS1 constraints
-/// are not penalty-converted and cause an error before mutation. Validation and
-/// objective construction are atomic: any error leaves the instance unchanged.
-/// When a penalty is applied to active constraints, OMMX validates the weight
-/// domain but cannot decide whether a weight is large enough for an application's
-/// penalty rule; that choice belongs to the caller.
+/// constraints are preserved. When at least one active regular constraint is
+/// converted, the entry objective semantics are preserved in
+/// {attr}`~ommx.Instance.output_objective` for solution and sample evaluation,
+/// but active-formulation optimality is no longer transported. Active
+/// Indicator, OneHot, or SOS1 constraints are not penalty-converted and cause
+/// an error before mutation. Validation, objective construction, and regular
+/// constraint lifecycle changes are atomic: any error leaves the instance
+/// unchanged. When a penalty is applied to active constraints, OMMX validates
+/// the weight domain but cannot decide whether a weight is large enough for an
+/// application's penalty rule; that choice belongs to the caller.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq)]
@@ -284,8 +351,8 @@ impl FixedPenaltyPreparation {
     /// ``atol`` is used by the owner operation to accept a penalty magnitude
     /// down to ``-atol`` and normalize a tolerated negative value to zero. When
     /// at least one active regular constraint is converted, the weight must be
-    /// finite. With no active regular constraints the owner operation is an
-    /// identity and does not inspect the weight.
+    /// finite. With no active constraint of any family, the owner operation is
+    /// an identity and does not inspect the weight.
     /// Removed constraints record
     /// ``reason="ommx.Instance.uniform_penalty_method_with_fixed_weight"`` with
     /// no reason parameters.
@@ -316,51 +383,234 @@ impl From<ommx::FixedPenaltyPreparation> for FixedPenaltyPreparation {
     }
 }
 
-/// Optional phases interpreted by {meth}`~ommx.Instance.prepare`.
-///
-/// Each property independently selects at most one well-formed phase. Fields
-/// may be combined freely, although owner validation and target membership can
-/// still make a combination fail for a particular {class}`~ommx.Instance`.
-///
-/// {meth}`~ommx.Instance.prepare` applies selected phases at most once in the canonical
-/// Rust-owned order: special constraints, optimization sense, Integer slack,
-/// Integer encoding, then fixed penalty. All phases are disabled by default.
-/// Future phases will also default to disabled.
-///
-/// Construct the table with keyword arguments or assign its public properties:
-///
-/// ```python
-/// from ommx import PreparationPolicy, SensePreparation
-///
-/// policy = PreparationPolicy()
-/// policy.sense = SensePreparation.as_minimization_problem()
-/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq)]
 #[derive(Debug, Clone, PartialEq, Default)]
+/// Select optional transformations applied by {meth}`~ommx.Instance.prepare`.
+///
+/// Each property selects at most one phase. Properties may be combined freely,
+/// although owner-operation validation and target membership can still make a
+/// combination fail for a particular {class}`~ommx.Instance`.
+/// {meth}`~ommx.Instance.prepare` applies enabled phases at most once in this
+/// order: special constraints, active objective, Integer slack, fixed penalty,
+/// used-Integer encoding, then Binary-power reduction. It stops as soon as the
+/// target {class}`~ommx.InstanceClass` contains the instance.
+///
+/// # Invariants
+///
+/// A default policy selects no Preparation phase. Future phases also default
+/// to disabled.
+///
+/// >>> from ommx import PreparationPolicy
+/// >>> policy = PreparationPolicy()
+/// >>> assert (
+/// ...     policy.special_constraints,
+/// ...     policy.objective,
+/// ...     policy.integer_slack,
+/// ...     policy.integer_encoding,
+/// ...     policy.fixed_penalty,
+/// ...     policy.binary_power_reduction,
+/// ... ) == (None, None, None, None, None, None)
 pub struct PreparationPolicy {
     inner: ommx::PreparationPolicy,
+}
+
+fn configure_qubo_hubo_policy(
+    mut inner: ommx::PreparationPolicy,
+    uniform_penalty_weight: Option<f64>,
+    penalty_weights: Option<BTreeMap<u64, f64>>,
+    inequality_integer_slack_max_range: u64,
+) -> OmmxPyResult<PreparationPolicy> {
+    if uniform_penalty_weight.is_some() && penalty_weights.is_some() {
+        return Err(PyValueError::new_err(
+            "Both uniform_penalty_weight and penalty_weights are specified. Please choose one.",
+        )
+        .into());
+    }
+
+    inner.integer_slack = Some(ommx::IntegerSlackPreparation {
+        max_integer_range: inequality_integer_slack_max_range,
+        atol: ommx::ATol::default(),
+        slack_upper_bound: Some(inequality_integer_slack_max_range),
+    });
+    if let Some(weights) = penalty_weights {
+        inner.fixed_penalty = Some(
+            ommx::FixedPenaltyPreparation::PenaltyMethodWithFixedWeights {
+                weights: weights
+                    .into_iter()
+                    .map(|(id, weight)| (ommx::ConstraintID::from(id), weight))
+                    .collect(),
+                atol: ommx::ATol::default(),
+            },
+        );
+    } else if let Some(weight) = uniform_penalty_weight {
+        inner.fixed_penalty = Some(
+            ommx::FixedPenaltyPreparation::UniformPenaltyMethodWithFixedWeight {
+                weight,
+                atol: ommx::ATol::default(),
+            },
+        );
+    }
+
+    Ok(PreparationPolicy { inner })
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl PreparationPolicy {
     #[new]
-    #[pyo3(signature = (*, special_constraints=None, sense=None, integer_slack=None, integer_encoding=None, fixed_penalty=None))]
+    #[pyo3(signature = (*, special_constraints=None, objective=None, integer_slack=None, integer_encoding=None, fixed_penalty=None, binary_power_reduction=None))]
     pub fn new(
         special_constraints: Option<SpecialConstraintPreparation>,
-        sense: Option<SensePreparation>,
+        objective: Option<ObjectivePreparation>,
         integer_slack: Option<IntegerSlackPreparation>,
         integer_encoding: Option<IntegerEncodingPreparation>,
         fixed_penalty: Option<FixedPenaltyPreparation>,
+        binary_power_reduction: Option<BinaryPowerPreparation>,
     ) -> Self {
         let mut inner = ommx::PreparationPolicy::default();
         inner.special_constraints = special_constraints.map(Into::into);
-        inner.sense = sense.map(Into::into);
+        inner.objective = objective.map(Into::into);
         inner.integer_slack = integer_slack.map(Into::into);
         inner.integer_encoding = integer_encoding.map(Into::into);
         inner.fixed_penalty = fixed_penalty.map(Into::into);
+        inner.binary_power_reduction = binary_power_reduction.map(Into::into);
         Self { inner }
+    }
+
+    /// Return a fresh policy for preparing an instance for QUBO formatting.
+    ///
+    /// ``uniform_penalty_weight`` and ``penalty_weights`` override the default
+    /// uniform penalty weight of 1.0 and are mutually exclusive. The keyed form
+    /// must cover exactly the active regular constraints at the penalty phase.
+    /// ``inequality_integer_slack_max_range`` defaults to 31 and configures both
+    /// the exact Integer-slack range and the fallback slack upper bound. This
+    /// QUBO policy also reduces powers of Binary variables before checking the
+    /// quadratic target.
+    ///
+    /// # Postconditions
+    ///
+    /// Each call returns a fresh complete QUBO policy whose optional weights and slack range are applied exactly.
+    ///
+    /// >>> from ommx import (
+    /// ...     BinaryPowerPreparation, FixedPenaltyPreparation,
+    /// ...     IntegerEncodingPreparation, IntegerSlackPreparation,
+    /// ...     ObjectivePreparation, PreparationPolicy, Sense,
+    /// ...     SpecialConstraintKind, SpecialConstraintPreparation,
+    /// ... )
+    /// >>> expected_special = SpecialConstraintPreparation.lower_special_constraints(
+    /// ...     kinds={
+    /// ...         SpecialConstraintKind.Indicator,
+    /// ...         SpecialConstraintKind.OneHot,
+    /// ...         SpecialConstraintKind.Sos1,
+    /// ...     }
+    /// ... )
+    /// >>> expected_penalty = FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
+    /// >>> first = PreparationPolicy.for_qubo(inequality_integer_slack_max_range=17)
+    /// >>> second = PreparationPolicy.for_qubo(inequality_integer_slack_max_range=17)
+    /// >>> assert first is not second
+    /// >>> assert first.special_constraints == expected_special
+    /// >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
+    /// >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
+    /// >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+    /// >>> assert first.fixed_penalty == expected_penalty
+    /// >>> assert first.binary_power_reduction == BinaryPowerPreparation()
+    /// >>> first.fixed_penalty = None
+    /// >>> first.binary_power_reduction = None
+    /// >>> assert second.fixed_penalty == expected_penalty
+    /// >>> assert second.binary_power_reduction == BinaryPowerPreparation()
+    /// >>> keyed = PreparationPolicy.for_qubo(penalty_weights={3: 2.0})
+    /// >>> assert keyed.fixed_penalty == FixedPenaltyPreparation.penalty_method_with_fixed_weights(weights={3: 2.0})
+    ///
+    /// # Errors
+    ///
+    /// Supplying uniform and keyed penalty weights together raises ``ValueError``.
+    ///
+    /// >>> try:
+    /// ...     PreparationPolicy.for_qubo(uniform_penalty_weight=1.0, penalty_weights={3: 2.0})
+    /// ... except ValueError as error:
+    /// ...     assert "Both uniform_penalty_weight" in str(error)
+    /// ... else:
+    /// ...     raise AssertionError("mutually exclusive penalty options were accepted")
+    #[staticmethod]
+    #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
+    pub fn for_qubo(
+        uniform_penalty_weight: Option<f64>,
+        penalty_weights: Option<BTreeMap<u64, f64>>,
+        inequality_integer_slack_max_range: u64,
+    ) -> OmmxPyResult<Self> {
+        configure_qubo_hubo_policy(
+            ommx::PreparationPolicy::for_qubo(),
+            uniform_penalty_weight,
+            penalty_weights,
+            inequality_integer_slack_max_range,
+        )
+    }
+
+    /// Return a fresh policy for preparing an instance for HUBO formatting.
+    ///
+    /// ``uniform_penalty_weight`` and ``penalty_weights`` override the default
+    /// uniform penalty weight of 1.0 and are mutually exclusive. The keyed form
+    /// must cover exactly the active regular constraints at the penalty phase.
+    /// ``inequality_integer_slack_max_range`` defaults to 31 and configures both
+    /// the exact Integer-slack range and the fallback slack upper bound. Unlike
+    /// {meth}`for_qubo`, this policy leaves Binary-power reduction disabled
+    /// because HUBO accepts arbitrary polynomial degree.
+    ///
+    /// # Postconditions
+    ///
+    /// Each call returns a fresh complete HUBO policy with no Binary-power reduction and exact overrides.
+    ///
+    /// >>> from ommx import (
+    /// ...     FixedPenaltyPreparation, IntegerEncodingPreparation,
+    /// ...     IntegerSlackPreparation, ObjectivePreparation,
+    /// ...     PreparationPolicy, Sense, SpecialConstraintKind,
+    /// ...     SpecialConstraintPreparation,
+    /// ... )
+    /// >>> expected_special = SpecialConstraintPreparation.lower_special_constraints(
+    /// ...     kinds={
+    /// ...         SpecialConstraintKind.Indicator,
+    /// ...         SpecialConstraintKind.OneHot,
+    /// ...         SpecialConstraintKind.Sos1,
+    /// ...     }
+    /// ... )
+    /// >>> first = PreparationPolicy.for_hubo(inequality_integer_slack_max_range=17)
+    /// >>> second = PreparationPolicy.for_hubo(inequality_integer_slack_max_range=17)
+    /// >>> assert first is not second
+    /// >>> assert first.special_constraints == expected_special
+    /// >>> assert first.objective == ObjectivePreparation(target=Sense.Minimize)
+    /// >>> assert first.integer_slack == IntegerSlackPreparation(max_integer_range=17, slack_upper_bound=17)
+    /// >>> assert first.integer_encoding == IntegerEncodingPreparation.log_encode_all_used_integers()
+    /// >>> assert first.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
+    /// >>> assert first.binary_power_reduction is None
+    /// >>> first.fixed_penalty = None
+    /// >>> assert second.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=1.0)
+    /// >>> uniform = PreparationPolicy.for_hubo(uniform_penalty_weight=4.0)
+    /// >>> assert uniform.fixed_penalty == FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=4.0)
+    ///
+    /// # Errors
+    ///
+    /// Supplying uniform and keyed penalty weights together raises ``ValueError``.
+    ///
+    /// >>> try:
+    /// ...     PreparationPolicy.for_hubo(uniform_penalty_weight=1.0, penalty_weights={3: 2.0})
+    /// ... except ValueError as error:
+    /// ...     assert "Both uniform_penalty_weight" in str(error)
+    /// ... else:
+    /// ...     raise AssertionError("mutually exclusive penalty options were accepted")
+    #[staticmethod]
+    #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
+    pub fn for_hubo(
+        uniform_penalty_weight: Option<f64>,
+        penalty_weights: Option<BTreeMap<u64, f64>>,
+        inequality_integer_slack_max_range: u64,
+    ) -> OmmxPyResult<Self> {
+        configure_qubo_hubo_policy(
+            ommx::PreparationPolicy::for_hubo(),
+            uniform_penalty_weight,
+            penalty_weights,
+            inequality_integer_slack_max_range,
+        )
     }
 
     /// Optional special-constraint phase. ``None`` disables this phase.
@@ -374,15 +624,15 @@ impl PreparationPolicy {
         self.inner.special_constraints = value.map(Into::into);
     }
 
-    /// Optional optimization-sense phase. ``None`` disables this phase.
+    /// Optional active-objective phase. ``None`` disables this phase.
     #[getter]
-    pub fn sense(&self) -> Option<SensePreparation> {
-        self.inner.sense.map(Into::into)
+    pub fn objective(&self) -> Option<ObjectivePreparation> {
+        self.inner.objective.map(Into::into)
     }
 
     #[setter]
-    pub fn set_sense(&mut self, value: Option<SensePreparation>) {
-        self.inner.sense = value.map(Into::into);
+    pub fn set_objective(&mut self, value: Option<ObjectivePreparation>) {
+        self.inner.objective = value.map(Into::into);
     }
 
     /// Optional Integer-slack phase. ``None`` disables this phase.
@@ -417,32 +667,76 @@ impl PreparationPolicy {
     pub fn set_fixed_penalty(&mut self, value: Option<FixedPenaltyPreparation>) {
         self.inner.fixed_penalty = value.map(Into::into);
     }
+
+    /// Optional Binary-power reduction phase. ``None`` disables this phase.
+    #[getter]
+    pub fn binary_power_reduction(&self) -> Option<BinaryPowerPreparation> {
+        self.inner.binary_power_reduction.map(Into::into)
+    }
+
+    #[setter]
+    pub fn set_binary_power_reduction(&mut self, value: Option<BinaryPowerPreparation>) {
+        self.inner.binary_power_reduction = value.map(Into::into);
+    }
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
-    /// Prepare this instance in place for membership in ``input_class``.
+    /// Apply the caller's ``policy`` to this instance in place to reach
+    /// ``input_class`` membership.
     ///
-    /// ``policy`` selects existing {class}`~ommx.Instance` owner operations. The
-    /// method checks whole-class membership before the first phase and after
-    /// each selected phase. Each selected phase is applied at most once in the
-    /// canonical order documented by {class}`~ommx.PreparationPolicy`, and later
-    /// phases are skipped as soon as ``input_class`` contains this instance.
-    /// The method then returns ``None``. Success guarantees only that membership;
-    /// Adapter-specific applicability remains a separate check.
+    /// ``policy`` selects existing {class}`~ommx.Instance` owner operations.
+    /// Whole-class membership is checked before the first phase and after each
+    /// selected phase. Phases are applied at most once in this order, stopping
+    /// as soon as membership is reached:
+    ///
+    /// 1. ``special_constraints``:
+    ///    {meth}`~ommx.Instance.lower_special_constraints`
+    /// 2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`
+    /// 3. ``integer_slack``:
+    ///    {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
+    ///    followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
+    ///    when exact conversion is unavailable and ``slack_upper_bound`` is set
+    /// 4. ``fixed_penalty``
+    /// 5. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+    /// 6. ``binary_power_reduction``:
+    ///    {meth}`~ommx.Instance.reduce_binary_power`
+    ///
+    /// Success guarantees ``input_class`` membership. When ``input_class`` is an
+    /// Adapter's ``INPUT_CLASS``, that membership is the complete applicability
+    /// condition; converter-local or backend failures may still occur later.
     ///
     /// Preparation is not globally transactional. Changes committed by an
     /// earlier owner operation remain if a later operation raises an error.
     /// Within the Integer-slack phase, active regular inequalities are processed
     /// in ascending constraint-ID order, and a later failure leaves earlier
-    /// conversions committed. Other phases retain the failure semantics of their
-    /// owner operations.
+    /// conversions committed. Other phases retain the mutation and failure
+    /// semantics of their owner operations.
     ///
     /// Existing Rust owner signals retain their Python exception mappings.
     /// When configured phases are exhausted without reaching ``input_class``,
-    /// {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership
-    /// report through its ``report`` attribute.
+    /// {class}`~ommx.PreparationTargetNotReachedError` exposes the final
+    /// membership report through its ``report`` attribute.
+    ///
+    /// # Postconditions
+    ///
+    /// Selected owner operations establish their own output semantics, and
+    /// successful composition reaches the target class.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
+    /// ... )
+    /// >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
+    /// >>> assert instance.prepare(InstanceClass.qubo(), policy) is None
+    /// >>> assert InstanceClass.qubo().contains(instance)
+    /// >>> assert instance.sense == Sense.Minimize
+    /// >>> assert instance.objective.evaluate({0: 0}) == 2.0
+    /// >>> solution = instance.evaluate({0: 0})
+    /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)
+    /// >>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
     pub fn prepare(
         &mut self,
         py: Python<'_>,

@@ -68,7 +68,7 @@ source
 
 ## Solve with the PySCIPOpt Adapter
 
-The PySCIPOpt Adapter accepts linear Indicator constraints and SOS1 constraints directly. This model needs no preparation, so we pass `source` directly to `solve()`.
+The PySCIPOpt Adapter accepts linear Indicator constraints and SOS1 constraints as exact inputs. We can therefore call the easy `solve()` API without converting either constraint ourselves. The API works on an isolated copy; because this model is already in `INPUT_CLASS`, Preparation stops without lowering the special constraints.
 
 ```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -82,4 +82,4 @@ solution.decision_variables_df()
 
 The solution has `enabled = 1`, `option_a = 1`, `option_b = 0`, and `option_c = 1`, satisfying both the Indicator and SOS1 constraints. We did not need to rewrite either one as a regular constraint before calling the Adapter.
 
-To solve the same model with an Adapter that does not support these special constraints directly, continue to [Prepare an Instance for an Adapter](./prepare_instance_for_adapter.md). For the meanings of each special constraint and links to their individual APIs, see [Special Constraint Types](../user_guide/special_constraints.md).
+For an Adapter whose exact input does not include these special constraints, its easy API may lower them on a private copy. Continue to [Prepare an Instance for an Adapter](./prepare_instance_for_adapter.md) to see the automatic workflow and its explicit preparation-free equivalent. For the meanings of each special constraint and links to their individual APIs, see [Special Constraint Types](../user_guide/special_constraints.md).
