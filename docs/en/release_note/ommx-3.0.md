@@ -8,7 +8,23 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178))
+### 🛠 Inclusive `atol` boundaries ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+Absolute-tolerance comparisons now include the exact boundary consistently.
+Equality residuals are feasible when $|f(x)| \leq \mathtt{atol}$, while
+inequality residuals are feasible when $f(x) < 0$ or
+$|f(x)| \leq \mathtt{atol}$. The same rule is used by scalar and sample
+evaluation, regular and Indicator constraints, `Solution` and `SampleSet`
+validation, and v1/v2 deserialization.
+
+Function zero-sensitive operations, Indicator activation, OneHot and SOS1
+classification, discrete solver-state canonicalization, and fixed-value
+consistency checks also include values exactly `atol` from their target.
+Values just outside the boundary remain outside. APIs that own finite-value
+validation continue to reject NaN and infinity before reporting domain or
+consistency errors.
+
+### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 {class}`~ommx.Function` can now represent composed expressions as well as
 compact polynomials. Python users can construct absolute values, sign
@@ -81,7 +97,7 @@ is a breaking rename from the API published in Python SDK 3.0.0 Beta 4:
 `PolynomialRequirement.any_degree()` accepts a polynomial of any degree; it
 does not admit a composed, non-polynomial `Function`.
 
-### 🛠 Canonical solver states during evaluation ([#1174](https://github.com/Jij-Inc/ommx/pull/1174))
+### 🛠 Canonical solver states during evaluation ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 {meth}`~ommx.Instance.populate_state`, {meth}`~ommx.Instance.evaluate`, and
 {meth}`~ommx.Instance.evaluate_samples` now canonicalize finite supplied

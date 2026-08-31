@@ -8,7 +8,20 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178))
+### 🛠 境界を含む `atol` 判定 ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+絶対許容誤差の比較は、差がちょうど`atol`となる境界を一貫して含むようになりました。
+等式のresidualは $|f(x)| \leq \mathtt{atol}$ のときfeasible、不等式のresidualは
+$f(x) < 0$ または $|f(x)| \leq \mathtt{atol}$ のときfeasibleです。scalar / sample
+evaluation、regular / Indicator constraint、`Solution` / `SampleSet`の検証、v1 / v2の
+deserializeで同じ規則を使います。
+
+Functionのゼロ依存演算、Indicatorのactivation、OneHot / SOS1の分類、solver stateの
+離散値canonicalization、fixed valueの整合性検証でも、targetとの差がちょうど`atol`の
+値を含みます。境界をわずかに超える値は引き続き範囲外です。有限値の検証を所有するAPIは、
+domain errorや整合性errorを返す前にNaNと無限大を引き続き拒否します。
+
+### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 {class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
 なりました。絶対値、符号関数、最小値、最大値、除算、符号付き32 bit整数による
@@ -75,7 +88,7 @@ Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含
 `PolynomialRequirement.any_degree()`が受け付けるのは任意次数のpolynomialであり、
 複合された非polynomialの`Function`は含みません。
 
-### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174))
+### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 {meth}`~ommx.Instance.populate_state`、{meth}`~ommx.Instance.evaluate`、
 {meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
