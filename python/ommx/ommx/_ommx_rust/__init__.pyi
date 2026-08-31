@@ -1306,6 +1306,12 @@ class AutosavePolicy:
 class BinaryPowerPreparation:
     r"""
     Reduce powers of active Binary variables during Preparation.
+
+    This phase invokes {meth}`~ommx.Instance.reduce_binary_power`, using
+    $x^n=x$ for Binary variables. If it rewrites the active objective, the
+    unreduced expression is preserved in
+    {attr}`~ommx.Instance.output_objective` for solution and sample evaluation.
+    A coefficient error leaves the instance unchanged.
     """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __new__(cls) -> BinaryPowerPreparation: ...
@@ -2445,17 +2451,74 @@ class ExperimentRef:
 
 @typing.final
 class FixedPenaltyPreparation:
+    r"""
+    Selection for the fixed-weight penalty Preparation phase.
+
+    Let $F(x)$ be the active objective and $g_i(x)$ the body of each active
+    regular constraint. With normalized nonnegative penalty magnitudes $w_i$,
+    the keyed operation replaces the active objective by
+
+    $$
+    F(x) + \sum_i w_i g_i(x)^2
+    $$
+
+    for minimization, and by $F(x) - \sum_i w_i g_i(x)^2$ for maximization. The
+    uniform operation uses one $w$ for every active regular constraint. For an
+    inequality $g_i(x) \leq 0$, this squares $g_i(x)$ itself; it is not the
+    one-sided penalty $\max(0, g_i(x))^2$.
+
+    On success, every active regular constraint moves to
+    {attr}`~ommx.Instance.removed_constraints`, while existing removed
+    constraints are preserved. When at least one active regular constraint is
+    converted, the entry objective semantics are preserved in
+    {attr}`~ommx.Instance.output_objective` for solution and sample evaluation,
+    but active-formulation optimality is no longer transported. Active
+    Indicator, OneHot, or SOS1 constraints are not penalty-converted and cause
+    an error before mutation. Validation, objective construction, and regular
+    constraint lifecycle changes are atomic: any error leaves the instance
+    unchanged. When a penalty is applied to active constraints, OMMX validates
+    the weight domain but cannot decide whether a weight is large enough for an
+    application's penalty rule; that choice belongs to the caller.
+    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def penalty_method_with_fixed_weights(
         *,
         weights: typing.Mapping[builtins.int, builtins.float],
         atol: typing.Optional[builtins.float] = None,
-    ) -> FixedPenaltyPreparation: ...
+    ) -> FixedPenaltyPreparation:
+        r"""
+        Select the keyed fixed-weight penalty owner operation.
+
+        The keys of ``weights`` must be exactly the active regular constraint
+        IDs. Each value is the corresponding $w_i$ in the class formula.
+        ``atol`` is used by the owner operation to accept a penalty magnitude
+        down to ``-atol`` and normalize a tolerated negative value to zero. Every
+        weight must be finite.
+        Removed constraints record
+        ``reason="ommx.Instance.penalty_method_with_fixed_weights"`` with no
+        reason parameters.
+        """
     @staticmethod
     def uniform_penalty_method_with_fixed_weight(
         *, weight: builtins.float, atol: typing.Optional[builtins.float] = None
-    ) -> FixedPenaltyPreparation: ...
+    ) -> FixedPenaltyPreparation:
+        r"""
+        Select the uniform fixed-weight penalty owner operation.
+
+        ``weight`` is the common $w$ in the class formula for every active
+        regular constraint. In particular, this replaces $F(x)$ by
+        $F(x) + w \sum_i g_i(x)^2$ for minimization and by
+        $F(x) - w \sum_i g_i(x)^2$ for maximization, after normalizing $w$.
+        ``atol`` is used by the owner operation to accept a penalty magnitude
+        down to ``-atol`` and normalize a tolerated negative value to zero. When
+        at least one active regular constraint is converted, the weight must be
+        finite. With no active constraint of any family, the owner operation is
+        an identity and does not inspect the weight.
+        Removed constraints record
+        ``reason="ommx.Instance.uniform_penalty_method_with_fixed_weight"`` with
+        no reason parameters.
+        """
 
 @typing.final
 class Function:
@@ -3162,7 +3225,7 @@ class Instance:
         r"""
         The kinds of active special constraints this instance currently uses.
 
-        Returns the set of :class:`SpecialConstraintKind` values corresponding
+        Returns the set of {class}`~ommx.SpecialConstraintKind` values corresponding
         to non-empty active (non-removed) special constraint collections. An
         empty set means the instance has no active special constraints.
         """
@@ -3179,7 +3242,19 @@ class Instance:
     @property
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
-    def used_decision_variables(self) -> builtins.list[DecisionVariable]: ...
+    def used_decision_variables(self) -> builtins.list[DecisionVariable]:
+        r"""
+        Decision variables used by the mathematical solver input.
+
+        This list contains the variables referenced by the objective or by an
+        active regular, Indicator, OneHot, or SOS1 constraint. Variables
+        referenced only by the output objective, named functions, removed
+        constraints, or the right-hand side of a decision-variable dependency
+        are excluded. Fixed, dependent, and irrelevant variables are also
+        excluded; {meth}`~ommx.Instance.evaluate` and
+        {meth}`~ommx.Instance.evaluate_samples` populate them when reconstructing
+        output semantics.
+        """
     def replace_annotations(
         self, annotations: typing.Mapping[builtins.str, builtins.str]
     ) -> None: ...
@@ -3404,14 +3479,14 @@ class Instance:
 
         For every kind in ``kinds_to_lower``, the corresponding bulk conversion
         is invoked
-        (:meth:`convert_all_indicators_to_constraints`,
-        :meth:`convert_all_one_hots_to_constraints`, or
-        :meth:`convert_all_sos1_to_constraints`) when that kind is active. The
+        ({meth}`~ommx.Instance.convert_all_indicators_to_constraints`,
+        {meth}`~ommx.Instance.convert_all_one_hots_to_constraints`, or
+        {meth}`~ommx.Instance.convert_all_sos1_to_constraints`) when that kind is active. The
         instance is mutated in place. Kinds omitted from ``kinds_to_lower``
         remain active, and an empty set is a no-op. This does not establish
-        :class:`InstanceClass` membership; check the resulting input separately.
+        {class}`~ommx.InstanceClass` membership; check the resulting input separately.
 
-        Returns the set of :class:`SpecialConstraintKind` values that were
+        Returns the set of {class}`~ommx.SpecialConstraintKind` values that were
         requested and active, and therefore actually lowered. Empty when no
         requested kind was active.
 
@@ -3420,9 +3495,13 @@ class Instance:
         aligns zero-sensitive Function body evaluation; lowering itself assumes
         exact discrete variable values.
 
-        Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each
-        individual family conversion is atomic, but the whole operation is not:
-        an error in a later family does not roll back families already lowered.
+        Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. The
+        Indicator bulk conversion validates its complete family before mutating
+        it. The OneHot and SOS1 bulk conversions do not provide family-wide
+        rollback: OneHot constraints are applied in ascending original ID order,
+        while SOS1 validates mathematical preconditions first but may partially
+        allocate auxiliary IDs before a later allocation fails. The whole
+        operation is not transactional across families either.
 
         Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
         with a non-finite bound).
@@ -4040,6 +4119,9 @@ class Instance:
         {attr}`~ommx.Instance.removed_one_hot_constraints` with
         ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
         ``constraint_id`` parameter pointing to the new regular constraint.
+        The generated regular constraint preserves the original one-hot context
+        and appends a {class}`~ommx.Provenance` entry identifying the original
+        one-hot constraint.
 
         Returns the ID of the newly created regular constraint.
 
@@ -4067,7 +4149,12 @@ class Instance:
         Convert every active one-hot constraint to a regular equality constraint.
 
         See {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.
-        Returns the IDs of the newly created regular constraints.
+        Returns the IDs of the newly created regular constraints in ascending
+        order of the original one-hot IDs.
+
+        Conversions are applied one at a time in that order. This method does not
+        provide family-wide rollback if a later conversion fails; conversions
+        already completed remain in the instance.
 
         # Examples
 
@@ -4121,8 +4208,17 @@ class Instance:
         Raises if any $x_i$ has a non-binary bound that is not finite, if its domain
         excludes $0$, or if its kind is semi-continuous / semi-integer (the split
         domain $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase
-        yet, so Big-M conversion of these kinds is not supported).
-        The instance is not mutated on error.
+        yet, so Big-M conversion of these kinds is not supported). These
+        mathematical preconditions are validated before mutation. Auxiliary
+        variable allocation then proceeds in variable-ID order; if a later ID
+        allocation fails, earlier auxiliary variables remain in the Instance.
+
+        On success, the original SOS1 constraint is moved to
+        {attr}`~ommx.Instance.removed_sos1_constraints` with
+        ``reason="ommx.Instance.convert_sos1_to_constraints"`` and a
+        comma-separated ``constraint_ids`` parameter in returned order. Every
+        generated regular constraint records a {class}`~ommx.Provenance` entry
+        identifying the original SOS1 constraint.
 
         # Examples
 
@@ -4156,10 +4252,10 @@ class Instance:
         rule. Returns a dict mapping each original SOS1 ID to the list of regular
         constraint IDs it produced.
 
-        Atomic: every active SOS1 is validated up front, and only if every one is
-        convertible are the conversions applied. If any SOS1 fails validation
-        (unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation
-        happens and the instance is left untouched.
+        Every active SOS1 is checked for its mathematical preconditions up front.
+        If that validation fails, no mutation happens. Applying the validated
+        plans is not family-wide atomic: earlier SOS1 conversions and earlier
+        auxiliary-variable allocations remain if a later ID allocation fails.
 
         # Examples
 
@@ -4230,6 +4326,14 @@ class Instance:
         as zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes
         the indicator variable is exactly binary; this does not canonicalize an
         approximate solver value near 0 or 1.
+
+        On success, the original indicator constraint is moved to
+        {attr}`~ommx.Instance.removed_indicator_constraints` with
+        ``reason="ommx.Instance.convert_indicator_to_constraint"`` and a
+        comma-separated ``constraint_ids`` parameter in returned order (empty
+        when no side is emitted). Every generated regular constraint records a
+        {class}`~ommx.Provenance` entry identifying the original indicator
+        constraint.
 
         # Examples
 
@@ -4908,8 +5012,10 @@ class Instance:
         Apply the caller's ``policy`` to this instance in place to reach
         ``input_class`` membership.
 
-        Selected phases are applied at most once in this order, stopping as soon
-        as membership is reached:
+        ``policy`` selects existing {class}`~ommx.Instance` owner operations.
+        Whole-class membership is checked before the first phase and after each
+        selected phase. Phases are applied at most once in this order, stopping
+        as soon as membership is reached:
 
         1. ``special_constraints``:
            {meth}`~ommx.Instance.lower_special_constraints`
@@ -4925,14 +5031,24 @@ class Instance:
 
         Success guarantees ``input_class`` membership. When ``input_class`` is an
         Adapter's ``INPUT_CLASS``, that membership is the complete applicability
-        condition; converter-local or backend failures may still occur later. This
-        operation is not transactional, so an error may leave the instance changed.
-        {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership
-        report when the selections do not reach ``input_class``.
+        condition; converter-local or backend failures may still occur later.
+
+        Preparation is not globally transactional. Changes committed by an
+        earlier owner operation remain if a later operation raises an error.
+        Within the Integer-slack phase, active regular inequalities are processed
+        in ascending constraint-ID order, and a later failure leaves earlier
+        conversions committed. Other phases retain the mutation and failure
+        semantics of their owner operations.
+
+        Existing Rust owner signals retain their Python exception mappings.
+        When configured phases are exhausted without reaching ``input_class``,
+        {class}`~ommx.PreparationTargetNotReachedError` exposes the final
+        membership report through its ``report`` attribute.
 
         # Postconditions
 
-        Selected owner operations establish their own output semantics, and successful composition reaches the target class.
+        Selected owner operations establish their own output semantics, and
+        successful composition reaches the target class.
 
         >>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense
         >>> x = DecisionVariable.binary(0)
@@ -5361,20 +5477,64 @@ class InstanceDescription:
 
 @typing.final
 class IntegerEncodingPreparation:
+    r"""
+    Selection for the used-Integer encoding Preparation phase.
+
+    Exactly one encoding owner operation is selected. Validation and mutation
+    semantics remain owned by that operation.
+    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def log_encode_all_used_integers(
         *, atol: typing.Optional[builtins.float] = None
-    ) -> IntegerEncodingPreparation: ...
+    ) -> IntegerEncodingPreparation:
+        r"""
+        Select log encoding of every used Integer decision variable.
+
+        The complete target set is determined from
+        {attr}`~ommx.Instance.used_decision_variables` before mutation and encoded
+        together with the same mathematical rule as {meth}`~ommx.Instance.log_encode`.
+        ``atol`` normalizes bounds that are within tolerance of integers. On
+        success, no used Integer decision variable remains; irrelevant Integer
+        variables are not encoded.
+
+        A used Integer with a non-finite or otherwise non-encodable bound raises
+        {class}`~ommx.LogEncodingError`. Active SOS1 members cannot be substituted
+        and must be lowered first. Any error leaves this phase's input unchanged.
+        """
 
 @typing.final
 class IntegerSlackPreparation:
+    r"""
+    Integer-slack Preparation for active regular inequalities.
+
+    Preparation first attempts exact conversion to equality using
+    ``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the
+    constraint to become an equality or be removed as trivially satisfied, so
+    {class}`~ommx.ExactIntegerSlackError` is propagated. An integer value permits the
+    constraint to remain an inequality: only that signal selects the
+    inequality-preserving owner operation with this upper bound. The latter is
+    not an approximation of the original feasible set. Every other owner error
+    is propagated unchanged.
+    """
     @property
-    def max_integer_range(self) -> builtins.int: ...
+    def max_integer_range(self) -> builtins.int:
+        r"""
+        Maximum finite range accepted for exact Integer slack.
+        """
     @property
-    def atol(self) -> builtins.float: ...
+    def atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance used to normalize bounds to integers.
+        """
     @property
-    def slack_upper_bound(self) -> typing.Optional[builtins.int]: ...
+    def slack_upper_bound(self) -> typing.Optional[builtins.int]:
+        r"""
+        Optional upper bound for inequality-preserving Integer slack.
+
+        ``None`` requires equality. An integer permits the inequality-preserving
+        owner operation only after {class}`~ommx.ExactIntegerSlackError`.
+        """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __new__(
         cls,
@@ -5382,7 +5542,17 @@ class IntegerSlackPreparation:
         max_integer_range: builtins.int,
         atol: typing.Optional[builtins.float] = None,
         slack_upper_bound: typing.Optional[builtins.int] = None,
-    ) -> IntegerSlackPreparation: ...
+    ) -> IntegerSlackPreparation:
+        r"""
+        Configure Integer-slack Preparation for active regular inequalities.
+
+        ``max_integer_range`` and ``atol`` are passed to
+        {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`.
+        ``slack_upper_bound`` has the fallback semantics documented by this
+        class. Inequalities are processed in ascending constraint-ID order; a
+        failure on a later constraint does not roll back conversions already
+        completed by this phase.
+        """
 
 class InvalidRemoteArtifactError(RemoteArtifactError):
     r"""
@@ -5674,6 +5844,13 @@ class NamedFunction:
 @typing.final
 class ObjectivePreparation:
     r"""
+    Selection for the active-objective Preparation phase.
+
+    The phase invokes {meth}`~ommx.Instance.convert_active_objective`. When the
+    target differs from the active sense, that owner operation changes only the
+    solver-facing objective and preserves the previous pair as
+    {attr}`~ommx.Instance.output_objective`, so solution and sample evaluation
+    continue to report the entry objective semantics.
     Convert the active objective to ``target`` during Preparation.
 
     # Invariants
@@ -6621,9 +6798,18 @@ class PreparationPolicy:
     r"""
     Select optional transformations applied by {meth}`~ommx.Instance.prepare`.
 
+    Each property selects at most one phase. Properties may be combined freely,
+    although owner-operation validation and target membership can still make a
+    combination fail for a particular {class}`~ommx.Instance`.
+    {meth}`~ommx.Instance.prepare` applies enabled phases at most once in this
+    order: special constraints, active objective, Integer slack, fixed penalty,
+    used-Integer encoding, then Binary-power reduction. It stops as soon as the
+    target {class}`~ommx.InstanceClass` contains the instance.
+
     # Invariants
 
-    A default policy selects no Preparation phase.
+    A default policy selects no Preparation phase. Future phases also default
+    to disabled.
 
     >>> from ommx import PreparationPolicy
     >>> policy = PreparationPolicy()
@@ -6637,35 +6823,53 @@ class PreparationPolicy:
     ... ) == (None, None, None, None, None, None)
     """
     @property
-    def special_constraints(self) -> typing.Optional[SpecialConstraintPreparation]: ...
+    def special_constraints(self) -> typing.Optional[SpecialConstraintPreparation]:
+        r"""
+        Optional special-constraint phase. ``None`` disables this phase.
+        """
     @special_constraints.setter
     def special_constraints(
         self, value: typing.Optional[SpecialConstraintPreparation]
     ) -> None: ...
     @property
-    def objective(self) -> typing.Optional[ObjectivePreparation]: ...
+    def objective(self) -> typing.Optional[ObjectivePreparation]:
+        r"""
+        Optional active-objective phase. ``None`` disables this phase.
+        """
     @objective.setter
     def objective(self, value: typing.Optional[ObjectivePreparation]) -> None: ...
     @property
-    def integer_slack(self) -> typing.Optional[IntegerSlackPreparation]: ...
+    def integer_slack(self) -> typing.Optional[IntegerSlackPreparation]:
+        r"""
+        Optional Integer-slack phase. ``None`` disables this phase.
+        """
     @integer_slack.setter
     def integer_slack(
         self, value: typing.Optional[IntegerSlackPreparation]
     ) -> None: ...
     @property
-    def integer_encoding(self) -> typing.Optional[IntegerEncodingPreparation]: ...
+    def integer_encoding(self) -> typing.Optional[IntegerEncodingPreparation]:
+        r"""
+        Optional used-Integer encoding phase. ``None`` disables this phase.
+        """
     @integer_encoding.setter
     def integer_encoding(
         self, value: typing.Optional[IntegerEncodingPreparation]
     ) -> None: ...
     @property
-    def fixed_penalty(self) -> typing.Optional[FixedPenaltyPreparation]: ...
+    def fixed_penalty(self) -> typing.Optional[FixedPenaltyPreparation]:
+        r"""
+        Optional fixed-weight penalty phase. ``None`` disables this phase.
+        """
     @fixed_penalty.setter
     def fixed_penalty(
         self, value: typing.Optional[FixedPenaltyPreparation]
     ) -> None: ...
     @property
-    def binary_power_reduction(self) -> typing.Optional[BinaryPowerPreparation]: ...
+    def binary_power_reduction(self) -> typing.Optional[BinaryPowerPreparation]:
+        r"""
+        Optional Binary-power reduction phase. ``None`` disables this phase.
+        """
     @binary_power_reduction.setter
     def binary_power_reduction(
         self, value: typing.Optional[BinaryPowerPreparation]
@@ -6826,8 +7030,8 @@ class Provenance:
 
     When a special constraint (indicator / one-hot / SOS1) is converted into a
     regular {class}`~ommx.Constraint` — for example via
-    :meth:`~ommx.Instance.convert_one_hot_to_constraint` or
-    :meth:`~ommx.Instance.lower_special_constraints` —
+    {meth}`~ommx.Instance.convert_one_hot_to_constraint` or
+    {meth}`~ommx.Instance.lower_special_constraints` —
     the generated constraint records a {class}`Provenance` entry naming the
     original special constraint. This lets callers trace a regular constraint
     back to the special constraint it was derived from.
@@ -7308,9 +7512,11 @@ class Run:
         r"""
         Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
 
-        The input Instance is cloned before calling the adapter, so adapter-side
-        capability reductions do not mutate the caller's object. The original
-        input is always stored as the Solve input.
+        The input Instance is cloned before calling the Adapter's easy
+        ``solve()`` API. That API may prepare another isolated copy with the
+        Adapter's recommended Policy, so neither step mutates the caller's
+        object. The original caller input, before any recommended Preparation,
+        is always stored as the Solve input.
 
         `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
         arguments are passed to `adapter.solve(...)` and recorded as
@@ -7376,6 +7582,10 @@ class Run:
         construction or the context body fails before `decode` succeeds, a failed
         or interrupted Solve is recorded when possible and the exception is
         re-raised.
+
+        This is the strict exact-input path: it does not apply the Adapter's
+        recommended Preparation Policy. The supplied Instance must already
+        belong to the Adapter's ``INPUT_CLASS``.
         """
     def finish(self) -> None:
         r"""
@@ -7981,7 +8191,7 @@ class Sampling:
     @property
     def input(self) -> Instance:
         r"""
-        Input `Instance` passed to the sampler.
+        Source `Instance` supplied by the caller, before Adapter Preparation.
         """
     @property
     def output(self) -> typing.Optional[SampleSet]:
@@ -8554,7 +8764,7 @@ class Solve:
     @property
     def input(self) -> Instance:
         r"""
-        Input `Instance` passed to the solver.
+        Source `Instance` supplied by the caller, before Adapter Preparation.
         """
     @property
     def output(self) -> typing.Optional[Solution]:
@@ -8646,6 +8856,12 @@ class Sos1Constraint:
 
 @typing.final
 class SpecialConstraintPreparation:
+    r"""
+    Selection for the special-constraint Preparation phase.
+
+    Construct a value with an owner-operation factory. Validation and mutation
+    semantics remain owned by that {class}`~ommx.Instance` operation.
+    """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     @staticmethod
     def lower_special_constraints(
@@ -8654,7 +8870,12 @@ class SpecialConstraintPreparation:
         atol: typing.Optional[builtins.float] = None,
     ) -> SpecialConstraintPreparation:
         r"""
-        Configure lowering for the selected special-constraint families.
+        Select {meth}`~ommx.Instance.lower_special_constraints`.
+
+        ``kinds`` is passed unchanged as the set of active special-constraint
+        families to lower. See the owner operation and its per-family conversion
+        methods for formulas, prerequisites, generated artifacts, stored removal
+        reasons and provenance, and failure semantics.
 
         ``atol`` is used when Indicator Function bodies require zero-sensitive
         interval evaluation. If omitted, :attr:`DEFAULT_ATOL` is stored in the
@@ -8895,8 +9116,8 @@ class SpecialConstraintKind(enum.Enum):
     r"""
     Kind of active special constraint in an instance.
 
-    Use these values with :attr:`Instance.active_special_constraint_kinds` to
-    inspect an instance and :meth:`Instance.lower_special_constraints` to select
+    Use these values with {attr}`~ommx.Instance.active_special_constraint_kinds` to
+    inspect an instance and {meth}`~ommx.Instance.lower_special_constraints` to select
     special constraint families for explicit lowering to regular constraints.
     This is a transformation selector, not an adapter input declaration or an
     ``ommx.v2.Feature`` wire-format requirement.

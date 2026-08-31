@@ -532,6 +532,13 @@ objective and sense exposed by `source` before Preparation (§5.6). The
 [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) covers policy
 details and penalty selection.
 
+See [Adapter exact inputs](../user_guide/adapter_input_class.md) for the
+membership/applicability boundary,
+[Instance Preparation and PreparationPolicy](../user_guide/preparation_policy.md)
+for caller ownership, and
+[Removed constraints and feasibility](../user_guide/removed_constraints.md)
+for evaluation after preparation.
+
 ```python
 # v2.5.1
 from ommx.artifact import ArtifactArchive, ArtifactDir

@@ -293,6 +293,13 @@ impl Instance {
             .collect()
     }
 
+    /// Return the decision-variable IDs used by the mathematical solver input.
+    ///
+    /// The set contains IDs referenced by the objective or by active regular,
+    /// Indicator, OneHot, or SOS1 constraints. It excludes references that occur
+    /// only in the output objective, named functions, removed constraints, or on
+    /// the right-hand side of a decision-variable dependency. Fixed, dependent,
+    /// and irrelevant variables are therefore not included.
     pub fn used_decision_variable_ids(&self) -> VariableIDSet {
         let mut used = self.objective.required_ids();
         used.extend(self.constraint_collection.required_ids());
@@ -304,6 +311,7 @@ impl Instance {
         used
     }
 
+    /// Return the decision variables in [`Self::used_decision_variable_ids`], keyed by ID.
     pub fn used_decision_variables(&self) -> BTreeMap<VariableID, &DecisionVariable> {
         let used_ids = self.used_decision_variable_ids();
         self.decision_variables

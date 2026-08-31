@@ -72,6 +72,8 @@ print(f"{solution.objective=}, {solution.feasible=}")
 
 Since $xy = 0$ when $x = 1, y = 0$, all constraints are satisfied, so `feasible` is `True`. The value of the objective function is $x + y = 1$.
 
+`feasible` checks the pre-transformation constraints retained as removed constraints as well as the active constraints. See [Removed Constraints and Feasibility](./removed_constraints.md) for the distinction from `feasible_relaxed`, which checks only the currently active constraints.
+
 What happens in the case of an infeasible solution, $x = 1, y = 1$?
 
 ```{code-cell} ipython3

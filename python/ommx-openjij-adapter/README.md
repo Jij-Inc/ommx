@@ -79,8 +79,10 @@ This adapter directly accepts:
 - no active regular or special constraints
 - minimization
 
-For the shared semantics of adapter input classes and preparation, see
-[Adapter Input Classes and Explicit Constraint Lowering](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/capability_model.html).
+For the shared semantics, see [Adapter Exact Inputs
+(`INPUT_CLASS`)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/adapter_input_class.html)
+and [Instance Preparation and
+`PreparationPolicy`](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/preparation_policy.html).
 
 When building OpenJij sampler input, used variable IDs must fit a signed 64-bit
 integer and converted interaction coefficients must be finite. Violations are

@@ -14,7 +14,11 @@ kernelspec:
 複数のAdapterで最適化問題を解いて結果を比較する
 =========================================
 
-OMMX Adapterは共通化されたAPIを持っているので、複数のソルバーを使って同じ問題を解いて結果を比較することができます。まず例として簡単なナップザック問題を考えましょう：
+OMMX Adapterは共通化されたAPIを持つため、同じ問題を複数のソルバーで解いて結果を比較できます。[PySCIPOpt Adapterで特殊制約をそのまま解く](./solve_special_constraints_with_pyscipopt_adapter.md)と[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md)では、Adapterによって直接受け取れるInstanceと推奨Preparationが異なる例を見ました。このページでは、HiGHSとPySCIPOptのどちらにも変換なしで渡せる簡単なモデルを使います。
+
+easy APIの`solve()`はprivate copyを作ってPreparationするため、1つのsource `Instance`を複数のAdapterで再利用しても、変換が互いに影響しません。この例のsourceは両方の`INPUT_CLASS`に最初から入るため、どちらのAdapterでも変換は不要です。比較にapplication固有のPreparationが必要なら、Adapterごとにsourceのcopyを作り、それぞれの`INPUT_CLASS`へPreparationして`solve_without_preparation()`へ渡します。
+
+ここでは、HiGHSとSCIPのどちらも直接受け取れる簡単なナップザック問題を考えましょう：
 
 $$
 \begin{aligned}
@@ -25,26 +29,19 @@ $$
 $$
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable
+from ommx import Instance
 
 v = [10, 13, 18, 31, 7, 15]
 w = [11, 25, 20, 35, 10, 33]
 W = 47
 N = len(v)
 
-x = [
-    DecisionVariable.binary(
-        id=i,
-        name="x",
-        subscripts=[i],
-    )
-    for i in range(N)
-]
-instance = Instance.from_components(
-    decision_variables=x,
-    objective=sum(v[i] * x[i] for i in range(N)),
-    constraints={0: sum(w[i] * x[i] for i in range(N)) - W <= 0},
-    sense=Instance.MAXIMIZE,
+instance = Instance.maximize()
+x = [instance.new_binary("x", subscripts=[i]) for i in range(N)]
+instance.objective = sum(v[i] * x[i] for i in range(N))
+instance.add_constraint(
+    sum(w[i] * x[i] for i in range(N)) <= W,
+    "重量制限",
 )
 ```
 
@@ -56,7 +53,7 @@ OSSでないソルバーについてもAdapterが存在し、同じインター�
 
 
 
-ここではOSSのHighs, SCIPのAdapterを使ってナップザック問題を解いてみましょう。
+ここではOSSのHiGHSとSCIPのAdapterを使ってナップザック問題を解いてみましょう。
 
 ```{code-cell} ipython3
 from ommx_highs_adapter import OMMXHighsAdapter

@@ -324,8 +324,16 @@ v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `inequality_integer_slack_max_range`を直接受け取っていました。v3ではこれらの選択を推奨
 `PreparationPolicy`へ移します。
 
+`INPUT_CLASS` の exact な意味は [Adapter の exact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)、推奨 Policy と呼び出し側の責任境界は [Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md) を参照してください。
+
 - `uniform_penalty_weight`と`penalty_weights`は`policy.fixed_penalty`へ移す。
 - `inequality_integer_slack_max_range`は`policy.integer_slack`へ移す。
+
+OpenJijの推奨Policyでは、特殊制約lowering、minimizationへのsense正規化、Integer slack、
+使用中Integer変数のlog encodingを有効にします。Integer slackはrange 32でexactな
+equality変換を最初に試し、そのoperationが利用できない場合には、上限32のslackを
+追加してinequalityのまま残すことを許可します。equalityが必須なら、置き換える
+`IntegerSlackPreparation` の `slack_upper_bound=None` を指定します。
 
 constructorを直接使う場合は自動的にPrepareされないため、あらかじめ
 `OMMXOpenJijSAAdapter.INPUT_CLASS`向けにPrepareしたInstanceを渡します。
@@ -339,6 +347,8 @@ applicationがそのmagnitudeを選ぶ必要があります。v3はv2の暗黙�
 使用しません。customizeしたPolicyをInstanceへ適用し、preparation-free methodを呼びます。
 
 ```python
+import copy
+
 from ommx import FixedPenaltyPreparation
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
@@ -346,13 +356,16 @@ policy = OMMXOpenJijSAAdapter.recommended_preparation_policy()
 policy.fixed_penalty = (
     FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(weight=20.0)
 )
-source.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
-samples = OMMXOpenJijSAAdapter.sample_without_preparation(source)
+prepared = copy.copy(source)
+prepared.prepare(OMMXOpenJijSAAdapter.INPUT_CLASS, policy)
+samples = OMMXOpenJijSAAdapter.sample_without_preparation(prepared)
 ```
 
-`prepare()`は`source`をin-placeで変更します。返される`SampleSet`のobjectiveとsenseは
+`prepare()`は`prepared`をin-placeで変更し、`source`は保持されます。返される`SampleSet`のobjectiveとsenseは
 Preparation前に`source`が公開していたものです（§5.6）。Policyの詳細とpenaltyの選び方は
 [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter)を参照してください。
+
+Preparation 中に removed へ移った制約と、`feasible` / `feasible_relaxed` の違いは [Removed constraints と実行可能性](../user_guide/removed_constraints.md) を参照してください。
 
 ## 8. DataFrame accessor
 
@@ -366,10 +379,10 @@ df = instance.constraints_df
 df = instance.constraints_df()
 ```
 
-kind 別や removed / active 別の DataFrame accessor は、`constraints_df(kind=..., removed=...)` に統合されています。
+kind 別や removed / active 別の DataFrame accessor は、`constraints_df(kind=..., removed=...)` に統合されています。removed lifecycle と評価時の扱いは [Removed constraints と実行可能性](../user_guide/removed_constraints.md) を参照してください。
 
 ```python
-instance.constraints_df(kind="normal")
+instance.constraints_df(kind="regular")
 instance.constraints_df(kind="one_hot")
 instance.constraints_df(kind="sos1", removed=True)
 solution.constraints_df(kind="indicator")

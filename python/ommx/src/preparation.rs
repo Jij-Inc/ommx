@@ -11,6 +11,10 @@ fn resolve_atol(value: Option<f64>) -> OmmxPyResult<ommx::ATol> {
     })
 }
 
+/// Selection for the special-constraint Preparation phase.
+///
+/// Construct a value with an owner-operation factory. Validation and mutation
+/// semantics remain owned by that {class}`~ommx.Instance` operation.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,7 +25,12 @@ pub struct SpecialConstraintPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SpecialConstraintPreparation {
-    /// Configure lowering for the selected special-constraint families.
+    /// Select {meth}`~ommx.Instance.lower_special_constraints`.
+    ///
+    /// ``kinds`` is passed unchanged as the set of active special-constraint
+    /// families to lower. See the owner operation and its per-family conversion
+    /// methods for formulas, prerequisites, generated artifacts, stored removal
+    /// reasons and provenance, and failure semantics.
     ///
     /// ``atol`` is used when Indicator Function bodies require zero-sensitive
     /// interval evaluation. If omitted, :attr:`DEFAULT_ATOL` is stored in the
@@ -53,6 +62,13 @@ impl From<ommx::SpecialConstraintPreparation> for SpecialConstraintPreparation {
     }
 }
 
+/// Selection for the active-objective Preparation phase.
+///
+/// The phase invokes {meth}`~ommx.Instance.convert_active_objective`. When the
+/// target differs from the active sense, that owner operation changes only the
+/// solver-facing objective and preserves the previous pair as
+/// {attr}`~ommx.Instance.output_objective`, so solution and sample evaluation
+/// continue to report the entry objective semantics.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,6 +116,16 @@ impl From<ommx::ObjectivePreparation> for ObjectivePreparation {
     }
 }
 
+/// Integer-slack Preparation for active regular inequalities.
+///
+/// Preparation first attempts exact conversion to equality using
+/// ``max_integer_range`` and ``atol``. ``slack_upper_bound=None`` requires the
+/// constraint to become an equality or be removed as trivially satisfied, so
+/// {class}`~ommx.ExactIntegerSlackError` is propagated. An integer value permits the
+/// constraint to remain an inequality: only that signal selects the
+/// inequality-preserving owner operation with this upper bound. The latter is
+/// not an approximation of the original feasible set. Every other owner error
+/// is propagated unchanged.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,6 +136,14 @@ pub struct IntegerSlackPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl IntegerSlackPreparation {
+    /// Configure Integer-slack Preparation for active regular inequalities.
+    ///
+    /// ``max_integer_range`` and ``atol`` are passed to
+    /// {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`.
+    /// ``slack_upper_bound`` has the fallback semantics documented by this
+    /// class. Inequalities are processed in ascending constraint-ID order; a
+    /// failure on a later constraint does not roll back conversions already
+    /// completed by this phase.
     #[new]
     #[pyo3(signature = (*, max_integer_range, atol=None, slack_upper_bound=None))]
     pub fn new(
@@ -126,16 +160,22 @@ impl IntegerSlackPreparation {
         })
     }
 
+    /// Maximum finite range accepted for exact Integer slack.
     #[getter]
     pub fn max_integer_range(&self) -> u64 {
         self.inner.max_integer_range
     }
 
+    /// Absolute tolerance used to normalize bounds to integers.
     #[getter]
     pub fn atol(&self) -> f64 {
         self.inner.atol.into_inner()
     }
 
+    /// Optional upper bound for inequality-preserving Integer slack.
+    ///
+    /// ``None`` requires equality. An integer permits the inequality-preserving
+    /// owner operation only after {class}`~ommx.ExactIntegerSlackError`.
     #[getter]
     pub fn slack_upper_bound(&self) -> Option<u64> {
         self.inner.slack_upper_bound
@@ -154,6 +194,10 @@ impl From<ommx::IntegerSlackPreparation> for IntegerSlackPreparation {
     }
 }
 
+/// Selection for the used-Integer encoding Preparation phase.
+///
+/// Exactly one encoding owner operation is selected. Validation and mutation
+/// semantics remain owned by that operation.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,6 +208,18 @@ pub struct IntegerEncodingPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl IntegerEncodingPreparation {
+    /// Select log encoding of every used Integer decision variable.
+    ///
+    /// The complete target set is determined from
+    /// {attr}`~ommx.Instance.used_decision_variables` before mutation and encoded
+    /// together with the same mathematical rule as {meth}`~ommx.Instance.log_encode`.
+    /// ``atol`` normalizes bounds that are within tolerance of integers. On
+    /// success, no used Integer decision variable remains; irrelevant Integer
+    /// variables are not encoded.
+    ///
+    /// A used Integer with a non-finite or otherwise non-encodable bound raises
+    /// {class}`~ommx.LogEncodingError`. Active SOS1 members cannot be substituted
+    /// and must be lowered first. Any error leaves this phase's input unchanged.
     #[staticmethod]
     #[pyo3(signature = (*, atol=None))]
     pub fn log_encode_all_used_integers(atol: Option<f64>) -> OmmxPyResult<Self> {
@@ -188,6 +244,12 @@ impl From<ommx::IntegerEncodingPreparation> for IntegerEncodingPreparation {
 }
 
 /// Reduce powers of active Binary variables during Preparation.
+///
+/// This phase invokes {meth}`~ommx.Instance.reduce_binary_power`, using
+/// $x^n=x$ for Binary variables. If it rewrites the active objective, the
+/// unreduced expression is preserved in
+/// {attr}`~ommx.Instance.output_objective` for solution and sample evaluation.
+/// A coefficient error leaves the instance unchanged.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -216,6 +278,33 @@ impl From<ommx::BinaryPowerPreparation> for BinaryPowerPreparation {
     }
 }
 
+/// Selection for the fixed-weight penalty Preparation phase.
+///
+/// Let $F(x)$ be the active objective and $g_i(x)$ the body of each active
+/// regular constraint. With normalized nonnegative penalty magnitudes $w_i$,
+/// the keyed operation replaces the active objective by
+///
+/// $$
+/// F(x) + \sum_i w_i g_i(x)^2
+/// $$
+///
+/// for minimization, and by $F(x) - \sum_i w_i g_i(x)^2$ for maximization. The
+/// uniform operation uses one $w$ for every active regular constraint. For an
+/// inequality $g_i(x) \leq 0$, this squares $g_i(x)$ itself; it is not the
+/// one-sided penalty $\max(0, g_i(x))^2$.
+///
+/// On success, every active regular constraint moves to
+/// {attr}`~ommx.Instance.removed_constraints`, while existing removed
+/// constraints are preserved. When at least one active regular constraint is
+/// converted, the entry objective semantics are preserved in
+/// {attr}`~ommx.Instance.output_objective` for solution and sample evaluation,
+/// but active-formulation optimality is no longer transported. Active
+/// Indicator, OneHot, or SOS1 constraints are not penalty-converted and cause
+/// an error before mutation. Validation, objective construction, and regular
+/// constraint lifecycle changes are atomic: any error leaves the instance
+/// unchanged. When a penalty is applied to active constraints, OMMX validates
+/// the weight domain but cannot decide whether a weight is large enough for an
+/// application's penalty rule; that choice belongs to the caller.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq)]
@@ -226,6 +315,16 @@ pub struct FixedPenaltyPreparation {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl FixedPenaltyPreparation {
+    /// Select the keyed fixed-weight penalty owner operation.
+    ///
+    /// The keys of ``weights`` must be exactly the active regular constraint
+    /// IDs. Each value is the corresponding $w_i$ in the class formula.
+    /// ``atol`` is used by the owner operation to accept a penalty magnitude
+    /// down to ``-atol`` and normalize a tolerated negative value to zero. Every
+    /// weight must be finite.
+    /// Removed constraints record
+    /// ``reason="ommx.Instance.penalty_method_with_fixed_weights"`` with no
+    /// reason parameters.
     #[staticmethod]
     #[pyo3(signature = (*, weights, atol=None))]
     pub fn penalty_method_with_fixed_weights(
@@ -243,6 +342,20 @@ impl FixedPenaltyPreparation {
         })
     }
 
+    /// Select the uniform fixed-weight penalty owner operation.
+    ///
+    /// ``weight`` is the common $w$ in the class formula for every active
+    /// regular constraint. In particular, this replaces $F(x)$ by
+    /// $F(x) + w \sum_i g_i(x)^2$ for minimization and by
+    /// $F(x) - w \sum_i g_i(x)^2$ for maximization, after normalizing $w$.
+    /// ``atol`` is used by the owner operation to accept a penalty magnitude
+    /// down to ``-atol`` and normalize a tolerated negative value to zero. When
+    /// at least one active regular constraint is converted, the weight must be
+    /// finite. With no active constraint of any family, the owner operation is
+    /// an identity and does not inspect the weight.
+    /// Removed constraints record
+    /// ``reason="ommx.Instance.uniform_penalty_method_with_fixed_weight"`` with
+    /// no reason parameters.
     #[staticmethod]
     #[pyo3(signature = (*, weight, atol=None))]
     pub fn uniform_penalty_method_with_fixed_weight(
@@ -275,9 +388,18 @@ impl From<ommx::FixedPenaltyPreparation> for FixedPenaltyPreparation {
 #[derive(Debug, Clone, PartialEq, Default)]
 /// Select optional transformations applied by {meth}`~ommx.Instance.prepare`.
 ///
+/// Each property selects at most one phase. Properties may be combined freely,
+/// although owner-operation validation and target membership can still make a
+/// combination fail for a particular {class}`~ommx.Instance`.
+/// {meth}`~ommx.Instance.prepare` applies enabled phases at most once in this
+/// order: special constraints, active objective, Integer slack, fixed penalty,
+/// used-Integer encoding, then Binary-power reduction. It stops as soon as the
+/// target {class}`~ommx.InstanceClass` contains the instance.
+///
 /// # Invariants
 ///
-/// A default policy selects no Preparation phase.
+/// A default policy selects no Preparation phase. Future phases also default
+/// to disabled.
 ///
 /// >>> from ommx import PreparationPolicy
 /// >>> policy = PreparationPolicy()
@@ -491,6 +613,7 @@ impl PreparationPolicy {
         )
     }
 
+    /// Optional special-constraint phase. ``None`` disables this phase.
     #[getter]
     pub fn special_constraints(&self) -> Option<SpecialConstraintPreparation> {
         self.inner.special_constraints.clone().map(Into::into)
@@ -501,6 +624,7 @@ impl PreparationPolicy {
         self.inner.special_constraints = value.map(Into::into);
     }
 
+    /// Optional active-objective phase. ``None`` disables this phase.
     #[getter]
     pub fn objective(&self) -> Option<ObjectivePreparation> {
         self.inner.objective.map(Into::into)
@@ -511,6 +635,7 @@ impl PreparationPolicy {
         self.inner.objective = value.map(Into::into);
     }
 
+    /// Optional Integer-slack phase. ``None`` disables this phase.
     #[getter]
     pub fn integer_slack(&self) -> Option<IntegerSlackPreparation> {
         self.inner.integer_slack.map(Into::into)
@@ -521,6 +646,7 @@ impl PreparationPolicy {
         self.inner.integer_slack = value.map(Into::into);
     }
 
+    /// Optional used-Integer encoding phase. ``None`` disables this phase.
     #[getter]
     pub fn integer_encoding(&self) -> Option<IntegerEncodingPreparation> {
         self.inner.integer_encoding.map(Into::into)
@@ -531,6 +657,7 @@ impl PreparationPolicy {
         self.inner.integer_encoding = value.map(Into::into);
     }
 
+    /// Optional fixed-weight penalty phase. ``None`` disables this phase.
     #[getter]
     pub fn fixed_penalty(&self) -> Option<FixedPenaltyPreparation> {
         self.inner.fixed_penalty.clone().map(Into::into)
@@ -541,6 +668,7 @@ impl PreparationPolicy {
         self.inner.fixed_penalty = value.map(Into::into);
     }
 
+    /// Optional Binary-power reduction phase. ``None`` disables this phase.
     #[getter]
     pub fn binary_power_reduction(&self) -> Option<BinaryPowerPreparation> {
         self.inner.binary_power_reduction.map(Into::into)
@@ -558,8 +686,10 @@ impl Instance {
     /// Apply the caller's ``policy`` to this instance in place to reach
     /// ``input_class`` membership.
     ///
-    /// Selected phases are applied at most once in this order, stopping as soon
-    /// as membership is reached:
+    /// ``policy`` selects existing {class}`~ommx.Instance` owner operations.
+    /// Whole-class membership is checked before the first phase and after each
+    /// selected phase. Phases are applied at most once in this order, stopping
+    /// as soon as membership is reached:
     ///
     /// 1. ``special_constraints``:
     ///    {meth}`~ommx.Instance.lower_special_constraints`
@@ -575,14 +705,24 @@ impl Instance {
     ///
     /// Success guarantees ``input_class`` membership. When ``input_class`` is an
     /// Adapter's ``INPUT_CLASS``, that membership is the complete applicability
-    /// condition; converter-local or backend failures may still occur later. This
-    /// operation is not transactional, so an error may leave the instance changed.
-    /// {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership
-    /// report when the selections do not reach ``input_class``.
+    /// condition; converter-local or backend failures may still occur later.
+    ///
+    /// Preparation is not globally transactional. Changes committed by an
+    /// earlier owner operation remain if a later operation raises an error.
+    /// Within the Integer-slack phase, active regular inequalities are processed
+    /// in ascending constraint-ID order, and a later failure leaves earlier
+    /// conversions committed. Other phases retain the mutation and failure
+    /// semantics of their owner operations.
+    ///
+    /// Existing Rust owner signals retain their Python exception mappings.
+    /// When configured phases are exhausted without reaching ``input_class``,
+    /// {class}`~ommx.PreparationTargetNotReachedError` exposes the final
+    /// membership report through its ``report`` attribute.
     ///
     /// # Postconditions
     ///
-    /// Selected owner operations establish their own output semantics, and successful composition reaches the target class.
+    /// Selected owner operations establish their own output semantics, and
+    /// successful composition reaches the target class.
     ///
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense
     /// >>> x = DecisionVariable.binary(0)

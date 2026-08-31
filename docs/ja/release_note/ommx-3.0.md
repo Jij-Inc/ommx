@@ -199,8 +199,8 @@ Converter 固有の表現検査や backend の上限検査は solver input の�
 その失敗は `AdapterNotApplicableError` ではなく conversion または backend の error です。
 特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
 行われるようになりました。責務境界の詳細は
-[Adapter Input Class](../user_guide/capability_model.md) と
-[Adapter 実装チュートリアル](../tutorial/implement_adapter.md)を参照してください。
+[Adapterのexact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)と
+[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
 
 ### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
 
@@ -210,7 +210,7 @@ Converter 固有の表現検査や backend の上限検査は solver input の�
 呼び出し側は `is not None` の確認なしで `Adapter.INPUT_CLASS` を
 {meth}`~ommx.Instance.prepare` に渡せます。宣言がない場合は、applicability の確認時に
 引き続き明確な `TypeError` を送出します。契約の全体像は
-[Adapter 実装チュートリアル](../tutorial/implement_adapter.md)を参照してください。
+[Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
 
 ## 3.0.0 Beta 3
 
@@ -222,7 +222,7 @@ Function、polynomial、constraint、named function、`Instance` のevaluation A
 RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
 未知のID・不正な値と、回復可能なdependent-variable assertionは`ValueError`になります。
 Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
-`Instance`が所有するdependencyの正規化とremoved constraintの復元で発生した
+`Instance`が所有するdependencyの正規化と[removed constraint](../user_guide/removed_constraints.md)の復元で発生した
 coefficient failureは`RuntimeError`にfallbackします。
 
 Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/SOS1の
@@ -268,7 +268,9 @@ HiGHS、Python-MIP、PySCIPOpt、OpenJijはいずれもこのフローを利用�
 ときは、変換前の変数値を復元し、preparation中に取り除かれた制約を検査できます。後の
 preparation stepが失敗した場合、それより前に完了した変更はinstanceに残ります。v2または
 Beta 2から移行する場合は、OpenJijのモデル変換optionとpre-release版の
-`OpenJijPreparation*` APIを、この共通フローに置き換えてください。完全な利用例は
+`OpenJijPreparation*` APIを、この共通フローに置き換えてください。exact inputの意味は
+[Adapter の exact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)、Policyと実行の責任境界は
+[Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md)、完全な利用例は
 [OpenJijによるサンプリング](../tutorial/tsp_sampling_with_openjij_adapter)、対応するAPIの
 置き換えは[Python SDK v2からv3へのマイグレーションガイド](../migration/python_sdk_v2_to_v3.md)
 を参照してください。
@@ -326,7 +328,8 @@ source_samples = preparation.evaluate_source(prepared_samples)
 有限penaltyとapproximate integer slackは明示的なopt-inが必要です。prepare後の値は
 別の {class}`~ommx.Instance` なので、sourceから推論せず `preparation.input` 自体の
 applicabilityを確認してください。受け入れるmodel classとpreparationの詳細は
-[Adapter Input Class](../user_guide/capability_model.md) と
+[Adapter の exact input（INPUT_CLASS）](../user_guide/adapter_input_class.md) と
+[Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md) および
 [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) を参照してください。
 
 2.6.1から移行する場合、非対応入力にはAdapter固有exceptionではなく
@@ -1208,7 +1211,7 @@ Instance.from_components(..., constraints={5: c}, ...)
 - {class}`~ommx.OneHotConstraint` — 従来 `ConstraintHints.OneHot` として扱われていた one-hot 制約
 - {class}`~ommx.Sos1Constraint` — 従来 `ConstraintHints.Sos1` として扱われていた SOS1 制約
 
-具体的な使い方、評価結果の参照、Indicator 制約の relax / restore ワークフローについては [特殊制約型](../user_guide/special_constraints.md) を参照してください。
+具体的な使い方と評価結果の参照については [特殊制約型](../user_guide/special_constraints.md)、Indicator 制約の relax / restore ワークフローについては [Removed constraints と実行可能性](../user_guide/removed_constraints.md) を参照してください。
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
 

@@ -2108,9 +2108,11 @@ impl PyRun {
 
     /// Solve an Instance with an OMMX SolverAdapter and log a Solve entry.
     ///
-    /// The input Instance is cloned before calling the adapter, so adapter-side
-    /// capability reductions do not mutate the caller's object. The original
-    /// input is always stored as the Solve input.
+    /// The input Instance is cloned before calling the Adapter's easy
+    /// ``solve()`` API. That API may prepare another isolated copy with the
+    /// Adapter's recommended Policy, so neither step mutates the caller's
+    /// object. The original caller input, before any recommended Preparation,
+    /// is always stored as the Solve input.
     ///
     /// `adapter` must be a subclass of `ommx.adapter.SolverAdapter`. Keyword
     /// arguments are passed to `adapter.solve(...)` and recorded as
@@ -2290,6 +2292,10 @@ impl PyRun {
     /// construction or the context body fails before `decode` succeeds, a failed
     /// or interrupted Solve is recorded when possible and the exception is
     /// re-raised.
+    ///
+    /// This is the strict exact-input path: it does not apply the Adapter's
+    /// recommended Preparation Policy. The supplied Instance must already
+    /// belong to the Adapter's ``INPUT_CLASS``.
     #[pyo3(signature = (adapter, instance, *, store_diagnostics = false, **kwargs))]
     pub fn open_solve(
         slf: Bound<'_, Self>,
@@ -4303,7 +4309,7 @@ impl PySolve {
     }
 
     #[getter]
-    /// Input `Instance` passed to the solver.
+    /// Source `Instance` supplied by the caller, before Adapter Preparation.
     pub fn input(&self) -> OmmxPyResult<crate::Instance> {
         let inner = self.0.input_instance()?;
         Ok(crate::Instance { inner })
@@ -4391,7 +4397,7 @@ impl PySampling {
     }
 
     #[getter]
-    /// Input `Instance` passed to the sampler.
+    /// Source `Instance` supplied by the caller, before Adapter Preparation.
     pub fn input(&self) -> OmmxPyResult<crate::Instance> {
         Ok(crate::Instance {
             inner: self.0.input_instance()?,
