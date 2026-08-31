@@ -197,9 +197,11 @@ fn polynomial_large_little_fixture(num_terms: usize) -> [Polynomial; 3] {
 
 /// Benchmark for summation of three polynomial functions with many terms.
 ///
-/// The term-count axis measures per-term merge and hash-table growth. Each
-/// operand has deterministic, disjoint cubic support so commit comparisons use
-/// the same monomials and coefficients.
+/// The first borrowed operand is cloned once to establish result ownership;
+/// the other two are merged into that owned accumulator. The term-count axis
+/// therefore measures the required copy plus per-term merge and hash-table
+/// growth. Each operand has deterministic, disjoint cubic support so commit
+/// comparisons use the same monomials and coefficients.
 fn sum_polynomial_large_little(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("sum-polynomial-large-little");
@@ -211,9 +213,9 @@ fn sum_polynomial_large_little(c: &mut Criterion) {
             &functions,
             |b, polys| {
                 b.iter(|| {
-                    polys
-                        .iter()
-                        .try_fold(Polynomial::zero(), |acc, p| acc + p)
+                    let (first, rest) = polys.split_first().expect("fixture is non-empty");
+                    rest.iter()
+                        .try_fold(first.clone(), |acc, p| acc + p)
                         .unwrap()
                 })
             },
