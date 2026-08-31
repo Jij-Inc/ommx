@@ -1,11 +1,11 @@
-//! Checked promotion of canonical SOS1 Big-M formulations.
+//! Checked promotion of SOS1 Big-M formulations.
 //!
 //! The promotion request accepted here is deliberately untrusted. It identifies
 //! stable OMMX IDs and their claimed roles; the current [`Instance`] remains the
 //! sole source of truth for domains and row contents. A successful promotion
-//! compresses
+//! rewrites the active formulation from
 //!
-//! `Base(x) AND CanonicalSos1BigM(x, z)`
+//! `Base(x) AND ValidatedSos1BigM(x, z)`
 //!
 //! into
 //!
@@ -19,24 +19,20 @@
 //! clone. This keeps request rejection atomic and prevents a checked plan from
 //! being reused after the instance changes.
 
-use super::{
-    sos1::{
-        canonical_sos1_big_m_cardinality, canonical_sos1_big_m_lower_link,
-        canonical_sos1_big_m_upper_link,
-    },
-    Instance,
-};
+use super::Instance;
 use crate::{
-    Bound, Constraint, ConstraintContext, ConstraintID, Equality, Function, Kind, RemovedReason,
-    Sos1Constraint, Sos1ConstraintID, VariableID, VariableIDSet,
+    ATol, Bound, Constraint, ConstraintContext, ConstraintID, Equality, Evaluate, Function, Kind,
+    Linear, LinearMonomial, RemovedReason, Sos1Constraint, Sos1ConstraintID, VariableID,
+    VariableIDSet,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Claimed selector role for one member of a canonical SOS1 Big-M formulation.
+/// Claimed selector role for one member of an SOS1 Big-M formulation.
 ///
 /// This is an unchecked claim, not a verified fact.
 /// [`Instance::promote_sos1_big_m`] checks the role against the current member
-/// domain and exact regular-row contents before changing the instance.
+/// domain and the meaning of the claimed regular rows before changing the
+/// instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sos1BigMSelectorClaim {
     /// The member itself is claimed to be a full-domain binary selector.
@@ -45,14 +41,16 @@ pub enum Sos1BigMSelectorClaim {
     Fresh {
         /// Private binary selector associated with the member.
         selector: VariableID,
-        /// Canonical row `member - upper * selector <= 0`, when required.
+        /// Upper link whose positive normalization is
+        /// `member - M * selector <= 0`, when required.
         upper_link: Option<ConstraintID>,
-        /// Canonical row `lower * selector - member <= 0`, when required.
+        /// Lower link whose positive normalization is
+        /// `-member - M * selector <= 0`, when required.
         lower_link: Option<ConstraintID>,
     },
 }
 
-/// Untrusted stable-ID request for one canonical SOS1 Big-M promotion.
+/// Untrusted stable-ID request for one SOS1 Big-M promotion.
 ///
 /// Map keys are the intended SOS1 members. Each value claims whether the
 /// member is reused as its selector or linked to a fresh selector. The final
@@ -123,7 +121,7 @@ impl Sos1BigMPromotion {
         &self.fresh_selectors
     }
 
-    /// Canonical formulation rows moved from active to removed.
+    /// Verified formulation rows moved from active to removed.
     pub fn relaxed_constraint_ids(&self) -> &BTreeSet<ConstraintID> {
         &self.relaxed_constraint_ids
     }
@@ -134,8 +132,77 @@ struct Sos1BigMPromotionPlan {
     result: Sos1BigMPromotion,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Sos1LinkSide {
+    Upper,
+    Lower,
+}
+
+impl Sos1LinkSide {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Upper => "upper",
+            Self::Lower => "lower",
+        }
+    }
+
+    fn is_required(self, bound: Bound) -> bool {
+        match self {
+            Self::Upper => bound.upper() > 0.0,
+            Self::Lower => bound.lower() < 0.0,
+        }
+    }
+
+    fn member_coefficient_has_expected_sign(self, coefficient: f64) -> bool {
+        match self {
+            Self::Upper => coefficient > 0.0,
+            Self::Lower => coefficient < 0.0,
+        }
+    }
+
+    fn required_magnitude(self, bound: Bound) -> f64 {
+        match self {
+            Self::Upper => bound.upper(),
+            Self::Lower => -bound.lower(),
+        }
+    }
+}
+
+fn canonical_sos1_big_m_cardinality(
+    selectors: impl IntoIterator<Item = VariableID>,
+) -> crate::Result<Constraint> {
+    let function =
+        selectors
+            .into_iter()
+            .try_fold(Linear::from(crate::coeff!(-1.0)), |sum, selector| {
+                sum + Linear::single_term(LinearMonomial::Variable(selector), crate::coeff!(1.0))
+            })?;
+    Ok(Constraint::less_than_or_equal_to_zero(Function::from(
+        function,
+    )))
+}
+
+fn populated_required_ids(
+    function: &Function,
+    dependencies: &crate::AcyclicAssignments,
+) -> VariableIDSet {
+    let mut closure = function.required_ids();
+    let mut pending = closure.iter().copied().collect::<Vec<_>>();
+    while let Some(id) = pending.pop() {
+        let Some(dependency) = dependencies.get(&id) else {
+            continue;
+        };
+        for required_id in dependency.required_ids() {
+            if closure.insert(required_id) {
+                pending.push(required_id);
+            }
+        }
+    }
+    closure
+}
+
 impl Instance {
-    /// Promote one exact canonical Big-M selector formulation to SOS1.
+    /// Promote one validated Big-M selector formulation to SOS1.
     ///
     /// The request is untrusted. This method validates all of the following
     /// against the current instance before mutation:
@@ -143,28 +210,48 @@ impl Instance {
     /// - a non-empty member set with finite supported domains;
     /// - exact agreement between full binary members and reused-selector roles;
     /// - distinct full binary fresh selectors outside the member set;
-    /// - exact canonical upper/lower links and cardinality row, without a
-    ///   tolerance or scalar-multiple relaxation;
+    /// - upper and lower links that normalize to the expected two-variable
+    ///   Big-M shape and cover the member domain under the supplied `atol`;
+    /// - the exact canonical selector-cardinality row;
     /// - absence of every fresh selector from current active solver input,
-    ///   except for the claimed formulation rows.
+    ///   except for the claimed formulation rows;
+    /// - absence of every fresh selector from the output objective.
     ///
     /// Rust-side concepts not modeled by the initial Lean semantics are
     /// handled conservatively. Selected semi variables, fixed or dependent
     /// members, fixed binary member bounds, and already fixed/dependent fresh
     /// selectors are rejected. Removed constraints, named functions,
     /// dependency RHS expressions, row context, and selector labels remain
-    /// valid history and are preserved unchanged. Unrelated nonlinear
-    /// expressions and unrelated special constraints are preserved unchanged.
+    /// valid history and are preserved unchanged. Direct or
+    /// dependency-transitive output-objective references are rejected because
+    /// dependent reconstruction would change the returned objective value.
+    /// Unrelated nonlinear expressions and unrelated special constraints are
+    /// preserved unchanged.
     /// Calling this family-specific method is the explicit request to add the
     /// SOS1 capability to the instance; request rejection means only that the
     /// claimed formulation is outside this conservative checker.
     ///
-    /// Canonical formulation recognition is exact. When evaluating a solver
-    /// state, fresh-selector reconstruction uses the same [`crate::ATol`]
-    /// approximate-zero classifier as the promoted SOS1 constraint and retained
-    /// formulation rows. At `abs(member) == atol`, selector reconstruction,
-    /// SOS1 activity, and regular-row feasibility therefore agree on the
-    /// inclusive boundary.
+    /// Link validation first divides by the positive magnitude of the member
+    /// coefficient. It therefore accepts positive scalar multiples and Big-M
+    /// bounds wider than the current member domain. The supplied finite `atol`
+    /// is interpreted after normalization and used only for the one-sided
+    /// domain-containment comparison, so checker acceptance is scale invariant.
+    /// Relation, variable support, zero constant, and cardinality remain exact
+    /// structural requirements. Link presence remains determined by the exact
+    /// sign of the domain endpoint because the resulting [`Instance`] does not
+    /// retain this validation tolerance.
+    ///
+    /// The original link rows are retained unchanged. The checker and promoted
+    /// active model interpret links in normalized coefficient units, while
+    /// regular-row feasibility applies an absolute tolerance to each retained
+    /// raw residual. A promoted state may therefore satisfy
+    /// [`crate::Solution::feasible_relaxed`] but not
+    /// [`crate::Solution::feasible`]. This can happen near zero even when `M`
+    /// exactly contains the domain, as well as when an `M` shortfall is accepted
+    /// within `atol`. Positive scalar normalization preserves exact-real
+    /// semantics of the row itself; tolerance-level shortfall is only an
+    /// approximate acceptance. Callers that require feasibility against the
+    /// original rows must continue to inspect full feasibility.
     ///
     /// On success the verified formulation rows are relaxed, fresh selectors
     /// remain registered as dependent variables, and a new active SOS1
@@ -173,14 +260,15 @@ impl Instance {
     pub fn promote_sos1_big_m(
         &mut self,
         request: &Sos1BigMPromotionRequest,
+        atol: ATol,
     ) -> crate::Result<Sos1BigMPromotion> {
-        let plan = self.plan_sos1_big_m_promotion(request)?;
+        let plan = self.plan_sos1_big_m_promotion(request, atol)?;
         let mut staged = self.clone();
         for &id in &plan.result.relaxed_constraint_ids {
             staged.constraint_collection.relax(
                 id,
                 RemovedReason {
-                    reason: "promoted canonical SOS1 Big-M formulation".to_string(),
+                    reason: "promoted validated SOS1 Big-M formulation".to_string(),
                     parameters: [(
                         "sos1_constraint_id".to_string(),
                         plan.result.sos1_constraint_id.to_string(),
@@ -225,7 +313,14 @@ impl Instance {
     fn plan_sos1_big_m_promotion(
         &self,
         request: &Sos1BigMPromotionRequest,
+        atol: ATol,
     ) -> crate::Result<Sos1BigMPromotionPlan> {
+        if !atol.into_inner().is_finite() {
+            crate::bail!(
+                { atol = atol.into_inner() },
+                "SOS1 Big-M promotion requires a finite ATol"
+            );
+        }
         if request.selector_claims.is_empty() {
             crate::bail!("SOS1 Big-M promotion request must contain at least one member");
         }
@@ -329,18 +424,18 @@ impl Instance {
                         member,
                         selector,
                         upper_link,
-                        bound.upper() > 0.0,
-                        "upper",
-                        || canonical_sos1_big_m_upper_link(member, selector, bound.upper()),
+                        bound,
+                        Sos1LinkSide::Upper,
+                        atol,
                         &mut relaxed_constraint_ids,
                     )?;
                     self.validate_optional_sos1_link(
                         member,
                         selector,
                         lower_link,
-                        bound.lower() < 0.0,
-                        "lower",
-                        || canonical_sos1_big_m_lower_link(member, selector, bound.lower()),
+                        bound,
+                        Sos1LinkSide::Lower,
+                        atol,
                         &mut relaxed_constraint_ids,
                     )?;
                     fresh_selectors.insert(member, selector);
@@ -391,31 +486,113 @@ impl Instance {
         member: VariableID,
         selector: VariableID,
         actual_id: Option<ConstraintID>,
-        required: bool,
-        side: &'static str,
-        expected: impl FnOnce() -> crate::Result<Constraint>,
+        bound: Bound,
+        side: Sos1LinkSide,
+        atol: ATol,
         relaxed: &mut BTreeSet<ConstraintID>,
     ) -> crate::Result<()> {
-        match (required, actual_id) {
-            (false, None) => Ok(()),
-            (false, Some(id)) => crate::bail!(
-                { ?member, ?selector, ?id, side },
-                "SOS1 member {member:?} has a {side} link even though its bound makes that canonical link unnecessary"
+        let side_name = side.name();
+        match actual_id {
+            None if !side.is_required(bound) => Ok(()),
+            None => crate::bail!(
+                { ?member, ?selector, side = side_name },
+                "SOS1 member {member:?} is missing its required {side_name} link"
             ),
-            (true, None) => crate::bail!(
-                { ?member, ?selector, side },
-                "SOS1 member {member:?} is missing its canonical {side} link"
-            ),
-            (true, Some(id)) => {
+            Some(id) => {
                 if !relaxed.insert(id) {
                     crate::bail!(
-                        { ?member, ?selector, ?id, side },
+                        { ?member, ?selector, ?id, side = side_name },
                         "Regular constraint {id:?} is claimed for more than one SOS1 formulation role"
                     );
                 }
-                self.ensure_exact_sos1_formulation_row(id, &expected()?, side)
+                self.ensure_sufficient_sos1_link(id, member, selector, bound, side, atol)
             }
         }
+    }
+
+    fn ensure_sufficient_sos1_link(
+        &self,
+        id: ConstraintID,
+        member: VariableID,
+        selector: VariableID,
+        bound: Bound,
+        side: Sos1LinkSide,
+        atol: ATol,
+    ) -> crate::Result<()> {
+        let side_name = side.name();
+        let actual = self.constraints().get(&id).ok_or_else(|| {
+            crate::error!(
+                { ?id, side = side_name },
+                "Claimed SOS1 {side_name} link constraint {id:?} is not active"
+            )
+        })?;
+        if actual.equality != Equality::LessThanOrEqualToZero {
+            crate::bail!(
+                { ?id, side = side_name, equality = ?actual.equality },
+                "Claimed SOS1 {side_name} link constraint {id:?} is not a less-than-or-equal-to-zero row"
+            );
+        }
+        let linear = actual.function().as_linear().ok_or_else(|| {
+            crate::error!(
+                { ?id, side = side_name },
+                "Claimed SOS1 {side_name} link constraint {id:?} is not linear"
+            )
+        })?;
+        let member_monomial = LinearMonomial::Variable(member);
+        let selector_monomial = LinearMonomial::Variable(selector);
+        let (Some(member_coefficient), Some(selector_coefficient)) =
+            (linear.get(&member_monomial), linear.get(&selector_monomial))
+        else {
+            crate::bail!(
+                { ?id, ?member, ?selector, side = side_name },
+                "Claimed SOS1 {side_name} link constraint {id:?} must contain exactly the member and selector terms with no constant"
+            );
+        };
+        if linear.num_terms() != 2 {
+            crate::bail!(
+                { ?id, ?member, ?selector, side = side_name },
+                "Claimed SOS1 {side_name} link constraint {id:?} must contain exactly the member and selector terms with no constant"
+            );
+        }
+
+        let member_coefficient = member_coefficient.into_inner();
+        if !side.member_coefficient_has_expected_sign(member_coefficient) {
+            crate::bail!(
+                { ?id, ?member, member_coefficient, side = side_name },
+                "Claimed SOS1 {side_name} link constraint {id:?} has the wrong member-coefficient sign"
+            );
+        }
+        let selector_coefficient = selector_coefficient.into_inner();
+        if selector_coefficient >= 0.0 {
+            crate::bail!(
+                { ?id, ?selector, selector_coefficient, side = side_name },
+                "Claimed SOS1 {side_name} link constraint {id:?} must have a negative selector coefficient"
+            );
+        }
+
+        let scale = member_coefficient.abs();
+        let big_m = -selector_coefficient / scale;
+        if !big_m.is_finite() || big_m <= 0.0 {
+            crate::bail!(
+                { ?id, member_coefficient, selector_coefficient, big_m, side = side_name },
+                "Claimed SOS1 {side_name} link constraint {id:?} does not have a finite positive Big-M after normalization"
+            );
+        }
+        let required_magnitude = side.required_magnitude(bound);
+        if required_magnitude > big_m && !atol.approx_eq(required_magnitude, big_m) {
+            crate::bail!(
+                {
+                    ?id,
+                    ?member,
+                    required_magnitude,
+                    big_m,
+                    atol = atol.into_inner(),
+                    side = side_name
+                },
+                "Claimed SOS1 {side_name} link constraint {id:?} has Big-M {big_m}, which does not cover the member domain requirement {required_magnitude} within ATol"
+            );
+        }
+        Ok(())
     }
 
     fn ensure_exact_sos1_formulation_row(
@@ -440,7 +617,8 @@ impl Instance {
     }
 
     /// Prove that fresh selectors occur in current active solver input only in
-    /// the formulation rows claimed by the request.
+    /// the formulation rows claimed by the request and do not occur in the
+    /// output objective.
     ///
     /// Removed rows, named functions, and dependency RHS expressions are not
     /// solver input. They are intentionally allowed to retain references and
@@ -451,6 +629,12 @@ impl Instance {
         relaxed_regular_rows: &BTreeSet<ConstraintID>,
     ) -> crate::Result<()> {
         let usage = self.decision_variable_usage();
+        let output_objective_ids = self
+            .output_objective()
+            .map(|output| {
+                populated_required_ids(output.function(), &self.decision_variable_dependency)
+            })
+            .unwrap_or_default();
         for &id in private_ids {
             if let Some(entry) = usage.get(id) {
                 if entry.used_in_objective() {
@@ -484,6 +668,13 @@ impl Instance {
                         "Fresh SOS1 selector {id:?} is used by active SOS1 constraint {row:?}"
                     );
                 }
+            }
+
+            if output_objective_ids.contains(&id) {
+                crate::bail!(
+                    { ?id },
+                    "Fresh SOS1 selector {id:?} is used by the output objective"
+                );
             }
 
             if self.decision_variable_dependency.get(&id).is_some() {
@@ -535,7 +726,7 @@ fn same_linear_constraint(actual: &Constraint, expected: &Constraint) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        coeff, linear, quadratic, ATol, AcyclicAssignments, DecisionVariable, Evaluate, Function,
+        coeff, linear, quadratic, ATol, AcyclicAssignments, DecisionVariable, Function,
         IndicatorConstraint, ModelingLabel, NamedFunction, OneHotConstraint, RemovedReason, Sense,
     };
 
@@ -576,16 +767,30 @@ mod tests {
         .unwrap()
     }
 
+    fn two_term_link(member_coefficient: f64, selector_coefficient: f64) -> Constraint {
+        let function = (crate::Linear::single_term(
+            LinearMonomial::Variable(member_integer_id()),
+            crate::Coefficient::try_from(member_coefficient).unwrap(),
+        ) + crate::Linear::single_term(
+            LinearMonomial::Variable(selector_id()),
+            crate::Coefficient::try_from(selector_coefficient).unwrap(),
+        ))
+        .unwrap();
+        Constraint::less_than_or_equal_to_zero(Function::from(function))
+    }
+
+    fn upper_link(scale: f64, big_m: f64) -> Constraint {
+        two_term_link(scale, -scale * big_m)
+    }
+
+    fn lower_link(scale: f64, big_m: f64) -> Constraint {
+        two_term_link(-scale, -scale * big_m)
+    }
+
     fn mixed_instance() -> (Instance, Sos1BigMPromotionRequest) {
         let constraints = BTreeMap::from([
-            (
-                upper_row_id(),
-                canonical_sos1_big_m_upper_link(member_integer_id(), selector_id(), 3.0).unwrap(),
-            ),
-            (
-                lower_row_id(),
-                canonical_sos1_big_m_lower_link(member_integer_id(), selector_id(), -2.0).unwrap(),
-            ),
+            (upper_row_id(), upper_link(1.0, 3.0)),
+            (lower_row_id(), lower_link(1.0, 2.0)),
             (
                 cardinality_row_id(),
                 canonical_sos1_big_m_cardinality([member_binary_id(), selector_id()]).unwrap(),
@@ -622,24 +827,16 @@ mod tests {
 
     fn fresh_instance(
         member: DecisionVariable,
-        upper_link: Option<ConstraintID>,
-        lower_link: Option<ConstraintID>,
+        upper_link_id: Option<ConstraintID>,
+        lower_link_id: Option<ConstraintID>,
     ) -> (Instance, Sos1BigMPromotionRequest) {
         let bound = member.bound();
         let mut constraints = BTreeMap::new();
-        if let Some(id) = upper_link {
-            constraints.insert(
-                id,
-                canonical_sos1_big_m_upper_link(member_integer_id(), selector_id(), bound.upper())
-                    .unwrap(),
-            );
+        if let Some(id) = upper_link_id {
+            constraints.insert(id, upper_link(1.0, bound.upper()));
         }
-        if let Some(id) = lower_link {
-            constraints.insert(
-                id,
-                canonical_sos1_big_m_lower_link(member_integer_id(), selector_id(), bound.lower())
-                    .unwrap(),
-            );
+        if let Some(id) = lower_link_id {
+            constraints.insert(id, lower_link(1.0, -bound.lower()));
         }
         constraints.insert(
             cardinality_row_id(),
@@ -660,8 +857,8 @@ mod tests {
                 member_integer_id(),
                 Sos1BigMSelectorClaim::Fresh {
                     selector: selector_id(),
-                    upper_link,
-                    lower_link,
+                    upper_link: upper_link_id,
+                    lower_link: lower_link_id,
                 },
             )]),
             cardinality_row_id(),
@@ -670,12 +867,21 @@ mod tests {
     }
 
     fn assert_atomic_rejection(
-        mut instance: Instance,
+        instance: Instance,
         request: &Sos1BigMPromotionRequest,
         expected: &str,
     ) {
+        assert_atomic_rejection_with_atol(instance, request, ATol::default(), expected);
+    }
+
+    fn assert_atomic_rejection_with_atol(
+        mut instance: Instance,
+        request: &Sos1BigMPromotionRequest,
+        atol: ATol,
+        expected: &str,
+    ) {
         let before = instance.clone();
-        let error = instance.promote_sos1_big_m(request).unwrap_err();
+        let error = instance.promote_sos1_big_m(request, atol).unwrap_err();
         assert!(
             error.to_string().contains(expected),
             "expected {expected:?} in error, got: {error:#}"
@@ -684,9 +890,11 @@ mod tests {
     }
 
     #[test]
-    fn promotes_mixed_canonical_formulation_and_retains_history() {
+    fn promotes_mixed_formulation_and_retains_history() {
         let (mut instance, request) = mixed_instance();
-        let promotion = instance.promote_sos1_big_m(&request).unwrap();
+        let promotion = instance
+            .promote_sos1_big_m(&request, ATol::default())
+            .unwrap();
 
         assert_eq!(promotion.sos1_constraint_id(), Sos1ConstraintID::from(0));
         assert_eq!(
@@ -707,7 +915,7 @@ mod tests {
         assert!(instance
             .removed_constraints()
             .values()
-            .all(|(_, reason)| reason.reason == "promoted canonical SOS1 Big-M formulation"));
+            .all(|(_, reason)| reason.reason == "promoted validated SOS1 Big-M formulation"));
         assert_eq!(
             &instance.sos1_constraints()[&Sos1ConstraintID::from(0)].variables,
             promotion.members()
@@ -740,8 +948,8 @@ mod tests {
         .unwrap();
         let (mut instance, request) =
             fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
-        let promotion = instance.promote_sos1_big_m(&request).unwrap();
         let atol = ATol::new(1.0e-6).unwrap();
+        let promotion = instance.promote_sos1_big_m(&request, atol).unwrap();
 
         let near_zero = instance
             .evaluate(&crate::v1::State::from_iter([(1, 5.0e-7)]), atol)
@@ -828,12 +1036,16 @@ mod tests {
     #[test]
     fn accepts_finite_member_bounds_that_exclude_zero() {
         let (mut positive, request) = fresh_instance(integer(1.0, 3.0), Some(upper_row_id()), None);
-        let _promotion = positive.promote_sos1_big_m(&request).unwrap();
+        let _promotion = positive
+            .promote_sos1_big_m(&request, ATol::default())
+            .unwrap();
         assert_eq!(positive.sos1_constraints().len(), 1);
 
         let (mut negative, request) =
             fresh_instance(integer(-3.0, -1.0), None, Some(lower_row_id()));
-        let _promotion = negative.promote_sos1_big_m(&request).unwrap();
+        let _promotion = negative
+            .promote_sos1_big_m(&request, ATol::default())
+            .unwrap();
         assert_eq!(negative.sos1_constraints().len(), 1);
     }
 
@@ -862,7 +1074,9 @@ mod tests {
             ]),
             cardinality,
         );
-        let promotion = instance.promote_sos1_big_m(&request).unwrap();
+        let promotion = instance
+            .promote_sos1_big_m(&request, ATol::default())
+            .unwrap();
         assert!(promotion.fresh_selectors().is_empty());
         assert!(instance.decision_variable_dependency().is_empty());
         assert_eq!(instance.decision_variables().len(), 2);
@@ -871,18 +1085,176 @@ mod tests {
     }
 
     #[test]
-    fn rejects_one_ulp_row_change_without_mutation() {
+    fn accepts_loose_links_and_preserves_original_rows() {
         let (mut instance, request) = mixed_instance();
-        let changed_upper = f64::from_bits(3.0f64.to_bits() + 1);
+        let upper = upper_link(1.0, 10.0);
+        let lower = lower_link(1.0, 8.0);
         instance
             .constraint_collection
-            .replace_active_row(
-                upper_row_id(),
-                canonical_sos1_big_m_upper_link(member_integer_id(), selector_id(), changed_upper)
-                    .unwrap(),
-            )
+            .replace_active_row(upper_row_id(), upper.clone())
             .unwrap();
-        assert_atomic_rejection(instance, &request, "does not match");
+        instance
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower.clone())
+            .unwrap();
+
+        let promotion = instance
+            .promote_sos1_big_m(&request, ATol::new(1.0e-6).unwrap())
+            .unwrap();
+
+        assert_eq!(promotion.relaxed_constraint_ids().len(), 3);
+        assert_eq!(instance.removed_constraints()[&upper_row_id()].0, upper);
+        assert_eq!(instance.removed_constraints()[&lower_row_id()].0, lower);
+    }
+
+    #[test]
+    fn accepts_positive_scalar_multiple_links() {
+        let (mut instance, request) = mixed_instance();
+        instance
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(1.0e-9, 3.0))
+            .unwrap();
+        instance
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(4.0, 2.0))
+            .unwrap();
+
+        let _ = instance
+            .promote_sos1_big_m(&request, ATol::new(1.0e-6).unwrap())
+            .unwrap();
+    }
+
+    #[test]
+    fn normalized_link_units_can_differ_from_retained_raw_row_atol() {
+        let atol = ATol::new(1.0e-6).unwrap();
+        let member = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(-2.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let (mut instance, request) =
+            fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
+        instance
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(4.0, 3.0))
+            .unwrap();
+        instance
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(4.0, 2.0))
+            .unwrap();
+        let _ = instance.promote_sos1_big_m(&request, atol).unwrap();
+
+        let solution = instance
+            .evaluate(&crate::v1::State::from_iter([(1, 5.0e-7)]), atol)
+            .unwrap();
+        assert!(solution.feasible_relaxed());
+        assert!(!solution.feasible());
+        assert!(
+            !solution
+                .evaluated_constraints()
+                .get(&upper_row_id())
+                .unwrap()
+                .stage
+                .feasible
+        );
+    }
+
+    #[test]
+    fn normalized_link_containment_uses_inclusive_atol() {
+        let atol = ATol::new(0.125).unwrap();
+
+        let (mut on_boundary, request) = mixed_instance();
+        on_boundary
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(2.0, 2.875))
+            .unwrap();
+        on_boundary
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(3.0, 1.875))
+            .unwrap();
+        let _ = on_boundary.promote_sos1_big_m(&request, atol).unwrap();
+
+        let (mut upper_outside, request) = mixed_instance();
+        upper_outside
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(2.0, 2.75))
+            .unwrap();
+        assert_atomic_rejection_with_atol(upper_outside, &request, atol, "does not cover");
+
+        let (mut lower_outside, request) = mixed_instance();
+        lower_outside
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(3.0, 1.75))
+            .unwrap();
+        assert_atomic_rejection_with_atol(lower_outside, &request, atol, "does not cover");
+    }
+
+    #[test]
+    fn accepts_valid_redundant_links_on_domain_implied_sides() {
+        let (mut positive, request) = fresh_instance(
+            integer(1.0, 3.0),
+            Some(upper_row_id()),
+            Some(lower_row_id()),
+        );
+        positive
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(2.0, 1.0))
+            .unwrap();
+        let _ = positive
+            .promote_sos1_big_m(&request, ATol::default())
+            .unwrap();
+
+        let (mut negative, request) = fresh_instance(
+            integer(-3.0, -1.0),
+            Some(upper_row_id()),
+            Some(lower_row_id()),
+        );
+        negative
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(2.0, 1.0))
+            .unwrap();
+        let _ = negative
+            .promote_sos1_big_m(&request, ATol::default())
+            .unwrap();
+    }
+
+    #[test]
+    fn rejects_invalid_redundant_link_without_mutation() {
+        let (mut instance, request) = fresh_instance(
+            integer(1.0, 3.0),
+            Some(upper_row_id()),
+            Some(lower_row_id()),
+        );
+        instance
+            .constraint_collection
+            .replace_active_row(lower_row_id(), upper_link(1.0, 1.0))
+            .unwrap();
+
+        assert_atomic_rejection(instance, &request, "member-coefficient sign");
+    }
+
+    #[test]
+    fn rejects_missing_required_link_without_mutation() {
+        let (instance, request) = fresh_instance(integer(-2.0, 3.0), None, Some(lower_row_id()));
+        assert_atomic_rejection(instance, &request, "missing its required upper link");
+
+        let (instance, request) = fresh_instance(integer(-2.0, 3.0), Some(upper_row_id()), None);
+        assert_atomic_rejection(instance, &request, "missing its required lower link");
+
+        let small_positive = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(0.0, 0.0625).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let (instance, request) = fresh_instance(small_positive, None, None);
+        assert_atomic_rejection_with_atol(
+            instance,
+            &request,
+            ATol::new(0.125).unwrap(),
+            "missing its required upper link",
+        );
     }
 
     #[test]
@@ -898,11 +1270,150 @@ mod tests {
             )
             .unwrap();
 
-        assert_atomic_rejection(instance, &request, "does not match");
+        assert_atomic_rejection(instance, &request, "is not linear");
+    }
+
+    #[test]
+    fn rejects_nonsemantic_link_shapes_without_mutation() {
+        let (mut wrong_member_sign, request) = mixed_instance();
+        wrong_member_sign
+            .constraint_collection
+            .replace_active_row(upper_row_id(), lower_link(1.0, 3.0))
+            .unwrap();
+        assert_atomic_rejection(wrong_member_sign, &request, "member-coefficient sign");
+
+        let (mut wrong_selector_sign, request) = mixed_instance();
+        wrong_selector_sign
+            .constraint_collection
+            .replace_active_row(upper_row_id(), two_term_link(1.0, 3.0))
+            .unwrap();
+        assert_atomic_rejection(
+            wrong_selector_sign,
+            &request,
+            "negative selector coefficient",
+        );
+
+        let (mut shifted, request) = mixed_instance();
+        let shifted_function = (upper_link(1.0, 3.0)
+            .function()
+            .as_linear()
+            .unwrap()
+            .into_owned()
+            + crate::Linear::from(coeff!(0.25)))
+        .unwrap();
+        shifted
+            .constraint_collection
+            .replace_active_row(
+                upper_row_id(),
+                Constraint::less_than_or_equal_to_zero(Function::from(shifted_function)),
+            )
+            .unwrap();
+        assert_atomic_rejection(shifted, &request, "with no constant");
+
+        let (mut extra_variable, request) = mixed_instance();
+        let extra_function = (upper_link(1.0, 3.0)
+            .function()
+            .as_linear()
+            .unwrap()
+            .into_owned()
+            + crate::Linear::single_term(LinearMonomial::Variable(unrelated_id()), coeff!(0.25)))
+        .unwrap();
+        extra_variable
+            .constraint_collection
+            .replace_active_row(
+                upper_row_id(),
+                Constraint::less_than_or_equal_to_zero(Function::from(extra_function)),
+            )
+            .unwrap();
+        assert_atomic_rejection(extra_variable, &request, "with no constant");
+
+        let (mut equality, request) = mixed_instance();
+        equality
+            .constraint_collection
+            .replace_active_row(
+                upper_row_id(),
+                Constraint::equal_to_zero(upper_link(1.0, 3.0).function().clone()),
+            )
+            .unwrap();
+        assert_atomic_rejection(equality, &request, "less-than-or-equal-to-zero");
+    }
+
+    #[test]
+    fn rejects_nonfinite_validation_inputs_without_mutation() {
+        let (instance, request) = mixed_instance();
+        assert_atomic_rejection_with_atol(
+            instance,
+            &request,
+            ATol::new(f64::INFINITY).unwrap(),
+            "requires a finite ATol",
+        );
+
+        let (mut overflowed_ratio, request) = mixed_instance();
+        overflowed_ratio
+            .constraint_collection
+            .replace_active_row(upper_row_id(), two_term_link(f64::MIN_POSITIVE, -f64::MAX))
+            .unwrap();
+        assert_atomic_rejection(
+            overflowed_ratio,
+            &request,
+            "finite positive Big-M after normalization",
+        );
+    }
+
+    #[test]
+    fn link_ids_must_name_active_regular_constraints() {
+        let (instance, mut request) = mixed_instance();
+        request.selector_claims.insert(
+            member_integer_id(),
+            Sos1BigMSelectorClaim::Fresh {
+                selector: selector_id(),
+                upper_link: Some(ConstraintID::from(999)),
+                lower_link: Some(lower_row_id()),
+            },
+        );
+        assert_atomic_rejection(instance, &request, "is not active");
+
+        let (mut removed, request) = mixed_instance();
+        removed
+            .relax_constraint(upper_row_id(), "test".to_string(), [])
+            .unwrap();
+        assert_atomic_rejection(removed, &request, "is not active");
+    }
+
+    #[test]
+    fn cardinality_row_remains_exact() {
+        let (mut instance, request) = mixed_instance();
+        let changed_one = f64::from_bits(1.0f64.to_bits() + 1);
+        let cardinality = ((crate::Linear::single_term(
+            LinearMonomial::Variable(member_binary_id()),
+            coeff!(1.0),
+        ) + crate::Linear::single_term(
+            LinearMonomial::Variable(selector_id()),
+            crate::Coefficient::try_from(changed_one).unwrap(),
+        ))
+        .unwrap()
+            + crate::Linear::from(coeff!(-1.0)))
+        .unwrap();
+        instance
+            .constraint_collection
+            .replace_active_row(
+                cardinality_row_id(),
+                Constraint::less_than_or_equal_to_zero(Function::from(cardinality)),
+            )
+            .unwrap();
+
+        assert_atomic_rejection(
+            instance,
+            &request,
+            "does not match the canonical row exactly",
+        );
     }
 
     #[test]
     fn rejects_unmodeled_members_without_mutation() {
+        let (instance, request) = fresh_instance(DecisionVariable::continuous(), None, None);
+        assert_atomic_rejection(instance, &request, "does not have finite bounds");
+
         let fixed_binary =
             DecisionVariable::new(Kind::Binary, Bound::new(1.0, 1.0).unwrap(), ATol::default())
                 .unwrap();
@@ -937,7 +1448,7 @@ mod tests {
         let empty_request = Sos1BigMPromotionRequest::new(BTreeMap::new(), ConstraintID::from(0));
         let before = empty.clone();
         assert!(empty
-            .promote_sos1_big_m(&empty_request)
+            .promote_sos1_big_m(&empty_request, ATol::default())
             .unwrap_err()
             .to_string()
             .contains("at least one member"));
@@ -983,7 +1494,9 @@ mod tests {
                 },
             )
             .unwrap();
-        let _ = instance.promote_sos1_big_m(&request).unwrap();
+        let _ = instance
+            .promote_sos1_big_m(&request, ATol::default())
+            .unwrap();
 
         assert_eq!(
             instance.variable_labels().name(selector_id()),
@@ -1003,6 +1516,24 @@ mod tests {
         let mut instance = base.clone();
         instance.set_objective(Function::from(linear!(10))).unwrap();
         assert_atomic_rejection(instance, &request, "the objective");
+
+        let mut instance = base.clone();
+        instance.output_objective = Some(super::super::OutputObjective::new(
+            Sense::Minimize,
+            Function::from(linear!(10)),
+            false,
+        ));
+        assert_atomic_rejection(instance, &request, "the output objective");
+
+        let mut instance = base.clone();
+        instance.decision_variable_dependency =
+            AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)))]).unwrap();
+        instance.output_objective = Some(super::super::OutputObjective::new(
+            Sense::Minimize,
+            Function::from(linear!(20)),
+            false,
+        ));
+        assert_atomic_rejection(instance, &request, "the output objective");
 
         let mut instance = base.clone();
         instance
@@ -1121,7 +1652,9 @@ mod tests {
         instance.decision_variable_dependency =
             AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)))]).unwrap();
 
-        let _ = instance.promote_sos1_big_m(&request).unwrap();
+        let _ = instance
+            .promote_sos1_big_m(&request, ATol::default())
+            .unwrap();
 
         assert!(instance.removed_constraints().contains_key(&regular_id));
         assert!(instance
@@ -1151,7 +1684,9 @@ mod tests {
     #[test]
     fn dependent_selector_reconstruction_validates_input_state() {
         let (mut instance, request) = mixed_instance();
-        let _ = instance.promote_sos1_big_m(&request).unwrap();
+        let _ = instance
+            .promote_sos1_big_m(&request, ATol::default())
+            .unwrap();
 
         let inconsistent = instance
             .populate_state(

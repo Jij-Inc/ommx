@@ -65,7 +65,9 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
     );
     assert_eq!(request.selector_claims().len(), 2);
 
-    let promotion = instance.promote_sos1_big_m(&request).unwrap();
+    let promotion = instance
+        .promote_sos1_big_m(&request, Default::default())
+        .unwrap();
 
     assert_eq!(promotion.relaxed_constraint_ids().len(), 3);
 

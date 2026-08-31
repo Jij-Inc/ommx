@@ -2,6 +2,7 @@ use super::Instance;
 use crate::{
     coeff,
     constraint::{ConstraintContext, ConstraintID, Provenance, RemovedReason},
+    linear,
     sos1_constraint::Sos1ConstraintID,
     Bound, Coefficient, Constraint, Function, Kind, Linear, LinearMonomial, VariableID,
 };
@@ -15,54 +16,6 @@ enum IndicatorPlan {
     Reuse,
     /// Variable requires a fresh binary indicator and Big-M constraints using these bounds.
     Fresh { bound: Bound },
-}
-
-/// Build the canonical upper Big-M link `x - u y <= 0`.
-///
-/// Shared by lowering and checked promotion so both directions use the same
-/// row representation. Callers must provide a finite, strictly positive
-/// `upper` value.
-pub fn canonical_sos1_big_m_upper_link(
-    member: VariableID,
-    selector: VariableID,
-    upper: f64,
-) -> Result<Constraint> {
-    let neg_upper = Coefficient::try_from(-upper)?;
-    let function = (Linear::single_term(LinearMonomial::Variable(member), coeff!(1.0))
-        + Linear::single_term(LinearMonomial::Variable(selector), neg_upper))?;
-    Ok(Constraint::less_than_or_equal_to_zero(Function::from(
-        function,
-    )))
-}
-
-/// Build the canonical lower Big-M link `l y - x <= 0`.
-///
-/// Callers must provide a finite, strictly negative `lower` value.
-pub fn canonical_sos1_big_m_lower_link(
-    member: VariableID,
-    selector: VariableID,
-    lower: f64,
-) -> Result<Constraint> {
-    let lower = Coefficient::try_from(lower)?;
-    let function = (Linear::single_term(LinearMonomial::Variable(selector), lower)
-        + Linear::single_term(LinearMonomial::Variable(member), coeff!(-1.0)))?;
-    Ok(Constraint::less_than_or_equal_to_zero(Function::from(
-        function,
-    )))
-}
-
-/// Build the canonical selector-cardinality row `sum(y) - 1 <= 0`.
-pub fn canonical_sos1_big_m_cardinality(
-    selectors: impl IntoIterator<Item = VariableID>,
-) -> Result<Constraint> {
-    let function = selectors
-        .into_iter()
-        .try_fold(Linear::from(coeff!(-1.0)), |sum, selector| {
-            sum + Linear::single_term(LinearMonomial::Variable(selector), coeff!(1.0))
-        })?;
-    Ok(Constraint::less_than_or_equal_to_zero(Function::from(
-        function,
-    )))
 }
 
 impl Instance {
@@ -236,20 +189,26 @@ impl Instance {
 
             // Upper Big-M: x_i - u_i y_i <= 0. Skip when u_i == 0 (trivial with l_i <= 0).
             if bound.upper() > 0.0 {
+                let neg_u = Coefficient::try_from(-bound.upper())
+                    .expect("planner guaranteed finite non-zero upper bound");
+                let f = (Linear::zero() + linear!(x_id.into_inner()))?;
+                let f = (f + Linear::single_term(LinearMonomial::Variable(y_id), neg_u))?;
                 let new_id = self.insert_sos1_generated_constraint(
                     id,
-                    canonical_sos1_big_m_upper_link(*x_id, y_id, bound.upper())
-                        .expect("planner guaranteed a finite positive upper bound"),
+                    Constraint::less_than_or_equal_to_zero(Function::from(f)),
                 );
                 new_constraint_ids.push(new_id);
             }
 
             // Lower Big-M: l_i y_i - x_i <= 0. Skip when l_i == 0 (trivial with u_i >= 0).
             if bound.lower() < 0.0 {
+                let l = Coefficient::try_from(bound.lower())
+                    .expect("planner guaranteed finite non-zero lower bound");
+                let f = (Linear::single_term(LinearMonomial::Variable(y_id), l)
+                    + Linear::single_term(LinearMonomial::Variable(*x_id), coeff!(-1.0)))?;
                 let new_id = self.insert_sos1_generated_constraint(
                     id,
-                    canonical_sos1_big_m_lower_link(*x_id, y_id, bound.lower())
-                        .expect("planner guaranteed a finite negative lower bound"),
+                    Constraint::less_than_or_equal_to_zero(Function::from(f)),
                 );
                 new_constraint_ids.push(new_id);
             }
@@ -263,9 +222,13 @@ impl Instance {
         // branch is defensive: it covers callers that bypass the builder (e.g.
         // future preprocessing that shrinks a SOS1 to empty).
         if !indicators.is_empty() {
+            let sum = indicators
+                .values()
+                .try_fold(Linear::zero(), |acc, v| acc + linear!(v.into_inner()))?;
+            let cardinality = Function::from((sum + Linear::from(coeff!(-1.0)))?);
             let new_id = self.insert_sos1_generated_constraint(
                 id,
-                canonical_sos1_big_m_cardinality(indicators.values().copied())?,
+                Constraint::less_than_or_equal_to_zero(cardinality),
             );
             new_constraint_ids.push(new_id);
         }
@@ -311,9 +274,7 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        constraint::Equality, linear, sos1_constraint::Sos1Constraint, DecisionVariable, Sense,
-    };
+    use crate::{constraint::Equality, sos1_constraint::Sos1Constraint, DecisionVariable, Sense};
     use ::approx::assert_abs_diff_eq;
     use maplit::btreemap;
     use std::collections::{BTreeMap, BTreeSet};
