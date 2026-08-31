@@ -5,6 +5,7 @@ use crate::{
     check_self_assignment, decision_variable::VariableID, substitute_acyclic_via_one, v1::State,
     ATol, Evaluate, Function, Substitute, VariableIDSet,
 };
+use anyhow::Context;
 use fnv::FnvHashMap;
 use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
@@ -215,6 +216,26 @@ impl AcyclicAssignments {
             })
     }
 
+    /// Consume the assignment table and return its functions in evaluation order.
+    ///
+    /// Crate-internal consuming root operations use this to transform dependency
+    /// functions by value after their rollback boundary has already been
+    /// established. The cached graph and order are consumed together, so no
+    /// assignment function needs to be cloned merely to rebuild the table.
+    pub(crate) fn into_evaluation_order(self) -> impl Iterator<Item = (VariableID, Function)> {
+        let Self {
+            mut assignments,
+            dependency: _,
+            topological_order,
+        } = self;
+        topological_order.into_iter().rev().map(move |id| {
+            let function = assignments
+                .remove(&id)
+                .expect("topological_order only contains assigned variables");
+            (id, function)
+        })
+    }
+
     pub fn keys(&self) -> impl Iterator<Item = VariableID> + '_ {
         self.assignments.keys().copied()
     }
@@ -298,7 +319,9 @@ impl Evaluate for AcyclicAssignments {
         // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
         // we first evaluate x1 = 3, then x4 = 5. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 5}.
         for (var_id, function) in self.evaluation_order_iter() {
-            let value = function.evaluate(&extended_state, atol)?;
+            let value = function.evaluate(&extended_state, atol).with_context(|| {
+                format!("failed to evaluate assignment for variable {var_id:?}")
+            })?;
             if !value.is_finite() {
                 return Err(crate::error!(
                     "Assignment for variable {var_id:?} evaluated to non-finite value: {value}"
@@ -536,6 +559,23 @@ mod tests {
     }
 
     #[test]
+    fn into_evaluation_order_moves_every_assignment_in_dependency_order() {
+        let assignments = assign! {
+            1 <- linear!(2) + linear!(3),
+            4 <- linear!(1) + coeff!(2.0),
+            8 <- linear!(9)
+        };
+        let expected = assignments
+            .evaluation_order_iter()
+            .map(|(id, function)| (id, function.clone()))
+            .collect::<Vec<_>>();
+
+        let actual = assignments.into_evaluation_order().collect::<Vec<_>>();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn test_evaluate_topological_order() {
         // Test case based on the comment in evaluate method:
         // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
@@ -660,7 +700,7 @@ mod tests {
     }
 
     #[test]
-    fn evaluate_samples_propagates_scalar_assignment_error() {
+    fn evaluate_samples_propagates_scalar_function_error() {
         let assignments = assign! {
             1 <- linear!(2),
             2 <- linear!(3)
@@ -675,7 +715,10 @@ mod tests {
 
         let sampled_message = sampled_error.to_string();
         assert_eq!(sampled_message, scalar_error.to_string());
-        assert!(sampled_message.contains("evaluated to non-finite value"));
+        assert!(matches!(
+            sampled_error.downcast_ref::<crate::FunctionEvaluationError>(),
+            Some(crate::FunctionEvaluationError::NonFiniteResult { .. })
+        ));
     }
 
     #[test]
@@ -724,6 +767,9 @@ mod tests {
         let state = State::from_iter([(2, f64::INFINITY)]);
 
         let err = assignments.evaluate(&state, ATol::default()).unwrap_err();
-        assert!(err.to_string().contains("evaluated to non-finite value"));
+        assert!(err
+            .to_string()
+            .contains("failed to evaluate assignment for variable VariableID(1)"));
+        assert!(err.is::<crate::FunctionEvaluationError>());
     }
 }

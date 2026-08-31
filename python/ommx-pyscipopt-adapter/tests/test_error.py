@@ -10,13 +10,14 @@ from ommx.adapter import AdapterNotApplicableError, InfeasibleDetected
 from ommx import (
     Constraint,
     DecisionVariable,
-    DegreeBound,
     Equality,
+    Function,
     Instance,
     InstanceClassMismatch,
     Kind,
     OneHotConstraint,
     Polynomial,
+    PolynomialRequirement,
     Sense,
     Sos1Constraint,
 )
@@ -31,14 +32,14 @@ def test_declares_quadratic_mip_input_class():
         Kind.Integer,
         Kind.Continuous,
     }
-    assert clause.objective_degree_bound == DegreeBound.at_most(2)
-    assert clause.regular_constraint_degree_bounds == {
-        Equality.EqualToZero: DegreeBound.at_most(2),
-        Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
+    assert clause.objective_polynomial_requirement == PolynomialRequirement.at_most(2)
+    assert clause.regular_constraint_polynomial_requirements == {
+        Equality.EqualToZero: PolynomialRequirement.at_most(2),
+        Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(2),
     }
-    assert clause.indicator_constraint_degree_bounds == {
-        Equality.EqualToZero: DegreeBound.at_most(1),
-        Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+    assert clause.indicator_body_polynomial_requirements == {
+        Equality.EqualToZero: PolynomialRequirement.at_most(1),
+        Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
     }
     assert not clause.allows_one_hot
     assert clause.allows_sos1
@@ -85,7 +86,23 @@ def test_error_polynomial_objective():
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.ObjectiveDegreeExceedsBound)
     assert mismatch.actual_degree == 3
-    assert mismatch.bound == DegreeBound.at_most(2)
+    assert mismatch.bound == PolynomialRequirement.at_most(2)
+
+
+def test_error_non_polynomial_objective():
+    x = DecisionVariable.continuous(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=abs(Function(x)),
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    with pytest.raises(AdapterNotApplicableError) as error:
+        OMMXPySCIPOptAdapter(instance)
+
+    [mismatch] = error.value.report.clause_reports[0].mismatches
+    assert isinstance(mismatch, InstanceClassMismatch.ObjectiveFunctionNotPolynomial)
 
 
 def test_rejects_inapplicable_input_before_backend_construction(monkeypatch):
@@ -129,7 +146,7 @@ def test_error_nonlinear_constraint():
         mismatch, InstanceClassMismatch.RegularConstraintDegreeExceedsBound
     )
     assert mismatch.actual_degrees == {0: 3}
-    assert mismatch.bound == DegreeBound.at_most(2)
+    assert mismatch.bound == PolynomialRequirement.at_most(2)
 
 
 def test_rejects_quadratic_indicator_body_without_mutating_input():
@@ -152,7 +169,7 @@ def test_rejects_quadratic_indicator_body_without_mutating_input():
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.IndicatorBodyDegreeExceedsBound)
     assert mismatch.actual_degrees == {0: 2}
-    assert mismatch.bound == DegreeBound.at_most(1)
+    assert mismatch.bound == PolynomialRequirement.at_most(1)
     assert instance.to_v2_bytes() == before
 
 

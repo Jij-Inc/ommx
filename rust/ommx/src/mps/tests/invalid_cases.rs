@@ -22,13 +22,15 @@ fn test_nonlinear_objective_error() {
     )
     .unwrap();
 
-    let mut buffer = Vec::new();
+    let mut buffer = b"unchanged".to_vec();
     let err = format::format(&instance, &mut buffer).unwrap_err();
-    let msg = err.to_string();
-    assert!(
-        msg.contains("nonlinear objective") && msg.contains("3-degree"),
-        "unexpected error: {msg}"
-    );
+    insta::assert_snapshot!(err.to_string(), @r###"
+    Instance is outside the MPS input class:
+    Instance does not belong to any clause:
+    - clause 0 (`MPS`):
+      - objective degree 3 exceeds degree <= 2
+    "###);
+    assert_eq!(buffer, b"unchanged");
 }
 
 #[test]
@@ -52,13 +54,13 @@ fn test_nonlinear_constraint_error() {
     )
     .unwrap();
 
-    let mut buffer = Vec::new();
+    let mut buffer = b"unchanged".to_vec();
     let err = format::format(&instance, &mut buffer).unwrap_err();
-    let msg = err.to_string();
-    assert!(
-        msg.contains("nonlinear constraint")
-            && msg.contains("OMMX_CONSTR_0")
-            && msg.contains("3-degree"),
-        "unexpected error: {msg}"
-    );
+    insta::assert_snapshot!(err.to_string(), @r###"
+    Instance is outside the MPS input class:
+    Instance does not belong to any clause:
+    - clause 0 (`MPS`):
+      - regular LessThanOrEqualToZero constraint degrees {ConstraintID(0): Degree(3)} exceed degree <= 2
+    "###);
+    assert_eq!(buffer, b"unchanged");
 }

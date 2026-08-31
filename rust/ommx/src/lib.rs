@@ -69,7 +69,9 @@ pub use evaluate::{
     UnknownStateEntries, UnverifiableDependentAssertion,
 };
 pub use format::{FormattedFunction, FunctionFormatOptions};
-pub use function::*;
+pub use function::{
+    Expression, Function, FunctionEvaluationError, FunctionParameters, IntoFunctionForMacro,
+};
 pub use indicator_constraint::*;
 pub use infeasible_detected::*;
 pub use instance::*;

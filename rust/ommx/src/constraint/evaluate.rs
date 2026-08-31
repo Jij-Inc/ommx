@@ -1,6 +1,26 @@
 use super::*;
 use crate::{Evaluate, VariableIDSet};
 
+impl Constraint<Created> {
+    /// Prepare an intrinsic row replacement for the `Instance`-owned atomic
+    /// partial-evaluation plan while preserving this constraint's equality.
+    pub(crate) fn partial_evaluate_replacement(
+        &self,
+        state: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> crate::Result<Option<Self>> {
+        self.stage
+            .function
+            .partial_evaluate_replacement(state, atol)
+            .map(|replacement| {
+                replacement.map(|function| Self {
+                    equality: self.equality,
+                    stage: CreatedData { function },
+                })
+            })
+    }
+}
+
 impl Evaluate for Constraint<Created> {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;
@@ -89,11 +109,23 @@ mod tests {
     proptest! {
         #[test]
         fn test_evaluate_samples((c, samples) in constraint_and_samples()) {
-            let evaluated = c.evaluate_samples(&samples, crate::ATol::default()).unwrap();
-            for (sample_id, state) in samples.iter() {
-                let expected = c.evaluate(state, crate::ATol::default()).unwrap();
-                let extracted = evaluated.get(*sample_id).unwrap();
-                prop_assert_eq!(extracted, expected);
+            let atol = crate::ATol::default();
+            match c.evaluate_samples(&samples, atol) {
+                Ok(evaluated) => {
+                    for (sample_id, state) in samples.iter() {
+                        let expected = c.evaluate(state, atol).unwrap();
+                        let extracted = evaluated.get(*sample_id).unwrap();
+                        prop_assert_eq!(extracted, expected);
+                    }
+                }
+                Err(_) => {
+                    prop_assert!(
+                        samples
+                            .iter()
+                            .any(|(_, state)| c.evaluate(state, atol).is_err()),
+                        "sample evaluation failed although every scalar evaluation succeeded",
+                    );
+                }
             }
         }
     }

@@ -372,11 +372,11 @@ Using the functions prepared so far, you can implement it as follows:
 ```{code-cell} ipython3
 from ommx.adapter import DiagnosticsSink, SolverAdapter
 from ommx import (
-    DegreeBound,
     Equality,
     InstanceClass,
     InstanceClassClause,
     Kind,
+    PolynomialRequirement,
     PreparationPolicy,
     Sense,
     SpecialConstraintKind,
@@ -389,14 +389,14 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             InstanceClassClause(
                 label="tutorial-quadratic-mip",
                 allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
-                objective_degree_bound=DegreeBound.at_most(2),
-                regular_constraint_degree_bounds={
-                    Equality.EqualToZero: DegreeBound.at_most(2),
-                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
+                objective_polynomial_requirement=PolynomialRequirement.at_most(2),
+                regular_constraint_polynomial_requirements={
+                    Equality.EqualToZero: PolynomialRequirement.at_most(2),
+                    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(2),
                 },
-                indicator_constraint_degree_bounds={
-                    Equality.EqualToZero: DegreeBound.at_most(1),
-                    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+                indicator_body_polynomial_requirements={
+                    Equality.EqualToZero: PolynomialRequirement.at_most(1),
+                    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
                 },
                 allows_sos1=True,
                 allowed_senses={Sense.Minimize, Sense.Maximize},
@@ -660,7 +660,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             InstanceClassClause(
                 label="tutorial-binary-qubo",
                 allowed_variable_kinds={Kind.Binary},
-                objective_degree_bound=DegreeBound.at_most(2),
+                objective_polynomial_requirement=PolynomialRequirement.at_most(2),
                 allowed_senses={Sense.Minimize},
             )
         ]

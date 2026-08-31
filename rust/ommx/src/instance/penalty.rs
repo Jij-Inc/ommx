@@ -137,9 +137,8 @@ impl Instance {
     /// ```
     pub fn penalty_method(mut self) -> Result<ParametricInstance> {
         self.ensure_penalty_method_supported("penalty_method")?;
-        if !self.constraints().is_empty() {
-            self.capture_output_objective();
-            self.invalidate_output_objective_optimality();
+        if self.constraints().is_empty() {
+            return Ok(self.into_parametric_without_penalty());
         }
 
         let mut max_id = 0;
@@ -157,12 +156,11 @@ impl Instance {
         }
 
         let id_base = max_id + 1;
-        let mut objective = self.objective.clone();
+        let mut objective = self.take_or_clone_objective_for_penalty();
         let mut parameters = ParameterTable::default();
-        let mut constraint_collection = self.constraint_collection;
-        let mut removals = BTreeMap::new();
+        let mut removal_reasons = BTreeMap::new();
         for (parameter_offset, (&constraint_id, constraint)) in
-            constraint_collection.active().iter().enumerate()
+            self.constraint_collection.active().iter().enumerate()
         {
             let parameter_offset = u64::try_from(parameter_offset)?;
             let parameter_id = VariableID::from(id_base + parameter_offset);
@@ -172,11 +170,11 @@ impl Instance {
                 ..Default::default()
             };
 
-            let f = constraint.function().clone();
+            let f = constraint.function();
             // Add penalty term: λ * f(x)^2
             let mut penalty_term = Function::from(linear!(parameter_id));
-            penalty_term.try_mul_assign_in_place(&f)?;
-            penalty_term.try_mul_assign_in_place(&f)?;
+            penalty_term.try_mul_assign_in_place(f)?;
+            penalty_term.try_mul_assign_in_place(f)?;
             objective.try_add_assign_in_place(penalty_term)?;
 
             let removed_reason = crate::constraint::RemovedReason {
@@ -192,17 +190,22 @@ impl Instance {
             };
 
             parameters.insert(parameter_id, parameter_label)?;
-            removals.insert(constraint_id, (constraint.clone(), removed_reason));
+            removal_reasons.insert(constraint_id, removed_reason);
         }
-        constraint_collection.move_active_rows_to_removed(removals)?;
+        if !removal_reasons.is_empty() {
+            self.constraint_collection
+                .move_active_rows_to_removed_with_reasons(removal_reasons)?;
+            self.replace_active_objective_preserving_output(objective);
+            self.invalidate_output_objective_optimality();
+        }
 
         Ok(ParametricInstance {
             sense: self.sense,
-            objective,
+            objective: self.objective,
             output_objective: self.output_objective,
             decision_variables: self.decision_variables,
             parameters,
-            constraint_collection,
+            constraint_collection: self.constraint_collection,
             indicator_constraint_collection: self.indicator_constraint_collection,
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,
@@ -306,8 +309,7 @@ impl Instance {
         let mut objective = self.objective.clone();
         for (&id, constraint) in self.constraint_collection.active() {
             let function = constraint.function();
-            let mut penalty_term = function.clone();
-            penalty_term.try_mul_assign_in_place(function)?;
+            let mut penalty_term = (function * function)?;
             let weight = self.fixed_penalty_objective_coefficient(normalized_weights[&id]);
             penalty_term.try_mul_assign_in_place(&Function::try_from(weight)?)?;
             objective.try_add_assign_in_place(penalty_term)?;
@@ -388,25 +390,8 @@ impl Instance {
 
         // Early return if no active constraints (preserve any existing removed constraints)
         if self.constraints().is_empty() {
-            return Ok(ParametricInstance {
-                sense: self.sense,
-                objective: self.objective,
-                output_objective: self.output_objective,
-                decision_variables: self.decision_variables,
-                parameters: ParameterTable::default(),
-                constraint_collection: self.constraint_collection,
-                indicator_constraint_collection: self.indicator_constraint_collection,
-                one_hot_constraint_collection: self.one_hot_constraint_collection,
-                sos1_constraint_collection: self.sos1_constraint_collection,
-                decision_variable_dependency: self.decision_variable_dependency,
-                description: self.description,
-                named_functions: self.named_functions,
-                annotations: self.annotations,
-            });
+            return Ok(self.into_parametric_without_penalty());
         }
-
-        self.capture_output_objective();
-        self.invalidate_output_objective_optimality();
 
         let mut max_id = 0;
 
@@ -423,28 +408,25 @@ impl Instance {
         }
 
         let parameter_id = VariableID::from(max_id + 1);
-        let mut objective = self.objective.clone();
+        let mut objective = self.take_or_clone_objective_for_penalty();
         let parameter_label = ParameterLabel {
             name: Some("uniform_penalty_weight".to_string()),
             ..Default::default()
         };
 
         let mut quad_sum = Function::zero();
-        let mut constraint_collection = self.constraint_collection;
-        let mut removals = BTreeMap::new();
-        for (&constraint_id, constraint) in constraint_collection.active() {
-            let f = constraint.function().clone();
-            let mut squared = f.clone();
-            squared.try_mul_assign_in_place(&f)?;
+        let mut removal_reasons = BTreeMap::new();
+        for (&constraint_id, constraint) in self.constraint_collection.active() {
+            let f = constraint.function();
+            let squared = (f * f)?;
             quad_sum.try_add_assign_in_place(squared)?;
 
             let removed_reason = crate::constraint::RemovedReason {
                 reason: "ommx.Instance.uniform_penalty_method".to_string(),
                 parameters: Default::default(),
             };
-            removals.insert(constraint_id, (constraint.clone(), removed_reason));
+            removal_reasons.insert(constraint_id, removed_reason);
         }
-        constraint_collection.move_active_rows_to_removed(removals)?;
 
         let mut penalty_term = Function::from(linear!(parameter_id));
         penalty_term.try_mul_assign_in_place(&quad_sum)?;
@@ -453,13 +435,18 @@ impl Instance {
         let mut parameters = ParameterTable::default();
         parameters.insert(parameter_id, parameter_label)?;
 
+        self.constraint_collection
+            .move_active_rows_to_removed_with_reasons(removal_reasons)?;
+        self.replace_active_objective_preserving_output(objective);
+        self.invalidate_output_objective_optimality();
+
         Ok(ParametricInstance {
             sense: self.sense,
-            objective,
+            objective: self.objective,
             output_objective: self.output_objective,
             decision_variables: self.decision_variables,
             parameters,
-            constraint_collection,
+            constraint_collection: self.constraint_collection,
             indicator_constraint_collection: self.indicator_constraint_collection,
             one_hot_constraint_collection: self.one_hot_constraint_collection,
             sos1_constraint_collection: self.sos1_constraint_collection,
@@ -554,8 +541,7 @@ impl Instance {
         let mut penalty_term = Function::zero();
         for constraint in self.constraint_collection.active().values() {
             let function = constraint.function();
-            let mut squared = function.clone();
-            squared.try_mul_assign_in_place(function)?;
+            let squared = (function * function)?;
             penalty_term.try_add_assign_in_place(squared)?;
         }
         penalty_term.try_mul_assign_in_place(&Function::try_from(weight)?)?;
@@ -569,6 +555,40 @@ impl Instance {
         match self.sense() {
             Sense::Minimize => weight,
             Sense::Maximize => -weight,
+        }
+    }
+
+    /// Convert a consumed `Instance` to the corresponding parameter-free
+    /// representation without cloning any owned table or function.
+    fn into_parametric_without_penalty(self) -> ParametricInstance {
+        ParametricInstance {
+            sense: self.sense,
+            objective: self.objective,
+            output_objective: self.output_objective,
+            decision_variables: self.decision_variables,
+            parameters: ParameterTable::default(),
+            constraint_collection: self.constraint_collection,
+            indicator_constraint_collection: self.indicator_constraint_collection,
+            one_hot_constraint_collection: self.one_hot_constraint_collection,
+            sos1_constraint_collection: self.sos1_constraint_collection,
+            decision_variable_dependency: self.decision_variable_dependency,
+            description: self.description,
+            named_functions: self.named_functions,
+            annotations: self.annotations,
+        }
+    }
+
+    /// Obtain an owned objective for a consuming penalty rewrite.
+    ///
+    /// The first formulation rewrite must retain the original objective in
+    /// `output_objective`, so it needs one storage copy. Once output semantics
+    /// have already been captured, the active objective can be moved into the
+    /// rewrite instead.
+    fn take_or_clone_objective_for_penalty(&mut self) -> Function {
+        if self.output_objective.is_some() {
+            std::mem::replace(&mut self.objective, Function::zero())
+        } else {
+            self.objective.clone()
         }
     }
 
@@ -617,31 +637,26 @@ impl Instance {
 
     fn commit_fixed_penalty(&mut self, objective: Function, operation: &str) -> crate::Result<()> {
         let reason = format!("ommx.Instance.{operation}");
-        let removals = self
+        let removal_reasons = self
             .constraint_collection
             .active()
-            .iter()
-            .map(|(&id, constraint)| {
+            .keys()
+            .map(|&id| {
                 (
                     id,
-                    (
-                        constraint.clone(),
-                        crate::constraint::RemovedReason {
-                            reason: reason.clone(),
-                            parameters: Default::default(),
-                        },
-                    ),
+                    crate::constraint::RemovedReason {
+                        reason: reason.clone(),
+                        parameters: Default::default(),
+                    },
                 )
             })
             .collect();
-        let mut constraint_collection = self.constraint_collection.clone();
-        constraint_collection.move_active_rows_to_removed(removals)?;
 
         debug_assert!(!self.constraint_collection.active().is_empty());
-        self.capture_output_objective();
+        self.constraint_collection
+            .move_active_rows_to_removed_with_reasons(removal_reasons)?;
+        self.replace_active_objective_preserving_output(objective);
         self.invalidate_output_objective_optimality();
-        self.objective = objective;
-        self.constraint_collection = constraint_collection;
         Ok(())
     }
 }
@@ -1464,7 +1479,7 @@ mod tests {
             SpecialConstraintKind::Sos1,
         ]);
         lowered
-            .convert_indicator_to_constraint(crate::IndicatorConstraintID::from(1))
+            .convert_indicator_to_constraint(crate::IndicatorConstraintID::from(1), ATol::default())
             .unwrap();
         lowered
             .convert_one_hot_to_constraint(crate::OneHotConstraintID::from(1))

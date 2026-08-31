@@ -20,13 +20,13 @@ from ommx.adapter import (
 from ommx import (
     Constraint,
     DecisionVariable,
-    DegreeBound,
     Equality,
     Function,
     Instance,
     InstanceClass,
     InstanceClassClause,
     Kind,
+    PolynomialRequirement,
     PreparationPolicy,
     Sense,
     Solution,
@@ -44,13 +44,13 @@ if TYPE_CHECKING:
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 _SCIP_TERMINATION_EVENT = "TERMINATION"
 
-_QUADRATIC_REGULAR_CONSTRAINT_DEGREE_BOUNDS = {
-    Equality.EqualToZero: DegreeBound.at_most(2),
-    Equality.LessThanOrEqualToZero: DegreeBound.at_most(2),
+_QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS = {
+    Equality.EqualToZero: PolynomialRequirement.at_most(2),
+    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(2),
 }
-_LINEAR_INDICATOR_CONSTRAINT_DEGREE_BOUNDS = {
-    Equality.EqualToZero: DegreeBound.at_most(1),
-    Equality.LessThanOrEqualToZero: DegreeBound.at_most(1),
+_LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS = {
+    Equality.EqualToZero: PolynomialRequirement.at_most(1),
+    Equality.LessThanOrEqualToZero: PolynomialRequirement.at_most(1),
 }
 
 
@@ -510,12 +510,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             InstanceClassClause(
                 label="pyscipopt-quadratic-mip",
                 allowed_variable_kinds={Kind.Binary, Kind.Integer, Kind.Continuous},
-                objective_degree_bound=DegreeBound.at_most(2),
-                regular_constraint_degree_bounds=(
-                    _QUADRATIC_REGULAR_CONSTRAINT_DEGREE_BOUNDS
+                objective_polynomial_requirement=PolynomialRequirement.at_most(2),
+                regular_constraint_polynomial_requirements=(
+                    _QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS
                 ),
-                indicator_constraint_degree_bounds=(
-                    _LINEAR_INDICATOR_CONSTRAINT_DEGREE_BOUNDS
+                indicator_body_polynomial_requirements=(
+                    _LINEAR_INDICATOR_BODY_POLYNOMIAL_REQUIREMENTS
                 ),
                 allows_sos1=True,
                 allowed_senses={Sense.Minimize, Sense.Maximize},
@@ -849,6 +849,11 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         # Check if objective is quadratic to add auxiliary variable
         degree = self.instance.objective.degree()
+        if degree is None or degree > 2:
+            raise OMMXPySCIPOptAdapterError(
+                f"Objective function degree {degree} is not supported. "
+                "Only constant, linear, and quadratic objectives are supported."
+            )
         if degree == 2:
             # If objective function is quadratic, add the auxiliary variable for the linearized objective function,
             # because the setObjective method in PySCIPOpt does not support quadratic objective functions.

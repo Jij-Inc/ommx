@@ -5723,144 +5723,6 @@
         },
         {
           "kind": "Class",
-          "name": "DegreeBound",
-          "doc": "Cumulative polynomial-degree bound in an :class:`InstanceClassClause`.",
-          "bases": [],
-          "methods": [
-            {
-              "name": "__eq__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "other",
-                      "type_": {
-                        "display": "object",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "__repr__",
-              "doc": "",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "str",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "at_most",
-              "doc": "Include every degree up to and including ``maximum``.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "maximum",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "DegreeBound",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "includes",
-              "doc": "Return whether ``actual_degree`` satisfies this bound.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "actual_degree",
-                      "type_": {
-                        "display": "int",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "bool",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "unbounded",
-              "doc": "Include every polynomial degree representable by OMMX.",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "DegreeBound",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            }
-          ],
-          "attributes": [
-            {
-              "name": "maximum",
-              "doc": "Inclusive maximum degree, or ``None`` when unbounded.",
-              "type_": {
-                "display": "Optional[int]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            }
-          ],
-          "deprecated": null
-        },
-        {
-          "kind": "Class",
           "name": "Equality",
           "doc": "Equality type for constraints",
           "bases": [],
@@ -6538,6 +6400,27 @@
           "bases": [],
           "methods": [
             {
+              "name": "__abs__",
+              "doc": "Absolute value operator",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__add__",
               "doc": "Addition",
               "signatures": [
@@ -6838,6 +6721,44 @@
               "deprecated": null
             },
             {
+              "name": "__pow__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "exponent",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "modulo",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__radd__",
               "doc": "Reverse addition (lhs + self)",
               "signatures": [
@@ -6962,8 +6883,80 @@
               "deprecated": null
             },
             {
+              "name": "__rtruediv__",
+              "doc": "Reverse division (lhs / self)",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "lhs",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__sub__",
               "doc": "Subtraction",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__truediv__",
+              "doc": "Division",
               "signatures": [
                 {
                   "parameters": [
@@ -7241,7 +7234,7 @@
             },
             {
               "name": "content_factor",
-              "doc": "",
+              "doc": "Return the minimal positive factor that makes all coefficients integers.\n\nRaises `TypeError` for a composed, non-polynomial Function.",
               "signatures": [
                 {
                   "parameters": [],
@@ -7257,14 +7250,20 @@
             },
             {
               "name": "degree",
-              "doc": "Get the degree of this function.\n\nReturns the highest degree of any term in the function.\nZero function has degree 0, constant function has degree 0,\nlinear function has degree 1, quadratic function has degree 2, etc.",
+              "doc": "Get the degree of this function.\n\nReturns the highest degree of any term in a polynomial function.\nZero function has degree 0, constant function has degree 0,\nlinear function has degree 1, quadratic function has degree 2, etc.\nReturns None for non-polynomial expression functions.",
               "signatures": [
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "int",
+                    "display": "Optional[int]",
                     "link_target": null,
-                    "children": []
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -7322,7 +7321,7 @@
             },
             {
               "name": "evaluate_bound",
-              "doc": "Compute an interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.\n\n**Returns:** A {class}`~ommx.Bound` that contains $[\\inf f, \\sup f]$ over the given variable bounds.\n\n**Tightness:** This evaluates the bound **term by term** (monomial-wise)\nand sums the per-term intervals. The result is a **sound\nover-approximation** of the true range $[\\inf f, \\sup f]$ but is **not\nguaranteed to be tight**, because it ignores dependencies between terms\nthat share variables. For example, $f = x^2 - x$ with $x \\in [0, 1]$\nhas true range $[-1/4, 0]$ (minimum at $x = 1/2$), but term-wise\nevaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.\n\n# Examples\n\n>>> from ommx import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> (b.lower, b.upper)\n(3.0, 7.0)",
+              "doc": "Compute an interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.\n- `atol`: Absolute tolerance used by operations whose semantics depend on\n  whether a value is zero. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used.\n  Use the same tolerance when point-evaluating this function.\n\n**Returns:** A {class}`~ommx.Bound` that contains $[\\inf f, \\sup f]$ over the given variable bounds.\n\n**Tightness:** Polynomial leaves are bounded **term by term**\n(monomial-wise), and composed expression operations combine their operand\nbounds with interval arithmetic. The result is a **sound\nover-approximation** of the true range $[\\inf f, \\sup f]$ but is **not\nguaranteed to be tight**, because it ignores dependencies between terms\nor operands that share variables. For example, $f = x^2 - x$ with\n$x \\in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but\nterm-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.\n\n**Raises:** `RuntimeError` when an interval contains a value treated as\nzero by `atol` in a denominator or as the base of a negative integer\npower.\nRaises `ValueError` if valid bound endpoints cannot be constructed after\nnumeric overflow.\n\n# Examples\n\n>>> from ommx import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> b.lower <= 3.0 and b.upper >= 7.0\nTrue",
               "signatures": [
                 {
                   "parameters": [
@@ -7345,6 +7344,24 @@
                         ]
                       },
                       "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -7461,6 +7478,78 @@
                       "type_": {
                         "display": "float",
                         "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "maximum",
+              "doc": "Pointwise maximum",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "minimum",
+              "doc": "Pointwise minimum",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "ToFunction",
+                        "link_target": {
+                          "fqn": "ommx._ommx_rust.ToFunction",
+                          "doc_module": "ommx._ommx_rust",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       },
                       "default": null
@@ -7607,14 +7696,20 @@
             },
             {
               "name": "num_terms",
-              "doc": "Get the number of terms in this function.\n\nZero function has 0 terms, constant function has 1 term,\nand polynomial functions have the number of non-zero coefficient terms.",
+              "doc": "Get the number of terms in this function.\n\nZero function has 0 terms, constant function has 1 term,\nand polynomial functions have the number of non-zero coefficient terms.\nReturns None for non-polynomial expression functions.",
               "signatures": [
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "int",
+                    "display": "Optional[int]",
                     "link_target": null,
-                    "children": []
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
@@ -7658,6 +7753,37 @@
                         "kind": "Simple",
                         "value": "None"
                       }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "powi",
+              "doc": "Raise this function to a signed 32-bit integer power.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "exponent",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -7795,12 +7921,33 @@
               ],
               "is_async": false,
               "deprecated": null
+            },
+            {
+              "name": "signum",
+              "doc": "Sign of the function value",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Function",
+                    "link_target": {
+                      "fqn": "ommx.Function",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
             }
           ],
           "attributes": [
             {
               "name": "constant_term",
-              "doc": "Get the constant term of the function.\n\nReturns the constant term. Returns 0.0 if function has no constant term.\nWorks for all polynomial functions by filtering the degree-0 term.",
+              "doc": "Get the constant term of the function.\n\nReturns the constant term. Returns 0.0 if function has no constant term.\nWorks for all polynomial functions by filtering the degree-0 term.\nRaises TypeError if this is a non-polynomial expression function.",
               "type_": {
                 "display": "float",
                 "link_target": null,
@@ -7811,7 +7958,7 @@
             },
             {
               "name": "linear_terms",
-              "doc": "Get linear terms as a dictionary mapping variable id to coefficient.\n\nReturns dictionary mapping variable IDs to their linear coefficients.\nReturns empty dict if function has no linear terms.\nWorks for all polynomial functions by filtering only degree-1 terms.",
+              "doc": "Get linear terms as a dictionary mapping variable id to coefficient.\n\nReturns dictionary mapping variable IDs to their linear coefficients.\nReturns empty dict if function has no linear terms.\nWorks for all polynomial functions by filtering only degree-1 terms.\nRaises TypeError if this is a non-polynomial expression function.",
               "type_": {
                 "display": "dict[int, float]",
                 "link_target": null,
@@ -7833,7 +7980,7 @@
             },
             {
               "name": "quadratic_terms",
-              "doc": "Get quadratic terms as a dictionary mapping (row, col) to coefficient.\n\nReturns dictionary mapping variable ID pairs to their quadratic coefficients.\nReturns empty dict if function has no quadratic terms.\nWorks for all polynomial functions by filtering only degree-2 terms.",
+              "doc": "Get quadratic terms as a dictionary mapping (row, col) to coefficient.\n\nReturns dictionary mapping variable ID pairs to their quadratic coefficients.\nReturns empty dict if function has no quadratic terms.\nWorks for all polynomial functions by filtering only degree-2 terms.\nRaises TypeError if this is a non-polynomial expression function.",
               "type_": {
                 "display": "dict[tuple[int, int], float]",
                 "link_target": null,
@@ -7866,7 +8013,7 @@
             },
             {
               "name": "terms",
-              "doc": "",
+              "doc": "Get all polynomial terms as a dictionary mapping monomial tuples to coefficients.\n\nRaises TypeError if this is a non-polynomial expression function.",
               "type_": {
                 "display": "dict",
                 "link_target": null,
@@ -8585,7 +8732,7 @@
             },
             {
               "name": "add_integer_slack_to_inequality",
-              "doc": "Convert inequality $f(x) \\leq 0$ to **inequality** $f(x) + b s \\leq 0$ with an integer slack variable $s$.\n\n- This should be used when {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.\n\n- The bound of $s$ will be $[0, \\text{slack\\_upper\\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.\n\n- Since the slack variable is integer, the yielded inequality has residual error $\\min_s f(x) + b s$ at most $b$.\n  And thus $b$ is returned to use scaling the penalty weight or other things.\n\n  - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,\n    but it needs more bits for the slack variable, and thus the problem size becomes larger.\n\n**Returns:**\nThe coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 4.\n\n>>> from ommx import DecisionVariable, Equality, Instance, Sense\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: x[0] + 2*x[1] <= 4},\n...     sense=Sense.Maximize,\n... )\n\nIntroduce an integer slack variable s in [0, 2]\n\n>>> b = instance.add_integer_slack_to_inequality(\n...     constraint_id=0,\n...     slack_upper_bound=2\n... )\n>>> assert b == 2.0\n>>> assert instance.constraints[0].function.terms == {\n...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0\n... }\n>>> assert instance.constraints[0].equality == Equality.LessThanOrEqualToZero",
+              "doc": "Convert inequality $f(x) \\leq 0$ to **inequality** $f(x) + b s \\leq 0$ with an integer slack variable $s$.\n\n- This should be used when {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.\n\n- The bound of $s$ will be $[0, \\text{slack\\_upper\\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.\n\n- Since the slack variable is integer, the yielded inequality has residual error $\\min_s f(x) + b s$ at most $b$.\n  And thus $b$ is returned to use scaling the penalty weight or other things.\n\n  - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,\n    but it needs more bits for the slack variable, and thus the problem size becomes larger.\n\n**Returns:**\nThe coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.\n\n``atol`` controls zero-sensitive interval bounds and the inequality\nfeasibility threshold used to select the slack coefficient and must be\nless than ``0.5``. If omitted, :attr:`DEFAULT_ATOL` is used.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 4.\n\n>>> from ommx import DecisionVariable, Equality, Instance, Sense\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: x[0] + 2*x[1] <= 4},\n...     sense=Sense.Maximize,\n... )\n\nIntroduce an integer slack variable s in [0, 2]\n\n>>> b = instance.add_integer_slack_to_inequality(\n...     constraint_id=0,\n...     slack_upper_bound=2\n... )\n>>> assert b == 2.0\n>>> assert instance.constraints[0].function.terms == {\n...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0\n... }\n>>> assert instance.constraints[0].equality == Equality.LessThanOrEqualToZero",
               "signatures": [
                 {
                   "parameters": [
@@ -8606,6 +8753,24 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -9214,10 +9379,29 @@
             },
             {
               "name": "convert_all_indicators_to_constraints",
-              "doc": "Convert every active indicator constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_indicator_to_constraint` for the\nconversion rule. Returns a dict mapping each original indicator ID to the\nlist of regular constraint IDs it produced.\n\nAtomic: every active indicator is validated up front, and only if every\none is convertible are the conversions applied. If any indicator fails\nvalidation (non-finite bound on a required side), no mutation happens and\nthe instance is left untouched.",
+              "doc": "Convert every active indicator constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_indicator_to_constraint` for the\nconversion rule. Returns a dict mapping each original indicator ID to the\nlist of regular constraint IDs it produced.\n\nAtomic: every active indicator is validated up front, and only if every\none is convertible are the conversions applied. If any indicator fails\nvalidation (non-finite bound on a required side), no mutation happens and\nthe instance is left untouched.\n\n``atol`` has the same Function-body meaning as in the single-constraint\nconversion. If omitted, :attr:`DEFAULT_ATOL` is used.",
               "signatures": [
                 {
-                  "parameters": [],
+                  "parameters": [
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
                   "return_type": {
                     "display": "dict[int, list[int]]",
                     "link_target": null,
@@ -9302,7 +9486,7 @@
             },
             {
               "name": "convert_indicator_to_constraint",
-              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). The instance is not\nmutated on error.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n>>> from ommx import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     constraints={},\n...     indicator_constraints={1: ic},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[0]\n>>> instance.indicator_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + 3*x1 - 5 <= 0)}",
+              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). The instance is not\nmutated on error.\n\n``atol`` controls which Function-body values the bound evaluator treats\nas zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes\nthe indicator variable is exactly binary; this does not canonicalize an\napproximate solver value near 0 or 1.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n>>> from ommx import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     constraints={},\n...     indicator_constraints={1: ic},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[0]\n>>> instance.indicator_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + 3*x1 - 5 <= 0)}",
               "signatures": [
                 {
                   "parameters": [
@@ -9314,6 +9498,24 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -9334,7 +9536,7 @@
             },
             {
               "name": "convert_inequality_to_equality_with_integer_slack",
-              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound $[l, u]$ is always negative, i.e. $u \\leq 0$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n>>> from ommx import DecisionVariable, Equality, Instance, Sense\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: x[0] + 2*x[1] <= 5},\n...     sense=Sense.Maximize,\n... )\n\nIntroduce an integer slack variable\n\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> assert instance.constraints[0].function.terms == {\n...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0\n... }\n>>> assert instance.constraints[0].equality == Equality.EqualToZero\n\nRaises {class}`~ommx.ExactIntegerSlackError` when exact conversion is\nunavailable because the coefficients cannot be normalized or the slack\nrange exceeds ``max_integer_range``. Raises\n{class}`~ommx.InfeasibleDetected` when the bounds prove the inequality\ninfeasible.",
+              "doc": "Convert an inequality constraint $f(x) \\leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.\n\n- Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,\n  $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal\n  range of $s$, and returns error if the range exceeds it.\n\n- Since this method evaluates the bound of $f(x)$, we may find that:\n\n  - The bound $[l, u]$ is infeasible at the selected tolerance, i.e.\n    $l \\geq \\text{atol}$:\n    this means the instance is infeasible because this constraint never be satisfied,\n    and an error is raised.\n\n  - The bound is feasible everywhere at the selected tolerance, i.e.\n    $u < \\text{atol}$:\n    this means this constraint is trivially satisfied,\n    the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,\n    and this method returns without introducing slack variable or raising an error.\n\n# Examples\n\nLet's consider a simple inequality constraint x0 + 2*x1 <= 5.\n\n>>> from ommx import DecisionVariable, Equality, Instance, Sense\n>>> x = [\n...     DecisionVariable.integer(i, lower=0, upper=3, name=\"x\", subscripts=[i])\n...     for i in range(3)\n... ]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: x[0] + 2*x[1] <= 5},\n...     sense=Sense.Maximize,\n... )\n\nIntroduce an integer slack variable\n\n>>> instance.convert_inequality_to_equality_with_integer_slack(\n...     constraint_id=0,\n...     max_integer_range=32\n... )\n>>> assert instance.constraints[0].function.terms == {\n...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0\n... }\n>>> assert instance.constraints[0].equality == Equality.EqualToZero\n\nRaises {class}`~ommx.ExactIntegerSlackError` when exact conversion is\nunavailable because the coefficients cannot be normalized or the slack\nrange exceeds ``max_integer_range``. Raises\n{class}`~ommx.InfeasibleDetected` when the bounds prove the inequality\ninfeasible.\n``atol`` controls zero-sensitive interval evaluation and the strict\ninequality feasibility threshold and must be less than ``0.5``. If\nomitted, :attr:`DEFAULT_ATOL` is used.",
               "signatures": [
                 {
                   "parameters": [
@@ -9355,6 +9557,24 @@
                         "children": []
                       },
                       "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -10031,7 +10251,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "",
+              "doc": "Deserialize an instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
               "signatures": [
                 {
                   "parameters": [
@@ -10057,7 +10277,7 @@
             },
             {
               "name": "from_v2_bytes",
-              "doc": "",
+              "doc": "Deserialize an instance from v2 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
               "signatures": [
                 {
                   "parameters": [
@@ -10408,7 +10628,7 @@
             },
             {
               "name": "lower_special_constraints",
-              "doc": "Lower selected active special constraint kinds into regular constraints.\n\nFor every kind in ``kinds_to_lower``, the corresponding bulk conversion\nis invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`) when that kind is active. The\ninstance is mutated in place. Kinds omitted from ``kinds_to_lower``\nremain active, and an empty set is a no-op. This does not establish\n:class:`InstanceClass` membership; check the resulting input separately.\n\nReturns the set of :class:`SpecialConstraintKind` values that were\nrequested and active, and therefore actually lowered. Empty when no\nrequested kind was active.\n\nKinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each\nindividual family conversion is atomic, but the whole operation is not:\nan error in a later family does not roll back families already lowered.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "doc": "Lower selected active special constraint kinds into regular constraints.\n\nFor every kind in ``kinds_to_lower``, the corresponding bulk conversion\nis invoked\n(:meth:`convert_all_indicators_to_constraints`,\n:meth:`convert_all_one_hots_to_constraints`, or\n:meth:`convert_all_sos1_to_constraints`) when that kind is active. The\ninstance is mutated in place. Kinds omitted from ``kinds_to_lower``\nremain active, and an empty set is a no-op. This does not establish\n:class:`InstanceClass` membership; check the resulting input separately.\n\nReturns the set of :class:`SpecialConstraintKind` values that were\nrequested and active, and therefore actually lowered. Empty when no\nrequested kind was active.\n\n``atol`` controls zero-sensitive interval bounds used while lowering\nIndicator constraints. If omitted, :attr:`DEFAULT_ATOL` is used. This\naligns zero-sensitive Function body evaluation; lowering itself assumes\nexact discrete variable values.\n\nKinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each\nindividual family conversion is atomic, but the whole operation is not:\nan error in a later family does not roll back families already lowered.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
               "signatures": [
                 {
                   "parameters": [
@@ -10426,6 +10646,24 @@
                         ]
                       },
                       "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -12260,9 +12498,9 @@
                       "default": null
                     },
                     {
-                      "name": "objective_degree_bound",
+                      "name": "objective_polynomial_requirement",
                       "type_": {
-                        "display": "DegreeBound",
+                        "display": "PolynomialRequirement",
                         "link_target": null,
                         "children": []
                       },
@@ -12284,13 +12522,13 @@
                       "default": null
                     },
                     {
-                      "name": "regular_constraint_degree_bounds",
+                      "name": "regular_constraint_polynomial_requirements",
                       "type_": {
-                        "display": "Optional[Mapping[Equality, DegreeBound]]",
+                        "display": "Optional[Mapping[Equality, PolynomialRequirement]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[Equality, DegreeBound]",
+                            "display": "Mapping[Equality, PolynomialRequirement]",
                             "link_target": null,
                             "children": [
                               {
@@ -12299,7 +12537,7 @@
                                 "children": []
                               },
                               {
-                                "display": "DegreeBound",
+                                "display": "PolynomialRequirement",
                                 "link_target": null,
                                 "children": []
                               }
@@ -12313,13 +12551,13 @@
                       }
                     },
                     {
-                      "name": "indicator_constraint_degree_bounds",
+                      "name": "indicator_body_polynomial_requirements",
                       "type_": {
-                        "display": "Optional[Mapping[Equality, DegreeBound]]",
+                        "display": "Optional[Mapping[Equality, PolynomialRequirement]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[Equality, DegreeBound]",
+                            "display": "Mapping[Equality, PolynomialRequirement]",
                             "link_target": null,
                             "children": [
                               {
@@ -12328,7 +12566,7 @@
                                 "children": []
                               },
                               {
-                                "display": "DegreeBound",
+                                "display": "PolynomialRequirement",
                                 "link_target": null,
                                 "children": []
                               }
@@ -12451,10 +12689,10 @@
               "is_readonly": true
             },
             {
-              "name": "indicator_constraint_degree_bounds",
+              "name": "indicator_body_polynomial_requirements",
               "doc": "",
               "type_": {
-                "display": "dict[Equality, DegreeBound]",
+                "display": "dict[Equality, PolynomialRequirement]",
                 "link_target": null,
                 "children": [
                   {
@@ -12463,7 +12701,7 @@
                     "children": []
                   },
                   {
-                    "display": "DegreeBound",
+                    "display": "PolynomialRequirement",
                     "link_target": null,
                     "children": []
                   }
@@ -12484,10 +12722,10 @@
               "is_readonly": true
             },
             {
-              "name": "objective_degree_bound",
+              "name": "objective_polynomial_requirement",
               "doc": "",
               "type_": {
-                "display": "DegreeBound",
+                "display": "PolynomialRequirement",
                 "link_target": null,
                 "children": []
               },
@@ -12495,10 +12733,10 @@
               "is_readonly": true
             },
             {
-              "name": "regular_constraint_degree_bounds",
+              "name": "regular_constraint_polynomial_requirements",
               "doc": "",
               "type_": {
-                "display": "dict[Equality, DegreeBound]",
+                "display": "dict[Equality, PolynomialRequirement]",
                 "link_target": null,
                 "children": [
                   {
@@ -12507,7 +12745,7 @@
                     "children": []
                   },
                   {
-                    "display": "DegreeBound",
+                    "display": "PolynomialRequirement",
                     "link_target": null,
                     "children": []
                   }
@@ -17533,7 +17771,7 @@
             },
             {
               "name": "from_v1_bytes",
-              "doc": "",
+              "doc": "Deserialize a parametric instance from v1 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
               "signatures": [
                 {
                   "parameters": [
@@ -17559,7 +17797,7 @@
             },
             {
               "name": "from_v2_bytes",
-              "doc": "",
+              "doc": "Deserialize a parametric instance from v2 protobuf bytes.\n\nRaises {class}`ValueError` if the protobuf payload is malformed or\nsemantically invalid.",
               "signatures": [
                 {
                   "parameters": [
@@ -19576,6 +19814,144 @@
             }
           ],
           "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "PolynomialRequirement",
+          "doc": "Polynomial requirement for one function position in an\n:class:`InstanceClassClause`.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "accepts_degree",
+              "doc": "Return whether ``actual_degree`` satisfies this requirement.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "actual_degree",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "any_degree",
+              "doc": "Require a polynomial of any degree.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "PolynomialRequirement",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "at_most",
+              "doc": "Require a polynomial whose degree is at most ``maximum``.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "maximum",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "PolynomialRequirement",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "maximum_degree",
+              "doc": "Inclusive maximum degree, or ``None`` when any degree is accepted.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
           "deprecated": null
         },
         {
@@ -26267,7 +26643,7 @@
             },
             {
               "name": "lower_special_constraints",
-              "doc": "",
+              "doc": "Configure lowering for the selected special-constraint families.\n\n``atol`` is used when Indicator Function bodies require zero-sensitive\ninterval evaluation. If omitted, :attr:`DEFAULT_ATOL` is stored in the\npreparation step.",
               "signatures": [
                 {
                   "parameters": [
@@ -26285,6 +26661,24 @@
                         ]
                       },
                       "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
                     }
                   ],
                   "return_type": {
@@ -34103,7 +34497,6 @@
     "ommx.Constraint": "ommx",
     "ommx.DecisionVariable": "ommx",
     "ommx.DecisionVariableRole": "ommx",
-    "ommx.DegreeBound": "ommx",
     "ommx.Equality": "ommx",
     "ommx.EvaluatedConstraint": "ommx",
     "ommx.EvaluatedDecisionVariable": "ommx",
@@ -34132,6 +34525,7 @@
     "ommx.Parameter": "ommx",
     "ommx.ParametricInstance": "ommx",
     "ommx.Polynomial": "ommx",
+    "ommx.PolynomialRequirement": "ommx",
     "ommx.PreparationPolicy": "ommx",
     "ommx.PreparationTargetNotReachedError": "ommx",
     "ommx.Provenance": "ommx",

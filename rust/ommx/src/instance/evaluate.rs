@@ -1,9 +1,9 @@
 use super::*;
 use crate::Result;
 use crate::{
-    constraint::RemovedReason, ATol, DecisionVariableError, Evaluate, InconsistentDependentValue,
-    Kind, MissingStateEntries, Propagate, PropagateOutcome, UnknownStateEntries,
-    UnverifiableDependentAssertion, VariableIDSet,
+    constraint::RemovedReason, constraint_type::ActiveRowRewrite, ATol, DecisionVariableError,
+    Evaluate, InconsistentDependentValue, Kind, MissingStateEntries, Propagate, PropagateOutcome,
+    UnknownStateEntries, UnverifiableDependentAssertion, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -43,7 +43,7 @@ fn normalize_dependency_partial_evaluation_error(
     id: VariableID,
     error: crate::Error,
 ) -> crate::Error {
-    if !error.is::<crate::CoefficientError>() {
+    if !error.is::<crate::CoefficientError>() && !error.is::<crate::FunctionEvaluationError>() {
         return error;
     }
 
@@ -55,6 +55,20 @@ fn normalize_dependency_partial_evaluation_error(
         { id = ?id, cause = %error },
         "failed to normalize dependent variable {id:?}: {error:#}",
     )
+}
+
+fn dependent_function_evaluation_error(id: VariableID, error: crate::Error) -> crate::Error {
+    if error.is::<crate::FunctionEvaluationError>() {
+        // A direct Function evaluation exposes FunctionEvaluationError so its
+        // caller can change the state or expression. At this Instance-owned
+        // boundary the value is internally derived, so exposing that signal
+        // would give Python the wrong ValueError recovery contract.
+        return crate::error!(
+            { id = ?id, cause = %error },
+            "failed to evaluate dependent variable {id:?}: {error:#}",
+        );
+    }
+    error.context(format!("failed to evaluate dependent variable {id:?}"))
 }
 
 fn ensure_instance_value_is_finite(var_id: VariableID, value: f64) -> Result<()> {
@@ -187,7 +201,7 @@ enum PartialEvaluatePlan {
     },
     RegularReplacement {
         fixed_values: BTreeMap<VariableID, f64>,
-        objective: Function,
+        objective: Option<Function>,
         active_constraint_replacements: BTreeMap<ConstraintID, Constraint>,
         named_function_replacements: BTreeMap<NamedFunctionID, NamedFunction>,
     },
@@ -208,21 +222,28 @@ impl PartialEvaluatePlan {
         let fixed_values = Self::prepare_fixed_values(instance, state, atol)?;
         let evaluation_state = Self::evaluation_state(instance, &fixed_values);
 
-        let mut objective = instance.objective.clone();
-        objective.partial_evaluate(&evaluation_state, atol)?;
+        let objective = instance
+            .objective
+            .partial_evaluate_replacement(&evaluation_state, atol)?;
 
         let mut active_constraint_replacements = BTreeMap::new();
         for (&id, constraint) in instance.constraint_collection.active() {
-            let mut constraint = constraint.clone();
-            constraint.partial_evaluate(&evaluation_state, atol)?;
-            active_constraint_replacements.insert(id, constraint);
+            let Some(replacement) =
+                constraint.partial_evaluate_replacement(&evaluation_state, atol)?
+            else {
+                continue;
+            };
+            active_constraint_replacements.insert(id, replacement);
         }
 
         let mut named_function_replacements = BTreeMap::new();
         for (&id, named_function) in instance.named_functions.entries() {
-            let mut named_function = named_function.clone();
-            named_function.partial_evaluate(&evaluation_state, atol)?;
-            named_function_replacements.insert(id, named_function);
+            let Some(replacement) =
+                named_function.partial_evaluate_replacement(&evaluation_state, atol)?
+            else {
+                continue;
+            };
+            named_function_replacements.insert(id, replacement);
         }
 
         Ok(Some(Self::RegularReplacement {
@@ -263,14 +284,7 @@ impl PartialEvaluatePlan {
 
     fn supports_regular_replacement_shape(instance: &Instance) -> bool {
         Self::has_no_active_special_constraints(instance)
-            && instance
-                .indicator_constraint_collection
-                .removed()
-                .is_empty()
-            && instance.one_hot_constraint_collection.removed().is_empty()
-            && instance.sos1_constraint_collection.removed().is_empty()
             && instance.decision_variable_dependency.is_empty()
-            && !instance.constraint_collection.removed().is_empty()
     }
 
     fn prepare_fixed_values(
@@ -326,11 +340,14 @@ impl PartialEvaluatePlan {
         instance: &Instance,
         fixed_values: &BTreeMap<VariableID, f64>,
     ) -> v1::State {
-        let mut merged = instance.fixed_decision_variable_values().clone();
+        let existing = instance.fixed_decision_variable_values();
+        let mut entries =
+            std::collections::HashMap::with_capacity(existing.len() + fixed_values.len());
+        entries.extend(existing.iter().map(|(id, value)| (id.into_inner(), *value)));
         for (&id, &value) in fixed_values {
-            merged.entry(id).or_insert(value);
+            entries.entry(id.into_inner()).or_insert(value);
         }
-        fixed_values_state(&merged)
+        v1::State { entries }
     }
 }
 
@@ -416,9 +433,12 @@ impl<'a> PreparedStatePopulation<'a> {
             .decision_variable_dependency
             .evaluation_order_iter()
         {
-            let value = f.evaluate(&state, atol).inspect_err(|e| {
-                tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
-            })?;
+            let value = f
+                .evaluate(&state, atol)
+                .map_err(|error| dependent_function_evaluation_error(id, error))
+                .inspect_err(|e| {
+                    tracing::error!(?id, error = %e, "failed to evaluate dependent variable");
+                })?;
             if !value.is_finite() {
                 crate::bail!(
                     { id = ?id, value },
@@ -536,7 +556,9 @@ impl Instance {
             } => {
                 self.decision_variables
                     .merge_validated_fixed_values(fixed_values, atol);
-                self.objective = objective;
+                if let Some(objective) = objective {
+                    self.objective = objective;
+                }
                 self.constraint_collection
                     .replace_active_rows(active_constraint_replacements)
                     .expect(
@@ -549,6 +571,12 @@ impl Instance {
         }
     }
 
+    /// Execute the consuming fallback on a discardable instance value.
+    ///
+    /// Some nested tables are moved out before fallible work to avoid a second
+    /// clone layer. Therefore callers must discard this instance on error. The
+    /// borrowed public API satisfies that contract by running this method on its
+    /// rollback copy; `into_partial_evaluated` consumes its instance outright.
     fn partial_evaluate_fallback_in_place(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
         // The input state belongs to Instance validation. Validate it before
         // special-constraint propagation so propagation errors only describe
@@ -607,15 +635,18 @@ impl Instance {
         let mut evaluation_state = fixed_values_state(self.fixed_decision_variable_values());
         let mut remaining_assignments = Vec::new();
 
-        for (id, function) in self.decision_variable_dependency.evaluation_order_iter() {
-            let mut function = function.clone();
-            function
-                .partial_evaluate(&evaluation_state, atol)
+        let dependency = std::mem::take(&mut self.decision_variable_dependency);
+        for (id, function) in dependency.into_evaluation_order() {
+            let replacement = function
+                .partial_evaluate_replacement(&evaluation_state, atol)
                 .map_err(|error| normalize_dependency_partial_evaluation_error(id, error))?;
+            let function = replacement.unwrap_or_else(|| function.normalize());
             let required_ids = function.required_ids();
 
             if required_ids.is_empty() {
-                let value = function.evaluate(&v1::State::default(), atol)?;
+                let value = function
+                    .evaluate(&v1::State::default(), atol)
+                    .map_err(|error| dependent_function_evaluation_error(id, error))?;
                 if !value.is_finite() {
                     crate::bail!(
                         { id = ?id, value },
@@ -888,6 +919,9 @@ impl Instance {
     ///
     /// Consumed constraints are moved to the removed set.
     /// Promoted indicator constraints are inserted into the regular constraint collection.
+    /// This runs only on a root-level rollback copy or on a consumed `Instance`,
+    /// so the collection-owned by-value rewrites may consume their working
+    /// collection when propagation returns an error.
     fn propagate_special_constraints(
         &mut self,
         state: &v1::State,
@@ -905,77 +939,69 @@ impl Instance {
             changed = false;
 
             // --- OneHot constraints ---
-            let mut one_hot_replacements = BTreeMap::new();
-            let mut one_hot_removals = BTreeMap::new();
-            for (&id, oh) in self.one_hot_constraint_collection.active() {
-                let (outcome, additional) = oh.clone().propagate(&expanded, atol)?;
-                merge_state(&mut expanded, additional, atol, &mut changed)?;
-                match outcome {
-                    PropagateOutcome::Active(oh) => {
-                        one_hot_replacements.insert(id, oh);
-                    }
-                    PropagateOutcome::Consumed(oh) => {
-                        one_hot_removals.insert(id, (oh, propagation_reason.clone()));
-                    }
-                    PropagateOutcome::Transformed { new, .. } => match new {},
-                }
-            }
-            self.one_hot_constraint_collection
-                .replace_and_remove_active_rows(one_hot_replacements, one_hot_removals)?;
+            let one_hots = std::mem::take(&mut self.one_hot_constraint_collection);
+            self.one_hot_constraint_collection =
+                one_hots.rewrite_active_rows_by_value(|_id, one_hot| {
+                    let (outcome, additional) = one_hot.propagate(&expanded, atol)?;
+                    merge_state(&mut expanded, additional, atol, &mut changed)?;
+                    Ok(match outcome {
+                        PropagateOutcome::Active(one_hot) => ActiveRowRewrite::Active(one_hot),
+                        PropagateOutcome::Consumed(one_hot) => {
+                            ActiveRowRewrite::Removed(one_hot, propagation_reason.clone())
+                        }
+                        PropagateOutcome::Transformed { new, .. } => match new {},
+                    })
+                })?;
 
             // --- SOS1 constraints ---
-            let mut sos1_replacements = BTreeMap::new();
-            let mut sos1_removals = BTreeMap::new();
-            for (&id, sos1) in self.sos1_constraint_collection.active() {
-                let (outcome, additional) = sos1.clone().propagate(&expanded, atol)?;
+            let sos1s = std::mem::take(&mut self.sos1_constraint_collection);
+            self.sos1_constraint_collection = sos1s.rewrite_active_rows_by_value(|_id, sos1| {
+                let (outcome, additional) = sos1.propagate(&expanded, atol)?;
                 merge_state(&mut expanded, additional, atol, &mut changed)?;
-                match outcome {
-                    PropagateOutcome::Active(sos1) => {
-                        sos1_replacements.insert(id, sos1);
-                    }
+                Ok(match outcome {
+                    PropagateOutcome::Active(sos1) => ActiveRowRewrite::Active(sos1),
                     PropagateOutcome::Consumed(sos1) => {
-                        sos1_removals.insert(id, (sos1, propagation_reason.clone()));
+                        ActiveRowRewrite::Removed(sos1, propagation_reason.clone())
                     }
                     PropagateOutcome::Transformed { new, .. } => match new {},
-                }
-            }
-            self.sos1_constraint_collection
-                .replace_and_remove_active_rows(sos1_replacements, sos1_removals)?;
+                })
+            })?;
 
             // --- Indicator constraints ---
-            let indicator_context = self.indicator_constraint_collection.context();
-            let mut indicator_replacements = BTreeMap::new();
-            let mut indicator_removals = BTreeMap::new();
             let mut promoted_constraints = Vec::new();
-            for (&id, ic) in self.indicator_constraint_collection.active() {
-                let (outcome, additional) = ic.clone().propagate(&expanded, atol)?;
-                merge_state(&mut expanded, additional, atol, &mut changed)?;
-                match outcome {
-                    PropagateOutcome::Active(ic) => {
-                        indicator_replacements.insert(id, ic);
-                    }
-                    PropagateOutcome::Consumed(ic) => {
-                        indicator_removals.insert(id, (ic, propagation_reason.clone()));
-                    }
-                    PropagateOutcome::Transformed {
-                        original,
-                        new: constraint,
-                    } => {
-                        // Indicator=1 → promote inner constraint to regular constraint.
-                        // Carry over the indicator's context into the regular collection's
-                        // store and record the promotion in provenance.
-                        let mut new_context = indicator_context.collect_for(id);
-                        new_context
-                            .provenance
-                            .push(crate::constraint::Provenance::IndicatorConstraint(id));
-                        promoted_constraints.push((constraint, new_context));
-                        indicator_removals.insert(id, (original, propagation_reason.clone()));
-                    }
-                }
-            }
-            self.indicator_constraint_collection
-                .replace_and_remove_active_rows(indicator_replacements, indicator_removals)?;
-            for (constraint, context) in promoted_constraints {
+            let indicators = std::mem::take(&mut self.indicator_constraint_collection);
+            self.indicator_constraint_collection =
+                indicators.rewrite_active_rows_by_value(|id, indicator| {
+                    let (outcome, additional) = indicator.propagate(&expanded, atol)?;
+                    merge_state(&mut expanded, additional, atol, &mut changed)?;
+                    Ok(match outcome {
+                        PropagateOutcome::Active(indicator) => ActiveRowRewrite::Active(indicator),
+                        PropagateOutcome::Consumed(indicator) => {
+                            ActiveRowRewrite::Removed(indicator, propagation_reason.clone())
+                        }
+                        PropagateOutcome::Transformed {
+                            original,
+                            new: constraint,
+                        } => {
+                            promoted_constraints.push((id, constraint));
+                            ActiveRowRewrite::Removed(original, propagation_reason.clone())
+                        }
+                    })
+                })?;
+            for (indicator_id, constraint) in promoted_constraints {
+                // Indicator=1 → promote inner constraint to regular constraint.
+                // Carry over the indicator's context into the regular collection's
+                // store and record the promotion in provenance. The original
+                // context remains owned by the removed indicator row.
+                let mut context = self
+                    .indicator_constraint_collection
+                    .context()
+                    .collect_for(indicator_id);
+                context
+                    .provenance
+                    .push(crate::constraint::Provenance::IndicatorConstraint(
+                        indicator_id,
+                    ));
                 let id = self.constraint_collection.unused_id();
                 self.constraint_collection
                     .insert_active_with_context(id, constraint, context)?;
@@ -995,6 +1021,17 @@ mod tests {
     use proptest::prelude::*;
     use std::collections::HashMap;
 
+    fn polynomial_regular_parameters() -> crate::InstanceParameters {
+        let function =
+            crate::FunctionParameters::polynomial_only(crate::PolynomialParameters::default());
+        crate::InstanceParameters {
+            objective: function,
+            constraint: function,
+            named_function: function,
+            ..crate::InstanceParameters::regular_only()
+        }
+    }
+
     proptest! {
         #[test]
         fn test_evaluate_instance(
@@ -1004,16 +1041,31 @@ mod tests {
                     (Just(instance), state)
                 })
         ) {
-            let solution = instance.evaluate(&state, ATol::default()).unwrap();
-            // Must be populated
-            let ids: VariableIDSet = solution.state().entries.keys().map(|id| VariableID::from(*id)).collect();
-            let all: VariableIDSet = instance.decision_variables().keys().copied().collect();
-            prop_assert_eq!(ids, all);
+            match instance.evaluate(&state, ATol::default()) {
+                Ok(solution) => {
+                    // A successfully evaluated solution must contain the fully populated state.
+                    let ids: VariableIDSet = solution
+                        .state()
+                        .entries
+                        .keys()
+                        .map(|id| VariableID::from(*id))
+                        .collect();
+                    let all: VariableIDSet =
+                        instance.decision_variables().keys().copied().collect();
+                    prop_assert_eq!(ids, all);
+                }
+                Err(error) => {
+                    prop_assert!(
+                        error.is::<crate::FunctionEvaluationError>(),
+                        "arbitrary valid state produced a non-function evaluation error: {error:#}",
+                    );
+                }
+            }
         }
 
         #[test]
         fn partial_evaluate(
-            (instance, state, (u, v)) in Instance::arbitrary_with(crate::InstanceParameters::regular_only())
+            (instance, state, (u, v)) in Instance::arbitrary_with(polynomial_regular_parameters())
                 .prop_flat_map(|instance| {
                     let state = instance.arbitrary_state();
                     (Just(instance), state).prop_flat_map(|(instance, state)| {
@@ -1093,7 +1145,20 @@ mod tests {
 
     #[test]
     fn partial_evaluate_matches_direct_canonical_evaluation() {
-        let instance = state_canonicalization_instance();
+        let mut instance = state_canonicalization_instance();
+        // Keep this fixture on the fallback path: canonicalization must happen
+        // before a special constraint consumes the supplied discrete value.
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                crate::OneHotConstraintID::from(1),
+                crate::OneHotConstraint::new(std::collections::BTreeSet::from([VariableID::from(
+                    1,
+                )]))
+                .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
         let atol = ATol::new(0.125).unwrap();
         let state = v1::State::from(HashMap::from([
             (1, 1.0625),
@@ -1771,6 +1836,56 @@ mod tests {
         assert_eq!(instance.removed_one_hot_constraints(), &removed_before);
     }
 
+    #[test]
+    fn test_partial_evaluate_regular_plan_allows_removed_special_rows() {
+        use crate::{DecisionVariable, OneHotConstraint, OneHotConstraintID};
+
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::binary()),
+                (VariableID::from(2), DecisionVariable::binary()),
+                (VariableID::from(3), DecisionVariable::binary()),
+                (VariableID::from(4), DecisionVariable::continuous()),
+            ]))
+            .constraints(BTreeMap::from([(
+                ConstraintID::from(10),
+                Constraint::equal_to_zero(Function::from(linear!(4))),
+            )]))
+            .build()
+            .unwrap();
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                OneHotConstraintID::from(1),
+                OneHotConstraint::new([1, 2, 3].into_iter().map(VariableID::from).collect())
+                    .unwrap(),
+                crate::ConstraintContext::default(),
+            )
+            .unwrap();
+        instance
+            .partial_evaluate(&v1::State::from(HashMap::from([(2, 1.0)])), ATol::default())
+            .unwrap();
+
+        let removed_before = instance.removed_one_hot_constraints().clone();
+        let state = v1::State::from(HashMap::from([(4, 2.0)]));
+        assert!(matches!(
+            PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
+            Some(PartialEvaluatePlan::RegularReplacement { .. })
+        ));
+
+        instance.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert_eq!(instance.removed_one_hot_constraints(), &removed_before);
+        assert!(instance
+            .constraints()
+            .get(&ConstraintID::from(10))
+            .unwrap()
+            .required_ids()
+            .is_empty());
+    }
+
     fn regular_plan_instance() -> Instance {
         let named_function_id = crate::NamedFunctionID::from(1);
         let constraint_id = ConstraintID::from(1);
@@ -1816,6 +1931,36 @@ mod tests {
             )]))
             .build()
             .unwrap()
+    }
+
+    #[test]
+    fn test_partial_evaluate_active_regular_shape_uses_replacement_plan() {
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([(
+                VariableID::from(1),
+                crate::DecisionVariable::continuous(),
+            )]))
+            .constraints(BTreeMap::from([(
+                ConstraintID::from(1),
+                Constraint::equal_to_zero(Function::from(linear!(1))),
+            )]))
+            .build()
+            .unwrap();
+        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+
+        assert!(matches!(
+            PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap(),
+            Some(PartialEvaluatePlan::RegularReplacement { .. })
+        ));
+
+        let mut borrowed = instance.clone();
+        borrowed.partial_evaluate(&state, ATol::default()).unwrap();
+        let consumed = instance
+            .into_partial_evaluated(&state, ATol::default())
+            .unwrap();
+        assert_eq!(borrowed, consumed);
     }
 
     #[test]
@@ -1878,6 +2023,122 @@ mod tests {
                 .get(&crate::NamedFunctionID::from(1))
                 .unwrap()
                 .evaluated_value()
+        );
+    }
+
+    #[test]
+    fn test_partial_evaluate_regular_plan_replaces_only_overlapping_functions() {
+        let changed_constraint_id = ConstraintID::from(1);
+        let unchanged_constraint_id = ConstraintID::from(2);
+        let changed_named_function_id = NamedFunctionID::from(1);
+        let unchanged_named_function_id = NamedFunctionID::from(2);
+        let removed_reason = RemovedReason {
+            reason: "test".to_string(),
+            parameters: Default::default(),
+        };
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(3)))
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), crate::DecisionVariable::continuous()),
+                (VariableID::from(2), crate::DecisionVariable::continuous()),
+                (VariableID::from(3), crate::DecisionVariable::continuous()),
+            ]))
+            .constraints(BTreeMap::from([
+                (
+                    changed_constraint_id,
+                    Constraint::less_than_or_equal_to_zero(Function::from(
+                        (linear!(1) + linear!(3)).unwrap(),
+                    )),
+                ),
+                (
+                    unchanged_constraint_id,
+                    Constraint::equal_to_zero(Function::from(linear!(3))),
+                ),
+            ]))
+            .removed_constraints(BTreeMap::from([(
+                ConstraintID::from(10),
+                (
+                    Constraint::equal_to_zero(Function::from(linear!(2))),
+                    removed_reason,
+                ),
+            )]))
+            .named_functions(BTreeMap::from([
+                (
+                    changed_named_function_id,
+                    NamedFunction {
+                        function: Function::from((linear!(1) + linear!(3)).unwrap()),
+                    },
+                ),
+                (
+                    unchanged_named_function_id,
+                    NamedFunction {
+                        function: Function::from(linear!(3)),
+                    },
+                ),
+            ]))
+            .build()
+            .unwrap();
+        let state = v1::State::from(HashMap::from([(1, 2.0)]));
+
+        let Some(PartialEvaluatePlan::RegularReplacement {
+            objective,
+            active_constraint_replacements,
+            named_function_replacements,
+            ..
+        }) = PartialEvaluatePlan::prepare(&instance, &state, ATol::default()).unwrap()
+        else {
+            panic!("regular-only shape with removed rows must use replacement planning");
+        };
+
+        assert!(objective.is_none());
+        assert_eq!(
+            active_constraint_replacements
+                .keys()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![changed_constraint_id]
+        );
+        assert_eq!(
+            named_function_replacements
+                .keys()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![changed_named_function_id]
+        );
+
+        let original_objective = instance.objective().clone();
+        let original_unchanged_constraint = instance
+            .constraints()
+            .get(&unchanged_constraint_id)
+            .unwrap()
+            .clone();
+        let original_unchanged_named_function = instance
+            .named_functions()
+            .get(&unchanged_named_function_id)
+            .unwrap()
+            .clone();
+        let mut rewritten = instance;
+        rewritten.partial_evaluate(&state, ATol::default()).unwrap();
+
+        assert_eq!(rewritten.objective(), &original_objective);
+        assert_eq!(
+            rewritten.constraints().get(&unchanged_constraint_id),
+            Some(&original_unchanged_constraint)
+        );
+        assert_eq!(
+            rewritten
+                .named_functions()
+                .get(&unchanged_named_function_id),
+            Some(&original_unchanged_named_function)
+        );
+        assert_eq!(
+            rewritten
+                .constraints()
+                .get(&changed_constraint_id)
+                .unwrap()
+                .equality,
+            crate::Equality::LessThanOrEqualToZero
         );
     }
 
@@ -2314,7 +2575,10 @@ mod tests {
         assert!(!err.is::<InconsistentDependentValue>());
         assert!(!err.is::<UnverifiableDependentAssertion>());
         assert!(!err.is::<DecisionVariableError>());
-        assert!(err.to_string().contains("evaluated to non-finite value"));
+        assert!(err
+            .to_string()
+            .contains("failed to evaluate dependent variable VariableID(10)"));
+        assert!(!err.is::<crate::FunctionEvaluationError>());
     }
 
     /// Test that named functions can reference fixed, dependent, and irrelevant variables

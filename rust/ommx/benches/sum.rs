@@ -6,7 +6,8 @@
 //! Cross-degree additions guard promotion paths, while Function-level families
 //! guard against the per-operation normalization round-trip fixed by PR #990.
 //! Every family should remain linear in its varied operand-count or term-count
-//! axis.
+//! axis. Inputs are borrowed inside the measured fold so profiles contain the
+//! copies required to build the result, not throwaway whole-RHS clones.
 
 use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
@@ -14,8 +15,8 @@ use criterion::{
 
 use ommx::{
     random::{random, random_deterministic, Rng},
-    Function, Linear, LinearParameters, Polynomial, PolynomialParameters, Quadratic,
-    QuadraticParameters,
+    Coefficient, Function, Linear, LinearParameters, MonomialDyn, Polynomial, PolynomialParameters,
+    Quadratic, QuadraticParameters, VariableID,
 };
 
 // A 10x span separates linear from quadratic growth without making every
@@ -44,7 +45,7 @@ fn sum_linear_small_many(c: &mut Criterion) {
                 b.iter(|| {
                     linears
                         .iter()
-                        .try_fold(Linear::zero(), |acc, lin| acc + lin.clone())
+                        .try_fold(Linear::zero(), |acc, lin| acc + lin)
                         .unwrap()
                 })
             },
@@ -74,7 +75,7 @@ fn sum_linear_large_little(c: &mut Criterion) {
                 b.iter(|| {
                     linears
                         .iter()
-                        .try_fold(Linear::zero(), |acc, lin| acc + lin.clone())
+                        .try_fold(Linear::zero(), |acc, lin| acc + lin)
                         .unwrap()
                 })
             },
@@ -105,7 +106,7 @@ fn sum_quadratic_small_many(c: &mut Criterion) {
                 b.iter(|| {
                     quads
                         .iter()
-                        .try_fold(Quadratic::zero(), |acc, q| acc + q.clone())
+                        .try_fold(Quadratic::zero(), |acc, q| acc + q)
                         .unwrap()
                 })
             },
@@ -136,7 +137,7 @@ fn sum_quadratic_large_little(c: &mut Criterion) {
                 b.iter(|| {
                     quads
                         .iter()
-                        .try_fold(Quadratic::zero(), |acc, q| acc + q.clone())
+                        .try_fold(Quadratic::zero(), |acc, q| acc + q)
                         .unwrap()
                 })
             },
@@ -167,7 +168,7 @@ fn sum_polynomial_small_many(c: &mut Criterion) {
                 b.iter(|| {
                     polys
                         .iter()
-                        .try_fold(Polynomial::zero(), |acc, p| acc + p.clone())
+                        .try_fold(Polynomial::zero(), |acc, p| acc + p)
                         .unwrap()
                 })
             },
@@ -176,30 +177,45 @@ fn sum_polynomial_small_many(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark for summation of few polynomial functions with many terms
+/// Build three fixed-shape, disjoint polynomial operands.
+///
+/// This fixture intentionally does not use `Arbitrary`: generator changes must
+/// not change the input of this fixed-operation-count merge guardrail.
+fn polynomial_large_little_fixture(num_terms: usize) -> [Polynomial; 3] {
+    std::array::from_fn(|operand_index| {
+        let mut polynomial = Polynomial::with_capacity(num_terms);
+        let id_offset = operand_index * num_terms;
+        for term_index in 0..num_terms {
+            let id = VariableID::from((id_offset + term_index) as u64);
+            polynomial
+                .add_term(MonomialDyn::new(vec![id; 3]), Coefficient::one())
+                .unwrap();
+        }
+        polynomial
+    })
+}
+
+/// Benchmark for summation of three polynomial functions with many terms.
+///
+/// The first borrowed operand is cloned once to establish result ownership;
+/// the other two are merged into that owned accumulator. The term-count axis
+/// therefore measures the required copy plus per-term merge and hash-table
+/// growth. Each operand has deterministic, disjoint cubic support so commit
+/// comparisons use the same monomials and coefficients.
 fn sum_polynomial_large_little(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("sum-polynomial-large-little");
     group.plot_config(plot_config.clone());
     for num_terms in EXPRESSION_SCALE {
-        let mut rng = Rng::deterministic();
-        let functions = (0..3)
-            .map(|_| -> Polynomial {
-                random(
-                    &mut rng,
-                    PolynomialParameters::new(num_terms, 3.into(), ((3 * num_terms) as u64).into())
-                        .unwrap(),
-                )
-            })
-            .collect::<Vec<_>>();
+        let functions = polynomial_large_little_fixture(num_terms);
         group.bench_with_input(
             BenchmarkId::new("sum-polynomial-large-little", num_terms.to_string()),
             &functions,
             |b, polys| {
                 b.iter(|| {
-                    polys
-                        .iter()
-                        .try_fold(Polynomial::zero(), |acc, p| acc + p.clone())
+                    let (first, rest) = polys.split_first().expect("fixture is non-empty");
+                    rest.iter()
+                        .try_fold(first.clone(), |acc, p| acc + p)
                         .unwrap()
                 })
             },
