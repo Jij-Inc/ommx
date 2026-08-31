@@ -354,6 +354,8 @@ fn bound_contains_zero(bound: Bound) -> bool {
 }
 
 fn bound_may_be_classified_as_zero(bound: Bound, atol: ATol) -> bool {
+    // This is interval intersection with the inclusive approximate-zero
+    // domain, not a scalar approximate-equality comparison.
     bound.lower() <= *atol && bound.upper() >= -*atol
 }
 
@@ -442,7 +444,7 @@ fn analyze_atom(atom: &Atom, bounds: &Bounds, atol: ATol) -> crate::Result<Bound
             let value = value.into_inner();
             Ok(BoundAnalysis {
                 bound: Bound::new(value, value)?,
-                may_evaluate_to_zero: value.abs() <= *atol,
+                may_evaluate_to_zero: atol.approx_is_zero(value),
             })
         }
         Atom::Linear(function) => Ok(analyze_polynomial_bound(
@@ -478,6 +480,8 @@ fn analyze_unary_bound(
             operand.bound.lower().abs().max(operand.bound.upper().abs()),
         )?,
         UnaryOperator::Signum => {
+            // These strict endpoint checks are the complement of the inclusive
+            // `[-atol, atol]` zero classification.
             let negative_possible = operand.bound.lower() < -*atol;
             signum_zero_possible = operand.may_evaluate_to_zero;
             let positive_possible = operand.bound.upper() > *atol;
@@ -505,7 +509,7 @@ fn analyze_unary_bound(
     };
 
     let may_evaluate_to_zero = match operator {
-        UnaryOperator::Powi(0) => 1.0 <= *atol,
+        UnaryOperator::Powi(0) => atol.approx_is_zero(1.0),
         UnaryOperator::Powi(1) => operand.may_evaluate_to_zero,
         UnaryOperator::Powi(exponent) => {
             let value = if exponent < 0 {
@@ -513,10 +517,12 @@ fn analyze_unary_bound(
             } else {
                 minimum_absolute_value(operand.bound)
             };
-            value.powi(exponent).abs() <= *atol
+            atol.approx_is_zero(value.powi(exponent))
         }
         UnaryOperator::Neg | UnaryOperator::Abs => operand.may_evaluate_to_zero,
-        UnaryOperator::Signum => signum_zero_possible || (signum_nonzero_possible && 1.0 <= *atol),
+        UnaryOperator::Signum => {
+            signum_zero_possible || (signum_nonzero_possible && atol.approx_is_zero(1.0))
+        }
     };
     Ok(BoundAnalysis {
         bound,
@@ -590,18 +596,19 @@ fn analyze_binary_bound(
             // reciprocal over an unbounded finite input. `may_evaluate_to_zero`
             // distinguishes that sentinel from an attainable denominator.
             let bound = div_bounds(lhs.bound, rhs.bound, !rhs.may_evaluate_to_zero)?;
-            let may_evaluate_to_zero = if !lhs.may_evaluate_to_zero
-                && maximum_finite_absolute_value(rhs.bound) <= 1.0
-            {
-                // Division by a nonzero value whose magnitude is at most one
-                // cannot erase the numerator's proof that it stays outside
-                // the caller's zero tolerance.
-                false
-            } else {
-                lhs.may_evaluate_to_zero
-                    || minimum_absolute_value(lhs.bound) / maximum_finite_absolute_value(rhs.bound)
-                        <= *atol
-            };
+            let may_evaluate_to_zero =
+                if !lhs.may_evaluate_to_zero && maximum_finite_absolute_value(rhs.bound) <= 1.0 {
+                    // Division by a nonzero value whose magnitude is at most one
+                    // cannot erase the numerator's proof that it stays outside
+                    // the caller's zero tolerance.
+                    false
+                } else {
+                    lhs.may_evaluate_to_zero
+                        || atol.approx_is_zero(
+                            minimum_absolute_value(lhs.bound)
+                                / maximum_finite_absolute_value(rhs.bound),
+                        )
+                };
             Ok(BoundAnalysis {
                 bound,
                 may_evaluate_to_zero,
@@ -686,7 +693,7 @@ impl Function {
                 let value = value.into_inner();
                 BoundAnalysis {
                     bound: Bound::new(value, value)?,
-                    may_evaluate_to_zero: value.abs() <= *atol,
+                    may_evaluate_to_zero: atol.approx_is_zero(value),
                 }
             }
             Function::Linear(function) => analyze_polynomial_bound(

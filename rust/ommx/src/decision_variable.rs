@@ -107,7 +107,7 @@ impl Kind {
             Kind::Continuous | Kind::SemiContinuous => return None,
         };
 
-        if (candidate - value).abs() < *atol {
+        if atol.approx_eq(candidate, value) {
             // Normalize negative zero so exact state grouping is deterministic.
             Some(if candidate == 0.0 { 0.0 } else { candidate })
         } else {
@@ -298,7 +298,7 @@ impl DecisionVariable {
         match self.kind {
             Kind::Integer | Kind::Binary | Kind::SemiInteger => {
                 let rounded = value.round();
-                if (rounded - value).abs() >= atol {
+                if !atol.approx_eq(rounded, value) {
                     return Err(err());
                 }
             }
@@ -456,7 +456,7 @@ impl EvaluatedDecisionVariable {
         match self.kind {
             Kind::Integer | Kind::Binary | Kind::SemiInteger => {
                 let rounded = self.value.round();
-                (rounded - self.value).abs() < atol
+                atol.approx_eq(rounded, self.value)
             }
             _ => true,
         }
@@ -711,7 +711,7 @@ mod tests {
     }
 
     #[test]
-    fn canonical_discrete_value_uses_the_existing_strict_atol_boundary() {
+    fn canonical_discrete_value_includes_the_atol_boundary() {
         let atol = ATol::new(0.125).unwrap();
 
         assert_eq!(
@@ -731,10 +731,29 @@ mod tests {
             Some(-2.0)
         );
 
-        assert_eq!(Kind::Binary.canonical_discrete_value(1.125, atol), None);
-        assert_eq!(Kind::Integer.canonical_discrete_value(-2.125, atol), None);
+        assert_eq!(
+            Kind::Binary.canonical_discrete_value(1.125, atol),
+            Some(1.0)
+        );
+        assert_eq!(
+            Kind::Integer.canonical_discrete_value(-2.125, atol),
+            Some(-2.0)
+        );
         assert_eq!(
             Kind::SemiInteger.canonical_discrete_value(-1.875, atol),
+            Some(-2.0)
+        );
+
+        assert_eq!(
+            Kind::Binary.canonical_discrete_value(1.1250000000000002, atol),
+            None
+        );
+        assert_eq!(
+            Kind::Integer.canonical_discrete_value(-2.1250000000000004, atol),
+            None
+        );
+        assert_eq!(
+            Kind::SemiInteger.canonical_discrete_value(-1.8749999999999998, atol),
             None
         );
         assert_eq!(Kind::Integer.canonical_discrete_value(-2.25, atol), None);

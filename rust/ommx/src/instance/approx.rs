@@ -138,7 +138,7 @@ impl AbsDiffEq for Instance {
                         .fixed_decision_variable_values()
                         .get(id)
                         .expect("fixed role requires an Instance-owned value");
-                    if (*self_value - *other_value).abs() > epsilon.into_inner() {
+                    if !epsilon.approx_eq(*self_value, *other_value) {
                         return false;
                     }
                 }

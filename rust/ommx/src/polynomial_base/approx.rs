@@ -13,7 +13,7 @@ impl<M: Monomial> AbsDiffEq for PolynomialBase<M> {
         };
         residual
             .max_coefficient_abs()
-            .is_none_or(|max| max <= *epsilon)
+            .is_none_or(|max| epsilon.approx_is_zero(max.into_inner()))
     }
 }
 

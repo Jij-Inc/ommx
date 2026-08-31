@@ -48,7 +48,26 @@ impl AbsDiffEq for State {
                 other
                     .entries
                     .get(key)
-                    .is_some_and(|v| (*value - *v).abs() < atol)
+                    .is_some_and(|v| atol.approx_eq(*value, *v))
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn state_abs_diff_eq_uses_the_inclusive_atol_primitive() {
+        let atol = ATol::new(0.125).unwrap();
+        let reference = State::from_iter([(1, 1.0), (2, -1.0)]);
+        let boundary = State::from_iter([(1, 1.125), (2, -1.125)]);
+        let outside = State::from_iter([(1, f64::from_bits(1.125_f64.to_bits() + 1)), (2, -1.0)]);
+
+        assert!(reference.abs_diff_eq(&boundary, atol));
+        assert!(!reference.abs_diff_eq(&outside, atol));
+
+        let non_finite = State::from_iter([(1, f64::INFINITY), (2, -1.0)]);
+        assert!(!non_finite.abs_diff_eq(&non_finite, ATol::new(f64::INFINITY).unwrap()));
     }
 }

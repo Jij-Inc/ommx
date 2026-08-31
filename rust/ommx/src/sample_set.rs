@@ -486,10 +486,7 @@ fn expected_sampled_regular_constraint_feasible(
     evaluated_value: f64,
     atol: ATol,
 ) -> bool {
-    match equality {
-        crate::Equality::EqualToZero => evaluated_value.abs() < *atol,
-        crate::Equality::LessThanOrEqualToZero => evaluated_value < *atol,
-    }
+    equality.is_satisfied(evaluated_value, atol)
 }
 
 fn expected_sampled_indicator_constraint_feasible(
@@ -697,9 +694,9 @@ fn expected_binary_activity(
     atol: ATol,
     role: &'static str,
 ) -> Result<bool, String> {
-    if (value - 1.0).abs() < *atol {
+    if atol.approx_eq(value, 1.0) {
         Ok(true)
-    } else if value.abs() < *atol {
+    } else if atol.approx_is_zero(value) {
         Ok(false)
     } else {
         Err(format!(
@@ -722,12 +719,12 @@ fn expected_sampled_one_hot_active_variable(
             .samples()
             .get(sample_id)
             .expect("sample IDs must be validated first");
-        if (value - 1.0).abs() < *atol {
+        if atol.approx_eq(value, 1.0) {
             if active.is_some() {
                 return (false, None);
             }
             active = Some(*variable_id);
-        } else if value.abs() >= *atol {
+        } else if !atol.approx_is_zero(value) {
             return (false, None);
         }
     }
@@ -751,7 +748,7 @@ fn expected_sampled_sos1_active_variable(
             .samples()
             .get(sample_id)
             .expect("sample IDs must be validated first");
-        if value.abs() >= *atol {
+        if !atol.approx_is_zero(value) {
             if active.is_some() {
                 return (false, None);
             }

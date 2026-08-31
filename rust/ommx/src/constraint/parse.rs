@@ -171,10 +171,7 @@ impl Parse for v1::EvaluatedConstraint {
             provenance: Vec::new(),
         };
 
-        let feasible = match equality {
-            Equality::EqualToZero => self.evaluated_value.abs() < *crate::ATol::default(),
-            Equality::LessThanOrEqualToZero => self.evaluated_value < *crate::ATol::default(),
-        };
+        let feasible = equality.is_satisfied(self.evaluated_value, crate::ATol::default());
 
         let removed_reason = self.removed_reason.map(|reason| RemovedReason {
             reason,
@@ -367,5 +364,24 @@ mod tests {
         assert_eq!(context.label.subscripts, vec![10, 20]);
         // feasible should be false because 1.5 > ATol::default() for EqualToZero constraint
         assert!(!parsed.stage.feasible);
+    }
+
+    #[test]
+    fn v1_evaluated_constraint_parse_includes_default_atol_boundary() {
+        for equality in [
+            v1::Equality::EqualToZero,
+            v1::Equality::LessThanOrEqualToZero,
+        ] {
+            let proto = v1::EvaluatedConstraint {
+                equality: equality as i32,
+                evaluated_value: *crate::ATol::default(),
+                ..Default::default()
+            };
+
+            let (_, parsed, _, _): (ConstraintID, EvaluatedConstraint, ConstraintContext, _) =
+                proto.parse(&()).unwrap();
+
+            assert!(parsed.stage.feasible);
+        }
     }
 }

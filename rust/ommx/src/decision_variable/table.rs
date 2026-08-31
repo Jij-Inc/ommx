@@ -335,7 +335,7 @@ impl DecisionVariableTable<Created> {
         };
         row.check_value_consistency(id, value, atol)?;
         if let Some(previous_value) = self.columns.fixed_values.get(&id).copied() {
-            if !previous_value.is_finite() || (previous_value - value).abs() > *atol {
+            if !previous_value.is_finite() || !atol.approx_eq(previous_value, value) {
                 return Err(DecisionVariableError::SubstitutedValueOverwrite {
                     id,
                     previous_value,
@@ -369,7 +369,7 @@ impl DecisionVariableTable<Created> {
                 .columns
                 .fixed_values
                 .get(&id)
-                .is_none_or(|previous| previous.is_finite() && (*previous - value).abs() <= *atol));
+                .is_none_or(|previous| previous.is_finite() && atol.approx_eq(*previous, value)));
         }
 
         for (id, value) in fixed_values {
