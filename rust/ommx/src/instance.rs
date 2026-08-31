@@ -42,7 +42,7 @@ pub use preparation::{
     IntegerSlackPreparation, ObjectivePreparation, PreparationPolicy, PreparationTargetNotReached,
     SpecialConstraintPreparation,
 };
-pub use sos1_promotion::*;
+pub use sos1_promotion::{Sos1BigMPromotion, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim};
 pub use stats::*;
 
 use crate::{
@@ -249,8 +249,7 @@ impl OutputObjective {
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the active objective or active constraints.
-///   These are "dependent variables" whose values are reconstructed from
-///   [`Function`] values after solver-provided state has been validated.
+///   These are "dependent variables" whose values are computed from other variables.
 /// - Every variable ID in [`Self::output_objective`] belongs to
 ///   [`Self::decision_variables`]. The output objective does not contribute to
 ///   the solver-used variable set and is evaluated after state population.
@@ -260,8 +259,7 @@ impl OutputObjective {
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
-///   These are substituted when the constraint is restored via
-///   [`Self::restore_constraint`].
+///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
 /// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).

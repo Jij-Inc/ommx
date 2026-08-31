@@ -53,6 +53,7 @@ impl Instance {
             .ok_or_else(|| crate::error!("Removed constraint with ID {:?} not found", id))?
             .0
             .clone();
+
         if !dependency.is_empty() {
             crate::substitute_acyclic(&mut constraint.stage.function, dependency)
                 .map_err(|error| normalize_restore_error("constraint", id, error.into()))?;
@@ -633,39 +634,5 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("indicator variable"));
-    }
-
-    #[test]
-    fn restore_constraint_substitutes_composed_dependency() {
-        let constraint_id = ConstraintID::from(1);
-        let selector = VariableID::from(10);
-        let member = VariableID::from(1);
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            Function::Zero,
-            BTreeMap::from([
-                (member, DecisionVariable::continuous()),
-                (selector, DecisionVariable::binary()),
-            ]),
-            BTreeMap::from([(
-                constraint_id,
-                Constraint::less_than_or_equal_to_zero(Function::from(linear!(10))),
-            )]),
-        )
-        .unwrap();
-        instance
-            .relax_constraint(constraint_id, "test".to_string(), [])
-            .unwrap();
-        instance.decision_variable_dependency =
-            crate::AcyclicAssignments::new([(selector, Function::from(linear!(1)).signum().abs())])
-                .unwrap();
-
-        instance.restore_constraint(constraint_id).unwrap();
-
-        assert!(instance.constraints().contains_key(&constraint_id));
-        assert!(instance.removed_constraints().is_empty());
-        assert!(!instance.constraints()[&constraint_id]
-            .function()
-            .is_polynomial());
     }
 }

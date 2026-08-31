@@ -23,7 +23,7 @@ impl Instance {
     /// builder enforces (`builder.rs`): a constraint or objective cannot
     /// reference a variable whose value has been pinned via
     /// a table-owned fixed value (`fixed`), nor a variable
-    /// used as a dependent-variable reconstruction target (`dependent`).
+    /// used as a substitution-dependency key (`dependent`).
     fn validate_required_ids_with_sets(
         required_ids: &VariableIDSet,
         variable_ids: &VariableIDSet,
@@ -160,7 +160,7 @@ impl Instance {
     /// Enforces the same invariants as the [`Instance`] builder:
     /// - All variable IDs referenced by the constraint (function plus the
     ///   indicator variable) must be present in `decision_variables` and must
-    ///   not be dependent-variable reconstruction targets.
+    ///   not be substitution-dependency keys.
     /// - The indicator variable must have [`Kind::Binary`](crate::decision_variable::Kind).
     pub fn add_indicator_constraint(
         &mut self,
@@ -218,7 +218,7 @@ impl Instance {
     /// Insert a decision variable with its modeling label.
     ///
     /// The table key must not collide with any existing variable and must not
-    /// be a dependent-variable reconstruction target. Returns the inserted variable's id for
+    /// be a substitution-dependency key. Returns the inserted variable's id for
     /// symmetry with `add_constraint`.
     ///
     /// # Errors
@@ -237,7 +237,7 @@ impl Instance {
         {
             crate::bail!(
                 { ?id },
-                "Variable id {id:?} is currently a dependent-variable reconstruction target",
+                "Variable id {id:?} is currently used as a substitution-dependency key",
             );
         }
         self.decision_variables
@@ -361,8 +361,8 @@ impl Instance {
 
 impl ParametricInstance {
     /// Validate that all required IDs are defined either as decision variables
-    /// or as parameters, and are not currently dependent-variable
-    /// reconstruction targets.
+    /// or as parameters, and are not currently used as substitution-dependency
+    /// keys.
     ///
     /// `ParametricInstance` validation differs from
     /// [`Instance::validate_required_ids`](Instance) by also accepting
@@ -541,7 +541,7 @@ impl ParametricInstance {
     /// Insert a decision variable with its modeling label.
     ///
     /// The table key must not collide with any existing decision
-    /// variable, parameter, or dependent-variable reconstruction target.
+    /// variable, parameter, or substitution-dependency key.
     ///
     /// # Errors
     ///
@@ -563,7 +563,7 @@ impl ParametricInstance {
         if !has_decision_variable && self.decision_variable_dependency().keys().any(|k| k == id) {
             crate::bail!(
                 { ?id },
-                "Variable id {id:?} is currently a dependent-variable reconstruction target",
+                "Variable id {id:?} is currently used as a substitution-dependency key",
             );
         }
         self.decision_variables

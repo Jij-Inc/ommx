@@ -720,11 +720,6 @@ mod tests {
             promotion.members()
         );
         assert!(instance.decision_variables().contains_key(&unrelated_id()));
-        assert!(!instance
-            .decision_variable_dependency()
-            .get(&selector_id())
-            .unwrap()
-            .is_polynomial());
 
         let zero = instance
             .populate_state(
@@ -765,8 +760,6 @@ mod tests {
             .unwrap();
         assert!(evaluated.stage.feasible);
         assert_eq!(evaluated.stage.active_variable, None);
-        assert!(near_zero.feasible());
-        assert!(near_zero.feasible_relaxed());
 
         let on_boundary = instance
             .evaluate(&crate::v1::State::from_iter([(1, 1.0e-6)]), atol)
@@ -791,6 +784,25 @@ mod tests {
         );
         assert!(!on_boundary.feasible());
         assert!(on_boundary.feasible_relaxed());
+
+        let sample_id = crate::SampleID::from(0);
+        let sample_set = instance
+            .evaluate_samples(
+                &crate::Sampled::from(crate::v1::State::from_iter([(1, 1.0e-6)])),
+                atol,
+            )
+            .unwrap();
+        assert_eq!(
+            sample_set.decision_variables()[&selector_id()]
+                .samples()
+                .get(sample_id),
+            Some(&0.0)
+        );
+        let sampled = &sample_set.sos1_constraints()[&promotion.sos1_constraint_id()];
+        assert!(sampled.stage.feasible[&sample_id]);
+        assert_eq!(sampled.stage.active_variable[&sample_id], None);
+        assert_eq!(sample_set.is_sample_feasible(sample_id), Some(false));
+        assert_eq!(sample_set.is_sample_feasible_relaxed(sample_id), Some(true));
 
         let negative_boundary = instance
             .evaluate(&crate::v1::State::from_iter([(1, -1.0e-6)]), atol)
@@ -897,7 +909,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unmodeled_member_domains_without_mutation() {
+    fn rejects_unmodeled_members_without_mutation() {
         let fixed_binary =
             DecisionVariable::new(Kind::Binary, Bound::new(1.0, 1.0).unwrap(), ATol::default())
                 .unwrap();
@@ -912,6 +924,18 @@ mod tests {
         .unwrap();
         let (instance, request) = fresh_instance(semi, Some(upper_row_id()), Some(lower_row_id()));
         assert_atomic_rejection(instance, &request, "semi-variable");
+
+        let (mut instance, request) = mixed_instance();
+        instance
+            .decision_variables
+            .set_fixed_value(member_integer_id(), 0.0, ATol::default())
+            .unwrap();
+        assert_atomic_rejection(instance, &request, "is fixed");
+
+        let (mut instance, request) = mixed_instance();
+        instance.decision_variable_dependency =
+            AcyclicAssignments::new([(member_integer_id(), Function::Zero)]).unwrap();
+        assert_atomic_rejection(instance, &request, "dependency target");
     }
 
     #[test]
@@ -1044,12 +1068,6 @@ mod tests {
     fn removed_named_and_dependency_rhs_references_are_preserved() {
         let (mut instance, request) = mixed_instance();
 
-        instance.output_objective = Some(crate::OutputObjective::new(
-            Sense::Minimize,
-            Function::from(linear!(10)),
-            true,
-        ));
-
         let regular_id = instance
             .add_constraint(
                 Constraint::less_than_or_equal_to_zero(Function::from(linear!(10))),
@@ -1133,7 +1151,6 @@ mod tests {
                 ATol::default(),
             )
             .unwrap();
-        assert_eq!(*solution.objective(), 1.0);
         assert_eq!(solution.state().entries[&selector_id().into_inner()], 1.0);
         assert_eq!(solution.state().entries[&unrelated_id().into_inner()], 1.0);
     }

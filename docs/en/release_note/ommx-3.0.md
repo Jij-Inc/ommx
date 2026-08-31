@@ -8,15 +8,6 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🛠 Align SOS1 zero classification ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
-
-{meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples` now
-treat an SOS1 member with `abs(value) <= atol` as zero, including the boundary.
-This matches the zero classification used by `Function.signum`. Support for
-composed {class}`~ommx.Function` operations is provided separately by
-[#1158](https://github.com/Jij-Inc/ommx/pull/1158) and
-[#1178](https://github.com/Jij-Inc/ommx/pull/1178), as described below.
-
 ### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178))
 
 {class}`~ommx.Function` can now represent composed expressions as well as

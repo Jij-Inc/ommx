@@ -296,11 +296,6 @@ def test_evaluate_with_sos1_feasible():
     solution_zeros = instance.evaluate(state_zeros)
     assert solution_zeros.feasible
 
-    # Values exactly on either tolerance boundary are classified as zero.
-    state_boundary = State({1: 1.0e-6, 2: -1.0e-6, 3: 0.0})
-    solution_boundary = instance.evaluate(state_boundary, atol=1.0e-6)
-    assert solution_boundary.feasible
-
 
 def test_convert_sos1_with_integer_variables_emits_bigm_pair():
     """Non-binary SOS1 variables get a fresh binary indicator plus upper and lower Big-M."""

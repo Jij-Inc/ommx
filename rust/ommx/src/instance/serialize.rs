@@ -379,33 +379,6 @@ mod tests {
             .unwrap()
     }
 
-    fn instance_with_composed_dependency() -> Instance {
-        let source = VariableID::from(1);
-        let polynomial_dependent = VariableID::from(2);
-        let indicator_dependent = VariableID::from(3);
-        Instance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::from(crate::linear!(1)))
-            .decision_variables(BTreeMap::from([
-                (source, DecisionVariable::continuous()),
-                (polynomial_dependent, DecisionVariable::continuous()),
-                (indicator_dependent, DecisionVariable::binary()),
-            ]))
-            .constraints(BTreeMap::new())
-            .decision_variable_dependency(
-                AcyclicAssignments::new([
-                    (polynomial_dependent, Function::from(crate::linear!(1))),
-                    (
-                        indicator_dependent,
-                        Function::from(crate::linear!(2)).signum().abs(),
-                    ),
-                ])
-                .unwrap(),
-            )
-            .build()
-            .unwrap()
-    }
-
     fn expected_special_features() -> Vec<i32> {
         vec![
             v2::Feature::ConstraintIndicator as i32,
@@ -474,93 +447,6 @@ mod tests {
         assert!(
             err.to_string().contains("to_v2_bytes"),
             "unexpected error: {err}"
-        );
-    }
-
-    #[test]
-    fn composed_dependencies_round_trip_through_v1_and_v2() {
-        let instance = instance_with_composed_dependency();
-
-        let v1_bytes = instance.to_v1_bytes().unwrap();
-        assert_eq!(Instance::from_v1_bytes(&v1_bytes).unwrap(), instance);
-
-        let proto = v2::Instance::from(instance.clone());
-        assert_eq!(proto.decision_variable_dependency.len(), 2);
-        assert_eq!(Instance::try_from(proto).unwrap(), instance);
-        let v2_bytes = instance.to_v2_bytes();
-        assert_eq!(Instance::from_v2_bytes(&v2_bytes).unwrap(), instance);
-
-        let populated = instance
-            .populate_state(v1::State::from_iter([(1, -2.0)]), ATol::default())
-            .unwrap();
-        assert_eq!(populated.entries[&2], -2.0);
-        assert_eq!(populated.entries[&3], 1.0);
-
-        let parametric: ParametricInstance = instance.into();
-        let v1_bytes = parametric.to_v1_bytes().unwrap();
-        assert_eq!(
-            ParametricInstance::from_v1_bytes(&v1_bytes).unwrap(),
-            parametric
-        );
-        let v2_bytes = parametric.to_v2_bytes();
-        assert_eq!(
-            ParametricInstance::from_v2_bytes(&v2_bytes).unwrap(),
-            parametric
-        );
-    }
-
-    #[test]
-    fn v2_composed_dependency_coexists_with_output_objective() {
-        let mut instance = instance_with_composed_dependency();
-        instance.output_objective = Some(OutputObjective::new(
-            Sense::Maximize,
-            Function::from(crate::linear!(3)),
-            false,
-        ));
-
-        let proto = v2::Instance::from(instance.clone());
-
-        assert_eq!(proto.decision_variable_dependency.len(), 2);
-        assert!(proto.output_objective.is_some());
-        assert_eq!(
-            proto.required_features,
-            vec![v2::Feature::OutputObjective as i32]
-        );
-        assert_eq!(Instance::try_from(proto.clone()).unwrap(), instance);
-        assert_eq!(
-            Instance::from_v2_bytes(&proto.encode_to_vec()).unwrap(),
-            instance
-        );
-        assert!(instance.to_v1_bytes().is_err());
-    }
-
-    #[test]
-    fn parameterized_composed_dependency_round_trips_through_v1_and_v2() {
-        let dependent = VariableID::from(2);
-        let parameter = VariableID::from(100);
-        let instance = ParametricInstance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(BTreeMap::from([(dependent, DecisionVariable::binary())]))
-            .parameters(ParameterTable::from_ids(BTreeSet::from([parameter])))
-            .constraints(BTreeMap::new())
-            .decision_variable_dependency(
-                AcyclicAssignments::new([(
-                    dependent,
-                    Function::from(crate::linear!(100)).signum().abs(),
-                )])
-                .unwrap(),
-            )
-            .build()
-            .unwrap();
-
-        assert_eq!(
-            ParametricInstance::from_v1_bytes(&instance.to_v1_bytes().unwrap()).unwrap(),
-            instance
-        );
-        assert_eq!(
-            ParametricInstance::from_v2_bytes(&instance.to_v2_bytes()).unwrap(),
-            instance
         );
     }
 

@@ -22,7 +22,7 @@ enum IndicatorPlan {
 /// Shared by lowering and checked promotion so both directions use the same
 /// row representation. Callers must provide a finite, strictly positive
 /// `upper` value.
-pub(super) fn canonical_sos1_big_m_upper_link(
+pub fn canonical_sos1_big_m_upper_link(
     member: VariableID,
     selector: VariableID,
     upper: f64,
@@ -38,7 +38,7 @@ pub(super) fn canonical_sos1_big_m_upper_link(
 /// Build the canonical lower Big-M link `l y - x <= 0`.
 ///
 /// Callers must provide a finite, strictly negative `lower` value.
-pub(super) fn canonical_sos1_big_m_lower_link(
+pub fn canonical_sos1_big_m_lower_link(
     member: VariableID,
     selector: VariableID,
     lower: f64,
@@ -52,7 +52,7 @@ pub(super) fn canonical_sos1_big_m_lower_link(
 }
 
 /// Build the canonical selector-cardinality row `sum(y) - 1 <= 0`.
-pub(super) fn canonical_sos1_big_m_cardinality(
+pub fn canonical_sos1_big_m_cardinality(
     selectors: impl IntoIterator<Item = VariableID>,
 ) -> Result<Constraint> {
     let function = selectors

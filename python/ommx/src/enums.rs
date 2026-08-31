@@ -36,7 +36,7 @@ pub enum DecisionVariableRole {
     Used = 1,
     /// Fixed by the instance-owned fixed-value table and not used by solver input
     Fixed = 2,
-    /// Defined by a deterministic reconstruction dependency
+    /// Defined by decision_variable_dependency
     Dependent = 3,
     /// Not used, fixed, or dependent
     Irrelevant = 4,

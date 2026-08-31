@@ -574,8 +574,8 @@ impl Instance {
     /// - `description`: Optional description for the inserted constraint
     ///
     /// Raises {class}`ValueError` if the constraint references an undefined
-    /// decision variable or one currently used as a dependent-variable
-    /// reconstruction target, matching the validation performed by other constraint-insertion
+    /// decision variable or one currently used as a substitution-dependency
+    /// key, matching the validation performed by other constraint-insertion
     /// paths.
     #[pyo3(signature = (constraint, name=None, *, subscripts=None, parameters=None, description=None))]
     pub fn add_constraint(
@@ -645,8 +645,8 @@ impl Instance {
     /// new id.
     ///
     /// Raises {class}`ValueError` if the constraint references an undefined
-    /// decision variable or one currently used as a dependent-variable
-    /// reconstruction target.
+    /// decision variable or one currently used as a substitution-dependency
+    /// key.
     pub fn add_indicator_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::IndicatorConstraint,
@@ -2320,7 +2320,7 @@ impl Instance {
             .collect()
     }
 
-    /// Return IDs of decision variables defined by reconstruction dependencies.
+    /// Return IDs of decision variables defined by ``decision_variable_dependency``.
     pub fn dependent_decision_variable_ids(&self) -> BTreeSet<u64> {
         self.inner
             .dependent_decision_variable_ids()

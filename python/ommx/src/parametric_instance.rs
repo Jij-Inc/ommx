@@ -524,7 +524,7 @@ impl ParametricInstance {
     ///
     /// Raises {class}`ValueError` if the constraint references an id that is
     /// neither a defined decision variable nor a defined parameter, or if it
-    /// references an id currently used as a dependent-variable reconstruction target.
+    /// references an id currently used as a substitution-dependency key.
     pub fn add_constraint(
         slf: Bound<'_, Self>,
         constraint: Constraint,
@@ -593,8 +593,8 @@ impl ParametricInstance {
     ///
     /// Raises {class}`ValueError` if the constraint references an id that
     /// is neither a defined decision variable nor a defined parameter, or
-    /// if it references an id currently used as a dependent-variable
-    /// reconstruction target.
+    /// if it references an id currently used as a substitution-dependency
+    /// key.
     pub fn add_indicator_constraint(
         slf: Bound<'_, Self>,
         constraint: crate::IndicatorConstraint,

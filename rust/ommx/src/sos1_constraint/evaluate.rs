@@ -314,9 +314,10 @@ mod tests {
     #[test]
     fn test_propagate_zero_shrinks() {
         let c = make_sos1(1, &[1, 2, 3]);
-        // x1=0 → Active (shrunk to {x2, x3})
-        let state = crate::v1::State::from(HashMap::from([(1, 0.0)]));
-        let (outcome, additional) = c.propagate(&state, ATol::default()).unwrap();
+        let atol = ATol::new(1.0).unwrap();
+        // x1 is exactly at the zero tolerance boundary → Active (shrunk to {x2, x3})
+        let state = crate::v1::State::from(HashMap::from([(1, 1.0)]));
+        let (outcome, additional) = c.propagate(&state, atol).unwrap();
         match outcome {
             PropagateOutcome::Active(c) => {
                 assert_eq!(c.variables.len(), 2);

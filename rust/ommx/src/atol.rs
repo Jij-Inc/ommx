@@ -232,5 +232,6 @@ mod tests {
         assert!(atol.considers_zero(-0.5));
         assert!(atol.considers_zero(1.0));
         assert!(atol.considers_zero(-1.0));
+        assert!(!atol.considers_zero(1.0 + f64::EPSILON));
     }
 }

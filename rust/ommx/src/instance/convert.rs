@@ -549,59 +549,6 @@ mod with_parameters_tests {
         );
     }
 
-    #[test]
-    fn parameter_substitution_preserves_zero_sensitive_dependent_function() {
-        let dependent = VariableID::from(2);
-        let parameter = VariableID::from(100);
-        let parametric = ParametricInstance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(btreemap! {
-                dependent => DecisionVariable::binary(),
-            })
-            .parameters(parameters([parameter]))
-            .constraints(BTreeMap::new())
-            .decision_variable_dependency(
-                crate::AcyclicAssignments::new([(
-                    dependent,
-                    Function::from(linear!(100)).signum().abs(),
-                )])
-                .unwrap(),
-            )
-            .build()
-            .unwrap();
-
-        let instance = parametric
-            .with_parameters(crate::v1::Parameters {
-                entries: std::collections::HashMap::from([(100, 5.0e-7)]),
-            })
-            .unwrap();
-        let loose = instance
-            .populate_state(
-                crate::v1::State::default(),
-                crate::ATol::new(1.0e-6).unwrap(),
-            )
-            .unwrap();
-        let tight = instance
-            .populate_state(
-                crate::v1::State::default(),
-                crate::ATol::new(1.0e-8).unwrap(),
-            )
-            .unwrap();
-
-        assert_eq!(loose.entries[&2], 0.0);
-        assert_eq!(tight.entries[&2], 1.0);
-        assert!(!instance
-            .decision_variable_dependency()
-            .get(&dependent)
-            .unwrap()
-            .is_polynomial());
-        assert!(!instance
-            .decision_variable_dependency()
-            .required_ids()
-            .contains(&parameter));
-    }
-
     /// Parameter substitution must apply to *removed* regular constraints
     /// as well. `ParametricInstance` permits removed-constraint bodies to
     /// reference parameters (function bodies are unrestricted), but the

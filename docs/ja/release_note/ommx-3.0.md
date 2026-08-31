@@ -8,15 +8,6 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### 🛠 SOS1のゼロ判定を統一 ([#1136](https://github.com/Jij-Inc/ommx/pull/1136))
-
-{meth}`~ommx.Instance.evaluate`と{meth}`~ommx.Instance.evaluate_samples`は、境界を含む
-`abs(value) <= atol`のSOS1 memberをゼロとみなすようになりました。これは
-`Function.signum`のゼロ判定と同じです。composed {class}`~ommx.Function`演算の
-サポートは、この変更とは別に下記の
-[#1158](https://github.com/Jij-Inc/ommx/pull/1158)と
-[#1178](https://github.com/Jij-Inc/ommx/pull/1178)で提供されています。
-
 ### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178))
 
 {class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
