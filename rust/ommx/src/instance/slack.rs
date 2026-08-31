@@ -6,6 +6,16 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use num::traits::Inv;
 
+fn validate_integer_slack_atol(atol: ATol) -> Result<()> {
+    if atol >= 0.5 {
+        bail!(
+            "Integer slack introduction requires atol < 0.5: got {}",
+            atol.into_inner()
+        );
+    }
+    Ok(())
+}
+
 /// Signal returned when exact integer-slack conversion is structurally valid
 /// but cannot construct an exact finite encoding.
 ///
@@ -47,9 +57,9 @@ impl ExactIntegerSlackUnavailable {
 }
 
 impl Instance {
-    /// Convert an inequality $f(x) \leq 0$ to an equality $a f(x) + s = 0$ with a
+    /// Convert an inequality $f(x) \leq 0$ to an equality $f(x) + s/a = 0$ with a
     /// newly introduced integer slack variable $s$, where $a$ is the minimal positive
-    /// factor that makes every coefficient of $f(x)$ integer.
+    /// factor that makes every coefficient of $a f(x)$ integer.
     ///
     /// # Errors
     ///
@@ -59,13 +69,16 @@ impl Instance {
     /// infeasible. Missing constraints, unsupported variable kinds, allocation,
     /// and coefficient-arithmetic failures retain their ordinary error types.
     /// Feasibility and triviality are classified with the supplied `atol`,
-    /// matching [`crate::EvaluatedConstraint`] semantics.
+    /// matching [`crate::EvaluatedConstraint`] semantics. `atol` must be less
+    /// than `0.5` so its use while normalizing Integer bounds remains
+    /// unambiguous.
     pub fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
         atol: ATol,
     ) -> Result<()> {
+        validate_integer_slack_atol(atol)?;
         let constraint_id = ConstraintID::from(constraint_id);
         let bounds = self.bounds();
         let kinds = self.kinds();
@@ -181,13 +194,15 @@ impl Instance {
     /// removed_constraints.
     /// `atol` controls both zero-sensitive operations while computing the
     /// function bound and the inequality feasibility threshold used to classify
-    /// infeasible or trivial bounds.
+    /// infeasible or trivial bounds. It must be less than `0.5` so its use while
+    /// normalizing Integer bounds remains unambiguous.
     pub fn add_integer_slack_to_inequality(
         &mut self,
         constraint_id: u64,
         slack_upper_bound: u64,
         atol: ATol,
     ) -> Result<Option<f64>> {
+        validate_integer_slack_atol(atol)?;
         let constraint_id = ConstraintID::from(constraint_id);
         let bounds = self.bounds();
         let kinds = self.kinds();
@@ -311,7 +326,7 @@ mod tests {
 
     fn tolerance_boundary_instance() -> Instance {
         let id = VariableID::from(1);
-        let function = ((coeff!(1.0) * linear!(id)).unwrap() + coeff!(0.5)).unwrap();
+        let function = ((coeff!(1.0) * linear!(id)).unwrap() + coeff!(0.25)).unwrap();
         Instance::new(
             Sense::Minimize,
             Function::Zero,
@@ -368,10 +383,10 @@ mod tests {
 
     #[test]
     fn exact_integer_slack_uses_constraint_atol_at_a_positive_lower_bound() {
-        // f(0)=0.5 is feasible and f(1)=1.5 is infeasible at atol=1. The
-        // integer-normalized bound is [1, 3], so an exact-zero check would
+        // f(0)=0.25 is feasible and f(1)=1.25 is infeasible at atol=0.4. The
+        // integer-normalized bound is [1, 5], so an exact-zero check would
         // incorrectly reject the whole constraint as infeasible.
-        let atol = ATol::new(1.0).unwrap();
+        let atol = ATol::new(0.4).unwrap();
         let mut instance = tolerance_boundary_instance();
 
         instance
@@ -403,7 +418,7 @@ mod tests {
 
     #[test]
     fn inequality_preserving_slack_uses_constraint_atol_at_a_positive_lower_bound() {
-        let atol = ATol::new(1.0).unwrap();
+        let atol = ATol::new(0.4).unwrap();
         let mut instance = tolerance_boundary_instance();
 
         let coefficient = instance
@@ -424,7 +439,7 @@ mod tests {
 
     #[test]
     fn slack_conversion_relaxes_a_positive_but_tolerance_feasible_constraint() {
-        let atol = ATol::new(1.0).unwrap();
+        let atol = ATol::new(0.4).unwrap();
         for exact in [true, false] {
             let mut instance = Instance::new(
                 Sense::Minimize,
@@ -432,7 +447,7 @@ mod tests {
                 BTreeMap::new(),
                 btreemap! {
                     ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(
-                        Function::try_from(0.5).unwrap()
+                        Function::try_from(0.25).unwrap()
                     ),
                 },
             )
@@ -454,6 +469,37 @@ mod tests {
             assert!(instance
                 .removed_constraints()
                 .contains_key(&ConstraintID::from(0)));
+        }
+    }
+
+    #[test]
+    fn exact_integer_slack_rejects_large_atol_without_mutating_instance() {
+        for value in [0.5, 1.0] {
+            let mut instance = tolerance_boundary_instance();
+            let before = instance.clone();
+
+            let err = instance
+                .convert_inequality_to_equality_with_integer_slack(0, 1, ATol::new(value).unwrap())
+                .unwrap_err();
+
+            assert!(err.to_string().contains("requires atol < 0.5"));
+            assert!(!err.is::<ExactIntegerSlackUnavailable>());
+            assert_eq!(instance, before);
+        }
+    }
+
+    #[test]
+    fn inequality_preserving_slack_rejects_large_atol_without_mutating_instance() {
+        for value in [0.5, 1.0] {
+            let mut instance = tolerance_boundary_instance();
+            let before = instance.clone();
+
+            let err = instance
+                .add_integer_slack_to_inequality(0, 1, ATol::new(value).unwrap())
+                .unwrap_err();
+
+            assert!(err.to_string().contains("requires atol < 0.5"));
+            assert_eq!(instance, before);
         }
     }
 

@@ -50,6 +50,8 @@ pub struct IntegerSlackPreparation {
     /// Maximum finite range accepted for an exact Integer slack variable.
     pub max_integer_range: u64,
     /// Absolute tolerance used to normalize bounds to integers.
+    ///
+    /// Integer slack operations require this to be less than `0.5`.
     pub atol: ATol,
     /// Optional upper bound for inequality-preserving Integer slack.
     ///

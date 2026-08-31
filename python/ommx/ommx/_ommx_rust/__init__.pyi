@@ -4469,8 +4469,8 @@ class Instance:
         {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
         infeasible.
         ``atol`` controls zero-sensitive interval evaluation and the strict
-        inequality feasibility threshold. If omitted, :attr:`DEFAULT_ATOL` is
-        used.
+        inequality feasibility threshold and must be less than ``0.5``. If
+        omitted, :attr:`DEFAULT_ATOL` is used.
         """
     def add_integer_slack_to_inequality(
         self,
@@ -4496,8 +4496,8 @@ class Instance:
         The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
 
         ``atol`` controls zero-sensitive interval bounds and the inequality
-        feasibility threshold used to select the slack coefficient. If omitted,
-        :attr:`DEFAULT_ATOL` is used.
+        feasibility threshold used to select the slack coefficient and must be
+        less than ``0.5``. If omitted, :attr:`DEFAULT_ATOL` is used.
 
         # Examples
 
