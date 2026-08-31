@@ -8,7 +8,20 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178))
+### 🛠 境界を含む `atol` 判定 ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+絶対許容誤差の比較は、差がちょうど`atol`となる境界を一貫して含むようになりました。
+等式のresidualは $|f(x)| \leq \mathtt{atol}$ のときfeasible、不等式のresidualは
+$f(x) < 0$ または $|f(x)| \leq \mathtt{atol}$ のときfeasibleです。scalar / sample
+evaluation、regular / Indicator constraint、`Solution` / `SampleSet`の検証、v1 / v2の
+deserializeで同じ規則を使います。
+
+Functionのゼロ依存演算、Indicatorのactivation、OneHot / SOS1の分類、solver stateの
+離散値canonicalization、fixed valueの整合性検証でも、targetとの差がちょうど`atol`の
+値を含みます。境界をわずかに超える値は引き続き範囲外です。有限値の検証を所有するAPIは、
+domain errorや整合性errorを返す前にNaNと無限大を引き続き拒否します。
+
+### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 {class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
 なりました。絶対値、符号関数、最小値、最大値、除算、符号付き32 bit整数による
@@ -46,7 +59,8 @@ IndicatorのBig-M変換、特殊制約のlowering、integer slack変換も、導
 `atol=`を受け取ります。これによりFunction bodyのゼロ判定は整合しますが、代数的な
 loweringは離散値が厳密であることを仮定し、0や1に近いsolver出力を丸める処理は
 行いません。省略時は`DEFAULT_ATOL`が使われます。integer slack変換は係数の正規化前に、
-評価と同じ厳密な条件 $f(x) < \mathtt{atol}$ で不等式を分類するため、微小な正値が
+評価と同じ境界を含む条件 $f(x) < 0$ または
+$|f(x)| \leq \mathtt{atol}$ で不等式を分類するため、微小な正値が
 scaleによって暗黙に再分類されることはありません。厳密な多項式正規化は有限かつ
 非ゼロの係数をすべて保持し、許容誤差によるcleanupを暗黙には行いません。近似的な
 cleanupを将来提供する場合は、別の明示的なAPIになります。
@@ -74,14 +88,14 @@ Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含
 `PolynomialRequirement.any_degree()`が受け付けるのは任意次数のpolynomialであり、
 複合された非polynomialの`Function`は含みません。
 
-### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174))
+### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 {meth}`~ommx.Instance.populate_state`、{meth}`~ommx.Instance.evaluate`、
 {meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
 dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
 canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
-未満のBinary値と、整数との差が`atol`未満のInteger / SemiInteger値は、対応する厳密な
-離散値として格納されます。差がちょうど`atol`の値は変更しません。canonicalizationとは
+以下のBinary値と、整数との差が`atol`以下のInteger / SemiInteger値は、境界上の値も含めて
+対応する厳密な離散値として格納されます。canonicalizationとは
 別に、kindとboundのfeasibilityを既存の規則で判定します。
 ContinuousとSemiContinuousは丸めません。それ以外の有限値は、返された
 {class}`~ommx.Solution`がfeasibilityを判定できるように保持し、非有限なstate値は

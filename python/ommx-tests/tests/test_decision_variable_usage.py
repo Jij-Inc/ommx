@@ -1,5 +1,7 @@
 """Test decision-variable role and used-variable APIs."""
 
+import math
+
 import pytest
 
 from ommx import DecisionVariable, DecisionVariableRole, Instance
@@ -239,4 +241,13 @@ def test_instance_canonicalizes_discrete_solver_values():
     assert sample_set.objectives[8] == 1.0
 
     boundary = state | {0: 1.125, 1: -2.125, 2: -1.875}
-    assert instance.populate_state(boundary, atol=0.125).entries == boundary
+    assert instance.populate_state(boundary, atol=0.125).entries == expected
+
+    outside = state | {
+        # Stay inside the binary bound tolerance while moving just beyond the
+        # integrality tolerance around zero.
+        0: math.nextafter(0.125, math.inf),
+        1: math.nextafter(-2.125, -math.inf),
+        2: math.nextafter(-1.875, math.inf),
+    }
+    assert instance.populate_state(outside, atol=0.125).entries == outside

@@ -161,17 +161,10 @@ impl Instance {
     ///
     /// Canonical formulation recognition is exact. When evaluating a solver
     /// state, fresh-selector reconstruction uses the same [`crate::ATol`]
-    /// zero classifier as the promoted SOS1 constraint so numerical residuals
-    /// near zero do not reactivate retained selectors.
-    ///
-    /// Promotion establishes equivalence for exact real-valued semantics. It
-    /// does not claim that the sets accepted under a finite `atol` are
-    /// identical: regular rows keep their strict `residual < atol` rule, while
-    /// selector reconstruction classifies `abs(member) <= atol` as zero. For
-    /// example, exactly at `abs(member) == atol`, the promoted active model may
-    /// be feasible while [`crate::Solution::feasible`] reports `false` because
-    /// it also checks retained formulation history;
-    /// [`crate::Solution::feasible_relaxed`] reports only the active model.
+    /// approximate-zero classifier as the promoted SOS1 constraint and retained
+    /// formulation rows. At `abs(member) == atol`, selector reconstruction,
+    /// SOS1 activity, and regular-row feasibility therefore agree on the
+    /// inclusive boundary.
     ///
     /// On success the verified formulation rows are relaxed, fresh selectors
     /// remain registered as dependent variables, and a new active SOS1
@@ -738,7 +731,7 @@ mod tests {
     }
 
     #[test]
-    fn reconstructed_selector_uses_the_sos1_zero_tolerance() {
+    fn reconstructed_selector_uses_shared_atol_semantics() {
         let member = DecisionVariable::new(
             Kind::Continuous,
             Bound::new(-2.0, 3.0).unwrap(),
@@ -775,14 +768,14 @@ mod tests {
         assert!(evaluated.stage.feasible);
         assert_eq!(evaluated.stage.active_variable, None);
         assert!(
-            !on_boundary
+            on_boundary
                 .evaluated_constraints()
                 .get(&upper_row_id())
                 .unwrap()
                 .stage
                 .feasible
         );
-        assert!(!on_boundary.feasible());
+        assert!(on_boundary.feasible());
         assert!(on_boundary.feasible_relaxed());
 
         let sample_id = crate::SampleID::from(0);
@@ -801,7 +794,7 @@ mod tests {
         let sampled = &sample_set.sos1_constraints()[&promotion.sos1_constraint_id()];
         assert!(sampled.stage.feasible[&sample_id]);
         assert_eq!(sampled.stage.active_variable[&sample_id], None);
-        assert_eq!(sample_set.is_sample_feasible(sample_id), Some(false));
+        assert_eq!(sample_set.is_sample_feasible(sample_id), Some(true));
         assert_eq!(sample_set.is_sample_feasible_relaxed(sample_id), Some(true));
 
         let negative_boundary = instance
@@ -821,14 +814,14 @@ mod tests {
             None
         );
         assert!(
-            !negative_boundary
+            negative_boundary
                 .evaluated_constraints()
                 .get(&lower_row_id())
                 .unwrap()
                 .stage
                 .feasible
         );
-        assert!(!negative_boundary.feasible());
+        assert!(negative_boundary.feasible());
         assert!(negative_boundary.feasible_relaxed());
     }
 

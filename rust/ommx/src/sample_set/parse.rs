@@ -1670,6 +1670,66 @@ mod tests {
     }
 
     #[test]
+    fn v2_special_constraint_stage_validation_includes_the_atol_boundary() {
+        let atol = ATol::new(0.125).unwrap();
+
+        let mut indicator = v2_sample_set_with_indicator_constraint();
+        indicator.feasibility_atol = Some(*atol);
+        indicator
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .samples
+            .as_mut()
+            .unwrap()
+            .entries[0]
+            .value = 1.0 + *atol;
+        let indicator_row = indicator
+            .sampled_indicator_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        indicator_row.evaluated_values.as_mut().unwrap().entries[0].value = *atol;
+        indicator_row.feasible.insert(0, true);
+        indicator_row.indicator_active.insert(0, true);
+        SampleSet::try_from(indicator).unwrap();
+
+        let mut one_hot = v2_sample_set_with_one_hot_constraint();
+        one_hot.feasibility_atol = Some(*atol);
+        one_hot
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .samples
+            .as_mut()
+            .unwrap()
+            .entries[0]
+            .value = 1.0 + *atol;
+        SampleSet::try_from(one_hot).unwrap();
+
+        let mut sos1 = v2_sample_set_with_sos1_constraint();
+        sos1.feasibility_atol = Some(*atol);
+        let sos1_variable = sos1
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        sos1_variable.kind = v1::decision_variable::Kind::Continuous as i32;
+        sos1_variable.samples.as_mut().unwrap().entries[0].value = *atol;
+        SampleSet::try_from(sos1).unwrap();
+    }
+
+    #[test]
     fn test_v2_sample_set_parse_rejects_non_finite_objective() {
         use crate::{SampleID, Sampled, Sense};
         use std::collections::BTreeMap;

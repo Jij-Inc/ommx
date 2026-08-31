@@ -1,3 +1,4 @@
+use approx::AbsDiffEq;
 use ordered_float::{FloatIsNan, NotNan};
 use std::ops::{Add, Deref, Neg, Sub};
 use std::sync::{LazyLock, RwLock};
@@ -28,7 +29,13 @@ impl From<FloatIsNan> for AtolError {
     }
 }
 
-/// Absolute tolerance
+/// Absolute tolerance for inclusive approximate comparisons.
+///
+/// [`Self::approx_eq`] and [`Self::approx_is_zero`] are the canonical scalar
+/// comparison primitives. They include the tolerance boundary and reject
+/// non-finite operands or differences. Construction requires a positive,
+/// non-NaN value; positive infinity is currently accepted, so callers that own
+/// a finite-tolerance invariant must continue to validate it at that boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ATol(NotNan<f64>);
 
@@ -82,15 +89,39 @@ impl ATol {
         self.0.into_inner()
     }
 
-    /// Return whether `value` is treated as zero by zero-sensitive functions
-    /// and SOS1 evaluation.
+    /// Compare two values using this absolute tolerance.
     ///
-    /// Values with `abs(value) <= atol` are zero, including the boundary. This
-    /// is deliberately not the feasibility predicate for regular constraints,
-    /// whose strict inequalities retain their existing semantics. Callers that
-    /// require finite inputs must validate them before using this classifier.
-    pub(crate) fn considers_zero(self, value: f64) -> bool {
-        value.abs() <= self.into_inner()
+    /// For finite operands this delegates to [`AbsDiffEq`] for [`f64`], so the
+    /// tolerance boundary is inclusive: values compare approximately equal
+    /// when `abs(lhs - rhs) <= atol`.
+    ///
+    /// Comparisons involving [`f64::NAN`], an infinite operand, or a
+    /// non-finite subtraction always return `false`, including two infinities
+    /// with the same sign and comparisons made with an infinite tolerance.
+    /// This boolean helper does not replace finite-operand validation:
+    /// evaluation and parsing APIs that reject non-finite values still perform
+    /// those checks before or independently of approximate comparison.
+    ///
+    /// [`ATol::new`] currently accepts positive infinity. This method does not
+    /// change that separate type invariant: an infinite tolerance makes finite
+    /// operands approximately equal whenever their subtraction remains finite.
+    #[inline]
+    pub fn approx_eq(self, lhs: f64, rhs: f64) -> bool {
+        let difference = lhs - rhs;
+        lhs.is_finite()
+            && rhs.is_finite()
+            && difference.is_finite()
+            && lhs.abs_diff_eq(&rhs, self.into_inner())
+    }
+
+    /// Classify a value as approximately zero using this absolute tolerance.
+    ///
+    /// This is exactly `self.approx_eq(value, 0.0)`, including the tolerance
+    /// boundary and the non-finite-value behavior documented by
+    /// [`Self::approx_eq`].
+    #[inline]
+    pub fn approx_is_zero(self, value: f64) -> bool {
+        self.approx_eq(value, 0.0)
     }
 
     #[tracing::instrument(skip_all)]
@@ -223,15 +254,34 @@ mod tests {
     }
 
     #[test]
-    fn zero_classifier_includes_absolute_tolerance_boundary() {
-        let atol = ATol::new(1.0).unwrap();
+    fn approximate_comparison_includes_the_boundary() {
+        let atol = ATol::new(0.125).unwrap();
 
-        assert!(atol.considers_zero(0.0));
-        assert!(atol.considers_zero(-0.0));
-        assert!(atol.considers_zero(0.5));
-        assert!(atol.considers_zero(-0.5));
-        assert!(atol.considers_zero(1.0));
-        assert!(atol.considers_zero(-1.0));
-        assert!(!atol.considers_zero(1.0 + f64::EPSILON));
+        assert!(atol.approx_eq(1.0, 1.125));
+        assert!(atol.approx_eq(1.125, 1.0));
+        assert!(!atol.approx_eq(1.0, 1.1250000000000002));
+
+        assert!(atol.approx_is_zero(0.125));
+        assert!(atol.approx_is_zero(-0.125));
+        assert!(!atol.approx_is_zero(0.12500000000000003));
+    }
+
+    #[test]
+    fn approximate_comparison_does_not_accept_non_finite_operands() {
+        let atol = ATol::new(0.125).unwrap();
+        let infinite_atol = ATol::new(f64::INFINITY).unwrap();
+
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(!atol.approx_eq(value, value));
+            assert!(!atol.approx_eq(value, 0.0));
+            assert!(!atol.approx_eq(0.0, value));
+            assert!(!atol.approx_is_zero(value));
+            assert!(!infinite_atol.approx_eq(value, value));
+            assert!(!infinite_atol.approx_is_zero(value));
+        }
+
+        // The ATol finite-value invariant is intentionally a separate concern.
+        assert!(infinite_atol.approx_eq(1.0, 2.0));
+        assert!(!infinite_atol.approx_eq(f64::MAX, -f64::MAX));
     }
 }

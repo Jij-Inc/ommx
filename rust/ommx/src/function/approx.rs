@@ -45,8 +45,7 @@ fn coefficient_abs_diff_eq(
 ) -> bool {
     let lhs = lhs.map_or(0.0, Coefficient::into_inner);
     let rhs = rhs.map_or(0.0, Coefficient::into_inner);
-    let difference = lhs - rhs;
-    difference.is_finite() && difference.abs() <= epsilon.into_inner()
+    epsilon.approx_eq(lhs, rhs)
 }
 
 fn instruction_abs_diff_eq(lhs: &Instruction, rhs: &Instruction, epsilon: ATol) -> bool {

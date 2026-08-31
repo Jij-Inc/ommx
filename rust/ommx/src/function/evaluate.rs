@@ -46,10 +46,6 @@ fn ensure_required_state_entries(
     }
 }
 
-fn is_zero(value: f64, atol: crate::ATol) -> bool {
-    atol.considers_zero(value)
-}
-
 fn unary_partial_fold_is_atol_independent(operator: UnaryOperator) -> bool {
     match operator {
         UnaryOperator::Neg | UnaryOperator::Abs => true,
@@ -242,10 +238,10 @@ fn evaluate_unary(operator: UnaryOperator, operand: f64, atol: crate::ATol) -> c
     let value = match operator {
         UnaryOperator::Neg => -operand,
         UnaryOperator::Abs => operand.abs(),
-        UnaryOperator::Signum if is_zero(operand, atol) => 0.0,
+        UnaryOperator::Signum if atol.approx_is_zero(operand) => 0.0,
         UnaryOperator::Signum if operand < 0.0 => -1.0,
         UnaryOperator::Signum => 1.0,
-        UnaryOperator::Powi(exponent) if exponent < 0 && is_zero(operand, atol) => {
+        UnaryOperator::Powi(exponent) if exponent < 0 && atol.approx_is_zero(operand) => {
             return Err(FunctionEvaluationError::ZeroToNegativeIntegerPower { exponent }.into());
         }
         UnaryOperator::Powi(exponent) => operand.powi(exponent),
@@ -274,7 +270,7 @@ fn evaluate_binary(
     let lhs = ensure_finite("binary operation left operand", lhs)?;
     let rhs = ensure_finite("binary operation right operand", rhs)?;
     let value = match operator {
-        BinaryOperator::Div if is_zero(rhs, atol) => {
+        BinaryOperator::Div if atol.approx_is_zero(rhs) => {
             return Err(FunctionEvaluationError::DivisionByZero.into());
         }
         BinaryOperator::Div => lhs / rhs,

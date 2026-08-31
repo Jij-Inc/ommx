@@ -273,10 +273,7 @@ fn indicator_feasible_from_evaluated_value(
     if !indicator_active {
         return true;
     }
-    match equality {
-        Equality::EqualToZero => evaluated_value.abs() < *atol,
-        Equality::LessThanOrEqualToZero => evaluated_value < *atol,
-    }
+    equality.is_satisfied(evaluated_value, atol)
 }
 
 fn validate_indicator_feasible_from_evaluated_value(

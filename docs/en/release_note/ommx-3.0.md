@@ -8,7 +8,23 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178))
+### 🛠 Inclusive `atol` boundaries ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+Absolute-tolerance comparisons now include the exact boundary consistently.
+Equality residuals are feasible when $|f(x)| \leq \mathtt{atol}$, while
+inequality residuals are feasible when $f(x) < 0$ or
+$|f(x)| \leq \mathtt{atol}$. The same rule is used by scalar and sample
+evaluation, regular and Indicator constraints, `Solution` and `SampleSet`
+validation, and v1/v2 deserialization.
+
+Function zero-sensitive operations, Indicator activation, OneHot and SOS1
+classification, discrete solver-state canonicalization, and fixed-value
+consistency checks also include values exactly `atol` from their target.
+Values just outside the boundary remain outside. APIs that own finite-value
+validation continue to reject NaN and infinity before reporting domain or
+consistency errors.
+
+### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 {class}`~ommx.Function` can now represent composed expressions as well as
 compact polynomials. Python users can construct absolute values, sign
@@ -49,11 +65,12 @@ optional `atol=` for bounds they derive. This aligns zero-sensitive Function
 body evaluation; algebraic lowering still assumes exact discrete values and
 does not canonicalize approximate solver output near 0 or 1. Omitting `atol`
 uses `DEFAULT_ATOL`. Integer-slack conversion classifies an inequality with the
-same strict rule used by evaluation, $f(x) < \mathtt{atol}$, before coefficient
-normalization, so a small positive value is not silently reclassified by
-scaling. Exact polynomial normalization retains every finite nonzero coefficient
-and does not apply an implicit tolerance-based cleanup. A future approximate-
-cleanup API would be separate and explicit.
+same inclusive rule used by evaluation, $f(x) < 0$ or
+$|f(x)| \leq \mathtt{atol}$, before coefficient normalization, so a small
+positive value is not silently reclassified by scaling. Exact polynomial
+normalization retains every finite nonzero coefficient and does not apply an
+implicit tolerance-based cleanup. A future approximate-cleanup API would be
+separate and explicit.
 
 Because a `Function` is no longer necessarily a polynomial,
 {meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` return
@@ -80,18 +97,18 @@ is a breaking rename from the API published in Python SDK 3.0.0 Beta 4:
 `PolynomialRequirement.any_degree()` accepts a polynomial of any degree; it
 does not admit a composed, non-polynomial `Function`.
 
-### 🛠 Canonical solver states during evaluation ([#1174](https://github.com/Jij-Inc/ommx/pull/1174))
+### 🛠 Canonical solver states during evaluation ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 {meth}`~ommx.Instance.populate_state`, {meth}`~ommx.Instance.evaluate`, and
 {meth}`~ommx.Instance.evaluate_samples` now canonicalize finite supplied
 coordinates that are neither fixed nor dependent, as well as values derived for
 dependent targets, according to each decision-variable kind and the caller's
 `atol`. For those coordinates, Binary values whose distance from `0` or `1` is
-strictly less than `atol`, and Integer or SemiInteger values whose distance from
-an integer is strictly less than `atol`, are stored as the corresponding exact
-discrete value. Values exactly at the tolerance boundary remain unchanged,
-while kind and bound feasibility continue to be checked separately under their
-existing rules. Continuous and SemiContinuous values are never rounded. Other
+at most `atol`, and Integer or SemiInteger values whose distance from an integer
+is at most `atol`, are stored as the corresponding exact discrete value,
+including values exactly at the tolerance boundary. Kind and bound feasibility
+continue to be checked separately under their existing rules. Continuous and
+SemiContinuous values are never rounded. Other
 finite values are preserved so a returned {class}`~ommx.Solution` can report
 their feasibility, while non-finite state values remain rejected.
 

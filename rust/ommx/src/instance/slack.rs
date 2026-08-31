@@ -105,17 +105,17 @@ impl Instance {
             }
         }
 
-        // Constraint feasibility is defined by `f(x) < atol`, not by exact
-        // comparison with zero. Classify the original (unscaled) function so
-        // coefficient normalization cannot change that tolerance boundary.
+        // Classify the original (unscaled) function with the same inclusive
+        // zero boundary as evaluation so coefficient normalization cannot
+        // change that tolerance boundary.
         let f_bound = function.evaluate_bound(&bounds, atol)?;
-        if f_bound.lower() >= *atol {
+        if !Equality::LessThanOrEqualToZero.is_satisfied(f_bound.lower(), atol) {
             bail!(InfeasibleDetected::InequalityConstraintBound {
                 id: constraint_id,
                 bound: f_bound,
             });
         }
-        if f_bound.upper() < *atol {
+        if Equality::LessThanOrEqualToZero.is_satisfied(f_bound.upper(), atol) {
             self.relax_constraint(
                 constraint_id,
                 "ommx.Instance.convert_inequality_to_equality_with_integer_slack".to_string(),
@@ -138,7 +138,7 @@ impl Instance {
                 bound: af_bound,
             },
         )?;
-        // A positive minimum can still be feasible when it is below `atol`.
+        // A positive minimum can still be feasible when it is at or below `atol`.
         // In that case s=0 preserves the original tolerance classification.
         let slack_bound = Bound::new(0.0, (-af_bound.lower()).max(0.0)).unwrap();
         if slack_bound.width() > max_integer_range as f64 {
@@ -230,13 +230,13 @@ impl Instance {
         }
 
         let f_bound = function.evaluate_bound(&bounds, atol)?;
-        if f_bound.lower() >= *atol {
+        if !Equality::LessThanOrEqualToZero.is_satisfied(f_bound.lower(), atol) {
             bail!(InfeasibleDetected::InequalityConstraintBound {
                 id: constraint_id,
                 bound: f_bound,
             });
         }
-        if f_bound.upper() < *atol {
+        if Equality::LessThanOrEqualToZero.is_satisfied(f_bound.upper(), atol) {
             self.relax_constraint(
                 constraint_id,
                 "add_integer_slack_to_inequality".to_string(),
@@ -383,10 +383,11 @@ mod tests {
 
     #[test]
     fn exact_integer_slack_uses_constraint_atol_at_a_positive_lower_bound() {
-        // f(0)=0.25 is feasible and f(1)=1.25 is infeasible at atol=0.4. The
+        // f(0)=0.25 is feasible at the inclusive boundary and f(1)=1.25 is
+        // infeasible at atol=0.25. The
         // integer-normalized bound is [1, 5], so an exact-zero check would
         // incorrectly reject the whole constraint as infeasible.
-        let atol = ATol::new(0.4).unwrap();
+        let atol = ATol::new(0.25).unwrap();
         let mut instance = tolerance_boundary_instance();
 
         instance
@@ -418,7 +419,7 @@ mod tests {
 
     #[test]
     fn inequality_preserving_slack_uses_constraint_atol_at_a_positive_lower_bound() {
-        let atol = ATol::new(0.4).unwrap();
+        let atol = ATol::new(0.25).unwrap();
         let mut instance = tolerance_boundary_instance();
 
         let coefficient = instance
@@ -439,7 +440,7 @@ mod tests {
 
     #[test]
     fn slack_conversion_relaxes_a_positive_but_tolerance_feasible_constraint() {
-        let atol = ATol::new(0.4).unwrap();
+        let atol = ATol::new(0.25).unwrap();
         for exact in [true, false] {
             let mut instance = Instance::new(
                 Sense::Minimize,
@@ -469,6 +470,40 @@ mod tests {
             assert!(instance
                 .removed_constraints()
                 .contains_key(&ConstraintID::from(0)));
+        }
+    }
+
+    #[test]
+    fn slack_conversion_rejects_a_constant_just_outside_atol() {
+        let atol = ATol::new(0.25).unwrap();
+        let outside = f64::from_bits(0.25_f64.to_bits() + 1);
+
+        for exact in [true, false] {
+            let mut instance = Instance::new(
+                Sense::Minimize,
+                Function::Zero,
+                BTreeMap::new(),
+                btreemap! {
+                    ConstraintID::from(0) => crate::Constraint::less_than_or_equal_to_zero(
+                        Function::try_from(outside).unwrap()
+                    ),
+                },
+            )
+            .unwrap();
+            let before = instance.clone();
+
+            let err = if exact {
+                instance
+                    .convert_inequality_to_equality_with_integer_slack(0, 1, atol)
+                    .unwrap_err()
+            } else {
+                instance
+                    .add_integer_slack_to_inequality(0, 1, atol)
+                    .unwrap_err()
+            };
+
+            assert!(err.is::<InfeasibleDetected>());
+            assert_eq!(instance, before);
         }
     }
 
