@@ -298,8 +298,8 @@ impl AbsDiffEq for Bound {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         // Since `abs_diff_eq` for f64::INFINITY returns false, check it first
-        (self.lower == other.lower || self.lower.abs_diff_eq(&other.lower, *epsilon))
-            && (self.upper == other.upper || self.upper.abs_diff_eq(&other.upper, *epsilon))
+        (self.lower == other.lower || epsilon.approx_eq(self.lower, other.lower))
+            && (self.upper == other.upper || epsilon.approx_eq(self.upper, other.upper))
     }
 }
 
@@ -404,7 +404,7 @@ impl Bound {
 
     /// Check if the bound is a point, i.e. `lower == upper`
     pub fn is_point(&self, atol: ATol) -> Option<f64> {
-        if self.lower.abs_diff_eq(&self.upper, atol.into_inner()) {
+        if atol.approx_eq(self.lower, self.upper) {
             Some(self.lower)
         } else {
             None

@@ -31,7 +31,7 @@ impl Propagate for Sos1Constraint<Created> {
             };
 
             ensure_sos1_value_is_finite(var_id, value)?;
-            if value.abs() < *atol {
+            if atol.approx_is_zero(value) {
                 // Variable is ~0, removed from set
             } else {
                 // Variable is non-zero
@@ -148,7 +148,7 @@ fn check_sos1(
         })?;
 
         ensure_sos1_value_is_finite(var_id, *value)?;
-        if value.abs() >= *atol {
+        if !atol.approx_is_zero(*value) {
             // Variable is non-zero
             if active.is_some() {
                 // Multiple variables are non-zero → infeasible
@@ -167,6 +167,55 @@ mod tests {
     use super::*;
     use crate::{Evaluate, Propagate, PropagateOutcome};
     use std::collections::HashMap;
+
+    #[test]
+    fn zero_classification_includes_the_atol_boundary() {
+        let constraint = make_sos1(1, &[1, 2]);
+        let atol = ATol::new(0.125).unwrap();
+        let outside = f64::from_bits(0.125_f64.to_bits() + 1);
+
+        let boundary = crate::v1::State::from(HashMap::from([(1, *atol), (2, 1.0)]));
+        let evaluated = constraint.evaluate(&boundary, atol).unwrap();
+        assert!(evaluated.stage.feasible);
+        assert_eq!(evaluated.stage.active_variable, Some(VariableID::from(2)));
+
+        let outside_state = crate::v1::State::from(HashMap::from([(1, outside), (2, 1.0)]));
+        let mut samples = crate::Sampled::default();
+        let boundary_sample_id = crate::SampleID::from(0);
+        let outside_sample_id = crate::SampleID::from(1);
+        samples
+            .append([boundary_sample_id], boundary.clone())
+            .unwrap();
+        samples
+            .append([outside_sample_id], outside_state.clone())
+            .unwrap();
+        let sampled = constraint.evaluate_samples(&samples, atol).unwrap();
+        assert!(sampled.stage.feasible[&boundary_sample_id]);
+        assert_eq!(
+            sampled.stage.active_variable[&boundary_sample_id],
+            Some(VariableID::from(2))
+        );
+        assert!(!sampled.stage.feasible[&outside_sample_id]);
+        assert_eq!(sampled.stage.active_variable[&outside_sample_id], None);
+
+        let (boundary_outcome, _) = constraint
+            .clone()
+            .propagate(&crate::v1::State::from(HashMap::from([(1, *atol)])), atol)
+            .unwrap();
+        assert!(matches!(boundary_outcome, PropagateOutcome::Active(_)));
+
+        assert!(
+            !constraint
+                .evaluate(&outside_state, atol)
+                .unwrap()
+                .stage
+                .feasible
+        );
+        let (outside_outcome, _) = constraint
+            .propagate(&crate::v1::State::from(HashMap::from([(1, outside)])), atol)
+            .unwrap();
+        assert!(matches!(outside_outcome, PropagateOutcome::Consumed(_)));
+    }
 
     fn make_sos1(_id: u64, var_ids: &[u64]) -> Sos1Constraint {
         let vars = var_ids.iter().copied().map(VariableID::from).collect();

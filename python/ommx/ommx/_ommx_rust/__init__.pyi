@@ -3799,12 +3799,12 @@ class Instance:
         by this instance's objective and active constraints. The returned
         {class}`~ommx.State` contains every decision variable in the instance.
         For finite supplied coordinates that are neither fixed nor dependent,
-        Binary values strictly within ``atol`` of zero or one and Integer or
-        SemiInteger values strictly within ``atol`` of an integer are represented
+        Binary values at most ``atol`` away from zero or one and Integer or
+        SemiInteger values at most ``atol`` away from an integer are represented
         exactly. Derived dependent values use the same target-kind rule. Continuous
         and SemiContinuous values are not rounded. Other finite solver values remain
-        available for feasibility checks. A caller-provided fixed or dependent
-        value is a consistency assertion; after validation, the returned state uses
+        available for feasibility checks. A caller-provided fixed or dependent value
+        is a consistency assertion; after validation, the returned state uses
         the stored fixed value unchanged or the canonicalized derived dependent
         value. Dependencies consume canonicalized non-fixed, non-dependent inputs.
         A supplied dependent assertion is compared with the value derived from those
@@ -4426,12 +4426,12 @@ class Instance:
         - Since this method evaluates the bound of $f(x)$, we may find that:
 
           - The bound $[l, u]$ is infeasible at the selected tolerance, i.e.
-            $l \geq \text{atol}$:
+            $l > \text{atol}$:
             this means the instance is infeasible because this constraint never be satisfied,
             and an error is raised.
 
           - The bound is feasible everywhere at the selected tolerance, i.e.
-            $u < \text{atol}$:
+            $u \leq \text{atol}$:
             this means this constraint is trivially satisfied,
             the constraint is moved to {attr}`~ommx.Instance.removed_constraints`,
             and this method returns without introducing slack variable or raising an error.
@@ -4468,7 +4468,7 @@ class Instance:
         range exceeds ``max_integer_range``. Raises
         {class}`~ommx.InfeasibleDetected` when the bounds prove the inequality
         infeasible.
-        ``atol`` controls zero-sensitive interval evaluation and the strict
+        ``atol`` controls zero-sensitive interval evaluation and the inclusive
         inequality feasibility threshold and must be less than ``0.5``. If
         omitted, :attr:`DEFAULT_ATOL` is used.
         """
@@ -4495,9 +4495,9 @@ class Instance:
         **Returns:**
         The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
 
-        ``atol`` controls zero-sensitive interval bounds and the inequality
-        feasibility threshold used to select the slack coefficient and must be
-        less than ``0.5``. If omitted, :attr:`DEFAULT_ATOL` is used.
+        ``atol`` controls zero-sensitive interval bounds and the inclusive
+        inequality feasibility threshold used to select the slack coefficient;
+        it must be less than ``0.5``. If omitted, :attr:`DEFAULT_ATOL` is used.
 
         # Examples
 

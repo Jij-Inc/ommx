@@ -1,3 +1,5 @@
+import math
+
 from ommx import Instance, DecisionVariable, State
 import ommx
 import pytest
@@ -75,6 +77,46 @@ def test_default_atol_constraint_evaluation():
 
     # Verify reset worked
     assert ommx.get_default_atol() == initial_atol
+
+
+def test_constraint_boundary_matches_scalar_sample_and_v2_validation():
+    x = DecisionVariable.continuous(1, lower=-1, upper=1)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={1: x == 0, 2: x <= 0},
+        sense=Instance.MINIMIZE,
+    )
+    atol = 0.125
+    outside = math.nextafter(atol, math.inf)
+
+    boundary_solution = instance.evaluate({1: atol}, atol=atol)
+    outside_solution = instance.evaluate({1: outside}, atol=atol)
+    assert boundary_solution.constraints[1].feasible
+    assert boundary_solution.constraints[2].feasible
+    assert not outside_solution.constraints[1].feasible
+    assert not outside_solution.constraints[2].feasible
+
+    restored_solution = type(boundary_solution).from_v2_bytes(
+        boundary_solution.to_v2_bytes()
+    )
+    assert restored_solution.constraints[1].feasible
+    assert restored_solution.constraints[2].feasible
+
+    sample_set = instance.evaluate_samples(
+        {7: {1: atol}, 8: {1: outside}},
+        atol=atol,
+    )
+    assert sample_set.get(7).constraints[1].feasible
+    assert sample_set.get(7).constraints[2].feasible
+    assert not sample_set.get(8).constraints[1].feasible
+    assert not sample_set.get(8).constraints[2].feasible
+
+    restored_sample_set = type(sample_set).from_v2_bytes(sample_set.to_v2_bytes())
+    assert restored_sample_set.get(7).constraints[1].feasible
+    assert restored_sample_set.get(7).constraints[2].feasible
+    assert not restored_sample_set.get(8).constraints[1].feasible
+    assert not restored_sample_set.get(8).constraints[2].feasible
 
 
 def test_set_default_atol_validation():

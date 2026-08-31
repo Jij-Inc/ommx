@@ -118,30 +118,32 @@ impl Parse for crate::v1::Solution {
 
             // Get the value from state or substituted_value
             let atol = ATol::default();
-            let value = match (state.entries.get(&dv_id), parsed_fixed_value.as_ref()) {
-                (Some(value), None) | (None, Some(value)) => *value,
-                (Some(value), Some(substituted_value)) => {
-                    if (*value - *substituted_value).abs() > *atol {
-                        return Err(ParseError::new(SolutionError::InconsistentVariableValue {
+            let (value, substituted_value_assertion) =
+                match (state.entries.get(&dv_id), parsed_fixed_value.as_ref()) {
+                    (Some(value), None) | (None, Some(value)) => (*value, None),
+                    (Some(value), Some(substituted_value)) => (*value, Some(*substituted_value)),
+                    (None, None) => {
+                        return Err(ParseError::new(SolutionError::MissingVariableValue {
                             id: dv_id,
-                            state_value: *value,
-                            substituted_value: *substituted_value,
                         })
                         .context(message, "decision_variables"));
                     }
-                    *value
-                }
-                (None, None) => {
-                    return Err(
-                        ParseError::new(SolutionError::MissingVariableValue { id: dv_id })
-                            .context(message, "decision_variables"),
-                    );
-                }
-            };
+                };
 
             let evaluated_dv =
                 crate::EvaluatedDecisionVariable::new(parsed_id, parsed_dv, value)
                     .map_err(|e| ParseError::new(e).context(message, "decision_variables"))?;
+
+            if let Some(substituted_value) = substituted_value_assertion {
+                if !atol.approx_eq(value, substituted_value) {
+                    return Err(ParseError::new(SolutionError::InconsistentVariableValue {
+                        id: dv_id,
+                        state_value: value,
+                        substituted_value,
+                    })
+                    .context(message, "decision_variables"));
+                }
+            }
 
             variable_labels.insert(parsed_id, label);
             if decision_variables.insert(parsed_id, evaluated_dv).is_some() {
@@ -1137,6 +1139,43 @@ mod tests {
     }
 
     #[test]
+    fn test_non_finite_state_value_precedes_substituted_value_consistency() {
+        use crate::v1;
+
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let v1_solution = v1::Solution {
+                state: Some(v1::State {
+                    entries: [(1, value)].into_iter().collect(),
+                }),
+                objective: 42.5,
+                decision_variables: vec![v1::DecisionVariable {
+                    id: 1,
+                    substituted_value: Some(0.0),
+                    kind: v1::decision_variable::Kind::Continuous as i32,
+                    bound: Some(v1::Bound {
+                        lower: -10.0,
+                        upper: 10.0,
+                    }),
+                    ..Default::default()
+                }],
+                feasible: true,
+                feasible_relaxed: Some(true),
+                ..Default::default()
+            };
+
+            let error: ParseError = v1_solution.parse(&()).unwrap_err();
+            assert!(matches!(
+                parse_error_source(&error).downcast_ref::<crate::DecisionVariableError>(),
+                Some(crate::DecisionVariableError::NonFiniteValue {
+                    id,
+                    value: error_value,
+                }) if *id == VariableID::from(1)
+                    && error_value.to_bits() == value.to_bits()
+            ));
+        }
+    }
+
+    #[test]
     fn test_missing_variable_value() {
         use crate::v1;
 
@@ -1510,6 +1549,58 @@ mod tests {
                 .contains("Inconsistent constraint feasibility"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn v2_special_constraint_stage_validation_includes_the_atol_boundary() {
+        let atol = ATol::new(0.125).unwrap();
+
+        let mut indicator = v2_solution_with_indicator_constraint();
+        indicator.feasibility_atol = Some(*atol);
+        indicator
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .value = 1.0 + *atol;
+        let indicator_row = indicator
+            .evaluated_indicator_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        indicator_row.evaluated_value = *atol;
+        indicator_row.feasible = true;
+        indicator_row.indicator_active = true;
+        Solution::try_from(indicator).unwrap();
+
+        let mut one_hot = v2_solution_with_one_hot_constraint();
+        one_hot.feasibility_atol = Some(*atol);
+        one_hot
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .value = 1.0 + *atol;
+        Solution::try_from(one_hot).unwrap();
+
+        let mut sos1 = v2_solution_with_sos1_constraint();
+        sos1.feasibility_atol = Some(*atol);
+        let sos1_variable = sos1
+            .decision_variables
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap();
+        sos1_variable.kind = v1::decision_variable::Kind::Continuous as i32;
+        sos1_variable.value = *atol;
+        Solution::try_from(sos1).unwrap();
     }
 
     #[test]

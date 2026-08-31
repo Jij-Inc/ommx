@@ -33,10 +33,7 @@ impl Evaluate for Constraint<Created> {
         let evaluated_value = self.stage.function.evaluate(solution, atol)?;
         let used_decision_variable_ids = self.stage.function.required_ids();
 
-        let feasible = match self.equality {
-            Equality::EqualToZero => evaluated_value.abs() < *atol,
-            Equality::LessThanOrEqualToZero => evaluated_value < *atol,
-        };
+        let feasible = self.equality.is_satisfied(evaluated_value, atol);
 
         Ok(EvaluatedConstraint {
             equality: self.equality,
@@ -58,9 +55,11 @@ impl Evaluate for Constraint<Created> {
 
         let feasible: std::collections::BTreeMap<crate::SampleID, bool> = evaluated_values
             .iter()
-            .map(|(sample_id, evaluated_value)| match self.equality {
-                Equality::EqualToZero => (*sample_id, evaluated_value.abs() < *atol),
-                Equality::LessThanOrEqualToZero => (*sample_id, *evaluated_value < *atol),
+            .map(|(sample_id, evaluated_value)| {
+                (
+                    *sample_id,
+                    self.equality.is_satisfied(*evaluated_value, atol),
+                )
             })
             .collect();
 
@@ -93,6 +92,48 @@ mod tests {
     use super::*;
     use crate::{constraint_type::SampledConstraintBehavior, random::*, Sampled};
     use proptest::prelude::*;
+
+    #[test]
+    fn scalar_and_sample_feasibility_include_the_atol_boundary() {
+        let atol = crate::ATol::new(0.125).unwrap();
+        let outside = f64::from_bits(0.125_f64.to_bits() + 1);
+        let sample_id = crate::SampleID::from(0);
+        let samples = Sampled::from((sample_id, crate::v1::State::default()));
+
+        assert!(Equality::LessThanOrEqualToZero.is_satisfied(-10.0, atol));
+
+        for equality in [Equality::EqualToZero, Equality::LessThanOrEqualToZero] {
+            let constraint = Constraint {
+                equality,
+                stage: CreatedData {
+                    function: Function::Constant(crate::Coefficient::try_from(*atol).unwrap()),
+                },
+            };
+            let evaluated = constraint
+                .evaluate(&crate::v1::State::default(), atol)
+                .unwrap();
+            let sampled = constraint.evaluate_samples(&samples, atol).unwrap();
+
+            assert!(evaluated.stage.feasible);
+            assert_eq!(sampled.is_feasible(sample_id, atol), Some(true));
+            assert!(sampled.feasible_ids(atol).contains(&sample_id));
+
+            let outside_constraint = Constraint {
+                equality,
+                stage: CreatedData {
+                    function: Function::Constant(crate::Coefficient::try_from(outside).unwrap()),
+                },
+            };
+            let evaluated = outside_constraint
+                .evaluate(&crate::v1::State::default(), atol)
+                .unwrap();
+            let sampled = outside_constraint.evaluate_samples(&samples, atol).unwrap();
+
+            assert!(!evaluated.stage.feasible);
+            assert_eq!(sampled.is_feasible(sample_id, atol), Some(false));
+            assert!(sampled.infeasible_ids(atol).contains(&sample_id));
+        }
+    }
 
     fn constraint_and_samples(
     ) -> impl Strategy<Value = (Constraint<Created>, Sampled<crate::v1::State>)> {

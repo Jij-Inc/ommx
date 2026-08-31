@@ -177,7 +177,7 @@ impl Parse for v1::SampledDecisionVariable {
                     })
                     .context(message, "samples"));
                 }
-                if (sample_value - fixed_value).abs() > *atol {
+                if !atol.approx_eq(sample_value, fixed_value) {
                     return Err(ParseError::new(
                         DecisionVariableError::SubstitutedValueOverwrite {
                             id: parsed_dv.id,

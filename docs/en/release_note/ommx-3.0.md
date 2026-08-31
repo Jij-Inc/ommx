@@ -49,11 +49,12 @@ optional `atol=` for bounds they derive. This aligns zero-sensitive Function
 body evaluation; algebraic lowering still assumes exact discrete values and
 does not canonicalize approximate solver output near 0 or 1. Omitting `atol`
 uses `DEFAULT_ATOL`. Integer-slack conversion classifies an inequality with the
-same strict rule used by evaluation, $f(x) < \mathtt{atol}$, before coefficient
-normalization, so a small positive value is not silently reclassified by
-scaling. Exact polynomial normalization retains every finite nonzero coefficient
-and does not apply an implicit tolerance-based cleanup. A future approximate-
-cleanup API would be separate and explicit.
+same inclusive rule used by evaluation, $f(x) < 0$ or
+$|f(x)| \leq \mathtt{atol}$, before coefficient normalization, so a small
+positive value is not silently reclassified by scaling. Exact polynomial
+normalization retains every finite nonzero coefficient and does not apply an
+implicit tolerance-based cleanup. A future approximate-cleanup API would be
+separate and explicit.
 
 Because a `Function` is no longer necessarily a polynomial,
 {meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` return
@@ -87,11 +88,11 @@ does not admit a composed, non-polynomial `Function`.
 coordinates that are neither fixed nor dependent, as well as values derived for
 dependent targets, according to each decision-variable kind and the caller's
 `atol`. For those coordinates, Binary values whose distance from `0` or `1` is
-strictly less than `atol`, and Integer or SemiInteger values whose distance from
-an integer is strictly less than `atol`, are stored as the corresponding exact
-discrete value. Values exactly at the tolerance boundary remain unchanged,
-while kind and bound feasibility continue to be checked separately under their
-existing rules. Continuous and SemiContinuous values are never rounded. Other
+at most `atol`, and Integer or SemiInteger values whose distance from an integer
+is at most `atol`, are stored as the corresponding exact discrete value,
+including values exactly at the tolerance boundary. Kind and bound feasibility
+continue to be checked separately under their existing rules. Continuous and
+SemiContinuous values are never rounded. Other
 finite values are preserved so a returned {class}`~ommx.Solution` can report
 their feasibility, while non-finite state values remain rejected.
 

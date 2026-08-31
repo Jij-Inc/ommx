@@ -82,7 +82,7 @@ fn ensure_instance_value_is_finite(var_id: VariableID, value: f64) -> Result<()>
 }
 
 fn values_are_consistent(left: f64, right: f64, atol: ATol) -> bool {
-    left.is_finite() && right.is_finite() && (left - right).abs() <= *atol
+    left.is_finite() && right.is_finite() && atol.approx_eq(left, right)
 }
 
 /// Canonicalize a finite state value only when it represents the variable's
@@ -502,8 +502,8 @@ impl Instance {
     ///
     /// Post-condition: the returned state contains exactly this instance's
     /// decision-variable IDs. For supplied coordinates that are neither fixed
-    /// nor dependent, Binary values strictly within `atol` of zero or one and
-    /// Integer or SemiInteger values strictly within `atol` of an integer are
+    /// nor dependent, Binary values at most `atol` away from zero or one and
+    /// Integer or SemiInteger values at most `atol` away from an integer are
     /// represented by that exact discrete value. Derived dependent values use
     /// the same target-kind rule. Continuous and SemiContinuous values are not
     /// rounded. Other finite solver values are preserved so kind and bound
@@ -1120,7 +1120,7 @@ mod tests {
     }
 
     #[test]
-    fn populate_state_canonicalizes_discrete_values_strictly_within_atol() {
+    fn populate_state_canonicalizes_discrete_values_within_atol() {
         let instance = state_canonicalization_instance();
         let atol = ATol::new(0.125).unwrap();
         let state = v1::State::from(HashMap::from([
@@ -1192,11 +1192,12 @@ mod tests {
     }
 
     #[test]
-    fn partial_evaluate_preserves_strict_atol_rejection_and_is_atomic() {
+    fn partial_evaluate_rejects_values_outside_atol_and_is_atomic() {
         let mut instance = state_canonicalization_instance();
         let before = instance.clone();
         let atol = ATol::new(0.125).unwrap();
-        let state = v1::State::from(HashMap::from([(1, 1.125)]));
+        let outside = f64::from_bits(1.125_f64.to_bits() + 1);
+        let state = v1::State::from(HashMap::from([(1, outside)]));
 
         let error = instance.partial_evaluate(&state, atol).unwrap_err();
 
@@ -1206,25 +1207,25 @@ mod tests {
                 id,
                 substituted_value,
                 ..
-            }) if *id == VariableID::from(1) && *substituted_value == 1.125
+            }) if *id == VariableID::from(1) && *substituted_value == outside
         ));
         assert_eq!(instance, before);
     }
 
     #[test]
-    fn populate_state_preserves_discrete_values_at_the_atol_boundary() {
+    fn populate_state_canonicalizes_discrete_values_at_the_atol_boundary() {
         let instance = state_canonicalization_instance();
         let atol = ATol::new(0.125).unwrap();
         let state = v1::State::from(HashMap::from([(1, 1.125), (2, -2.125), (3, -1.875)]));
 
         let populated = instance.populate_state(state.clone(), atol).unwrap();
-        assert_eq!(populated.entries.get(&1), Some(&1.125));
-        assert_eq!(populated.entries.get(&2), Some(&-2.125));
-        assert_eq!(populated.entries.get(&3), Some(&-1.875));
+        assert_eq!(populated.entries.get(&1), Some(&1.0));
+        assert_eq!(populated.entries.get(&2), Some(&-2.0));
+        assert_eq!(populated.entries.get(&3), Some(&-2.0));
 
         let solution = instance.evaluate(&state, atol).unwrap();
         assert_eq!(solution.state(), populated);
-        assert!(!solution.feasible_decision_variables());
+        assert!(solution.feasible_decision_variables());
     }
 
     #[test]
@@ -1234,11 +1235,11 @@ mod tests {
         let state = v1::State::from(HashMap::from([(1, 2.0)]));
 
         let populated = instance.populate_state(state.clone(), atol).unwrap();
-        assert_eq!(populated.entries.get(&1), Some(&2.0));
+        assert_eq!(populated.entries.get(&1), Some(&1.0));
 
-        // Canonicalization is strict relative to the nearest Binary value, while
-        // Solution feasibility independently applies the existing kind and bound
-        // checks under the same (deliberately large) tolerance.
+        // Canonicalization includes the boundary relative to the selected
+        // Binary value. Solution feasibility still applies kind and bound
+        // checks under the same deliberately large tolerance.
         let solution = instance.evaluate(&state, atol).unwrap();
         assert!(solution.feasible_decision_variables());
 
@@ -1246,7 +1247,7 @@ mod tests {
         rewritten.partial_evaluate(&state, atol).unwrap();
         assert_eq!(
             rewritten.fixed_decision_variable_value(VariableID::from(1)),
-            Some(2.0)
+            Some(1.0)
         );
         let rewritten_solution = rewritten.evaluate(&v1::State::default(), atol).unwrap();
         assert_eq!(rewritten_solution.state(), populated);

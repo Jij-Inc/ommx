@@ -46,7 +46,8 @@ IndicatorのBig-M変換、特殊制約のlowering、integer slack変換も、導
 `atol=`を受け取ります。これによりFunction bodyのゼロ判定は整合しますが、代数的な
 loweringは離散値が厳密であることを仮定し、0や1に近いsolver出力を丸める処理は
 行いません。省略時は`DEFAULT_ATOL`が使われます。integer slack変換は係数の正規化前に、
-評価と同じ厳密な条件 $f(x) < \mathtt{atol}$ で不等式を分類するため、微小な正値が
+評価と同じ境界を含む条件 $f(x) < 0$ または
+$|f(x)| \leq \mathtt{atol}$ で不等式を分類するため、微小な正値が
 scaleによって暗黙に再分類されることはありません。厳密な多項式正規化は有限かつ
 非ゼロの係数をすべて保持し、許容誤差によるcleanupを暗黙には行いません。近似的な
 cleanupを将来提供する場合は、別の明示的なAPIになります。
@@ -80,8 +81,8 @@ Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含
 {meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
 dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
 canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
-未満のBinary値と、整数との差が`atol`未満のInteger / SemiInteger値は、対応する厳密な
-離散値として格納されます。差がちょうど`atol`の値は変更しません。canonicalizationとは
+以下のBinary値と、整数との差が`atol`以下のInteger / SemiInteger値は、境界上の値も含めて
+対応する厳密な離散値として格納されます。canonicalizationとは
 別に、kindとboundのfeasibilityを既存の規則で判定します。
 ContinuousとSemiContinuousは丸めません。それ以外の有限値は、返された
 {class}`~ommx.Solution`がfeasibilityを判定できるように保持し、非有限なstate値は
