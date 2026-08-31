@@ -165,7 +165,7 @@ impl Arbitrary for Coefficient {
         prop_oneof![
             Just(1.0),
             Just(-1.0),
-            proptest::sample::select(TINY_ARBITRARY_COEFFICIENTS.to_vec()),
+            proptest::sample::select(&TINY_ARBITRARY_COEFFICIENTS[..]),
             -10.0..10.0,
         ]
         .prop_filter("nonzero", |x: &f64| *x != 0.0)

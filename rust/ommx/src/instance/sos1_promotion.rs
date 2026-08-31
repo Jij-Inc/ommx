@@ -172,8 +172,6 @@ impl Instance {
     /// be feasible while [`crate::Solution::feasible`] reports `false` because
     /// it also checks retained formulation history;
     /// [`crate::Solution::feasible_relaxed`] reports only the active model.
-    /// Approximate selector coordinates accepted by the original Big-M model
-    /// can likewise differ from the deterministic reconstructed selector.
     ///
     /// On success the verified formulation rows are relaxed, fresh selectors
     /// remain registered as dependent variables, and a new active SOS1
@@ -820,99 +818,6 @@ mod tests {
         );
         assert!(!negative_boundary.feasible());
         assert!(negative_boundary.feasible_relaxed());
-    }
-
-    #[test]
-    fn finite_tolerance_does_not_define_the_exact_promotion_equivalence() {
-        let atol = ATol::new(1.0e-6).unwrap();
-        let first_member = VariableID::from(1);
-        let second_member = VariableID::from(2);
-        let first_selector = VariableID::from(10);
-        let second_selector = VariableID::from(11);
-        let first_link = ConstraintID::from(100);
-        let second_link = ConstraintID::from(101);
-        let cardinality = ConstraintID::from(102);
-        let member = || {
-            DecisionVariable::new(
-                Kind::Continuous,
-                Bound::new(0.0, 100.0).unwrap(),
-                ATol::default(),
-            )
-            .unwrap()
-        };
-        let mut instance = Instance::builder()
-            .sense(Sense::Minimize)
-            .objective(Function::Zero)
-            .decision_variables(BTreeMap::from([
-                (first_member, member()),
-                (second_member, member()),
-                (first_selector, DecisionVariable::binary()),
-                (second_selector, DecisionVariable::binary()),
-            ]))
-            .constraints(BTreeMap::from([
-                (
-                    first_link,
-                    canonical_sos1_big_m_upper_link(first_member, first_selector, 100.0).unwrap(),
-                ),
-                (
-                    second_link,
-                    canonical_sos1_big_m_upper_link(second_member, second_selector, 100.0).unwrap(),
-                ),
-                (
-                    cardinality,
-                    canonical_sos1_big_m_cardinality([first_selector, second_selector]).unwrap(),
-                ),
-            ]))
-            .build()
-            .unwrap();
-        let request = Sos1BigMPromotionRequest::new(
-            BTreeMap::from([
-                (
-                    first_member,
-                    Sos1BigMSelectorClaim::Fresh {
-                        selector: first_selector,
-                        upper_link: Some(first_link),
-                        lower_link: None,
-                    },
-                ),
-                (
-                    second_member,
-                    Sos1BigMSelectorClaim::Fresh {
-                        selector: second_selector,
-                        upper_link: Some(second_link),
-                        lower_link: None,
-                    },
-                ),
-            ]),
-            cardinality,
-        );
-
-        // Finite-tolerance Big-M semantics can admit approximate selector
-        // coordinates that are not the exact nonzero indicators.
-        let original = instance
-            .evaluate(
-                &crate::v1::State::from_iter([
-                    (1, 2.0e-6),
-                    (2, 2.0e-6),
-                    (10, 5.0e-7),
-                    (11, 5.0e-7),
-                ]),
-                atol,
-            )
-            .unwrap();
-        assert!(original.feasible());
-
-        let _ = instance.promote_sos1_big_m(&request).unwrap();
-        let promoted = instance
-            .evaluate(
-                &crate::v1::State::from_iter([(1, 2.0e-6), (2, 2.0e-6)]),
-                atol,
-            )
-            .unwrap();
-        assert_eq!(promoted.state().entries[&10], 1.0);
-        assert_eq!(promoted.state().entries[&11], 1.0);
-        assert!(!promoted.feasible_relaxed());
-        assert!(!promoted.feasible());
     }
 
     #[test]

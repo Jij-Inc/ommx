@@ -1,8 +1,9 @@
 use crate::{
     function::operation::{
-        instructions, AssociativeOperator, Atom, BinaryOperator, Instruction, UnaryOperator,
+        instructions, AssociativeOperator, Atom, BinaryOperator, Instruction, MonomialRef,
+        PolynomialRef, UnaryOperator,
     },
-    Expression, Function, Monomial, MonomialDyn, VariableID,
+    Expression, Function, Monomial, VariableID,
 };
 use std::{collections::BTreeMap, fmt};
 
@@ -42,8 +43,13 @@ fn write_f64_with_precision(f: &mut fmt::Formatter, coefficient: f64) -> fmt::Re
     Ok(())
 }
 
-fn write_term(f: &mut fmt::Formatter, ids: MonomialDyn, coefficient: f64) -> fmt::Result {
-    if ids.is_empty() {
+fn write_term_ids(
+    f: &mut fmt::Formatter,
+    ids: impl Iterator<Item = VariableID>,
+    coefficient: f64,
+) -> fmt::Result {
+    let mut ids = ids.peekable();
+    if ids.peek().is_none() {
         write_f64_with_precision(f, coefficient)?;
         return Ok(());
     }
@@ -55,7 +61,6 @@ fn write_term(f: &mut fmt::Formatter, ids: MonomialDyn, coefficient: f64) -> fmt
     if coefficient.abs() != 1.0 {
         write!(f, "*")?;
     }
-    let mut ids = ids.iter().peekable();
     if let Some(id) = ids.next() {
         write!(f, "x{id}")?;
     }
@@ -66,11 +71,11 @@ fn write_term(f: &mut fmt::Formatter, ids: MonomialDyn, coefficient: f64) -> fmt
 }
 
 fn write_term_to_string(
-    ids: &MonomialDyn,
+    monomial: MonomialRef<'_>,
     coefficient: f64,
     symbols: &BTreeMap<VariableID, String>,
 ) -> crate::Result<String> {
-    if ids.is_empty() {
+    if monomial.len() == 0 {
         return Ok(coefficient.to_string());
     }
 
@@ -84,16 +89,16 @@ fn write_term_to_string(
         out.push('*');
     }
 
-    let mut ids = ids.iter().peekable();
+    let mut ids = monomial.ids().peekable();
     if let Some(id) = ids.next() {
         let symbol = symbols
-            .get(id)
+            .get(&id)
             .ok_or_else(|| crate::error!("Missing symbol for variable ID {id:?}"))?;
         out.push_str(symbol);
     }
     for id in ids {
         let symbol = symbols
-            .get(id)
+            .get(&id)
             .ok_or_else(|| crate::error!("Missing symbol for variable ID {id:?}"))?;
         out.push('*');
         out.push_str(symbol);
@@ -127,27 +132,24 @@ fn format_zero(opts: FunctionFormatOptions) -> FormattedFunction {
 }
 
 fn total_polynomial_terms(function: &Function) -> usize {
+    if let Some(polynomial) = PolynomialRef::from_function(function) {
+        return polynomial.num_terms();
+    }
     match function {
-        Function::Zero => 0,
-        Function::Constant(_) => 1,
-        Function::Linear(value) => value.num_terms(),
-        Function::Quadratic(value) => value.num_terms(),
-        Function::Polynomial(value) => value.num_terms(),
         Function::Expression(expression) => instructions(expression)
             .iter()
             .filter_map(|instruction| match instruction {
-                Instruction::Push(atom) => Some(match atom {
-                    Atom::Zero => 0,
-                    Atom::Constant(_) => 1,
-                    Atom::Linear(value) => value.num_terms(),
-                    Atom::Quadratic(value) => value.num_terms(),
-                    Atom::Polynomial(value) => value.num_terms(),
-                }),
+                Instruction::Push(atom) => Some(PolynomialRef::from_atom(atom).num_terms()),
                 Instruction::Unary(_) | Instruction::Associative(_) | Instruction::Binary(_) => {
                     None
                 }
             })
             .sum(),
+        Function::Zero
+        | Function::Constant(_)
+        | Function::Linear(_)
+        | Function::Quadratic(_)
+        | Function::Polynomial(_) => unreachable!("polynomial variants returned above"),
     }
 }
 
@@ -208,9 +210,9 @@ fn render_function_with_symbols(
     function: &Function,
     symbols: &BTreeMap<VariableID, String>,
 ) -> crate::Result<String> {
-    if function.is_polynomial() {
-        return Ok(format_function_with_symbols(
-            function,
+    if let Some(polynomial) = PolynomialRef::from_function(function) {
+        return Ok(format_polynomial_ref_with_symbols(
+            polynomial,
             symbols,
             FunctionFormatOptions::default(),
         )?
@@ -220,11 +222,82 @@ fn render_function_with_symbols(
         unreachable!("polynomial variants returned above")
     };
     render_expression(expression, |atom| {
-        let function = atom.to_function();
-        Ok(
-            format_function_with_symbols(&function, symbols, FunctionFormatOptions::default())?
-                .text,
-        )
+        Ok(format_polynomial_ref_with_symbols(
+            PolynomialRef::from_atom(atom),
+            symbols,
+            FunctionFormatOptions::default(),
+        )?
+        .text)
+    })
+}
+
+fn format_polynomial_ref_with_symbols(
+    polynomial: PolynomialRef<'_>,
+    symbols: &BTreeMap<VariableID, String>,
+    opts: FunctionFormatOptions,
+) -> crate::Result<FormattedFunction> {
+    let mut terms = Vec::with_capacity(polynomial.num_terms());
+    polynomial.for_each_term(|monomial, coefficient| {
+        terms.push((monomial, coefficient.into_inner()));
+    });
+    if terms.is_empty() {
+        return Ok(format_zero(opts));
+    }
+    terms.sort_unstable_by(|(a, _), (b, _)| {
+        if a.len() != b.len() {
+            b.len().cmp(&a.len())
+        } else {
+            a.ids().cmp(b.ids())
+        }
+    });
+
+    let total_terms = terms.len();
+    let mut text = String::new();
+    let mut written_chars = 0;
+    let mut written_terms = 0;
+    let mut truncated_by_chars = false;
+    for (index, (ids, coefficient)) in terms.into_iter().enumerate() {
+        if opts
+            .max_terms
+            .is_some_and(|max_terms| written_terms >= max_terms)
+        {
+            break;
+        }
+
+        let term = if coefficient < 0.0 && index > 0 {
+            format!(" - {}", write_term_to_string(ids, -coefficient, symbols)?)
+        } else if index > 0 {
+            format!(" + {}", write_term_to_string(ids, coefficient, symbols)?)
+        } else {
+            write_term_to_string(ids, coefficient, symbols)?
+        };
+
+        if let Some(max_chars) = opts.max_chars {
+            let term_chars = term.chars().count();
+            if term_chars <= max_chars.saturating_sub(written_chars) {
+                text.push_str(&term);
+                written_chars += term_chars;
+                written_terms += 1;
+            } else {
+                truncated_by_chars = true;
+                if text.is_empty() && max_chars > 0 {
+                    let prefix_len = char_prefix_byte_len(&term, max_chars);
+                    text.push_str(&term[..prefix_len]);
+                }
+                break;
+            }
+        } else {
+            text.push_str(&term);
+            written_terms += 1;
+        }
+    }
+
+    Ok(FormattedFunction {
+        text,
+        total_terms,
+        written_terms,
+        omitted_terms: total_terms.saturating_sub(written_terms),
+        truncated_by_chars,
     })
 }
 
@@ -233,7 +306,7 @@ pub(crate) fn format_function_with_symbols(
     symbols: &BTreeMap<VariableID, String>,
     opts: FunctionFormatOptions,
 ) -> crate::Result<FormattedFunction> {
-    if !function.is_polynomial() {
+    let Some(polynomial) = PolynomialRef::from_function(function) else {
         let total_terms = total_polynomial_terms(function);
         // Resolve every referenced symbol before applying display limits. This
         // preserves the validation contract of the polynomial formatter: an
@@ -266,102 +339,37 @@ pub(crate) fn format_function_with_symbols(
             omitted_terms: total_terms.saturating_sub(written_terms),
             truncated_by_chars,
         });
-    }
+    };
 
-    let mut terms: Vec<_> = function
-        .iter()
-        .expect("polynomial functions expose terms")
-        .map(|(monomial, coefficient)| (monomial, coefficient.into_inner()))
-        .collect();
-    if terms.is_empty() {
-        return Ok(format_zero(opts));
-    }
-    terms.sort_unstable_by(|(a, _), (b, _)| {
-        if a.len() != b.len() {
-            b.len().cmp(&a.len())
-        } else {
-            a.cmp(b)
-        }
-    });
-
-    let total_terms = terms.len();
-    let mut text = String::new();
-    let mut written_chars = 0;
-    let mut written_terms = 0;
-    let mut truncated_by_chars = false;
-    for (index, (ids, coefficient)) in terms.into_iter().enumerate() {
-        if opts
-            .max_terms
-            .is_some_and(|max_terms| written_terms >= max_terms)
-        {
-            break;
-        }
-
-        let term = if coefficient < 0.0 && index > 0 {
-            format!(" - {}", write_term_to_string(&ids, -coefficient, symbols)?)
-        } else if index > 0 {
-            format!(" + {}", write_term_to_string(&ids, coefficient, symbols)?)
-        } else {
-            write_term_to_string(&ids, coefficient, symbols)?
-        };
-
-        if let Some(max_chars) = opts.max_chars {
-            let term_chars = term.chars().count();
-            if term_chars <= max_chars.saturating_sub(written_chars) {
-                text.push_str(&term);
-                written_chars += term_chars;
-                written_terms += 1;
-            } else {
-                truncated_by_chars = true;
-                if text.is_empty() && max_chars > 0 {
-                    let prefix_len = char_prefix_byte_len(&term, max_chars);
-                    text.push_str(&term[..prefix_len]);
-                }
-                break;
-            }
-        } else {
-            text.push_str(&term);
-            written_terms += 1;
-        }
-    }
-
-    Ok(FormattedFunction {
-        text,
-        total_terms,
-        written_terms,
-        omitted_terms: total_terms.saturating_sub(written_terms),
-        truncated_by_chars,
-    })
+    format_polynomial_ref_with_symbols(polynomial, symbols, opts)
 }
 
-pub fn format_polynomial(
+fn format_polynomial_borrowed<M: Monomial>(
     f: &mut fmt::Formatter,
-    iter: impl Iterator<Item = (MonomialDyn, f64)>,
+    polynomial: &crate::PolynomialBase<M>,
 ) -> fmt::Result {
-    let mut terms: Vec<_> = iter.collect();
+    let mut terms: Vec<_> = polynomial.iter().collect();
     if terms.is_empty() {
-        write!(f, "0")?;
-        return Ok(());
+        return write!(f, "0");
     }
     terms.sort_unstable_by(|(a, _), (b, _)| {
-        if a.len() != b.len() {
-            b.len().cmp(&a.len())
-        } else {
-            a.cmp(b)
-        }
+        b.degree()
+            .cmp(&a.degree())
+            .then_with(|| a.ids().cmp(b.ids()))
     });
 
-    let mut iter = terms.into_iter();
-    let (ids, coefficient) = iter.next().unwrap();
-    write_term(f, ids, coefficient)?;
+    let mut terms = terms.into_iter();
+    let (monomial, coefficient) = terms.next().unwrap();
+    write_term_ids(f, monomial.ids(), coefficient.into_inner())?;
 
-    for (ids, coefficient) in iter {
+    for (monomial, coefficient) in terms {
+        let coefficient = coefficient.into_inner();
         if coefficient < 0.0 {
             write!(f, " - ")?;
-            write_term(f, ids, -coefficient)?;
+            write_term_ids(f, monomial.ids(), -coefficient)?;
         } else {
             write!(f, " + ")?;
-            write_term(f, ids, coefficient)?;
+            write_term_ids(f, monomial.ids(), coefficient)?;
         }
     }
     Ok(())
@@ -369,14 +377,7 @@ pub fn format_polynomial(
 
 impl<M: Monomial> fmt::Display for crate::PolynomialBase<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.num_terms() == 0 {
-            return write!(f, "0");
-        }
-        format_polynomial(
-            f,
-            self.iter()
-                .map(|(monomial, coefficient)| (monomial.clone().into(), coefficient.into_inner())),
-        )
+        format_polynomial_borrowed(f, self)
     }
 }
 
@@ -429,7 +430,7 @@ impl fmt::Debug for crate::Function {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, linear, quadratic, Linear};
+    use crate::{coeff, linear, monomial, quadratic, Linear, Polynomial};
 
     #[test]
     fn test_polynomial_base_display_empty() {
@@ -595,6 +596,25 @@ mod tests {
             truncated_by_chars: true,
         }
         "###
+        );
+    }
+
+    #[test]
+    fn composite_context_formats_borrowed_dynamic_monomials() {
+        let polynomial = Polynomial::single_term(monomial!(4, 3, 2, 1), coeff!(2.0));
+        let function = Function::Polynomial(polynomial).abs();
+        let symbols = BTreeMap::from([
+            (VariableID::from(1), "alpha".to_string()),
+            (VariableID::from(2), "beta".to_string()),
+            (VariableID::from(3), "gamma".to_string()),
+            (VariableID::from(4), "delta".to_string()),
+        ]);
+
+        assert_eq!(
+            format_function_with_symbols(&function, &symbols, FunctionFormatOptions::default())
+                .unwrap()
+                .text,
+            "abs(2*alpha*beta*gamma*delta)"
         );
     }
 

@@ -366,7 +366,7 @@ mod tests {
     }
 
     #[test]
-    fn fixed_population_tolerance_is_not_symbolically_substituted() {
+    fn fixed_population_uses_authoritative_value_while_approximation_remains_conservative() {
         let id = VariableID::from(1);
         let make_instance = |output| {
             let mut instance = Instance::builder()
@@ -390,10 +390,11 @@ mod tests {
         let scaled_value = *scaled.evaluate(&state, epsilon).unwrap().objective();
         let constant_value = *constant.evaluate(&state, epsilon).unwrap().objective();
 
-        assert!(
-            (scaled_value - constant_value).abs() > epsilon.into_inner(),
-            "the accepted fixed-value perturbation must expose the old false positive",
-        );
+        assert_eq!(scaled_value, 4.0);
+        assert_eq!(constant_value, 4.0);
+        // Approximation compares the stored output functions conservatively;
+        // Equal evaluation after authoritative fixed-value restoration does not
+        // make the raw symbolic representations approximately equal.
         assert!(!scaled.abs_diff_eq(&constant, epsilon));
     }
 }

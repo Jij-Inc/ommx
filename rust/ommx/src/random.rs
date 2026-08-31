@@ -89,7 +89,7 @@ pub fn arbitrary_coefficient_nonzero() -> BoxedStrategy<f64> {
     prop_oneof![
         Just(1.0),
         Just(-1.0),
-        proptest::sample::select(TINY_NONZERO_COEFFICIENTS.to_vec()),
+        proptest::sample::select(&TINY_NONZERO_COEFFICIENTS[..]),
         -1.0..1.0,
     ]
     .prop_filter("nonzero", |x: &f64| *x != 0.0)

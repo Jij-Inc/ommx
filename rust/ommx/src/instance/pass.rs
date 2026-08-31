@@ -45,7 +45,7 @@ impl Instance {
 
     pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
         let fixed_state = self.fixed_state();
-        let dependency = self.decision_variable_dependency.clone();
+        let dependency = &self.decision_variable_dependency;
         let mut constraint = self
             .constraint_collection
             .removed()
@@ -54,7 +54,7 @@ impl Instance {
             .0
             .clone();
         if !dependency.is_empty() {
-            crate::substitute_acyclic(&mut constraint.stage.function, &dependency)
+            crate::substitute_acyclic(&mut constraint.stage.function, dependency)
                 .map_err(|error| normalize_restore_error("constraint", id, error.into()))?;
         }
         if !fixed_state.entries.is_empty() {
@@ -118,9 +118,9 @@ impl Instance {
         }
 
         let fixed_state = self.fixed_state();
-        let dependency = self.decision_variable_dependency.clone();
+        let dependency = &self.decision_variable_dependency;
         if !dependency.is_empty() {
-            crate::substitute_acyclic(&mut ic.stage.function, &dependency).map_err(|error| {
+            crate::substitute_acyclic(&mut ic.stage.function, dependency).map_err(|error| {
                 normalize_restore_error("indicator constraint", id, error.into())
             })?;
         }

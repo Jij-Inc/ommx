@@ -392,10 +392,10 @@ fn evaluate_polynomial_terms_bound<'a, M: crate::Monomial>(
     bounds: &Bounds,
 ) -> crate::Result<Bound> {
     let mut bound = Bound::zero();
-    for (ids, coefficient) in terms {
-        let ids: MonomialDyn = ids.clone().into();
+    for (monomial, coefficient) in terms {
         let value = coefficient.into_inner();
-        if ids.is_empty() {
+        let mut ids = monomial.ids().peekable();
+        if ids.peek().is_none() {
             bound = add_bounds(bound, Bound::new(value, value)?)?;
             continue;
         }
@@ -404,7 +404,12 @@ fn evaluate_polynomial_terms_bound<'a, M: crate::Monomial>(
         // The per-variable power still preserves correlation (for example,
         // an even power across zero has lower bound zero), unlike naively
         // multiplying the same interval by itself.
-        for (id, exponent) in ids.chunks() {
+        while let Some(id) = ids.next() {
+            let mut exponent = 1_usize;
+            while ids.peek().is_some_and(|next| *next == id) {
+                ids.next();
+                exponent += 1;
+            }
             let variable_bound = bounds.get(&id).cloned().unwrap_or_default();
             let exponent = u64::try_from(exponent).map_err(|_| {
                 anyhow::anyhow!("monomial exponent is outside the supported integer range")
@@ -501,6 +506,7 @@ fn analyze_unary_bound(
 
     let may_evaluate_to_zero = match operator {
         UnaryOperator::Powi(0) => 1.0 <= *atol,
+        UnaryOperator::Powi(1) => operand.may_evaluate_to_zero,
         UnaryOperator::Powi(exponent) => {
             let value = if exponent < 0 {
                 maximum_finite_absolute_value(operand.bound)
@@ -536,9 +542,34 @@ fn analyze_associative_bound(
             lhs.bound.upper().max(rhs.bound.upper()),
         )?,
     };
+    let interval_may_evaluate_to_zero = bound_may_be_classified_as_zero(bound, atol);
+    let may_evaluate_to_zero = match operator {
+        // Same-sign addition cannot reduce either operand's absolute value.
+        AssociativeOperator::Add
+            if (lhs.bound.lower() >= 0.0 && rhs.bound.lower() >= 0.0)
+                || (lhs.bound.upper() <= 0.0 && rhs.bound.upper() <= 0.0) =>
+        {
+            lhs.may_evaluate_to_zero && rhs.may_evaluate_to_zero
+        }
+        // Multiplication by a factor whose magnitude is always at least one
+        // cannot erase an operand's proof that it stays outside the caller's
+        // zero tolerance.
+        AssociativeOperator::Mul
+            if (!lhs.may_evaluate_to_zero && minimum_absolute_value(rhs.bound) >= 1.0)
+                || (!rhs.may_evaluate_to_zero && minimum_absolute_value(lhs.bound) >= 1.0) =>
+        {
+            false
+        }
+        // Min and max return one of their operands, so they can be classified
+        // as zero only if at least one operand can be.
+        AssociativeOperator::Min | AssociativeOperator::Max => {
+            lhs.may_evaluate_to_zero || rhs.may_evaluate_to_zero
+        }
+        _ => interval_may_evaluate_to_zero,
+    };
     Ok(BoundAnalysis {
         bound,
-        may_evaluate_to_zero: bound_may_be_classified_as_zero(bound, atol),
+        may_evaluate_to_zero,
     })
 }
 
@@ -559,9 +590,18 @@ fn analyze_binary_bound(
             // reciprocal over an unbounded finite input. `may_evaluate_to_zero`
             // distinguishes that sentinel from an attainable denominator.
             let bound = div_bounds(lhs.bound, rhs.bound, !rhs.may_evaluate_to_zero)?;
-            let may_evaluate_to_zero = lhs.may_evaluate_to_zero
-                || minimum_absolute_value(lhs.bound) / maximum_finite_absolute_value(rhs.bound)
-                    <= *atol;
+            let may_evaluate_to_zero = if !lhs.may_evaluate_to_zero
+                && maximum_finite_absolute_value(rhs.bound) <= 1.0
+            {
+                // Division by a nonzero value whose magnitude is at most one
+                // cannot erase the numerator's proof that it stays outside
+                // the caller's zero tolerance.
+                false
+            } else {
+                lhs.may_evaluate_to_zero
+                    || minimum_absolute_value(lhs.bound) / maximum_finite_absolute_value(rhs.bound)
+                        <= *atol
+            };
             Ok(BoundAnalysis {
                 bound,
                 may_evaluate_to_zero,
@@ -705,8 +745,8 @@ mod tests {
     fn bound_of_quadratic_with_squared_term() {
         // f = x1*x1 with x1 in [-2, 3].
         //
-        // `Function::evaluate_bound` collapses the monomial via
-        // `MonomialDyn::chunks()` and bounds its integer power. For an even
+        // `Function::evaluate_bound` collapses each repeated-ID run and bounds
+        // its integer power. For an even
         // exponent across zero this yields [0, max(|-2|^2, 3^2)] = [0, 9], not
         // a naive interval-square [-6, 9].
         let f = Function::from(quadratic!(1, 1));
@@ -1025,6 +1065,47 @@ mod tests {
         assert!(undefined_reciprocal
             .evaluate_bound(&zero_to_one, atol)
             .is_err());
+    }
+
+    #[test]
+    fn non_contracting_operations_preserve_an_unattained_zero_endpoint() {
+        let id = VariableID::from(1);
+        let x = Function::from(linear!(id));
+        let bounds = Bounds::from([(id, Bound::new(1.0, f64::INFINITY).unwrap())]);
+        let atol = ATol::new(f64::from_bits(1)).unwrap();
+        let reciprocal = (Function::one() / x).unwrap();
+        let doubled = (Function::try_from(2.0).unwrap() * reciprocal.clone()).unwrap();
+        let identity_power =
+            super::super::operation::unary_expression(UnaryOperator::Powi(1), reciprocal.clone());
+
+        let non_contracting = [
+            (reciprocal.clone() + reciprocal.clone()).unwrap(),
+            doubled.clone(),
+            reciprocal.clone().min(doubled.clone()),
+            reciprocal.clone().max(doubled),
+            identity_power,
+            (reciprocal / Function::one()).unwrap(),
+        ];
+
+        for function in non_contracting {
+            assert!(function.powi(-1).evaluate_bound(&bounds, atol).is_ok());
+        }
+    }
+
+    #[test]
+    fn shrinking_product_does_not_reuse_nonzero_operand_proofs() {
+        let x = Function::from(linear!(1));
+        let y = Function::from(linear!(2));
+        let bounds = Bounds::from([
+            (VariableID::from(1), Bound::new(1.0, f64::INFINITY).unwrap()),
+            (VariableID::from(2), Bound::new(1.0, f64::INFINITY).unwrap()),
+        ]);
+        let atol = ATol::new(f64::from_bits(1)).unwrap();
+        let reciprocal_x = (Function::one() / x).unwrap();
+        let reciprocal_y = (Function::one() / y).unwrap();
+        let inverse_product = (reciprocal_x * reciprocal_y).unwrap().powi(-1);
+
+        assert!(inverse_product.evaluate_bound(&bounds, atol).is_err());
     }
 
     #[test]

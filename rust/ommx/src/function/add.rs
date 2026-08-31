@@ -129,6 +129,175 @@ impl Function {
         };
         Ok(())
     }
+
+    /// Add a borrowed function without first cloning it into a `Function`.
+    ///
+    /// Compact variants update or replace the owned left-hand representation
+    /// directly. A borrowed operand is cloned only when its storage must become
+    /// part of the result, such as a higher-degree right-hand polynomial or an
+    /// expression atom.
+    fn try_add_assign_ref_in_place(&mut self, rhs: &Self) -> Result<(), CoefficientError> {
+        let lhs = std::mem::take(self);
+        *self = match (lhs, rhs) {
+            (Function::Zero, rhs) => rhs.clone(),
+            (lhs, Function::Zero) => lhs,
+            (Function::Constant(lhs), Function::Constant(rhs)) => {
+                if let Some(coefficient) = (lhs + *rhs)? {
+                    Function::Constant(coefficient)
+                } else {
+                    Function::Zero
+                }
+            }
+            (Function::Constant(c), Function::Linear(l)) => Function::Linear((l + c)?),
+            (Function::Linear(l), Function::Constant(c)) => Function::Linear((l + *c)?),
+            (Function::Constant(c), Function::Quadratic(q)) => Function::Quadratic((q + c)?),
+            (Function::Quadratic(q), Function::Constant(c)) => Function::Quadratic((q + *c)?),
+            (Function::Constant(c), Function::Polynomial(p)) => Function::Polynomial((p + c)?),
+            (Function::Polynomial(p), Function::Constant(c)) => Function::Polynomial((p + *c)?),
+            (Function::Linear(lhs), Function::Linear(rhs)) => Function::Linear((lhs + rhs)?),
+            (Function::Linear(l), Function::Quadratic(q)) => Function::Quadratic((q + &l)?),
+            (Function::Quadratic(q), Function::Linear(l)) => Function::Quadratic((q + l)?),
+            (Function::Linear(l), Function::Polynomial(p)) => Function::Polynomial((p + &l)?),
+            (Function::Polynomial(p), Function::Linear(l)) => Function::Polynomial((p + l)?),
+            (Function::Quadratic(lhs), Function::Quadratic(rhs)) => {
+                Function::Quadratic((lhs + rhs)?)
+            }
+            (Function::Quadratic(q), Function::Polynomial(p)) => Function::Polynomial((p + &q)?),
+            (Function::Polynomial(p), Function::Quadratic(q)) => Function::Polynomial((p + q)?),
+            (Function::Polynomial(lhs), Function::Polynomial(rhs)) => {
+                Function::Polynomial((lhs + rhs)?)
+            }
+            (lhs, rhs) => associative_operation(AssociativeOperator::Add, lhs, rhs.clone()),
+        };
+        Ok(())
+    }
+
+    /// Add two borrowed functions while cloning at most the compact map that
+    /// owns the result representation.
+    fn try_add_refs(lhs: &Self, rhs: &Self) -> Result<Self, CoefficientError> {
+        Ok(match (lhs, rhs) {
+            (Function::Zero, rhs) => rhs.clone(),
+            (lhs, Function::Zero) => lhs.clone(),
+            (Function::Constant(lhs), Function::Constant(rhs)) => {
+                if let Some(coefficient) = (*lhs + *rhs)? {
+                    Function::Constant(coefficient)
+                } else {
+                    Function::Zero
+                }
+            }
+            (Function::Constant(c), Function::Linear(l))
+            | (Function::Linear(l), Function::Constant(c)) => Function::Linear((l + *c)?),
+            (Function::Constant(c), Function::Quadratic(q))
+            | (Function::Quadratic(q), Function::Constant(c)) => Function::Quadratic((q + *c)?),
+            (Function::Constant(c), Function::Polynomial(p))
+            | (Function::Polynomial(p), Function::Constant(c)) => Function::Polynomial((p + *c)?),
+            (Function::Linear(lhs), Function::Linear(rhs)) => Function::Linear((lhs + rhs)?),
+            (Function::Linear(l), Function::Quadratic(q))
+            | (Function::Quadratic(q), Function::Linear(l)) => Function::Quadratic((q + l)?),
+            (Function::Linear(l), Function::Polynomial(p))
+            | (Function::Polynomial(p), Function::Linear(l)) => Function::Polynomial((p + l)?),
+            (Function::Quadratic(lhs), Function::Quadratic(rhs)) => {
+                Function::Quadratic((lhs + rhs)?)
+            }
+            (Function::Quadratic(q), Function::Polynomial(p))
+            | (Function::Polynomial(p), Function::Quadratic(q)) => Function::Polynomial((p + q)?),
+            (Function::Polynomial(lhs), Function::Polynomial(rhs)) => {
+                Function::Polynomial((lhs + rhs)?)
+            }
+            (lhs, rhs) => associative_operation(AssociativeOperator::Add, lhs.clone(), rhs.clone()),
+        })
+    }
+
+    fn try_add_linear_ref(mut self, rhs: &Linear) -> Result<Self, CoefficientError> {
+        self = match self {
+            Function::Zero => Function::Linear(rhs.clone()),
+            Function::Constant(c) => Function::Linear((rhs + c)?),
+            Function::Linear(lhs) => Function::Linear((lhs + rhs)?),
+            Function::Quadratic(lhs) => Function::Quadratic((lhs + rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs + rhs)?),
+            lhs @ Function::Expression(_) => {
+                associative_operation(AssociativeOperator::Add, lhs, Function::Linear(rhs.clone()))
+            }
+        };
+        Ok(self)
+    }
+
+    fn try_add_quadratic_ref(mut self, rhs: &Quadratic) -> Result<Self, CoefficientError> {
+        self = match self {
+            Function::Zero => Function::Quadratic(rhs.clone()),
+            Function::Constant(c) => Function::Quadratic((rhs + c)?),
+            Function::Linear(lhs) => Function::Quadratic((rhs + &lhs)?),
+            Function::Quadratic(lhs) => Function::Quadratic((lhs + rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs + rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs,
+                Function::Quadratic(rhs.clone()),
+            ),
+        };
+        Ok(self)
+    }
+
+    fn try_add_polynomial_ref(mut self, rhs: &Polynomial) -> Result<Self, CoefficientError> {
+        self = match self {
+            Function::Zero => Function::Polynomial(rhs.clone()),
+            Function::Constant(c) => Function::Polynomial((rhs + c)?),
+            Function::Linear(lhs) => Function::Polynomial((rhs + &lhs)?),
+            Function::Quadratic(lhs) => Function::Polynomial((rhs + &lhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs + rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs,
+                Function::Polynomial(rhs.clone()),
+            ),
+        };
+        Ok(self)
+    }
+
+    fn try_add_linear_refs(lhs: &Self, rhs: &Linear) -> Result<Self, CoefficientError> {
+        Ok(match lhs {
+            Function::Zero => Function::Linear(rhs.clone()),
+            Function::Constant(c) => Function::Linear((rhs + *c)?),
+            Function::Linear(lhs) => Function::Linear((lhs + rhs)?),
+            Function::Quadratic(lhs) => Function::Quadratic((lhs + rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs + rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs.clone(),
+                Function::Linear(rhs.clone()),
+            ),
+        })
+    }
+
+    fn try_add_quadratic_refs(lhs: &Self, rhs: &Quadratic) -> Result<Self, CoefficientError> {
+        Ok(match lhs {
+            Function::Zero => Function::Quadratic(rhs.clone()),
+            Function::Constant(c) => Function::Quadratic((rhs + *c)?),
+            Function::Linear(lhs) => Function::Quadratic((rhs + lhs)?),
+            Function::Quadratic(lhs) => Function::Quadratic((lhs + rhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs + rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs.clone(),
+                Function::Quadratic(rhs.clone()),
+            ),
+        })
+    }
+
+    fn try_add_polynomial_refs(lhs: &Self, rhs: &Polynomial) -> Result<Self, CoefficientError> {
+        Ok(match lhs {
+            Function::Zero => Function::Polynomial(rhs.clone()),
+            Function::Constant(c) => Function::Polynomial((rhs + *c)?),
+            Function::Linear(lhs) => Function::Polynomial((rhs + lhs)?),
+            Function::Quadratic(lhs) => Function::Polynomial((rhs + lhs)?),
+            Function::Polynomial(lhs) => Function::Polynomial((lhs + rhs)?),
+            lhs @ Function::Expression(_) => associative_operation(
+                AssociativeOperator::Add,
+                lhs.clone(),
+                Function::Polynomial(rhs.clone()),
+            ),
+        })
+    }
 }
 
 impl Add for Function {
@@ -145,7 +314,7 @@ impl Add for &Function {
     type Output = Result<Function, CoefficientError>;
 
     fn add(self, rhs: Self) -> Self::Output {
-        self.clone() + rhs.clone()
+        Ok(Function::try_add_refs(self, rhs)?.normalize())
     }
 }
 
@@ -153,7 +322,13 @@ impl Add<Function> for &Function {
     type Output = Result<Function, CoefficientError>;
 
     fn add(self, rhs: Function) -> Self::Output {
-        self.clone() + rhs
+        if self.is_polynomial() && rhs.is_polynomial() {
+            // Compact addition is commutative, so retain the owned operand and
+            // borrow the other map. Expression order is handled below.
+            rhs + self
+        } else {
+            self.clone() + rhs
+        }
     }
 }
 
@@ -161,7 +336,9 @@ impl Add<&Function> for Function {
     type Output = Result<Function, CoefficientError>;
 
     fn add(self, rhs: &Function) -> Self::Output {
-        self + rhs.clone()
+        let mut out = self;
+        out.try_add_assign_ref_in_place(rhs)?;
+        Ok(out.normalize())
     }
 }
 
@@ -178,7 +355,7 @@ impl Add<Coefficient> for &Function {
     type Output = Result<Function, CoefficientError>;
 
     fn add(self, rhs: Coefficient) -> Self::Output {
-        self.clone() + rhs
+        self + Function::Constant(rhs)
     }
 }
 
@@ -194,7 +371,7 @@ impl Add<&Coefficient> for &Function {
     type Output = Result<Function, CoefficientError>;
 
     fn add(self, rhs: &Coefficient) -> Self::Output {
-        self.clone() + *rhs
+        self + Function::Constant(*rhs)
     }
 }
 
@@ -215,13 +392,12 @@ impl Add<&Function> for Coefficient {
 }
 
 macro_rules! impl_add_polynomial_rhs {
-    (& $rhs:ty) => {
+    ($rhs:ty, $owned_ref_method:ident, $refs_method:ident) => {
         impl Add<&$rhs> for Function {
             type Output = Result<Function, CoefficientError>;
 
-            fn add(mut self, rhs: &$rhs) -> Self::Output {
-                self.try_add_assign_in_place(Function::from(rhs.clone()))?;
-                Ok(self.normalize())
+            fn add(self, rhs: &$rhs) -> Self::Output {
+                Ok(self.$owned_ref_method(rhs)?.normalize())
             }
         }
 
@@ -229,11 +405,10 @@ macro_rules! impl_add_polynomial_rhs {
             type Output = Result<Function, CoefficientError>;
 
             fn add(self, rhs: &$rhs) -> Self::Output {
-                self.clone() + rhs
+                Ok(Function::$refs_method(self, rhs)?.normalize())
             }
         }
-    };
-    ($rhs:ty) => {
+
         impl Add<$rhs> for Function {
             type Output = Result<Function, CoefficientError>;
 
@@ -247,18 +422,15 @@ macro_rules! impl_add_polynomial_rhs {
             type Output = Result<Function, CoefficientError>;
 
             fn add(self, rhs: $rhs) -> Self::Output {
-                self.clone() + rhs
+                self + Function::from(rhs)
             }
         }
     };
 }
 
-impl_add_polynomial_rhs!(Linear);
-impl_add_polynomial_rhs!(&Linear);
-impl_add_polynomial_rhs!(Quadratic);
-impl_add_polynomial_rhs!(&Quadratic);
-impl_add_polynomial_rhs!(Polynomial);
-impl_add_polynomial_rhs!(&Polynomial);
+impl_add_polynomial_rhs!(Linear, try_add_linear_ref, try_add_linear_refs);
+impl_add_polynomial_rhs!(Quadratic, try_add_quadratic_ref, try_add_quadratic_refs);
+impl_add_polynomial_rhs!(Polynomial, try_add_polynomial_ref, try_add_polynomial_refs);
 
 impl Neg for Function {
     type Output = Self;
@@ -315,6 +487,21 @@ mod tests {
         ) {
             assert_abs_diff_eq!((&a + (&b + &c).unwrap()).unwrap(), ((&a + &b).unwrap() + &c).unwrap());
         }
+
+        #[test]
+        fn fixed_rhs_refs_match_function_dispatch(
+            lhs in any::<Function>(),
+            linear in any::<Linear>(),
+            quadratic in any::<Quadratic>(),
+            polynomial in any::<Polynomial>(),
+        ) {
+            prop_assert_eq!(lhs.clone() + &linear, lhs.clone() + Function::Linear(linear.clone()));
+            prop_assert_eq!(&lhs + &linear, &lhs + Function::Linear(linear));
+            prop_assert_eq!(lhs.clone() + &quadratic, lhs.clone() + Function::Quadratic(quadratic.clone()));
+            prop_assert_eq!(&lhs + &quadratic, &lhs + Function::Quadratic(quadratic));
+            prop_assert_eq!(lhs.clone() + &polynomial, lhs.clone() + Function::Polynomial(polynomial.clone()));
+            prop_assert_eq!(&lhs + &polynomial, &lhs + Function::Polynomial(polynomial));
+        }
     }
 
     #[test]
@@ -335,5 +522,29 @@ mod tests {
             Function::Expression(_)
         ));
         assert!(matches!((linear.clone() - linear).unwrap(), Function::Zero));
+    }
+
+    #[test]
+    fn borrowed_addition_preserves_coefficient_error() {
+        let huge = Function::Linear(Linear::single_term(linear!(1), coeff!(f64::MAX)));
+        assert!(matches!(&huge + &huge, Err(CoefficientError::Infinite)));
+    }
+
+    #[test]
+    fn fixed_borrowed_addition_preserves_expression_order_and_coefficient_error() {
+        let lhs = Function::from(linear!(1)).abs();
+        let rhs = Linear::from(linear!(2));
+        let expected = (lhs.clone() + Function::Linear(rhs.clone())).unwrap();
+
+        assert!((lhs.clone() + &rhs).unwrap() == expected);
+        assert!((&lhs + &rhs).unwrap() == expected);
+
+        let huge = Function::Linear(Linear::single_term(linear!(1), coeff!(f64::MAX)));
+        let huge_rhs = Linear::single_term(linear!(1), coeff!(f64::MAX));
+        assert!(matches!(
+            huge.clone() + &huge_rhs,
+            Err(CoefficientError::Infinite)
+        ));
+        assert!(matches!(&huge + &huge_rhs, Err(CoefficientError::Infinite)));
     }
 }

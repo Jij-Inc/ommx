@@ -1,6 +1,47 @@
 use super::*;
 use crate::{v1::State, Evaluate, Result, Sampled, VariableIDSet};
 
+impl<M: Monomial> PolynomialBase<M> {
+    fn has_state_overlap(&self, state: &State) -> bool {
+        self.terms.keys().any(|monomial| {
+            monomial
+                .ids()
+                .any(|id| state.entries.contains_key(&id.into_inner()))
+        })
+    }
+
+    fn build_partial_evaluated(&self, state: &State) -> Result<Self> {
+        let mut updated = Self::default();
+        for (monomial, coefficient) in &self.terms {
+            let (new_monomial, value) = monomial.clone().partial_evaluate(state);
+            match TryInto::<Coefficient>::try_into(value) {
+                Ok(value) => {
+                    if let Some(coefficient) = (value * *coefficient)? {
+                        updated.add_term(new_monomial, coefficient)?;
+                    }
+                }
+                Err(crate::CoefficientError::Zero) => {
+                    continue;
+                }
+                Err(e) => {
+                    return Err(crate::Error::new(e)
+                        .context("Partial evaluation yields non-finite coefficient"));
+                }
+            }
+        }
+        Ok(updated)
+    }
+
+    /// Prepare a replacement for `Function`/`Instance` atomic plans without
+    /// granting those owners mutable access to this polynomial's term storage.
+    pub(crate) fn partial_evaluate_replacement(&self, state: &State) -> Result<Option<Self>> {
+        if !self.has_state_overlap(state) {
+            return Ok(None);
+        }
+        self.build_partial_evaluated(state).map(Some)
+    }
+}
+
 impl<M: Monomial> Evaluate for PolynomialBase<M> {
     type Output = f64;
     type SampledOutput = Sampled<f64>;
@@ -29,24 +70,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
         if state.entries.is_empty() {
             return Ok(());
         }
-        let mut updated = Self::default();
-        for (monomial, coefficient) in &self.terms {
-            let (new_monomial, value) = monomial.clone().partial_evaluate(state);
-            match TryInto::<Coefficient>::try_into(value) {
-                Ok(value) => {
-                    if let Some(coefficient) = (value * *coefficient)? {
-                        updated.add_term(new_monomial, coefficient)?;
-                    }
-                }
-                Err(crate::CoefficientError::Zero) => {
-                    continue;
-                }
-                Err(e) => {
-                    return Err(crate::Error::new(e)
-                        .context("Partial evaluation yields non-finite coefficient"));
-                }
-            }
-        }
+        let updated = self.build_partial_evaluated(state)?;
         *self = updated;
         Ok(())
     }

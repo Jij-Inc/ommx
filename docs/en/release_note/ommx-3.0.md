@@ -13,10 +13,11 @@ Changes merged after the most recent release will be appended here as they land,
 {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples` now
 treat an SOS1 member with `abs(value) <= atol` as zero, including the boundary.
 This matches the zero classification used by `Function.signum`. Support for
-composed {class}`~ommx.Function` operations is the separate
-[#1158](https://github.com/Jij-Inc/ommx/pull/1158) change described below.
+composed {class}`~ommx.Function` operations is provided separately by
+[#1158](https://github.com/Jij-Inc/ommx/pull/1158) and
+[#1178](https://github.com/Jij-Inc/ommx/pull/1178), as described below.
 
-### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158))
+### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178))
 
 {class}`~ommx.Function` can now represent composed expressions as well as
 compact polynomials. Python users can construct absolute values, sign
@@ -87,6 +88,37 @@ is a breaking rename from the API published in Python SDK 3.0.0 Beta 4:
 
 `PolynomialRequirement.any_degree()` accepts a polynomial of any degree; it
 does not admit a composed, non-polynomial `Function`.
+
+### 🛠 Canonical solver states during evaluation ([#1174](https://github.com/Jij-Inc/ommx/pull/1174))
+
+{meth}`~ommx.Instance.populate_state`, {meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples` now canonicalize finite supplied
+coordinates that are neither fixed nor dependent, as well as values derived for
+dependent targets, according to each decision-variable kind and the caller's
+`atol`. For those coordinates, Binary values whose distance from `0` or `1` is
+strictly less than `atol`, and Integer or SemiInteger values whose distance from
+an integer is strictly less than `atol`, are stored as the corresponding exact
+discrete value. Values exactly at the tolerance boundary remain unchanged,
+while kind and bound feasibility continue to be checked separately under their
+existing rules. Continuous and SemiContinuous values are never rounded. Other
+finite values are preserved so a returned {class}`~ommx.Solution` can report
+their feasibility, while non-finite state values remain rejected.
+
+A caller-supplied fixed or dependent value remains a consistency assertion.
+After validation, the returned state uses the Instance-owned fixed value
+unchanged or the dependency-derived value canonicalized for its target kind.
+Dependencies are evaluated from canonicalized inputs, so an explicitly supplied
+dependent assertion computed from the raw solver vector can now be rejected if
+it is not within `atol` of that derived value. Scalar and sample evaluation use
+the same rule while preserving SampleID membership.
+
+{meth}`~ommx.Instance.partial_evaluate` applies the same rule to its validated
+input before special-constraint propagation, expression substitution, and
+constant dependency evaluation. Evaluating the rewritten Instance therefore
+uses the same canonical coordinates as directly evaluating the original
+Instance. Existing Instance-owned fixed values remain unchanged, and values
+outside partial evaluation's existing kind and bound acceptance contract remain
+rejected.
 
 ### ⚠ `solve()` and `sample()` now prepare inputs automatically ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 
