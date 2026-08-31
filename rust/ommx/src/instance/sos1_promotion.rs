@@ -160,10 +160,92 @@ impl Sos1LinkSide {
         }
     }
 
-    fn required_magnitude(self, bound: Bound) -> f64 {
+    fn member_value(self, signed_value: f64) -> f64 {
         match self {
-            Self::Upper => bound.upper(),
-            Self::Lower => -bound.lower(),
+            Self::Upper => signed_value,
+            Self::Lower => -signed_value,
+        }
+    }
+
+    fn feasible_signed_domain(
+        self,
+        kind: Kind,
+        bound: Bound,
+        atol: ATol,
+    ) -> crate::Result<SignedFeasibleDomain> {
+        let tolerance = atol.into_inner();
+        let (lower, upper, discrete) = match kind {
+            Kind::Continuous => {
+                let lower = bound.lower() - tolerance;
+                let upper = bound.upper() + tolerance;
+                if !lower.is_finite() || !upper.is_finite() {
+                    crate::bail!(
+                        { ?kind, ?bound, tolerance, side = self.name() },
+                        "SOS1 Big-M promotion cannot certify a non-finite ATol-feasible member domain"
+                    );
+                }
+                (lower, upper, false)
+            }
+            Kind::Integer => (bound.lower(), bound.upper(), true),
+            _ => crate::bail!(
+                { ?kind, side = self.name() },
+                "SOS1 Big-M promotion cannot certify links for member kind {kind:?}"
+            ),
+        };
+        let (lower, upper) = match self {
+            Self::Upper => (lower, upper),
+            Self::Lower => (-upper, -lower),
+        };
+        Ok(SignedFeasibleDomain {
+            lower,
+            upper,
+            discrete,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SignedFeasibleDomain {
+    lower: f64,
+    upper: f64,
+    discrete: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ActiveMinimum {
+    /// A continuous domain contains values arbitrarily close to, but strictly
+    /// above, the SOS1 zero threshold.
+    OpenAtTolerance,
+    /// The smallest active value is attained by the feasible domain.
+    Attained(f64),
+}
+
+impl SignedFeasibleDomain {
+    fn max_zero_classified(self, atol: ATol) -> Option<f64> {
+        if self.discrete {
+            // Promotion requires ATol < 1, so zero is the only integer value
+            // classified as zero by SOS1 evaluation.
+            return (self.lower <= 0.0 && 0.0 <= self.upper).then_some(0.0);
+        }
+
+        let tolerance = atol.into_inner();
+        let lower = self.lower.max(-tolerance);
+        let upper = self.upper.min(tolerance);
+        (lower <= upper).then_some(upper)
+    }
+
+    fn min_active(self, atol: ATol) -> Option<ActiveMinimum> {
+        let tolerance = atol.into_inner();
+        if self.upper <= tolerance {
+            return None;
+        }
+        if self.discrete {
+            return Some(ActiveMinimum::Attained(self.lower.max(1.0)));
+        }
+        if self.lower > tolerance {
+            Some(ActiveMinimum::Attained(self.lower))
+        } else {
+            Some(ActiveMinimum::OpenAtTolerance)
         }
     }
 }
@@ -211,7 +293,8 @@ impl Instance {
     /// - exact agreement between full binary members and reused-selector roles;
     /// - distinct full binary fresh selectors outside the member set;
     /// - upper and lower links that normalize to the expected two-variable
-    ///   Big-M shape and cover the member domain under the supplied `atol`;
+    ///   Big-M shape and preserve the claimed formulation's projected feasible
+    ///   set under the supplied `atol`;
     /// - the exact canonical selector-cardinality row;
     /// - absence of every fresh selector from current active solver input,
     ///   except for the claimed formulation rows;
@@ -231,27 +314,28 @@ impl Instance {
     /// SOS1 capability to the instance; request rejection means only that the
     /// claimed formulation is outside this conservative checker.
     ///
-    /// Link validation first divides by the positive magnitude of the member
-    /// coefficient. It therefore accepts positive scalar multiples and Big-M
-    /// bounds wider than the current member domain. The supplied finite `atol`
-    /// is interpreted after normalization and used only for the one-sided
-    /// domain-containment comparison, so checker acceptance is scale invariant.
-    /// Relation, variable support, zero constant, and cardinality remain exact
-    /// structural requirements. Link presence remains determined by the exact
-    /// sign of the domain endpoint because the resulting [`Instance`] does not
-    /// retain this validation tolerance.
+    /// For a raw link `a * (t - M * z) <= 0`, normalization changes the
+    /// comparison tolerance to `atol / a`. The checker accepts the scale and
+    /// Big-M only when that threshold agrees with SOS1's `abs(member) <= atol`
+    /// zero classification: reconstructed `z = 0` must satisfy the raw row,
+    /// every active member must force `z = 1`, and `z = 1` must cover the full
+    /// member domain feasible under the same `atol`. Continuous domains include
+    /// the tolerance admitted by [`Bound::contains`], while Integer domains are
+    /// checked at their discrete values. The checker imposes no domain-derived
+    /// upper cap on a finite, representable loose Big-M; non-unit scales and
+    /// tolerance-level shortfalls are accepted only where these feasibility
+    /// conditions hold. The raw residual is checked as well as its normalized
+    /// form to avoid accepting an f64 normalization-rounding artifact.
     ///
-    /// The original link rows are retained unchanged. The checker and promoted
-    /// active model interpret links in normalized coefficient units, while
-    /// regular-row feasibility applies an absolute tolerance to each retained
-    /// raw residual. A promoted state may therefore satisfy
-    /// [`crate::Solution::feasible_relaxed`] but not
-    /// [`crate::Solution::feasible`]. This can happen near zero even when `M`
-    /// exactly contains the domain, as well as when an `M` shortfall is accepted
-    /// within `atol`. Positive scalar normalization preserves exact-real
-    /// semantics of the row itself; tolerance-level shortfall is only an
-    /// approximate acceptance. Callers that require feasibility against the
-    /// original rows must continue to inspect full feasibility.
+    /// The supplied `atol` must be finite and smaller than one so the exact
+    /// binary selector-cardinality row still means "at most one". Relation,
+    /// variable support, zero constant, and cardinality remain exact structural
+    /// requirements. Link presence remains determined by the exact sign of the
+    /// stored domain endpoint. The equivalence guarantee is local to the claimed
+    /// formulation and parameterized by this `atol`; callers must use the same
+    /// tolerance for subsequent state reconstruction and evaluation. The
+    /// transformed [`Instance`] does not store a global evaluation tolerance,
+    /// and unrelated removed history is preserved rather than reinterpreted.
     ///
     /// On success the verified formulation rows are relaxed, fresh selectors
     /// remain registered as dependent variables, and a new active SOS1
@@ -319,6 +403,12 @@ impl Instance {
             crate::bail!(
                 { atol = atol.into_inner() },
                 "SOS1 Big-M promotion requires a finite ATol"
+            );
+        }
+        if atol.into_inner() >= 1.0 {
+            crate::bail!(
+                { atol = atol.into_inner() },
+                "SOS1 Big-M promotion requires ATol < 1 so binary selector cardinality and SOS1 zero classification agree"
             );
         }
         if request.selector_claims.is_empty() {
@@ -424,7 +514,7 @@ impl Instance {
                         member,
                         selector,
                         upper_link,
-                        bound,
+                        variable,
                         Sos1LinkSide::Upper,
                         atol,
                         &mut relaxed_constraint_ids,
@@ -433,7 +523,7 @@ impl Instance {
                         member,
                         selector,
                         lower_link,
-                        bound,
+                        variable,
                         Sos1LinkSide::Lower,
                         atol,
                         &mut relaxed_constraint_ids,
@@ -486,12 +576,13 @@ impl Instance {
         member: VariableID,
         selector: VariableID,
         actual_id: Option<ConstraintID>,
-        bound: Bound,
+        variable: &crate::DecisionVariable,
         side: Sos1LinkSide,
         atol: ATol,
         relaxed: &mut BTreeSet<ConstraintID>,
     ) -> crate::Result<()> {
         let side_name = side.name();
+        let bound = variable.bound();
         match actual_id {
             None if !side.is_required(bound) => Ok(()),
             None => crate::bail!(
@@ -505,7 +596,7 @@ impl Instance {
                         "Regular constraint {id:?} is claimed for more than one SOS1 formulation role"
                     );
                 }
-                self.ensure_sufficient_sos1_link(id, member, selector, bound, side, atol)
+                self.ensure_sufficient_sos1_link(id, member, selector, variable, side, atol)
             }
         }
     }
@@ -515,7 +606,7 @@ impl Instance {
         id: ConstraintID,
         member: VariableID,
         selector: VariableID,
-        bound: Bound,
+        variable: &crate::DecisionVariable,
         side: Sos1LinkSide,
         atol: ATol,
     ) -> crate::Result<()> {
@@ -578,18 +669,155 @@ impl Instance {
                 "Claimed SOS1 {side_name} link constraint {id:?} does not have a finite positive Big-M after normalization"
             );
         }
-        let required_magnitude = side.required_magnitude(bound);
-        if required_magnitude > big_m && !atol.approx_eq(required_magnitude, big_m) {
+
+        let normalized_tolerance = atol.into_inner() / scale;
+        if !normalized_tolerance.is_finite() || normalized_tolerance <= 0.0 {
             crate::bail!(
                 {
                     ?id,
                     ?member,
-                    required_magnitude,
-                    big_m,
+                    scale,
                     atol = atol.into_inner(),
+                    normalized_tolerance,
                     side = side_name
                 },
-                "Claimed SOS1 {side_name} link constraint {id:?} has Big-M {big_m}, which does not cover the member domain requirement {required_magnitude} within ATol"
+                "Claimed SOS1 {side_name} link constraint {id:?} does not have a finite positive ATol after normalization"
+            );
+        }
+        let normalized_atol = ATol::new(normalized_tolerance)
+            .expect("finite positive normalized tolerance was checked above");
+        let domain = side.feasible_signed_domain(variable.kind(), variable.bound(), atol)?;
+
+        let normalized_is_satisfied = |signed_value: f64, selector_value: f64| {
+            let residual = signed_value - big_m * selector_value;
+            residual.is_finite()
+                && Equality::LessThanOrEqualToZero.is_satisfied(residual, normalized_atol)
+        };
+        let raw_is_satisfied = |signed_value: f64, selector_value: f64| -> crate::Result<bool> {
+            let member_value = side.member_value(signed_value);
+            let residual =
+                member_coefficient * member_value + selector_coefficient * selector_value;
+            if !residual.is_finite() {
+                crate::bail!(
+                    {
+                        ?id,
+                        ?member,
+                        ?selector,
+                        member_value,
+                        selector_value,
+                        residual,
+                        side = side_name
+                    },
+                    "Claimed SOS1 {side_name} link constraint {id:?} has a non-finite residual on the ATol-feasible member domain"
+                );
+            }
+            Ok(Equality::LessThanOrEqualToZero.is_satisfied(residual, atol))
+        };
+
+        // The reconstructed selector is zero throughout |member| <= ATol.
+        // Every such point must remain feasible in the original raw row.
+        if let Some(max_zero) = domain.max_zero_classified(atol) {
+            let normalized_feasible = normalized_is_satisfied(max_zero, 0.0);
+            let raw_feasible = raw_is_satisfied(max_zero, 0.0)?;
+            if !normalized_feasible || !raw_feasible {
+                crate::bail!(
+                    {
+                        ?id,
+                        ?member,
+                        scale,
+                        max_zero,
+                        atol = atol.into_inner(),
+                        normalized_tolerance,
+                        side = side_name
+                    },
+                    "Claimed SOS1 {side_name} link constraint {id:?} does not preserve the SOS1 zero classification under the supplied ATol"
+                );
+            }
+        }
+
+        // Conversely, a member active on this side must make z = 0
+        // infeasible, so every feasible original selector assignment uses z =
+        // 1. For a continuous interval meeting the open boundary x > ATol,
+        // this requires scale >= 1; an attained minimum can be checked
+        // directly in the raw row.
+        match domain.min_active(atol) {
+            None => {}
+            Some(ActiveMinimum::OpenAtTolerance) if scale < 1.0 => {
+                crate::bail!(
+                    {
+                        ?id,
+                        ?member,
+                        scale,
+                        atol = atol.into_inner(),
+                        normalized_tolerance,
+                        side = side_name
+                    },
+                    "Claimed SOS1 {side_name} link constraint {id:?} does not force an active member to use selector value one under the supplied ATol"
+                );
+            }
+            Some(ActiveMinimum::OpenAtTolerance) => {}
+            Some(ActiveMinimum::Attained(min_active)) => {
+                let normalized_feasible = normalized_is_satisfied(min_active, 0.0);
+                let raw_feasible = raw_is_satisfied(min_active, 0.0)?;
+                if normalized_feasible || raw_feasible {
+                    crate::bail!(
+                        {
+                            ?id,
+                            ?member,
+                            scale,
+                            min_active,
+                            atol = atol.into_inner(),
+                            normalized_tolerance,
+                            side = side_name
+                        },
+                        "Claimed SOS1 {side_name} link constraint {id:?} does not force an active member to use selector value one under the supplied ATol"
+                    );
+                }
+            }
+        }
+
+        // An active value on the opposite side satisfies this row
+        // mathematically, but the original f64 residual must also remain
+        // finite. Otherwise removing the row would turn an evaluation error
+        // into an active-model feasible point.
+        if domain.lower < -atol.into_inner()
+            && (!normalized_is_satisfied(domain.lower, 1.0)
+                || !raw_is_satisfied(domain.lower, 1.0)?)
+        {
+            crate::bail!(
+                {
+                    ?id,
+                    ?member,
+                    scale,
+                    big_m,
+                    domain_lower = domain.lower,
+                    atol = atol.into_inner(),
+                    normalized_tolerance,
+                    side = side_name
+                },
+                "Claimed SOS1 {side_name} link constraint {id:?} is not feasible over the complete ATol-feasible member domain at selector value one"
+            );
+        }
+
+        // At z = 1 the row is monotone in the signed member value, so the
+        // largest same-side active value proves Big-M coverage. This includes
+        // the bound tolerance for Continuous members.
+        if domain.upper > atol.into_inner()
+            && (!normalized_is_satisfied(domain.upper, 1.0)
+                || !raw_is_satisfied(domain.upper, 1.0)?)
+        {
+            crate::bail!(
+                {
+                    ?id,
+                    ?member,
+                    scale,
+                    big_m,
+                    domain_upper = domain.upper,
+                    atol = atol.into_inner(),
+                    normalized_tolerance,
+                    side = side_name
+                },
+                "Claimed SOS1 {side_name} link constraint {id:?} has Big-M {big_m}, which does not cover the ATol-feasible member domain"
             );
         }
         Ok(())
@@ -939,6 +1167,50 @@ mod tests {
     }
 
     #[test]
+    fn promotion_preserves_the_claimed_formulations_projected_feasibility() {
+        let atol = ATol::default();
+        let (original, request) = mixed_instance();
+        let mut promoted = original.clone();
+        let _ = promoted.promote_sos1_big_m(&request, atol).unwrap();
+
+        for reused_member in [0.0, 1.0] {
+            for fresh_member in -2..=3 {
+                let fresh_member = f64::from(fresh_member);
+                let original_projected_feasible = [0.0, 1.0].into_iter().any(|selector| {
+                    original
+                        .evaluate(
+                            &crate::v1::State::from_iter([
+                                (0, reused_member),
+                                (1, fresh_member),
+                                (10, selector),
+                            ]),
+                            atol,
+                        )
+                        .unwrap()
+                        .feasible()
+                });
+                let promoted_solution = promoted
+                    .evaluate(
+                        &crate::v1::State::from_iter([(0, reused_member), (1, fresh_member)]),
+                        atol,
+                    )
+                    .unwrap();
+
+                assert_eq!(
+                    promoted_solution.feasible_relaxed(),
+                    original_projected_feasible,
+                    "projected feasibility differs at reused={reused_member}, fresh={fresh_member}"
+                );
+                assert_eq!(
+                    promoted_solution.feasible(),
+                    promoted_solution.feasible_relaxed(),
+                    "canonical selector does not satisfy the claimed removed rows at reused={reused_member}, fresh={fresh_member}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn reconstructed_selector_uses_shared_atol_semantics() {
         let member = DecisionVariable::new(
             Kind::Continuous,
@@ -949,6 +1221,14 @@ mod tests {
         let (mut instance, request) =
             fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
         let atol = ATol::new(1.0e-6).unwrap();
+        instance
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(1.0, 3.0 + atol.into_inner()))
+            .unwrap();
+        instance
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(1.0, 2.0 + atol.into_inner()))
+            .unwrap();
         let promotion = instance.promote_sos1_big_m(&request, atol).unwrap();
 
         let near_zero = instance
@@ -1108,86 +1388,210 @@ mod tests {
     }
 
     #[test]
-    fn accepts_positive_scalar_multiple_links() {
+    fn accepts_nonunit_scales_when_integer_domain_preserves_atol_semantics() {
+        let atol = ATol::new(0.125).unwrap();
         let (mut instance, request) = mixed_instance();
         instance
             .constraint_collection
-            .replace_active_row(upper_row_id(), upper_link(1.0e-9, 3.0))
+            .replace_active_row(upper_row_id(), upper_link(0.5, 2.75))
             .unwrap();
         instance
             .constraint_collection
-            .replace_active_row(lower_row_id(), lower_link(4.0, 2.0))
+            .replace_active_row(lower_row_id(), lower_link(4.0, 1.96875))
             .unwrap();
 
-        let _ = instance
-            .promote_sos1_big_m(&request, ATol::new(1.0e-6).unwrap())
+        let _ = instance.promote_sos1_big_m(&request, atol).unwrap();
+
+        for member_value in [3.0, -2.0] {
+            let solution = instance
+                .evaluate(
+                    &crate::v1::State::from_iter([(0, 0.0), (1, member_value)]),
+                    atol,
+                )
+                .unwrap();
+            assert!(solution.feasible());
+            assert!(solution.feasible_relaxed());
+        }
+
+        let (mut upper_outside, request) = mixed_instance();
+        upper_outside
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(2.0, 2.875))
             .unwrap();
+        assert_atomic_rejection_with_atol(
+            upper_outside,
+            &request,
+            atol,
+            "does not cover the ATol-feasible member domain",
+        );
+
+        let (mut lower_outside, request) = mixed_instance();
+        lower_outside
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(4.0, 1.875))
+            .unwrap();
+        assert_atomic_rejection_with_atol(
+            lower_outside,
+            &request,
+            atol,
+            "does not cover the ATol-feasible member domain",
+        );
+
+        let (mut threshold_too_weak, request) = mixed_instance();
+        threshold_too_weak
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(0.125, 10.0))
+            .unwrap();
+        assert_atomic_rejection_with_atol(
+            threshold_too_weak,
+            &request,
+            atol,
+            "does not force an active member",
+        );
     }
 
     #[test]
-    fn normalized_link_units_can_differ_from_retained_raw_row_atol() {
-        let atol = ATol::new(1.0e-6).unwrap();
+    fn rejects_nonunit_scales_across_a_continuous_zero_boundary() {
+        let atol = ATol::new(0.125).unwrap();
         let member = DecisionVariable::new(
             Kind::Continuous,
             Bound::new(-2.0, 3.0).unwrap(),
             ATol::default(),
         )
         .unwrap();
-        let (mut instance, request) =
-            fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
-        instance
-            .constraint_collection
-            .replace_active_row(upper_row_id(), upper_link(4.0, 3.0))
-            .unwrap();
-        instance
-            .constraint_collection
-            .replace_active_row(lower_row_id(), lower_link(4.0, 2.0))
-            .unwrap();
-        let _ = instance.promote_sos1_big_m(&request, atol).unwrap();
 
-        let solution = instance
-            .evaluate(&crate::v1::State::from_iter([(1, 5.0e-7)]), atol)
+        let (mut upper_too_large, request) =
+            fresh_instance(member.clone(), Some(upper_row_id()), Some(lower_row_id()));
+        upper_too_large
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(2.0, 10.0))
             .unwrap();
-        assert!(solution.feasible_relaxed());
-        assert!(!solution.feasible());
-        assert!(
-            !solution
-                .evaluated_constraints()
-                .get(&upper_row_id())
-                .unwrap()
-                .stage
-                .feasible
+        assert_atomic_rejection_with_atol(
+            upper_too_large,
+            &request,
+            atol,
+            "does not preserve the SOS1 zero classification",
+        );
+
+        let (mut upper_too_small, request) =
+            fresh_instance(member.clone(), Some(upper_row_id()), Some(lower_row_id()));
+        upper_too_small
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(0.5, 10.0))
+            .unwrap();
+        assert_atomic_rejection_with_atol(
+            upper_too_small,
+            &request,
+            atol,
+            "does not force an active member",
+        );
+
+        let (mut lower_too_large, request) =
+            fresh_instance(member.clone(), Some(upper_row_id()), Some(lower_row_id()));
+        lower_too_large
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(2.0, 10.0))
+            .unwrap();
+        assert_atomic_rejection_with_atol(
+            lower_too_large,
+            &request,
+            atol,
+            "does not preserve the SOS1 zero classification",
+        );
+
+        let (mut lower_too_small, request) =
+            fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
+        lower_too_small
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(0.5, 10.0))
+            .unwrap();
+        assert_atomic_rejection_with_atol(
+            lower_too_small,
+            &request,
+            atol,
+            "does not force an active member",
         );
     }
 
     #[test]
-    fn normalized_link_containment_uses_inclusive_atol() {
+    fn continuous_link_coverage_uses_the_atol_feasible_domain() {
         let atol = ATol::new(0.125).unwrap();
 
-        let (mut on_boundary, request) = mixed_instance();
-        on_boundary
+        let positive = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(1.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let (mut upper_on_boundary, request) =
+            fresh_instance(positive.clone(), Some(upper_row_id()), None);
+        upper_on_boundary
             .constraint_collection
-            .replace_active_row(upper_row_id(), upper_link(2.0, 2.875))
+            .replace_active_row(upper_row_id(), upper_link(2.0, 3.0625))
             .unwrap();
-        on_boundary
-            .constraint_collection
-            .replace_active_row(lower_row_id(), lower_link(3.0, 1.875))
+        let original_upper = upper_on_boundary.clone();
+        let _ = upper_on_boundary
+            .promote_sos1_big_m(&request, atol)
             .unwrap();
-        let _ = on_boundary.promote_sos1_big_m(&request, atol).unwrap();
+        let before = original_upper
+            .evaluate(&crate::v1::State::from_iter([(1, 3.125), (10, 1.0)]), atol)
+            .unwrap();
+        let after = upper_on_boundary
+            .evaluate(&crate::v1::State::from_iter([(1, 3.125)]), atol)
+            .unwrap();
+        assert!(before.feasible());
+        assert!(after.feasible());
+        assert!(after.feasible_relaxed());
 
-        let (mut upper_outside, request) = mixed_instance();
+        let (mut upper_outside, request) = fresh_instance(positive, Some(upper_row_id()), None);
         upper_outside
             .constraint_collection
-            .replace_active_row(upper_row_id(), upper_link(2.0, 2.75))
+            .replace_active_row(upper_row_id(), upper_link(2.0, 3.0))
             .unwrap();
-        assert_atomic_rejection_with_atol(upper_outside, &request, atol, "does not cover");
+        assert_atomic_rejection_with_atol(
+            upper_outside,
+            &request,
+            atol,
+            "does not cover the ATol-feasible member domain",
+        );
 
-        let (mut lower_outside, request) = mixed_instance();
+        let negative = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(-3.0, -1.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let (mut lower_on_boundary, request) =
+            fresh_instance(negative.clone(), None, Some(lower_row_id()));
+        lower_on_boundary
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(0.5, 2.875))
+            .unwrap();
+        let original_lower = lower_on_boundary.clone();
+        let _ = lower_on_boundary
+            .promote_sos1_big_m(&request, atol)
+            .unwrap();
+        let before = original_lower
+            .evaluate(&crate::v1::State::from_iter([(1, -3.125), (10, 1.0)]), atol)
+            .unwrap();
+        let after = lower_on_boundary
+            .evaluate(&crate::v1::State::from_iter([(1, -3.125)]), atol)
+            .unwrap();
+        assert!(before.feasible());
+        assert!(after.feasible());
+        assert!(after.feasible_relaxed());
+
+        let (mut lower_outside, request) = fresh_instance(negative, None, Some(lower_row_id()));
         lower_outside
             .constraint_collection
-            .replace_active_row(lower_row_id(), lower_link(3.0, 1.75))
+            .replace_active_row(lower_row_id(), lower_link(0.5, 2.75))
             .unwrap();
-        assert_atomic_rejection_with_atol(lower_outside, &request, atol, "does not cover");
+        assert_atomic_rejection_with_atol(
+            lower_outside,
+            &request,
+            atol,
+            "does not cover the ATol-feasible member domain",
+        );
     }
 
     #[test]
@@ -1357,6 +1761,35 @@ mod tests {
             overflowed_ratio,
             &request,
             "finite positive Big-M after normalization",
+        );
+
+        let extreme_negative = DecisionVariable::new(
+            Kind::Continuous,
+            Bound::new(-1.0e308, -1.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let (mut raw_residual_overflow, request) =
+            fresh_instance(extreme_negative, Some(upper_row_id()), Some(lower_row_id()));
+        raw_residual_overflow
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(2.0, 10.0))
+            .unwrap();
+        assert_atomic_rejection(
+            raw_residual_overflow,
+            &request,
+            "non-finite residual on the ATol-feasible member domain",
+        );
+    }
+
+    #[test]
+    fn rejects_atol_that_weakens_binary_cardinality() {
+        let (instance, request) = mixed_instance();
+        assert_atomic_rejection_with_atol(
+            instance,
+            &request,
+            ATol::new(1.0).unwrap(),
+            "requires ATol < 1",
         );
     }
 
