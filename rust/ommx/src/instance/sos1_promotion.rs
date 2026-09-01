@@ -21,9 +21,8 @@
 
 use super::Instance;
 use crate::{
-    ATol, Bound, Constraint, ConstraintContext, ConstraintID, Equality, Evaluate, Function, Kind,
-    Linear, LinearMonomial, RemovedReason, Sos1Constraint, Sos1ConstraintID, VariableID,
-    VariableIDSet,
+    ATol, Bound, Constraint, ConstraintContext, ConstraintID, Equality, Function, Kind, Linear,
+    LinearMonomial, RemovedReason, Sos1Constraint, Sos1ConstraintID, VariableID, VariableIDSet,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -264,25 +263,6 @@ fn canonical_sos1_big_m_cardinality(
     )))
 }
 
-fn populated_required_ids(
-    function: &Function,
-    dependencies: &crate::AcyclicAssignments,
-) -> VariableIDSet {
-    let mut closure = function.required_ids();
-    let mut pending = closure.iter().copied().collect::<Vec<_>>();
-    while let Some(id) = pending.pop() {
-        let Some(dependency) = dependencies.get(&id) else {
-            continue;
-        };
-        for required_id in dependency.required_ids() {
-            if closure.insert(required_id) {
-                pending.push(required_id);
-            }
-        }
-    }
-    closure
-}
-
 impl Instance {
     /// Promote one validated Big-M selector formulation to SOS1.
     ///
@@ -298,18 +278,16 @@ impl Instance {
     /// - the exact canonical selector-cardinality row;
     /// - absence of every fresh selector from current active solver input,
     ///   except for the claimed formulation rows;
-    /// - absence of every fresh selector from the output objective.
     ///
     /// Rust-side concepts not modeled by the initial Lean semantics are
     /// handled conservatively. Selected semi variables, fixed or dependent
     /// members, fixed binary member bounds, and already fixed/dependent fresh
-    /// selectors are rejected. Removed constraints, named functions,
-    /// dependency RHS expressions, row context, and selector labels remain
-    /// valid history and are preserved unchanged. Direct or
-    /// dependency-transitive output-objective references are rejected because
-    /// dependent reconstruction would change the returned objective value.
-    /// Unrelated nonlinear expressions and unrelated special constraints are
-    /// preserved unchanged.
+    /// selectors are rejected. The output objective, removed constraints,
+    /// named functions, and dependency RHS expressions are outside active
+    /// solver input. They may reference fresh selectors and observe the
+    /// canonical dependent-selector value during evaluation. Row context,
+    /// selector labels, unrelated nonlinear expressions, and unrelated special
+    /// constraints are also preserved unchanged.
     /// Calling this family-specific method is the explicit request to add the
     /// SOS1 capability to the instance; request rejection means only that the
     /// claimed formulation is outside this conservative checker.
@@ -845,26 +823,21 @@ impl Instance {
     }
 
     /// Prove that fresh selectors occur in current active solver input only in
-    /// the formulation rows claimed by the request and do not occur in the
-    /// output objective.
+    /// the formulation rows claimed by the request.
     ///
-    /// Removed rows, named functions, and dependency RHS expressions are not
-    /// solver input. They are intentionally allowed to retain references and
-    /// observe the canonical dependent-selector value during evaluation.
+    /// [`Instance::decision_variable_usage`] is the source of truth for solver
+    /// use. The output objective, removed rows, named functions, and dependency
+    /// RHS expressions are intentionally outside that set; they may retain
+    /// references and observe the canonical dependent-selector value during
+    /// evaluation.
     fn ensure_variables_isolated_for_sos1_promotion(
         &self,
         private_ids: &VariableIDSet,
         relaxed_regular_rows: &BTreeSet<ConstraintID>,
     ) -> crate::Result<()> {
-        let usage = self.decision_variable_usage();
-        let output_objective_ids = self
-            .output_objective()
-            .map(|output| {
-                populated_required_ids(output.function(), &self.decision_variable_dependency)
-            })
-            .unwrap_or_default();
+        let solver_usage = self.decision_variable_usage();
         for &id in private_ids {
-            if let Some(entry) = usage.get(id) {
+            if let Some(entry) = solver_usage.get(id) {
                 if entry.used_in_objective() {
                     crate::bail!({ ?id }, "Fresh SOS1 selector {id:?} is used by the objective");
                 }
@@ -896,13 +869,6 @@ impl Instance {
                         "Fresh SOS1 selector {id:?} is used by active SOS1 constraint {row:?}"
                     );
                 }
-            }
-
-            if output_objective_ids.contains(&id) {
-                crate::bail!(
-                    { ?id },
-                    "Fresh SOS1 selector {id:?} is used by the output objective"
-                );
             }
 
             if self.decision_variable_dependency.get(&id).is_some() {
@@ -954,8 +920,9 @@ fn same_linear_constraint(actual: &Constraint, expected: &Constraint) -> bool {
 mod tests {
     use super::*;
     use crate::{
-        coeff, linear, quadratic, ATol, AcyclicAssignments, DecisionVariable, Function,
-        IndicatorConstraint, ModelingLabel, NamedFunction, OneHotConstraint, RemovedReason, Sense,
+        coeff, linear, quadratic, ATol, AcyclicAssignments, DecisionVariable, DecisionVariableRole,
+        Evaluate, Function, IndicatorConstraint, ModelingLabel, NamedFunction, OneHotConstraint,
+        RemovedReason, Sense,
     };
 
     fn member_binary_id() -> VariableID {
@@ -1951,24 +1918,6 @@ mod tests {
         assert_atomic_rejection(instance, &request, "the objective");
 
         let mut instance = base.clone();
-        instance.output_objective = Some(super::super::OutputObjective::new(
-            Sense::Minimize,
-            Function::from(linear!(10)),
-            false,
-        ));
-        assert_atomic_rejection(instance, &request, "the output objective");
-
-        let mut instance = base.clone();
-        instance.decision_variable_dependency =
-            AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)))]).unwrap();
-        instance.output_objective = Some(super::super::OutputObjective::new(
-            Sense::Minimize,
-            Function::from(linear!(20)),
-            false,
-        ));
-        assert_atomic_rejection(instance, &request, "the output objective");
-
-        let mut instance = base.clone();
         instance
             .add_constraint(
                 Constraint::less_than_or_equal_to_zero(Function::from(linear!(10))),
@@ -2022,7 +1971,7 @@ mod tests {
     }
 
     #[test]
-    fn removed_named_and_dependency_rhs_references_are_preserved() {
+    fn non_solver_references_are_preserved_and_use_the_canonical_selector() {
         let (mut instance, request) = mixed_instance();
 
         let regular_id = instance
@@ -2084,6 +2033,12 @@ mod tests {
             .unwrap();
         instance.decision_variable_dependency =
             AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)))]).unwrap();
+        let output_objective = super::super::OutputObjective::new(
+            Sense::Minimize,
+            (Function::from(linear!(10)) + Function::from(linear!(20))).unwrap(),
+            false,
+        );
+        instance.output_objective = Some(output_objective.clone());
 
         let _ = instance
             .promote_sos1_big_m(&request, ATol::default())
@@ -2102,7 +2057,12 @@ mod tests {
         assert!(instance
             .named_functions()
             .contains_key(&crate::NamedFunctionID::from(0)));
+        assert_eq!(instance.output_objective(), Some(&output_objective));
         assert_eq!(instance.decision_variable_dependency().len(), 2);
+        assert_eq!(
+            instance.decision_variable_role(selector_id()),
+            Some(DecisionVariableRole::Dependent)
+        );
 
         let solution = instance
             .evaluate(
@@ -2112,6 +2072,7 @@ mod tests {
             .unwrap();
         assert_eq!(solution.state().entries[&selector_id().into_inner()], 1.0);
         assert_eq!(solution.state().entries[&unrelated_id().into_inner()], 1.0);
+        assert_eq!(*solution.objective(), 2.0);
     }
 
     #[test]
