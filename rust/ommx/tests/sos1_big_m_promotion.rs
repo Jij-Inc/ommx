@@ -49,8 +49,8 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
         ]),
     )
     .unwrap();
-    let request = Sos1BigMPromotionRequest::new(
-        BTreeMap::from([
+    let request = Sos1BigMPromotionRequest {
+        selector_claims: BTreeMap::from([
             (VariableID::from(0), Sos1BigMSelectorClaim::Reused),
             (
                 VariableID::from(1),
@@ -61,9 +61,9 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
                 },
             ),
         ]),
-        cardinality_id,
-    );
-    assert_eq!(request.selector_claims().len(), 2);
+        cardinality_constraint: cardinality_id,
+    };
+    assert_eq!(request.selector_claims.len(), 2);
 
     let promotion = instance
         .promote_sos1_big_m(&request, Default::default())

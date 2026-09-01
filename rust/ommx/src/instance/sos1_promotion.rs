@@ -63,35 +63,15 @@ pub enum Sos1BigMSelectorClaim {
 ///
 /// Bounds and coefficients are intentionally absent: validation always reads
 /// them from the current [`Instance`]. The request is runtime-only and has no
-/// serialization contract.
+/// serialization contract. All fields are untrusted claims; no
+/// instance-dependent validation occurs until
+/// [`Instance::promote_sos1_big_m`] is called.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sos1BigMPromotionRequest {
-    selector_claims: BTreeMap<VariableID, Sos1BigMSelectorClaim>,
-    cardinality_constraint: ConstraintID,
-}
-
-impl Sos1BigMPromotionRequest {
-    /// Create an untrusted promotion request. No instance-dependent validation
-    /// occurs until [`Instance::promote_sos1_big_m`] is called.
-    pub fn new(
-        selector_claims: BTreeMap<VariableID, Sos1BigMSelectorClaim>,
-        cardinality_constraint: ConstraintID,
-    ) -> Self {
-        Self {
-            selector_claims,
-            cardinality_constraint,
-        }
-    }
-
     /// Claimed member-to-selector roles, keyed by intended SOS1 member ID.
-    pub fn selector_claims(&self) -> &BTreeMap<VariableID, Sos1BigMSelectorClaim> {
-        &self.selector_claims
-    }
-
-    /// Claimed canonical selector-cardinality row.
-    pub fn cardinality_constraint(&self) -> ConstraintID {
-        self.cardinality_constraint
-    }
+    pub selector_claims: BTreeMap<VariableID, Sos1BigMSelectorClaim>,
+    /// ID of the claimed canonical selector-cardinality row.
+    pub cardinality_constraint: ConstraintID,
 }
 
 /// Result of one checked SOS1 Big-M promotion.
@@ -174,6 +154,14 @@ impl Sos1LinkSide {
     }
 
     fn is_required(self, bound: Bound) -> bool {
+        // Let epsilon be the supplied ATol. For a Continuous upper side,
+        // Bound::contains admits values through U + epsilon, while SOS1 still
+        // classifies values through epsilon as zero. Thus an active positive
+        // value exists exactly when U + epsilon > epsilon, i.e. U > 0. The
+        // lower side is symmetric: L - epsilon < -epsilon iff L < 0. Integer
+        // bounds already have integer endpoints and promotion requires
+        // epsilon < 1, so the same exact-sign test detects an available
+        // nonzero integer. No ATol term is needed here because it cancels.
         match self {
             Self::Upper => bound.upper() > 0.0,
             Self::Lower => bound.lower() < 0.0,
@@ -1017,8 +1005,8 @@ mod tests {
             .constraints(constraints)
             .build()
             .unwrap();
-        let request = Sos1BigMPromotionRequest::new(
-            BTreeMap::from([
+        let request = Sos1BigMPromotionRequest {
+            selector_claims: BTreeMap::from([
                 (member_binary_id(), Sos1BigMSelectorClaim::Reused),
                 (
                     member_integer_id(),
@@ -1029,8 +1017,8 @@ mod tests {
                     },
                 ),
             ]),
-            cardinality_row_id(),
-        );
+            cardinality_constraint: cardinality_row_id(),
+        };
         (instance, request)
     }
 
@@ -1061,8 +1049,8 @@ mod tests {
             .constraints(constraints)
             .build()
             .unwrap();
-        let request = Sos1BigMPromotionRequest::new(
-            BTreeMap::from([(
+        let request = Sos1BigMPromotionRequest {
+            selector_claims: BTreeMap::from([(
                 member_integer_id(),
                 Sos1BigMSelectorClaim::Fresh {
                     selector: selector_id(),
@@ -1070,8 +1058,8 @@ mod tests {
                     lower_link: lower_link_id,
                 },
             )]),
-            cardinality_row_id(),
-        );
+            cardinality_constraint: cardinality_row_id(),
+        };
         (instance, request)
     }
 
@@ -1336,13 +1324,13 @@ mod tests {
             )]),
         )
         .unwrap();
-        let request = Sos1BigMPromotionRequest::new(
-            BTreeMap::from([
+        let request = Sos1BigMPromotionRequest {
+            selector_claims: BTreeMap::from([
                 (VariableID::from(3), Sos1BigMSelectorClaim::Reused),
                 (VariableID::from(4), Sos1BigMSelectorClaim::Reused),
             ]),
-            cardinality,
-        );
+            cardinality_constraint: cardinality,
+        };
         let promotion = instance
             .promote_sos1_big_m(&request, ATol::default())
             .unwrap();
@@ -1867,7 +1855,10 @@ mod tests {
     #[test]
     fn rejects_structurally_invalid_requests_without_mutation() {
         let mut empty = Instance::default();
-        let empty_request = Sos1BigMPromotionRequest::new(BTreeMap::new(), ConstraintID::from(0));
+        let empty_request = Sos1BigMPromotionRequest {
+            selector_claims: BTreeMap::new(),
+            cardinality_constraint: ConstraintID::from(0),
+        };
         let before = empty.clone();
         assert!(empty
             .promote_sos1_big_m(&empty_request, ATol::default())
