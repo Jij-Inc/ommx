@@ -49,6 +49,7 @@ Tail prose.
     )
 
     original_parse_myst = generated_extension._parse_myst
+    original_builder = generated_extension._build_callable_signatures
     ommx_extension.setup(None)
     try:
         container = nodes.container()
@@ -65,6 +66,7 @@ Tail prose.
         assert "Tail prose." in container.astext()
     finally:
         setattr(generated_extension, "_parse_myst", original_parse_myst)
+        setattr(generated_extension, "_build_callable_signatures", original_builder)
 
 
 def test_keyword_only_separator_is_restored_from_generated_stub(

@@ -8,6 +8,35 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Incremental constructors for interval-domain variables ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
+
+{class}`~ommx.Instance` can now create every existing interval-domain decision
+variable kind while assigning numeric IDs automatically. In addition to
+{meth}`~ommx.Instance.new_binary`, use
+{meth}`~ommx.Instance.new_integer`,
+{meth}`~ommx.Instance.new_continuous`,
+{meth}`~ommx.Instance.new_semi_integer`, or
+{meth}`~ommx.Instance.new_semi_continuous`:
+
+```python
+from ommx import Instance
+
+instance = Instance.minimize()
+count = instance.new_integer("count", lower=0, upper=10)
+amount = instance.new_continuous("amount", lower=0)
+batch = instance.new_semi_integer("batch", lower=2, upper=10)
+rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
+```
+
+Each method returns an {class}`~ommx.AttachedDecisionVariable` that can be used
+directly in expressions. `name` remains the optional positional argument, while
+`subscripts`, `parameters`, and `description` are keyword-only. The four new
+methods also accept keyword-only `lower` and `upper` bounds. Integer endpoints
+are normalized inward. An integer interval with no integer value raises
+`ValueError`, while a semi-integer interval with no integer value retains its
+zero alternative as the bound `[0, 0]`. See the [Instance user
+guide](../user_guide/instance.md) for the incremental workflow.
+
 ### 🛠 Inclusive `atol` boundaries ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 Absolute-tolerance comparisons now include the exact boundary consistently.

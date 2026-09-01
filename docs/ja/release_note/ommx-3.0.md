@@ -8,6 +8,35 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🆕 区間で定義する決定変数の逐次作成 ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
+
+{class}`~ommx.Instance` が数値IDを自動で割り当てながら、既存の区間で定義する
+すべての決定変数kindを作成できるようになりました。
+{meth}`~ommx.Instance.new_binary` に加えて、
+{meth}`~ommx.Instance.new_integer`、
+{meth}`~ommx.Instance.new_continuous`、
+{meth}`~ommx.Instance.new_semi_integer`、
+{meth}`~ommx.Instance.new_semi_continuous` を利用できます。
+
+```python
+from ommx import Instance
+
+instance = Instance.minimize()
+count = instance.new_integer("count", lower=0, upper=10)
+amount = instance.new_continuous("amount", lower=0)
+batch = instance.new_semi_integer("batch", lower=2, upper=10)
+rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
+```
+
+どのメソッドも式にそのまま利用できる
+{class}`~ommx.AttachedDecisionVariable` を返します。`name` は引き続き省略可能な
+位置引数で、`subscripts`、`parameters`、`description` はキーワード専用です。
+新しい4メソッドでは、`lower` と `upper` もキーワード専用で指定できます。
+Integerの非整数endpointは区間の内側へ正規化されます。
+整数を含まないInteger区間は`ValueError`になりますが、SemiIntegerはゼロの選択肢を
+bound `[0, 0]` として保持します。逐次modeling workflowの詳細は
+[Instance user guide](../user_guide/instance.md) を参照してください。
+
 ### 🛠 境界を含む `atol` 判定 ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 絶対許容誤差の比較は、差がちょうど`atol`となる境界を一貫して含むようになりました。
