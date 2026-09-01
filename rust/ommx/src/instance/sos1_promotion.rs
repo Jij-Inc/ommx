@@ -841,7 +841,7 @@ impl Instance {
     /// Prove that fresh selectors occur in active solver input only in the
     /// regular formulation rows claimed by the request.
     ///
-    /// The active-formulation traversal and its owner-aware `Except` visitor
+    /// The active-formulation traversal and its family-typed `Except` visitor
     /// are the source of truth. [`Instance::decision_variable_usage`] uses the
     /// same visitor with an empty exception set. The output objective, removed
     /// rows, named functions, and dependency RHS expressions are intentionally
@@ -852,11 +852,10 @@ impl Instance {
         private_ids: &VariableIDSet,
         excluded_regular_constraints: &BTreeSet<ConstraintID>,
     ) -> crate::Result<()> {
-        let except = excluded_regular_constraints
-            .iter()
-            .copied()
-            .map(super::analysis::SolverUse::RegularConstraint)
-            .collect();
+        let except = super::analysis::SolverUseExcept {
+            regular_constraints: excluded_regular_constraints.clone(),
+            ..Default::default()
+        };
         let used = super::analysis::used_decision_variable_ids_except(self, &except);
         for &id in private_ids {
             if used.contains(&id) {
