@@ -2,6 +2,7 @@ import importlib
 from pathlib import Path
 
 from docutils import nodes
+from sphinx.addnodes import desc_parameterlist, desc_sig_operator
 
 
 API_DOCS_DIR = Path(__file__).resolve().parents[3] / "docs" / "api"
@@ -64,3 +65,53 @@ Tail prose.
         assert "Tail prose." in container.astext()
     finally:
         setattr(generated_extension, "_parse_myst", original_parse_myst)
+
+
+def test_keyword_only_separator_is_restored_from_generated_stub(
+    monkeypatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(API_DOCS_DIR))
+    generated_extension = importlib.import_module("pyo3_stub_gen_ext")
+    ommx_extension = importlib.import_module("ommx_pyo3_stub_gen_ext")
+
+    type_expr = {"display": "str", "link_target": None, "children": []}
+    signature = {
+        "parameters": [
+            {"name": name, "type_": type_expr, "default": None}
+            for name in (
+                "name",
+                "lower",
+                "upper",
+                "subscripts",
+                "parameters",
+                "description",
+            )
+        ],
+        "return_type": None,
+    }
+
+    original_builder = generated_extension._build_callable_signatures
+    ommx_extension.setup(None)
+    try:
+        signature_node = generated_extension._build_callable_signatures(
+            [signature],
+            "new_integer",
+            "ommx",
+            "ommx.Instance.new_integer",
+            None,
+        )[0]
+        parameter_list = next(signature_node.findall(desc_parameterlist))
+        assert [child.astext() for child in parameter_list.children] == [
+            "name: str",
+            "*",
+            "lower: str",
+            "upper: str",
+            "subscripts: str",
+            "parameters: str",
+            "description: str",
+        ]
+        assert [
+            operator.astext() for operator in parameter_list.findall(desc_sig_operator)
+        ] == ["*"]
+    finally:
+        setattr(generated_extension, "_build_callable_signatures", original_builder)

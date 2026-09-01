@@ -109,6 +109,32 @@ impl Instance {
             None,
         )
     }
+
+    fn add_new_decision_variable(
+        slf: Bound<'_, Self>,
+        variable: ommx::DecisionVariable,
+        name: Option<String>,
+        subscripts: Vec<i64>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let label = ommx::DecisionVariableLabel {
+            name,
+            subscripts,
+            parameters: parameters.into_iter().collect(),
+            description,
+        };
+        let id = {
+            let mut inst = slf.borrow_mut();
+            let id = inst.inner.next_variable_id()?;
+            inst.inner.add_decision_variable(id, variable, label)?;
+            id
+        };
+        Ok(crate::AttachedDecisionVariable::from_instance(
+            slf.unbind(),
+            id,
+        ))
+    }
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -294,8 +320,8 @@ impl Instance {
 
     /// Create an empty minimization instance with a zero objective.
     ///
-    /// Decision variables and constraints can be added incrementally with
-    /// {meth}`new_binary` and {meth}`add_constraint`.
+    /// Decision variables and constraints can be added incrementally with the
+    /// `new_*` methods and {meth}`add_constraint`.
     #[staticmethod]
     pub fn minimize() -> OmmxPyResult<Self> {
         Self::empty_with_sense(Sense::Minimize)
@@ -303,8 +329,8 @@ impl Instance {
 
     /// Create an empty maximization instance with a zero objective.
     ///
-    /// Decision variables and constraints can be added incrementally with
-    /// {meth}`new_binary` and {meth}`add_constraint`.
+    /// Decision variables and constraints can be added incrementally with the
+    /// `new_*` methods and {meth}`add_constraint`.
     #[staticmethod]
     pub fn maximize() -> OmmxPyResult<Self> {
         Self::empty_with_sense(Sense::Maximize)
@@ -490,23 +516,153 @@ impl Instance {
         parameters: HashMap<String, String>,
         description: Option<String>,
     ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
-        let label = ommx::DecisionVariableLabel {
+        Self::add_new_decision_variable(
+            slf,
+            ommx::DecisionVariable::binary(),
             name,
             subscripts,
-            parameters: parameters.into_iter().collect(),
+            parameters,
             description,
-        };
-        let id = {
-            let mut inst = slf.borrow_mut();
-            let id = inst.inner.next_variable_id()?;
-            inst.inner
-                .add_decision_variable(id, ommx::DecisionVariable::binary(), label)?;
-            id
-        };
-        Ok(crate::AttachedDecisionVariable::from_instance(
-            slf.unbind(),
-            id,
-        ))
+        )
+    }
+
+    /// Create and add an integer decision variable with an automatically assigned ID.
+    ///
+    /// The bounds default to `(-inf, inf)` and are normalized inward to integer
+    /// values. Returns an {class}`~ommx.AttachedDecisionVariable` that can be
+    /// used directly in expressions.
+    ///
+    /// **Args:**
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `lower`: Lower bound of the variable.
+    /// - `upper`: Upper bound of the variable.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    ///
+    /// Raises {class}`ValueError` if the bounds are invalid or contain no
+    /// integer value, or if no larger automatic ID can be assigned.
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    pub fn new_integer(
+        slf: Bound<'_, Self>,
+        name: Option<String>,
+        lower: f64,
+        upper: f64,
+        subscripts: Vec<i64>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let variable = ommx::DecisionVariable::new(
+            ommx::Kind::Integer,
+            ommx::Bound::new(lower, upper)?,
+            ommx::ATol::default(),
+        )?;
+        Self::add_new_decision_variable(slf, variable, name, subscripts, parameters, description)
+    }
+
+    /// Create and add a continuous decision variable with an automatically assigned ID.
+    ///
+    /// The bounds default to `(-inf, inf)`. Returns an
+    /// {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+    /// expressions.
+    ///
+    /// **Args:**
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `lower`: Lower bound of the variable.
+    /// - `upper`: Upper bound of the variable.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    ///
+    /// Raises {class}`ValueError` if the bounds are invalid or if no larger
+    /// automatic ID can be assigned.
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    pub fn new_continuous(
+        slf: Bound<'_, Self>,
+        name: Option<String>,
+        lower: f64,
+        upper: f64,
+        subscripts: Vec<i64>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let variable = ommx::DecisionVariable::new(
+            ommx::Kind::Continuous,
+            ommx::Bound::new(lower, upper)?,
+            ommx::ATol::default(),
+        )?;
+        Self::add_new_decision_variable(slf, variable, name, subscripts, parameters, description)
+    }
+
+    /// Create and add a semi-integer decision variable with an automatically assigned ID.
+    ///
+    /// The bounds default to `(-inf, inf)`. Non-integral endpoints are
+    /// normalized inward. Unlike an integer variable, if the interval contains
+    /// no integer, its bound is normalized to `[0, 0]`, preserving the zero
+    /// alternative in the semi-integer domain. Returns an
+    /// {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+    /// expressions.
+    ///
+    /// **Args:**
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `lower`: Lower bound of the variable.
+    /// - `upper`: Upper bound of the variable.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    ///
+    /// Raises {class}`ValueError` if the bounds are invalid or if no larger
+    /// automatic ID can be assigned.
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    pub fn new_semi_integer(
+        slf: Bound<'_, Self>,
+        name: Option<String>,
+        lower: f64,
+        upper: f64,
+        subscripts: Vec<i64>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let variable = ommx::DecisionVariable::new(
+            ommx::Kind::SemiInteger,
+            ommx::Bound::new(lower, upper)?,
+            ommx::ATol::default(),
+        )?;
+        Self::add_new_decision_variable(slf, variable, name, subscripts, parameters, description)
+    }
+
+    /// Create and add a semi-continuous decision variable with an automatically assigned ID.
+    ///
+    /// The bounds default to `(-inf, inf)`. Returns an
+    /// {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+    /// expressions.
+    ///
+    /// **Args:**
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `lower`: Lower bound of the variable.
+    /// - `upper`: Upper bound of the variable.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    ///
+    /// Raises {class}`ValueError` if the bounds are invalid or if no larger
+    /// automatic ID can be assigned.
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    pub fn new_semi_continuous(
+        slf: Bound<'_, Self>,
+        name: Option<String>,
+        lower: f64,
+        upper: f64,
+        subscripts: Vec<i64>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let variable = ommx::DecisionVariable::new(
+            ommx::Kind::SemiContinuous,
+            ommx::Bound::new(lower, upper)?,
+            ommx::ATol::default(),
+        )?;
+        Self::add_new_decision_variable(slf, variable, name, subscripts, parameters, description)
     }
 
     /// Return an {class}`~ommx.AttachedDecisionVariable` bound to the
