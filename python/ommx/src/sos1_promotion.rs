@@ -205,14 +205,16 @@ impl Instance {
     /// and SOS1 insertion atomically. Invalid requests leave the instance
     /// unchanged.
     ///
-    /// ``atol`` parameterizes the local projected-feasibility check and must
-    /// also be used for subsequent state reconstruction and evaluation. If
-    /// omitted, the current default returned by
-    /// {func}`~ommx.get_default_atol` is used.
+    /// ``atol`` parameterizes the local projected-feasibility check, must be
+    /// finite and satisfy ``0 < atol < 1``, and must also be used for subsequent
+    /// state reconstruction and evaluation. If omitted, the current default
+    /// returned by {func}`~ommx.get_default_atol` is used.
     ///
     /// Raises {class}`RuntimeError` when the claimed formulation is invalid for
-    /// the current instance. Invalid ``atol`` values rejected while creating
-    /// the tolerance raise {class}`ValueError`.
+    /// the current instance, including a positive-infinite tolerance or a
+    /// finite ``atol >= 1``.
+    /// Non-positive or NaN values rejected while constructing the tolerance
+    /// raise {class}`ValueError`.
     #[pyo3(signature = (request, *, atol=None))]
     pub fn promote_sos1_big_m(
         &mut self,

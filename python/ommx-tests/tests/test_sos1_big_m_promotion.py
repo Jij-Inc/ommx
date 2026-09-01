@@ -76,3 +76,24 @@ def test_promote_sos1_big_m_rejects_invalid_request_atomically() -> None:
         instance.promote_sos1_big_m(invalid_request)
 
     assert instance.to_v2_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("atol", "error_type"),
+    [
+        (0.0, ValueError),
+        (1.0, RuntimeError),
+        (float("inf"), RuntimeError),
+    ],
+)
+def test_promote_sos1_big_m_rejects_invalid_atol_atomically(
+    atol: float,
+    error_type: type[Exception],
+) -> None:
+    instance, request = mixed_formulation()
+    before = instance.to_v2_bytes()
+
+    with pytest.raises(error_type):
+        instance.promote_sos1_big_m(request, atol=atol)
+
+    assert instance.to_v2_bytes() == before
