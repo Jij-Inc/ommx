@@ -15,11 +15,14 @@
 //! Verified Big-M rows move to the removed collection, and fresh selectors
 //! become dependent variables reconstructed by a composed [`Function`].
 //!
-//! The reusable proof plan remains private and prepares every fallible derived
-//! value before mutation. Commit starts with one batch lifecycle move that
-//! validates every row ID before changing state; the remaining table effects
-//! are infallible. This keeps request rejection atomic without cloning the
-//! whole instance or allowing a checked plan to outlive its source state.
+//! The reusable proof plan remains private and records the invariants that make
+//! every commit effect valid for its source instance. In particular, it proves
+//! that fresh-selector assignments have disjoint targets and cannot introduce a
+//! dependency cycle. Commit starts with one batch lifecycle move that validates
+//! every row ID before changing state. Failure while extending assignments is
+//! therefore an internal plan-invariant violation, not request rejection. This
+//! keeps request rejection atomic without cloning the whole instance or allowing
+//! a checked plan to outlive its source state.
 
 use super::Instance;
 use crate::{
@@ -128,10 +131,30 @@ impl Sos1BigMPromotion {
     }
 }
 
+/// Fully validated, instance-bound plan for an SOS1 Big-M promotion.
+///
+/// # Invariants
+///
+/// This value is constructed only by [`Instance::plan_sos1_big_m_promotion`]
+/// and is applied immediately to the same, otherwise-unmodified [`Instance`].
+/// For every `(member, selector)` in `result.fresh_selectors`:
+///
+/// - `selector` is distinct from every promoted member and every other fresh
+///   selector;
+/// - neither `member` nor `selector` is a target in the existing
+///   `decision_variable_dependency` table;
+/// - the only assignment added during commit is
+///   `selector <- abs(signum(member))`.
+///
+/// Consequently, every new dependency edge starts at a fresh assignment target
+/// and ends at a variable with no outgoing assignment edge. Existing assignment
+/// right-hand sides may reference members or selectors, but those incoming edges
+/// cannot close a cycle. Extending `decision_variable_dependency` during commit
+/// therefore cannot fail; an error there means this plan invariant was broken
+/// and is handled as a panic rather than an invalid-request result.
 #[derive(Debug)]
 struct Sos1BigMPromotionPlan {
     result: Sos1BigMPromotion,
-    dependencies: crate::AcyclicAssignments,
     sos1_constraint: Sos1Constraint,
 }
 
@@ -322,9 +345,10 @@ impl Instance {
     /// On success the verified formulation rows are relaxed, fresh selectors
     /// remain registered as dependent variables, and a new active SOS1
     /// constraint is inserted. The operation is atomic without cloning the
-    /// instance: all fallible derived values are prepared by the private plan,
-    /// and commit begins with a batch row move that validates every active ID
-    /// before mutation.
+    /// instance: all invalid requests are rejected by the private plan, and
+    /// commit begins with a batch row move that validates every active ID before
+    /// mutation. A failure while applying the plan is an internal invariant
+    /// violation rather than a recoverable request error.
     pub fn promote_sos1_big_m(
         &mut self,
         request: &Sos1BigMPromotionRequest,
@@ -332,7 +356,6 @@ impl Instance {
     ) -> crate::Result<Sos1BigMPromotion> {
         let Sos1BigMPromotionPlan {
             result,
-            dependencies,
             sos1_constraint,
         } = self.plan_sos1_big_m_promotion(request, atol)?;
         let removal_reasons = result
@@ -355,11 +378,22 @@ impl Instance {
             .collect();
 
         // This batch move validates every active ID before changing lifecycle
-        // state. All remaining effects consume values prepared by the plan and
-        // cannot return an error.
+        // state. The plan establishes the invariants under which every
+        // remaining storage effect must succeed.
         self.constraint_collection
             .move_active_rows_to_removed_with_reasons(removal_reasons)?;
-        self.decision_variable_dependency = dependencies;
+        self.decision_variable_dependency
+            .extend_disjoint_in_place_atomic(result.fresh_selectors.iter().map(
+                |(&member, &selector)| {
+                    (
+                        selector,
+                        Function::from(crate::linear!(member.into_inner()))
+                            .signum()
+                            .abs(),
+                    )
+                },
+            ))
+            .expect("fresh-selector dependency extension was validated by Sos1BigMPromotionPlan");
         self.sos1_constraint_collection
             .insert_active_with_context(
                 result.sos1_constraint_id,
@@ -537,20 +571,6 @@ impl Instance {
 
         let sos1_constraint_id = self.next_sos1_constraint_id()?;
         let sos1_constraint = Sos1Constraint::new(members.clone())?;
-        let mut dependencies = self
-            .decision_variable_dependency
-            .iter()
-            .map(|(&id, expr)| (id, expr.clone()))
-            .collect::<Vec<_>>();
-        dependencies.extend(fresh_selectors.iter().map(|(&member, &selector)| {
-            (
-                selector,
-                Function::from(crate::linear!(member.into_inner()))
-                    .signum()
-                    .abs(),
-            )
-        }));
-        let dependencies = crate::AcyclicAssignments::new(dependencies)?;
 
         Ok(Sos1BigMPromotionPlan {
             result: Sos1BigMPromotion {
@@ -559,7 +579,6 @@ impl Instance {
                 fresh_selectors,
                 relaxed_constraint_ids,
             },
-            dependencies,
             sos1_constraint,
         })
     }
@@ -1867,6 +1886,32 @@ mod tests {
         );
         assert_atomic_rejection(instance, &collision_request, "collides");
 
+        let duplicate_member = VariableID::from(2);
+        let (mut instance, mut duplicate_selector_request) = mixed_instance();
+        instance
+            .decision_variables
+            .insert(
+                duplicate_member,
+                integer(-1.0, 1.0),
+                Default::default(),
+                None,
+                ATol::default(),
+            )
+            .unwrap();
+        duplicate_selector_request.selector_claims.insert(
+            duplicate_member,
+            Sos1BigMSelectorClaim::Fresh {
+                selector: selector_id(),
+                upper_link: None,
+                lower_link: None,
+            },
+        );
+        assert_atomic_rejection(
+            instance,
+            &duplicate_selector_request,
+            "assigned to more than one member",
+        );
+
         let (instance, mut duplicate_row_request) = mixed_instance();
         duplicate_row_request.cardinality_constraint = upper_row_id();
         assert_atomic_rejection(instance, &duplicate_row_request, "also claimed");
@@ -2062,7 +2107,17 @@ mod tests {
             )
             .unwrap();
         instance.decision_variable_dependency =
-            AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)))]).unwrap();
+            AcyclicAssignments::new([(unrelated_id(), Function::from(linear!(10)).abs())]).unwrap();
+        let dependency_instructions = match instance
+            .decision_variable_dependency
+            .get(&unrelated_id())
+            .unwrap()
+        {
+            Function::Expression(expression) => {
+                crate::function::operation::instructions(expression).as_ptr()
+            }
+            _ => unreachable!("abs creates an Expression"),
+        };
         let output_objective = super::super::OutputObjective::new(
             Sense::Minimize,
             (Function::from(linear!(10)) + Function::from(linear!(20))).unwrap(),
@@ -2089,6 +2144,17 @@ mod tests {
             .contains_key(&crate::NamedFunctionID::from(0)));
         assert_eq!(instance.output_objective(), Some(&output_objective));
         assert_eq!(instance.decision_variable_dependency().len(), 2);
+        let retained_dependency_instructions = match instance
+            .decision_variable_dependency
+            .get(&unrelated_id())
+            .unwrap()
+        {
+            Function::Expression(expression) => {
+                crate::function::operation::instructions(expression).as_ptr()
+            }
+            _ => unreachable!("the existing Expression is preserved"),
+        };
+        assert_eq!(retained_dependency_instructions, dependency_instructions);
         assert_eq!(
             instance.decision_variable_role(selector_id()),
             Some(DecisionVariableRole::Dependent)
