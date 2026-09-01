@@ -10,33 +10,20 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### 🆕 検証付きSOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
 
-Rustが所有する検証付きpromotion APIを
-{meth}`~ommx.Instance.promote_sos1_big_m` としてPythonから利用できるように
-なりました。再利用するselectorとfresh selectorの未信頼なstable ID申請を作り、
-現在の{class}`~ommx.Instance`に検証と適用を委ねます。
+{ref}`SOS1制約 <sos1-constraint>`は、memberのうち高々1つだけが
+非零となる制約です。{ref}`Big-M formulation <sos1-big-m-formulation>`は、
+この条件をbinary selector、memberとselectorのlink制約、およびselectorの
+cardinality制約で表します。
+
+{meth}`~ommx.Instance.promote_sos1_big_m`は、現在の`Instance`がこの
+formulationを持つという申請を受け取ります。これは独立した変形申請であり、
+loweringのrollbackや逆変換ではありません。現在の変数、domain、rowが申請した
+formulationのrowをfirst-classなSOS1制約へ置き換えることを正当化する十分条件を
+満たすことを検証してから、その変形をatomicに適用します。
 
 ```python
-from ommx import (
-    DecisionVariable,
-    Instance,
-    Sense,
-    Sos1BigMPromotionRequest,
-    Sos1BigMSelectorClaim,
-)
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
 
-x = DecisionVariable.binary(0)
-y = DecisionVariable.integer(1, lower=-2, upper=3)
-z = DecisionVariable.binary(10)
-instance = Instance.from_components(
-    sense=Sense.Minimize,
-    objective=0,
-    decision_variables=[x, y, z],
-    constraints={
-        100: y - 3 * z <= 0,
-        101: -y - 2 * z <= 0,
-        102: x + z - 1 <= 0,
-    },
-)
 request = Sos1BigMPromotionRequest(
     selector_claims={
         0: Sos1BigMSelectorClaim.reused(),
@@ -49,25 +36,12 @@ request = Sos1BigMPromotionRequest(
     cardinality_constraint=102,
 )
 promotion = instance.promote_sos1_big_m(request)
-
-assert promotion.members == {0, 1}
-assert promotion.fresh_selectors == {1: 10}
-assert promotion.relaxed_constraint_ids == {100, 101, 102}
 ```
 
-requestにはboundや係数のcopyを含めません。Rustの{class}`~ommx.Instance` ownerが
-現在のdomainとrowを読み、指定した`atol`におけるcanonicalなcardinality / linkの
-semanticsとfresh selectorのisolationを検証し、申請全体が正しい場合に限ってcommitします。
-成功すると、検証済みのregular rowはremoved historyへ移動し、activeなSOS1 constraintが
-追加されます。fresh selectorはmemberから再構築するdependent variableとして保持されます。
-read-onlyな{class}`~ommx.Sos1BigMPromotion` resultから、追加したSOS1 ID、member、
-fresh selector、relaxしたrow IDを参照できます。
-
-semanticsが不正な申請は`RuntimeError`となり、Instanceは変更されません。toleranceは有限で
-`0 < atol < 1`を満たす必要があります。非正値とNaNは`ValueError`、正の無限大と有限な
-`1`以上の値は検証付きpromotionによって`RuntimeError`として拒否されます。後続のstate
-reconstructionとevaluationにも同じtoleranceを使用してください。同値性の保証は申請した
-formulationと指定したtoleranceに対して局所的で、無関係なremoved historyはそのまま保持されます。
+申請したformulationの検証に失敗すると`RuntimeError`となり、`Instance`は
+変更されません。戻り値の{class}`~ommx.Sos1BigMPromotion`から
+`sos1_constraint_id`、`members`、`fresh_selectors`、
+`relaxed_constraint_ids`を参照できます。
 
 ### 🆕 区間で定義する決定変数の逐次作成 ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
 
