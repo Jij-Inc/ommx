@@ -15,9 +15,11 @@
 //! Verified Big-M rows move to the removed collection, and fresh selectors
 //! become dependent variables reconstructed by a composed [`Function`].
 //!
-//! The reusable proof plan remains private and is applied only to a staged
-//! clone. This keeps request rejection atomic and prevents a checked plan from
-//! being reused after the instance changes.
+//! The reusable proof plan remains private and prepares every fallible derived
+//! value before mutation. Commit starts with one batch lifecycle move that
+//! validates every row ID before changing state; the remaining table effects
+//! are infallible. This keeps request rejection atomic without cloning the
+//! whole instance or allowing a checked plan to outlive its source state.
 
 use super::Instance;
 use crate::{
@@ -129,6 +131,8 @@ impl Sos1BigMPromotion {
 #[derive(Debug)]
 struct Sos1BigMPromotionPlan {
     result: Sos1BigMPromotion,
+    dependencies: crate::AcyclicAssignments,
+    sos1_constraint: Sos1Constraint,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -317,59 +321,54 @@ impl Instance {
     ///
     /// On success the verified formulation rows are relaxed, fresh selectors
     /// remain registered as dependent variables, and a new active SOS1
-    /// constraint is inserted. The operation is atomic: every change is
-    /// applied to a staged clone before replacing `self`.
+    /// constraint is inserted. The operation is atomic without cloning the
+    /// instance: all fallible derived values are prepared by the private plan,
+    /// and commit begins with a batch row move that validates every active ID
+    /// before mutation.
     pub fn promote_sos1_big_m(
         &mut self,
         request: &Sos1BigMPromotionRequest,
         atol: ATol,
     ) -> crate::Result<Sos1BigMPromotion> {
-        let plan = self.plan_sos1_big_m_promotion(request, atol)?;
-        let mut staged = self.clone();
-        for &id in &plan.result.relaxed_constraint_ids {
-            staged.constraint_collection.relax(
-                id,
-                RemovedReason {
-                    reason: "promoted validated SOS1 Big-M formulation".to_string(),
-                    parameters: [(
-                        "sos1_constraint_id".to_string(),
-                        plan.result.sos1_constraint_id.to_string(),
-                    )]
-                    .into_iter()
-                    .collect(),
-                },
-            )?;
-        }
-
-        let mut dependencies = staged
-            .decision_variable_dependency
+        let Sos1BigMPromotionPlan {
+            result,
+            dependencies,
+            sos1_constraint,
+        } = self.plan_sos1_big_m_promotion(request, atol)?;
+        let removal_reasons = result
+            .relaxed_constraint_ids
             .iter()
-            .map(|(&id, expr)| (id, expr.clone()))
-            .collect::<Vec<_>>();
-        dependencies.extend(
-            plan.result
-                .fresh_selectors
-                .iter()
-                .map(|(&member, &selector)| {
-                    (
-                        selector,
-                        Function::from(crate::linear!(member.into_inner()))
-                            .signum()
-                            .abs(),
-                    )
-                }),
-        );
-        staged.decision_variable_dependency = crate::AcyclicAssignments::new(dependencies)?;
-        staged
-            .sos1_constraint_collection
-            .insert_active_with_context(
-                plan.result.sos1_constraint_id,
-                Sos1Constraint::new(plan.result.members.clone())?,
-                ConstraintContext::default(),
-            )?;
+            .map(|&id| {
+                (
+                    id,
+                    RemovedReason {
+                        reason: "promoted validated SOS1 Big-M formulation".to_string(),
+                        parameters: [(
+                            "sos1_constraint_id".to_string(),
+                            result.sos1_constraint_id.to_string(),
+                        )]
+                        .into_iter()
+                        .collect(),
+                    },
+                )
+            })
+            .collect();
 
-        *self = staged;
-        Ok(plan.result)
+        // This batch move validates every active ID before changing lifecycle
+        // state. All remaining effects consume values prepared by the plan and
+        // cannot return an error.
+        self.constraint_collection
+            .move_active_rows_to_removed_with_reasons(removal_reasons)?;
+        self.decision_variable_dependency = dependencies;
+        self.sos1_constraint_collection
+            .insert_active_with_context(
+                result.sos1_constraint_id,
+                sos1_constraint,
+                ConstraintContext::default(),
+            )
+            .expect("SOS1 constraint ID and member IDs were validated by the promotion plan");
+
+        Ok(result)
     }
 
     fn plan_sos1_big_m_promotion(
@@ -537,6 +536,21 @@ impl Instance {
         )?;
 
         let sos1_constraint_id = self.next_sos1_constraint_id()?;
+        let sos1_constraint = Sos1Constraint::new(members.clone())?;
+        let mut dependencies = self
+            .decision_variable_dependency
+            .iter()
+            .map(|(&id, expr)| (id, expr.clone()))
+            .collect::<Vec<_>>();
+        dependencies.extend(fresh_selectors.iter().map(|(&member, &selector)| {
+            (
+                selector,
+                Function::from(crate::linear!(member.into_inner()))
+                    .signum()
+                    .abs(),
+            )
+        }));
+        let dependencies = crate::AcyclicAssignments::new(dependencies)?;
 
         Ok(Sos1BigMPromotionPlan {
             result: Sos1BigMPromotion {
@@ -545,6 +559,8 @@ impl Instance {
                 fresh_selectors,
                 relaxed_constraint_ids,
             },
+            dependencies,
+            sos1_constraint,
         })
     }
 
@@ -822,53 +838,30 @@ impl Instance {
         Ok(())
     }
 
-    /// Prove that fresh selectors occur in current active solver input only in
-    /// the formulation rows claimed by the request.
+    /// Prove that fresh selectors occur in active solver input only in the
+    /// regular formulation rows claimed by the request.
     ///
-    /// [`Instance::decision_variable_usage`] is the source of truth for solver
-    /// use. The output objective, removed rows, named functions, and dependency
-    /// RHS expressions are intentionally outside that set; they may retain
-    /// references and observe the canonical dependent-selector value during
-    /// evaluation.
+    /// The shared exclusion-aware solver-use visitor is the source of truth.
+    /// [`Instance::decision_variable_usage`] uses the same visitor with no
+    /// exclusions. The output objective, removed rows, named functions, and
+    /// dependency RHS expressions are intentionally outside that set; they may
+    /// retain references and observe the canonical dependent-selector value
+    /// during evaluation.
     fn ensure_variables_isolated_for_sos1_promotion(
         &self,
         private_ids: &VariableIDSet,
-        relaxed_regular_rows: &BTreeSet<ConstraintID>,
+        excluded_regular_constraints: &BTreeSet<ConstraintID>,
     ) -> crate::Result<()> {
-        let solver_usage = self.decision_variable_usage();
+        let used = super::analysis::used_decision_variable_ids_excluding_regular_constraints(
+            self,
+            excluded_regular_constraints,
+        );
         for &id in private_ids {
-            if let Some(entry) = solver_usage.get(id) {
-                if entry.used_in_objective() {
-                    crate::bail!({ ?id }, "Fresh SOS1 selector {id:?} is used by the objective");
-                }
-                if let Some(row) = entry
-                    .used_in_regular_constraints()
-                    .difference(relaxed_regular_rows)
-                    .next()
-                {
-                    crate::bail!(
-                        { ?id, ?row },
-                        "Fresh SOS1 selector {id:?} is used by retained active regular constraint {row:?}"
-                    );
-                }
-                if let Some(row) = entry.used_in_indicator_constraints().iter().next() {
-                    crate::bail!(
-                        { ?id, ?row },
-                        "Fresh SOS1 selector {id:?} is used by active Indicator constraint {row:?}"
-                    );
-                }
-                if let Some(row) = entry.used_in_one_hot_constraints().iter().next() {
-                    crate::bail!(
-                        { ?id, ?row },
-                        "Fresh SOS1 selector {id:?} is used by active OneHot constraint {row:?}"
-                    );
-                }
-                if let Some(row) = entry.used_in_sos1_constraints().iter().next() {
-                    crate::bail!(
-                        { ?id, ?row },
-                        "Fresh SOS1 selector {id:?} is used by active SOS1 constraint {row:?}"
-                    );
-                }
+            if used.contains(&id) {
+                crate::bail!(
+                    { ?id },
+                    "Fresh SOS1 selector {id:?} is used by active solver input outside the claimed formulation rows"
+                );
             }
 
             if self.decision_variable_dependency.get(&id).is_some() {
@@ -1087,6 +1080,10 @@ mod tests {
     #[test]
     fn promotes_mixed_formulation_and_retains_history() {
         let (mut instance, request) = mixed_instance();
+        assert_eq!(
+            instance.decision_variable_role(selector_id()),
+            Some(DecisionVariableRole::Used)
+        );
         let promotion = instance
             .promote_sos1_big_m(&request, ATol::default())
             .unwrap();
@@ -1105,6 +1102,10 @@ mod tests {
             &BTreeSet::from([upper_row_id(), lower_row_id(), cardinality_row_id()])
         );
         assert!(instance.decision_variables().contains_key(&selector_id()));
+        assert_eq!(
+            instance.decision_variable_role(selector_id()),
+            Some(DecisionVariableRole::Dependent)
+        );
         assert!(instance.constraints().is_empty());
         assert_eq!(instance.removed_constraints().len(), 3);
         assert!(instance
@@ -1871,7 +1872,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_selector_labels_and_relaxed_row_context() {
+    fn preserves_selector_labels_and_relaxed_row_context_without_cloning_instance() {
         let (mut instance, request) = mixed_instance();
         instance
             .set_variable_label(
@@ -1894,6 +1895,18 @@ mod tests {
                 },
             )
             .unwrap();
+        // A whole-Instance staging clone would duplicate these owned strings.
+        // Their allocation identity guards the plan-first, clone-free commit.
+        let selector_label_ptr = instance
+            .variable_labels()
+            .name(selector_id())
+            .unwrap()
+            .as_ptr();
+        let link_label_ptr = instance
+            .constraint_context()
+            .name(upper_row_id())
+            .unwrap()
+            .as_ptr();
         let _ = instance
             .promote_sos1_big_m(&request, ATol::default())
             .unwrap();
@@ -1906,6 +1919,22 @@ mod tests {
             instance.constraint_context().name(upper_row_id()),
             Some("user_link")
         );
+        assert_eq!(
+            instance
+                .variable_labels()
+                .name(selector_id())
+                .unwrap()
+                .as_ptr(),
+            selector_label_ptr
+        );
+        assert_eq!(
+            instance
+                .constraint_context()
+                .name(upper_row_id())
+                .unwrap()
+                .as_ptr(),
+            link_label_ptr
+        );
         assert!(instance.removed_constraints().contains_key(&upper_row_id()));
     }
 
@@ -1915,7 +1944,7 @@ mod tests {
 
         let mut instance = base.clone();
         instance.set_objective(Function::from(linear!(10))).unwrap();
-        assert_atomic_rejection(instance, &request, "the objective");
+        assert_atomic_rejection(instance, &request, "active solver input");
 
         let mut instance = base.clone();
         instance
@@ -1924,7 +1953,7 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
-        assert_atomic_rejection(instance, &request, "retained active regular");
+        assert_atomic_rejection(instance, &request, "active solver input");
 
         let mut instance = base.clone();
         instance
@@ -1937,7 +1966,7 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
-        assert_atomic_rejection(instance, &request, "active Indicator");
+        assert_atomic_rejection(instance, &request, "active solver input");
 
         let mut instance = base.clone();
         instance
@@ -1946,7 +1975,7 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
-        assert_atomic_rejection(instance, &request, "active OneHot");
+        assert_atomic_rejection(instance, &request, "active solver input");
 
         let mut instance = base.clone();
         instance
@@ -1955,7 +1984,7 @@ mod tests {
                 Default::default(),
             )
             .unwrap();
-        assert_atomic_rejection(instance, &request, "active SOS1");
+        assert_atomic_rejection(instance, &request, "active solver input");
 
         let mut instance = base.clone();
         instance.decision_variable_dependency =

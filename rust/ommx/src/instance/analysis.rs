@@ -114,48 +114,9 @@ pub struct DecisionVariableUsage<'a> {
 
 impl<'a> DecisionVariableUsage<'a> {
     fn new(instance: &'a Instance) -> Self {
-        let mut by_used_variable: BTreeMap<VariableID, DecisionVariableUsageEntry> =
-            BTreeMap::new();
-
-        for id in instance.objective().required_ids() {
-            usage_entry_mut(&mut by_used_variable, id).used_in_objective = true;
-        }
-
-        for (constraint_id, constraint) in instance.constraints() {
-            for id in constraint.function().required_ids() {
-                usage_entry_mut(&mut by_used_variable, id)
-                    .used_in_regular_constraints
-                    .insert(*constraint_id);
-            }
-        }
-
-        for (constraint_id, constraint) in instance.indicator_constraints() {
-            for id in constraint.required_ids() {
-                usage_entry_mut(&mut by_used_variable, id)
-                    .used_in_indicator_constraints
-                    .insert(*constraint_id);
-            }
-        }
-
-        for (constraint_id, constraint) in instance.one_hot_constraints() {
-            for id in constraint.required_ids() {
-                usage_entry_mut(&mut by_used_variable, id)
-                    .used_in_one_hot_constraints
-                    .insert(*constraint_id);
-            }
-        }
-
-        for (constraint_id, constraint) in instance.sos1_constraints() {
-            for id in constraint.required_ids() {
-                usage_entry_mut(&mut by_used_variable, id)
-                    .used_in_sos1_constraints
-                    .insert(*constraint_id);
-            }
-        }
-
         Self {
             instance,
-            by_used_variable,
+            by_used_variable: collect_decision_variable_usage(instance),
         }
     }
 
@@ -279,6 +240,101 @@ impl<'a> DecisionVariableUsage<'a> {
     }
 }
 
+/// One active solver-input owner reported by the shared usage visitor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SolverUse {
+    /// The active objective.
+    Objective,
+    /// An active regular constraint.
+    RegularConstraint(ConstraintID),
+    /// An active Indicator constraint.
+    IndicatorConstraint(IndicatorConstraintID),
+    /// An active OneHot constraint.
+    OneHotConstraint(OneHotConstraintID),
+    /// An active SOS1 constraint.
+    Sos1Constraint(Sos1ConstraintID),
+}
+
+/// Visit every solver-input use while omitting selected active regular rows.
+/// The containing `analysis` module is private; this is an internal source of
+/// truth shared with transformations that must reason about a planned removal.
+pub fn visit_solver_uses(
+    instance: &Instance,
+    excluded_regular_constraints: &BTreeSet<ConstraintID>,
+    mut visit: impl FnMut(VariableID, SolverUse),
+) {
+    for id in instance.objective().required_ids() {
+        visit(id, SolverUse::Objective);
+    }
+
+    for (constraint_id, constraint) in instance.constraints() {
+        if excluded_regular_constraints.contains(constraint_id) {
+            continue;
+        }
+        for id in constraint.function().required_ids() {
+            visit(id, SolverUse::RegularConstraint(*constraint_id));
+        }
+    }
+
+    for (constraint_id, constraint) in instance.indicator_constraints() {
+        for id in constraint.required_ids() {
+            visit(id, SolverUse::IndicatorConstraint(*constraint_id));
+        }
+    }
+
+    for (constraint_id, constraint) in instance.one_hot_constraints() {
+        for id in constraint.required_ids() {
+            visit(id, SolverUse::OneHotConstraint(*constraint_id));
+        }
+    }
+
+    for (constraint_id, constraint) in instance.sos1_constraints() {
+        for id in constraint.required_ids() {
+            visit(id, SolverUse::Sos1Constraint(*constraint_id));
+        }
+    }
+}
+
+fn collect_decision_variable_usage(
+    instance: &Instance,
+) -> BTreeMap<VariableID, DecisionVariableUsageEntry> {
+    let mut by_used_variable: BTreeMap<VariableID, DecisionVariableUsageEntry> = BTreeMap::new();
+    visit_solver_uses(instance, &BTreeSet::new(), |id, owner| {
+        let entry = usage_entry_mut(&mut by_used_variable, id);
+        match owner {
+            SolverUse::Objective => entry.used_in_objective = true,
+            SolverUse::RegularConstraint(constraint_id) => {
+                entry.used_in_regular_constraints.insert(constraint_id);
+            }
+            SolverUse::IndicatorConstraint(constraint_id) => {
+                entry.used_in_indicator_constraints.insert(constraint_id);
+            }
+            SolverUse::OneHotConstraint(constraint_id) => {
+                entry.used_in_one_hot_constraints.insert(constraint_id);
+            }
+            SolverUse::Sos1Constraint(constraint_id) => {
+                entry.used_in_sos1_constraints.insert(constraint_id);
+            }
+        }
+    });
+
+    by_used_variable
+}
+
+/// Collect solver-used decision variables while omitting selected active
+/// regular constraints. The ordinary usage API passes an empty exclusion set
+/// through the same collector.
+pub fn used_decision_variable_ids_excluding_regular_constraints(
+    instance: &Instance,
+    excluded_regular_constraints: &BTreeSet<ConstraintID>,
+) -> VariableIDSet {
+    let mut used = VariableIDSet::new();
+    visit_solver_uses(instance, excluded_regular_constraints, |id, _owner| {
+        used.insert(id);
+    });
+    used
+}
+
 impl Instance {
     pub fn binary_ids(&self) -> VariableIDSet {
         self.decision_variables
@@ -294,14 +350,7 @@ impl Instance {
     }
 
     pub fn used_decision_variable_ids(&self) -> VariableIDSet {
-        let mut used = self.objective.required_ids();
-        used.extend(self.constraint_collection.required_ids());
-        used.extend(self.indicator_constraint_collection.required_ids());
-        used.extend(self.one_hot_constraint_collection.required_ids());
-        used.extend(self.sos1_constraint_collection.required_ids());
-        // Note: named_functions are intentionally excluded from the "used" set.
-        // They are auxiliary quantities that can reference fixed/dependent variables.
-        used
+        used_decision_variable_ids_excluding_regular_constraints(self, &BTreeSet::new())
     }
 
     pub fn used_decision_variables(&self) -> BTreeMap<VariableID, &DecisionVariable> {
@@ -488,7 +537,58 @@ mod tests {
     };
     use maplit::hashmap;
     use proptest::prelude::*;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    #[test]
+    fn excluded_regular_rows_use_the_shared_solver_usage_visitor() {
+        let instance = Instance::new(
+            Sense::Minimize,
+            crate::Function::from(linear!(0)),
+            BTreeMap::from([
+                (VariableID::from(0), crate::DecisionVariable::continuous()),
+                (VariableID::from(1), crate::DecisionVariable::continuous()),
+                (VariableID::from(2), crate::DecisionVariable::continuous()),
+            ]),
+            BTreeMap::from([
+                (
+                    ConstraintID::from(0),
+                    Constraint::equal_to_zero(crate::Function::from(linear!(1))),
+                ),
+                (
+                    ConstraintID::from(1),
+                    Constraint::equal_to_zero(crate::Function::from(
+                        (linear!(1) + linear!(2)).unwrap(),
+                    )),
+                ),
+            ]),
+        )
+        .unwrap();
+
+        let ordinary = instance.used_decision_variable_ids();
+        assert_eq!(ordinary, instance.decision_variable_usage().used());
+        assert_eq!(
+            ordinary,
+            VariableIDSet::from([
+                VariableID::from(0),
+                VariableID::from(1),
+                VariableID::from(2),
+            ])
+        );
+        assert_eq!(
+            used_decision_variable_ids_excluding_regular_constraints(
+                &instance,
+                &BTreeSet::from([ConstraintID::from(1)]),
+            ),
+            VariableIDSet::from([VariableID::from(0), VariableID::from(1)])
+        );
+        assert_eq!(
+            used_decision_variable_ids_excluding_regular_constraints(
+                &instance,
+                &BTreeSet::from([ConstraintID::from(0), ConstraintID::from(1)]),
+            ),
+            VariableIDSet::from([VariableID::from(0)])
+        );
+    }
 
     #[test]
     fn test_decision_variable_usage_display() {

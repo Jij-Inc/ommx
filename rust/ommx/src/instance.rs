@@ -33,7 +33,7 @@ mod stats;
 mod substitute;
 mod unary_encode;
 
-pub use analysis::*;
+pub use analysis::{DecisionVariableRole, DecisionVariableUsage, DecisionVariableUsageEntry};
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
