@@ -3303,7 +3303,7 @@ class Instance:
         name: typing.Optional[builtins.str] = None,
         *,
         subscripts: typing.Sequence[builtins.int] = [],
-        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        parameters: collections.abc.Mapping[str, str] = {},
         description: typing.Optional[builtins.str] = None,
     ) -> AttachedDecisionVariable:
         r"""
@@ -3330,15 +3330,18 @@ class Instance:
         lower: builtins.float = float("-inf"),
         upper: builtins.float = float("inf"),
         subscripts: typing.Sequence[builtins.int] = [],
-        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        parameters: collections.abc.Mapping[str, str] = {},
         description: typing.Optional[builtins.str] = None,
+        atol: typing.Optional[builtins.float] = None,
     ) -> AttachedDecisionVariable:
         r"""
         Create and add an integer decision variable with an automatically assigned ID.
 
-        The bounds default to `(-inf, inf)` and are normalized inward to integer
-        values. Returns an {class}`~ommx.AttachedDecisionVariable` that can be
-        used directly in expressions.
+        The bounds default to `(-inf, inf)` and are normalized to integer
+        endpoints under `atol`: a finite lower endpoint is rounded up after
+        subtracting `atol`, and a finite upper endpoint is rounded down after
+        adding `atol`. Returns an {class}`~ommx.AttachedDecisionVariable` that
+        can be used directly in expressions.
 
         **Args:**
         - `name`: Optional human-readable modeling name. Names need not be unique.
@@ -3347,10 +3350,13 @@ class Instance:
         - `subscripts`: Optional integer indices from the source model.
         - `parameters`: Optional string-valued indices from the source model.
         - `description`: Optional human-readable description.
+        - `atol`: Absolute tolerance for integer-bound normalization. If
+          omitted, the current default returned by
+          {func}`~ommx.get_default_atol` is used.
 
-        Raises {class}`ValueError` if the bounds are invalid or contain no
-        integer value, or if no larger automatic ID can be assigned. On failure,
-        no variable or modeling label is added to the instance.
+        Raises {class}`ValueError` if the bounds are invalid or normalization
+        yields no integer value, or if no larger automatic ID can be assigned.
+        On failure, no variable or modeling label is added to the instance.
         """
     def new_continuous(
         self,
@@ -3359,7 +3365,7 @@ class Instance:
         lower: builtins.float = float("-inf"),
         upper: builtins.float = float("inf"),
         subscripts: typing.Sequence[builtins.int] = [],
-        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        parameters: collections.abc.Mapping[str, str] = {},
         description: typing.Optional[builtins.str] = None,
     ) -> AttachedDecisionVariable:
         r"""
@@ -3388,16 +3394,18 @@ class Instance:
         lower: builtins.float = float("-inf"),
         upper: builtins.float = float("inf"),
         subscripts: typing.Sequence[builtins.int] = [],
-        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        parameters: collections.abc.Mapping[str, str] = {},
         description: typing.Optional[builtins.str] = None,
+        atol: typing.Optional[builtins.float] = None,
     ) -> AttachedDecisionVariable:
         r"""
         Create and add a semi-integer decision variable with an automatically assigned ID.
 
         The bounds default to `(-inf, inf)`. Non-integral endpoints are
-        normalized inward. Unlike an integer variable, if the interval contains
-        no integer, its bound is normalized to `[0, 0]`, preserving the zero
-        alternative in the semi-integer domain. Returns an
+        normalized under `atol` using the same endpoint rule as
+        {meth}`~ommx.Instance.new_integer`. Unlike an integer variable, if the
+        normalized interval contains no integer, its bound becomes `[0, 0]`,
+        preserving the zero alternative in the semi-integer domain. Returns an
         {class}`~ommx.AttachedDecisionVariable` that can be used directly in
         expressions.
 
@@ -3408,6 +3416,9 @@ class Instance:
         - `subscripts`: Optional integer indices from the source model.
         - `parameters`: Optional string-valued indices from the source model.
         - `description`: Optional human-readable description.
+        - `atol`: Absolute tolerance for integer-bound normalization. If
+          omitted, the current default returned by
+          {func}`~ommx.get_default_atol` is used.
 
         Raises {class}`ValueError` if the bounds are invalid or if no larger
         automatic ID can be assigned. On failure, no variable or modeling label
@@ -3420,7 +3431,7 @@ class Instance:
         lower: builtins.float = float("-inf"),
         upper: builtins.float = float("inf"),
         subscripts: typing.Sequence[builtins.int] = [],
-        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        parameters: collections.abc.Mapping[str, str] = {},
         description: typing.Optional[builtins.str] = None,
     ) -> AttachedDecisionVariable:
         r"""

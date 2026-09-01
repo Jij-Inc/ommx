@@ -79,10 +79,15 @@ assert_eq!(instance.fixed_decision_variable_value(id), Some(2.0));
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-The bound is normalized for the selected kind, and the row, label, and fixed
-value are committed together under the returned ID. Invalid bounds,
-inconsistent fixed values, and exhausted IDs return
-[`DecisionVariableError`](crate::DecisionVariableError) without leaving a
-partially created variable in the instance. Use
+For `Integer` and `SemiInteger`, finite endpoints are normalized to
+`ceil(lower - atol)` and `floor(upper + atol)`. If that normalized interval
+contains no integer, `new_integer` returns an error, while `new_semi_integer`
+uses `[0, 0]` to preserve the semi-integer zero alternative.
+
+The normalized row, label, and fixed value are committed together under the
+returned ID. Invalid bounds, inconsistent fixed values, and a maximum existing
+decision-variable ID of `u64::MAX` that prevents assignment of a larger
+automatic ID return [`DecisionVariableError`](crate::DecisionVariableError)
+without leaving a partially created variable in the instance. Use
 [`Instance::new_decision_variable`](crate::Instance::new_decision_variable)
 when the kind is selected dynamically.

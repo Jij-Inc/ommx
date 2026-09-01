@@ -31,17 +31,20 @@ rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
 Each method returns an {class}`~ommx.AttachedDecisionVariable` that can be used
 directly in expressions. `name` remains the optional positional argument, while
 `subscripts`, `parameters`, and `description` are keyword-only. The four new
-methods also accept keyword-only `lower` and `upper` bounds. Integer endpoints
-are normalized inward. An integer interval with no integer value raises
-`ValueError`, while a semi-integer interval with no integer value retains its
-zero alternative as the bound `[0, 0]`. See the [Instance user
+methods also accept keyword-only `lower` and `upper` bounds. `new_integer` and
+`new_semi_integer` additionally accept keyword-only `atol`; omitting it uses the
+current default returned by {func}`~ommx.get_default_atol`. For these two
+methods, a finite lower endpoint is normalized to `ceil(lower - atol)` and a
+finite upper endpoint to `floor(upper + atol)`. If the normalized interval has
+no integer, `new_integer` raises `ValueError`, while `new_semi_integer` retains
+its zero alternative as `[0, 0]`. See the [Instance user
 guide](../user_guide/instance.md) for the incremental workflow.
 
-Each Python constructor delegates variable creation to one atomic Rust SDK
-owner operation: kind and bound normalization, automatic ID allocation, and
-row and modeling-label insertion are validated before the
-{class}`~ommx.Instance` changes. Invalid bounds and exhausted IDs leave no
-partial variable or label behind.
+Each constructor validates the complete variable definition before committing
+the row and modeling label together to the {class}`~ommx.Instance`. An invalid
+bound or tolerance, or a maximum existing decision-variable ID of `2**64 - 1`
+that prevents assignment of a larger automatic ID, leaves no partial variable
+or label behind.
 
 ### 🛠 Inclusive `atol` boundaries ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 

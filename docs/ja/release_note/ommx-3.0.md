@@ -32,15 +32,18 @@ rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
 {class}`~ommx.AttachedDecisionVariable` を返します。`name` は引き続き省略可能な
 位置引数で、`subscripts`、`parameters`、`description` はキーワード専用です。
 新しい4メソッドでは、`lower` と `upper` もキーワード専用で指定できます。
-Integerの非整数endpointは区間の内側へ正規化されます。
-整数を含まないInteger区間は`ValueError`になりますが、SemiIntegerはゼロの選択肢を
-bound `[0, 0]` として保持します。逐次modeling workflowの詳細は
+さらに `new_integer` と `new_semi_integer` はキーワード専用の `atol` を受け取り、
+省略時には {func}`~ommx.get_default_atol` が返す現在の既定値を使います。この2メソッドでは、
+有限な lower endpoint を `ceil(lower - atol)`、有限な upper endpoint を
+`floor(upper + atol)` へ正規化します。正規化後の区間に整数がない場合、`new_integer` は
+`ValueError` を返し、`new_semi_integer` はゼロの選択肢を `[0, 0]` として保持します。
+逐次modeling workflowの詳細は
 [Instance user guide](../user_guide/instance.md) を参照してください。
 
-各Python constructorは、Rust SDKが所有する1回のatomicな変数作成操作を呼び出します。
-kindとboundの正規化、IDの自動割り当て、rowとmodeling labelの挿入をすべて検証してから
-{class}`~ommx.Instance` を変更します。不正なboundやIDの枯渇が発生しても、変数や
-labelの一部だけが残ることはありません。
+各constructorは決定変数の定義全体を検証してから、rowとmodeling labelをまとめて
+{class}`~ommx.Instance` へ追加します。boundまたはtoleranceが不正な場合や、既存の
+決定変数IDの最大値が `2**64 - 1` で、それより大きい自動IDを割り当てられない場合も、
+変数やlabelの一部だけが残ることはありません。
 
 ### 🛠 境界を含む `atol` 判定 ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 

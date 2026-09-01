@@ -10995,7 +10995,7 @@
             },
             {
               "name": "new_integer",
-              "doc": "Create and add an integer decision variable with an automatically assigned ID.\n\nThe bounds default to `(-inf, inf)` and are normalized inward to integer\nvalues. Returns an {class}`~ommx.AttachedDecisionVariable` that can be\nused directly in expressions.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `lower`: Lower bound of the variable.\n- `upper`: Upper bound of the variable.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n\nRaises {class}`ValueError` if the bounds are invalid or contain no\ninteger value, or if no larger automatic ID can be assigned. On failure,\nno variable or modeling label is added to the instance.",
+              "doc": "Create and add an integer decision variable with an automatically assigned ID.\n\nThe bounds default to `(-inf, inf)` and are normalized to integer\nendpoints under `atol`: a finite lower endpoint is rounded up after\nsubtracting `atol`, and a finite upper endpoint is rounded down after\nadding `atol`. Returns an {class}`~ommx.AttachedDecisionVariable` that\ncan be used directly in expressions.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `lower`: Lower bound of the variable.\n- `upper`: Upper bound of the variable.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n- `atol`: Absolute tolerance for integer-bound normalization. If\n  omitted, the current default returned by\n  {func}`~ommx.get_default_atol` is used.\n\nRaises {class}`ValueError` if the bounds are invalid or normalization\nyields no integer value, or if no larger automatic ID can be assigned.\nOn failure, no variable or modeling label is added to the instance.",
               "signatures": [
                 {
                   "parameters": [
@@ -11090,6 +11090,24 @@
                         "children": [
                           {
                             "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
                             "link_target": null,
                             "children": []
                           }
@@ -11231,7 +11249,7 @@
             },
             {
               "name": "new_semi_integer",
-              "doc": "Create and add a semi-integer decision variable with an automatically assigned ID.\n\nThe bounds default to `(-inf, inf)`. Non-integral endpoints are\nnormalized inward. Unlike an integer variable, if the interval contains\nno integer, its bound is normalized to `[0, 0]`, preserving the zero\nalternative in the semi-integer domain. Returns an\n{class}`~ommx.AttachedDecisionVariable` that can be used directly in\nexpressions.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `lower`: Lower bound of the variable.\n- `upper`: Upper bound of the variable.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n\nRaises {class}`ValueError` if the bounds are invalid or if no larger\nautomatic ID can be assigned. On failure, no variable or modeling label\nis added to the instance.",
+              "doc": "Create and add a semi-integer decision variable with an automatically assigned ID.\n\nThe bounds default to `(-inf, inf)`. Non-integral endpoints are\nnormalized under `atol` using the same endpoint rule as\n{meth}`~ommx.Instance.new_integer`. Unlike an integer variable, if the\nnormalized interval contains no integer, its bound becomes `[0, 0]`,\npreserving the zero alternative in the semi-integer domain. Returns an\n{class}`~ommx.AttachedDecisionVariable` that can be used directly in\nexpressions.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `lower`: Lower bound of the variable.\n- `upper`: Upper bound of the variable.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n- `atol`: Absolute tolerance for integer-bound normalization. If\n  omitted, the current default returned by\n  {func}`~ommx.get_default_atol` is used.\n\nRaises {class}`ValueError` if the bounds are invalid or if no larger\nautomatic ID can be assigned. On failure, no variable or modeling label\nis added to the instance.",
               "signatures": [
                 {
                   "parameters": [
@@ -11326,6 +11344,24 @@
                         "children": [
                           {
                             "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
                             "link_target": null,
                             "children": []
                           }

@@ -47,13 +47,13 @@ impl Instance {
         })
     }
 
-    /// Returns the next available [`VariableID`].
+    /// Returns the next automatically assigned [`VariableID`].
     ///
     /// Finds the maximum ID from decision variables, then adds 1.
     /// If there are no variables, returns `Ok(VariableID(0))`.
     ///
-    /// Note: This method does not track which IDs have been allocated.
-    /// Consecutive calls will return the same ID until a variable is actually added.
+    /// This allocator does not reuse gaps below the current maximum ID.
+    /// Consecutive calls return the same ID until a variable is actually added.
     ///
     /// # Errors
     ///
@@ -102,8 +102,9 @@ impl Instance {
     /// # Errors
     ///
     /// Returns [`DecisionVariableError::BoundInconsistentToKind`] when `bound`
-    /// contains no value allowed by `kind`,
-    /// [`DecisionVariableError::NoAvailableID`] when the ID space is exhausted,
+    /// cannot be normalized to a domain consistent with `kind` under `atol`,
+    /// [`DecisionVariableError::NoAvailableID`] when the largest existing ID is
+    /// `u64::MAX` and no larger automatic ID can be assigned,
     /// [`DecisionVariableError::NonFiniteValue`] when `fixed_value` is not
     /// finite, or [`DecisionVariableError::SubstitutedValueInconsistent`] when
     /// it does not belong to the normalized variable domain.
@@ -138,7 +139,8 @@ impl Instance {
 
     /// Create and atomically add an integer decision variable.
     ///
-    /// `bound` is normalized inward to integer endpoints. See
+    /// A finite lower endpoint is normalized to `ceil(lower - atol)` and a
+    /// finite upper endpoint to `floor(upper + atol)`. See
     /// [`Self::new_decision_variable`] for the insertion and error contract.
     pub fn new_integer(
         &mut self,
@@ -165,7 +167,8 @@ impl Instance {
 
     /// Create and atomically add a semi-integer decision variable.
     ///
-    /// `bound` is normalized inward to integer endpoints while preserving the
+    /// A finite lower endpoint is normalized to `ceil(lower - atol)` and a
+    /// finite upper endpoint to `floor(upper + atol)`, while preserving the
     /// semi-integer zero alternative. See [`Self::new_decision_variable`] for
     /// the insertion and error contract.
     pub fn new_semi_integer(

@@ -44,9 +44,11 @@ instance.add_constraint(x * y == 0, "exclusive")
 
 `Instance` はモデルの構築時に決定変数と制約条件の数値 ID を自動的に割り当てます。割り当てられた ID は `x.id` や `add_constraint` が返すハンドルから確認できます。明示的な ID を持つコンポーネントを一度に組み立てる場合は、引き続き {meth}`~ommx.Instance.from_components` を使用できます。
 
-決定変数を作成するすべての `new_*` メソッドと `add_constraint` は、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を受け取れます。後ろの 3 フィールドはキーワード専用です。`new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous` では、`lower` と `upper` もキーワード専用で指定できます。`add_constraint` では、省略したフィールドについて入力 Constraint が持つ既存ラベルを保持します。
+決定変数を作成するすべての `new_*` メソッドと `add_constraint` は、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を受け取れます。後ろの 3 フィールドはキーワード専用です。`new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous` では、`lower` と `upper` もキーワード専用で指定できます。さらに `new_integer` と `new_semi_integer` はキーワード専用の `atol` を受け取り、省略時には {func}`~ommx.get_default_atol` が返す現在の既定値を使います。`add_constraint` では、省略したフィールドについて入力 Constraint が持つ既存ラベルを保持します。
 
-各 `new_*` 呼び出しは、IDを割り当てる前に決定変数の定義全体を検証し、正規化します。boundが不正な場合や利用可能なIDが残っていない場合、決定変数もModelingLabelも `Instance` には追加されません。
+Integer と SemiInteger では、有限な lower endpoint を `ceil(lower - atol)`、有限な upper endpoint を `floor(upper + atol)` へ正規化します。正規化後の区間に整数がない場合、`new_integer` は `ValueError` を返し、`new_semi_integer` は SemiInteger のゼロ選択肢を保持するため `[0, 0]` を使います。
+
+各 `new_*` 呼び出しは、IDを割り当てる前に決定変数の定義全体を検証し、正規化します。boundまたはtoleranceが不正な場合や、既存の決定変数IDの最大値が `2**64 - 1` で、それより大きい自動IDを割り当てられない場合、決定変数もModelingLabelも `Instance` には追加されません。
 
 これらのコンポーネントはそれぞれに対応するプロパティが用意されています。目的関数については前節で説明した {class}`~ommx.Function` の形に変換されます。
 

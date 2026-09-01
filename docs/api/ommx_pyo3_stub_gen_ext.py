@@ -10,8 +10,21 @@ from docutils import nodes
 from sphinx.addnodes import desc_parameter, desc_parameterlist, desc_sig_operator
 
 
-_generated_parse_myst = generated_extension._parse_myst
-_generated_build_callable_signatures = generated_extension._build_callable_signatures
+_ORIGINAL_HOOKS_ATTRIBUTE = "_ommx_pyo3_stub_gen_ext_original_hooks"
+try:
+    _generated_parse_myst, _generated_build_callable_signatures = getattr(
+        generated_extension, _ORIGINAL_HOOKS_ATTRIBUTE
+    )
+except AttributeError:
+    _generated_parse_myst = generated_extension._parse_myst
+    _generated_build_callable_signatures = (
+        generated_extension._build_callable_signatures
+    )
+    setattr(
+        generated_extension,
+        _ORIGINAL_HOOKS_ATTRIBUTE,
+        (_generated_parse_myst, _generated_build_callable_signatures),
+    )
 _STUB_PATH = (
     Path(__file__).resolve().parents[2]
     / "python"
@@ -74,9 +87,10 @@ def _find_stub_parameters(fullname, signature):
     _, signatures = max(candidates, key=lambda item: len(item[0]))
     json_names = {parameter["name"] for parameter in signature["parameters"]}
     for parameters in signatures:
-        if len(parameters) == len(json_names) and {
-            name for name, _ in parameters
-        } == json_names:
+        if (
+            len(parameters) == len(json_names)
+            and {name for name, _ in parameters} == json_names
+        ):
             return parameters
     return None
 
@@ -113,7 +127,11 @@ def _restore_parameter_kinds(signature_node, signature, parameters):
         parameter_list.remove(child)
 
     grouped = {
-        kind: [rendered[name] for name, parameter_kind in parameters if parameter_kind == kind]
+        kind: [
+            rendered[name]
+            for name, parameter_kind in parameters
+            if parameter_kind == kind
+        ]
         for kind in (
             "positional_only",
             "positional_or_keyword",

@@ -683,25 +683,54 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         Ok(())
     }
 
+    fn maximum_owned_id(&self) -> Option<u64> {
+        let max_active = self.active.keys().last().copied().map(Into::into);
+        let max_removed = self.removed.keys().last().copied().map(Into::into);
+        match (max_active, max_removed) {
+            (None, None) => None,
+            (Some(id), None) | (None, Some(id)) => Some(id),
+            (Some(active), Some(removed)) => Some(active.max(removed)),
+        }
+    }
+
+    /// Verify that `count` consecutive fresh IDs can be allocated.
+    ///
+    /// Crate-internal root transformations use this during their read-only
+    /// planning phase so later calls to [`Self::unused_id`] cannot panic after
+    /// the root has already been partially mutated.
+    pub(crate) fn ensure_unused_id_capacity(&self, count: usize) -> crate::Result<()> {
+        if count == 0 {
+            return Ok(());
+        }
+        let count = u64::try_from(count)
+            .map_err(|_| crate::error!("Constraint ID allocation count exceeds u64"))?;
+        if let Some(maximum_id) = self.maximum_owned_id() {
+            maximum_id.checked_add(count).ok_or_else(|| {
+                crate::error!(
+                    { maximum_id, count },
+                    "Cannot allocate {count} consecutive constraint IDs after maximum ID {maximum_id}",
+                )
+            })?;
+        }
+        Ok(())
+    }
+
     /// Return an ID that is not used by any active or removed constraint in this collection.
     ///
     /// Returns `0` when the collection is empty, otherwise `max(existing id) + 1`.
     ///
     /// # Panics
     ///
-    /// Panics if the maximum existing ID is `u64::MAX`, i.e. all IDs are exhausted.
+    /// Panics if the maximum existing ID is `u64::MAX`, so no larger automatic
+    /// ID can be assigned. Gaps below the maximum are not reused.
     pub fn unused_id(&self) -> T::ID {
-        let max_active = self.active.keys().last().copied().map(Into::into);
-        let max_removed = self.removed.keys().last().copied().map(Into::into);
-        let next = match (max_active, max_removed) {
-            (None, None) => 0u64,
-            (Some(a), None) => a.checked_add(1).expect("constraint ID space exhausted"),
-            (None, Some(r)) => r.checked_add(1).expect("constraint ID space exhausted"),
-            (Some(a), Some(r)) => a
-                .max(r)
-                .checked_add(1)
-                .expect("constraint ID space exhausted"),
-        };
+        let next = self
+            .maximum_owned_id()
+            .map(|id| {
+                id.checked_add(1)
+                    .expect("no constraint ID larger than the current maximum remains")
+            })
+            .unwrap_or(0);
         T::ID::from(next)
     }
 
@@ -1672,6 +1701,25 @@ mod tests {
         let collection = ConstraintCollection::<Constraint>::new(active, BTreeMap::new()).unwrap();
         assert_eq!(collection.active().len(), 1);
         assert_eq!(collection.removed().len(), 0);
+    }
+
+    #[test]
+    fn collection_preflights_fresh_id_capacity_across_active_and_removed_rows() {
+        let active = BTreeMap::from([(
+            ConstraintID::from(1),
+            Constraint::equal_to_zero(Function::Zero),
+        )]);
+        let removed = BTreeMap::from([(
+            ConstraintID::from(u64::MAX - 2),
+            (Constraint::equal_to_zero(Function::Zero), removed_reason()),
+        )]);
+        let collection = ConstraintCollection::<Constraint>::new(active, removed).unwrap();
+
+        collection.ensure_unused_id_capacity(2).unwrap();
+        let err = collection.ensure_unused_id_capacity(3).unwrap_err();
+
+        assert!(err.to_string().contains("Cannot allocate"));
+        assert_eq!(collection.unused_id(), ConstraintID::from(u64::MAX - 1));
     }
 
     #[test]

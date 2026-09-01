@@ -1,4 +1,7 @@
 import math
+from collections import UserDict
+from types import MappingProxyType
+from typing import Any
 
 import ommx
 import pytest
@@ -86,6 +89,39 @@ def test_new_binary_accepts_full_modeling_label():
     assert unnamed.subscripts == []
     assert unnamed.parameters == {}
     assert unnamed.description == ""
+
+
+@pytest.mark.parametrize("mapping_type", [UserDict, MappingProxyType])
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "new_binary",
+        "new_integer",
+        "new_continuous",
+        "new_semi_integer",
+        "new_semi_continuous",
+    ],
+)
+def test_new_decision_variables_accept_mapping_parameters(
+    method_name: str, mapping_type: type
+):
+    instance = Instance.minimize()
+
+    variable = getattr(instance, method_name)(
+        "x", parameters=mapping_type({"region": "east"})
+    )
+
+    assert variable.parameters == {"region": "east"}
+
+
+def test_new_decision_variable_rejects_non_string_mapping_atomically():
+    instance = Instance.minimize()
+    invalid_parameters: Any = {"region": 1}
+
+    with pytest.raises(TypeError, match=r"parameters must be a Mapping\[str, str\]"):
+        instance.new_binary("x", parameters=invalid_parameters)
+
+    assert instance.decision_variables == []
 
 
 def test_new_non_binary_variables_assign_ids_and_preserve_domains_and_labels():
@@ -194,6 +230,51 @@ def test_new_semi_integer_uses_zero_when_bounds_contain_no_integer():
     assert variable.bound.upper == 0
 
 
+def test_new_integer_atol_overrides_the_process_default_atomically():
+    initial_atol = ommx.get_default_atol()
+    try:
+        ommx.set_default_atol(0.2)
+
+        defaulted_instance = Instance.minimize()
+        defaulted = defaulted_instance.new_integer("defaulted", lower=1.1, upper=1.9)
+        assert (defaulted.bound.lower, defaulted.bound.upper) == (1, 2)
+
+        explicit_instance = Instance.minimize()
+        with pytest.raises(ValueError):
+            explicit_instance.new_integer("explicit", lower=1.1, upper=1.9, atol=1e-6)
+        assert explicit_instance.decision_variables == []
+    finally:
+        ommx.set_default_atol(initial_atol)
+
+
+def test_new_semi_integer_atol_overrides_the_process_default():
+    initial_atol = ommx.get_default_atol()
+    try:
+        ommx.set_default_atol(0.2)
+
+        defaulted = Instance.minimize().new_semi_integer(
+            "defaulted", lower=1.1, upper=1.9
+        )
+        assert (defaulted.bound.lower, defaulted.bound.upper) == (1, 2)
+
+        explicit = Instance.minimize().new_semi_integer(
+            "explicit", lower=1.1, upper=1.9, atol=1e-6
+        )
+        assert (explicit.bound.lower, explicit.bound.upper) == (0, 0)
+    finally:
+        ommx.set_default_atol(initial_atol)
+
+
+@pytest.mark.parametrize("method_name", ["new_integer", "new_semi_integer"])
+def test_new_discrete_variable_rejects_invalid_atol_atomically(method_name: str):
+    instance = Instance.minimize()
+
+    with pytest.raises(ValueError):
+        getattr(instance, method_name)("x", lower=0, upper=1, atol=0)
+
+    assert instance.decision_variables == []
+
+
 @pytest.mark.parametrize(
     "method_name",
     [
@@ -215,7 +296,10 @@ def test_new_decision_variable_raises_value_error_when_automatic_id_overflows(
         sense=Instance.MINIMIZE,
     )
 
-    with pytest.raises(ValueError, match="No available decision variable ID remains"):
+    with pytest.raises(
+        ValueError,
+        match="Insufficient capacity for automatically assigned decision variable IDs",
+    ):
         getattr(instance, method_name)("x")
 
     assert [variable.id for variable in instance.decision_variables] == [max_id]

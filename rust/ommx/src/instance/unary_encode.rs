@@ -972,7 +972,7 @@ mod tests {
             .unwrap_err();
         assert!(err
             .to_string()
-            .contains("No available decision variable ID"));
+            .contains("Insufficient capacity for automatically assigned decision variable IDs"));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }

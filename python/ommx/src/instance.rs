@@ -14,12 +14,61 @@ use crate::{
 };
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
-    exceptions::{PyKeyError, PyValueError},
+    exceptions::{PyKeyError, PyTypeError, PyValueError},
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+#[derive(Default)]
+struct StringMapping(HashMap<String, String>);
+
+impl<'py> FromPyObject<'_, 'py> for StringMapping {
+    type Error = PyErr;
+
+    fn extract(value: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let type_error = || PyTypeError::new_err("parameters must be a Mapping[str, str]");
+        let items = value.call_method0("items").map_err(|_| type_error())?;
+        let mut parameters = HashMap::new();
+        for item in items.try_iter().map_err(|_| type_error())? {
+            let (key, value) = item?
+                .extract::<(String, String)>()
+                .map_err(|_| type_error())?;
+            parameters.insert(key, value);
+        }
+        Ok(Self(parameters))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for StringMapping {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "collections.abc.Mapping[str, str]".to_string(),
+            source_module: None,
+            import: ["collections.abc".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
+impl<'py> IntoPyObject<'py> for StringMapping {
+    type Target = PyDict;
+    type Output = Bound<'py, PyDict>;
+    type Error = PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+        let mapping = PyDict::new(py);
+        for (key, value) in self.0 {
+            mapping.set_item(key, value)?;
+        }
+        Ok(mapping)
+    }
+}
 
 /// Read-only objective semantics used when evaluating solver output.
 ///
@@ -113,14 +162,21 @@ impl Instance {
     fn decision_variable_label(
         name: Option<String>,
         subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
+        parameters: StringMapping,
         description: Option<String>,
     ) -> ommx::DecisionVariableLabel {
         ommx::DecisionVariableLabel {
             name,
             subscripts,
-            parameters: parameters.into_iter().collect(),
+            parameters: parameters.0.into_iter().collect(),
             description,
+        }
+    }
+
+    fn atol_or_default(value: Option<f64>) -> OmmxPyResult<ommx::ATol> {
+        match value {
+            Some(value) => Ok(ommx::ATol::new(value)?),
+            None => Ok(ommx::ATol::default()),
         }
     }
 
@@ -504,12 +560,12 @@ impl Instance {
     /// Raises {class}`ValueError` if the maximum decision-variable ID is
     /// `2**64 - 1` and no larger automatic ID can be assigned. On failure, no
     /// variable or modeling label is added to the instance.
-    #[pyo3(signature = (name=None, *, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn new_binary(
+    #[pyo3(signature = (name=None, *, subscripts=Vec::new(), parameters=StringMapping::default(), description=None))]
+    fn new_binary(
         slf: Bound<'_, Self>,
         name: Option<String>,
         subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
+        parameters: StringMapping,
         description: Option<String>,
     ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
         let label = Self::decision_variable_label(name, subscripts, parameters, description);
@@ -526,9 +582,11 @@ impl Instance {
 
     /// Create and add an integer decision variable with an automatically assigned ID.
     ///
-    /// The bounds default to `(-inf, inf)` and are normalized inward to integer
-    /// values. Returns an {class}`~ommx.AttachedDecisionVariable` that can be
-    /// used directly in expressions.
+    /// The bounds default to `(-inf, inf)` and are normalized to integer
+    /// endpoints under `atol`: a finite lower endpoint is rounded up after
+    /// subtracting `atol`, and a finite upper endpoint is rounded down after
+    /// adding `atol`. Returns an {class}`~ommx.AttachedDecisionVariable` that
+    /// can be used directly in expressions.
     ///
     /// **Args:**
     /// - `name`: Optional human-readable modeling name. Names need not be unique.
@@ -537,26 +595,31 @@ impl Instance {
     /// - `subscripts`: Optional integer indices from the source model.
     /// - `parameters`: Optional string-valued indices from the source model.
     /// - `description`: Optional human-readable description.
+    /// - `atol`: Absolute tolerance for integer-bound normalization. If
+    ///   omitted, the current default returned by
+    ///   {func}`~ommx.get_default_atol` is used.
     ///
-    /// Raises {class}`ValueError` if the bounds are invalid or contain no
-    /// integer value, or if no larger automatic ID can be assigned. On failure,
-    /// no variable or modeling label is added to the instance.
-    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn new_integer(
+    /// Raises {class}`ValueError` if the bounds are invalid or normalization
+    /// yields no integer value, or if no larger automatic ID can be assigned.
+    /// On failure, no variable or modeling label is added to the instance.
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=StringMapping::default(), description=None, atol=None))]
+    fn new_integer(
         slf: Bound<'_, Self>,
         name: Option<String>,
         lower: f64,
         upper: f64,
         subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
+        parameters: StringMapping,
         description: Option<String>,
+        atol: Option<f64>,
     ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
         let bound = ommx::Bound::new(lower, upper)?;
         let label = Self::decision_variable_label(name, subscripts, parameters, description);
+        let atol = Self::atol_or_default(atol)?;
         let id = {
             slf.borrow_mut()
                 .inner
-                .new_integer(bound, label, None, ommx::ATol::default())?
+                .new_integer(bound, label, None, atol)?
         };
         Ok(Self::attach_decision_variable(slf, id))
     }
@@ -578,14 +641,14 @@ impl Instance {
     /// Raises {class}`ValueError` if the bounds are invalid or if no larger
     /// automatic ID can be assigned. On failure, no variable or modeling label
     /// is added to the instance.
-    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn new_continuous(
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=StringMapping::default(), description=None))]
+    fn new_continuous(
         slf: Bound<'_, Self>,
         name: Option<String>,
         lower: f64,
         upper: f64,
         subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
+        parameters: StringMapping,
         description: Option<String>,
     ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
         let bound = ommx::Bound::new(lower, upper)?;
@@ -601,9 +664,10 @@ impl Instance {
     /// Create and add a semi-integer decision variable with an automatically assigned ID.
     ///
     /// The bounds default to `(-inf, inf)`. Non-integral endpoints are
-    /// normalized inward. Unlike an integer variable, if the interval contains
-    /// no integer, its bound is normalized to `[0, 0]`, preserving the zero
-    /// alternative in the semi-integer domain. Returns an
+    /// normalized under `atol` using the same endpoint rule as
+    /// {meth}`~ommx.Instance.new_integer`. Unlike an integer variable, if the
+    /// normalized interval contains no integer, its bound becomes `[0, 0]`,
+    /// preserving the zero alternative in the semi-integer domain. Returns an
     /// {class}`~ommx.AttachedDecisionVariable` that can be used directly in
     /// expressions.
     ///
@@ -614,26 +678,31 @@ impl Instance {
     /// - `subscripts`: Optional integer indices from the source model.
     /// - `parameters`: Optional string-valued indices from the source model.
     /// - `description`: Optional human-readable description.
+    /// - `atol`: Absolute tolerance for integer-bound normalization. If
+    ///   omitted, the current default returned by
+    ///   {func}`~ommx.get_default_atol` is used.
     ///
     /// Raises {class}`ValueError` if the bounds are invalid or if no larger
     /// automatic ID can be assigned. On failure, no variable or modeling label
     /// is added to the instance.
-    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn new_semi_integer(
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=StringMapping::default(), description=None, atol=None))]
+    fn new_semi_integer(
         slf: Bound<'_, Self>,
         name: Option<String>,
         lower: f64,
         upper: f64,
         subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
+        parameters: StringMapping,
         description: Option<String>,
+        atol: Option<f64>,
     ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
         let bound = ommx::Bound::new(lower, upper)?;
         let label = Self::decision_variable_label(name, subscripts, parameters, description);
+        let atol = Self::atol_or_default(atol)?;
         let id = {
             slf.borrow_mut()
                 .inner
-                .new_semi_integer(bound, label, None, ommx::ATol::default())?
+                .new_semi_integer(bound, label, None, atol)?
         };
         Ok(Self::attach_decision_variable(slf, id))
     }
@@ -655,14 +724,14 @@ impl Instance {
     /// Raises {class}`ValueError` if the bounds are invalid or if no larger
     /// automatic ID can be assigned. On failure, no variable or modeling label
     /// is added to the instance.
-    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn new_semi_continuous(
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=StringMapping::default(), description=None))]
+    fn new_semi_continuous(
         slf: Bound<'_, Self>,
         name: Option<String>,
         lower: f64,
         upper: f64,
         subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
+        parameters: StringMapping,
         description: Option<String>,
     ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
         let bound = ommx::Bound::new(lower, upper)?;
