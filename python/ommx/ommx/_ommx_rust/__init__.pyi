@@ -3320,7 +3320,8 @@ class Instance:
         - `description`: Optional human-readable description.
 
         Raises {class}`ValueError` if the maximum decision-variable ID is
-        `2**64 - 1` and no larger automatic ID can be assigned.
+        `2**64 - 1` and no larger automatic ID can be assigned. On failure, no
+        variable or modeling label is added to the instance.
         """
     def new_integer(
         self,
@@ -3348,7 +3349,8 @@ class Instance:
         - `description`: Optional human-readable description.
 
         Raises {class}`ValueError` if the bounds are invalid or contain no
-        integer value, or if no larger automatic ID can be assigned.
+        integer value, or if no larger automatic ID can be assigned. On failure,
+        no variable or modeling label is added to the instance.
         """
     def new_continuous(
         self,
@@ -3376,7 +3378,8 @@ class Instance:
         - `description`: Optional human-readable description.
 
         Raises {class}`ValueError` if the bounds are invalid or if no larger
-        automatic ID can be assigned.
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
         """
     def new_semi_integer(
         self,
@@ -3407,7 +3410,8 @@ class Instance:
         - `description`: Optional human-readable description.
 
         Raises {class}`ValueError` if the bounds are invalid or if no larger
-        automatic ID can be assigned.
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
         """
     def new_semi_continuous(
         self,
@@ -3435,7 +3439,8 @@ class Instance:
         - `description`: Optional human-readable description.
 
         Raises {class}`ValueError` if the bounds are invalid or if no larger
-        automatic ID can be assigned.
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
         """
     def attached_decision_variable(
         self, variable_id: builtins.int

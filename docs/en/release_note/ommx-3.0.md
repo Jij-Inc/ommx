@@ -37,6 +37,12 @@ are normalized inward. An integer interval with no integer value raises
 zero alternative as the bound `[0, 0]`. See the [Instance user
 guide](../user_guide/instance.md) for the incremental workflow.
 
+Each Python constructor delegates variable creation to one atomic Rust SDK
+owner operation: kind and bound normalization, automatic ID allocation, and
+row and modeling-label insertion are validated before the
+{class}`~ommx.Instance` changes. Invalid bounds and exhausted IDs leave no
+partial variable or label behind.
+
 ### 🛠 Inclusive `atol` boundaries ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 Absolute-tolerance comparisons now include the exact boundary consistently.

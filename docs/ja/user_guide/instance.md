@@ -46,6 +46,8 @@ instance.add_constraint(x * y == 0, "exclusive")
 
 決定変数を作成するすべての `new_*` メソッドと `add_constraint` は、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を受け取れます。後ろの 3 フィールドはキーワード専用です。`new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous` では、`lower` と `upper` もキーワード専用で指定できます。`add_constraint` では、省略したフィールドについて入力 Constraint が持つ既存ラベルを保持します。
 
+各 `new_*` 呼び出しは、IDを割り当てる前に決定変数の定義全体を検証し、正規化します。boundが不正な場合や利用可能なIDが残っていない場合、決定変数もModelingLabelも `Instance` には追加されません。
+
 これらのコンポーネントはそれぞれに対応するプロパティが用意されています。目的関数については前節で説明した {class}`~ommx.Function` の形に変換されます。
 
 ```{code-cell} ipython3

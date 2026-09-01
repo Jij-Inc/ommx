@@ -55,6 +55,10 @@ three fields are keyword-only. `new_integer`, `new_continuous`,
 and `upper` bounds. For `add_constraint`, omitted fields preserve labels already
 stored on the input constraint.
 
+Each `new_*` call validates and normalizes its complete variable definition
+before assigning the ID. If a bound is invalid or no ID remains, neither the
+variable nor its modeling label is added to the `Instance`.
+
 Each of these components has a corresponding property. The objective function is converted into the form of {class}`~ommx.Function`, as explained in the previous section.
 
 ```{code-cell} ipython3

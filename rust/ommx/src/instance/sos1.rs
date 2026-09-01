@@ -57,6 +57,11 @@ impl Instance {
         id: Sos1ConstraintID,
     ) -> Result<Vec<ConstraintID>> {
         let plans = self.plan_sos1_conversion(id)?;
+        let fresh_indicator_count = plans
+            .iter()
+            .filter(|(_, plan)| matches!(plan, IndicatorPlan::Fresh { .. }))
+            .count();
+        self.ensure_new_decision_variable_capacity(fresh_indicator_count)?;
         self.apply_sos1_conversion(id, plans)
     }
 
@@ -88,6 +93,12 @@ impl Instance {
             let plans = self.plan_sos1_conversion(id)?;
             all_plans.push((id, plans));
         }
+        let fresh_indicator_count = all_plans
+            .iter()
+            .flat_map(|(_, plans)| plans)
+            .filter(|(_, plan)| matches!(plan, IndicatorPlan::Fresh { .. }))
+            .count();
+        self.ensure_new_decision_variable_capacity(fresh_indicator_count)?;
         // Phase 2: apply. Planned state only references variables that existed at
         // plan time; `apply_sos1_conversion` only adds fresh variables / constraints
         // and relaxes its own SOS1, so earlier applications cannot invalidate later
@@ -163,8 +174,7 @@ impl Instance {
         for (x_id, plan) in &plans {
             let y_id = match plan {
                 IndicatorPlan::Reuse => *x_id,
-                IndicatorPlan::Fresh { .. } => self.new_decision_variable_with_label(
-                    Kind::Binary,
+                IndicatorPlan::Fresh { .. } => self.new_binary(
                     Bound::of_binary(),
                     crate::ModelingLabel {
                         name: Some("ommx.sos1_indicator".to_string()),
@@ -645,5 +655,80 @@ mod tests {
         assert_eq!(instance.decision_variables, before_vars);
         assert_eq!(instance.constraints(), &before_constraints);
         assert!(instance.removed_sos1_constraints().is_empty());
+    }
+
+    #[test]
+    fn conversion_is_atomic_when_fresh_indicator_ids_are_exhausted() {
+        let dv = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(-1.0, 1.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
+        let last_existing_id = VariableID::from(u64::MAX - 1);
+        let sos1 = Sos1Constraint::new(
+            [VariableID::from(0), last_existing_id]
+                .into_iter()
+                .collect(),
+        )
+        .unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(0) => dv.clone(),
+                last_existing_id => dv,
+            })
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(9), sos1)]))
+            .build()
+            .unwrap();
+        let before = instance.clone();
+
+        let err = instance
+            .convert_sos1_to_constraints(Sos1ConstraintID::from(9))
+            .unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<crate::DecisionVariableError>(),
+            Some(crate::DecisionVariableError::NoAvailableID)
+        ));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn bulk_conversion_is_atomic_when_fresh_indicator_ids_are_exhausted() {
+        let dv = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(-1.0, 1.0).unwrap(),
+            crate::ATol::default(),
+        )
+        .unwrap();
+        let last_existing_id = VariableID::from(u64::MAX - 1);
+        let first = Sos1Constraint::new([VariableID::from(0)].into_iter().collect()).unwrap();
+        let second = Sos1Constraint::new([last_existing_id].into_iter().collect()).unwrap();
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                VariableID::from(0) => dv.clone(),
+                last_existing_id => dv,
+            })
+            .constraints(BTreeMap::new())
+            .sos1_constraints(BTreeMap::from([
+                (Sos1ConstraintID::from(8), first),
+                (Sos1ConstraintID::from(9), second),
+            ]))
+            .build()
+            .unwrap();
+        let before = instance.clone();
+
+        let err = instance.convert_all_sos1_to_constraints().unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<crate::DecisionVariableError>(),
+            Some(crate::DecisionVariableError::NoAvailableID)
+        ));
+        assert_eq!(instance, before);
     }
 }

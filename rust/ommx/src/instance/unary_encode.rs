@@ -190,8 +190,7 @@ impl Instance {
         let mut linear = Linear::try_from(offset).unwrap();
         let coefficient = Coefficient::try_from(1.0).unwrap();
         for i in 0..num_binary_variables {
-            let binary_id = self.new_decision_variable_with_label(
-                Kind::Binary,
+            let binary_id = self.new_binary(
                 Bound::of_binary(),
                 crate::ModelingLabel {
                     name: Some("ommx.unary_encode".to_string()),

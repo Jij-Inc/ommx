@@ -37,6 +37,11 @@ Integerの非整数endpointは区間の内側へ正規化されます。
 bound `[0, 0]` として保持します。逐次modeling workflowの詳細は
 [Instance user guide](../user_guide/instance.md) を参照してください。
 
+各Python constructorは、Rust SDKが所有する1回のatomicな変数作成操作を呼び出します。
+kindとboundの正規化、IDの自動割り当て、rowとmodeling labelの挿入をすべて検証してから
+{class}`~ommx.Instance` を変更します。不正なboundやIDの枯渇が発生しても、変数や
+labelの一部だけが残ることはありません。
+
 ### 🛠 境界を含む `atol` 判定 ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
 絶対許容誤差の比較は、差がちょうど`atol`となる境界を一貫して含むようになりました。
