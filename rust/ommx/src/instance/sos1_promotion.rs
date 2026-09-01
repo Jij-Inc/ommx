@@ -154,14 +154,16 @@ impl Sos1LinkSide {
     }
 
     fn is_required(self, bound: Bound) -> bool {
-        // Let epsilon be the supplied ATol. For a Continuous upper side,
-        // Bound::contains admits values through U + epsilon, while SOS1 still
-        // classifies values through epsilon as zero. Thus an active positive
-        // value exists exactly when U + epsilon > epsilon, i.e. U > 0. The
-        // lower side is symmetric: L - epsilon < -epsilon iff L < 0. Integer
-        // bounds already have integer endpoints and promotion requires
-        // epsilon < 1, so the same exact-sign test detects an available
-        // nonzero integer. No ATol term is needed here because it cancels.
+        // Let epsilon be the supplied ATol. In the real-number semantics, a
+        // Continuous upper side admitted by Bound::contains reaches U +
+        // epsilon, while SOS1 classifies values through epsilon as zero. Thus
+        // U + epsilon > epsilon iff U > 0; the lower side is symmetric because
+        // L - epsilon < -epsilon iff L < 0. The ATol term therefore cancels
+        // from this exact-sign rule. At f64 extremes the endpoint addition can
+        // round back to epsilon, so this rule is intentionally conservative
+        // and may require a redundant link. Integer bounds already have
+        // integer endpoints and promotion requires epsilon < 1, so the same
+        // exact-sign rule detects an available nonzero integer.
         match self {
             Self::Upper => bound.upper() > 0.0,
             Self::Lower => bound.lower() < 0.0,
@@ -558,7 +560,9 @@ impl Instance {
             &relaxed_constraint_ids,
         )?;
 
-        let sos1_constraint_id = self.next_sos1_constraint_id()?;
+        self.sos1_constraint_collection
+            .ensure_unused_id_capacity(1)?;
+        let sos1_constraint_id = self.sos1_constraint_collection.unused_id();
         let sos1_constraint = Sos1Constraint::new(members.clone())?;
 
         Ok(Sos1BigMPromotionPlan {
@@ -884,22 +888,6 @@ impl Instance {
             }
         }
         Ok(())
-    }
-
-    fn next_sos1_constraint_id(&self) -> crate::Result<Sos1ConstraintID> {
-        let max_id = self
-            .sos1_constraints()
-            .keys()
-            .chain(self.removed_sos1_constraints().keys())
-            .map(|id| id.into_inner())
-            .max();
-        match max_id {
-            None => Ok(Sos1ConstraintID::from(0)),
-            Some(max_id) => max_id
-                .checked_add(1)
-                .map(Sos1ConstraintID::from)
-                .ok_or_else(|| crate::error!("SOS1 constraint ID space is exhausted")),
-        }
     }
 }
 
@@ -1771,6 +1759,21 @@ mod tests {
     }
 
     #[test]
+    fn rejects_exhausted_sos1_constraint_ids_without_mutation() {
+        let (mut instance, request) = mixed_instance();
+        instance
+            .sos1_constraint_collection
+            .insert_active_with_context(
+                Sos1ConstraintID::from(u64::MAX),
+                Sos1Constraint::new(BTreeSet::from([unrelated_id()])).unwrap(),
+                ConstraintContext::default(),
+            )
+            .unwrap();
+
+        assert_atomic_rejection(instance, &request, "Cannot allocate");
+    }
+
+    #[test]
     fn link_ids_must_name_active_regular_constraints() {
         let (instance, mut request) = mixed_instance();
         request.selector_claims.insert(
@@ -1934,7 +1937,8 @@ mod tests {
             )
             .unwrap();
         // A whole-Instance staging clone would duplicate these owned strings.
-        // Their allocation identity guards the plan-first, clone-free commit.
+        // Their allocation identity guards the plan-first commit without
+        // cloning the Instance.
         let selector_label_ptr = instance
             .variable_labels()
             .name(selector_id())
