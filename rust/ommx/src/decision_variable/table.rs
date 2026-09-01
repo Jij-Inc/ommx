@@ -378,6 +378,16 @@ impl DecisionVariableTable<Created> {
     }
 
     /// Insert one fresh row, its label, and optionally its fixed value.
+    ///
+    /// The row, label, and fixed-value column are committed together. If this
+    /// method returns an error, the table is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DecisionVariableError::DuplicateID`] when `id` already exists,
+    /// [`DecisionVariableError::NonFiniteValue`] when `fixed_value` is not
+    /// finite, or [`DecisionVariableError::SubstitutedValueInconsistent`] when
+    /// it does not belong to the row's domain.
     pub fn insert(
         &mut self,
         id: VariableID,
@@ -391,9 +401,12 @@ impl DecisionVariableTable<Created> {
         }
         if let Some(value) = fixed_value {
             row.check_value_consistency(id, value, atol)?;
+        }
+        self.insert_labeled_row(id, row, label)?;
+        if let Some(value) = fixed_value {
             self.columns.fixed_values.insert(id, value);
         }
-        self.insert_labeled_row(id, row, label)
+        Ok(())
     }
 
     /// Impose an additional bound on one row while preserving table invariants.
@@ -960,6 +973,56 @@ mod tests {
         assert_eq!(table.get(&id), Some(&original));
         assert_eq!(table.labels().name(id), None);
         assert_eq!(table.fixed_value(id), Some(1.0));
+    }
+
+    #[test]
+    fn definition_table_insert_commits_row_label_and_fixed_value_together() {
+        let id = VariableID::from(1);
+        let row = DecisionVariable::integer();
+        let label = DecisionVariableLabel {
+            name: Some("x".to_string()),
+            subscripts: vec![2, 3],
+            ..Default::default()
+        };
+        let mut table = DecisionVariableTable::<crate::Created>::default();
+
+        table
+            .insert(id, row.clone(), label.clone(), Some(1.0), ATol::default())
+            .unwrap();
+
+        assert_eq!(table.get(&id), Some(&row));
+        assert_eq!(table.labels().collect_for(id), label);
+        assert_eq!(table.fixed_value(id), Some(1.0));
+    }
+
+    #[test]
+    fn definition_table_insert_rejects_inconsistent_fixed_value_atomically() {
+        let id = VariableID::from(1);
+        let mut table = DecisionVariableTable::<crate::Created>::default();
+        let before = table.clone();
+
+        let err = table
+            .insert(
+                id,
+                DecisionVariable::integer(),
+                DecisionVariableLabel {
+                    name: Some("invalid".to_string()),
+                    ..Default::default()
+                },
+                Some(0.5),
+                ATol::default(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            DecisionVariableError::SubstitutedValueInconsistent {
+                id: error_id,
+                substituted_value: 0.5,
+                ..
+            } if error_id == id
+        ));
+        assert_eq!(table, before);
     }
 
     #[test]

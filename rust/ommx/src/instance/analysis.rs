@@ -114,48 +114,12 @@ pub struct DecisionVariableUsage<'a> {
 
 impl<'a> DecisionVariableUsage<'a> {
     fn new(instance: &'a Instance) -> Self {
-        let mut by_used_variable: BTreeMap<VariableID, DecisionVariableUsageEntry> =
-            BTreeMap::new();
-
-        for id in instance.objective().required_ids() {
-            usage_entry_mut(&mut by_used_variable, id).used_in_objective = true;
-        }
-
-        for (constraint_id, constraint) in instance.constraints() {
-            for id in constraint.function().required_ids() {
-                usage_entry_mut(&mut by_used_variable, id)
-                    .used_in_regular_constraints
-                    .insert(*constraint_id);
-            }
-        }
-
-        for (constraint_id, constraint) in instance.indicator_constraints() {
-            for id in constraint.required_ids() {
-                usage_entry_mut(&mut by_used_variable, id)
-                    .used_in_indicator_constraints
-                    .insert(*constraint_id);
-            }
-        }
-
-        for (constraint_id, constraint) in instance.one_hot_constraints() {
-            for id in constraint.required_ids() {
-                usage_entry_mut(&mut by_used_variable, id)
-                    .used_in_one_hot_constraints
-                    .insert(*constraint_id);
-            }
-        }
-
-        for (constraint_id, constraint) in instance.sos1_constraints() {
-            for id in constraint.required_ids() {
-                usage_entry_mut(&mut by_used_variable, id)
-                    .used_in_sos1_constraints
-                    .insert(*constraint_id);
-            }
-        }
-
         Self {
             instance,
-            by_used_variable,
+            by_used_variable: collect_decision_variable_usage(
+                instance,
+                &SolverUseExcept::default(),
+            ),
         }
     }
 
@@ -279,6 +243,259 @@ impl<'a> DecisionVariableUsage<'a> {
     }
 }
 
+trait SolverUseVisitor {
+    fn visit_objective(&mut self, required_ids: VariableIDSet);
+    fn visit_regular_constraint(
+        &mut self,
+        constraint_id: ConstraintID,
+        required_ids: VariableIDSet,
+    );
+    fn visit_indicator_constraint(
+        &mut self,
+        constraint_id: IndicatorConstraintID,
+        required_ids: VariableIDSet,
+    );
+    fn visit_one_hot_constraint(
+        &mut self,
+        constraint_id: OneHotConstraintID,
+        required_ids: VariableIDSet,
+    );
+    fn visit_sos1_constraint(
+        &mut self,
+        constraint_id: Sos1ConstraintID,
+        required_ids: VariableIDSet,
+    );
+}
+
+/// Traverse every variable use rooted in the active formulation.
+///
+/// The traversal owns which `Instance` fields constitute solver input. It does
+/// not apply transformation-specific filtering; visitors may interpret or
+/// exclude the reported owners.
+fn traverse_active_solver_uses(instance: &Instance, visitor: &mut impl SolverUseVisitor) {
+    visitor.visit_objective(instance.objective().required_ids());
+
+    for (constraint_id, constraint) in instance.constraints() {
+        visitor.visit_regular_constraint(*constraint_id, constraint.function().required_ids());
+    }
+
+    for (constraint_id, constraint) in instance.indicator_constraints() {
+        visitor.visit_indicator_constraint(*constraint_id, constraint.required_ids());
+    }
+
+    for (constraint_id, constraint) in instance.one_hot_constraints() {
+        visitor.visit_one_hot_constraint(*constraint_id, constraint.required_ids());
+    }
+
+    for (constraint_id, constraint) in instance.sos1_constraints() {
+        visitor.visit_sos1_constraint(*constraint_id, constraint.required_ids());
+    }
+}
+
+/// Active-formulation roots omitted by an internal solver-use query.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SolverUseExcept {
+    pub objective: bool,
+    pub regular_constraints: BTreeSet<ConstraintID>,
+    pub indicator_constraints: BTreeSet<IndicatorConstraintID>,
+    pub one_hot_constraints: BTreeSet<OneHotConstraintID>,
+    pub sos1_constraints: BTreeSet<Sos1ConstraintID>,
+}
+
+/// Visitor adapter that suppresses complete active-formulation roots.
+struct Except<'a, V> {
+    except: &'a SolverUseExcept,
+    visitor: V,
+}
+
+impl<'a, V> Except<'a, V> {
+    fn new(except: &'a SolverUseExcept, visitor: V) -> Self {
+        Self { except, visitor }
+    }
+
+    fn into_inner(self) -> V {
+        self.visitor
+    }
+}
+
+impl<V: SolverUseVisitor> SolverUseVisitor for Except<'_, V> {
+    fn visit_objective(&mut self, required_ids: VariableIDSet) {
+        if !self.except.objective {
+            self.visitor.visit_objective(required_ids);
+        }
+    }
+
+    fn visit_regular_constraint(
+        &mut self,
+        constraint_id: ConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        if !self.except.regular_constraints.contains(&constraint_id) {
+            self.visitor
+                .visit_regular_constraint(constraint_id, required_ids);
+        }
+    }
+
+    fn visit_indicator_constraint(
+        &mut self,
+        constraint_id: IndicatorConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        if !self.except.indicator_constraints.contains(&constraint_id) {
+            self.visitor
+                .visit_indicator_constraint(constraint_id, required_ids);
+        }
+    }
+
+    fn visit_one_hot_constraint(
+        &mut self,
+        constraint_id: OneHotConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        if !self.except.one_hot_constraints.contains(&constraint_id) {
+            self.visitor
+                .visit_one_hot_constraint(constraint_id, required_ids);
+        }
+    }
+
+    fn visit_sos1_constraint(
+        &mut self,
+        constraint_id: Sos1ConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        if !self.except.sos1_constraints.contains(&constraint_id) {
+            self.visitor
+                .visit_sos1_constraint(constraint_id, required_ids);
+        }
+    }
+}
+
+#[derive(Default)]
+struct DecisionVariableUsageVisitor {
+    by_used_variable: BTreeMap<VariableID, DecisionVariableUsageEntry>,
+}
+
+impl DecisionVariableUsageVisitor {
+    fn update_entries(
+        &mut self,
+        required_ids: VariableIDSet,
+        mut update: impl FnMut(&mut DecisionVariableUsageEntry),
+    ) {
+        for id in required_ids {
+            update(usage_entry_mut(&mut self.by_used_variable, id));
+        }
+    }
+}
+
+impl SolverUseVisitor for DecisionVariableUsageVisitor {
+    fn visit_objective(&mut self, required_ids: VariableIDSet) {
+        self.update_entries(required_ids, |entry| entry.used_in_objective = true);
+    }
+
+    fn visit_regular_constraint(
+        &mut self,
+        constraint_id: ConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        self.update_entries(required_ids, |entry| {
+            entry.used_in_regular_constraints.insert(constraint_id);
+        });
+    }
+
+    fn visit_indicator_constraint(
+        &mut self,
+        constraint_id: IndicatorConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        self.update_entries(required_ids, |entry| {
+            entry.used_in_indicator_constraints.insert(constraint_id);
+        });
+    }
+
+    fn visit_one_hot_constraint(
+        &mut self,
+        constraint_id: OneHotConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        self.update_entries(required_ids, |entry| {
+            entry.used_in_one_hot_constraints.insert(constraint_id);
+        });
+    }
+
+    fn visit_sos1_constraint(
+        &mut self,
+        constraint_id: Sos1ConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        self.update_entries(required_ids, |entry| {
+            entry.used_in_sos1_constraints.insert(constraint_id);
+        });
+    }
+}
+
+#[derive(Default)]
+struct UsedDecisionVariableVisitor {
+    used: VariableIDSet,
+}
+
+impl SolverUseVisitor for UsedDecisionVariableVisitor {
+    fn visit_objective(&mut self, required_ids: VariableIDSet) {
+        self.used.extend(required_ids);
+    }
+
+    fn visit_regular_constraint(
+        &mut self,
+        _constraint_id: ConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        self.used.extend(required_ids);
+    }
+
+    fn visit_indicator_constraint(
+        &mut self,
+        _constraint_id: IndicatorConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        self.used.extend(required_ids);
+    }
+
+    fn visit_one_hot_constraint(
+        &mut self,
+        _constraint_id: OneHotConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        self.used.extend(required_ids);
+    }
+
+    fn visit_sos1_constraint(
+        &mut self,
+        _constraint_id: Sos1ConstraintID,
+        required_ids: VariableIDSet,
+    ) {
+        self.used.extend(required_ids);
+    }
+}
+
+fn collect_decision_variable_usage(
+    instance: &Instance,
+    except: &SolverUseExcept,
+) -> BTreeMap<VariableID, DecisionVariableUsageEntry> {
+    let mut visitor = Except::new(except, DecisionVariableUsageVisitor::default());
+    traverse_active_solver_uses(instance, &mut visitor);
+    visitor.into_inner().by_used_variable
+}
+
+/// Collect solver-used decision variables, except for complete active roots
+/// explicitly named by the caller.
+pub fn used_decision_variable_ids_except(
+    instance: &Instance,
+    except: &SolverUseExcept,
+) -> VariableIDSet {
+    let mut visitor = Except::new(except, UsedDecisionVariableVisitor::default());
+    traverse_active_solver_uses(instance, &mut visitor);
+    visitor.into_inner().used
+}
+
 impl Instance {
     pub fn binary_ids(&self) -> VariableIDSet {
         self.decision_variables
@@ -294,14 +511,7 @@ impl Instance {
     }
 
     pub fn used_decision_variable_ids(&self) -> VariableIDSet {
-        let mut used = self.objective.required_ids();
-        used.extend(self.constraint_collection.required_ids());
-        used.extend(self.indicator_constraint_collection.required_ids());
-        used.extend(self.one_hot_constraint_collection.required_ids());
-        used.extend(self.sos1_constraint_collection.required_ids());
-        // Note: named_functions are intentionally excluded from the "used" set.
-        // They are auxiliary quantities that can reference fixed/dependent variables.
-        used
+        used_decision_variable_ids_except(self, &SolverUseExcept::default())
     }
 
     pub fn used_decision_variables(&self) -> BTreeMap<VariableID, &DecisionVariable> {
@@ -483,12 +693,96 @@ fn write_variable_list_inline<'a>(
 mod tests {
     use super::*;
     use crate::{
-        assign, coeff, linear, v1::State, Constraint, ConstraintID, Evaluate, Sense, Substitute,
-        VariableID,
+        assign, coeff, linear, v1::State, Constraint, ConstraintID, Equality, Evaluate,
+        IndicatorConstraint, OneHotConstraint, Sense, Sos1Constraint, Substitute, VariableID,
     };
     use maplit::hashmap;
     use proptest::prelude::*;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    #[test]
+    fn active_solver_use_except_filters_every_owner_family() {
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            crate::Function::from(linear!(0)),
+            (0..=6)
+                .map(|id| (VariableID::from(id), crate::DecisionVariable::binary()))
+                .collect(),
+            BTreeMap::from([
+                (
+                    ConstraintID::from(0),
+                    Constraint::equal_to_zero(crate::Function::from(linear!(1))),
+                ),
+                (
+                    ConstraintID::from(1),
+                    Constraint::equal_to_zero(crate::Function::from(
+                        (linear!(1) + linear!(2)).unwrap(),
+                    )),
+                ),
+            ]),
+        )
+        .unwrap();
+        let indicator_id = instance
+            .add_indicator_constraint(
+                IndicatorConstraint::new(
+                    VariableID::from(3),
+                    Equality::LessThanOrEqualToZero,
+                    crate::Function::from(linear!(4)),
+                ),
+                Default::default(),
+            )
+            .unwrap();
+        let one_hot_id = instance
+            .add_one_hot_constraint(
+                OneHotConstraint::new(BTreeSet::from([VariableID::from(5)])).unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let sos1_id = instance
+            .add_sos1_constraint(
+                Sos1Constraint::new(BTreeSet::from([VariableID::from(6)])).unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+
+        let ordinary = instance.used_decision_variable_ids();
+        assert_eq!(ordinary, instance.decision_variable_usage().used());
+        assert_eq!(ordinary, (0..=6).map(VariableID::from).collect());
+
+        // Excluding one active root does not hide a variable also used by a
+        // retained root.
+        assert_eq!(
+            used_decision_variable_ids_except(
+                &instance,
+                &SolverUseExcept {
+                    regular_constraints: BTreeSet::from([ConstraintID::from(1)]),
+                    ..Default::default()
+                },
+            ),
+            (0..=6)
+                .filter(|id| *id != 2)
+                .map(VariableID::from)
+                .collect()
+        );
+
+        let all_constraints = SolverUseExcept {
+            regular_constraints: BTreeSet::from([ConstraintID::from(0), ConstraintID::from(1)]),
+            indicator_constraints: BTreeSet::from([indicator_id]),
+            one_hot_constraints: BTreeSet::from([one_hot_id]),
+            sos1_constraints: BTreeSet::from([sos1_id]),
+            ..Default::default()
+        };
+        assert_eq!(
+            used_decision_variable_ids_except(&instance, &all_constraints),
+            VariableIDSet::from([VariableID::from(0)]),
+        );
+
+        let all_roots = SolverUseExcept {
+            objective: true,
+            ..all_constraints
+        };
+        assert!(used_decision_variable_ids_except(&instance, &all_roots).is_empty());
+    }
 
     #[test]
     fn test_decision_variable_usage_display() {

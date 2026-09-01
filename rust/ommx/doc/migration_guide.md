@@ -655,6 +655,38 @@ let evaluated = EvaluatedDecisionVariable::new(id, y, value)?;
 let sampled = SampledDecisionVariable::new(id, y, samples)?;
 ```
 
+Incremental construction on [`Instance`](crate::Instance) now follows the
+same owner boundary. The v2 `new_*` methods inserted a default row first and
+returned `&mut DecisionVariable`, which encouraged a second fallible bound
+mutation:
+
+```rust,ignore
+// ❌ Before: the unbounded row remains inserted if set_bound fails.
+instance
+    .new_integer()
+    .set_bound(bound, atol)?;
+
+// ✅ After: normalize and validate every table-owned field before insertion.
+let id = instance.new_integer(
+    bound,
+    DecisionVariableLabel {
+        name: Some("x".to_string()),
+        ..Default::default()
+    },
+    fixed_value,
+    atol,
+)?;
+```
+
+All typed constructors (`new_binary`, `new_integer`, `new_continuous`,
+`new_semi_integer`, and `new_semi_continuous`) accept the complete `Bound`,
+`DecisionVariableLabel`, optional fixed value, and `ATol`, and return
+`Result<VariableID, DecisionVariableError>`. The generic
+`new_decision_variable` additionally accepts `Kind`. They normalize the row,
+allocate the ID, validate the fixed value, and commit the row plus label and
+fixed-value sidecar as one operation. An error leaves the `Instance`
+unchanged.
+
 When constructing a created-stage table directly, use
 `DecisionVariableTable::with_fixed_values(entries, labels, fixed_values, atol)`.
 If no variables are fixed, pass an empty `fixed_values` map; this is the same
@@ -905,6 +937,10 @@ let air05_annotations = annotations.get("air05");
 - [ ] Replace `Result<T, UnknownSampleIDError>` key-lookup methods with `Option<T>` on the call site
 - [ ] Replace `DecisionVariable::new(id, kind, bound, ..., atol)` with `DecisionVariable::new(kind, bound, atol)`, and insert it under the desired `VariableID` key in the host table
 - [ ] Replace `DecisionVariable::binary(id)` / `integer(id)` / `continuous(id)` / `semi_integer(id)` / `semi_continuous(id)` / etc. with the no-argument row factories, and keep the ID on the enclosing map key
+- [ ] Replace chained `Instance::new_*().set_bound(...)` construction with one
+      fallible `Instance::new_*(bound, label, fixed_value, atol)?` call; update
+      generic `new_decision_variable` calls to pass the label before the fixed
+      value
 - [ ] Replace `DecisionVariable::substituted_value()` and `DecisionVariable::substitute(...)` with host-owned fixed values: `InstanceBuilder::fixed_decision_variable_values(...)`, `Instance::fixed_decision_variable_value(id)`, or `Instance::fixed_decision_variable_values()`
 - [ ] Replace `analyze_decision_variables()` role queries with `Instance::decision_variable_roles()`, `Instance::decision_variable_role(id)`, `Instance::fixed_decision_variables()`, `Instance::dependent_decision_variable_ids()`, or `Instance::irrelevant_decision_variable_ids()`; keep `Instance::decision_variable_usage()` only when you need reverse expression usage
 - [ ] Update `EvaluatedDecisionVariable::new(...)` and `SampledDecisionVariable::new(...)`: drop the `atol` argument, pass the `VariableID` separately for diagnostics, and keep using the enclosing `Solution` / `SampleSet` map key as the source of truth

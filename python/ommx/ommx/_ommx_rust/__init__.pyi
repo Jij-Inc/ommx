@@ -3272,16 +3272,16 @@ class Instance:
         r"""
         Create an empty minimization instance with a zero objective.
 
-        Decision variables and constraints can be added incrementally with
-        {meth}`new_binary` and {meth}`add_constraint`.
+        Decision variables and constraints can be added incrementally with the
+        `new_*` methods and {meth}`add_constraint`.
         """
     @staticmethod
     def maximize() -> Instance:
         r"""
         Create an empty maximization instance with a zero objective.
 
-        Decision variables and constraints can be added incrementally with
-        {meth}`new_binary` and {meth}`add_constraint`.
+        Decision variables and constraints can be added incrementally with the
+        `new_*` methods and {meth}`add_constraint`.
         """
     def add_decision_variable(
         self, variable: DecisionVariable
@@ -3303,7 +3303,7 @@ class Instance:
         name: typing.Optional[builtins.str] = None,
         *,
         subscripts: typing.Sequence[builtins.int] = [],
-        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        parameters: collections.abc.Mapping[str, str] = {},
         description: typing.Optional[builtins.str] = None,
     ) -> AttachedDecisionVariable:
         r"""
@@ -3320,7 +3320,138 @@ class Instance:
         - `description`: Optional human-readable description.
 
         Raises {class}`ValueError` if the maximum decision-variable ID is
-        `2**64 - 1` and no larger automatic ID can be assigned.
+        `2**64 - 1` and no larger automatic ID can be assigned. On failure, no
+        variable or modeling label is added to the instance.
+        """
+    def new_integer(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add an integer decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)` and are normalized to integer
+        endpoints under `atol`: a finite lower endpoint is rounded up after
+        subtracting `atol`, and a finite upper endpoint is rounded down after
+        adding `atol`. Returns an {class}`~ommx.AttachedDecisionVariable` that
+        can be used directly in expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+        - `atol`: Absolute tolerance for integer-bound normalization. If
+          omitted, the current default returned by
+          {func}`~ommx.get_default_atol` is used.
+
+        Raises {class}`ValueError` if the bounds are invalid or normalization
+        yields no integer value, or if no larger automatic ID can be assigned.
+        On failure, no variable or modeling label is added to the instance.
+        """
+    def new_continuous(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a continuous decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+
+        Raises {class}`ValueError` if the bounds are invalid or if no larger
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
+        """
+    def new_semi_integer(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a semi-integer decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Non-integral endpoints are
+        normalized under `atol` using the same endpoint rule as
+        {meth}`~ommx.Instance.new_integer`. Unlike an integer variable, if the
+        normalized interval contains no integer, its bound becomes `[0, 0]`,
+        preserving the zero alternative in the semi-integer domain. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+        - `atol`: Absolute tolerance for integer-bound normalization. If
+          omitted, the current default returned by
+          {func}`~ommx.get_default_atol` is used.
+
+        Raises {class}`ValueError` if the bounds are invalid or if no larger
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
+        """
+    def new_semi_continuous(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a semi-continuous decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+
+        Raises {class}`ValueError` if the bounds are invalid or if no larger
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
         """
     def attached_decision_variable(
         self, variable_id: builtins.int
