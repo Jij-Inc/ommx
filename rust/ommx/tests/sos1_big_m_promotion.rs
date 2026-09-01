@@ -74,3 +74,49 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
     let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
     assert_eq!(restored, instance);
 }
+
+#[test]
+fn public_api_promotes_an_explicit_legacy_v1_sos1_hint() {
+    let first = VariableID::from(0);
+    let second = VariableID::from(1);
+    let cardinality_id = ConstraintID::from(10);
+    let cardinality = Constraint::less_than_or_equal_to_zero(Function::from(
+        ((term(0, 1.0) + term(1, 1.0)).unwrap() + Linear::from(coeff!(-1.0))).unwrap(),
+    ));
+    let source = Instance::new(
+        Sense::Minimize,
+        Function::Zero,
+        BTreeMap::from([
+            (first, DecisionVariable::binary()),
+            (second, DecisionVariable::binary()),
+        ]),
+        BTreeMap::from([(cardinality_id, cardinality)]),
+    )
+    .unwrap();
+    let mut hint = ommx::v1::Sos1::default();
+    hint.binary_constraint_id = cardinality_id.into_inner();
+    hint.decision_variables = vec![second.into_inner(), first.into_inner()];
+    let mut hints = ommx::v1::ConstraintHints::default();
+    hints.sos1_constraints.push(hint.clone());
+    let mut raw = ommx::v1::Instance::try_from(source).unwrap();
+    raw.constraint_hints = Some(hints);
+
+    let retained_hint = raw
+        .constraint_hints
+        .as_ref()
+        .unwrap()
+        .sos1_constraints
+        .first()
+        .unwrap()
+        .clone();
+    let mut instance = Instance::try_from(raw).unwrap();
+    assert!(instance.sos1_constraints().is_empty());
+
+    let promotion = instance
+        .promote_sos1_big_m_from_v1_hint(&retained_hint, Default::default())
+        .unwrap();
+
+    assert_eq!(promotion.members().len(), 2);
+    assert!(promotion.fresh_selectors().is_empty());
+    assert_eq!(promotion.relaxed_constraint_ids().len(), 1);
+}

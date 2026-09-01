@@ -26,8 +26,9 @@
 
 use super::Instance;
 use crate::{
-    ATol, Bound, Constraint, ConstraintContext, ConstraintID, Equality, Function, Kind, Linear,
-    LinearMonomial, RemovedReason, Sos1Constraint, Sos1ConstraintID, VariableID, VariableIDSet,
+    ATol, Bound, Constraint, ConstraintContext, ConstraintID, Equality, Evaluate, Function, Kind,
+    Linear, LinearMonomial, RemovedReason, Sos1Constraint, Sos1ConstraintID, VariableID,
+    VariableIDSet,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -137,6 +138,13 @@ impl Sos1BigMPromotion {
 struct Sos1BigMPromotionPlan {
     result: Sos1BigMPromotion,
     sos1_constraint: Sos1Constraint,
+}
+
+#[derive(Debug)]
+struct LegacyV1FreshSelectorClaim {
+    selector: VariableID,
+    upper_link: Option<ConstraintID>,
+    lower_link: Option<ConstraintID>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -394,6 +402,240 @@ impl Instance {
             .expect("SOS1 constraint ID and member IDs were validated by the promotion plan");
 
         Ok(result)
+    }
+
+    /// Promote one legacy v1 SOS1 hint through the checked Big-M promotion.
+    ///
+    /// A [`crate::v1::Sos1`] hint is advisory wire-format metadata, not a
+    /// certificate or trusted witness. This method uses only its stable IDs to
+    /// reconstruct one [`Sos1BigMPromotionRequest`], then delegates all domain,
+    /// link-row, cardinality, and selector-isolation validation to
+    /// [`Instance::promote_sos1_big_m`]. No hint field supplies bounds,
+    /// coefficients, or verified selector roles.
+    ///
+    /// The legacy hint stores member IDs and an unordered flat list of Big-M
+    /// row IDs, but not the member/selector/side role of each row. Request
+    /// reconstruction therefore succeeds only when every listed row has one
+    /// hinted member and one non-member selector and the complete mapping is
+    /// unique. Duplicate IDs, stale active-row references, unused rows, and
+    /// ambiguous or incomplete mappings are rejected before mutation.
+    ///
+    /// [`Instance::from_v1_bytes`] discards legacy
+    /// [`crate::v1::ConstraintHints`], and converting a consumed
+    /// [`crate::v1::Instance`] does not retain them either. Callers must decode
+    /// the raw v1 message, clone the selected [`crate::v1::Sos1`] hint, convert
+    /// the raw message into the domain [`Instance`], and then invoke this
+    /// method explicitly. Neither parsing path promotes a hint automatically.
+    ///
+    /// On success this is the same atomic, history-preserving mutation as
+    /// [`Instance::promote_sos1_big_m`]. On error the instance is unchanged.
+    pub fn promote_sos1_big_m_from_v1_hint(
+        &mut self,
+        hint: &crate::v1::Sos1,
+        atol: ATol,
+    ) -> crate::Result<Sos1BigMPromotion> {
+        let request = self.sos1_big_m_promotion_request_from_v1_hint(hint)?;
+        self.promote_sos1_big_m(&request, atol)
+    }
+
+    fn sos1_big_m_promotion_request_from_v1_hint(
+        &self,
+        hint: &crate::v1::Sos1,
+    ) -> crate::Result<Sos1BigMPromotionRequest> {
+        let mut members = VariableIDSet::new();
+        for &raw_id in &hint.decision_variables {
+            let id = VariableID::from(raw_id);
+            if !members.insert(id) {
+                crate::bail!(
+                    { ?id },
+                    "Legacy v1 SOS1 hint lists decision variable {id:?} more than once"
+                );
+            }
+        }
+        if members.is_empty() {
+            crate::bail!("Legacy v1 SOS1 hint must list at least one decision variable");
+        }
+        for &member in &members {
+            if !self.decision_variables().contains_key(&member) {
+                crate::bail!(
+                    { ?member },
+                    "Legacy v1 SOS1 hint member {member:?} is not registered in the current instance"
+                );
+            }
+        }
+
+        let cardinality_constraint = ConstraintID::from(hint.binary_constraint_id);
+        let cardinality_row = self.constraints().get(&cardinality_constraint).ok_or_else(|| {
+            crate::error!(
+                { ?cardinality_constraint },
+                "Legacy v1 SOS1 hint cardinality constraint {cardinality_constraint:?} is not active"
+            )
+        })?;
+
+        let mut link_ids = BTreeSet::new();
+        for &raw_id in &hint.big_m_constraint_ids {
+            let id = ConstraintID::from(raw_id);
+            if id == cardinality_constraint {
+                crate::bail!(
+                    { ?id },
+                    "Legacy v1 SOS1 hint uses constraint {id:?} as both cardinality and Big-M link"
+                );
+            }
+            if !link_ids.insert(id) {
+                crate::bail!(
+                    { ?id },
+                    "Legacy v1 SOS1 hint lists Big-M constraint {id:?} more than once"
+                );
+            }
+        }
+
+        let mut fresh_claims = BTreeMap::<VariableID, LegacyV1FreshSelectorClaim>::new();
+        let mut selector_owners = BTreeMap::<VariableID, VariableID>::new();
+        for &id in &link_ids {
+            let row = self.constraints().get(&id).ok_or_else(|| {
+                crate::error!(
+                    { ?id },
+                    "Legacy v1 SOS1 hint Big-M constraint {id:?} is not active"
+                )
+            })?;
+            let linear = row.function().as_linear().ok_or_else(|| {
+                crate::error!(
+                    { ?id },
+                    "Legacy v1 SOS1 hint Big-M constraint {id:?} is not linear, so its selector role cannot be inferred"
+                )
+            })?;
+            let support = linear
+                .linear_terms()
+                .map(|(variable, _)| variable)
+                .collect::<VariableIDSet>();
+            let linked_members = support.intersection(&members).copied().collect::<Vec<_>>();
+            let selectors = support.difference(&members).copied().collect::<Vec<_>>();
+            if linked_members.len() != 1 || selectors.len() != 1 {
+                crate::bail!(
+                    {
+                        ?id,
+                        hinted_members = linked_members.len(),
+                        non_member_variables = selectors.len()
+                    },
+                    "Legacy v1 SOS1 hint Big-M constraint {id:?} must identify exactly one hinted member and one non-member selector"
+                );
+            }
+            let member = linked_members[0];
+            let selector = selectors[0];
+
+            if let Some(previous_member) = selector_owners.insert(selector, member) {
+                if previous_member != member {
+                    crate::bail!(
+                        { ?selector, ?member, ?previous_member },
+                        "Legacy v1 SOS1 hint assigns selector {selector:?} to more than one member"
+                    );
+                }
+            }
+
+            let claim = fresh_claims
+                .entry(member)
+                .or_insert(LegacyV1FreshSelectorClaim {
+                    selector,
+                    upper_link: None,
+                    lower_link: None,
+                });
+            if claim.selector != selector {
+                crate::bail!(
+                    { ?member, first_selector = ?claim.selector, ?selector },
+                    "Legacy v1 SOS1 hint assigns different selectors to member {member:?}"
+                );
+            }
+
+            let member_coefficient = linear
+                .get(&LinearMonomial::Variable(member))
+                .expect("member was collected from the linear row support")
+                .into_inner();
+            let (side, slot) = if member_coefficient > 0.0 {
+                ("upper", &mut claim.upper_link)
+            } else {
+                ("lower", &mut claim.lower_link)
+            };
+            if let Some(previous_id) = slot.replace(id) {
+                crate::bail!(
+                    { ?member, ?selector, ?id, ?previous_id, side },
+                    "Legacy v1 SOS1 hint assigns more than one {side} link to member {member:?}"
+                );
+            }
+        }
+
+        let cardinality_selectors = cardinality_row.function().required_ids();
+        let mut selector_claims = BTreeMap::new();
+        let mut assigned_selectors = VariableIDSet::new();
+        let mut unresolved_members = Vec::new();
+        for &member in &members {
+            let variable = &self.decision_variables()[&member];
+            let is_full_binary =
+                variable.kind() == Kind::Binary && variable.bound() == Bound::of_binary();
+            if is_full_binary {
+                if fresh_claims.remove(&member).is_some() {
+                    crate::bail!(
+                        { ?member },
+                        "Legacy v1 SOS1 hint assigns a Big-M link to full-domain binary member {member:?}"
+                    );
+                }
+                assigned_selectors.insert(member);
+                selector_claims.insert(member, Sos1BigMSelectorClaim::Reused);
+            } else if let Some(claim) = fresh_claims.remove(&member) {
+                assigned_selectors.insert(claim.selector);
+                selector_claims.insert(
+                    member,
+                    Sos1BigMSelectorClaim::Fresh {
+                        selector: claim.selector,
+                        upper_link: claim.upper_link,
+                        lower_link: claim.lower_link,
+                    },
+                );
+            } else {
+                unresolved_members.push(member);
+            }
+        }
+        debug_assert!(fresh_claims.is_empty());
+
+        let unresolved_selectors = cardinality_selectors
+            .difference(&assigned_selectors)
+            .copied()
+            .collect::<Vec<_>>();
+        match (unresolved_members.len(), unresolved_selectors.len()) {
+            (0, 0) => {}
+            (1, 1) => {
+                selector_claims.insert(
+                    unresolved_members[0],
+                    Sos1BigMSelectorClaim::Fresh {
+                        selector: unresolved_selectors[0],
+                        upper_link: None,
+                        lower_link: None,
+                    },
+                );
+            }
+            (members, selectors) if members > 1 && members == selectors => {
+                crate::bail!(
+                    {
+                        unresolved_members = members,
+                        unresolved_selectors = selectors
+                    },
+                    "Legacy v1 SOS1 hint is ambiguous: it does not map unlinked members to cardinality selectors"
+                );
+            }
+            (members, selectors) => {
+                crate::bail!(
+                    {
+                        unresolved_members = members,
+                        unresolved_selectors = selectors
+                    },
+                    "Legacy v1 SOS1 hint is incomplete: it does not uniquely identify every member selector"
+                );
+            }
+        }
+
+        Ok(Sos1BigMPromotionRequest {
+            selector_claims,
+            cardinality_constraint,
+        })
     }
 
     fn plan_sos1_big_m_promotion(
@@ -1010,6 +1252,18 @@ mod tests {
         (instance, request)
     }
 
+    fn mixed_v1_hint() -> crate::v1::Sos1 {
+        crate::v1::Sos1 {
+            binary_constraint_id: cardinality_row_id().into_inner(),
+            // Legacy repeated fields do not encode request roles or ordering.
+            big_m_constraint_ids: vec![lower_row_id().into_inner(), upper_row_id().into_inner()],
+            decision_variables: vec![
+                member_integer_id().into_inner(),
+                member_binary_id().into_inner(),
+            ],
+        }
+    }
+
     fn fresh_instance(
         member: DecisionVariable,
         upper_link_id: Option<ConstraintID>,
@@ -1072,6 +1326,333 @@ mod tests {
             "expected {expected:?} in error, got: {error:#}"
         );
         assert_eq!(instance, before);
+    }
+
+    fn assert_v1_hint_atomic_rejection(
+        mut instance: Instance,
+        hint: &crate::v1::Sos1,
+        expected: &str,
+    ) {
+        let before = instance.clone();
+        let error = instance
+            .promote_sos1_big_m_from_v1_hint(hint, ATol::default())
+            .unwrap_err();
+        assert!(
+            error.to_string().contains(expected),
+            "expected {expected:?} in error, got: {error:#}"
+        );
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn legacy_v1_hint_uses_the_same_checked_history_preserving_promotion() {
+        let (mut direct, request) = mixed_instance();
+        let mut from_hint = direct.clone();
+
+        let expected = direct
+            .promote_sos1_big_m(&request, ATol::default())
+            .unwrap();
+        let actual = from_hint
+            .promote_sos1_big_m_from_v1_hint(&mixed_v1_hint(), ATol::default())
+            .unwrap();
+
+        assert_eq!(actual, expected);
+        assert_eq!(from_hint, direct);
+        assert_eq!(
+            actual.relaxed_constraint_ids(),
+            &BTreeSet::from([upper_row_id(), lower_row_id(), cardinality_row_id()])
+        );
+    }
+
+    #[test]
+    fn legacy_v1_hint_accepts_all_reused_binary_members_without_big_m_rows() {
+        let first = VariableID::from(0);
+        let second = VariableID::from(2);
+        let cardinality = ConstraintID::from(7);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([
+                (first, DecisionVariable::binary()),
+                (second, DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::from([(
+                cardinality,
+                canonical_sos1_big_m_cardinality([first, second]).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        let hint = crate::v1::Sos1 {
+            binary_constraint_id: cardinality.into_inner(),
+            big_m_constraint_ids: vec![],
+            decision_variables: vec![second.into_inner(), first.into_inner()],
+        };
+
+        let promotion = instance
+            .promote_sos1_big_m_from_v1_hint(&hint, ATol::default())
+            .unwrap();
+
+        assert_eq!(promotion.members(), &VariableIDSet::from([first, second]));
+        assert!(promotion.fresh_selectors().is_empty());
+        assert_eq!(
+            promotion.relaxed_constraint_ids(),
+            &BTreeSet::from([cardinality])
+        );
+    }
+
+    #[test]
+    fn legacy_v1_hint_infers_one_unlinked_fresh_selector_and_allows_id_zero() {
+        let member = VariableID::from(1);
+        let selector = VariableID::from(10);
+        let cardinality = ConstraintID::from(0);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([
+                (member, integer(0.0, 0.0)),
+                (selector, DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::from([(
+                cardinality,
+                canonical_sos1_big_m_cardinality([selector]).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        let hint = crate::v1::Sos1 {
+            binary_constraint_id: 0,
+            big_m_constraint_ids: vec![],
+            decision_variables: vec![member.into_inner()],
+        };
+
+        let promotion = instance
+            .promote_sos1_big_m_from_v1_hint(&hint, ATol::default())
+            .unwrap();
+
+        assert_eq!(
+            promotion.fresh_selectors(),
+            &BTreeMap::from([(member, selector)])
+        );
+        assert_eq!(
+            promotion.relaxed_constraint_ids(),
+            &BTreeSet::from([cardinality])
+        );
+    }
+
+    #[test]
+    fn legacy_v1_hint_rejects_missing_and_duplicate_ids_without_mutation() {
+        let (instance, _) = mixed_instance();
+        let mut hint = mixed_v1_hint();
+        hint.decision_variables.clear();
+        assert_v1_hint_atomic_rejection(instance, &hint, "at least one decision variable");
+
+        let (instance, _) = mixed_instance();
+        let mut hint = mixed_v1_hint();
+        hint.decision_variables
+            .push(member_integer_id().into_inner());
+        assert_v1_hint_atomic_rejection(instance, &hint, "more than once");
+
+        let (instance, _) = mixed_instance();
+        let mut hint = mixed_v1_hint();
+        hint.big_m_constraint_ids.push(upper_row_id().into_inner());
+        assert_v1_hint_atomic_rejection(instance, &hint, "more than once");
+
+        let (instance, _) = mixed_instance();
+        let mut hint = mixed_v1_hint();
+        hint.big_m_constraint_ids
+            .push(cardinality_row_id().into_inner());
+        assert_v1_hint_atomic_rejection(instance, &hint, "both cardinality and Big-M link");
+    }
+
+    #[test]
+    fn legacy_v1_hint_rejects_stale_ids_without_mutation() {
+        let (instance, _) = mixed_instance();
+        let mut hint = mixed_v1_hint();
+        hint.decision_variables[0] = 999;
+        assert_v1_hint_atomic_rejection(instance, &hint, "is not registered");
+
+        let (instance, _) = mixed_instance();
+        let mut hint = mixed_v1_hint();
+        hint.binary_constraint_id = 999;
+        assert_v1_hint_atomic_rejection(instance, &hint, "is not active");
+
+        let (instance, _) = mixed_instance();
+        let mut hint = mixed_v1_hint();
+        hint.big_m_constraint_ids[0] = 999;
+        assert_v1_hint_atomic_rejection(instance, &hint, "is not active");
+
+        let (mut instance, _) = mixed_instance();
+        instance
+            .relax_constraint(upper_row_id(), "test".to_string(), [])
+            .unwrap();
+        assert_v1_hint_atomic_rejection(instance, &mixed_v1_hint(), "is not active");
+    }
+
+    #[test]
+    fn legacy_v1_hint_rejects_ambiguous_selector_roles_without_mutation() {
+        let (mut instance, _) = mixed_instance();
+        let binary_member_selector = VariableID::from(11);
+        instance
+            .decision_variables
+            .insert(
+                binary_member_selector,
+                DecisionVariable::binary(),
+                Default::default(),
+                None,
+                ATol::default(),
+            )
+            .unwrap();
+        let binary_member_link = Constraint::less_than_or_equal_to_zero(Function::from(
+            (Linear::single_term(LinearMonomial::Variable(member_binary_id()), coeff!(1.0))
+                + Linear::single_term(
+                    LinearMonomial::Variable(binary_member_selector),
+                    coeff!(-1.0),
+                ))
+            .unwrap(),
+        ));
+        let binary_member_link_id = instance
+            .add_constraint(binary_member_link, Default::default())
+            .unwrap();
+        let mut hint = mixed_v1_hint();
+        hint.big_m_constraint_ids
+            .push(binary_member_link_id.into_inner());
+        assert_v1_hint_atomic_rejection(instance, &hint, "full-domain binary member");
+
+        let (mut instance, _) = mixed_instance();
+        let second_selector = VariableID::from(11);
+        instance
+            .decision_variables
+            .insert(
+                second_selector,
+                DecisionVariable::binary(),
+                Default::default(),
+                None,
+                ATol::default(),
+            )
+            .unwrap();
+        let second_link = Constraint::less_than_or_equal_to_zero(Function::from(
+            (Linear::single_term(LinearMonomial::Variable(member_integer_id()), coeff!(1.0))
+                + Linear::single_term(LinearMonomial::Variable(second_selector), coeff!(-3.0)))
+            .unwrap(),
+        ));
+        let second_link_id = instance
+            .add_constraint(second_link, Default::default())
+            .unwrap();
+        let mut hint = mixed_v1_hint();
+        hint.big_m_constraint_ids.push(second_link_id.into_inner());
+        assert_v1_hint_atomic_rejection(instance, &hint, "different selectors");
+
+        let (mut instance, _) = mixed_instance();
+        let duplicate_upper = instance
+            .add_constraint(upper_link(1.0, 3.0), Default::default())
+            .unwrap();
+        let mut hint = mixed_v1_hint();
+        hint.big_m_constraint_ids.push(duplicate_upper.into_inner());
+        assert_v1_hint_atomic_rejection(instance, &hint, "more than one upper link");
+
+        let (mut instance, _) = mixed_instance();
+        let malformed_support = Constraint::less_than_or_equal_to_zero(Function::from(
+            ((Linear::single_term(LinearMonomial::Variable(member_integer_id()), coeff!(1.0))
+                + Linear::single_term(LinearMonomial::Variable(selector_id()), coeff!(-3.0)))
+            .unwrap()
+                + Linear::single_term(LinearMonomial::Variable(unrelated_id()), coeff!(1.0)))
+            .unwrap(),
+        ));
+        instance
+            .constraint_collection
+            .replace_active_row(upper_row_id(), malformed_support)
+            .unwrap();
+        assert_v1_hint_atomic_rejection(
+            instance,
+            &mixed_v1_hint(),
+            "exactly one hinted member and one non-member selector",
+        );
+
+        let first_member = VariableID::from(1);
+        let second_member = VariableID::from(2);
+        let first_selector = VariableID::from(10);
+        let second_selector = VariableID::from(11);
+        let cardinality = ConstraintID::from(100);
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([
+                (first_member, integer(0.0, 0.0)),
+                (second_member, integer(0.0, 0.0)),
+                (first_selector, DecisionVariable::binary()),
+                (second_selector, DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::from([(
+                cardinality,
+                canonical_sos1_big_m_cardinality([first_selector, second_selector]).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        let hint = crate::v1::Sos1 {
+            binary_constraint_id: cardinality.into_inner(),
+            big_m_constraint_ids: vec![],
+            decision_variables: vec![first_member.into_inner(), second_member.into_inner()],
+        };
+        assert_v1_hint_atomic_rejection(instance, &hint, "is ambiguous");
+    }
+
+    #[test]
+    fn legacy_v1_hint_delegates_incomplete_and_invalid_semantics_to_checker() {
+        let (mut instance, _) = mixed_instance();
+        let extra_selector = VariableID::from(11);
+        instance
+            .decision_variables
+            .insert(
+                extra_selector,
+                DecisionVariable::binary(),
+                Default::default(),
+                None,
+                ATol::default(),
+            )
+            .unwrap();
+        instance
+            .constraint_collection
+            .replace_active_row(
+                cardinality_row_id(),
+                canonical_sos1_big_m_cardinality([
+                    member_binary_id(),
+                    selector_id(),
+                    extra_selector,
+                ])
+                .unwrap(),
+            )
+            .unwrap();
+        assert_v1_hint_atomic_rejection(instance, &mixed_v1_hint(), "is incomplete");
+
+        let (instance, _) = mixed_instance();
+        let mut hint = mixed_v1_hint();
+        hint.big_m_constraint_ids
+            .retain(|&id| id != lower_row_id().into_inner());
+        assert_v1_hint_atomic_rejection(instance, &hint, "missing its required lower link");
+
+        let (mut instance, _) = mixed_instance();
+        instance
+            .constraint_collection
+            .replace_active_row(
+                cardinality_row_id(),
+                Constraint::less_than_or_equal_to_zero(Function::Zero),
+            )
+            .unwrap();
+        assert_v1_hint_atomic_rejection(
+            instance,
+            &mixed_v1_hint(),
+            "does not match the canonical row exactly",
+        );
+
+        let (mut instance, _) = mixed_instance();
+        instance
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(1.0, 1.0))
+            .unwrap();
+        assert_v1_hint_atomic_rejection(
+            instance,
+            &mixed_v1_hint(),
+            "does not cover the ATol-feasible member domain",
+        );
     }
 
     #[test]
