@@ -150,8 +150,7 @@ impl Instance {
             .into());
         }
 
-        let slack_id = self.new_decision_variable_with_label(
-            Kind::Integer,
+        let slack_id = self.new_integer(
             slack_bound,
             crate::ModelingLabel {
                 name: Some("ommx.slack".to_string()),
@@ -267,8 +266,7 @@ impl Instance {
             Err(e) => return Err(e).context("Slack coefficient must be finite"),
         };
 
-        let slack_id = self.new_decision_variable_with_label(
-            Kind::Integer,
+        let slack_id = self.new_integer(
             slack_bound,
             crate::ModelingLabel {
                 name: Some("ommx.slack".to_string()),

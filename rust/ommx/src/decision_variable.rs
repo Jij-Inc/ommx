@@ -372,7 +372,9 @@ pub enum DecisionVariableError {
     #[error("Duplicate decision variable ID={id}")]
     DuplicateID { id: VariableID },
 
-    #[error("No available decision variable ID remains")]
+    #[error(
+        "Insufficient capacity for automatically assigned decision variable IDs above the current maximum"
+    )]
     NoAvailableID,
 
     #[error("Decision variable value for ID={id} must be finite: value={value}")]

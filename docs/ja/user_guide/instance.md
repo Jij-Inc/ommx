@@ -44,7 +44,11 @@ instance.add_constraint(x * y == 0, "exclusive")
 
 `Instance` はモデルの構築時に決定変数と制約条件の数値 ID を自動的に割り当てます。割り当てられた ID は `x.id` や `add_constraint` が返すハンドルから確認できます。明示的な ID を持つコンポーネントを一度に組み立てる場合は、引き続き {meth}`~ommx.Instance.from_components` を使用できます。
 
-`new_binary` と `add_constraint` は、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を受け取れます。後ろの 3 フィールドはキーワード専用です。`add_constraint` では、省略したフィールドについて入力 Constraint が持つ既存ラベルを保持します。
+決定変数を作成するすべての `new_*` メソッドと `add_constraint` は、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を受け取れます。後ろの 3 フィールドはキーワード専用です。`new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous` では、`lower` と `upper` もキーワード専用で指定できます。さらに `new_integer` と `new_semi_integer` はキーワード専用の `atol` を受け取り、省略時には {func}`~ommx.get_default_atol` が返す現在の既定値を使います。`add_constraint` では、省略したフィールドについて入力 Constraint が持つ既存ラベルを保持します。
+
+Integer と SemiInteger では、有限な lower endpoint を `ceil(lower - atol)`、有限な upper endpoint を `floor(upper + atol)` へ正規化します。正規化後の区間に整数がない場合、`new_integer` は `ValueError` を返し、`new_semi_integer` は SemiInteger のゼロ選択肢を保持するため `[0, 0]` を使います。
+
+各 `new_*` 呼び出しは、IDを割り当てる前に決定変数の定義全体を検証し、正規化します。boundまたはtoleranceが不正な場合や、既存の決定変数IDの最大値が `2**64 - 1` で、それより大きい自動IDを割り当てられない場合、決定変数もModelingLabelも `Instance` には追加されません。
 
 これらのコンポーネントはそれぞれに対応するプロパティが用意されています。目的関数については前節で説明した {class}`~ommx.Function` の形に変換されます。
 
@@ -70,6 +74,16 @@ instance.decision_variables_df()
 
 - `kind` はその決定変数の種類でBinary, Integer, Continuousに加えてSemiInteger, SemiContinuousがあります。
 - `lower` と `upper` はその決定変数の下限と上限です。Binaryの場合は $[0, 1]$ になります。
+
+数値 ID を `Instance` に自動で割り当てさせる場合は、これらすべての種類の決定変数を `Instance` 上で直接作成できます。返された attached 変数は、上の binary 変数と同様に式で利用できます。
+
+```{code-cell} ipython3
+typed = Instance.minimize()
+count = typed.new_integer("count", lower=0, upper=10)
+amount = typed.new_continuous("amount", lower=0)
+batch = typed.new_semi_integer("batch", lower=2, upper=10)
+rate = typed.new_semi_continuous("rate", lower=0.5, upper=4)
+```
 
 加えてOMMXは数理最適化を実務上のデータ分析に統合した時に必要になるようなメタデータを統合的に扱う事を目指して設計されているので、決定変数のメタデータを保持することができます。これらは数理モデル自体には影響を与えないので必須の情報ではありませんがデータ分析や可視化の際に有用です。
 

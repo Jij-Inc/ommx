@@ -47,3 +47,47 @@ assert_eq!(instance.constraints().len(), 2);
 The `new` method validates that all variable IDs used in the objective function and
 constraints are defined in the decision variables map, returning an error if any
 undefined variables are referenced.
+
+## Incremental decision-variable construction
+
+When the instance should allocate variable IDs, use its typed `new_*` methods.
+Each method receives the complete bound, modeling label, optional fixed value,
+and tolerance before changing the instance:
+
+```rust
+use ommx::{ATol, Bound, DecisionVariableLabel, Instance, Kind, VariableID};
+
+let mut instance = Instance::default();
+let id = instance.new_integer(
+    Bound::new(0.2, 3.8)?,
+    DecisionVariableLabel {
+        name: Some("count".to_string()),
+        ..Default::default()
+    },
+    Some(2.0),
+    ATol::default(),
+)?;
+
+assert_eq!(id, VariableID::from(0));
+assert_eq!(instance.decision_variables()[&id].kind(), Kind::Integer);
+assert_eq!(
+    instance.decision_variables()[&id].bound(),
+    Bound::new(1.0, 3.0)?,
+);
+assert_eq!(instance.variable_labels().name(id), Some("count"));
+assert_eq!(instance.fixed_decision_variable_value(id), Some(2.0));
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+For `Integer` and `SemiInteger`, finite endpoints are normalized to
+`ceil(lower - atol)` and `floor(upper + atol)`. If that normalized interval
+contains no integer, `new_integer` returns an error, while `new_semi_integer`
+uses `[0, 0]` to preserve the semi-integer zero alternative.
+
+The normalized row, label, and fixed value are committed together under the
+returned ID. Invalid bounds, inconsistent fixed values, and a maximum existing
+decision-variable ID of `u64::MAX` that prevents assignment of a larger
+automatic ID return [`DecisionVariableError`](crate::DecisionVariableError)
+without leaving a partially created variable in the instance. Use
+[`Instance::new_decision_variable`](crate::Instance::new_decision_variable)
+when the kind is selected dynamically.
