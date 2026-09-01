@@ -43,6 +43,7 @@ mod sampled_named_function;
 mod samples;
 mod solution;
 mod sos1_constraint;
+mod sos1_promotion;
 mod state;
 
 pub use artifact::*;
@@ -83,6 +84,7 @@ pub use sampled_named_function::*;
 pub use samples::*;
 pub use solution::*;
 pub use sos1_constraint::*;
+pub use sos1_promotion::*;
 pub use state::*;
 
 use pyo3::prelude::*;
@@ -221,6 +223,9 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Sos1Constraint>()?;
     m.add_class::<AttachedSos1Constraint>()?;
     m.add_class::<RemovedSos1Constraint>()?;
+    m.add_class::<Sos1BigMSelectorClaim>()?;
+    m.add_class::<Sos1BigMPromotionRequest>()?;
+    m.add_class::<Sos1BigMPromotion>()?;
     m.add_class::<NamedFunction>()?;
     m.add_class::<RemovedConstraint>()?;
     m.add_class::<Provenance>()?;
@@ -329,6 +334,9 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "Sos1Constraint",
     "AttachedSos1Constraint",
     "RemovedSos1Constraint",
+    "Sos1BigMSelectorClaim",
+    "Sos1BigMPromotionRequest",
+    "Sos1BigMPromotion",
     "RemovedConstraint",
     "Provenance",
     "ProvenanceKind",

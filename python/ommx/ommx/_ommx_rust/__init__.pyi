@@ -109,6 +109,9 @@ __all__ = [
     "Sense",
     "Solution",
     "Solve",
+    "Sos1BigMPromotion",
+    "Sos1BigMPromotionRequest",
+    "Sos1BigMSelectorClaim",
     "Sos1Constraint",
     "SpecialConstraintKind",
     "SpecialConstraintPreparation",
@@ -5079,6 +5082,30 @@ class Instance:
         >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)
         >>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
         """
+    def promote_sos1_big_m(
+        self,
+        request: Sos1BigMPromotionRequest,
+        *,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> Sos1BigMPromotion:
+        r"""
+        Validate and promote one claimed SOS1 Big-M formulation in place.
+
+        The request supplies stable IDs only. The Rust {class}`Instance` owner
+        reads the current variable domains and regular rows, validates the full
+        formulation, and commits the lifecycle move, selector reconstruction,
+        and SOS1 insertion atomically. Invalid requests leave the instance
+        unchanged.
+
+        ``atol`` parameterizes the local projected-feasibility check and must
+        also be used for subsequent state reconstruction and evaluation. If
+        omitted, the current default returned by
+        {func}`~ommx.get_default_atol` is used.
+
+        Raises {class}`RuntimeError` when the claimed formulation is invalid for
+        the current instance. Invalid ``atol`` values rejected while creating
+        the tolerance raise {class}`ValueError`.
+        """
 
 @typing.final
 class InstanceClass:
@@ -8712,6 +8739,115 @@ class Solve:
         Adapter-defined diagnostics recorded during this solve.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class Sos1BigMPromotion:
+    r"""
+    Read-only result of one checked SOS1 Big-M promotion.
+
+    State reconstruction remains owned by the mutated {class}`Instance`; this
+    value reports the inserted SOS1 constraint and the retained formulation
+    history.
+    """
+    @property
+    def sos1_constraint_id(self) -> builtins.int:
+        r"""
+        ID allocated to the promoted active SOS1 constraint.
+        """
+    @property
+    def members(self) -> builtins.set[builtins.int]:
+        r"""
+        Members of the promoted SOS1 constraint.
+        """
+    @property
+    def fresh_selectors(self) -> builtins.dict[builtins.int, builtins.int]:
+        r"""
+        Verified fresh selectors keyed by their associated SOS1 member.
+        """
+    @property
+    def relaxed_constraint_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Verified regular-constraint IDs moved from active to removed.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
+@typing.final
+class Sos1BigMPromotionRequest:
+    r"""
+    Untrusted stable-ID request for one checked SOS1 Big-M promotion.
+
+    Map keys are the intended SOS1 member IDs. Bounds, kinds, coefficients, and
+    row contents are intentionally absent so the current {class}`Instance`
+    remains the sole source of truth when the request is validated.
+    """
+    @property
+    def selector_claims(self) -> builtins.dict[builtins.int, Sos1BigMSelectorClaim]:
+        r"""
+        Claimed selector roles keyed by intended SOS1 member ID.
+        """
+    @property
+    def cardinality_constraint(self) -> builtins.int:
+        r"""
+        Claimed canonical selector-cardinality constraint ID.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        *,
+        selector_claims: typing.Mapping[builtins.int, Sos1BigMSelectorClaim],
+        cardinality_constraint: builtins.int,
+    ) -> Sos1BigMPromotionRequest: ...
+
+@typing.final
+class Sos1BigMSelectorClaim:
+    r"""
+    Unchecked selector-role claim for one member of an SOS1 Big-M formulation.
+
+    Construct claims with {meth}`reused` or {meth}`fresh`. The claim contains
+    stable IDs only; {meth}`~ommx.Instance.promote_sos1_big_m` validates the
+    current variable domains and regular-constraint rows before mutating the
+    instance.
+    """
+    @property
+    def is_reused(self) -> builtins.bool:
+        r"""
+        Whether this claim reuses the member itself as its selector.
+        """
+    @property
+    def selector(self) -> typing.Optional[builtins.int]:
+        r"""
+        Claimed fresh selector ID, or ``None`` for a reused selector.
+        """
+    @property
+    def upper_link(self) -> typing.Optional[builtins.int]:
+        r"""
+        Claimed upper-link constraint ID, if supplied.
+        """
+    @property
+    def lower_link(self) -> typing.Optional[builtins.int]:
+        r"""
+        Claimed lower-link constraint ID, if supplied.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def reused() -> Sos1BigMSelectorClaim:
+        r"""
+        Claim that the promoted member is itself a full-domain Binary selector.
+        """
+    @staticmethod
+    def fresh(
+        selector: builtins.int,
+        *,
+        upper_link: typing.Optional[builtins.int] = None,
+        lower_link: typing.Optional[builtins.int] = None,
+    ) -> Sos1BigMSelectorClaim:
+        r"""
+        Claim a separate private Binary selector and its optional Big-M links.
+
+        A link may be omitted only when the current member domain makes that
+        side redundant. Supplied links are always validated by the Rust
+        {class}`Instance` owner.
+        """
 
 @typing.final
 class Sos1Constraint:
