@@ -8,6 +8,71 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Checked SOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
+
+{meth}`~ommx.Instance.promote_sos1_big_m` now exposes the Rust-owned checked
+promotion API to Python. Build an untrusted stable-ID request from reused and
+fresh selector claims, then let the current {class}`~ommx.Instance` validate and
+apply it:
+
+```python
+from ommx import (
+    DecisionVariable,
+    Instance,
+    Sense,
+    Sos1BigMPromotionRequest,
+    Sos1BigMSelectorClaim,
+)
+
+x = DecisionVariable.binary(0)
+y = DecisionVariable.integer(1, lower=-2, upper=3)
+z = DecisionVariable.binary(10)
+instance = Instance.from_components(
+    sense=Sense.Minimize,
+    objective=0,
+    decision_variables=[x, y, z],
+    constraints={
+        100: y - 3 * z <= 0,
+        101: -y - 2 * z <= 0,
+        102: x + z - 1 <= 0,
+    },
+)
+request = Sos1BigMPromotionRequest(
+    selector_claims={
+        0: Sos1BigMSelectorClaim.reused(),
+        1: Sos1BigMSelectorClaim.fresh(
+            10,
+            upper_link=100,
+            lower_link=101,
+        ),
+    },
+    cardinality_constraint=102,
+)
+promotion = instance.promote_sos1_big_m(request)
+
+assert promotion.members == {0, 1}
+assert promotion.fresh_selectors == {1: 10}
+assert promotion.relaxed_constraint_ids == {100, 101, 102}
+```
+
+The request deliberately contains no copied bounds or coefficients. The Rust
+{class}`~ommx.Instance` owner reads the current domains and rows, checks the
+canonical cardinality and link semantics under the supplied `atol`, verifies
+fresh-selector isolation, and commits only after the complete request is valid.
+On success, the verified regular rows move to removed history, an active SOS1
+constraint is inserted, and each fresh selector is retained as a dependent
+variable reconstructed from its member. The read-only
+{class}`~ommx.Sos1BigMPromotion` result reports the inserted SOS1 ID, members,
+fresh selectors, and relaxed row IDs.
+
+Invalid semantic claims raise `RuntimeError` and leave the Instance unchanged.
+The tolerance must be finite and satisfy `0 < atol < 1`; non-positive or NaN
+values raise `ValueError`, while a positive-infinite value or a finite value at
+least `1` is rejected by the checked promotion as `RuntimeError`. Use the same
+tolerance for subsequent state reconstruction and evaluation. The equivalence
+guarantee is local to the claimed formulation and supplied tolerance; unrelated
+removed history remains preserved.
+
 ### 🆕 Incremental constructors for interval-domain variables ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
 
 {class}`~ommx.Instance` can now create every existing interval-domain decision
