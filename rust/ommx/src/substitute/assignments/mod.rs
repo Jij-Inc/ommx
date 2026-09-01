@@ -85,56 +85,6 @@ impl AcyclicAssignments {
         self.assignments.iter()
     }
 
-    /// Atomically append assignment rules whose targets are disjoint from this
-    /// table.
-    ///
-    /// This crate-internal storage operation lets an owning root transformation
-    /// update the assignment map, dependency graph, and cached topological order
-    /// together after it has validated that no target will be replaced. Existing
-    /// assignment functions are borrowed while the combined graph is checked and
-    /// are not cloned or rewritten.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the combined assignment graph contains self-reference
-    /// or a dependency cycle. This value remains unchanged on error.
-    ///
-    /// # Panics
-    ///
-    /// Panics if an incoming target is repeated or already exists. Callers must
-    /// establish target disjointness as part of their transformation plan.
-    pub(crate) fn extend_disjoint_in_place_atomic(
-        &mut self,
-        iter: impl IntoIterator<Item = (VariableID, Function)>,
-    ) -> Result<(), SubstitutionError> {
-        let mut incoming = FnvHashMap::default();
-        for (id, function) in iter {
-            assert!(
-                !self.assignments.contains_key(&id),
-                "disjoint assignment extension must not replace existing target {id:?}"
-            );
-            assert!(
-                incoming.insert(id, function).is_none(),
-                "disjoint assignment extension must not repeat incoming target {id:?}"
-            );
-        }
-        if incoming.is_empty() {
-            return Ok(());
-        }
-
-        let (dependency, topological_order) = build_dependency_graph(
-            self.assignments
-                .iter()
-                .chain(incoming.iter())
-                .map(|(&id, function)| (id, function)),
-        )?;
-
-        self.assignments.extend(incoming);
-        self.dependency = dependency;
-        self.topological_order = topological_order;
-        Ok(())
-    }
-
     /// Apply an acyclic substitution atomically without cloning unaffected assignments.
     ///
     /// Crate-internal root operations use this storage effect after planning
@@ -497,68 +447,6 @@ mod tests {
     use crate::{assign, coeff, linear, SampleID, Sampled};
     use ::approx::assert_abs_diff_eq;
     use std::collections::BTreeSet;
-
-    #[test]
-    fn extend_disjoint_preserves_existing_functions_and_updates_evaluation_order() {
-        let mut assignments =
-            AcyclicAssignments::new([(VariableID::from(1), Function::from(linear!(2)).abs())])
-                .unwrap();
-        let original_instructions = match assignments.get(&VariableID::from(1)).unwrap() {
-            Function::Expression(expression) => {
-                crate::function::operation::instructions(expression).as_ptr()
-            }
-            _ => unreachable!("abs creates an Expression"),
-        };
-
-        assignments
-            .extend_disjoint_in_place_atomic([(
-                VariableID::from(2),
-                Function::from(linear!(3)).signum().abs(),
-            )])
-            .unwrap();
-
-        let retained_instructions = match assignments.get(&VariableID::from(1)).unwrap() {
-            Function::Expression(expression) => {
-                crate::function::operation::instructions(expression).as_ptr()
-            }
-            _ => unreachable!("the existing Expression is preserved"),
-        };
-        assert_eq!(retained_instructions, original_instructions);
-
-        let evaluated = assignments
-            .evaluate(&State::from_iter([(3, -2.0)]), ATol::default())
-            .unwrap();
-        assert_eq!(evaluated.entries[&2], 1.0);
-        assert_eq!(evaluated.entries[&1], 1.0);
-    }
-
-    #[test]
-    fn extend_disjoint_preserves_value_when_the_combined_graph_is_cyclic() {
-        let mut assignments = AcyclicAssignments::new([
-            (VariableID::from(1), Function::from(linear!(2))),
-            (VariableID::from(4), Function::from(linear!(1))),
-        ])
-        .unwrap();
-        let before = assignments.clone();
-        let evaluation_order_before = assignments
-            .evaluation_order_iter()
-            .map(|(id, _)| id)
-            .collect::<Vec<_>>();
-
-        let error = assignments
-            .extend_disjoint_in_place_atomic([(VariableID::from(2), Function::from(linear!(4)))])
-            .unwrap_err();
-
-        assert_eq!(error, SubstitutionError::CyclicAssignmentDetected);
-        assert_eq!(assignments, before);
-        assert_eq!(
-            assignments
-                .evaluation_order_iter()
-                .map(|(id, _)| id)
-                .collect::<Vec<_>>(),
-            evaluation_order_before
-        );
-    }
 
     #[test]
     fn test_substitute_acyclic_success() {

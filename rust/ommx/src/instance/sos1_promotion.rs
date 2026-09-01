@@ -19,7 +19,7 @@
 //! every commit effect valid for its source instance. In particular, it proves
 //! that fresh-selector assignments have disjoint targets and cannot introduce a
 //! dependency cycle. Commit starts with one batch lifecycle move that validates
-//! every row ID before changing state. Failure while extending assignments is
+//! every row ID before changing state. Failure while rebuilding assignments is
 //! therefore an internal plan-invariant violation, not request rejection. This
 //! keeps request rejection atomic without cloning the whole instance or allowing
 //! a checked plan to outlive its source state.
@@ -149,9 +149,10 @@ impl Sos1BigMPromotion {
 /// Consequently, every new dependency edge starts at a fresh assignment target
 /// and ends at a variable with no outgoing assignment edge. Existing assignment
 /// right-hand sides may reference members or selectors, but those incoming edges
-/// cannot close a cycle. Extending `decision_variable_dependency` during commit
-/// therefore cannot fail; an error there means this plan invariant was broken
-/// and is handled as a panic rather than an invalid-request result.
+/// cannot close a cycle. Rebuilding `decision_variable_dependency` from the
+/// existing and planned assignments during commit therefore cannot fail; an
+/// error there means this plan invariant was broken and is handled as a panic
+/// rather than an invalid-request result.
 #[derive(Debug)]
 struct Sos1BigMPromotionPlan {
     result: Sos1BigMPromotion,
@@ -382,18 +383,18 @@ impl Instance {
         // remaining storage effect must succeed.
         self.constraint_collection
             .move_active_rows_to_removed_with_reasons(removal_reasons)?;
-        self.decision_variable_dependency
-            .extend_disjoint_in_place_atomic(result.fresh_selectors.iter().map(
-                |(&member, &selector)| {
-                    (
-                        selector,
-                        Function::from(crate::linear!(member.into_inner()))
-                            .signum()
-                            .abs(),
-                    )
-                },
-            ))
-            .expect("fresh-selector dependency extension was validated by Sos1BigMPromotionPlan");
+        let dependencies = std::mem::take(&mut self.decision_variable_dependency)
+            .into_iter()
+            .chain(result.fresh_selectors.iter().map(|(&member, &selector)| {
+                (
+                    selector,
+                    Function::from(crate::linear!(member.into_inner()))
+                        .signum()
+                        .abs(),
+                )
+            }));
+        self.decision_variable_dependency = crate::AcyclicAssignments::new(dependencies)
+            .expect("fresh-selector dependency rebuild was validated by Sos1BigMPromotionPlan");
         self.sos1_constraint_collection
             .insert_active_with_context(
                 result.sos1_constraint_id,
