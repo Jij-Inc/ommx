@@ -841,21 +841,23 @@ impl Instance {
     /// Prove that fresh selectors occur in active solver input only in the
     /// regular formulation rows claimed by the request.
     ///
-    /// The shared exclusion-aware solver-use visitor is the source of truth.
-    /// [`Instance::decision_variable_usage`] uses the same visitor with no
-    /// exclusions. The output objective, removed rows, named functions, and
-    /// dependency RHS expressions are intentionally outside that set; they may
-    /// retain references and observe the canonical dependent-selector value
-    /// during evaluation.
+    /// The active-formulation traversal and its owner-aware `Except` visitor
+    /// are the source of truth. [`Instance::decision_variable_usage`] uses the
+    /// same visitor with an empty exception set. The output objective, removed
+    /// rows, named functions, and dependency RHS expressions are intentionally
+    /// outside the traversal; they may retain references and observe the
+    /// canonical dependent-selector value during evaluation.
     fn ensure_variables_isolated_for_sos1_promotion(
         &self,
         private_ids: &VariableIDSet,
         excluded_regular_constraints: &BTreeSet<ConstraintID>,
     ) -> crate::Result<()> {
-        let used = super::analysis::used_decision_variable_ids_excluding_regular_constraints(
-            self,
-            excluded_regular_constraints,
-        );
+        let except = excluded_regular_constraints
+            .iter()
+            .copied()
+            .map(super::analysis::SolverUse::RegularConstraint)
+            .collect();
+        let used = super::analysis::used_decision_variable_ids_except(self, &except);
         for &id in private_ids {
             if used.contains(&id) {
                 crate::bail!(
