@@ -28,11 +28,12 @@ mod setter;
 mod slack;
 pub use slack::ExactIntegerSlackUnavailable;
 mod sos1;
+mod sos1_promotion;
 mod stats;
 mod substitute;
 mod unary_encode;
 
-pub use analysis::*;
+pub use analysis::{DecisionVariableRole, DecisionVariableUsage, DecisionVariableUsageEntry};
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
 pub use parametric_builder::*;
@@ -41,6 +42,7 @@ pub use preparation::{
     IntegerSlackPreparation, ObjectivePreparation, PreparationPolicy, PreparationTargetNotReached,
     SpecialConstraintPreparation,
 };
+pub use sos1_promotion::{Sos1BigMPromotion, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim};
 pub use stats::*;
 
 use crate::{
