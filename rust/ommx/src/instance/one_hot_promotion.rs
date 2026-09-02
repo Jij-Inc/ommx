@@ -5,6 +5,12 @@
 //! of truth for the regular row and decision-variable domains. Promotion is
 //! allowed only when the active source is exactly a non-zero scalar multiple of
 //! `sum(variables) - 1 = 0` over binary variables.
+//!
+//! Even the single-request API uses a private batch plan. All candidates are
+//! checked against one unchanged source instance before target IDs are
+//! allocated. The batch plan proves that every aggregate storage effect must
+//! succeed, so applying it never clones the [`Instance`] and cannot return a
+//! recoverable error.
 
 use super::Instance;
 use crate::{
@@ -92,11 +98,54 @@ impl OneHotPromotion {
     }
 }
 
+/// Instance-validated OneHot formulation before target-ID allocation.
+///
+/// Multiple requests are checked against the same source snapshot, so target
+/// IDs are deliberately absent here. Only batch planning may allocate them.
+#[derive(Debug)]
+struct CheckedOneHotFormulation {
+    variables: VariableIDSet,
+    source_constraint_id: ConstraintID,
+    one_hot_constraint: OneHotConstraint,
+    context: ConstraintContext,
+}
+
+/// Fully validated, instance-bound plan for one OneHot promotion.
+///
+/// This value is constructed only while building a
+/// [`OneHotPromotionBatchPlan`] and is applied as part of that aggregate plan
+/// to the same, otherwise-unmodified [`Instance`].
 #[derive(Debug)]
 struct OneHotPromotionPlan {
     result: OneHotPromotion,
     one_hot_constraint: OneHotConstraint,
     context: ConstraintContext,
+}
+
+/// Aggregate proof object for applying compatible OneHot promotions.
+///
+/// # Invariants
+///
+/// - every source row was active on one unchanged source [`Instance`];
+/// - source row IDs are pairwise distinct;
+/// - target OneHot IDs are pairwise distinct and absent from both active and
+///   removed OneHot collections;
+/// - every structural constraint is non-empty and all of its members are
+///   registered Binary variables; and
+/// - every source context was captured before mutation.
+///
+/// The plan is private, constructed and immediately consumed by the OneHot
+/// owner module. Consequently no caller can stale it between checking and
+/// applying it, and aggregate Apply cannot produce a recoverable error.
+#[derive(Debug)]
+struct OneHotPromotionBatchPlan {
+    entries: Vec<(usize, OneHotPromotionPlan)>,
+}
+
+#[derive(Debug)]
+struct OneHotPromotionBatchPlanning {
+    plan: OneHotPromotionBatchPlan,
+    rejections: Vec<Option<crate::Error>>,
 }
 
 impl Instance {
@@ -121,42 +170,185 @@ impl Instance {
         &mut self,
         request: &OneHotPromotionRequest,
     ) -> crate::Result<OneHotPromotion> {
-        let plan = self.plan_one_hot_promotion(request)?;
-        let result = plan.result.clone();
-
-        // Commit to a rollback copy so even a storage-layer invariant failure
-        // cannot expose a partially promoted Instance.
-        let mut staged = self.clone();
-        staged
-            .constraint_collection
-            .move_active_rows_to_removed_with_reasons(BTreeMap::from([(
-                result.relaxed_constraint_id,
-                RemovedReason {
-                    reason: PROMOTION_REASON.to_string(),
-                    parameters: [(
-                        TARGET_ID_PARAMETER.to_string(),
-                        result.one_hot_constraint_id.into_inner().to_string(),
-                    )]
-                    .into_iter()
-                    .collect(),
-                },
-            )]))?;
-        staged
-            .one_hot_constraint_collection
-            .insert_active_with_context(
-                result.one_hot_constraint_id,
-                plan.one_hot_constraint,
-                plan.context,
-            )?;
-        *self = staged;
-
-        Ok(result)
+        self.promote_compatible_one_hot(std::slice::from_ref(request))
+            .pop()
+            .expect("one request must produce one aligned OneHot promotion outcome")
     }
 
-    fn plan_one_hot_promotion(
+    /// Check, reconcile, and apply OneHot promotion requests as one batch.
+    ///
+    /// Results remain aligned with the input requests. Individually invalid
+    /// requests and every request sharing a source row with another
+    /// individually valid request are rejected. All remaining requests are
+    /// applied together through one [`OneHotPromotionBatchPlan`].
+    fn promote_compatible_one_hot(
+        &mut self,
+        requests: &[OneHotPromotionRequest],
+    ) -> Vec<crate::Result<OneHotPromotion>> {
+        let OneHotPromotionBatchPlanning { plan, rejections } =
+            self.plan_compatible_one_hot_promotions(requests);
+        let mut outcomes = rejections
+            .into_iter()
+            .map(|error| error.map(Err))
+            .collect::<Vec<_>>();
+
+        for (index, promotion) in self.apply_one_hot_promotion_batch(plan) {
+            debug_assert!(outcomes[index].is_none());
+            outcomes[index] = Some(Ok(promotion));
+        }
+
+        outcomes
+            .into_iter()
+            .map(|outcome| outcome.expect("every OneHot request must receive one outcome"))
+            .collect()
+    }
+
+    fn apply_one_hot_promotion_batch(
+        &mut self,
+        plan: OneHotPromotionBatchPlan,
+    ) -> Vec<(usize, OneHotPromotion)> {
+        if plan.entries.is_empty() {
+            return Vec::new();
+        }
+
+        let removal_reasons = plan
+            .entries
+            .iter()
+            .map(|(_, plan)| {
+                (
+                    plan.result.relaxed_constraint_id,
+                    RemovedReason {
+                        reason: PROMOTION_REASON.to_string(),
+                        parameters: [(
+                            TARGET_ID_PARAMETER.to_string(),
+                            plan.result.one_hot_constraint_id.into_inner().to_string(),
+                        )]
+                        .into_iter()
+                        .collect(),
+                    },
+                )
+            })
+            .collect();
+        self.constraint_collection
+            .move_active_rows_to_removed_with_reasons(removal_reasons)
+            .expect("source rows were validated by OneHotPromotionBatchPlan");
+
+        let mut promotions = Vec::with_capacity(plan.entries.len());
+        for (index, plan) in plan.entries {
+            self.one_hot_constraint_collection
+                .insert_active_with_context(
+                    plan.result.one_hot_constraint_id,
+                    plan.one_hot_constraint,
+                    plan.context,
+                )
+                .expect("target IDs and member IDs were validated by OneHotPromotionBatchPlan");
+            promotions.push((index, plan.result));
+        }
+        promotions
+    }
+
+    fn plan_compatible_one_hot_promotions(
+        &self,
+        requests: &[OneHotPromotionRequest],
+    ) -> OneHotPromotionBatchPlanning {
+        let mut checked = Vec::with_capacity(requests.len());
+        let mut rejections = Vec::with_capacity(requests.len());
+        for request in requests {
+            match self.check_one_hot_promotion(request) {
+                Ok(formulation) => {
+                    checked.push(Some(formulation));
+                    rejections.push(None);
+                }
+                Err(error) => {
+                    checked.push(None);
+                    rejections.push(Some(error));
+                }
+            }
+        }
+
+        let mut source_claimants = BTreeMap::<ConstraintID, Vec<usize>>::new();
+        for (index, formulation) in checked.iter().enumerate() {
+            if let Some(formulation) = formulation {
+                source_claimants
+                    .entry(formulation.source_constraint_id)
+                    .or_default()
+                    .push(index);
+            }
+        }
+        for (source_constraint_id, claimants) in source_claimants {
+            if claimants.len() <= 1 {
+                continue;
+            }
+            for index in claimants {
+                checked[index] = None;
+                rejections[index] = Some(crate::error!(
+                    { index, ?source_constraint_id },
+                    "OneHot promotion request at index {index} conflicts with another individually valid request over source row {source_constraint_id:?}"
+                ));
+            }
+        }
+
+        let survivor_count = checked.iter().filter(|entry| entry.is_some()).count();
+        if let Err(error) = self
+            .one_hot_constraint_collection
+            .ensure_unused_id_capacity(survivor_count)
+        {
+            let message = error.to_string();
+            for (index, formulation) in checked.iter_mut().enumerate() {
+                if formulation.take().is_some() {
+                    rejections[index] = Some(crate::error!(
+                        { index, survivor_count },
+                        "Cannot allocate OneHot constraint IDs for the compatible promotion batch: {message}"
+                    ));
+                }
+            }
+            return OneHotPromotionBatchPlanning {
+                plan: OneHotPromotionBatchPlan {
+                    entries: Vec::new(),
+                },
+                rejections,
+            };
+        }
+
+        let first_id = (survivor_count > 0)
+            .then(|| self.one_hot_constraint_collection.unused_id().into_inner());
+        let mut offset = 0_u64;
+        let mut entries = Vec::with_capacity(survivor_count);
+        for (index, formulation) in checked.into_iter().enumerate() {
+            let Some(formulation) = formulation else {
+                continue;
+            };
+            let one_hot_constraint_id = OneHotConstraintID::from(
+                first_id
+                    .expect("a non-empty compatible batch has a first OneHot ID")
+                    .checked_add(offset)
+                    .expect("batch ID capacity was validated before allocation"),
+            );
+            offset += 1;
+            entries.push((
+                index,
+                OneHotPromotionPlan {
+                    result: OneHotPromotion {
+                        one_hot_constraint_id,
+                        variables: formulation.variables,
+                        relaxed_constraint_id: formulation.source_constraint_id,
+                    },
+                    one_hot_constraint: formulation.one_hot_constraint,
+                    context: formulation.context,
+                },
+            ));
+        }
+
+        OneHotPromotionBatchPlanning {
+            plan: OneHotPromotionBatchPlan { entries },
+            rejections,
+        }
+    }
+
+    fn check_one_hot_promotion(
         &self,
         request: &OneHotPromotionRequest,
-    ) -> crate::Result<OneHotPromotionPlan> {
+    ) -> crate::Result<CheckedOneHotFormulation> {
         if request.variables.is_empty() {
             crate::bail!("One-hot promotion request must contain at least one member");
         }
@@ -247,21 +439,15 @@ impl Instance {
             );
         }
 
-        self.one_hot_constraint_collection
-            .ensure_unused_id_capacity(1)?;
-        let one_hot_constraint_id = self.one_hot_constraint_collection.unused_id();
         let one_hot_constraint = OneHotConstraint::new(request.variables.clone())?;
         let context = self
             .constraint_collection
             .context()
             .collect_for(request.source_constraint_id);
 
-        Ok(OneHotPromotionPlan {
-            result: OneHotPromotion {
-                one_hot_constraint_id,
-                variables: request.variables.clone(),
-                relaxed_constraint_id: request.source_constraint_id,
-            },
+        Ok(CheckedOneHotFormulation {
+            variables: request.variables.clone(),
+            source_constraint_id: request.source_constraint_id,
             one_hot_constraint,
             context,
         })
@@ -304,6 +490,40 @@ mod tests {
             .unwrap()
     }
 
+    fn batch_instance() -> (Instance, Vec<OneHotPromotionRequest>) {
+        let requests = vec![
+            OneHotPromotionRequest {
+                source_constraint_id: ConstraintID::from(10),
+                variables: variables([1, 2]),
+            },
+            OneHotPromotionRequest {
+                source_constraint_id: ConstraintID::from(20),
+                variables: variables([2, 3]),
+            },
+        ];
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::from([
+                (VariableID::from(1), DecisionVariable::binary()),
+                (VariableID::from(2), DecisionVariable::binary()),
+                (VariableID::from(3), DecisionVariable::binary()),
+            ]))
+            .constraints(BTreeMap::from([
+                (
+                    ConstraintID::from(10),
+                    Constraint::equal_to_zero(exact_scaled_one_hot(&[1, 2], 1.0)),
+                ),
+                (
+                    ConstraintID::from(20),
+                    Constraint::equal_to_zero(exact_scaled_one_hot(&[2, 3], -2.0)),
+                ),
+            ]))
+            .build()
+            .unwrap();
+        (instance, requests)
+    }
+
     fn request(ids: impl IntoIterator<Item = u64>) -> OneHotPromotionRequest {
         OneHotPromotionRequest {
             source_constraint_id: ConstraintID::from(10),
@@ -316,13 +536,15 @@ mod tests {
         request: &OneHotPromotionRequest,
         message: &str,
     ) {
-        let before = instance.clone();
+        let regular_before = instance.constraint_collection.clone();
+        let one_hot_before = instance.one_hot_constraint_collection.clone();
         let error = instance.promote_one_hot(request).unwrap_err();
         assert!(
             error.to_string().contains(message),
             "unexpected error: {error:#}"
         );
-        assert_eq!(instance, before);
+        assert_eq!(instance.constraint_collection, regular_before);
+        assert_eq!(instance.one_hot_constraint_collection, one_hot_before);
     }
 
     #[test]
@@ -410,6 +632,90 @@ mod tests {
                 context
             );
         }
+    }
+
+    #[test]
+    fn batch_promotes_disjoint_rows_with_a_shared_member() {
+        let (mut instance, requests) = batch_instance();
+
+        let outcomes = instance.promote_compatible_one_hot(&requests);
+
+        let promotions = outcomes
+            .iter()
+            .map(|outcome| outcome.as_ref().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            promotions
+                .iter()
+                .map(|promotion| promotion.one_hot_constraint_id())
+                .collect::<Vec<_>>(),
+            vec![OneHotConstraintID::from(0), OneHotConstraintID::from(1)]
+        );
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 2);
+        assert_eq!(instance.one_hot_constraints().len(), 2);
+        assert_eq!(
+            instance.one_hot_constraints()[&OneHotConstraintID::from(0)].variables,
+            variables([1, 2])
+        );
+        assert_eq!(
+            instance.one_hot_constraints()[&OneHotConstraintID::from(1)].variables,
+            variables([2, 3])
+        );
+    }
+
+    #[test]
+    fn batch_rejects_all_duplicate_source_claims_and_promotes_unrelated_request() {
+        let (mut instance, requests) = batch_instance();
+        let requests = vec![
+            requests[0].clone(),
+            requests[0].clone(),
+            requests[1].clone(),
+        ];
+
+        let outcomes = instance.promote_compatible_one_hot(&requests);
+
+        assert!(outcomes[0]
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("conflicts with another individually valid request"));
+        assert!(outcomes[1].is_err());
+        assert_eq!(
+            outcomes[2].as_ref().unwrap().one_hot_constraint_id(),
+            OneHotConstraintID::from(0)
+        );
+        assert!(instance.constraints().contains_key(&ConstraintID::from(10)));
+        assert!(instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(20)));
+        assert_eq!(instance.one_hot_constraints().len(), 1);
+    }
+
+    #[test]
+    fn batch_rejects_id_exhaustion_before_any_mutation() {
+        let (mut instance, requests) = batch_instance();
+        instance
+            .one_hot_constraint_collection
+            .insert_active_with_context(
+                OneHotConstraintID::from(u64::MAX),
+                OneHotConstraint::new(variables([1])).unwrap(),
+                ConstraintContext::default(),
+            )
+            .unwrap();
+        let regular_before = instance.constraint_collection.clone();
+        let one_hot_before = instance.one_hot_constraint_collection.clone();
+
+        let outcomes = instance.promote_compatible_one_hot(&requests);
+
+        assert!(outcomes.iter().all(Result::is_err));
+        assert!(outcomes.iter().all(|outcome| outcome
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot allocate OneHot constraint IDs")));
+        assert_eq!(instance.constraint_collection, regular_before);
+        assert_eq!(instance.one_hot_constraint_collection, one_hot_before);
     }
 
     #[test]
