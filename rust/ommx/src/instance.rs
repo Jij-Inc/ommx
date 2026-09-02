@@ -37,7 +37,7 @@ mod unary_encode;
 pub use analysis::{DecisionVariableRole, DecisionVariableUsage, DecisionVariableUsageEntry};
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
-pub use one_hot_promotion::OneHotPromotionRequest;
+pub use one_hot_promotion::{OneHotPromotion, OneHotPromotionRequest};
 pub use parametric_builder::*;
 pub use preparation::{
     BinaryPowerPreparation, FixedPenaltyPreparation, IntegerEncodingPreparation,
