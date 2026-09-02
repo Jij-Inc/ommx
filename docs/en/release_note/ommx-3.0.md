@@ -8,6 +8,132 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+## 3.0.0 Beta 5
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b5)
+
+### 🛠 Inclusive `atol` boundaries ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+Absolute-tolerance comparisons now include the exact boundary consistently.
+Equality residuals are feasible when $|f(x)| \leq \mathtt{atol}$, while
+inequality residuals are feasible when $f(x) < 0$ or
+$|f(x)| \leq \mathtt{atol}$. The same rule is used by scalar and sample
+evaluation, regular and Indicator constraints, `Solution` and `SampleSet`
+validation, and v1/v2 deserialization.
+
+Function zero-sensitive operations, Indicator activation, OneHot and SOS1
+classification, discrete solver-state canonicalization, and fixed-value
+consistency checks also include values exactly `atol` from their target.
+Values just outside the boundary remain outside. APIs that own finite-value
+validation continue to reject NaN and infinity before reporting domain or
+consistency errors.
+
+### 🛠 Canonical solver states during evaluation ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+{meth}`~ommx.Instance.populate_state`, {meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples` now canonicalize finite supplied
+coordinates that are neither fixed nor dependent, as well as values derived for
+dependent targets, according to each decision-variable kind and the caller's
+`atol`. For those coordinates, Binary values whose distance from `0` or `1` is
+at most `atol`, and Integer or SemiInteger values whose distance from an integer
+is at most `atol`, are stored as the corresponding exact discrete value,
+including values exactly at the tolerance boundary. Kind and bound feasibility
+continue to be checked separately under their existing rules. Continuous and
+SemiContinuous values are never rounded. Other
+finite values are preserved so a returned {class}`~ommx.Solution` can report
+their feasibility, while non-finite state values remain rejected.
+
+A caller-supplied fixed or dependent value remains a consistency assertion.
+After validation, the returned state uses the Instance-owned fixed value
+unchanged or the dependency-derived value canonicalized for its target kind.
+Dependencies are evaluated from canonicalized inputs, so an explicitly supplied
+dependent assertion computed from the raw solver vector can now be rejected if
+it is not within `atol` of that derived value. Scalar and sample evaluation use
+the same rule while preserving SampleID membership.
+
+{meth}`~ommx.Instance.partial_evaluate` applies the same rule to its validated
+input before special-constraint propagation, expression substitution, and
+constant dependency evaluation. Evaluating the rewritten Instance therefore
+uses the same canonical coordinates as directly evaluating the original
+Instance. Existing Instance-owned fixed values remain unchanged, and values
+outside partial evaluation's existing kind and bound acceptance contract remain
+rejected.
+
+### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181), [#1184](https://github.com/Jij-Inc/ommx/pull/1184))
+
+{class}`~ommx.Function` can now represent composed expressions as well as
+compact polynomials. Python users can construct absolute values, sign
+functions, minima, maxima, divisions, and signed 32-bit integer powers directly:
+
+```python
+from ommx import DecisionVariable, Function
+
+x = Function(DecisionVariable.continuous(1))
+y = Function(DecisionVariable.continuous(2))
+z = Function(DecisionVariable.continuous(3))
+
+f = abs(x - 2).maximum(y) / (z + 1)
+g = f**2
+h = f.powi(-2)
+```
+
+Use {meth}`~ommx.Function.signum`, {meth}`~ommx.Function.minimum`, and
+{meth}`~ommx.Function.maximum` for the named operations. `f**n` and
+{meth}`~ommx.Function.powi` are equivalent; floating-point or function-valued
+exponents and reverse exponentiation are not supported. At evaluation,
+`abs(value) <= atol` is classified as zero, including the boundary: `signum`
+returns `0`, while division by such a denominator and raising such a value to a
+negative integer power raise `ValueError`. Composed expressions are serialized
+as flat reverse Polish notation (RPN) instruction sequences in OMMX protobuf
+payloads. All bundled adapters—HiGHS, Python-MIP, PySCIPOpt, and OpenJij—
+currently declare polynomial-only input classes and therefore reject composed
+expressions in the function positions they accept.
+
+Zero-sensitive `Signum`, `Div`, and negative `Powi` nodes are retained through
+construction, substitution, and partial evaluation so that a later evaluation
+call supplies the `atol` that determines their result or domain error. In
+particular, dividing a `Function` by a constant or coefficient remains a
+composed expression. `Function.evaluate_bound(..., atol=...)` applies the same
+zero classification to interval bounds. Indicator Big-M conversion,
+special-constraint lowering, and integer-slack conversion also accept an
+optional `atol=` for bounds they derive. This aligns zero-sensitive Function
+body evaluation; algebraic lowering still assumes exact discrete values and
+does not canonicalize approximate solver output near 0 or 1. Omitting `atol`
+uses `DEFAULT_ATOL`. Integer-slack conversion classifies an inequality with the
+same inclusive rule used by evaluation, $f(x) < 0$ or
+$|f(x)| \leq \mathtt{atol}$, before coefficient normalization, so a small
+positive value is not silently reclassified by scaling. Exact polynomial
+normalization retains every finite nonzero coefficient and does not apply an
+implicit tolerance-based cleanup. A future approximate-cleanup API would be
+separate and explicit. Subtraction follows the same canonicalization as
+addition with a negated right-hand side, so `x - (-y)` compacts to a polynomial
+when possible and coefficient overflow is raised immediately as `ValueError`.
+
+Because a `Function` is no longer necessarily a polynomial,
+{meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` return
+`None` for composed expressions. Polynomial-term accessors and
+{meth}`~ommx.Function.content_factor` raise `TypeError` instead of treating a
+composed expression as an empty polynomial. See the
+[Function user guide](../user_guide/function.md) for operation ordering,
+evaluation errors, and serialization details.
+
+The instance-class API now names that polynomial requirement explicitly. This
+is a breaking rename from the API published in Python SDK 3.0.0 Beta 4:
+
+| Before | After |
+|---|---|
+| `DegreeBound` | `PolynomialRequirement` |
+| `DegreeBound.at_most(n)` | `PolynomialRequirement.at_most(n)` |
+| `DegreeBound.unbounded()` | `PolynomialRequirement.any_degree()` |
+| `bound.maximum` | `requirement.maximum_degree` |
+| `bound.includes(degree)` | `requirement.accepts_degree(degree)` |
+| `objective_degree_bound` | `objective_polynomial_requirement` |
+| `regular_constraint_degree_bounds` | `regular_constraint_polynomial_requirements` |
+| `indicator_constraint_degree_bounds` | `indicator_body_polynomial_requirements` |
+
+`PolynomialRequirement.any_degree()` accepts a polynomial of any degree; it
+does not admit a composed, non-polynomial `Function`.
+
 ### 🆕 Checked SOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
 
 An {ref}`SOS1 constraint <sos1-constraint>` allows at most one member to be
@@ -82,125 +208,9 @@ bound or tolerance, or a maximum existing decision-variable ID of `2**64 - 1`
 that prevents assignment of a larger automatic ID, leaves no partial variable
 or label behind.
 
-### 🛠 Inclusive `atol` boundaries ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+## 3.0.0 Beta 4
 
-Absolute-tolerance comparisons now include the exact boundary consistently.
-Equality residuals are feasible when $|f(x)| \leq \mathtt{atol}$, while
-inequality residuals are feasible when $f(x) < 0$ or
-$|f(x)| \leq \mathtt{atol}$. The same rule is used by scalar and sample
-evaluation, regular and Indicator constraints, `Solution` and `SampleSet`
-validation, and v1/v2 deserialization.
-
-Function zero-sensitive operations, Indicator activation, OneHot and SOS1
-classification, discrete solver-state canonicalization, and fixed-value
-consistency checks also include values exactly `atol` from their target.
-Values just outside the boundary remain outside. APIs that own finite-value
-validation continue to reject NaN and infinity before reporting domain or
-consistency errors.
-
-### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
-
-{class}`~ommx.Function` can now represent composed expressions as well as
-compact polynomials. Python users can construct absolute values, sign
-functions, minima, maxima, divisions, and signed 32-bit integer powers directly:
-
-```python
-from ommx import DecisionVariable, Function
-
-x = Function(DecisionVariable.continuous(1))
-y = Function(DecisionVariable.continuous(2))
-z = Function(DecisionVariable.continuous(3))
-
-f = abs(x - 2).maximum(y) / (z + 1)
-g = f**2
-h = f.powi(-2)
-```
-
-Use {meth}`~ommx.Function.signum`, {meth}`~ommx.Function.minimum`, and
-{meth}`~ommx.Function.maximum` for the named operations. `f**n` and
-{meth}`~ommx.Function.powi` are equivalent; floating-point or function-valued
-exponents and reverse exponentiation are not supported. At evaluation,
-`abs(value) <= atol` is classified as zero, including the boundary: `signum`
-returns `0`, while division by such a denominator and raising such a value to a
-negative integer power raise `ValueError`. Composed expressions are serialized
-as flat reverse Polish notation (RPN) instruction sequences in OMMX protobuf
-payloads. All bundled adapters—HiGHS, Python-MIP, PySCIPOpt, and OpenJij—
-currently declare polynomial-only input classes and therefore reject composed
-expressions in the function positions they accept.
-
-Zero-sensitive `Signum`, `Div`, and negative `Powi` nodes are retained through
-construction, substitution, and partial evaluation so that a later evaluation
-call supplies the `atol` that determines their result or domain error. In
-particular, dividing a `Function` by a constant or coefficient remains a
-composed expression. `Function.evaluate_bound(..., atol=...)` applies the same
-zero classification to interval bounds. Indicator Big-M conversion,
-special-constraint lowering, and integer-slack conversion also accept an
-optional `atol=` for bounds they derive. This aligns zero-sensitive Function
-body evaluation; algebraic lowering still assumes exact discrete values and
-does not canonicalize approximate solver output near 0 or 1. Omitting `atol`
-uses `DEFAULT_ATOL`. Integer-slack conversion classifies an inequality with the
-same inclusive rule used by evaluation, $f(x) < 0$ or
-$|f(x)| \leq \mathtt{atol}$, before coefficient normalization, so a small
-positive value is not silently reclassified by scaling. Exact polynomial
-normalization retains every finite nonzero coefficient and does not apply an
-implicit tolerance-based cleanup. A future approximate-cleanup API would be
-separate and explicit.
-
-Because a `Function` is no longer necessarily a polynomial,
-{meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` return
-`None` for composed expressions. Polynomial-term accessors and
-{meth}`~ommx.Function.content_factor` raise `TypeError` instead of treating a
-composed expression as an empty polynomial. See the
-[Function user guide](../user_guide/function.md) for operation ordering,
-evaluation errors, and serialization details.
-
-The instance-class API now names that polynomial requirement explicitly. This
-is a breaking rename from the API published in Python SDK 3.0.0 Beta 4:
-
-| Before | After |
-|---|---|
-| `DegreeBound` | `PolynomialRequirement` |
-| `DegreeBound.at_most(n)` | `PolynomialRequirement.at_most(n)` |
-| `DegreeBound.unbounded()` | `PolynomialRequirement.any_degree()` |
-| `bound.maximum` | `requirement.maximum_degree` |
-| `bound.includes(degree)` | `requirement.accepts_degree(degree)` |
-| `objective_degree_bound` | `objective_polynomial_requirement` |
-| `regular_constraint_degree_bounds` | `regular_constraint_polynomial_requirements` |
-| `indicator_constraint_degree_bounds` | `indicator_body_polynomial_requirements` |
-
-`PolynomialRequirement.any_degree()` accepts a polynomial of any degree; it
-does not admit a composed, non-polynomial `Function`.
-
-### 🛠 Canonical solver states during evaluation ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
-
-{meth}`~ommx.Instance.populate_state`, {meth}`~ommx.Instance.evaluate`, and
-{meth}`~ommx.Instance.evaluate_samples` now canonicalize finite supplied
-coordinates that are neither fixed nor dependent, as well as values derived for
-dependent targets, according to each decision-variable kind and the caller's
-`atol`. For those coordinates, Binary values whose distance from `0` or `1` is
-at most `atol`, and Integer or SemiInteger values whose distance from an integer
-is at most `atol`, are stored as the corresponding exact discrete value,
-including values exactly at the tolerance boundary. Kind and bound feasibility
-continue to be checked separately under their existing rules. Continuous and
-SemiContinuous values are never rounded. Other
-finite values are preserved so a returned {class}`~ommx.Solution` can report
-their feasibility, while non-finite state values remain rejected.
-
-A caller-supplied fixed or dependent value remains a consistency assertion.
-After validation, the returned state uses the Instance-owned fixed value
-unchanged or the dependency-derived value canonicalized for its target kind.
-Dependencies are evaluated from canonicalized inputs, so an explicitly supplied
-dependent assertion computed from the raw solver vector can now be rejected if
-it is not within `atol` of that derived value. Scalar and sample evaluation use
-the same rule while preserving SampleID membership.
-
-{meth}`~ommx.Instance.partial_evaluate` applies the same rule to its validated
-input before special-constraint propagation, expression substitution, and
-constant dependency evaluation. Evaluating the rewritten Instance therefore
-uses the same canonical coordinates as directly evaluating the original
-Instance. Existing Instance-owned fixed values remain unchanged, and values
-outside partial evaluation's existing kind and bound acceptance contract remain
-rejected.
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b4)
 
 ### ⚠ `solve()` and `sample()` now prepare inputs automatically ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 
