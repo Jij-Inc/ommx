@@ -15,6 +15,7 @@ mod logical_memory;
 mod named_function;
 mod new;
 mod one_hot;
+mod one_hot_promotion;
 mod parametric_builder;
 mod parse;
 mod pass;
@@ -32,10 +33,12 @@ mod sos1_promotion;
 mod stats;
 mod substitute;
 mod unary_encode;
+mod v1_hint_promotion;
 
 pub use analysis::{DecisionVariableRole, DecisionVariableUsage, DecisionVariableUsageEntry};
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
+pub use one_hot_promotion::{OneHotPromotion, OneHotPromotionRequest};
 pub use parametric_builder::*;
 pub use preparation::{
     BinaryPowerPreparation, FixedPenaltyPreparation, IntegerEncodingPreparation,
@@ -44,6 +47,9 @@ pub use preparation::{
 };
 pub use sos1_promotion::{Sos1BigMPromotion, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim};
 pub use stats::*;
+pub use v1_hint_promotion::{
+    V1ConstraintHintPromotionReport, V1OneHotHintPromotionOutcome, V1Sos1HintPromotionOutcome,
+};
 
 use crate::{
     constraint::{ConstraintContextStore, RemovedReason},

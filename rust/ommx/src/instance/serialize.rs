@@ -68,6 +68,12 @@ impl Instance {
         v2_instance.encode_to_vec()
     }
 
+    /// Deserialize an instance from the v1 wire format.
+    ///
+    /// Legacy [`v1::ConstraintHints`] are advisory and are ignored by this
+    /// ordinary loader. Use [`Instance::from_v1_bytes_with_promotion`] to
+    /// retain a structured outcome for every hint and promote each
+    /// independently verified formulation.
     pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = message_io::decode::<v1::Instance>(bytes, "ommx.v1.Instance")?;
         Ok(Parse::parse(inner, &())?)

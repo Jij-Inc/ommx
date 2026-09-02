@@ -75,6 +75,28 @@ pub struct Sos1BigMPromotionRequest {
     pub cardinality_constraint: ConstraintID,
 }
 
+impl Sos1BigMPromotionRequest {
+    /// Reconstruct an untrusted promotion request from one legacy v1 SOS1 hint.
+    ///
+    /// The legacy hint stores member IDs and an unordered flat list of Big-M
+    /// row IDs, but not the member/selector/side role of each row. This
+    /// conversion therefore inspects the supplied [`Instance`] and succeeds
+    /// only when every listed row has one hinted member and one non-member
+    /// selector and the complete mapping is unique. Duplicate IDs, stale
+    /// active-row references, unused rows, and ambiguous or incomplete
+    /// mappings are rejected.
+    ///
+    /// The returned request remains an untrusted claim. In particular, this
+    /// conversion does not certify the Big-M bounds, link coefficients,
+    /// cardinality semantics, or selector isolation. Pass it to
+    /// [`Instance::promote_sos1_big_m`] for the complete checked promotion.
+    /// Keeping conversion separate lets callers that obtained a raw
+    /// [`crate::v1::Sos1`] independently decide when and how to apply it.
+    pub fn from_v1_hint(instance: &Instance, hint: &crate::v1::Sos1) -> crate::Result<Self> {
+        instance.sos1_big_m_promotion_request_from_v1_hint(hint)
+    }
+}
+
 /// Result of one checked SOS1 Big-M promotion.
 ///
 /// State reconstruction is owned by the mutated [`Instance`]: each fresh
@@ -413,19 +435,17 @@ impl Instance {
     /// [`Instance::promote_sos1_big_m`]. No hint field supplies bounds,
     /// coefficients, or verified selector roles.
     ///
-    /// The legacy hint stores member IDs and an unordered flat list of Big-M
-    /// row IDs, but not the member/selector/side role of each row. Request
-    /// reconstruction therefore succeeds only when every listed row has one
-    /// hinted member and one non-member selector and the complete mapping is
-    /// unique. Duplicate IDs, stale active-row references, unused rows, and
-    /// ambiguous or incomplete mappings are rejected before mutation.
+    /// Request reconstruction is also available independently through
+    /// [`Sos1BigMPromotionRequest::from_v1_hint`] for callers that obtained a
+    /// raw hint separately.
     ///
-    /// [`Instance::from_v1_bytes`] discards legacy
+    /// The ordinary [`Instance::from_v1_bytes`] path discards legacy
     /// [`crate::v1::ConstraintHints`], and converting a consumed
-    /// [`crate::v1::Instance`] does not retain them either. Callers must decode
-    /// the raw v1 message, clone the selected [`crate::v1::Sos1`] hint, convert
-    /// the raw message into the domain [`Instance`], and then invoke this
-    /// method explicitly. Neither parsing path promotes a hint automatically.
+    /// [`crate::v1::Instance`] does not retain them either. Use
+    /// [`Instance::from_v1_bytes_with_promotion`] when the complete v1 bytes
+    /// are available and every hint should be attempted with a structured
+    /// report. This method remains useful when a caller retained or obtained
+    /// one raw [`crate::v1::Sos1`] separately from the domain instance.
     ///
     /// On success this is the same atomic, history-preserving mutation as
     /// [`Instance::promote_sos1_big_m`]. On error the instance is unchanged.
@@ -434,7 +454,7 @@ impl Instance {
         hint: &crate::v1::Sos1,
         atol: ATol,
     ) -> crate::Result<Sos1BigMPromotion> {
-        let request = self.sos1_big_m_promotion_request_from_v1_hint(hint)?;
+        let request = Sos1BigMPromotionRequest::from_v1_hint(self, hint)?;
         self.promote_sos1_big_m(&request, atol)
     }
 
