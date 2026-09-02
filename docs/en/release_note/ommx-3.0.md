@@ -8,6 +8,42 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🆕 Checked SOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
+
+An {ref}`SOS1 constraint <sos1-constraint>` allows at most one member to be
+non-zero. A {ref}`Big-M formulation <sos1-big-m-formulation>` represents this
+condition with binary selectors, member-selector link constraints, and a
+selector-cardinality constraint.
+
+{meth}`~ommx.Instance.promote_sos1_big_m` accepts a claim that the current
+`Instance` contains such a formulation. This is an independent transformation
+request, not a rollback or inverse of lowering. The method verifies that the
+current variables, domains, and rows satisfy sufficient conditions that justify
+replacing the claimed formulation rows with a first-class SOS1 constraint, then
+applies that transformation atomically.
+
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest(
+    selector_claims={
+        0: Sos1BigMSelectorClaim.reused(),
+        1: Sos1BigMSelectorClaim.fresh(
+            10,
+            upper_link=100,
+            lower_link=101,
+        ),
+    },
+    cardinality_constraint=102,
+)
+promotion = instance.promote_sos1_big_m(request)
+```
+
+If the claimed formulation fails validation, `RuntimeError` is raised and the
+`Instance` remains unchanged. The returned
+{class}`~ommx.Sos1BigMPromotion` exposes `sos1_constraint_id`, `members`,
+`fresh_selectors`, and `relaxed_constraint_ids`.
+
 ### 🆕 Incremental constructors for interval-domain variables ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
 
 {class}`~ommx.Instance` can now create every existing interval-domain decision

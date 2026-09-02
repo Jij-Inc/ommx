@@ -52,6 +52,9 @@ ommx
    _items/ommx.Sos1Constraint
    _items/ommx.AttachedSos1Constraint
    _items/ommx.RemovedSos1Constraint
+   _items/ommx.Sos1BigMSelectorClaim
+   _items/ommx.Sos1BigMPromotionRequest
+   _items/ommx.Sos1BigMPromotion
    _items/ommx.RemovedConstraint
    _items/ommx.Provenance
    _items/ommx.ProvenanceKind

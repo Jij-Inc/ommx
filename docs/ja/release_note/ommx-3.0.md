@@ -8,6 +8,41 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🆕 検証付きSOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
+
+{ref}`SOS1制約 <sos1-constraint>`は、memberのうち高々1つだけが
+非零となる制約です。{ref}`Big-M formulation <sos1-big-m-formulation>`は、
+この条件をbinary selector、memberとselectorのlink制約、およびselectorの
+cardinality制約で表します。
+
+{meth}`~ommx.Instance.promote_sos1_big_m`は、現在の`Instance`がこの
+formulationを持つという申請を受け取ります。これは独立した変形申請であり、
+loweringのrollbackや逆変換ではありません。現在の変数、domain、rowが申請した
+formulationのrowをfirst-classなSOS1制約へ置き換えることを正当化する十分条件を
+満たすことを検証してから、その変形をatomicに適用します。
+
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest(
+    selector_claims={
+        0: Sos1BigMSelectorClaim.reused(),
+        1: Sos1BigMSelectorClaim.fresh(
+            10,
+            upper_link=100,
+            lower_link=101,
+        ),
+    },
+    cardinality_constraint=102,
+)
+promotion = instance.promote_sos1_big_m(request)
+```
+
+申請したformulationの検証に失敗すると`RuntimeError`となり、`Instance`は
+変更されません。戻り値の{class}`~ommx.Sos1BigMPromotion`から
+`sos1_constraint_id`、`members`、`fresh_selectors`、
+`relaxed_constraint_ids`を参照できます。
+
 ### 🆕 区間で定義する決定変数の逐次作成 ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
 
 {class}`~ommx.Instance` が数値IDを自動で割り当てながら、既存の区間で定義する

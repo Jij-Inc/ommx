@@ -11538,6 +11538,50 @@
               "deprecated": null
             },
             {
+              "name": "promote_sos1_big_m",
+              "doc": "Validate and promote one claimed SOS1 Big-M formulation in place.\n\nThe request supplies stable IDs only. The Rust {class}`Instance` owner\nreads the current variable domains and regular rows, validates the full\nformulation, and commits the lifecycle move, selector reconstruction,\nand SOS1 insertion atomically. Invalid requests leave the instance\nunchanged.\n\n``atol`` parameterizes the local projected-feasibility check, must be\nfinite and satisfy ``0 < atol < 1``, and must also be used for subsequent\nstate reconstruction and evaluation. If omitted, the current default\nreturned by {func}`~ommx.get_default_atol` is used.\n\nRaises {class}`RuntimeError` when the claimed formulation is invalid for\nthe current instance, including a positive-infinite tolerance or a\nfinite ``atol >= 1``.\nNon-positive or NaN values rejected while constructing the tolerance\nraise {class}`ValueError`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "request",
+                      "type_": {
+                        "display": "Sos1BigMPromotionRequest",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1BigMPromotion",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "random_samples",
               "doc": "Generate random samples for this instance.\n\nThe generated samples will contain ``num_samples`` sample entries divided into\n``num_different_samples`` groups, where each group shares the same state but has\ndifferent sample IDs.\n\n**Args:**\n- `rng`: Random number generator\n- `num_different_samples`: Number of different states to generate\n- `num_samples`: Total number of samples to generate\n- `max_sample_id`: Maximum sample ID (default: ``num_samples``)\n\n**Returns:**\nSamples object\n\nRaises {class}`ValueError` if the requested state groups cannot\npartition the samples or the inclusive sample-ID range is too small.\n`num_different_samples=0` is valid only when `num_samples=0`.\n\n# Examples\n\nGenerate samples for a simple instance:\n\n>>> from ommx import DecisionVariable, Instance, Rng, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: sum(x) <= 2},\n...     sense=Sense.Maximize,\n... )\n\n>>> rng = Rng()\n>>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)\n>>> samples.num_samples()\n5",
               "signatures": [
@@ -26700,6 +26744,403 @@
         },
         {
           "kind": "Class",
+          "name": "Sos1BigMPromotion",
+          "doc": "Read-only result of one checked SOS1 Big-M promotion.\n\nState reconstruction remains owned by the mutated {class}`Instance`; this\nvalue reports the inserted SOS1 constraint and the retained formulation\nhistory.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "fresh_selectors",
+              "doc": "Verified fresh selectors keyed by their associated SOS1 member.",
+              "type_": {
+                "display": "dict[int, int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "members",
+              "doc": "Members of the promoted SOS1 constraint.",
+              "type_": {
+                "display": "set[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "relaxed_constraint_ids",
+              "doc": "Verified regular-constraint IDs moved from active to removed.",
+              "type_": {
+                "display": "set[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sos1_constraint_id",
+              "doc": "ID allocated to the promoted active SOS1 constraint.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "Sos1BigMPromotionRequest",
+          "doc": "Untrusted stable-ID request for one checked SOS1 Big-M promotion.\n\nMap keys are the intended SOS1 member IDs. Bounds, kinds, coefficients, and\nrow contents are intentionally absent so the current {class}`Instance`\nremains the sole source of truth when the request is validated.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "selector_claims",
+                      "type_": {
+                        "display": "Mapping[int, Sos1BigMSelectorClaim]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Sos1BigMSelectorClaim",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "cardinality_constraint",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1BigMPromotionRequest",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "cardinality_constraint",
+              "doc": "Claimed canonical selector-cardinality constraint ID.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "selector_claims",
+              "doc": "Claimed selector roles keyed by intended SOS1 member ID.",
+              "type_": {
+                "display": "dict[int, Sos1BigMSelectorClaim]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "Sos1BigMSelectorClaim",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "Sos1BigMSelectorClaim",
+          "doc": "Unchecked selector-role claim for one member of an SOS1 Big-M formulation.\n\nConstruct claims with {meth}`reused` or {meth}`fresh`. The claim contains\nstable IDs only; {meth}`~ommx.Instance.promote_sos1_big_m` validates the\ncurrent variable domains and regular-constraint rows before mutating the\ninstance.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "fresh",
+              "doc": "Claim a separate private Binary selector and its optional Big-M links.\n\nA link may be omitted only when the current member domain makes that\nside redundant. Supplied links are always validated by the Rust\n{class}`Instance` owner.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "selector",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "upper_link",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "lower_link",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1BigMSelectorClaim",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "reused",
+              "doc": "Claim that the promoted member is itself a full-domain Binary selector.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Sos1BigMSelectorClaim",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "is_reused",
+              "doc": "Whether this claim reuses the member itself as its selector.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "lower_link",
+              "doc": "Claimed lower-link constraint ID, if supplied.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "selector",
+              "doc": "Claimed fresh selector ID, or ``None`` for a reused selector.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "upper_link",
+              "doc": "Claimed upper-link constraint ID, if supplied.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Sos1Constraint",
           "doc": "A SOS1 (Special Ordered Set type 1) constraint: at most one variable can be non-zero.\n\nThis is a structural constraint — no explicit function is stored.\nUnlike OneHotConstraint, SOS1 allows all variables to be zero.",
           "bases": [],
@@ -35052,6 +35493,9 @@
     "ommx.Samples": "ommx",
     "ommx.Sense": "ommx",
     "ommx.Solution": "ommx",
+    "ommx.Sos1BigMPromotion": "ommx",
+    "ommx.Sos1BigMPromotionRequest": "ommx",
+    "ommx.Sos1BigMSelectorClaim": "ommx",
     "ommx.Sos1Constraint": "ommx",
     "ommx.SpecialConstraintKind": "ommx",
     "ommx.SpecialConstraintPreparation": "ommx",

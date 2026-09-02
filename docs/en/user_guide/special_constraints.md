@@ -123,6 +123,7 @@ before solving. That explicit conversion removes the active OneHot constraint,
 adds the equivalent regular constraint, and records the original in
 `removed_one_hot_constraints`.
 
+(sos1-constraint)=
 ## Sos1Constraint
 
 An **SOS1 (Special Ordered Set type 1)** constraint over a set of variables $\{x_1, \ldots, x_n\}$ requires that **at most one** of them be non-zero. It differs from one-hot in the following ways:
@@ -159,6 +160,37 @@ solution = OMMXPySCIPOptAdapter.solve(instance_s1)
 # Only one variable may be non-zero, so one is set to its upper bound 10 and the others to 0
 assert abs(solution.objective - 10.0) < 1e-6
 ```
+
+(sos1-big-m-formulation)=
+### SOS1 Big-M formulations
+
+A **Big-M formulation** represents the SOS1 condition with regular
+constraints. For each member $x_i$, introduce a binary selector $y_i$ and
+finite coefficients $M_i^+$ and $M_i^-$ large enough to cover the member's
+upper and lower domain values:
+
+$$
+x_i - M_i^+ y_i \leq 0, \qquad
+-x_i - M_i^- y_i \leq 0, \qquad
+\sum_i y_i \leq 1.
+$$
+
+When $y_i = 0$, the link constraints force $x_i = 0$. The cardinality
+constraint then allows at most one member to be non-zero, so the Big-M rows
+imply SOS1. Conversely, when the coefficients cover the complete member
+domains, every SOS1-feasible member assignment can set the selector of its
+non-zero member to one and every other selector to zero, or set all selectors
+to zero when all members are zero. The two formulations therefore have the same
+feasible member assignments after fresh selectors are projected out. A
+full-domain binary member can be reused as its own selector, and a link whose
+side is already implied by the member's domain can be omitted.
+
+A call to {meth}`~ommx.Instance.promote_sos1_big_m` is an independent request
+to transform a claimed existing Big-M formulation. It verifies the current
+variables, domains, and rows satisfy sufficient conditions for this projected
+equivalence before replacing the claimed formulation rows with a first-class
+SOS1 constraint. It neither assumes that the rows came from
+{meth}`~ommx.Instance.convert_sos1_to_constraints` nor rolls that operation back.
 
 ## Independent ID spaces per constraint type
 
