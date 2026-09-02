@@ -8,6 +8,19 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🛠 Boundとconstraintのtolerance意味論を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
+
+{meth}`~ommx.Bound.contains`は、$x \in [l,u]$を通常のconstraint feasibilityと
+同じ不等式residual $l-x\leq 0$ と $x-u\leq 0$ で判定するようになりました。
+Integer、SemiInteger、Binaryのbound正規化も、toleranceで拡張したendpointを
+構成せず、このmembership規則を使います。
+
+検証付きSOS1 Big-M promotionは、`lower - atol`や`upper + atol`を先に計算せず、
+これらのresidualが実際に受理する表現可能domainを導出します。そのためcanonicalな
+unit-scale linkではtightな $M=U$ と $M=-L$ を利用でき、小さすぎるlinkは引き続き
+拒否されます。詳細は [Instance user guide](../user_guide/instance.md) と
+[special constraint guide](../user_guide/special_constraints.md) を参照してください。
+
 ## 3.0.0 Beta 5
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b5)

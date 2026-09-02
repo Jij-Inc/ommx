@@ -8,6 +8,20 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Unified bound and constraint tolerance semantics ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
+
+{meth}`~ommx.Bound.contains` now interprets $x \in [l,u]$ through the same
+inequality residuals $l-x\leq 0$ and $x-u\leq 0$ used by regular constraint
+feasibility. Integer, SemiInteger, and Binary bound normalization use this same
+membership rule instead of constructing tolerance-expanded endpoints.
+
+Checked SOS1 Big-M promotion derives the actual representable domain accepted
+by those residuals without first computing `lower - atol` or `upper + atol`.
+Canonical unit-scale links can therefore use the tight values $M=U$ and
+$M=-L$, while undersized links remain rejected. See the
+[Instance user guide](../user_guide/instance.md) and
+[special-constraint guide](../user_guide/special_constraints.md) for details.
+
 ## 3.0.0 Beta 5
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b5)
