@@ -185,6 +185,11 @@ feasible member assignments after fresh selectors are projected out. A
 full-domain binary member can be reused as its own selector, and a link whose
 side is already implied by the member's domain can be omitted.
 
+Promotion interprets each member bound through the same inequality residuals
+used by regular constraints. Consequently, a canonical unit-scale upper link
+`x - U*y <= 0` may use the tight value `M = U`; validation derives the actual
+representable bound-feasible domain without first constructing `U + atol`.
+
 A call to {meth}`~ommx.Instance.promote_sos1_big_m` is an independent request
 to transform a claimed existing Big-M formulation. It verifies the current
 variables, domains, and rows satisfy sufficient conditions for this projected

@@ -139,8 +139,9 @@ impl Instance {
 
     /// Create and atomically add an integer decision variable.
     ///
-    /// A finite lower endpoint is normalized to `ceil(lower - atol)` and a
-    /// finite upper endpoint to `floor(upper + atol)`. See
+    /// Each finite side is normalized to the least or greatest integer value
+    /// satisfying the original bound under `atol`; an unbounded side remains
+    /// unbounded. See
     /// [`Self::new_decision_variable`] for the insertion and error contract.
     pub fn new_integer(
         &mut self,
@@ -167,10 +168,10 @@ impl Instance {
 
     /// Create and atomically add a semi-integer decision variable.
     ///
-    /// A finite lower endpoint is normalized to `ceil(lower - atol)` and a
-    /// finite upper endpoint to `floor(upper + atol)`, while preserving the
-    /// semi-integer zero alternative. See [`Self::new_decision_variable`] for
-    /// the insertion and error contract.
+    /// Each finite side is normalized to the least or greatest integer value
+    /// satisfying the original bound under `atol`; an unbounded side remains
+    /// unbounded. The semi-integer zero alternative is preserved. See
+    /// [`Self::new_decision_variable`] for the insertion and error contract.
     pub fn new_semi_integer(
         &mut self,
         bound: Bound,
