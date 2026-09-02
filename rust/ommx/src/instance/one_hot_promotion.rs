@@ -5,6 +5,10 @@
 //! membership, and the decision-variable domains. Promotion is allowed only
 //! when the active source is exactly a non-zero scalar multiple of
 //! `sum(variables) - 1 = 0` over binary variables.
+//! This preserves the exact feasible set over binary assignments. It does not
+//! promise identical approximate-feasibility classification: regular rows test
+//! one scaled residual, while OneHot constraints classify each member as zero
+//! or one under the caller's [`crate::ATol`].
 //!
 //! The public API is batch-oriented. All candidates are checked against one
 //! unchanged source instance before target IDs are allocated. The batch plan
@@ -96,10 +100,10 @@ impl<'a> OneHotPromotionBatchPlan<'a> {
             })
             .collect();
 
-        let survivor_count = checked.values().filter(|result| result.is_ok()).count();
+        let promotion_count = checked.values().filter(|result| result.is_ok()).count();
         if let Err(error) = instance
             .one_hot_constraint_collection
-            .ensure_unused_id_capacity(survivor_count)
+            .ensure_unused_id_capacity(promotion_count)
         {
             let message = error.to_string();
             let plans = checked
@@ -107,7 +111,7 @@ impl<'a> OneHotPromotionBatchPlan<'a> {
                 .map(|(source_constraint_id, result)| {
                     let plan = match result {
                         Ok(_) => Err(crate::error!(
-                            { ?source_constraint_id, survivor_count },
+                            { ?source_constraint_id, promotion_count },
                             "Cannot allocate OneHot constraint IDs for the compatible promotion batch: {message}"
                         )),
                         Err(error) => Err(error),
@@ -118,7 +122,7 @@ impl<'a> OneHotPromotionBatchPlan<'a> {
             return Self { instance, plans };
         }
 
-        let first_id = (survivor_count > 0).then(|| {
+        let first_id = (promotion_count > 0).then(|| {
             instance
                 .one_hot_constraint_collection
                 .unused_id()
@@ -210,6 +214,11 @@ impl Instance {
     ///   variable; and
     /// - for one common non-zero coefficient `c`, the row is exactly
     ///   `c * (sum(variables) - 1) = 0`.
+    ///
+    /// This preserves the exact feasible set over binary assignments. At a
+    /// nonzero [`crate::ATol`], the regular row's scaled-residual check and the
+    /// OneHot constraint's per-variable zero/one classification can differ for
+    /// approximate assignments.
     ///
     /// The returned map has exactly one entry per requested source ID. Each
     /// value is either the allocated OneHot ID or that source's rejection
@@ -310,7 +319,8 @@ impl Instance {
             );
         }
 
-        let one_hot_constraint = OneHotConstraint::new(support)?;
+        let one_hot_constraint = OneHotConstraint::new(support)
+            .expect("candidate support was checked as non-empty before construction");
         let context = self
             .constraint_collection
             .context()
@@ -405,12 +415,13 @@ mod tests {
 
     #[test]
     fn converts_v1_hint_to_a_singleton_request_without_using_claimed_members() {
-        for members in [vec![], vec![2, 1], vec![1, 1]] {
+        for (constraint_id, members) in [(0, vec![]), (7, vec![]), (7, vec![2, 1]), (7, vec![1, 1])]
+        {
             let request = OneHotPromotionRequest::from(&crate::v1::OneHot {
-                constraint_id: 7,
+                constraint_id,
                 decision_variables: members,
             });
-            assert_eq!(request, BTreeSet::from([ConstraintID::from(7)]));
+            assert_eq!(request, BTreeSet::from([ConstraintID::from(constraint_id)]));
         }
     }
 
@@ -518,6 +529,19 @@ mod tests {
     }
 
     #[test]
+    fn empty_request_is_a_no_op() {
+        let (mut instance, _) = batch_instance();
+        let regular_before = instance.constraint_collection.clone();
+        let one_hot_before = instance.one_hot_constraint_collection.clone();
+
+        let results = instance.promote_one_hot(&OneHotPromotionRequest::new());
+
+        assert!(results.is_empty());
+        assert_eq!(instance.constraint_collection, regular_before);
+        assert_eq!(instance.one_hot_constraint_collection, one_hot_before);
+    }
+
+    #[test]
     fn batch_promotes_valid_requests_while_rejecting_individually_invalid_requests() {
         let (mut instance, _) = batch_instance();
         let request = BTreeSet::from([ConstraintID::from(99), ConstraintID::from(20)]);
@@ -544,8 +568,37 @@ mod tests {
     }
 
     #[test]
-    fn batch_rejects_id_exhaustion_before_any_mutation() {
+    fn batch_leaves_an_existing_rejected_row_active_while_promoting_a_valid_row() {
         let (mut instance, request) = batch_instance();
+        let rejected = Constraint::less_than_or_equal_to_zero(exact_scaled_one_hot(&[1, 2], 1.0));
+        instance
+            .insert_constraint(ConstraintID::from(10), rejected.clone())
+            .unwrap();
+
+        let results = instance.promote_one_hot(&request);
+
+        assert!(results[&ConstraintID::from(10)]
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("not an equality-to-zero"));
+        assert_eq!(
+            results[&ConstraintID::from(20)].as_ref().unwrap(),
+            &OneHotConstraintID::from(0)
+        );
+        assert_eq!(instance.constraints()[&ConstraintID::from(10)], rejected);
+        assert!(!instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(10)));
+        assert!(instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(20)));
+    }
+
+    #[test]
+    fn batch_keeps_individual_rejections_when_id_exhaustion_rejects_valid_rows() {
+        let (mut instance, mut request) = batch_instance();
+        request.insert(ConstraintID::from(99));
         instance
             .one_hot_constraint_collection
             .insert_active_with_context(
@@ -560,11 +613,18 @@ mod tests {
         let results = instance.promote_one_hot(&request);
 
         assert_eq!(results.keys().copied().collect::<BTreeSet<_>>(), request);
-        assert!(results.values().all(|result| result
+        for source_constraint_id in [ConstraintID::from(10), ConstraintID::from(20)] {
+            assert!(results[&source_constraint_id]
+                .as_ref()
+                .unwrap_err()
+                .to_string()
+                .contains("Cannot allocate OneHot constraint IDs"));
+        }
+        assert!(results[&ConstraintID::from(99)]
             .as_ref()
             .unwrap_err()
             .to_string()
-            .contains("Cannot allocate OneHot constraint IDs")));
+            .contains("was not found"));
         assert_eq!(instance.constraint_collection, regular_before);
         assert_eq!(instance.one_hot_constraint_collection, one_hot_before);
     }
