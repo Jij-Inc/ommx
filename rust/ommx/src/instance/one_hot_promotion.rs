@@ -6,11 +6,10 @@
 //! allowed only when the active source is exactly a non-zero scalar multiple of
 //! `sum(variables) - 1 = 0` over binary variables.
 //!
-//! Even the single-request API uses a private batch plan. All candidates are
-//! checked against one unchanged source instance before target IDs are
-//! allocated. The batch plan proves that every aggregate storage effect must
-//! succeed, so applying it never clones the [`Instance`] and cannot return a
-//! recoverable error.
+//! The public API is batch-oriented. All candidates are checked against one
+//! unchanged source instance before target IDs are allocated. The batch plan
+//! proves that every aggregate storage effect must succeed, so applying it
+//! never clones the [`Instance`] and cannot return a recoverable error.
 
 use super::Instance;
 use crate::{
@@ -149,10 +148,11 @@ struct OneHotPromotionBatchPlanning {
 }
 
 impl Instance {
-    /// Promote an exact regular equality to a one-hot constraint.
+    /// Promote compatible exact regular equalities to one-hot constraints as a
+    /// single batch.
     ///
-    /// The request is untrusted. This method verifies against the current
-    /// instance that:
+    /// The requests are untrusted. This method verifies each candidate against
+    /// the current instance, requiring that:
     ///
     /// - the claimed member set is non-empty;
     /// - the source is an active regular equality;
@@ -162,26 +162,16 @@ impl Instance {
     /// - for one common non-zero coefficient `c`, the row is exactly
     ///   `c * (sum(variables) - 1) = 0`.
     ///
-    /// On success the source moves to `removed_constraints`, its context is
-    /// copied to the new active one-hot constraint, and the removal reason
-    /// records the allocated target ID. The operation is atomic: any returned
-    /// error leaves this instance unchanged.
-    pub fn promote_one_hot(
-        &mut self,
-        request: &OneHotPromotionRequest,
-    ) -> crate::Result<OneHotPromotion> {
-        self.promote_compatible_one_hot(std::slice::from_ref(request))
-            .pop()
-            .expect("one request must produce one aligned OneHot promotion outcome")
-    }
-
-    /// Check, reconcile, and apply OneHot promotion requests as one batch.
+    /// Results remain aligned with `requests`. Individually invalid requests
+    /// and every request sharing a source row with another individually valid
+    /// request are rejected, while compatible requests are all applied.
     ///
-    /// Results remain aligned with the input requests. Individually invalid
-    /// requests and every request sharing a source row with another
-    /// individually valid request are rejected. All remaining requests are
-    /// applied together through one [`OneHotPromotionBatchPlan`].
-    fn promote_compatible_one_hot(
+    /// On each successful entry the source moves to `removed_constraints`, its
+    /// context is copied to the new active one-hot constraint, and the removal
+    /// reason records the allocated target ID. Planning is atomic: rejected
+    /// requests leave their rows unchanged, and applying the resulting private
+    /// plan is infallible by construction.
+    pub fn promote_one_hot(
         &mut self,
         requests: &[OneHotPromotionRequest],
     ) -> Vec<crate::Result<OneHotPromotion>> {
@@ -538,7 +528,11 @@ mod tests {
     ) {
         let regular_before = instance.constraint_collection.clone();
         let one_hot_before = instance.one_hot_constraint_collection.clone();
-        let error = instance.promote_one_hot(request).unwrap_err();
+        let error = instance
+            .promote_one_hot(std::slice::from_ref(request))
+            .pop()
+            .unwrap()
+            .unwrap_err();
         assert!(
             error.to_string().contains(message),
             "unexpected error: {error:#}"
@@ -595,7 +589,11 @@ mod tests {
                 .set_constraint_context(ConstraintID::from(10), context.clone())
                 .unwrap();
 
-            let promotion = instance.promote_one_hot(&request([1, 2, 3])).unwrap();
+            let promotion = instance
+                .promote_one_hot(&[request([1, 2, 3])])
+                .pop()
+                .unwrap()
+                .unwrap();
 
             assert_eq!(
                 promotion.one_hot_constraint_id(),
@@ -638,7 +636,7 @@ mod tests {
     fn batch_promotes_disjoint_rows_with_a_shared_member() {
         let (mut instance, requests) = batch_instance();
 
-        let outcomes = instance.promote_compatible_one_hot(&requests);
+        let outcomes = instance.promote_one_hot(&requests);
 
         let promotions = outcomes
             .iter()
@@ -673,7 +671,7 @@ mod tests {
             requests[1].clone(),
         ];
 
-        let outcomes = instance.promote_compatible_one_hot(&requests);
+        let outcomes = instance.promote_one_hot(&requests);
 
         assert!(outcomes[0]
             .as_ref()
@@ -686,6 +684,37 @@ mod tests {
             OneHotConstraintID::from(0)
         );
         assert!(instance.constraints().contains_key(&ConstraintID::from(10)));
+        assert!(instance
+            .removed_constraints()
+            .contains_key(&ConstraintID::from(20)));
+        assert_eq!(instance.one_hot_constraints().len(), 1);
+    }
+
+    #[test]
+    fn batch_promotes_valid_requests_while_rejecting_individually_invalid_requests() {
+        let (mut instance, requests) = batch_instance();
+        let requests = vec![
+            OneHotPromotionRequest {
+                source_constraint_id: ConstraintID::from(99),
+                variables: variables([1, 2]),
+            },
+            requests[1].clone(),
+        ];
+
+        let outcomes = instance.promote_one_hot(&requests);
+
+        assert_eq!(outcomes.len(), 2);
+        assert!(outcomes[0]
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("was not found"));
+        assert_eq!(
+            outcomes[1].as_ref().unwrap().one_hot_constraint_id(),
+            OneHotConstraintID::from(0)
+        );
+        assert!(instance.constraints().contains_key(&ConstraintID::from(10)));
+        assert!(!instance.constraints().contains_key(&ConstraintID::from(20)));
         assert!(instance
             .removed_constraints()
             .contains_key(&ConstraintID::from(20)));
@@ -706,7 +735,7 @@ mod tests {
         let regular_before = instance.constraint_collection.clone();
         let one_hot_before = instance.one_hot_constraint_collection.clone();
 
-        let outcomes = instance.promote_compatible_one_hot(&requests);
+        let outcomes = instance.promote_one_hot(&requests);
 
         assert!(outcomes.iter().all(Result::is_err));
         assert!(outcomes.iter().all(|outcome| outcome
