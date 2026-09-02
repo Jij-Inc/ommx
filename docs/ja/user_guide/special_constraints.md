@@ -175,7 +175,7 @@ $y_i = 0$のときlink制約は$x_i = 0$を強制し、cardinality制約は
 非零になれるmemberを高々1つに制限するため、Big-MのrowはSOS1を含意します。
 逆に、係数がmemberのdomain全体を覆っていれば、SOS1を満たすどのmemberへの
 値の割り当てに対しても、非零のmemberがあればそのselectorだけを1、
-その他を0にできます。すべてのmemberが0なら、すべのselectorを0にできます。
+その他を0にできます。すべてのmemberが0なら、すべてのselectorを0にできます。
 したがって、fresh selectorを除いてmemberだけを見ると、両方のformulationは
 同じ実行可能集合を表します。domainが$[0, 1]$のbinary memberはそれ自身を
 selectorとして再利用でき、memberのdomainから自明な側のlinkは省略できます。
