@@ -352,11 +352,12 @@ impl Bound {
         Ok(())
     }
 
-    /// Strengthen the bound for integer decision variables
+    /// Strengthen the bound for integer decision variables.
     ///
-    /// - Since the bound evaluation may be inaccurate due to floating-point arithmetic error,
-    ///   this method rounds to `[ceil(lower-atol), floor(upper+atol)]`
-    /// - If no integer value is in the bound, return `None`
+    /// Each finite returned endpoint is the smallest or largest integer value
+    /// satisfying this bound under the same residual-feasibility semantics as
+    /// [`Self::contains`]; an unbounded side remains unbounded. If no integer
+    /// value satisfies the bound, this returns `None`.
     ///
     /// Examples
     /// ---------
@@ -380,8 +381,12 @@ impl Bound {
     /// assert_eq!(bound.as_integer_bound(ATol::default()).unwrap(), Bound::new(2.0, f64::INFINITY).unwrap());
     /// ```
     pub fn as_integer_bound(&self, atol: crate::ATol) -> Option<Self> {
+        if !self.lower.is_finite() && !self.upper.is_finite() {
+            return Some(*self);
+        }
+        let (finite_lower, finite_upper) = self.finite_feasible_extrema(atol);
         let lower = if self.lower.is_finite() {
-            let out = (self.lower - atol).ceil();
+            let out = finite_lower.ceil();
             if out == 0.0 {
                 0.0 // Avoid negative zero
             } else {
@@ -391,7 +396,7 @@ impl Bound {
             self.lower
         };
         let upper = if self.upper.is_finite() {
-            (self.upper + atol).floor()
+            finite_upper.floor()
         } else {
             self.upper
         };
@@ -446,9 +451,95 @@ impl Bound {
         }
     }
 
-    /// Check the `value` is in the bound with absolute tolerance
+    /// Check whether `value` is in the bound with absolute tolerance.
+    ///
+    /// A bound is interpreted as the conjunction of the residual constraints
+    /// `lower - value <= 0` and `value - upper <= 0`. Both residuals use
+    /// [`ATol::approx_le`], exactly like a less-than-or-equal-to-zero regular
+    /// constraint after finite evaluation. An infinite endpoint means that its
+    /// side is unconstrained; non-finite values and overflow while evaluating a
+    /// finite-endpoint residual are rejected.
     pub fn contains(&self, value: f64, atol: crate::ATol) -> bool {
-        self.lower - atol <= value && value <= self.upper + atol
+        if !value.is_finite() {
+            return false;
+        }
+
+        let lower_satisfied = if self.lower == f64::NEG_INFINITY {
+            true
+        } else {
+            let residual = self.lower - value;
+            residual.is_finite() && atol.approx_le(residual, 0.0)
+        };
+        let upper_satisfied = if self.upper == f64::INFINITY {
+            true
+        } else {
+            let residual = value - self.upper;
+            residual.is_finite() && atol.approx_le(residual, 0.0)
+        };
+        lower_satisfied && upper_satisfied
+    }
+
+    /// Return the least and greatest finite `f64` values accepted by this
+    /// bound under `atol`.
+    ///
+    /// Membership is monotone on each side of an exactly feasible seed. A
+    /// binary search over the total order of finite `f64` values therefore
+    /// derives the actual representable extrema without materializing
+    /// `lower - atol` or `upper + atol`. This remains crate-private because the
+    /// endpoints are an implementation tool for domain-owned normalization and
+    /// validation, not a new mathematical Bound representation.
+    pub(crate) fn finite_feasible_extrema(&self, atol: ATol) -> (f64, f64) {
+        const SIGN_MASK: u64 = 1_u64 << 63;
+
+        fn ordered_key(value: f64) -> u64 {
+            debug_assert!(value.is_finite());
+            let bits = value.to_bits();
+            if bits & SIGN_MASK == 0 {
+                bits | SIGN_MASK
+            } else {
+                !bits
+            }
+        }
+
+        fn from_ordered_key(key: u64) -> f64 {
+            let bits = if key & SIGN_MASK == 0 {
+                !key
+            } else {
+                key & !SIGN_MASK
+            };
+            let value = f64::from_bits(bits);
+            debug_assert!(value.is_finite());
+            value
+        }
+
+        let seed = self.nearest_to_zero();
+        debug_assert!(seed.is_finite());
+        debug_assert!(self.contains(seed, atol));
+
+        let mut lower_false_or_first = ordered_key(-f64::MAX);
+        let mut lower_true = ordered_key(seed);
+        while lower_false_or_first < lower_true {
+            let middle = lower_false_or_first + (lower_true - lower_false_or_first) / 2;
+            if self.contains(from_ordered_key(middle), atol) {
+                lower_true = middle;
+            } else {
+                lower_false_or_first = middle + 1;
+            }
+        }
+
+        let mut upper_true = ordered_key(seed);
+        let mut upper_false_or_last = ordered_key(f64::MAX);
+        while upper_true < upper_false_or_last {
+            let distance = upper_false_or_last - upper_true;
+            let middle = upper_true + distance / 2 + distance % 2;
+            if self.contains(from_ordered_key(middle), atol) {
+                upper_true = middle;
+            } else {
+                upper_false_or_last = middle - 1;
+            }
+        }
+
+        (from_ordered_key(lower_true), from_ordered_key(upper_true))
     }
 
     pub fn as_range(&self) -> RangeInclusive<f64> {
@@ -624,6 +715,103 @@ mod tests {
     }
 
     #[test]
+    fn contains_uses_constraint_residual_semantics() {
+        let atol = ATol::new(1.0e-6).unwrap();
+
+        let upper = 2.0 / 3.0;
+        let above = upper + atol.into_inner();
+        let upper_bound = Bound::new(f64::NEG_INFINITY, upper).unwrap();
+        let upper_residual = above - upper;
+        assert_eq!(
+            upper_bound.contains(above, atol),
+            crate::Equality::LessThanOrEqualToZero.is_satisfied(upper_residual, atol)
+        );
+        assert!(!upper_bound.contains(above, atol));
+
+        let below = 2.0;
+        let lower = below + atol.into_inner();
+        let lower_bound = Bound::new(lower, f64::INFINITY).unwrap();
+        let lower_residual = lower - below;
+        assert_eq!(
+            lower_bound.contains(below, atol),
+            crate::Equality::LessThanOrEqualToZero.is_satisfied(lower_residual, atol)
+        );
+        assert!(!lower_bound.contains(below, atol));
+
+        assert!(!Bound::unbounded().contains(f64::NAN, atol));
+        assert!(!Bound::unbounded().contains(f64::INFINITY, atol));
+        assert!(!Bound::unbounded().contains(f64::NEG_INFINITY, atol));
+    }
+
+    #[test]
+    fn contains_treats_infinite_endpoints_as_absent_constraints() {
+        let atol = ATol::default();
+
+        assert!(Bound::unbounded().contains(-f64::MAX, atol));
+        assert!(Bound::unbounded().contains(f64::MAX, atol));
+        assert!(Bound::negative().contains(-f64::MAX, atol));
+        assert!(Bound::positive().contains(f64::MAX, atol));
+    }
+
+    #[test]
+    fn contains_rejects_finite_endpoint_residual_overflow() {
+        let atol = ATol::default();
+        let bound = Bound::new(-f64::MAX, f64::MAX).unwrap();
+
+        assert!(bound.contains(0.0, atol));
+        assert!(!bound.contains(-f64::MAX, atol));
+        assert!(!bound.contains(f64::MAX, atol));
+
+        let (lower, upper) = bound.finite_feasible_extrema(atol);
+        assert!(bound.contains(lower, atol));
+        assert!(bound.contains(upper, atol));
+        assert!(!bound.contains(lower.next_down(), atol));
+        assert!(!bound.contains(upper.next_up(), atol));
+    }
+
+    #[test]
+    fn finite_feasible_extrema_are_exactly_derived_from_contains() {
+        let atol = ATol::new(1.0e-6).unwrap();
+        let bound = Bound::new(-2.0, 2.0).unwrap();
+        let (lower, upper) = bound.finite_feasible_extrema(atol);
+
+        assert!(bound.contains(lower, atol));
+        assert!(bound.contains(upper, atol));
+        assert!(!bound.contains(lower.next_down(), atol));
+        assert!(!bound.contains(upper.next_up(), atol));
+
+        // Expanding the stored endpoint first does not necessarily produce a
+        // value whose subsequently evaluated residual is within ATol.
+        assert!(!bound.contains(2.0 + atol.into_inner(), atol));
+        assert!(upper < 2.0 + atol.into_inner());
+    }
+
+    #[test]
+    fn integer_bound_is_derived_from_bound_membership() {
+        let atol = ATol::new(1.0e-6).unwrap();
+        let bound = Bound::new(2.0 + atol.into_inner(), 4.0 - atol.into_inner()).unwrap();
+        assert_eq!(
+            bound.as_integer_bound(atol),
+            Some(Bound::new(3.0, 3.0).unwrap())
+        );
+        assert!(!bound.contains(2.0, atol));
+        assert!(!bound.contains(4.0, atol));
+
+        assert_eq!(
+            Bound::new(2.0 + atol.into_inner(), 3.0 - atol.into_inner())
+                .unwrap()
+                .as_integer_bound(atol),
+            None
+        );
+
+        let large_atol = ATol::new(2.0).unwrap();
+        assert_eq!(
+            Bound::new(10.2, 10.3).unwrap().as_integer_bound(large_atol),
+            Some(Bound::new(9.0, 12.0).unwrap())
+        );
+    }
+
+    #[test]
     fn bound_pow() {
         insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(2), @"Bound[4, 9]");
         insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(3), @"Bound[8, 27]");
@@ -640,6 +828,21 @@ mod tests {
     }
 
     proptest! {
+        #[test]
+        fn finite_feasible_extrema_are_membership_boundaries(
+            bound in any::<Bound>(),
+            tolerance in 1.0e-12_f64..10.0,
+        ) {
+            let atol = ATol::new(tolerance).unwrap();
+            let (lower, upper) = bound.finite_feasible_extrema(atol);
+
+            prop_assert!(lower <= upper);
+            prop_assert!(bound.contains(lower, atol));
+            prop_assert!(bound.contains(upper, atol));
+            prop_assert!(!bound.contains(lower.next_down(), atol));
+            prop_assert!(!bound.contains(upper.next_up(), atol));
+        }
+
         #[test]
         fn contains((bound, value) in bound_and_containing()) {
             prop_assert!(bound.contains(value, crate::ATol::default()));

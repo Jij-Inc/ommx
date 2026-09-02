@@ -1,6 +1,6 @@
 import math
 
-from ommx import Instance, DecisionVariable, State
+from ommx import Bound, DecisionVariable, Instance, State
 import ommx
 import pytest
 
@@ -117,6 +117,44 @@ def test_constraint_boundary_matches_scalar_sample_and_v2_validation():
     assert restored_sample_set.get(7).constraints[2].feasible
     assert not restored_sample_set.get(8).constraints[1].feasible
     assert not restored_sample_set.get(8).constraints[2].feasible
+
+
+def test_bound_membership_matches_inequality_residual_feasibility():
+    atol = 1e-6
+    x = DecisionVariable.continuous(1, lower=-10, upper=10)
+    upper = 2.0 / 3.0
+    lower = 2.0 + atol
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints={1: x <= upper, 2: x >= lower},
+        sense=Instance.MINIMIZE,
+    )
+
+    above = upper + atol
+    upper_feasible = instance.evaluate({1: above}, atol=atol).constraints[1].feasible
+    assert Bound(float("-inf"), upper).contains(above, atol) == upper_feasible
+    assert not upper_feasible
+
+    below = 2.0
+    lower_feasible = instance.evaluate({1: below}, atol=atol).constraints[2].feasible
+    assert Bound(lower, float("inf")).contains(below, atol) == lower_feasible
+    assert not lower_feasible
+
+
+def test_bound_membership_handles_infinite_endpoints_without_hiding_overflow():
+    atol = 1e-6
+    maximum = float.fromhex("0x1.fffffffffffffp+1023")
+
+    assert Bound.unbounded().contains(-maximum, atol)
+    assert Bound.unbounded().contains(maximum, atol)
+    assert not Bound.unbounded().contains(float("-inf"), atol)
+    assert not Bound.unbounded().contains(float("inf"), atol)
+
+    finite = Bound(-maximum, maximum)
+    assert finite.contains(0.0, atol)
+    assert not finite.contains(-maximum, atol)
+    assert not finite.contains(maximum, atol)
 
 
 def test_set_default_atol_validation():

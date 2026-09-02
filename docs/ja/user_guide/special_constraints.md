@@ -120,6 +120,7 @@ assert instance_oh.removed_one_hot_constraints == {}
 solveします。この明示的な変換はactiveなOneHotを除去し、同値な通常制約を追加して、
 元の制約を`removed_one_hot_constraints`へ記録します。
 
+(sos1-constraint)=
 ## Sos1Constraint
 
 **SOS1 (Special Ordered Set type 1)** 制約は変数集合 $\{x_1, \ldots, x_n\}$ の**高々1個**しか非ゼロになれないことを要求します。One-hot との違いは以下の通りです。
@@ -156,6 +157,40 @@ solution = OMMXPySCIPOptAdapter.solve(instance_s1)
 # 高々 1 つだけが非ゼロなので、1 つを上限 10 にして他を 0 にする
 assert abs(solution.objective - 10.0) < 1e-6
 ```
+
+(sos1-big-m-formulation)=
+### SOS1のBig-M定式化
+
+**Big-M定式化**は、SOS1の条件を通常制約で表す方法です。各member
+$x_i$にbinary selector $y_i$を導入し、memberの上側と下側のdomainを
+十分に覆う有限な係数$M_i^+$と$M_i^-$を用います。
+
+$$
+x_i - M_i^+ y_i \leq 0, \qquad
+-x_i - M_i^- y_i \leq 0, \qquad
+\sum_i y_i \leq 1.
+$$
+
+$y_i = 0$のときlink制約は$x_i = 0$を強制し、cardinality制約は
+非零になれるmemberを高々1つに制限するため、Big-MのrowはSOS1を含意します。
+逆に、係数がmemberのdomain全体を覆っていれば、SOS1を満たすどのmemberへの
+値の割り当てに対しても、非零のmemberがあればそのselectorだけを1、
+その他を0にできます。すべてのmemberが0なら、すべてのselectorを0にできます。
+したがって、fresh selectorを除いてmemberだけを見ると、両方のformulationは
+同じ実行可能集合を表します。domainが$[0, 1]$のbinary memberはそれ自身を
+selectorとして再利用でき、memberのdomainから自明な側のlinkは省略できます。
+
+promotionでは、memberのboundを通常の不等式constraintと同じresidualで解釈します。
+したがって、canonicalなunit-scale upper link `x - U*y <= 0` ではtightな`M = U`を
+利用できます。検証時には`U + atol`を先に構成せず、実際にbound-feasibleな表現可能domainを
+導出します。
+
+{meth}`~ommx.Instance.promote_sos1_big_m`の呼び出しは、申請した既存の
+Big-M定式化に対する独立した変形申請です。現在の変数、domain、rowが
+この射影上の同値性を保証する十分条件を満たすことを検証してから、
+申請したformulationのrowをfirst-classなSOS1制約へ置き換えます。これらのrowが
+{meth}`~ommx.Instance.convert_sos1_to_constraints`によって生成されたことは
+前提にせず、そのoperationのrollbackでもありません。
 
 ## 制約種別ごとに独立したID空間
 

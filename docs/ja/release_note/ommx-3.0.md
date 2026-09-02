@@ -8,42 +8,22 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### 🆕 区間で定義する決定変数の逐次作成 ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
+### 🛠 Boundとconstraintのtolerance意味論を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
-{class}`~ommx.Instance` が数値IDを自動で割り当てながら、既存の区間で定義する
-すべての決定変数kindを作成できるようになりました。
-{meth}`~ommx.Instance.new_binary` に加えて、
-{meth}`~ommx.Instance.new_integer`、
-{meth}`~ommx.Instance.new_continuous`、
-{meth}`~ommx.Instance.new_semi_integer`、
-{meth}`~ommx.Instance.new_semi_continuous` を利用できます。
+{meth}`~ommx.Bound.contains`は、$x \in [l,u]$を通常のconstraint feasibilityと
+同じ不等式residual $l-x\leq 0$ と $x-u\leq 0$ で判定するようになりました。
+Integer、SemiInteger、Binaryのbound正規化も、toleranceで拡張したendpointを
+構成せず、このmembership規則を使います。
 
-```python
-from ommx import Instance
+検証付きSOS1 Big-M promotionは、`lower - atol`や`upper + atol`を先に計算せず、
+これらのresidualが実際に受理する表現可能domainを導出します。そのためcanonicalな
+unit-scale linkではtightな $M=U$ と $M=-L$ を利用でき、小さすぎるlinkは引き続き
+拒否されます。詳細は [Instance user guide](../user_guide/instance.md) と
+[special constraint guide](../user_guide/special_constraints.md) を参照してください。
 
-instance = Instance.minimize()
-count = instance.new_integer("count", lower=0, upper=10)
-amount = instance.new_continuous("amount", lower=0)
-batch = instance.new_semi_integer("batch", lower=2, upper=10)
-rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
-```
+## 3.0.0 Beta 5
 
-どのメソッドも式にそのまま利用できる
-{class}`~ommx.AttachedDecisionVariable` を返します。`name` は引き続き省略可能な
-位置引数で、`subscripts`、`parameters`、`description` はキーワード専用です。
-新しい4メソッドでは、`lower` と `upper` もキーワード専用で指定できます。
-さらに `new_integer` と `new_semi_integer` はキーワード専用の `atol` を受け取り、
-省略時には {func}`~ommx.get_default_atol` が返す現在の既定値を使います。この2メソッドでは、
-有限な lower endpoint を `ceil(lower - atol)`、有限な upper endpoint を
-`floor(upper + atol)` へ正規化します。正規化後の区間に整数がない場合、`new_integer` は
-`ValueError` を返し、`new_semi_integer` はゼロの選択肢を `[0, 0]` として保持します。
-逐次modeling workflowの詳細は
-[Instance user guide](../user_guide/instance.md) を参照してください。
-
-各constructorは決定変数の定義全体を検証してから、rowとmodeling labelをまとめて
-{class}`~ommx.Instance` へ追加します。boundまたはtoleranceが不正な場合や、既存の
-決定変数IDの最大値が `2**64 - 1` で、それより大きい自動IDを割り当てられない場合も、
-変数やlabelの一部だけが残ることはありません。
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b5)
 
 ### 🛠 境界を含む `atol` 判定 ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
@@ -58,7 +38,33 @@ Functionのゼロ依存演算、Indicatorのactivation、OneHot / SOS1の分類�
 値を含みます。境界をわずかに超える値は引き続き範囲外です。有限値の検証を所有するAPIは、
 domain errorや整合性errorを返す前にNaNと無限大を引き続き拒否します。
 
-### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+{meth}`~ommx.Instance.populate_state`、{meth}`~ommx.Instance.evaluate`、
+{meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
+dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
+canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
+以下のBinary値と、整数との差が`atol`以下のInteger / SemiInteger値は、境界上の値も含めて
+対応する厳密な離散値として格納されます。canonicalizationとは
+別に、kindとboundのfeasibilityを既存の規則で判定します。
+ContinuousとSemiContinuousは丸めません。それ以外の有限値は、返された
+{class}`~ommx.Solution`がfeasibilityを判定できるように保持し、非有限なstate値は
+引き続き拒否します。
+
+呼び出し側がfixedまたはdependent variableの値を渡した場合、その値は引き続き
+整合性assertionとして扱います。検証後のstateには、Instanceが所有するfixed valueを
+変更せずに格納するか、dependencyから導出してtarget kindに従いcanonicalizeした値を
+格納します。dependencyはcanonicalized inputから評価するため、丸め前のsolver vectorを
+もとに明示したdependent assertionが、導出値の`atol`内に入らず拒否される場合があります。
+scalar / sample evaluationは同じ規則を使い、SampleIDの対応関係を保持します。
+
+{meth}`~ommx.Instance.partial_evaluate`も、入力を検証した後、special constraintのpropagation、
+expressionへの代入、定数化したdependencyの評価より前に同じ規則を適用します。そのため、
+書き換え後のInstanceを評価した結果は、元のInstanceを直接評価した場合と同じcanonical
+coordinateを使います。Instanceが既に所有するfixed valueは変更せず、既存のkind / bound
+検証でpartial evaluationの受理範囲外となる値は引き続き拒否します。
+
+### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181), [#1184](https://github.com/Jij-Inc/ommx/pull/1184))
 
 {class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
 なりました。絶対値、符号関数、最小値、最大値、除算、符号付き32 bit整数による
@@ -100,7 +106,9 @@ loweringは離散値が厳密であることを仮定し、0や1に近いsolver�
 $|f(x)| \leq \mathtt{atol}$ で不等式を分類するため、微小な正値が
 scaleによって暗黙に再分類されることはありません。厳密な多項式正規化は有限かつ
 非ゼロの係数をすべて保持し、許容誤差によるcleanupを暗黙には行いません。近似的な
-cleanupを将来提供する場合は、別の明示的なAPIになります。
+cleanupを将来提供する場合は、別の明示的なAPIになります。減算も、右辺を符号反転して
+加算する場合と同じcanonicalizationに従います。そのため `x - (-y)` は可能ならcompact
+polynomialへ戻り、係数overflowは遅延せず直ちに`ValueError`として通知されます。
 
 `Function`が常にpolynomialとは限らなくなったため、複合式に対する
 {meth}`~ommx.Function.degree` と {meth}`~ommx.Function.num_terms` は`None`を返します。
@@ -125,31 +133,81 @@ Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含
 `PolynomialRequirement.any_degree()`が受け付けるのは任意次数のpolynomialであり、
 複合された非polynomialの`Function`は含みません。
 
-### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+### 🆕 検証付きSOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
 
-{meth}`~ommx.Instance.populate_state`、{meth}`~ommx.Instance.evaluate`、
-{meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
-dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
-canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
-以下のBinary値と、整数との差が`atol`以下のInteger / SemiInteger値は、境界上の値も含めて
-対応する厳密な離散値として格納されます。canonicalizationとは
-別に、kindとboundのfeasibilityを既存の規則で判定します。
-ContinuousとSemiContinuousは丸めません。それ以外の有限値は、返された
-{class}`~ommx.Solution`がfeasibilityを判定できるように保持し、非有限なstate値は
-引き続き拒否します。
+{ref}`SOS1制約 <sos1-constraint>`は、memberのうち高々1つだけが
+非零となる制約です。{ref}`Big-M formulation <sos1-big-m-formulation>`は、
+この条件をbinary selector、memberとselectorのlink制約、およびselectorの
+cardinality制約で表します。
 
-呼び出し側がfixedまたはdependent variableの値を渡した場合、その値は引き続き
-整合性assertionとして扱います。検証後のstateには、Instanceが所有するfixed valueを
-変更せずに格納するか、dependencyから導出してtarget kindに従いcanonicalizeした値を
-格納します。dependencyはcanonicalized inputから評価するため、丸め前のsolver vectorを
-もとに明示したdependent assertionが、導出値の`atol`内に入らず拒否される場合があります。
-scalar / sample evaluationは同じ規則を使い、SampleIDの対応関係を保持します。
+{meth}`~ommx.Instance.promote_sos1_big_m`は、現在の`Instance`がこの
+formulationを持つという申請を受け取ります。これは独立した変形申請であり、
+loweringのrollbackや逆変換ではありません。現在の変数、domain、rowが申請した
+formulationのrowをfirst-classなSOS1制約へ置き換えることを正当化する十分条件を
+満たすことを検証してから、その変形をatomicに適用します。
 
-{meth}`~ommx.Instance.partial_evaluate`も、入力を検証した後、special constraintのpropagation、
-expressionへの代入、定数化したdependencyの評価より前に同じ規則を適用します。そのため、
-書き換え後のInstanceを評価した結果は、元のInstanceを直接評価した場合と同じcanonical
-coordinateを使います。Instanceが既に所有するfixed valueは変更せず、既存のkind / bound
-検証でpartial evaluationの受理範囲外となる値は引き続き拒否します。
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest(
+    selector_claims={
+        0: Sos1BigMSelectorClaim.reused(),
+        1: Sos1BigMSelectorClaim.fresh(
+            10,
+            upper_link=100,
+            lower_link=101,
+        ),
+    },
+    cardinality_constraint=102,
+)
+promotion = instance.promote_sos1_big_m(request)
+```
+
+申請したformulationの検証に失敗すると`RuntimeError`となり、`Instance`は
+変更されません。戻り値の{class}`~ommx.Sos1BigMPromotion`から
+`sos1_constraint_id`、`members`、`fresh_selectors`、
+`relaxed_constraint_ids`を参照できます。
+
+### 🆕 区間で定義する決定変数の逐次作成 ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
+
+{class}`~ommx.Instance` が数値IDを自動で割り当てながら、既存の区間で定義する
+すべての決定変数kindを作成できるようになりました。
+{meth}`~ommx.Instance.new_binary` に加えて、
+{meth}`~ommx.Instance.new_integer`、
+{meth}`~ommx.Instance.new_continuous`、
+{meth}`~ommx.Instance.new_semi_integer`、
+{meth}`~ommx.Instance.new_semi_continuous` を利用できます。
+
+```python
+from ommx import Instance
+
+instance = Instance.minimize()
+count = instance.new_integer("count", lower=0, upper=10)
+amount = instance.new_continuous("amount", lower=0)
+batch = instance.new_semi_integer("batch", lower=2, upper=10)
+rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
+```
+
+どのメソッドも式にそのまま利用できる
+{class}`~ommx.AttachedDecisionVariable` を返します。`name` は引き続き省略可能な
+位置引数で、`subscripts`、`parameters`、`description` はキーワード専用です。
+新しい4メソッドでは、`lower` と `upper` もキーワード専用で指定できます。
+さらに `new_integer` と `new_semi_integer` はキーワード専用の `atol` を受け取り、
+省略時には {func}`~ommx.get_default_atol` が返す現在の既定値を使います。この2メソッドでは、
+有限な lower endpoint を `ceil(lower - atol)`、有限な upper endpoint を
+`floor(upper + atol)` へ正規化します。正規化後の区間に整数がない場合、`new_integer` は
+`ValueError` を返し、`new_semi_integer` はゼロの選択肢を `[0, 0]` として保持します。
+逐次modeling workflowの詳細は
+[Instance user guide](../user_guide/instance.md) を参照してください。
+
+各constructorは決定変数の定義全体を検証してから、rowとmodeling labelをまとめて
+{class}`~ommx.Instance` へ追加します。boundまたはtoleranceが不正な場合や、既存の
+決定変数IDの最大値が `2**64 - 1` で、それより大きい自動IDを割り当てられない場合も、
+変数やlabelの一部だけが残ることはありません。
+
+## 3.0.0 Beta 4
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b4)
 
 ### ⚠ `solve()`と`sample()`が入力を自動的にPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 

@@ -79,10 +79,12 @@ assert_eq!(instance.fixed_decision_variable_value(id), Some(2.0));
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-For `Integer` and `SemiInteger`, finite endpoints are normalized to
-`ceil(lower - atol)` and `floor(upper + atol)`. If that normalized interval
-contains no integer, `new_integer` returns an error, while `new_semi_integer`
-uses `[0, 0]` to preserve the semi-integer zero alternative.
+For `Integer` and `SemiInteger`, each finite bound side becomes the least or
+greatest integer satisfying the requested bound under `atol`; an infinite side
+remains unbounded. Bound membership uses the same one-sided
+residual-feasibility rule as inequality constraints. If no integer satisfies
+the bound, `new_integer` returns an error, while `new_semi_integer` uses `[0,
+0]` to preserve the semi-integer zero alternative.
 
 The normalized row, label, and fixed value are committed together under the
 returned ID. Invalid bounds, inconsistent fixed values, and a maximum existing

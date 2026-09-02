@@ -582,11 +582,13 @@ impl Instance {
 
     /// Create and add an integer decision variable with an automatically assigned ID.
     ///
-    /// The bounds default to `(-inf, inf)` and are normalized to integer
-    /// endpoints under `atol`: a finite lower endpoint is rounded up after
-    /// subtracting `atol`, and a finite upper endpoint is rounded down after
-    /// adding `atol`. Returns an {class}`~ommx.AttachedDecisionVariable` that
-    /// can be used directly in expressions.
+    /// The bounds default to `(-inf, inf)`. Each finite side is normalized to
+    /// the least or greatest integer value that satisfies the original bound
+    /// under `atol`; an infinite side remains unbounded. Bound membership uses
+    /// the same inequality-residual tolerance semantics as constraint
+    /// feasibility. Returns an
+    /// {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+    /// expressions.
     ///
     /// **Args:**
     /// - `name`: Optional human-readable modeling name. Names need not be unique.
@@ -663,11 +665,12 @@ impl Instance {
 
     /// Create and add a semi-integer decision variable with an automatically assigned ID.
     ///
-    /// The bounds default to `(-inf, inf)`. Non-integral endpoints are
-    /// normalized under `atol` using the same endpoint rule as
-    /// {meth}`~ommx.Instance.new_integer`. Unlike an integer variable, if the
-    /// normalized interval contains no integer, its bound becomes `[0, 0]`,
-    /// preserving the zero alternative in the semi-integer domain. Returns an
+    /// The bounds default to `(-inf, inf)`. Each finite side is normalized under
+    /// `atol` using the same residual-feasibility rule as
+    /// {meth}`~ommx.Instance.new_integer`, while an infinite side remains
+    /// unbounded. Unlike an integer variable, if the bound contains no integer,
+    /// its normalized bound becomes `[0, 0]`, preserving the zero alternative
+    /// in the semi-integer domain. Returns an
     /// {class}`~ommx.AttachedDecisionVariable` that can be used directly in
     /// expressions.
     ///

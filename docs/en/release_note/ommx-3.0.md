@@ -8,43 +8,23 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### 🆕 Incremental constructors for interval-domain variables ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
+### 🛠 Unified bound and constraint tolerance semantics ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
-{class}`~ommx.Instance` can now create every existing interval-domain decision
-variable kind while assigning numeric IDs automatically. In addition to
-{meth}`~ommx.Instance.new_binary`, use
-{meth}`~ommx.Instance.new_integer`,
-{meth}`~ommx.Instance.new_continuous`,
-{meth}`~ommx.Instance.new_semi_integer`, or
-{meth}`~ommx.Instance.new_semi_continuous`:
+{meth}`~ommx.Bound.contains` now interprets $x \in [l,u]$ through the same
+inequality residuals $l-x\leq 0$ and $x-u\leq 0$ used by regular constraint
+feasibility. Integer, SemiInteger, and Binary bound normalization use this same
+membership rule instead of constructing tolerance-expanded endpoints.
 
-```python
-from ommx import Instance
+Checked SOS1 Big-M promotion derives the actual representable domain accepted
+by those residuals without first computing `lower - atol` or `upper + atol`.
+Canonical unit-scale links can therefore use the tight values $M=U$ and
+$M=-L$, while undersized links remain rejected. See the
+[Instance user guide](../user_guide/instance.md) and
+[special-constraint guide](../user_guide/special_constraints.md) for details.
 
-instance = Instance.minimize()
-count = instance.new_integer("count", lower=0, upper=10)
-amount = instance.new_continuous("amount", lower=0)
-batch = instance.new_semi_integer("batch", lower=2, upper=10)
-rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
-```
+## 3.0.0 Beta 5
 
-Each method returns an {class}`~ommx.AttachedDecisionVariable` that can be used
-directly in expressions. `name` remains the optional positional argument, while
-`subscripts`, `parameters`, and `description` are keyword-only. The four new
-methods also accept keyword-only `lower` and `upper` bounds. `new_integer` and
-`new_semi_integer` additionally accept keyword-only `atol`; omitting it uses the
-current default returned by {func}`~ommx.get_default_atol`. For these two
-methods, a finite lower endpoint is normalized to `ceil(lower - atol)` and a
-finite upper endpoint to `floor(upper + atol)`. If the normalized interval has
-no integer, `new_integer` raises `ValueError`, while `new_semi_integer` retains
-its zero alternative as `[0, 0]`. See the [Instance user
-guide](../user_guide/instance.md) for the incremental workflow.
-
-Each constructor validates the complete variable definition before committing
-the row and modeling label together to the {class}`~ommx.Instance`. An invalid
-bound or tolerance, or a maximum existing decision-variable ID of `2**64 - 1`
-that prevents assignment of a larger automatic ID, leaves no partial variable
-or label behind.
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b5)
 
 ### 🛠 Inclusive `atol` boundaries ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
@@ -62,7 +42,38 @@ Values just outside the boundary remain outside. APIs that own finite-value
 validation continue to reject NaN and infinity before reporting domain or
 consistency errors.
 
-### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+### 🛠 Canonical solver states during evaluation ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+{meth}`~ommx.Instance.populate_state`, {meth}`~ommx.Instance.evaluate`, and
+{meth}`~ommx.Instance.evaluate_samples` now canonicalize finite supplied
+coordinates that are neither fixed nor dependent, as well as values derived for
+dependent targets, according to each decision-variable kind and the caller's
+`atol`. For those coordinates, Binary values whose distance from `0` or `1` is
+at most `atol`, and Integer or SemiInteger values whose distance from an integer
+is at most `atol`, are stored as the corresponding exact discrete value,
+including values exactly at the tolerance boundary. Kind and bound feasibility
+continue to be checked separately under their existing rules. Continuous and
+SemiContinuous values are never rounded. Other
+finite values are preserved so a returned {class}`~ommx.Solution` can report
+their feasibility, while non-finite state values remain rejected.
+
+A caller-supplied fixed or dependent value remains a consistency assertion.
+After validation, the returned state uses the Instance-owned fixed value
+unchanged or the dependency-derived value canonicalized for its target kind.
+Dependencies are evaluated from canonicalized inputs, so an explicitly supplied
+dependent assertion computed from the raw solver vector can now be rejected if
+it is not within `atol` of that derived value. Scalar and sample evaluation use
+the same rule while preserving SampleID membership.
+
+{meth}`~ommx.Instance.partial_evaluate` applies the same rule to its validated
+input before special-constraint propagation, expression substitution, and
+constant dependency evaluation. Evaluating the rewritten Instance therefore
+uses the same canonical coordinates as directly evaluating the original
+Instance. Existing Instance-owned fixed values remain unchanged, and values
+outside partial evaluation's existing kind and bound acceptance contract remain
+rejected.
+
+### ⚠ Composed `Function` operations ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181), [#1184](https://github.com/Jij-Inc/ommx/pull/1184))
 
 {class}`~ommx.Function` can now represent composed expressions as well as
 compact polynomials. Python users can construct absolute values, sign
@@ -108,7 +119,9 @@ $|f(x)| \leq \mathtt{atol}$, before coefficient normalization, so a small
 positive value is not silently reclassified by scaling. Exact polynomial
 normalization retains every finite nonzero coefficient and does not apply an
 implicit tolerance-based cleanup. A future approximate-cleanup API would be
-separate and explicit.
+separate and explicit. Subtraction follows the same canonicalization as
+addition with a negated right-hand side, so `x - (-y)` compacts to a polynomial
+when possible and coefficient overflow is raised immediately as `ValueError`.
 
 Because a `Function` is no longer necessarily a polynomial,
 {meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` return
@@ -135,36 +148,83 @@ is a breaking rename from the API published in Python SDK 3.0.0 Beta 4:
 `PolynomialRequirement.any_degree()` accepts a polynomial of any degree; it
 does not admit a composed, non-polynomial `Function`.
 
-### 🛠 Canonical solver states during evaluation ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+### 🆕 Checked SOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
 
-{meth}`~ommx.Instance.populate_state`, {meth}`~ommx.Instance.evaluate`, and
-{meth}`~ommx.Instance.evaluate_samples` now canonicalize finite supplied
-coordinates that are neither fixed nor dependent, as well as values derived for
-dependent targets, according to each decision-variable kind and the caller's
-`atol`. For those coordinates, Binary values whose distance from `0` or `1` is
-at most `atol`, and Integer or SemiInteger values whose distance from an integer
-is at most `atol`, are stored as the corresponding exact discrete value,
-including values exactly at the tolerance boundary. Kind and bound feasibility
-continue to be checked separately under their existing rules. Continuous and
-SemiContinuous values are never rounded. Other
-finite values are preserved so a returned {class}`~ommx.Solution` can report
-their feasibility, while non-finite state values remain rejected.
+An {ref}`SOS1 constraint <sos1-constraint>` allows at most one member to be
+non-zero. A {ref}`Big-M formulation <sos1-big-m-formulation>` represents this
+condition with binary selectors, member-selector link constraints, and a
+selector-cardinality constraint.
 
-A caller-supplied fixed or dependent value remains a consistency assertion.
-After validation, the returned state uses the Instance-owned fixed value
-unchanged or the dependency-derived value canonicalized for its target kind.
-Dependencies are evaluated from canonicalized inputs, so an explicitly supplied
-dependent assertion computed from the raw solver vector can now be rejected if
-it is not within `atol` of that derived value. Scalar and sample evaluation use
-the same rule while preserving SampleID membership.
+{meth}`~ommx.Instance.promote_sos1_big_m` accepts a claim that the current
+`Instance` contains such a formulation. This is an independent transformation
+request, not a rollback or inverse of lowering. The method verifies that the
+current variables, domains, and rows satisfy sufficient conditions that justify
+replacing the claimed formulation rows with a first-class SOS1 constraint, then
+applies that transformation atomically.
 
-{meth}`~ommx.Instance.partial_evaluate` applies the same rule to its validated
-input before special-constraint propagation, expression substitution, and
-constant dependency evaluation. Evaluating the rewritten Instance therefore
-uses the same canonical coordinates as directly evaluating the original
-Instance. Existing Instance-owned fixed values remain unchanged, and values
-outside partial evaluation's existing kind and bound acceptance contract remain
-rejected.
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest(
+    selector_claims={
+        0: Sos1BigMSelectorClaim.reused(),
+        1: Sos1BigMSelectorClaim.fresh(
+            10,
+            upper_link=100,
+            lower_link=101,
+        ),
+    },
+    cardinality_constraint=102,
+)
+promotion = instance.promote_sos1_big_m(request)
+```
+
+If the claimed formulation fails validation, `RuntimeError` is raised and the
+`Instance` remains unchanged. The returned
+{class}`~ommx.Sos1BigMPromotion` exposes `sos1_constraint_id`, `members`,
+`fresh_selectors`, and `relaxed_constraint_ids`.
+
+### 🆕 Incremental constructors for interval-domain variables ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
+
+{class}`~ommx.Instance` can now create every existing interval-domain decision
+variable kind while assigning numeric IDs automatically. In addition to
+{meth}`~ommx.Instance.new_binary`, use
+{meth}`~ommx.Instance.new_integer`,
+{meth}`~ommx.Instance.new_continuous`,
+{meth}`~ommx.Instance.new_semi_integer`, or
+{meth}`~ommx.Instance.new_semi_continuous`:
+
+```python
+from ommx import Instance
+
+instance = Instance.minimize()
+count = instance.new_integer("count", lower=0, upper=10)
+amount = instance.new_continuous("amount", lower=0)
+batch = instance.new_semi_integer("batch", lower=2, upper=10)
+rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
+```
+
+Each method returns an {class}`~ommx.AttachedDecisionVariable` that can be used
+directly in expressions. `name` remains the optional positional argument, while
+`subscripts`, `parameters`, and `description` are keyword-only. The four new
+methods also accept keyword-only `lower` and `upper` bounds. `new_integer` and
+`new_semi_integer` additionally accept keyword-only `atol`; omitting it uses the
+current default returned by {func}`~ommx.get_default_atol`. For these two
+methods, a finite lower endpoint is normalized to `ceil(lower - atol)` and a
+finite upper endpoint to `floor(upper + atol)`. If the normalized interval has
+no integer, `new_integer` raises `ValueError`, while `new_semi_integer` retains
+its zero alternative as `[0, 0]`. See the [Instance user
+guide](../user_guide/instance.md) for the incremental workflow.
+
+Each constructor validates the complete variable definition before committing
+the row and modeling label together to the {class}`~ommx.Instance`. An invalid
+bound or tolerance, or a maximum existing decision-variable ID of `2**64 - 1`
+that prevents assignment of a larger automatic ID, leaves no partial variable
+or label behind.
+
+## 3.0.0 Beta 4
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b4)
 
 ### ⚠ `solve()` and `sample()` now prepare inputs automatically ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 

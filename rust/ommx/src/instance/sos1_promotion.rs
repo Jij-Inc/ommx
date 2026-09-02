@@ -305,15 +305,15 @@ impl Sos1LinkSide {
 
     fn is_required(self, bound: Bound) -> bool {
         // Let epsilon be the supplied ATol. In the real-number semantics, a
-        // Continuous upper side admitted by Bound::contains reaches U +
-        // epsilon, while SOS1 classifies values through epsilon as zero. Thus
-        // U + epsilon > epsilon iff U > 0; the lower side is symmetric because
-        // L - epsilon < -epsilon iff L < 0. The ATol term therefore cancels
-        // from this exact-sign rule. At f64 extremes the endpoint addition can
-        // round back to epsilon, so this rule is intentionally conservative
-        // and may require a redundant link. Integer bounds already have
-        // integer endpoints and promotion requires epsilon < 1, so the same
-        // exact-sign rule detects an available nonzero integer.
+        // Continuous upper residual admits x - U <= epsilon, while SOS1
+        // classifies values through epsilon as zero. Thus a potentially active
+        // upper value exists exactly when U > 0; the lower side is symmetric
+        // because L - x <= epsilon can reach below -epsilon exactly when L <
+        // 0. The ATol term therefore cancels from this exact-sign rule. The
+        // actual representable extrema are derived separately from
+        // Bound::contains, so no expanded endpoint is needed here. Integer
+        // bounds already have integer endpoints and promotion requires epsilon
+        // < 1, so the same exact-sign rule detects an available nonzero integer.
         match self {
             Self::Upper => bound.upper() > 0.0,
             Self::Lower => bound.lower() < 0.0,
@@ -340,17 +340,14 @@ impl Sos1LinkSide {
         bound: Bound,
         atol: ATol,
     ) -> crate::Result<SignedFeasibleDomain> {
-        let tolerance = atol.into_inner();
         let (lower, upper, discrete) = match kind {
             Kind::Continuous => {
-                let lower = bound.lower() - tolerance;
-                let upper = bound.upper() + tolerance;
-                if !lower.is_finite() || !upper.is_finite() {
-                    crate::bail!(
-                        { ?kind, ?bound, tolerance, side = self.name() },
-                        "SOS1 Big-M promotion cannot certify a non-finite ATol-feasible member domain"
-                    );
-                }
+                // Derive the actual representable domain from the same
+                // residual membership predicate used by DecisionVariable
+                // validation. In particular, do not materialize `L - atol` or
+                // `U + atol`: rounding those endpoints and subtracting the
+                // stored bound again can disagree with Bound::contains.
+                let (lower, upper) = bound.finite_feasible_extrema(atol);
                 (lower, upper, false)
             }
             Kind::Integer => (bound.lower(), bound.upper(), true),
@@ -465,13 +462,14 @@ impl Instance {
     /// Big-M only when that threshold agrees with SOS1's `abs(member) <= atol`
     /// zero classification: reconstructed `z = 0` must satisfy the raw row,
     /// every active member must force `z = 1`, and `z = 1` must cover the full
-    /// member domain feasible under the same `atol`. Continuous domains include
-    /// the tolerance admitted by [`Bound::contains`], while Integer domains are
-    /// checked at their discrete values. The checker imposes no domain-derived
-    /// upper cap on a finite, representable loose Big-M; non-unit scales and
-    /// tolerance-level shortfalls are accepted only where these feasibility
-    /// conditions hold. The raw residual is checked as well as its normalized
-    /// form to avoid accepting an f64 normalization-rounding artifact.
+    /// member domain feasible under the same `atol`. Continuous domains are
+    /// derived directly from [`Bound::contains`] without constructing expanded
+    /// endpoints, while Integer domains are checked at their discrete values.
+    /// The checker imposes no domain-derived upper cap on a finite,
+    /// representable loose Big-M; non-unit scales and tolerance-level shortfalls
+    /// are accepted only where these feasibility conditions hold. The raw
+    /// residual is checked as well as its normalized form to avoid accepting an
+    /// f64 normalization-rounding artifact.
     ///
     /// The supplied `atol` must be finite and smaller than one so the exact
     /// binary selector-cardinality row still means "at most one". Relation,
@@ -2327,6 +2325,63 @@ mod tests {
         );
         assert!(negative_boundary.feasible());
         assert!(negative_boundary.feasible_relaxed());
+    }
+
+    #[test]
+    fn accepts_tight_unit_scale_links_at_continuous_bound_endpoints() {
+        let atol = ATol::new(1.0e-6).unwrap();
+        let bound = Bound::new(-2.0, 2.0).unwrap();
+        let member = DecisionVariable::new(Kind::Continuous, bound, ATol::default()).unwrap();
+        let (original, request) =
+            fresh_instance(member.clone(), Some(upper_row_id()), Some(lower_row_id()));
+        let mut promoted = original.clone();
+
+        let promotion = promoted.promote_sos1_big_m(&request, atol).unwrap();
+        let (lower, upper) = bound.finite_feasible_extrema(atol);
+        for member_value in [lower, upper] {
+            let original_solution = original
+                .evaluate(
+                    &crate::v1::State::from_iter([
+                        (member_integer_id().into_inner(), member_value),
+                        (selector_id().into_inner(), 1.0),
+                    ]),
+                    atol,
+                )
+                .unwrap();
+            let promoted_solution = promoted
+                .evaluate(
+                    &crate::v1::State::from_iter([(
+                        member_integer_id().into_inner(),
+                        member_value,
+                    )]),
+                    atol,
+                )
+                .unwrap();
+
+            assert!(original_solution.feasible());
+            assert!(promoted_solution.feasible());
+            assert!(promoted_solution.feasible_relaxed());
+            assert_eq!(
+                promoted_solution.state().entries[&selector_id().into_inner()],
+                1.0
+            );
+            assert!(promoted_solution
+                .evaluated_sos1_constraints()
+                .contains_key(&promotion.sos1_constraint_id()));
+        }
+
+        let (mut too_small, request) =
+            fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
+        too_small
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(1.0, 2.0 - atol.into_inner()))
+            .unwrap();
+        assert_atomic_rejection_with_atol(
+            too_small,
+            &request,
+            atol,
+            "does not cover the ATol-feasible member domain",
+        );
     }
 
     #[test]
