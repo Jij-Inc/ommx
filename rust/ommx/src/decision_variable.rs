@@ -175,15 +175,11 @@ impl Kind {
             ),
             Kind::Binary => {
                 // Acceptable bounds are only [0, 0], [0, 1], [1, 1]
-                if bound.lower() > 1.0 + atol || bound.upper() < 0.0 - atol {
-                    return None;
-                }
-                if bound.lower() > 0.0 + atol {
-                    Some(Bound::new(1.0, 1.0).unwrap())
-                } else if bound.upper() < 1.0 - atol {
-                    Some(Bound::new(0.0, 0.0).unwrap())
-                } else {
-                    Some(Bound::new(0.0, 1.0).unwrap())
+                match (bound.contains(0.0, atol), bound.contains(1.0, atol)) {
+                    (false, false) => None,
+                    (true, false) => Some(Bound::new(0.0, 0.0).unwrap()),
+                    (false, true) => Some(Bound::new(1.0, 1.0).unwrap()),
+                    (true, true) => Some(Bound::new(0.0, 1.0).unwrap()),
                 }
             }
         }
@@ -691,6 +687,47 @@ mod tests {
             result,
             Err(DecisionVariableError::EmptyBoundIntersection { .. })
         ));
+    }
+
+    #[test]
+    fn integer_and_binary_bounds_use_bound_membership() {
+        let atol = ATol::new(1.0e-6).unwrap();
+
+        let integer_source = Bound::new(2.0 + atol.into_inner(), 4.0 - atol.into_inner()).unwrap();
+        assert_eq!(
+            Kind::Integer.consistent_bound(integer_source, atol),
+            Some(Bound::new(3.0, 3.0).unwrap())
+        );
+        assert_eq!(
+            Kind::SemiInteger.consistent_bound(integer_source, atol),
+            Some(Bound::new(3.0, 3.0).unwrap())
+        );
+
+        let excludes_one = Bound::new(0.0, 1.0 - atol.into_inner()).unwrap();
+        assert!(excludes_one.contains(0.0, atol));
+        assert!(!excludes_one.contains(1.0, atol));
+        assert_eq!(
+            Kind::Binary.consistent_bound(excludes_one, atol),
+            Some(Bound::new(0.0, 0.0).unwrap())
+        );
+
+        let excludes_zero = Bound::new(atol.into_inner().next_up(), 1.0).unwrap();
+        assert!(!excludes_zero.contains(0.0, atol));
+        assert!(excludes_zero.contains(1.0, atol));
+        assert_eq!(
+            Kind::Binary.consistent_bound(excludes_zero, atol),
+            Some(Bound::new(1.0, 1.0).unwrap())
+        );
+
+        let excludes_both = Bound::new(0.1, 0.9).unwrap();
+        assert!(!excludes_both.contains(0.0, atol));
+        assert!(!excludes_both.contains(1.0, atol));
+        assert_eq!(Kind::Binary.consistent_bound(excludes_both, atol), None);
+
+        assert_eq!(
+            Kind::Binary.consistent_bound(Bound::of_binary(), atol),
+            Some(Bound::of_binary())
+        );
     }
 
     #[test]

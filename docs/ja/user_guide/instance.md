@@ -46,7 +46,13 @@ instance.add_constraint(x * y == 0, "exclusive")
 
 決定変数を作成するすべての `new_*` メソッドと `add_constraint` は、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を受け取れます。後ろの 3 フィールドはキーワード専用です。`new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous` では、`lower` と `upper` もキーワード専用で指定できます。さらに `new_integer` と `new_semi_integer` はキーワード専用の `atol` を受け取り、省略時には {func}`~ommx.get_default_atol` が返す現在の既定値を使います。`add_constraint` では、省略したフィールドについて入力 Constraint が持つ既存ラベルを保持します。
 
-Integer と SemiInteger では、有限な lower endpoint を `ceil(lower - atol)`、有限な upper endpoint を `floor(upper + atol)` へ正規化します。正規化後の区間に整数がない場合、`new_integer` は `ValueError` を返し、`new_semi_integer` は SemiInteger のゼロ選択肢を保持するため `[0, 0]` を使います。
+Integer と SemiInteger では、有限なboundの各側を、指定したboundを`atol`のもとで満たす
+最小または最大の整数へ正規化します。無限な側はunboundedのまま保持します。
+Bound membershipは $x \in [l,u]$ を $l-x\leq 0$ と $x-u\leq 0$ という
+2つのresidual constraintとして解釈し、不等式constraintのfeasibilityと同じtolerance規則を
+使います。boundを満たす整数がない場合、`new_integer` は `ValueError` を返し、
+`new_semi_integer` はSemiIntegerのゼロ選択肢を保持するため `[0, 0]` を使います。
+Binaryのbound正規化でも、同じ規則で`0`と`1`のmembershipを判定します。
 
 各 `new_*` 呼び出しは、IDを割り当てる前に決定変数の定義全体を検証し、正規化します。boundまたはtoleranceが不正な場合や、既存の決定変数IDの最大値が `2**64 - 1` で、それより大きい自動IDを割り当てられない場合、決定変数もModelingLabelも `Instance` には追加されません。
 

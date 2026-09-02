@@ -64,6 +64,36 @@ def test_promote_sos1_big_m_exposes_checked_result() -> None:
     assert instance.populate_state({0: 0, 1: 2}).entries[10] == 1
 
 
+def test_promote_sos1_big_m_accepts_tight_continuous_links() -> None:
+    member = DecisionVariable.continuous(1, lower=-2, upper=2)
+    selector = DecisionVariable.binary(10)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=0,
+        decision_variables=[member, selector],
+        constraints={
+            100: member - 2 * selector <= 0,
+            101: -member - 2 * selector <= 0,
+            102: selector - 1 <= 0,
+        },
+    )
+    request = Sos1BigMPromotionRequest(
+        selector_claims={
+            1: Sos1BigMSelectorClaim.fresh(
+                10,
+                upper_link=100,
+                lower_link=101,
+            )
+        },
+        cardinality_constraint=102,
+    )
+
+    promotion = instance.promote_sos1_big_m(request, atol=1e-6)
+
+    assert promotion.members == {1}
+    assert promotion.fresh_selectors == {1: 10}
+
+
 def test_promote_sos1_big_m_rejects_invalid_request_atomically() -> None:
     instance, valid_request = mixed_formulation()
     invalid_request = Sos1BigMPromotionRequest(

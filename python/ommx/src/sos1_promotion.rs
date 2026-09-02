@@ -207,8 +207,11 @@ impl Instance {
     ///
     /// ``atol`` parameterizes the local projected-feasibility check, must be
     /// finite and satisfy ``0 < atol < 1``, and must also be used for subsequent
-    /// state reconstruction and evaluation. If omitted, the current default
-    /// returned by {func}`~ommx.get_default_atol` is used.
+    /// state reconstruction and evaluation. Continuous member bounds and link
+    /// rows use the same inequality-residual feasibility rule, so canonical
+    /// unit-scale links may use tight Big-M values `U` for an upper link and
+    /// `-L` for a lower link. If omitted, the current default returned by
+    /// {func}`~ommx.get_default_atol` is used.
     ///
     /// Raises {class}`RuntimeError` when the claimed formulation is invalid for
     /// the current instance, including a positive-infinite tolerance or a

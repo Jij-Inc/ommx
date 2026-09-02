@@ -41,9 +41,7 @@ impl Equality {
     pub(crate) fn is_satisfied(self, evaluated_value: f64, atol: ATol) -> bool {
         match self {
             Self::EqualToZero => atol.approx_is_zero(evaluated_value),
-            Self::LessThanOrEqualToZero => {
-                evaluated_value < 0.0 || atol.approx_is_zero(evaluated_value)
-            }
+            Self::LessThanOrEqualToZero => atol.approx_le(evaluated_value, 0.0),
         }
     }
 }

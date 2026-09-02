@@ -7,6 +7,7 @@ import ommx
 import pytest
 from ommx import (
     AttachedDecisionVariable,
+    Bound,
     DecisionVariable,
     ExactIntegerSlackError,
     Function,
@@ -261,6 +262,33 @@ def test_new_semi_integer_atol_overrides_the_process_default():
             "explicit", lower=1.1, upper=1.9, atol=1e-6
         )
         assert (explicit.bound.lower, explicit.bound.upper) == (0, 0)
+    finally:
+        ommx.set_default_atol(initial_atol)
+
+
+@pytest.mark.parametrize("method_name", ["new_integer", "new_semi_integer"])
+def test_new_integer_kinds_use_bound_residual_membership(method_name: str):
+    atol = 1e-6
+    variable = getattr(Instance.minimize(), method_name)(
+        "x",
+        lower=2.0 + atol,
+        upper=4.0 - atol,
+        atol=atol,
+    )
+
+    assert (variable.bound.lower, variable.bound.upper) == (3.0, 3.0)
+
+
+def test_binary_bound_normalization_uses_bound_residual_membership():
+    initial_atol = ommx.get_default_atol()
+    try:
+        atol = 1e-6
+        ommx.set_default_atol(atol)
+        source = Bound(0.0, 1.0 - atol)
+
+        assert not source.contains(1.0, atol)
+        variable = DecisionVariable(0, DecisionVariable.BINARY, source)
+        assert (variable.bound.lower, variable.bound.upper) == (0.0, 0.0)
     finally:
         ommx.set_default_atol(initial_atol)
 
