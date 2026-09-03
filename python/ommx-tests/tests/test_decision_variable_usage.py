@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from ommx import DecisionVariable, DecisionVariableRole, Instance
+from ommx import DecisionVariable, DecisionVariableRole, Instance, Sense
 
 
 def test_decision_variable_roles_basic():
@@ -15,7 +15,7 @@ def test_decision_variable_roles_basic():
         decision_variables=x,
         objective=x[0] + x[1],
         constraints={0: x[1] + x[2] == 1},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     assert instance.used_decision_variables == x
@@ -35,7 +35,7 @@ def test_decision_variable_role_partitions():
         decision_variables=list(x.values()),
         objective=x[0],
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.substitute({2: x[0] + 1})
     instance = instance.partial_evaluate({1: 2.0})
@@ -58,7 +58,7 @@ def _dependent_instance_y_eq_2x():
         decision_variables=list(x.values()),
         objective=x[1],
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.substitute({10: x[1] + x[1]})
     return instance
@@ -115,7 +115,7 @@ def test_partial_evaluate_normalizes_dependency_chain():
         decision_variables=list(x.values()),
         objective=x[1],
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.substitute({10: x[1] + x[1], 11: x[10] + 1})
 
@@ -152,7 +152,7 @@ def test_instance_populate_state():
         decision_variables=list(x.values()),
         objective=x[1] + x[2],
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.substitute(
         {
@@ -194,7 +194,7 @@ def test_instance_canonicalizes_discrete_solver_values():
         decision_variables=list(x.values()),
         objective=x[0],
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     state = {
         0: 1.0625,

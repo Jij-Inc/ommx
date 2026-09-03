@@ -16,7 +16,7 @@ from ommx.experiment import (
     list_experiments,
 )
 from ommx.tracing import TraceResult, render_text_tree
-from ommx import DecisionVariable, Instance, SampleSet, Solution
+from ommx import DecisionVariable, Instance, SampleSet, Solution, Sense
 
 from conftest import get_test_exporter
 
@@ -1011,7 +1011,7 @@ def test_log_sample_records_finished_sample_set_without_feasible_samples():
         decision_variables=[x],
         objective=x,
         constraints={0: x == 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     experiment = Experiment.with_temp_local_registry()
 

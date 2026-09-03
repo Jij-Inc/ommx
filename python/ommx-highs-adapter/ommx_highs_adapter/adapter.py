@@ -11,8 +11,6 @@ from highspy.highs import highs_linear_expression
 from opentelemetry import trace
 
 from ommx import (
-    Constraint,
-    DecisionVariable,
     Equality,
     Function,
     Instance,
@@ -444,19 +442,19 @@ class OMMXHighsAdapter(SolverAdapter):
        * - OMMX Type
          - HiGHS Type
          - Bounds
-       * - ``DecisionVariable.BINARY``
+       * - ``Kind.Binary``
          - ``HighsVarType.kInteger``
          - ``[0, 1]``
-       * - ``DecisionVariable.INTEGER``
+       * - ``Kind.Integer``
          - ``HighsVarType.kInteger``
          - ``[var.bound.lower, var.bound.upper]``
-       * - ``DecisionVariable.CONTINUOUS``
+       * - ``Kind.Continuous``
          - ``HighsVarType.kContinuous``
          - ``[var.bound.lower, var.bound.upper]``
-       * - ``DecisionVariable.SEMI_INTEGER``
+       * - ``Kind.SemiInteger``
          - **Not supported** (support planned)
          - \\-
-       * - ``DecisionVariable.SEMI_CONTINUOUS``
+       * - ``Kind.SemiContinuous``
          - **Not supported** (support planned)
          - \\-
 
@@ -480,10 +478,10 @@ class OMMXHighsAdapter(SolverAdapter):
        * - OMMX Constraint
          - Mathematical Form
          - HiGHS Constraint
-       * - ``Constraint.EQUAL_TO_ZERO``
+       * - ``Equality.EqualToZero``
          - f(x) = 0
          - ``const_expr == 0``
-       * - ``Constraint.LESS_THAN_OR_EQUAL_TO_ZERO``
+       * - ``Equality.LessThanOrEqualToZero``
          - f(x) ≤ 0
          - ``const_expr <= 0``
 
@@ -505,9 +503,9 @@ class OMMXHighsAdapter(SolverAdapter):
 
        * - OMMX Direction
          - HiGHS Method
-       * - ``Instance.MINIMIZE``
+       * - ``Sense.Minimize``
          - ``model.minimize(...)``
-       * - ``Instance.MAXIMIZE``
+       * - ``Sense.Maximize``
          - ``model.maximize(...)``
 
     **Function Types**:
@@ -534,9 +532,10 @@ class OMMXHighsAdapter(SolverAdapter):
     **Unsupported Features**:
 
     - Quadratic functions (HiGHS supports linear problems only)
-    - Semi-integer variables (``DecisionVariable.SEMI_INTEGER``, kind=4) - support planned
-    - Semi-continuous variables (``DecisionVariable.SEMI_CONTINUOUS``, kind=5) - support planned
-    - Constraint types other than ``EQUAL_TO_ZERO``/``LESS_THAN_OR_EQUAL_TO_ZERO``
+    - Semi-integer variables (``Kind.SemiInteger``) - support planned
+    - Semi-continuous variables (``Kind.SemiContinuous``) - support planned
+    - Constraint types other than ``Equality.EqualToZero``/
+      ``Equality.LessThanOrEqualToZero``
 
     **Solver Status Mapping**:
 
@@ -558,13 +557,13 @@ class OMMXHighsAdapter(SolverAdapter):
     2. Constraint forms limited to equality (= 0) and inequality (≤ 0)
     3. Variable types limited to Binary, Integer, and Continuous
 
-       - Semi-integer (SEMI_INTEGER) support is planned but not yet implemented
-       - Semi-continuous (SEMI_CONTINUOUS) support is planned but not yet implemented
+       - ``Kind.SemiInteger`` support is planned but not yet implemented
+       - ``Kind.SemiContinuous`` support is planned but not yet implemented
 
     Examples
     --------
     >>> from ommx_highs_adapter import OMMXHighsAdapter
-    >>> from ommx import Instance, DecisionVariable
+    >>> from ommx import DecisionVariable, Instance, Sense
     >>>
     >>> # Define problem
     >>> x = DecisionVariable.binary(0)
@@ -573,7 +572,7 @@ class OMMXHighsAdapter(SolverAdapter):
     ...     decision_variables=[x, y],
     ...     objective=2*x + 3*y,
     ...     constraints={0: x + y <= 5},
-    ...     sense=Instance.MAXIMIZE,
+    ...     sense=Sense.Maximize,
     ... )
     >>>
     >>> # Solve
@@ -707,7 +706,7 @@ class OMMXHighsAdapter(SolverAdapter):
         ...     decision_variables=x,
         ...     objective=sum(p[i] * x[i] for i in range(6)),
         ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-        ...     sense=Instance.MAXIMIZE,
+        ...     sense=Sense.Maximize,
         ... )
         >>>
         >>> solution = OMMXHighsAdapter.solve(instance)
@@ -726,7 +725,7 @@ class OMMXHighsAdapter(SolverAdapter):
         ...     decision_variables=[x],
         ...     objective=x,
         ...     constraints={0: x >= 4},  # Impossible: x ≤ 3 and x ≥ 4
-        ...     sense=Instance.MAXIMIZE,
+        ...     sense=Sense.Maximize,
         ... )
         >>> OMMXHighsAdapter.solve(instance)  # doctest: +IGNORE_EXCEPTION_DETAIL
         Traceback (most recent call last):
@@ -748,7 +747,7 @@ class OMMXHighsAdapter(SolverAdapter):
         # ...     decision_variables=[x],
         # ...     objective=x,
         # ...     constraints={},
-        # ...     sense=Instance.MAXIMIZE,
+        # ...     sense=Sense.Maximize,
         # ... )
 
         # >>> OMMXHighsAdapter.solve(instance)
@@ -866,7 +865,7 @@ class OMMXHighsAdapter(SolverAdapter):
         ...     decision_variables=[x],
         ...     objective=x,
         ...     constraints={},
-        ...     sense=Instance.MAXIMIZE,
+        ...     sense=Sense.Maximize,
         ... )
         >>>
         >>> adapter = OMMXHighsAdapter(instance)
@@ -936,7 +935,7 @@ class OMMXHighsAdapter(SolverAdapter):
         ...     decision_variables=[x1],
         ...     objective=x1,
         ...     constraints={},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> adapter = OMMXHighsAdapter(instance)
         >>> model = adapter.solver_input
@@ -971,15 +970,15 @@ class OMMXHighsAdapter(SolverAdapter):
 
         for i, var in enumerate(self.instance.used_decision_variables):
             var_ids.append(var.id)
-            if var.kind == DecisionVariable.BINARY:
+            if var.kind == Kind.Binary:
                 lower[i] = 0
                 upper[i] = 1
                 types.append(highspy.HighsVarType.kInteger)
-            elif var.kind == DecisionVariable.INTEGER:
+            elif var.kind == Kind.Integer:
                 lower[i] = var.bound.lower
                 upper[i] = var.bound.upper
                 types.append(highspy.HighsVarType.kInteger)
-            elif var.kind == DecisionVariable.CONTINUOUS:
+            elif var.kind == Kind.Continuous:
                 lower[i] = var.bound.lower
                 upper[i] = var.bound.upper
                 types.append(highspy.HighsVarType.kContinuous)
@@ -1013,9 +1012,9 @@ class OMMXHighsAdapter(SolverAdapter):
         obj = self._linear_expr_conversion(self.instance.objective)
         if isinstance(obj, float):
             return
-        if self.instance.sense == Instance.MAXIMIZE:
+        if self.instance.sense == Sense.Maximize:
             self.model.maximize(highs_linear_expression(obj))
-        elif self.instance.sense == Instance.MINIMIZE:
+        elif self.instance.sense == Sense.Minimize:
             self.model.minimize(highs_linear_expression(obj))
         else:
             raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.sense}")
@@ -1025,13 +1024,13 @@ class OMMXHighsAdapter(SolverAdapter):
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
                 val = const_expr
-                if constr.equality == Constraint.EQUAL_TO_ZERO:
+                if constr.equality == Equality.EqualToZero:
                     if abs(val) > 1e-10:
                         raise OMMXHighsAdapterError(
                             "Infeasible constant equality constraint"
                         )
                     continue
-                elif constr.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+                elif constr.equality == Equality.LessThanOrEqualToZero:
                     if val > 1e-10:
                         raise OMMXHighsAdapterError(
                             "Infeasible constant inequality constraint"
@@ -1039,9 +1038,9 @@ class OMMXHighsAdapter(SolverAdapter):
                     continue
             else:
                 const_expr = highs_linear_expression(const_expr)
-                if constr.equality == Constraint.EQUAL_TO_ZERO:
+                if constr.equality == Equality.EqualToZero:
                     self.model.addConstr(const_expr == 0, str(cid))
-                elif constr.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+                elif constr.equality == Equality.LessThanOrEqualToZero:
                     self.model.addConstr(const_expr <= 0, str(cid))
                 else:
                     raise OMMXHighsAdapterError(

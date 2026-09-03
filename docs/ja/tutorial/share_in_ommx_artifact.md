@@ -26,7 +26,7 @@ OMMXは、これらの多様なデータを効率的かつシンプルに管理�
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-from ommx import Instance, DecisionVariable, Constraint
+from ommx import Constraint, DecisionVariable, Equality, Instance, Sense
 from ommx_pyscipopt_adapter.adapter import OMMXPySCIPOptAdapter
 import pandas as pd
 
@@ -67,7 +67,7 @@ constraint = Constraint(
     # 制約式の左辺を指定する
     function=sum(data["w"][i] * x[i] for i in range(data["N"])) - data["W"],
     # 等式制約 (==0) or 不等式制約 (<=0) を指定する
-    equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+    equality=Equality.LessThanOrEqualToZero,
 )
 
 # インスタンスを作成する
@@ -79,7 +79,7 @@ instance = Instance.from_components(
     # 全ての制約条件を登録する (キーは制約ID)
     constraints={0: constraint},
     # 最大化問題であることを指定する
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 
 # SCIPで解く

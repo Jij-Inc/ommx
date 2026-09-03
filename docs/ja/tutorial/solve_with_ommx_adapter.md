@@ -81,7 +81,7 @@ N = len(v)  # アイテムの総数
 この数理モデルとデータに基づいて、OMMX Python SDKを使用して問題インスタンスを記述するコードは次のようになります：
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable
+from ommx import DecisionVariable, Instance, Sense
 
 # 決定変数を定義する
 x = [
@@ -113,7 +113,7 @@ instance = Instance.from_components(
     # 制約条件を登録する (キーは制約ID)
     constraints={0: constraint},
     # 最大化問題であることを指定する
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 ```
 

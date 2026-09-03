@@ -63,7 +63,13 @@ Applicability と solver input の構築は別の境界です。Membership は�
 {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` は、その {class}`~ommx.Instance` が **現在保持している active な特殊制約** に対応する `SpecialConstraintKind` の集合を返します。通常制約しか使っていない場合は空集合です。
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, OneHotConstraint, SpecialConstraintKind
+from ommx import (
+    DecisionVariable,
+    Instance,
+    OneHotConstraint,
+    Sense,
+    SpecialConstraintKind,
+)
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 
@@ -72,7 +78,7 @@ instance = Instance.from_components(
     objective=sum(xs),
     constraints={},
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
 assert binary_linear_with_one_hot.contains(instance)
@@ -111,7 +117,7 @@ instance2 = Instance.from_components(
     objective=sum(xs),
     constraints={},
     one_hot_constraints={1: OneHotConstraint(variables=xs)},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 new_id = instance2.convert_one_hot_to_constraint(1)
 assert isinstance(new_id, int)
@@ -138,7 +144,7 @@ instance3 = Instance.from_components(
     objective=sum(ys),
     constraints={},
     sos1_constraints={1: Sos1Constraint(variables=ys)},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 new_ids = instance3.convert_sos1_to_constraints(1)
 # バイナリ変数のみの SOS1 は濃度制約 sum(x_i) - 1 <= 0 1本に変換される

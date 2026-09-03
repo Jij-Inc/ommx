@@ -63,7 +63,17 @@ PySCIPOpt manages decision variables by name, so register the OMMX decision vari
 
 ```{code-cell} ipython3
 import pyscipopt
-from ommx import Instance, Solution, DecisionVariable, Constraint, State, Function
+from ommx import (
+    Constraint,
+    DecisionVariable,
+    Equality,
+    Function,
+    Instance,
+    Kind,
+    Sense,
+    Solution,
+    State,
+)
 
 def set_decision_variables(
     model: pyscipopt.Model,  # For tutorial purposes, we pass state as arguments, but managing with class is common
@@ -74,13 +84,13 @@ def set_decision_variables(
     """
     # Create PySCIPOpt variables from OMMX decision variable information
     for var in instance.used_decision_variables:
-        if var.kind == DecisionVariable.BINARY:
+        if var.kind == Kind.Binary:
             model.addVar(name=str(var.id), vtype="B")
-        elif var.kind == DecisionVariable.INTEGER:
+        elif var.kind == Kind.Integer:
             model.addVar(
                 name=str(var.id), vtype="I", lb=var.bound.lower, ub=var.bound.upper
             )
-        elif var.kind == DecisionVariable.CONTINUOUS:
+        elif var.kind == Kind.Continuous:
             model.addVar(
                 name=str(var.id), vtype="C", lb=var.bound.lower, ub=var.bound.upper
             )
@@ -145,9 +155,9 @@ def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict)
     """Set the objective function for the model"""
     objective = instance.objective
 
-    if instance.sense == Instance.MAXIMIZE:
+    if instance.sense == Sense.Maximize:
         sense = "maximize"
-    elif instance.sense == Instance.MINIMIZE:
+    elif instance.sense == Sense.Minimize:
         sense = "minimize"
     else:
         raise OMMXPySCIPOptAdapterError(
@@ -191,12 +201,12 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
         if degree == 0:
             # For constant constraints, check feasibility
             constant_value = f.constant_term
-            if constraint.equality == Constraint.EQUAL_TO_ZERO and math.isclose(
+            if constraint.equality == Equality.EqualToZero and math.isclose(
                 constant_value, 0, abs_tol=1e-6
             ):
                 continue
             elif (
-                constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+                constraint.equality == Equality.LessThanOrEqualToZero
                 and constant_value <= 1e-6
             ):
                 continue
@@ -216,9 +226,9 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
             )
 
         # Add constraints based on the type (equality/inequality)
-        if constraint.equality == Constraint.EQUAL_TO_ZERO:
+        if constraint.equality == Equality.EqualToZero:
             constr_expr = expr == 0
-        elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+        elif constraint.equality == Equality.LessThanOrEqualToZero:
             constr_expr = expr <= 0
         else:
             raise OMMXPySCIPOptAdapterError(
@@ -560,7 +570,7 @@ instance = Instance.from_components(
     decision_variables=x,
     objective=sum(v[i] * x[i] for i in range(N)),
     constraints={0: sum(w[i] * x[i] for i in range(N)) - W <= 0},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 
 solution = OMMXPySCIPOptAdapter.solve(instance)
@@ -580,7 +590,7 @@ The sample results from OpenJij are obtained as `openjij.Response`, so implement
 
 ```{code-cell} ipython3
 import openjij as oj
-from ommx import Instance, SampleSet, Solution, Samples, State
+from ommx import Instance, SampleSet, Samples, Sense, Solution, State
 
 def decode_to_samples(response: oj.Response) -> Samples:
     # Generate sample IDs
@@ -726,7 +736,7 @@ instance = Instance.from_components(
     decision_variables=x,
     objective=-x[0] - x[1] + 2 * x[0] * x[1],
     constraints={},
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
 )
 
 sample_set = OMMXOpenJijSAAdapter.sample(instance)

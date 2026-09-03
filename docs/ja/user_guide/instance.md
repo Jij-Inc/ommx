@@ -33,7 +33,7 @@ $$
 これに対応する `ommx.Instance` は次のようになります。
 
 ```{code-cell} ipython3
-from ommx import Instance
+from ommx import Instance, Sense
 
 instance = Instance.maximize()
 x = instance.new_binary("x")
@@ -62,10 +62,10 @@ Binaryのbound正規化でも、同じ規則で`0`と`1`のmembershipを判定�
 instance.objective
 ```
 
-最大化問題には {meth}`~ommx.Instance.maximize`、最小化問題には {meth}`~ommx.Instance.minimize` を使用します。作成された Instance の `sense` には、それぞれ `Instance.MAXIMIZE` または `Instance.MINIMIZE` が設定されます。
+最大化問題には {meth}`~ommx.Instance.maximize`、最小化問題には {meth}`~ommx.Instance.minimize` を使用します。作成された Instance の `sense` には、それぞれ `Sense.Maximize` または `Sense.Minimize` が設定されます。
 
 ```{code-cell} ipython3
-instance.sense == Instance.MAXIMIZE
+instance.sense == Sense.Maximize
 ```
 
 ## 決定変数
@@ -120,7 +120,7 @@ instance.constraints_df()
 
 OMMXでは制約条件もIDで管理されます。このIDは決定変数のIDとは独立です。制約条件のIDは `Instance` に登録する際に決まります: {meth}`~ommx.Instance.from_components` に渡す `constraints` 辞書のキーがそのまま制約条件のIDになります。
 
-制約条件に必須の情報は `equality` です。`equality` はその制約条件が等式制約 ({attr}`~ommx.Constraint.EQUAL_TO_ZERO`) か不等式制約 ({attr}`~ommx.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`) かを表します。$f(x) \geq 0$のタイプの制約条件は $-f(x) \leq 0$ として扱われることに注意してください。
+制約条件に必須の情報は `equality` です。`equality` はその制約条件が等式制約 ({attr}`~ommx.Equality.EqualToZero`) か不等式制約 ({attr}`~ommx.Equality.LessThanOrEqualToZero`) かを表します。$f(x) \geq 0$のタイプの制約条件は $-f(x) \leq 0$ として扱われることに注意してください。
 
 制約条件にも決定変数と同様にメタデータを保存することができます。決定変数と同様に `name`, `description`, `subscripts`, `parameters` が利用できます。これらのメタデータ全体を置き換える場合は `set_name`, `set_description`, `set_subscripts`, `set_parameters` を使います。既存の値に追記または merge したい場合は `add_subscripts`, `add_parameter`, `add_parameters` を使います。
 

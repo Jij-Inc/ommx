@@ -35,7 +35,7 @@ $$
 をここでも考えましょう。これは明らかに実行可能解 $x = 1, y = 0$ を持ちます。
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable
+from ommx import DecisionVariable, Instance, Sense
 
 # Create a simple instance
 x = DecisionVariable.binary(1, name='x')
@@ -45,7 +45,7 @@ instance = Instance.from_components(
     decision_variables=[x, y],
     objective=x + y,
     constraints={0: x * y == 0},
-    sense=Instance.MAXIMIZE
+    sense=Sense.Maximize
 )
 
 # Create a solution

@@ -25,7 +25,7 @@ $$
 $$
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable
+from ommx import DecisionVariable, Instance, Sense
 
 v = [10, 13, 18, 31, 7, 15]
 w = [11, 25, 20, 35, 10, 33]
@@ -44,7 +44,7 @@ instance = Instance.from_components(
     decision_variables=x,
     objective=sum(v[i] * x[i] for i in range(N)),
     constraints={0: sum(w[i] * x[i] for i in range(N)) - W <= 0},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 ```
 

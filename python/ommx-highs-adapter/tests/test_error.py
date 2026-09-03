@@ -63,7 +63,7 @@ def test_error_nonlinear_objective():
         decision_variables=[x],
         objective=2.3 * x * x,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with pytest.raises(AdapterNotApplicableError) as e:
@@ -100,7 +100,7 @@ def test_error_nonlinear_constraint():
         decision_variables=[x],
         objective=0,  # constant 0
         constraints={0: 2.3 * x * x == 0},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with pytest.raises(AdapterNotApplicableError) as e:
@@ -239,10 +239,10 @@ def test_error_infeasible_constant_equality_constraint():
         constraints={
             0: Constraint(
                 function=-1,
-                equality=Constraint.EQUAL_TO_ZERO,
+                equality=Equality.EqualToZero,
             )
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     with pytest.raises(OMMXHighsAdapterError) as e:
         OMMXHighsAdapter(ommx_instance)
@@ -256,10 +256,10 @@ def test_error_infeasible_constant_inequality_constraint():
         constraints={
             0: Constraint(
                 function=1,
-                equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+                equality=Equality.LessThanOrEqualToZero,
             )
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     with pytest.raises(OMMXHighsAdapterError) as e:
         OMMXHighsAdapter(ommx_instance)
@@ -274,14 +274,14 @@ def test_error_infeasible_model():
         constraints={
             0: Constraint(
                 function=x,
-                equality=Constraint.EQUAL_TO_ZERO,
+                equality=Equality.EqualToZero,
             ),
             1: Constraint(
                 function=x - 1,
-                equality=Constraint.EQUAL_TO_ZERO,
+                equality=Equality.EqualToZero,
             ),
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     with pytest.raises(InfeasibleDetected):
         OMMXHighsAdapter.solve(ommx_instance)

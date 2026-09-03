@@ -49,7 +49,7 @@ def test_integration_milp():
         decision_variables=[x1, x2],
         objective=-x1 - x2,
         constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     adapter = OMMXPythonMIPAdapter(ommx_instance)
@@ -68,7 +68,7 @@ def test_solution_optimality():
         decision_variables=[x, y],
         objective=x + y,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     solution = OMMXPythonMIPAdapter.solve(ommx_instance)
@@ -81,7 +81,7 @@ def test_solution_optimality_is_not_transported_through_fixed_penalty():
         decision_variables=[x],
         objective=x,
         constraints={7: x == 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.to_qubo(uniform_penalty_weight=0.0)
 
@@ -115,7 +115,7 @@ def test_partial_evaluate():
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
         constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     assert instance.used_decision_variables == x
     partial = instance.partial_evaluate({0: 1})
@@ -141,7 +141,7 @@ def test_relax_constraint():
         decision_variables=x,
         objective=x[0] + x[1],
         constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     assert instance.used_decision_variables == x
@@ -182,7 +182,7 @@ def test_integration_timelimit():
         decision_variables=x,
         objective=sum(v[i] * x[i] for i in range(n)),
         constraints={0: constraint},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     adapter = OMMXPythonMIPAdapter(instance)
     model = adapter.solver_input
@@ -204,7 +204,7 @@ def test_infeasible_problem():
         decision_variables=[x],
         objective=x,
         constraints={0: x >= 4},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     adapter = OMMXPythonMIPAdapter(instance)
     model = adapter.solver_input
@@ -221,7 +221,7 @@ def test_unbounded_problem():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     adapter = OMMXPythonMIPAdapter(instance)
     model = adapter.solver_input
@@ -237,7 +237,7 @@ def test_decode_before_optimize():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     adapter = OMMXPythonMIPAdapter(instance)
     model = adapter.solver_input

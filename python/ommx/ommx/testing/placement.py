@@ -115,7 +115,7 @@ from math import ceil, sqrt
 import random
 from typing import Dict, List, Tuple
 
-from ommx import DecisionVariable, Instance, Sos1Constraint
+from ommx import DecisionVariable, Instance, Sos1Constraint, Sense
 
 
 @dataclass
@@ -306,7 +306,7 @@ def build_sos1(input: Input) -> Instance:
         objective=_objective(input, s, c),
         constraints=constraints,
         sos1_constraints=sos1_constraints,
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
 
@@ -365,7 +365,7 @@ def _build_with_delta(
         objective=_objective(input, s, c),
         constraints=constraints,
         sos1_constraints=sos1_constraints,
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
 

@@ -63,7 +63,17 @@ PySCIPOptは決定変数を名前で管理するので、OMMXの決定変数のI
 
 ```{code-cell} ipython3
 import pyscipopt
-from ommx import Instance, Solution, DecisionVariable, Constraint, State, Function
+from ommx import (
+    Constraint,
+    DecisionVariable,
+    Equality,
+    Function,
+    Instance,
+    Kind,
+    Sense,
+    Solution,
+    State,
+)
 
 def set_decision_variables(
     model: pyscipopt.Model,  # チュートリアルのために状態を引数で受け取っているがclassで管理するのが一般的
@@ -74,13 +84,13 @@ def set_decision_variables(
     """
     # OMMXの決定変数の情報からPySCIPOptの変数を作成
     for var in instance.used_decision_variables:
-        if var.kind == DecisionVariable.BINARY:
+        if var.kind == Kind.Binary:
             model.addVar(name=str(var.id), vtype="B")
-        elif var.kind == DecisionVariable.INTEGER:
+        elif var.kind == Kind.Integer:
             model.addVar(
                 name=str(var.id), vtype="I", lb=var.bound.lower, ub=var.bound.upper
             )
-        elif var.kind == DecisionVariable.CONTINUOUS:
+        elif var.kind == Kind.Continuous:
             model.addVar(
                 name=str(var.id), vtype="C", lb=var.bound.lower, ub=var.bound.upper
             )
@@ -142,9 +152,9 @@ def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict)
     """モデルに目的関数を設定"""
     objective = instance.objective
 
-    if instance.sense == Instance.MAXIMIZE:
+    if instance.sense == Sense.Maximize:
         sense = "maximize"
-    elif instance.sense == Instance.MINIMIZE:
+    elif instance.sense == Sense.Minimize:
         sense = "minimize"
     else:
         raise OMMXPySCIPOptAdapterError(
@@ -187,12 +197,12 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
         if degree == 0:
             # 定数制約の場合、実行可能かどうかをチェック
             constant_value = f.constant_term
-            if constraint.equality == Constraint.EQUAL_TO_ZERO and math.isclose(
+            if constraint.equality == Equality.EqualToZero and math.isclose(
                 constant_value, 0, abs_tol=1e-6
             ):
                 continue
             elif (
-                constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+                constraint.equality == Equality.LessThanOrEqualToZero
                 and constant_value <= 1e-6
             ):
                 continue
@@ -212,9 +222,9 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
             )
 
         # 制約種別（等式/不等式）に基づいて制約を追加
-        if constraint.equality == Constraint.EQUAL_TO_ZERO:
+        if constraint.equality == Equality.EqualToZero:
             constr_expr = expr == 0
-        elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+        elif constraint.equality == Equality.LessThanOrEqualToZero:
             constr_expr = expr <= 0
         else:
             raise OMMXPySCIPOptAdapterError(
@@ -550,7 +560,7 @@ instance = Instance.from_components(
     decision_variables=x,
     objective=sum(v[i] * x[i] for i in range(N)),
     constraints={0: sum(w[i] * x[i] for i in range(N)) - W <= 0},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 
 solution = OMMXPySCIPOptAdapter.solve(instance)
@@ -570,7 +580,7 @@ OpenJijのサンプル結果は `openjij.Response` として得られるので�
 
 ```{code-cell} ipython3
 import openjij as oj
-from ommx import Instance, SampleSet, Solution, Samples, State
+from ommx import Instance, SampleSet, Samples, Sense, Solution, State
 
 def decode_to_samples(response: oj.Response) -> Samples:
     samples = Samples({})  # Create empty samples
@@ -709,7 +719,7 @@ instance = Instance.from_components(
     decision_variables=x,
     objective=-x[0] - x[1] + 2 * x[0] * x[1],
     constraints={},
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
 )
 
 sample_set = OMMXOpenJijSAAdapter.sample(instance)

@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from ommx import (
+    Sense,
     Bound,
     DecisionVariable,
     Function,
@@ -288,7 +289,7 @@ def test_function_reverse_associative_operators_preserve_left_operand_order():
 
 def test_compact_types_reverse_magic_methods_preserve_function_lhs_order():
     instance = Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=0,
         decision_variables=[DecisionVariable.continuous(2)],
         constraints={},
