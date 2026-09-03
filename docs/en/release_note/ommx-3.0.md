@@ -10,50 +10,15 @@ Changes merged after the most recent release will be appended here as they land,
 
 ### 🛠 Restore typed enum model discriminators ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
 
-The v3 PyO3 rewrite accidentally exposed raw protobuf integer discriminators
-through the {class}`~ommx.DecisionVariable` constructor and the `kind`
-properties of detached and attached variables. These APIs now accept and return
-{class}`~ommx.Kind` consistently, matching the stable v2 Python API and the
-already-typed {class}`~ommx.Equality` and {class}`~ommx.Sense` APIs.
+The v3 rewrite accidentally exposed protobuf integer discriminators through
+{class}`~ommx.DecisionVariable`. Its constructor and `kind` properties now use
+{class}`~ommx.Kind` consistently, restoring the stable-v2 behavior. Existing
+`DecisionVariable.*`, `Constraint.*`, and `Instance.*` names remain
+non-deprecated typed aliases.
 
-The stable-v2 usage remains valid after the normal v3 import migration:
-
-```python
-# v2
-from ommx.v1 import DecisionVariable
-
-x = DecisionVariable.binary(0)
-assert x.kind == DecisionVariable.BINARY
-```
-
-```python
-# v3
-from ommx import DecisionVariable, Kind
-
-x = DecisionVariable.binary(0)
-assert x.kind == DecisionVariable.BINARY
-assert x.kind == Kind.Binary
-```
-
-`DecisionVariable.BINARY` / `INTEGER` / …, `Constraint.EQUAL_TO_ZERO` / …,
-and `Instance.MINIMIZE` / `MAXIMIZE` remain non-deprecated typed compatibility
-aliases. Enum members also retain equality and hash compatibility with their
-protobuf integer values.
-
-Only code written against the accidental integer surface in v3 prereleases
-needs to change. Pass the typed enum member instead of a raw discriminator:
-
-```python
-from ommx import Bound, DecisionVariable, Kind
-
-# Accepted by early v3 prereleases, but not by the stable v2 public API.
-# x = DecisionVariable(0, 1, Bound(0, 1))
-
-x = DecisionVariable(0, Kind.Binary, Bound(0, 1))
-```
-
-See the [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)
-for the complete enum compatibility policy.
+Only v3 prerelease code passing raw integers directly must switch to typed enum
+members. Enum/integer equality and hash compatibility is retained. See the
+[migration guide](../migration/python_sdk_v2_to_v3.md) for details.
 
 ### 🛠 Unified bound and constraint tolerance semantics ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 

@@ -10,49 +10,14 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ### 🛠 モデルの識別子を型付きenumへ復元 ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
 
-v3のPyO3への書き直しで、{class}`~ommx.DecisionVariable`のconstructorと
-detached / attached variableの`kind` propertyから、protobufの整数識別子を
-誤って公開していました。これらのAPIは{class}`~ommx.Kind`を一貫して受け取り、
-返すようになりました。stable v2のPython API、および既に型付けされていた
-{class}`~ommx.Equality`と{class}`~ommx.Sense`のAPIと同じ挙動です。
+v3への書き直しで、{class}`~ommx.DecisionVariable`からprotobufの整数識別子を
+誤って公開していました。constructorと`kind` propertyは{class}`~ommx.Kind`を
+一貫して使い、stable v2の挙動を復元します。既存の`DecisionVariable.*`、
+`Constraint.*`、`Instance.*`は、非deprecatedの型付きaliasとして残ります。
 
-通常のv3 import migration後も、stable v2の書き方はそのまま利用できます。
-
-```python
-# v2
-from ommx.v1 import DecisionVariable
-
-x = DecisionVariable.binary(0)
-assert x.kind == DecisionVariable.BINARY
-```
-
-```python
-# v3
-from ommx import DecisionVariable, Kind
-
-x = DecisionVariable.binary(0)
-assert x.kind == DecisionVariable.BINARY
-assert x.kind == Kind.Binary
-```
-
-`DecisionVariable.BINARY` / `INTEGER` / …、`Constraint.EQUAL_TO_ZERO` / …、
-`Instance.MINIMIZE` / `MAXIMIZE`は、非deprecatedの型付き互換aliasとして残ります。
-また各enum memberは、protobufの整数値との比較およびhashの互換性を維持します。
-
-変更が必要なのは、v3 prereleaseで誤って公開された整数APIを直接利用したコードだけです。
-生の整数識別子ではなく、型付きenum memberを渡してください。
-
-```python
-from ommx import Bound, DecisionVariable, Kind
-
-# v3初期prereleaseでは受理されましたが、stable v2の公開APIではありませんでした。
-# x = DecisionVariable(0, 1, Bound(0, 1))
-
-x = DecisionVariable(0, Kind.Binary, Bound(0, 1))
-```
-
-enumの互換方針全体については
-[Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+生の整数を直接渡していたv3 prereleaseのコードだけが、型付きenum memberへの変更を
+必要とします。enumと整数値の比較・hash互換性は維持します。詳細は
+[migration guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
 
 ### 🛠 Boundとconstraintのtolerance意味論を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
