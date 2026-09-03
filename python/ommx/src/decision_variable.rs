@@ -1,7 +1,7 @@
 use crate::{
-    error::OmmxPyResult, Constraint, Function, Linear, Polynomial, Quadratic, VariableBound,
+    error::OmmxPyResult, Constraint, Function, Kind, Linear, Polynomial, Quadratic, VariableBound,
 };
-use ommx::{v1, ATol, LinearMonomial, VariableID};
+use ommx::{ATol, LinearMonomial, VariableID};
 use pyo3::{
     prelude::*,
     types::{PyBool, PyInt},
@@ -14,8 +14,8 @@ use std::collections::HashMap;
 /// This class represents a variable that will be optimized in a mathematical programming problem.
 /// It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
 /// can be used in arithmetic expressions to build objective functions and constraints.
-/// Construction raises ValueError when the kind discriminator is unknown or
-/// the requested bound cannot be normalized for the selected variable kind.
+/// Construction requires a {class}`~ommx.Kind` and raises ValueError when the
+/// requested bound cannot be normalized for the selected variable kind.
 ///
 /// Note that this object overloads `==` for creating a constraint, not for equality comparison.
 ///
@@ -65,19 +65,6 @@ impl DecisionVariable {
         };
 
         Ok(Self(variable_id, decision_variable, label))
-    }
-
-    fn parse_kind(kind: i32) -> PyResult<ommx::Kind> {
-        match kind {
-            1 => Ok(ommx::Kind::Binary),
-            2 => Ok(ommx::Kind::Integer),
-            3 => Ok(ommx::Kind::Continuous),
-            4 => Ok(ommx::Kind::SemiInteger),
-            5 => Ok(ommx::Kind::SemiContinuous),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Unknown decision variable kind: {kind}"
-            ))),
-        }
     }
 
     pub fn from_parts(
@@ -159,7 +146,7 @@ impl DecisionVariable {
     #[pyo3(signature = (id, kind, bound, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn new(
         id: u64,
-        kind: i32,
+        kind: Kind,
         bound: VariableBound,
         name: Option<String>,
         subscripts: Vec<i64>,
@@ -168,7 +155,7 @@ impl DecisionVariable {
     ) -> OmmxPyResult<Self> {
         Self::try_new(
             id,
-            Self::parse_kind(kind)?,
+            kind.into(),
             bound,
             name,
             subscripts,
@@ -183,9 +170,8 @@ impl DecisionVariable {
     }
 
     #[getter]
-    pub fn kind(&self) -> i32 {
-        let kind: v1::decision_variable::Kind = self.1.kind().into();
-        kind as i32
+    pub fn kind(&self) -> Kind {
+        self.1.kind().into()
     }
 
     #[getter]
@@ -327,9 +313,9 @@ impl DecisionVariable {
 
     pub fn __repr__(&self) -> String {
         format!(
-            "DecisionVariable(id={}, kind={}, name=\"{}\", bound=[{}, {}])",
+            "DecisionVariable(id={}, kind=Kind.{:?}, name=\"{}\", bound=[{}, {}])",
             self.id(),
-            self.kind(),
+            self.1.kind(),
             self.name(),
             self.1.bound().lower(),
             self.1.bound().upper()
@@ -348,23 +334,43 @@ impl DecisionVariable {
     }
 
     // =====================
-    // Class-level constants for variable kinds
+    // Compatibility aliases for variable kinds
     // =====================
 
+    /// Compatibility alias for {attr}`Kind.Binary`.
     #[classattr]
-    const BINARY: i32 = 1;
+    #[pyo3(name = "BINARY")]
+    fn class_binary() -> Kind {
+        Kind::Binary
+    }
 
+    /// Compatibility alias for {attr}`Kind.Integer`.
     #[classattr]
-    const INTEGER: i32 = 2;
+    #[pyo3(name = "INTEGER")]
+    fn class_integer() -> Kind {
+        Kind::Integer
+    }
 
+    /// Compatibility alias for {attr}`Kind.Continuous`.
     #[classattr]
-    const CONTINUOUS: i32 = 3;
+    #[pyo3(name = "CONTINUOUS")]
+    fn class_continuous() -> Kind {
+        Kind::Continuous
+    }
 
+    /// Compatibility alias for {attr}`Kind.SemiInteger`.
     #[classattr]
-    const SEMI_INTEGER: i32 = 4;
+    #[pyo3(name = "SEMI_INTEGER")]
+    fn class_semi_integer() -> Kind {
+        Kind::SemiInteger
+    }
 
+    /// Compatibility alias for {attr}`Kind.SemiContinuous`.
     #[classattr]
-    const SEMI_CONTINUOUS: i32 = 5;
+    #[pyo3(name = "SEMI_CONTINUOUS")]
+    fn class_semi_continuous() -> Kind {
+        Kind::SemiContinuous
+    }
 
     // =====================
     // Comparison for equality (not constraint creation)
@@ -783,11 +789,8 @@ impl AttachedDecisionVariable {
     }
 
     #[getter]
-    pub fn kind(&self, py: Python<'_>) -> PyResult<i32> {
-        let with = |v: &ommx::DecisionVariable| -> i32 {
-            let kind: ommx::v1::decision_variable::Kind = v.kind().into();
-            kind as i32
-        };
+    pub fn kind(&self, py: Python<'_>) -> PyResult<Kind> {
+        let with = |v: &ommx::DecisionVariable| -> Kind { v.kind().into() };
         match &self.host {
             crate::ConstraintHost::Instance(p) => {
                 let inst = p.borrow(py);
@@ -837,11 +840,10 @@ impl AttachedDecisionVariable {
     pub fn __repr__(&self, py: Python<'_>) -> String {
         let render =
             |id: ommx::VariableID, v: &ommx::DecisionVariable, name: Option<&str>| -> String {
-                let kind: ommx::v1::decision_variable::Kind = v.kind().into();
                 format!(
-                    "AttachedDecisionVariable(id={}, kind={}, name=\"{}\", bound=[{}, {}])",
+                    "AttachedDecisionVariable(id={}, kind=Kind.{:?}, name=\"{}\", bound=[{}, {}])",
                     id.into_inner(),
-                    kind as i32,
+                    v.kind(),
                     name.unwrap_or(""),
                     v.bound().lower(),
                     v.bound().upper()

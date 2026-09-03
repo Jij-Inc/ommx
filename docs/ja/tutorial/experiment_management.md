@@ -43,7 +43,7 @@ kernelspec:
 まず、ナップサック問題の元データと、容量をパラメータとして持つ {py:class}`~ommx.ParametricInstance` を作ります。OMMXの {py:class}`~ommx.ParametricInstance` は、{py:class}`~ommx.Instance` と同様に、目的関数や制約条件を定義できますが、定数項の代わりにパラメータを置くことができます。定数だけ異なるモデルを複数用意する必要がある場合に便利です。
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Parameter, Instance, ParametricInstance
+from ommx import DecisionVariable, Instance, Parameter, ParametricInstance, Sense
 
 v = [10, 13, 18, 31, 7, 15]  # 各アイテムの価値
 w = [11, 25, 20, 35, 10, 33]  # 各アイテムの重さ
@@ -67,7 +67,7 @@ pi = ParametricInstance.from_components(
     constraints={
         0: (sum(w[i] * x[i] for i in range(N)) <= capacity).set_name("重量制限")
     },
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 ```
 

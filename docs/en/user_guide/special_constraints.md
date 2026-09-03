@@ -40,7 +40,7 @@ An **indicator constraint** enforces a constraint $f(x) \leq 0$ (or $f(x) = 0$) 
 Create an {class}`~ommx.IndicatorConstraint` from an existing {class}`~ommx.Constraint` by calling {meth}`Constraint.with_indicator() <ommx.Constraint.with_indicator>`. The indicator argument accepts a variable ID, a standalone {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, Equality
+from ommx import DecisionVariable, Equality, Instance, Sense
 
 z = DecisionVariable.binary(0, name="z")
 x = DecisionVariable.continuous(1, lower=0, upper=10, name="x")
@@ -59,7 +59,7 @@ instance = Instance.from_components(
     objective=x,
     constraints={0: z == 1},       # fix z = 1
     indicator_constraints={0: ic}, # z = 1 => x <= 5
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 assert set(instance.indicator_constraints.keys()) == {0}
 ```
@@ -95,7 +95,7 @@ instance_oh = Instance.from_components(
     objective=sum(v * x for v, x in zip(values, xs)),
     constraints={},
     one_hot_constraints={0: oh},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
 ```
@@ -148,7 +148,7 @@ instance_s1 = Instance.from_components(
     objective=sum(ys),
     constraints={},
     sos1_constraints={0: s1},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 assert set(instance_s1.sos1_constraints.keys()) == {0}
 ```
@@ -214,7 +214,7 @@ instance_mix = Instance.from_components(
     indicator_constraints={1: (x2 <= 5).with_indicator(z2)},         # Indicator ID=1
     one_hot_constraints={1: OneHotConstraint(variables=xs)},         # OneHot ID=1
     sos1_constraints={1: Sos1Constraint(variables=ys)},              # SOS1 ID=1
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 
 # Each of the four dicts holds its own ID=1 constraint independently

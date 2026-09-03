@@ -359,9 +359,9 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import Instance, Sense
     /// >>> instance = Instance.minimize()
-    /// >>> instance.sense == Instance.MINIMIZE
+    /// >>> instance.sense == Sense.Minimize
     /// True
     #[deprecated(note = "Use Instance.minimize() instead.")]
     #[staticmethod]
@@ -387,12 +387,14 @@ impl Instance {
         Self::empty_with_sense(Sense::Maximize)
     }
 
+    /// Compatibility alias for {attr}`Sense.Maximize`.
     #[classattr]
     #[pyo3(name = "MAXIMIZE")]
     fn class_maximize() -> Sense {
         Sense::Maximize
     }
 
+    /// Compatibility alias for {attr}`Sense.Minimize`.
     #[classattr]
     #[pyo3(name = "MINIMIZE")]
     fn class_minimize() -> Sense {
@@ -1931,14 +1933,14 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint
+    /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
     /// ...     constraints={},
     /// ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
-    /// ...     sense=Instance.MINIMIZE,
+    /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> new_id = instance.convert_one_hot_to_constraint(1)
     /// >>> instance.one_hot_constraints
@@ -1961,7 +1963,7 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint
+    /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(4)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -1971,7 +1973,7 @@ impl Instance {
     /// ...         1: OneHotConstraint(variables=x[:2]),
     /// ...         2: OneHotConstraint(variables=x[2:]),
     /// ...     },
-    /// ...     sense=Instance.MINIMIZE,
+    /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_all_one_hots_to_constraints()
     /// [0, 1]
@@ -2018,14 +2020,14 @@ impl Instance {
     ///
     /// All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
     ///
-    /// >>> from ommx import Instance, DecisionVariable, Sos1Constraint
+    /// >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
     /// ...     constraints={},
     /// ...     sos1_constraints={1: Sos1Constraint(variables=x)},
-    /// ...     sense=Instance.MINIMIZE,
+    /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_sos1_to_constraints(1)
     /// [0]
@@ -2053,7 +2055,7 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance, DecisionVariable, Sos1Constraint
+    /// >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
     /// >>> x = [DecisionVariable.binary(i) for i in range(4)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -2063,7 +2065,7 @@ impl Instance {
     /// ...         1: Sos1Constraint(variables=x[:2]),
     /// ...         2: Sos1Constraint(variables=x[2:]),
     /// ...     },
-    /// ...     sense=Instance.MINIMIZE,
+    /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_all_sos1_to_constraints()
     /// {1: [0], 2: [1]}
@@ -2131,7 +2133,7 @@ impl Instance {
     /// Convert an inequality indicator where the upper side is active:
     ///
     /// >>> from ommx import (
-    /// ...     Instance, DecisionVariable, IndicatorConstraint, Equality,
+    /// ...     Instance, DecisionVariable, IndicatorConstraint, Equality, Sense,
     /// ... )
     /// >>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)
     /// >>> y = DecisionVariable.binary(1)
@@ -2145,7 +2147,7 @@ impl Instance {
     /// ...     objective=x,
     /// ...     constraints={},
     /// ...     indicator_constraints={1: ic},
-    /// ...     sense=Instance.MINIMIZE,
+    /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_indicator_to_constraint(1)
     /// [0]

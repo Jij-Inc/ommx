@@ -1,6 +1,6 @@
 import math
 
-from ommx import Bound, DecisionVariable, Instance, State
+from ommx import Bound, DecisionVariable, Instance, State, Sense
 import ommx
 import pytest
 
@@ -42,7 +42,7 @@ def test_default_atol_constraint_evaluation():
         decision_variables=[x],
         objective=x,  # minimize x
         constraints={1: constraint},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Create a state that violates the constraint by exactly 1e-5
@@ -85,7 +85,7 @@ def test_constraint_boundary_matches_scalar_sample_and_v2_validation():
         decision_variables=[x],
         objective=x,
         constraints={1: x == 0, 2: x <= 0},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     atol = 0.125
     outside = math.nextafter(atol, math.inf)
@@ -128,7 +128,7 @@ def test_bound_membership_matches_inequality_residual_feasibility():
         decision_variables=[x],
         objective=x,
         constraints={1: x <= upper, 2: x >= lower},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     above = upper + atol
@@ -195,7 +195,7 @@ def test_instance_evaluate_with_custom_atol():
         decision_variables=[x1],
         objective=x1,
         constraints={1: constraint},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Create a state where x1 = 1.0 + 1e-6 (violates constraint by 1e-6)

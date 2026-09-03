@@ -20,7 +20,7 @@ from ommx import (
 
 def _empty_instance() -> Instance:
     return Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[
             DecisionVariable.binary(0),
@@ -318,7 +318,7 @@ def test_add_indicator_rejects_non_binary_indicator_variable():
     post-construction add_indicator_constraint(c) with an integer indicator
     would leave the instance in an invalid state."""
     instance = Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[
             DecisionVariable.binary(0),

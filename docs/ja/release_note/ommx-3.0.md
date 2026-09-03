@@ -8,6 +8,17 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🛠 モデルの識別子を型付きenumへ復元 ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
+
+v3への書き直しで、{class}`~ommx.DecisionVariable`からprotobufの整数識別子を
+誤って公開していました。constructorと`kind` propertyは{class}`~ommx.Kind`を
+一貫して使い、stable v2の挙動を復元します。既存の`DecisionVariable.*`、
+`Constraint.*`、`Instance.*`は、非deprecatedの型付きaliasとして残ります。
+
+生の整数を直接渡していたv3 prereleaseのコードだけが、型付きenum memberへの変更を
+必要とします。enumと整数値の比較・hash互換性は維持します。詳細は
+[migration guide](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
 ### 🛠 Boundとconstraintのtolerance意味論を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
 {meth}`~ommx.Bound.contains`は、$x \in [l,u]$を通常のconstraint feasibilityと

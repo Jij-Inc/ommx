@@ -16,6 +16,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 from ommx import (
+    Sense,
     Constraint,
     DecisionVariable,
     Instance,
@@ -40,7 +41,7 @@ def _build_instance() -> Instance:
         decision_variables=x,
         objective=sum(x),
         constraints={10: c},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
 
@@ -85,7 +86,7 @@ def test_decision_variables_df_state_role():
         decision_variables=list(x.values()),
         objective=x[0],
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.substitute({2: x[0] + 1})
     instance = instance.partial_evaluate({1: 2.0})

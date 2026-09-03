@@ -936,7 +936,7 @@ class AttachedDecisionVariable:
         The parent host this variable lives in.
         """
     @property
-    def kind(self) -> builtins.int: ...
+    def kind(self) -> Kind: ...
     @property
     def bound(self) -> Bound: ...
     @property
@@ -1370,11 +1370,11 @@ class Constraint:
 
     EQUAL_TO_ZERO: Equality
     r"""
-    Class constant for equality type: equal to zero (==)
+    Compatibility alias for {attr}`Equality.EqualToZero`.
     """
     LESS_THAN_OR_EQUAL_TO_ZERO: Equality
     r"""
-    Class constant for equality type: less than or equal to zero (<=)
+    Compatibility alias for {attr}`Equality.LessThanOrEqualToZero`.
     """
     @property
     def function(self) -> Function: ...
@@ -1512,8 +1512,8 @@ class DecisionVariable:
     This class represents a variable that will be optimized in a mathematical programming problem.
     It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
     can be used in arithmetic expressions to build objective functions and constraints.
-    Construction raises ValueError when the kind discriminator is unknown or
-    the requested bound cannot be normalized for the selected variable kind.
+    Construction requires a {class}`~ommx.Kind` and raises ValueError when the
+    requested bound cannot be normalized for the selected variable kind.
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
@@ -1530,15 +1530,30 @@ class DecisionVariable:
     False
     """
 
-    BINARY: builtins.int = 1
-    INTEGER: builtins.int = 2
-    CONTINUOUS: builtins.int = 3
-    SEMI_INTEGER: builtins.int = 4
-    SEMI_CONTINUOUS: builtins.int = 5
+    BINARY: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.Binary`.
+    """
+    INTEGER: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.Integer`.
+    """
+    CONTINUOUS: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.Continuous`.
+    """
+    SEMI_INTEGER: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.SemiInteger`.
+    """
+    SEMI_CONTINUOUS: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.SemiContinuous`.
+    """
     @property
     def id(self) -> builtins.int: ...
     @property
-    def kind(self) -> builtins.int: ...
+    def kind(self) -> Kind: ...
     @property
     def bound(self) -> Bound: ...
     @property
@@ -1600,7 +1615,7 @@ class DecisionVariable:
     def __new__(
         cls,
         id: builtins.int,
-        kind: builtins.int,
+        kind: Kind,
         bound: Bound,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
@@ -2977,7 +2992,13 @@ class Instance:
     """
 
     MAXIMIZE: Sense
+    r"""
+    Compatibility alias for {attr}`Sense.Maximize`.
+    """
     MINIMIZE: Sense
+    r"""
+    Compatibility alias for {attr}`Sense.Minimize`.
+    """
     Description: type[InstanceDescription]
     @property
     def annotations(self) -> types.MappingProxyType[str, str]:
@@ -3273,9 +3294,9 @@ class Instance:
 
         # Examples
 
-        >>> from ommx import Instance
+        >>> from ommx import Instance, Sense
         >>> instance = Instance.minimize()
-        >>> instance.sense == Instance.MINIMIZE
+        >>> instance.sense == Sense.Minimize
         True
         """
     @staticmethod
@@ -4190,14 +4211,14 @@ class Instance:
 
         # Examples
 
-        >>> from ommx import Instance, DecisionVariable, OneHotConstraint
+        >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
         ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> new_id = instance.convert_one_hot_to_constraint(1)
         >>> instance.one_hot_constraints
@@ -4216,7 +4237,7 @@ class Instance:
 
         # Examples
 
-        >>> from ommx import Instance, DecisionVariable, OneHotConstraint
+        >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -4226,7 +4247,7 @@ class Instance:
         ...         1: OneHotConstraint(variables=x[:2]),
         ...         2: OneHotConstraint(variables=x[2:]),
         ...     },
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_all_one_hots_to_constraints()
         [0, 1]
@@ -4273,14 +4294,14 @@ class Instance:
 
         All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
 
-        >>> from ommx import Instance, DecisionVariable, Sos1Constraint
+        >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
         ...     sos1_constraints={1: Sos1Constraint(variables=x)},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_sos1_to_constraints(1)
         [0]
@@ -4308,7 +4329,7 @@ class Instance:
 
         # Examples
 
-        >>> from ommx import Instance, DecisionVariable, Sos1Constraint
+        >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -4318,7 +4339,7 @@ class Instance:
         ...         1: Sos1Constraint(variables=x[:2]),
         ...         2: Sos1Constraint(variables=x[2:]),
         ...     },
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_all_sos1_to_constraints()
         {1: [0], 2: [1]}
@@ -4381,7 +4402,7 @@ class Instance:
         Convert an inequality indicator where the upper side is active:
 
         >>> from ommx import (
-        ...     Instance, DecisionVariable, IndicatorConstraint, Equality,
+        ...     Instance, DecisionVariable, IndicatorConstraint, Equality, Sense,
         ... )
         >>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)
         >>> y = DecisionVariable.binary(1)
@@ -4395,7 +4416,7 @@ class Instance:
         ...     objective=x,
         ...     constraints={},
         ...     indicator_constraints={1: ic},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_indicator_to_constraint(1)
         [0]

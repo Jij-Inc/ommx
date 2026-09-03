@@ -1,7 +1,7 @@
 """Tests for constraint violation calculation methods."""
 
 import pytest
-from ommx import Instance, DecisionVariable
+from ommx import Instance, DecisionVariable, Sense
 
 
 def test_evaluated_constraint_violation_equality():
@@ -15,7 +15,7 @@ def test_evaluated_constraint_violation_equality():
         decision_variables=[x],
         objective=x,
         constraints={1: constraint},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Evaluate at x=0, so constraint becomes 0 = 2.5, f(x) = -2.5
@@ -37,7 +37,7 @@ def test_evaluated_constraint_violation_inequality_violated():
         decision_variables=[x],
         objective=x,
         constraints={1: constraint},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Evaluate at x=3, so constraint becomes 3 <= 1.5, f(x) = 1.5
@@ -59,7 +59,7 @@ def test_evaluated_constraint_violation_inequality_satisfied():
         decision_variables=[x],
         objective=x,
         constraints={1: constraint},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Evaluate at x=2, so constraint becomes 2 <= 5, f(x) = -3
@@ -81,7 +81,7 @@ def test_solution_total_violation_l1():
             0: x == 2.5,  # Equality: x = 2.5, evaluated at x=0 gives f(x) = -2.5
             1: x <= 1.5,  # Inequality: x <= 1.5, evaluated at x=3 gives f(x) = 1.5
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Use x=0 for equality (violation=2.5) but that would make inequality satisfied
@@ -104,7 +104,7 @@ def test_solution_total_violation_l2():
             0: x == 2.5,  # Equality: x = 2.5
             1: x <= 1.5,  # Inequality: x <= 1.5
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Evaluate at x=5: equality violation = 2.5, inequality violation = 3.5
@@ -127,7 +127,7 @@ def test_solution_total_violation_with_satisfied_constraints():
             1: x
             <= 10.0,  # Satisfied inequality: x <= 10, evaluated at x=5 gives max(0, 5-10) = 0
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     solution = instance.evaluate({1: 5.0})
@@ -146,7 +146,7 @@ def test_solution_total_violation_empty():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     solution = instance.evaluate({1: 5.0})

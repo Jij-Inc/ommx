@@ -8,6 +8,18 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Restore typed enum model discriminators ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
+
+The v3 rewrite accidentally exposed protobuf integer discriminators through
+{class}`~ommx.DecisionVariable`. Its constructor and `kind` properties now use
+{class}`~ommx.Kind` consistently, restoring the stable-v2 behavior. Existing
+`DecisionVariable.*`, `Constraint.*`, and `Instance.*` names remain
+non-deprecated typed aliases.
+
+Only v3 prerelease code passing raw integers directly must switch to typed enum
+members. Enum/integer equality and hash compatibility is retained. See the
+[migration guide](../migration/python_sdk_v2_to_v3.md) for details.
+
 ### 🛠 Unified bound and constraint tolerance semantics ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
 {meth}`~ommx.Bound.contains` now interprets $x \in [l,u]$ through the same

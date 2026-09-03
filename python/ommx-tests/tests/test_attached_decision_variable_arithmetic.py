@@ -29,7 +29,7 @@ from ommx import (
 @pytest.fixture
 def instance() -> Instance:
     return Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[
             DecisionVariable.integer(0, lower=0, upper=10, name="x"),

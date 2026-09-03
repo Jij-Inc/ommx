@@ -3,7 +3,13 @@ from typing import cast
 
 import openjij as oj
 import pytest
-from ommx import DecisionVariable, FixedPenaltyPreparation, Instance, Sos1Constraint
+from ommx import (
+    DecisionVariable,
+    FixedPenaltyPreparation,
+    Instance,
+    Sense,
+    Sos1Constraint,
+)
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 
@@ -14,7 +20,7 @@ def binary_no_constraint_minimize():
         decision_variables=[x0, x1],
         objective=x0 + x1,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     ans = {(0,): 0.0, (1,): 0.0}
     return pytest.param(instance, ans, id="binary_no_constraint_minimize")
@@ -27,7 +33,7 @@ def binary_no_constraint_maximize():
         decision_variables=[x0, x1],
         objective=x0 + x1,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     ans = {(0,): 1.0, (1,): 1.0}
     return pytest.param(instance, ans, id="binary_no_constraint_maximize")
@@ -42,7 +48,7 @@ def binary_equality():
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2,
         constraints={0: x1 * x2 == 0},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     # x0 = x2 = 1, x1 = 0 is maximum
@@ -59,7 +65,7 @@ def binary_inequality():
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2,
         constraints={0: x0 + x1 + x2 <= 2},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     # x1 = x2 = 1, x0 = 0 is maximum
@@ -75,7 +81,7 @@ def integer_equality():
         decision_variables=[x0, x1],
         objective=x0 + 2 * x1,
         constraints={0: x0 + x1 == 0},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     # x1 = -x0 = 1 is maximum
@@ -91,7 +97,7 @@ def integer_inequality():
         decision_variables=[x0, x1],
         objective=x0 + 2 * x1,
         constraints={0: x0 + x1 <= 0},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     # x1 = -x0 = 1 is maximum
@@ -107,7 +113,7 @@ def hubo_binary_no_constraint_minimize():
         decision_variables=[x0, x1, x2],
         objective=x0 + x1 + x2 + x0 * x1 * x2,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     ans = {(0,): 0.0, (1,): 0.0, (2,): 0.0}
     return pytest.param(instance, ans, id="hubo_binary_no_constraint_minimize")
@@ -121,7 +127,7 @@ def hubo_binary_no_constraint_maximize():
         decision_variables=[x0, x1, x2],
         objective=x0 + x0 * x1 * x2,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     ans = {(0,): 1.0, (1,): 1.0, (2,): 1.0}
     return pytest.param(instance, ans, id="hubo_binary_no_constraint_maximize")
@@ -136,7 +142,7 @@ def hubo_binary_equality():
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2 + x0 * x1 * x2,
         constraints={0: x1 * x2 == 0},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     # x0 = x2 = 1, x1 = 0 is maximum
@@ -153,7 +159,7 @@ def hubo_binary_inequality():
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2 + x0 * x1 * x2,
         constraints={0: x0 + x1 + x2 <= 2},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     # x1 = x2 = 1, x0 = 0 is maximum
@@ -246,17 +252,17 @@ def test_easy_sample_restores_maximization_output_without_mutating_input():
         decision_variables=[x],
         objective=3 * x + 2,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     before = instance.to_v2_bytes()
 
     sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=4, seed=999)
 
     assert instance.to_v2_bytes() == before
-    assert sample_set.sense == Instance.MAXIMIZE
+    assert sample_set.sense == Sense.Maximize
     for sample_id in sample_set.sample_ids():
         solution = sample_set.get(sample_id)
-        assert solution.sense == Instance.MAXIMIZE
+        assert solution.sense == Sense.Maximize
         assert solution.objective == pytest.approx(3 * solution.state.entries[0] + 2)
 
 
@@ -298,7 +304,7 @@ def test_sample_fills_evaluation_variables_omitted_from_sampler_input(
         decision_variables=[x],
         objective=objective_factory(x),
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     adapter = OMMXOpenJijSAAdapter(instance)
     assert adapter.sampler_input == {}
@@ -315,7 +321,7 @@ def test_decode_to_sampleset_uses_instance_variables():
         decision_variables=[x0, x2],
         objective=x0 + x2,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     response = SimpleNamespace(
         variables=[0, 1],  # 1 is not part of the Adapter input.
@@ -357,7 +363,7 @@ def test_prepared_instance_evaluation_populates_variable_removed_with_trivial_in
         decision_variables=[variable],
         objective=0,
         constraints={7: constraint(variable)},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
     instance.prepare(
@@ -384,7 +390,7 @@ def test_prepared_instance_evaluation_restores_integer_sos1():
         objective=integer + binary,
         constraints={},
         sos1_constraints={30: Sos1Constraint(variables=[integer, binary])},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
