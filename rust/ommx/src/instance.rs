@@ -15,6 +15,7 @@ mod logical_memory;
 mod named_function;
 mod new;
 mod one_hot;
+mod one_hot_promotion;
 mod parametric_builder;
 mod parse;
 mod pass;
@@ -36,6 +37,7 @@ mod unary_encode;
 pub use analysis::{DecisionVariableRole, DecisionVariableUsage, DecisionVariableUsageEntry};
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
+pub use one_hot_promotion::{OneHotPromotion, OneHotPromotionRequest};
 pub use parametric_builder::*;
 pub use preparation::{
     BinaryPowerPreparation, FixedPenaltyPreparation, IntegerEncodingPreparation,
