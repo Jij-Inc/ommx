@@ -72,8 +72,8 @@ impl Instance {
     ///
     /// Legacy [`v1::ConstraintHints`] are advisory and are ignored by this
     /// ordinary loader. Use [`Instance::from_v1_bytes_with_promotion`] to
-    /// retain a structured outcome for every hint and promote each
-    /// independently verified formulation.
+    /// retain a structured outcome for every hint and promote the compatible
+    /// verified formulations.
     pub fn from_v1_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = message_io::decode::<v1::Instance>(bytes, "ommx.v1.Instance")?;
         Ok(Parse::parse(inner, &())?)
