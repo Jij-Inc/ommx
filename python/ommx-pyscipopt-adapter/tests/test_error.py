@@ -77,7 +77,7 @@ def test_error_polynomial_objective():
         decision_variables=[DecisionVariable.continuous(1)],
         objective=Polynomial(terms={(1, 1, 1): 2.3}),
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(ommx_instance)
@@ -132,10 +132,10 @@ def test_error_nonlinear_constraint():
         constraints={
             0: Constraint(
                 function=Polynomial(terms={(1, 1, 1): 2.3}),
-                equality=Constraint.EQUAL_TO_ZERO,
+                equality=Equality.EqualToZero,
             )
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     with pytest.raises(AdapterNotApplicableError) as e:
         OMMXPySCIPOptAdapter(ommx_instance)
@@ -247,7 +247,7 @@ def test_error_not_optimized_model():
         decision_variables=[],
         objective=0,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     with pytest.raises(OMMXPySCIPOptAdapterError) as e:
         OMMXPySCIPOptAdapter(instance).decode_to_state(model)
@@ -262,14 +262,14 @@ def test_error_infeasible_model():
         constraints={
             0: Constraint(
                 function=x,
-                equality=Constraint.EQUAL_TO_ZERO,
+                equality=Equality.EqualToZero,
             ),
             1: Constraint(
                 function=x - 1,
-                equality=Constraint.EQUAL_TO_ZERO,
+                equality=Equality.EqualToZero,
             ),
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     with pytest.raises(InfeasibleDetected):
         OMMXPySCIPOptAdapter.solve(ommx_instance)
@@ -282,10 +282,10 @@ def test_error_infeasible_constant_equality_constraint():
         constraints={
             0: Constraint(
                 function=-1,
-                equality=Constraint.EQUAL_TO_ZERO,
+                equality=Equality.EqualToZero,
             )
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     with pytest.raises(OMMXPySCIPOptAdapterError) as e:
         OMMXPySCIPOptAdapter(ommx_instance)
@@ -299,10 +299,10 @@ def test_error_infeasible_constant_inequality_constraint():
         constraints={
             0: Constraint(
                 function=1,
-                equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+                equality=Equality.LessThanOrEqualToZero,
             )
         },
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     with pytest.raises(OMMXPySCIPOptAdapterError) as e:
         OMMXPySCIPOptAdapter(ommx_instance)

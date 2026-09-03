@@ -71,7 +71,7 @@ def test_removed_constraint_access_original_constraint():
     retrieved_constraint = removed_constraint.constraint
     assert isinstance(retrieved_constraint, rust.Constraint)
     assert retrieved_constraint.name == "original"
-    assert retrieved_constraint.equality == 1  # EqualToZero
+    assert retrieved_constraint.equality == rust.Equality.EqualToZero
 
 
 def test_removed_constraint_repr():
@@ -161,5 +161,5 @@ def test_removed_constraint_getter_properties():
     # Test that the constraint property returns the right type and values
     retrieved_constraint = removed_constraint.constraint
     assert retrieved_constraint.name == "getter_test"
-    assert retrieved_constraint.equality == 2
+    assert retrieved_constraint.equality == rust.Equality.LessThanOrEqualToZero
     assert retrieved_constraint.subscripts == [1, 2, 3]

@@ -13,6 +13,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 from ommx import (
+    Sense,
     Constraint,
     DecisionVariable,
     Equality,
@@ -64,7 +65,7 @@ def _instance_all_kinds() -> Instance:
         },
         one_hot_constraints={30: OneHotConstraint(variables=x)},
         sos1_constraints={40: Sos1Constraint(variables=x)},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
 
@@ -82,7 +83,7 @@ def _parametric_instance() -> ParametricInstance:
     c = x[0] + x[1] + p * x[2] == 1
     assert isinstance(c, Constraint)
     return ParametricInstance.from_components(
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
         objective=sum(x),
         decision_variables=x,
         constraints={10: c},
@@ -141,7 +142,7 @@ def test_instance_constraints_df_reports_composed_function_type():
         decision_variables=[variable],
         objective=variable,
         constraints={10: constraint},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     assert instance.constraints_df().loc[10, "type"] == "Expression"
@@ -216,7 +217,7 @@ def test_instance_constraints_df_removed_true_id_sorted(snapshot):
             30: x[1] + x[2] == 1,
             20: x[0] + x[2] == 1,
         },
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     inst.relax_constraint(20, "relax_middle")
     df = inst.constraints_df(kind="regular", removed=True)
@@ -254,7 +255,7 @@ def test_instance_constraints_df_one_hot_removed_true(snapshot):
             5: OneHotConstraint(variables=x[:2]),
             7: OneHotConstraint(variables=x[1:]),
         },
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     instance.convert_one_hot_to_constraint(7)
     df = instance.constraints_df(kind="one_hot", removed=True)

@@ -33,14 +33,14 @@ impl Constraint {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Constraint {
-    /// Class constant for equality type: equal to zero (==)
+    /// Compatibility alias for {attr}`Equality.EqualToZero`.
     #[classattr]
     #[pyo3(name = "EQUAL_TO_ZERO")]
     fn class_equal_to_zero() -> Equality {
         Equality::EqualToZero
     }
 
-    /// Class constant for equality type: less than or equal to zero (<=)
+    /// Compatibility alias for {attr}`Equality.LessThanOrEqualToZero`.
     #[classattr]
     #[pyo3(name = "LESS_THAN_OR_EQUAL_TO_ZERO")]
     fn class_less_than_or_equal_to_zero() -> Equality {

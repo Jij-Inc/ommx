@@ -1,6 +1,8 @@
 """Snapshot tests for print output of OMMX v1 classes."""
 
 from ommx import (
+    Sense,
+    Equality,
     Constraint,
     DecisionVariable,
     IndicatorConstraint,
@@ -115,7 +117,7 @@ def test_instance_stats_print(snapshot):
         decision_variables=x,
         objective=x[0] + x[1],
         constraints={0: x[0] + x[1] <= 1, 1: x[1] + x[2] >= 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     stats = instance.stats()
     assert str(stats) == snapshot
@@ -130,14 +132,14 @@ def test_instance_print_uses_modeling_labels(snapshot):
     ]
     capacity = Constraint(
         function=x[0] + x[1] - 1,
-        equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+        equality=Equality.LessThanOrEqualToZero,
         name="capacity",
         subscripts=[0],
     )
     indicator = IndicatorConstraint(
         indicator_variable=x[0],
         function=x[1] - 1,
-        equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+        equality=Equality.LessThanOrEqualToZero,
         name="active",
     )
     one_hot = OneHotConstraint(variables=x[:2], name="choose")
@@ -149,7 +151,7 @@ def test_instance_print_uses_modeling_labels(snapshot):
         indicator_constraints={20: indicator},
         one_hot_constraints={30: one_hot},
         named_functions=[score],
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     assert str(instance) == snapshot
@@ -165,7 +167,7 @@ def test_parametric_instance_print_uses_parameter_labels(snapshot):
         objective=x + p,
         constraints={},
         parameters=[p],
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     assert str(instance) == snapshot
@@ -178,14 +180,14 @@ def test_instance_print_disambiguates_duplicate_labels_across_sections(snapshot)
     x1 = DecisionVariable.binary(1, name="x")
     constraint = Constraint(
         function=x1 - 1,
-        equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+        equality=Equality.LessThanOrEqualToZero,
         name="limit",
     )
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0,
         constraints={1: constraint},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     assert str(instance) == snapshot
@@ -205,7 +207,7 @@ def test_parametric_instance_print_disambiguates_parameter_and_structural_variab
         constraints={},
         parameters=[p],
         one_hot_constraints={7: one_hot},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     assert str(instance) == snapshot
@@ -220,7 +222,7 @@ def test_instance_print_limits_section_rows(snapshot):
     constraints = {
         i: Constraint(
             function=variables[i] - 1,
-            equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+            equality=Equality.LessThanOrEqualToZero,
             name="row",
             subscripts=[i],
         )
@@ -230,7 +232,7 @@ def test_instance_print_limits_section_rows(snapshot):
         decision_variables=variables,
         objective=variables[0],
         constraints=constraints,
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     assert str(instance) == snapshot
@@ -248,7 +250,7 @@ def test_instance_print_limits_structural_variable_sets(snapshot):
         objective=variables[0],
         constraints={},
         one_hot_constraints={3: one_hot},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     assert str(instance) == snapshot

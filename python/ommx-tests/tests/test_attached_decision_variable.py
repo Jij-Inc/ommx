@@ -5,6 +5,7 @@ import copy
 import pytest
 
 from ommx import (
+    Kind,
     AttachedDecisionVariable,
     DecisionVariable,
     Function,
@@ -18,7 +19,7 @@ from ommx import (
 
 def _empty_instance() -> Instance:
     return Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[DecisionVariable.binary(0)],
         constraints={},
@@ -173,7 +174,7 @@ def test_add_rejects_duplicate_id():
 
 def test_add_rejects_substituted_variable_id_as_duplicate():
     instance = Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=0,
         decision_variables=[
             DecisionVariable.binary(0),
@@ -193,7 +194,8 @@ def test_kind_and_bound_getters_read_through():
     instance = _empty_instance()
     attached = instance.add_decision_variable(_make_variable())
 
-    assert attached.kind == DecisionVariable.INTEGER
+    assert type(attached.kind) is Kind
+    assert attached.kind == Kind.Integer
     bound = attached.bound
     assert bound.lower == 0
     assert bound.upper == 10

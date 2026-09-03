@@ -4,7 +4,15 @@ from typing import final
 import mip
 
 from mip.exceptions import ParameterNotAvailable
-from ommx import Instance, DecisionVariable, Constraint, Function, Linear
+from ommx import (
+    Constraint,
+    DecisionVariable,
+    Equality,
+    Function,
+    Instance,
+    Linear,
+    Sense,
+)
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -83,13 +91,13 @@ class OMMXInstanceBuilder:
             if lin_expr.sense == "=":
                 constraint = Constraint(
                     function=self.as_ommx_function(lin_expr),
-                    equality=Constraint.EQUAL_TO_ZERO,
+                    equality=Equality.EqualToZero,
                     name=name,
                 )
             elif lin_expr.sense == "<":
                 constraint = Constraint(
                     function=self.as_ommx_function(lin_expr),
-                    equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+                    equality=Equality.LessThanOrEqualToZero,
                     name=name,
                 )
             elif lin_expr.sense == ">":
@@ -97,7 +105,7 @@ class OMMXInstanceBuilder:
                 # So multiply the linear expression by -1.
                 constraint = Constraint(
                     function=self.as_ommx_function(-lin_expr),
-                    equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+                    equality=Equality.LessThanOrEqualToZero,
                     name=name,
                 )
             else:
@@ -112,9 +120,9 @@ class OMMXInstanceBuilder:
 
     def sense(self):
         if self.model.sense == mip.MAXIMIZE:
-            return Instance.MAXIMIZE
+            return Sense.Maximize
         elif self.model.sense == mip.MINIMIZE:
-            return Instance.MINIMIZE
+            return Sense.Minimize
         raise OMMXPythonMIPAdapterError(f"Not supported sense: {self.model.sense}")
 
     @final

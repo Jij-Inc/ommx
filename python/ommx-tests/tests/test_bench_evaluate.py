@@ -8,7 +8,7 @@ algorithmic scaling is measured in ``rust/ommx/benches/evaluate.rs``.
 """
 
 import pytest
-from ommx import DecisionVariable, Instance, Rng
+from ommx import DecisionVariable, Instance, Rng, Sense
 from ommx.dataset import miplib2017
 
 
@@ -21,7 +21,7 @@ def boundary_instance():
         decision_variables=x,
         objective=sum(x),
         constraints={i: x[i] <= 1 for i in range(size)},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
 

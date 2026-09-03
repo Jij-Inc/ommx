@@ -13,7 +13,7 @@ from ommx import (
 def _special_instance() -> Instance:
     variables = [DecisionVariable.binary(i) for i in range(3)]
     return Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=sum(variables),
         decision_variables=variables,
         constraints={},

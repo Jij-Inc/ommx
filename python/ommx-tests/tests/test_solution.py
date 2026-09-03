@@ -1,4 +1,4 @@
-from ommx import Instance
+from ommx import Instance, Sense
 
 
 def test_solution_sense_minimize():
@@ -6,10 +6,10 @@ def test_solution_sense_minimize():
         decision_variables=[],
         objective=0,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     solution = instance.evaluate({})
-    assert solution.sense == Instance.MINIMIZE
+    assert solution.sense == Sense.Minimize
 
 
 def test_solution_sense_maximize():
@@ -17,7 +17,7 @@ def test_solution_sense_maximize():
         decision_variables=[],
         objective=0,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     solution = instance.evaluate({})
-    assert solution.sense == Instance.MAXIMIZE
+    assert solution.sense == Sense.Maximize

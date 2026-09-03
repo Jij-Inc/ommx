@@ -1,5 +1,5 @@
 import pytest
-from ommx import Instance, DecisionVariable, Rng
+from ommx import Instance, DecisionVariable, Rng, Sense
 
 
 def _single_binary_instance() -> Instance:
@@ -8,7 +8,7 @@ def _single_binary_instance() -> Instance:
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
 
@@ -20,7 +20,7 @@ def test_random_samples_basic():
         decision_variables=x,
         objective=sum(x),
         constraints={0: sum(x) <= 3},  # type: ignore
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     # Generate random samples
@@ -52,7 +52,7 @@ def test_random_samples_only_used_variables():
         decision_variables=x,
         objective=x[0] + x[1] + x[2],  # Only use first 3 variables
         constraints={0: x[1] + x[3] <= 1},  # Also use x[3]
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     # Generate samples
@@ -83,7 +83,7 @@ def test_random_samples_with_different_variable_types():
         decision_variables=[x_bin, x_int, x_cont],
         objective=x_bin + x_int + x_cont,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Generate samples
@@ -119,7 +119,7 @@ def test_random_samples_custom_max_sample_id():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     # Generate samples with custom max_sample_id

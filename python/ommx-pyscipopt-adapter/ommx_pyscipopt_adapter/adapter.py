@@ -18,8 +18,6 @@ from ommx.adapter import (
     NoSolutionReturned,
 )
 from ommx import (
-    Constraint,
-    DecisionVariable,
     Equality,
     Function,
     Instance,
@@ -598,7 +596,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-            ...     sense=Instance.MAXIMIZE,
+            ...     sense=Sense.Maximize,
             ... )
 
             Solve it
@@ -633,7 +631,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints={0: x >= 4},
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> OMMXPySCIPOptAdapter.solve(instance)
@@ -653,7 +651,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints={},
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> OMMXPySCIPOptAdapter.solve(instance)
@@ -735,7 +733,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-            ...     sense=Instance.MAXIMIZE,
+            ...     sense=Sense.Maximize,
             ... )
 
             >>> adapter = OMMXPySCIPOptAdapter(instance)
@@ -783,7 +781,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             ...     decision_variables=[x1],
             ...     objective=x1,
             ...     constraints={},
-            ...     sense=Instance.MINIMIZE,
+            ...     sense=Sense.Minimize,
             ... )
             >>> adapter = OMMXPySCIPOptAdapter(ommx_instance)
             >>> model = adapter.solver_input
@@ -831,13 +829,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     def _set_decision_variables(self):
         for var in self.instance.used_decision_variables:
-            if var.kind == DecisionVariable.BINARY:
+            if var.kind == Kind.Binary:
                 self.model.addVar(name=str(var.id), vtype="B")
-            elif var.kind == DecisionVariable.INTEGER:
+            elif var.kind == Kind.Integer:
                 self.model.addVar(
                     name=str(var.id), vtype="I", lb=var.bound.lower, ub=var.bound.upper
                 )
-            elif var.kind == DecisionVariable.CONTINUOUS:
+            elif var.kind == Kind.Continuous:
                 self.model.addVar(
                     name=str(var.id), vtype="C", lb=var.bound.lower, ub=var.bound.upper
                 )
@@ -864,9 +862,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self.varname_map = {var.name: var for var in self.model.getVars()}
 
     def _set_objective(self):
-        if self.instance.sense == Instance.MAXIMIZE:
+        if self.instance.sense == Sense.Maximize:
             sense = "maximize"
-        elif self.instance.sense == Instance.MINIMIZE:
+        elif self.instance.sense == Sense.Minimize:
             sense = "minimize"
         else:
             raise OMMXPySCIPOptAdapterError(
@@ -922,12 +920,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             if degree == 0:
                 # Constant constraint is not passed to SCIP, but checked for feasibility
                 constant_value = f.constant_term
-                if constraint.equality == Constraint.EQUAL_TO_ZERO and math.isclose(
+                if constraint.equality == Equality.EqualToZero and math.isclose(
                     constant_value, 0, abs_tol=1e-6
                 ):
                     continue  # Skip feasible constant constraint
                 elif (
-                    constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+                    constraint.equality == Equality.LessThanOrEqualToZero
                     and constant_value <= 1e-6
                 ):
                     continue  # Skip feasible constant constraint
@@ -946,9 +944,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     f"degree: {degree}"
                 )
 
-            if constraint.equality == Constraint.EQUAL_TO_ZERO:
+            if constraint.equality == Equality.EqualToZero:
                 constr_expr = expr == 0
-            elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+            elif constraint.equality == Equality.LessThanOrEqualToZero:
                 constr_expr = expr <= 0
             else:
                 raise OMMXPySCIPOptAdapterError(
@@ -967,10 +965,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 # When indicator is ON, the constant constraint must hold
                 constant_value = f.constant_term
                 is_feasible = (
-                    indicator.equality == Constraint.EQUAL_TO_ZERO
+                    indicator.equality == Equality.EqualToZero
                     and math.isclose(constant_value, 0, abs_tol=1e-6)
                 ) or (
-                    indicator.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+                    indicator.equality == Equality.LessThanOrEqualToZero
                     and constant_value <= 1e-6
                 )
                 if is_feasible:
@@ -990,7 +988,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             binvar = self.varname_map[str(indicator.indicator_variable_id)]
 
-            if indicator.equality == Constraint.EQUAL_TO_ZERO:
+            if indicator.equality == Equality.EqualToZero:
                 # Decompose f(x) == 0 into two indicator constraints
                 self.model.addConsIndicator(
                     expr <= 0, binvar=binvar, name=f"ind_{ind_id}_le"
@@ -998,7 +996,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 self.model.addConsIndicator(
                     -expr <= 0, binvar=binvar, name=f"ind_{ind_id}_ge"
                 )
-            elif indicator.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+            elif indicator.equality == Equality.LessThanOrEqualToZero:
                 self.model.addConsIndicator(
                     expr <= 0, binvar=binvar, name=f"ind_{ind_id}"
                 )

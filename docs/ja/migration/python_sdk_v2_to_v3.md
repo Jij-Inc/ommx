@@ -34,7 +34,7 @@ from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
 
 # v3
-from ommx import Constraint, Equality, Function, Linear, State
+from ommx import Constraint, Equality, Function, Linear, Sense, State
 ```
 
 `.from_protobuf()` / `.to_protobuf()` は、protobuf object と一緒に削除されています。`Instance` / `Solution` / `SampleSet` など全体をシリアライズする場合は、protobuf version を名前に含む bytes API を使います。新しく byte 列を作る場合は `to_v2_bytes()` / `from_v2_bytes(...)` を使い、legacy な v1 payload との互換が必要な場合だけ `to_v1_bytes()` / `from_v1_bytes(...)` を使ってください。
@@ -94,10 +94,10 @@ c = Constraint(
 c.set_id(6)
 
 # v3
-c = Constraint(function=x + y, equality=Constraint.EQUAL_TO_ZERO, name="cap")
+c = Constraint(function=x + y, equality=Equality.EqualToZero, name="cap")
 
 instance = Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=objective,
     decision_variables=decision_variables,
     constraints={5: c},
@@ -148,7 +148,7 @@ Instance.from_components(
 
 # v3
 Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=obj,
     decision_variables=[x0, x1],
     constraints={0: c0, 1: c1},
@@ -269,6 +269,33 @@ if name is not None:
 linear.terms()
 quadratic.terms()
 polynomial.terms()
+```
+
+v3 alpha の初期移行では、`DecisionVariable` の constructor と `kind` property が
+protobuf の整数表現を誤って公開していました。現在の v3 API は、detached、attached、
+evaluated、sampled の各 decision variable で top-level の `Kind` enum を一貫して
+受け取り、返します。新しいコードでは `Kind.Binary`、`Kind.Integer` などを使います。
+`DecisionVariable.BINARY` / `INTEGER` / … は、同じ enum 値を返す型付き互換 alias として
+残します。
+
+同じ互換方針を `Constraint.EQUAL_TO_ZERO` / `LESS_THAN_OR_EQUAL_TO_ZERO` と
+`Instance.MINIMIZE` / `MAXIMIZE` にも適用します。これらは型付き alias として残しますが、
+新しいコードでは `Equality.*` と `Sense.*` を使います。
+
+```python
+from ommx import Bound, DecisionVariable, Kind
+
+variable = DecisionVariable(0, Kind.Binary, Bound(0, 1))
+assert variable.kind == Kind.Binary
+assert DecisionVariable.BINARY == Kind.Binary
+```
+
+各 enum は protobuf の整数値との比較・hash の互換性を維持します。通常の SDK
+constructor と property は enum 型を使います。
+
+```python
+assert Kind.Binary == 1
+assert hash(Kind.Binary) == hash(1)
 ```
 
 `SampleSet.sample_ids` は list property ではなく set を返す method になりました。list が必要な場合は `sample_ids_list` を使います。

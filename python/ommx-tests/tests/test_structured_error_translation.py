@@ -11,7 +11,7 @@ def _evaluated_results() -> tuple[ommx.Solution, ommx.SampleSet]:
         decision_variables=[x],
         objective=x,
         constraints={0: constraint},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
         named_functions=[named_function],
     )
     return instance.evaluate({0: 1}), instance.evaluate_samples({7: {0: 1}})
@@ -48,7 +48,7 @@ def test_lookup_failures_raise_key_error(operation) -> None:
 @pytest.mark.parametrize(
     "operation",
     [
-        lambda: ommx.DecisionVariable(0, 1, ommx.Bound(2, 3)),
+        lambda: ommx.DecisionVariable(0, ommx.Kind.Binary, ommx.Bound(2, 3)),
         lambda: ommx.DecisionVariable.integer(0, lower=0.1, upper=0.2),
     ],
 )
@@ -57,10 +57,34 @@ def test_decision_variable_kind_bound_mismatch_raises_value_error(operation) -> 
         operation()
 
 
-@pytest.mark.parametrize("kind", [0, 99])
-def test_unknown_decision_variable_kind_raises_value_error(kind: int) -> None:
-    with pytest.raises(ValueError, match=f"Unknown decision variable kind: {kind}"):
-        ommx.DecisionVariable(0, kind, ommx.Bound(0, 1))
+@pytest.mark.parametrize("kind", [0, 1, 99])
+def test_decision_variable_rejects_raw_integer_kind(kind: int) -> None:
+    with pytest.raises(TypeError):
+        ommx.DecisionVariable(
+            0,
+            kind,  # pyright: ignore[reportArgumentType] - intentional invalid input
+            ommx.Bound(0, 1),
+        )
+
+
+def test_constraint_rejects_raw_integer_equality() -> None:
+    variable = ommx.DecisionVariable.binary(0)
+
+    with pytest.raises(TypeError):
+        ommx.Constraint(
+            function=variable,
+            equality=1,  # pyright: ignore[reportArgumentType] - intentional invalid input
+        )
+
+
+def test_instance_rejects_raw_integer_sense() -> None:
+    with pytest.raises(TypeError):
+        ommx.Instance.from_components(
+            decision_variables=[],
+            objective=0,
+            constraints={},
+            sense=1,  # pyright: ignore[reportArgumentType] - intentional invalid input
+        )
 
 
 def test_duplicate_variable_subscripts_raise_value_error() -> None:
@@ -76,7 +100,7 @@ def test_duplicate_variable_subscripts_raise_value_error() -> None:
         decision_variables=variables,
         objective=0,
         constraints={},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
     solution = instance.evaluate({0: 0, 1: 1})
     sample_set = instance.evaluate_samples({7: {0: 0, 1: 1}})
@@ -114,7 +138,7 @@ def test_duplicate_named_function_subscripts_raise_value_error() -> None:
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
         named_functions=named_functions,
     )
     solution = instance.evaluate({0: 1})
@@ -138,7 +162,7 @@ def test_parameterized_constraints_raise_value_error() -> None:
         decision_variables=[x],
         objective=x,
         constraints={0: constraint},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
     solution = instance.evaluate({0: 1})
     sample_set = instance.evaluate_samples({7: {0: 1}})
@@ -155,7 +179,7 @@ def test_missing_feasible_sample_raises_value_error_for_all_aliases() -> None:
         decision_variables=[x],
         objective=x,
         constraints={0: x == 1},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
     sample_set = instance.evaluate_samples({7: {0: 0}})
 
@@ -176,7 +200,7 @@ def test_all_extractors_validate_sample_id_before_skipping_unnamed_entries() -> 
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
         named_functions=[ommx.NamedFunction(id=0, function=x)],
     )
     sample_set = instance.evaluate_samples({7: {0: 1}})

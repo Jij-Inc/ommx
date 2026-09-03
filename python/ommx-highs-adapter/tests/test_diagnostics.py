@@ -6,7 +6,7 @@ import pytest
 
 from ommx.adapter import DiagnosticCollector, InfeasibleDetected
 from ommx.experiment import Experiment
-from ommx import Constraint, DecisionVariable, Instance, Solution
+from ommx import Constraint, DecisionVariable, Instance, Sense, Solution
 from ommx_highs_adapter import (
     HighsDiagnosticsAnalyzer,
     HighsProgressSnapshot,
@@ -22,7 +22,7 @@ def _mip_instance() -> Instance:
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
 
@@ -36,7 +36,7 @@ def _knapsack_instance() -> Instance:
         constraints={
             0: cast(Constraint, sum(weights[i] * x[i] for i in range(30)) <= 60)
         },
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
 
@@ -46,7 +46,7 @@ def _infeasible_instance() -> Instance:
         decision_variables=[x],
         objective=0,
         constraints={0: x == 0, 1: x == 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
 

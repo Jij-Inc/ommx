@@ -36,7 +36,7 @@ from ommx.v1.solution_pb2 import State
 
 **After (v3)**:
 ```python
-from ommx import Constraint, Equality, Function, Linear, State
+from ommx import Constraint, Equality, Function, Kind, Linear, Sense, State
 ```
 
 The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use explicit versioned bytes APIs on whole serialization roots instead. Prefer `to_v2_bytes` / `from_v2_bytes` when producing new serialized bytes; use `to_v1_bytes` / `from_v1_bytes` only when you need to interoperate with legacy v1 payloads.
@@ -112,14 +112,14 @@ s1 = Sos1Constraint(id=11, variables=[0, 1])
 
 **After (v3)**:
 ```python
-c  = Constraint(function=x + y, equality=Constraint.EQUAL_TO_ZERO, name="cap")
+c  = Constraint(function=x + y, equality=Equality.EqualToZero, name="cap")
 xs = [DecisionVariable.binary(i) for i in range(3)]
 oh = OneHotConstraint(variables=xs)
 s1 = Sos1Constraint(variables=xs[:2])
 
 # IDs are assigned by the enclosing Instance:
 instance = Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=...,
     decision_variables=[...],
     constraints={5: c},
@@ -178,7 +178,7 @@ Instance.from_components(
 **After (v3)**:
 ```python
 Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=obj,
     decision_variables=[x0, x1],
     constraints={0: c0, 1: c1},           # dict keyed by constraint ID
@@ -394,21 +394,29 @@ polynomial.terms()
 
 `Linear.linear_terms`, `Quadratic.linear_terms` / `quadratic_terms`, and `Polynomial.constant_term` stay properties.
 
-### 6.3 `DecisionVariable.BINARY`/`INTEGER`/… are `int` sentinels (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770))
+### 6.3 `DecisionVariable.kind` is a typed `Kind` enum
 
-In v2.5.1 these class constants were `Kind` enum members. In v3 they are the underlying `int` values, and `DecisionVariable.kind` returns `int` (the protobuf wire value).
+The initial v3 alpha migration in `3.0.0a1` ([#770](https://github.com/Jij-Inc/ommx/pull/770)) accidentally exposed the protobuf integer representation through the `DecisionVariable` constructor and `kind` properties. The v3 API now consistently accepts and returns the top-level `Kind` enum for detached, attached, evaluated, and sampled decision variables.
+
+Use `Kind.Binary`, `Kind.Integer`, and the other `Kind` members in new code. The old `DecisionVariable.BINARY`/`INTEGER`/… names remain as typed compatibility aliases with the same enum values.
+
+The same compatibility policy applies to `Constraint.EQUAL_TO_ZERO` / `LESS_THAN_OR_EQUAL_TO_ZERO` and `Instance.MINIMIZE` / `MAXIMIZE`: they remain typed aliases, while new code should use `Equality.*` and `Sense.*`.
 
 ```python
-# v2.5.1
-DecisionVariable.BINARY        # Kind.Binary
-if var.kind == DecisionVariable.INTEGER:  # Kind.Integer == Kind.Integer
-    ...
+from ommx import Bound, DecisionVariable, Kind
 
-# v3
-DecisionVariable.BINARY        # 1 (int)
-if var.kind == DecisionVariable.INTEGER:  # int == int
-    ...
-# If you want the enum, construct it: Kind(var.kind)
+var = DecisionVariable(0, Kind.Binary, Bound(0, 1))
+assert var.kind == Kind.Binary
+
+# Typed compatibility alias.
+assert DecisionVariable.BINARY == Kind.Binary
+```
+
+The enums retain comparison and hash compatibility with their protobuf integer values, so explicit boundary checks continue to work. The regular SDK constructor and properties nevertheless use the enum type.
+
+```python
+assert Kind.Binary == 1
+assert hash(Kind.Binary) == hash(1)
 ```
 
 ### 6.4 `SampleSet.sample_ids` changed from list-property to set-method (`3.0.0a1`, [#775](https://github.com/Jij-Inc/ommx/pull/775))
@@ -761,7 +769,7 @@ dv      = DecisionVariable.from_bytes(dv_blob)
 # After (3.0.0a3) — wrap in the enclosing container and round-trip that.
 # Use v2 bytes for newly serialized payloads.
 instance      = Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=my_function,
     decision_variables=[decision_variable],
     constraints={},

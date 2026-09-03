@@ -1,7 +1,7 @@
 """Test PySCIPOpt adapter behavior with partial_evaluate and SOS1 constraints."""
 
 import pytest
-from ommx import Instance, DecisionVariable, Sos1Constraint, State
+from ommx import DecisionVariable, Instance, Sense, Sos1Constraint, State
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
@@ -40,7 +40,7 @@ def sos1_instance_setup():
             5: independent_constraint,
         },
         sos1_constraints={0: sos1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
 

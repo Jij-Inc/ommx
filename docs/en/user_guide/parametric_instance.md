@@ -28,7 +28,7 @@ $$
 Here, $N$ is the number of items, $p_i$ is the value of item i, $w_i$ is the weight of item i, and $W$ is the knapsack's capacity. The variable $x_i$ is binary and indicates whether item i is included in the knapsack. In `ommx.Instance`, fixed values were used for $p_i$ and $w_i$, but here they are treated as parameters.
 
 ```{code-cell} ipython3
-from ommx import ParametricInstance, DecisionVariable, Parameter, Instance
+from ommx import DecisionVariable, Instance, Parameter, ParametricInstance, Sense
 
 N = 6
 x = [DecisionVariable.binary(id=i, name="x", subscripts=[i]) for i in range(N)]
@@ -53,7 +53,7 @@ parametric_instance = ParametricInstance.from_components(
     parameters=p + w + [W],
     objective=objective,
     constraints={0: constraint},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 ```
 

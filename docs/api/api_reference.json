@@ -1555,7 +1555,7 @@
               "name": "kind",
               "doc": "",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               },
@@ -3892,7 +3892,7 @@
           "attributes": [
             {
               "name": "EQUAL_TO_ZERO",
-              "doc": "Class constant for equality type: equal to zero (==)",
+              "doc": "Compatibility alias for {attr}`Equality.EqualToZero`.",
               "type_": {
                 "display": "Equality",
                 "link_target": null,
@@ -3901,7 +3901,7 @@
             },
             {
               "name": "LESS_THAN_OR_EQUAL_TO_ZERO",
-              "doc": "Class constant for equality type: less than or equal to zero (<=)",
+              "doc": "Compatibility alias for {attr}`Equality.LessThanOrEqualToZero`.",
               "type_": {
                 "display": "Equality",
                 "link_target": null,
@@ -4031,7 +4031,7 @@
         {
           "kind": "Class",
           "name": "DecisionVariable",
-          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\nConstruction raises ValueError when the kind discriminator is unknown or\nthe requested bound cannot be normalized for the selected variable kind.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse",
+          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\nConstruction requires a {class}`~ommx.Kind` and raises ValueError when the\nrequested bound cannot be normalized for the selected variable kind.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse",
           "bases": [],
           "methods": [
             {
@@ -4401,7 +4401,7 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "int",
+                        "display": "Kind",
                         "link_target": null,
                         "children": []
                       },
@@ -5551,45 +5551,45 @@
           "attributes": [
             {
               "name": "BINARY",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Kind.Binary`.",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               }
             },
             {
               "name": "CONTINUOUS",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Kind.Continuous`.",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               }
             },
             {
               "name": "INTEGER",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Kind.Integer`.",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               }
             },
             {
               "name": "SEMI_CONTINUOUS",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Kind.SemiContinuous`.",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               }
             },
             {
               "name": "SEMI_INTEGER",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Kind.SemiInteger`.",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               }
@@ -5631,7 +5631,7 @@
               "name": "kind",
               "doc": "",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               },
@@ -9431,7 +9431,7 @@
             },
             {
               "name": "convert_all_one_hots_to_constraints",
-              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=x[:2]),\n...         2: OneHotConstraint(variables=x[2:]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}",
+              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=x[:2]),\n...         2: OneHotConstraint(variables=x[2:]),\n...     },\n...     sense=Sense.Minimize,\n... )\n>>> instance.convert_all_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}",
               "signatures": [
                 {
                   "parameters": [],
@@ -9453,7 +9453,7 @@
             },
             {
               "name": "convert_all_sos1_to_constraints",
-              "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\nAtomic: every active SOS1 is validated up front, and only if every one is\nconvertible are the conversions applied. If any SOS1 fails validation\n(unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation\nhappens and the instance is left untouched.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=x[:2]),\n...         2: Sos1Constraint(variables=x[2:]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}",
+              "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\nAtomic: every active SOS1 is validated up front, and only if every one is\nconvertible are the conversions applied. If any SOS1 fails validation\n(unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation\nhappens and the instance is left untouched.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=x[:2]),\n...         2: Sos1Constraint(variables=x[2:]),\n...     },\n...     sense=Sense.Minimize,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}",
               "signatures": [
                 {
                   "parameters": [],
@@ -9486,7 +9486,7 @@
             },
             {
               "name": "convert_indicator_to_constraint",
-              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). The instance is not\nmutated on error.\n\n``atol`` controls which Function-body values the bound evaluator treats\nas zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes\nthe indicator variable is exactly binary; this does not canonicalize an\napproximate solver value near 0 or 1.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n>>> from ommx import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     constraints={},\n...     indicator_constraints={1: ic},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[0]\n>>> instance.indicator_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + 3*x1 - 5 <= 0)}",
+              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). The instance is not\nmutated on error.\n\n``atol`` controls which Function-body values the bound evaluator treats\nas zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes\nthe indicator variable is exactly binary; this does not canonicalize an\napproximate solver value near 0 or 1.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n>>> from ommx import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality, Sense,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     constraints={},\n...     indicator_constraints={1: ic},\n...     sense=Sense.Minimize,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[0]\n>>> instance.indicator_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + 3*x1 - 5 <= 0)}",
               "signatures": [
                 {
                   "parameters": [
@@ -9589,7 +9589,7 @@
             },
             {
               "name": "convert_one_hot_to_constraint",
-              "doc": "Convert a one-hot constraint to a regular equality constraint.\n\nA one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the\nlinear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality\nas a new regular constraint and moves the one-hot constraint into\n{attr}`~ommx.Instance.removed_one_hot_constraints` with\n``reason=\"ommx.Instance.convert_one_hot_to_constraint\"`` and a\n``constraint_id`` parameter pointing to the new regular constraint.\n\nReturns the ID of the newly created regular constraint.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={1: OneHotConstraint(variables=x)},\n...     sense=Instance.MINIMIZE,\n... )\n>>> new_id = instance.convert_one_hot_to_constraint(1)\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 == 0)}\n>>> instance.removed_one_hot_constraints\n{1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}",
+              "doc": "Convert a one-hot constraint to a regular equality constraint.\n\nA one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the\nlinear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality\nas a new regular constraint and moves the one-hot constraint into\n{attr}`~ommx.Instance.removed_one_hot_constraints` with\n``reason=\"ommx.Instance.convert_one_hot_to_constraint\"`` and a\n``constraint_id`` parameter pointing to the new regular constraint.\n\nReturns the ID of the newly created regular constraint.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={1: OneHotConstraint(variables=x)},\n...     sense=Sense.Minimize,\n... )\n>>> new_id = instance.convert_one_hot_to_constraint(1)\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 == 0)}\n>>> instance.removed_one_hot_constraints\n{1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}",
               "signatures": [
                 {
                   "parameters": [
@@ -9615,7 +9615,7 @@
             },
             {
               "name": "convert_sos1_to_constraints",
-              "doc": "Convert a SOS1 constraint to regular constraints using the Big-M method.\n\nA SOS1 constraint over $\\{x_1, \\ldots, x_n\\}$ with each $x_i \\in [l_i, u_i]$\nasserts that at most one $x_i$ is non-zero. Per variable, a binary indicator\n$y_i$ is introduced with the Big-M pair\n\n$$\nx_i - u_i y_i \\leq 0, \\qquad l_i y_i - x_i \\leq 0\n$$\n\n(trivial sides $u_i = 0$ or $l_i = 0$ are skipped), together with the single\ncardinality constraint\n\n$$\n\\sum_i y_i - 1 \\leq 0.\n$$\n\nIf $x_i$ is already binary with bound $[0, 1]$, $x_i$ itself is reused as its\nindicator (no new variable, no Big-M pair).\n\nReturns the list of newly created regular constraint IDs in insertion order\n(Big-M upper/lower pairs per non-binary variable, followed by the cardinality\nsum).\n\nRaises if any $x_i$ has a non-binary bound that is not finite, if its domain\nexcludes $0$, or if its kind is semi-continuous / semi-integer (the split\ndomain $\\{0\\} \\cup [l, u]$ is not uniformly implemented across the codebase\nyet, so Big-M conversion of these kinds is not supported).\nThe instance is not mutated on error.\n\n# Examples\n\nAll-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:\n\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={1: Sos1Constraint(variables=x)},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_sos1_to_constraints(1)\n[0]\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 <= 0)}\n>>> instance.removed_sos1_constraints\n{1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}",
+              "doc": "Convert a SOS1 constraint to regular constraints using the Big-M method.\n\nA SOS1 constraint over $\\{x_1, \\ldots, x_n\\}$ with each $x_i \\in [l_i, u_i]$\nasserts that at most one $x_i$ is non-zero. Per variable, a binary indicator\n$y_i$ is introduced with the Big-M pair\n\n$$\nx_i - u_i y_i \\leq 0, \\qquad l_i y_i - x_i \\leq 0\n$$\n\n(trivial sides $u_i = 0$ or $l_i = 0$ are skipped), together with the single\ncardinality constraint\n\n$$\n\\sum_i y_i - 1 \\leq 0.\n$$\n\nIf $x_i$ is already binary with bound $[0, 1]$, $x_i$ itself is reused as its\nindicator (no new variable, no Big-M pair).\n\nReturns the list of newly created regular constraint IDs in insertion order\n(Big-M upper/lower pairs per non-binary variable, followed by the cardinality\nsum).\n\nRaises if any $x_i$ has a non-binary bound that is not finite, if its domain\nexcludes $0$, or if its kind is semi-continuous / semi-integer (the split\ndomain $\\{0\\} \\cup [l, u]$ is not uniformly implemented across the codebase\nyet, so Big-M conversion of these kinds is not supported).\nThe instance is not mutated on error.\n\n# Examples\n\nAll-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:\n\n>>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={1: Sos1Constraint(variables=x)},\n...     sense=Sense.Minimize,\n... )\n>>> instance.convert_sos1_to_constraints(1)\n[0]\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 <= 0)}\n>>> instance.removed_sos1_constraints\n{1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}",
               "signatures": [
                 {
                   "parameters": [
@@ -9836,7 +9836,7 @@
             },
             {
               "name": "empty",
-              "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> instance.sense == Instance.MINIMIZE\nTrue",
+              "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n>>> from ommx import Instance, Sense\n>>> instance = Instance.minimize()\n>>> instance.sense == Sense.Minimize\nTrue",
               "signatures": [
                 {
                   "parameters": [],
@@ -12334,7 +12334,7 @@
             },
             {
               "name": "MAXIMIZE",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Sense.Maximize`.",
               "type_": {
                 "display": "Sense",
                 "link_target": null,
@@ -12343,7 +12343,7 @@
             },
             {
               "name": "MINIMIZE",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Sense.Minimize`.",
               "type_": {
                 "display": "Sense",
                 "link_target": null,

@@ -5,6 +5,7 @@ import copy
 import pytest
 
 from ommx import (
+    Sense,
     AttachedConstraint,
     Constraint,
     DecisionVariable,
@@ -17,7 +18,7 @@ from ommx import (
 
 def _empty_instance() -> Instance:
     return Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[DecisionVariable.binary(0), DecisionVariable.binary(1)],
         constraints={},

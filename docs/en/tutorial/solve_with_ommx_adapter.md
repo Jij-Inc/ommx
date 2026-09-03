@@ -80,7 +80,7 @@ N = len(v)  # Total number of items
 Based on this mathematical model and data, the code for describing the problem instance using the OMMX Python SDK is as follows:
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable
+from ommx import DecisionVariable, Instance, Sense
 
 # Define decision variables
 x = [
@@ -112,7 +112,7 @@ instance = Instance.from_components(
     # Register all constraints (keys are constraint IDs)
     constraints={0: constraint},
     # Specify that it is a maximization problem
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 ```
 

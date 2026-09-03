@@ -33,7 +33,7 @@ $$
 The corresponding `ommx.Instance` is as follows.
 
 ```{code-cell} ipython3
-from ommx import Instance
+from ommx import Instance, Sense
 
 instance = Instance.maximize()
 x = instance.new_binary("x")
@@ -81,10 +81,10 @@ instance.objective
 
 Use {meth}`~ommx.Instance.maximize` for maximization problems and
 {meth}`~ommx.Instance.minimize` for minimization problems. The resulting
-`sense` is `Instance.MAXIMIZE` or `Instance.MINIMIZE`, respectively.
+`sense` is `Sense.Maximize` or `Sense.Minimize`, respectively.
 
 ```{code-cell} ipython3
-instance.sense == Instance.MAXIMIZE
+instance.sense == Sense.Maximize
 ```
 
 ## Decision Variables
@@ -141,7 +141,7 @@ instance.constraints_df()
 
 In OMMX, constraints are also managed by ID, and this ID is independent of the decision variable ID. The ID is assigned when a constraint is attached to an `Instance`: the key you use in the `constraints` dictionary passed to {meth}`~ommx.Instance.from_components` becomes the constraint ID.
 
-The essential information for constraints is `equality`. `equality` indicates whether the constraint is an equality constraint ({attr}`~ommx.Constraint.EQUAL_TO_ZERO`) or an inequality constraint ({attr}`~ommx.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`). Note that constraints of the type $f(x) \geq 0$ are treated as $-f(x) \leq 0$.
+The essential information for constraints is `equality`. `equality` indicates whether the constraint is an equality constraint ({attr}`~ommx.Equality.EqualToZero`) or an inequality constraint ({attr}`~ommx.Equality.LessThanOrEqualToZero`). Note that constraints of the type $f(x) \geq 0$ are treated as $-f(x) \leq 0$.
 
 Constraints can also store metadata similar to decision variables. You can use `name`, `description`, `subscripts`, and `parameters`. Use `set_name`, `set_description`, `set_subscripts`, and `set_parameters` to replace those metadata fields. Use `add_subscripts`, `add_parameter`, and `add_parameters` when you want to append or merge entries instead.
 

@@ -14,8 +14,6 @@ from ommx.adapter import (
     NoSolutionReturned,
 )
 from ommx import (
-    Constraint,
-    DecisionVariable,
     Equality,
     Function,
     Instance,
@@ -94,9 +92,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         with _tracer.start_as_current_span("convert"):
             self.require_applicable(ommx_instance)
-            if ommx_instance.sense == Instance.MAXIMIZE:
+            if ommx_instance.sense == Sense.Maximize:
                 sense = mip.MAXIMIZE
-            elif ommx_instance.sense == Instance.MINIMIZE:
+            elif ommx_instance.sense == Sense.Minimize:
                 sense = mip.MINIMIZE
             else:
                 raise OMMXPythonMIPAdapterError(
@@ -159,7 +157,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-            ...     sense=Instance.MAXIMIZE,
+            ...     sense=Sense.Maximize,
             ... )
 
             Solve it
@@ -194,7 +192,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints={0: x >= 4},
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> OMMXPythonMIPAdapter.solve(instance)
@@ -214,7 +212,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints={},
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> OMMXPythonMIPAdapter.solve(instance)
@@ -235,7 +233,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x, y],
                 ...     objective=x + y,
                 ...     constraints={0: x + y <= 1},
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> solution = OMMXPythonMIPAdapter.solve(instance)
@@ -315,7 +313,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
-            ...     sense=Instance.MAXIMIZE,
+            ...     sense=Sense.Maximize,
             ... )
 
             >>> adapter = OMMXPythonMIPAdapter(instance)
@@ -373,7 +371,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=[x1],
             ...     objective=x1,
             ...     constraints={},
-            ...     sense=Instance.MINIMIZE,
+            ...     sense=Sense.Minimize,
             ... )
             >>> adapter = OMMXPythonMIPAdapter(ommx_instance)
             >>> model = adapter.solver_input
@@ -416,19 +414,19 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
     def _set_decision_variables(self):
         for var in self.instance.used_decision_variables:
-            if var.kind == DecisionVariable.BINARY:
+            if var.kind == Kind.Binary:
                 self.model.add_var(
                     name=str(var.id),
                     var_type=mip.BINARY,
                 )
-            elif var.kind == DecisionVariable.INTEGER:
+            elif var.kind == Kind.Integer:
                 self.model.add_var(
                     name=str(var.id),
                     var_type=mip.INTEGER,
                     lb=var.bound.lower,  # type: ignore
                     ub=var.bound.upper,  # type: ignore
                 )
-            elif var.kind == DecisionVariable.CONTINUOUS:
+            elif var.kind == Kind.Continuous:
                 self.model.add_var(
                     name=str(var.id),
                     var_type=mip.CONTINUOUS,
@@ -477,9 +475,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
     def _set_constraints(self):
         for cid, constraint in self.instance.constraints.items():
             lin_expr = self._as_lin_expr(constraint.function)
-            if constraint.equality == Constraint.EQUAL_TO_ZERO:
+            if constraint.equality == Equality.EqualToZero:
                 constr_expr = lin_expr == 0
-            elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+            elif constraint.equality == Equality.LessThanOrEqualToZero:
                 constr_expr = lin_expr <= 0  # type: ignore
             else:
                 raise OMMXPythonMIPAdapterError(

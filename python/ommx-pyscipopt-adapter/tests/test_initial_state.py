@@ -1,4 +1,4 @@
-from ommx import Instance, DecisionVariable, State
+from ommx import DecisionVariable, Instance, Sense, State
 
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
@@ -16,7 +16,7 @@ def test_adapter_class_with_initial_state():
         decision_variables=[x, y],
         objective=x - y,
         constraints={0: x + y <= 5},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     initial_state = State(
         entries={
@@ -48,7 +48,7 @@ def test_solve_with_initial_state():
         decision_variables=[x, y],
         objective=x - y,
         constraints={0: x + y <= 5},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     initial_state = State(
         entries={
@@ -76,7 +76,7 @@ def test_adapter_class_with_initial_state_from_mapping():
         decision_variables=[x, y],
         objective=x - y,
         constraints={0: x + y <= 5},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     initial_mapping = {
         1: 3.0,
@@ -105,7 +105,7 @@ def test_solve_with_initial_state_from_mapping():
         decision_variables=[x, y],
         objective=x - y,
         constraints={0: x + y <= 5},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     initial_mapping = {
         1: 3.0,

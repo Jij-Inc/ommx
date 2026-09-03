@@ -7,6 +7,7 @@ from ommx import (
     Instance,
     OneHotConstraint,
     ProvenanceKind,
+    Sense,
     Sos1Constraint,
     SpecialConstraintKind,
 )
@@ -25,7 +26,7 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
         indicator_constraints={30: (value <= 1).with_indicator(indicator)},
         one_hot_constraints={10: OneHotConstraint(variables=x)},
         sos1_constraints={20: Sos1Constraint(variables=x)},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     before = instance.to_v2_bytes()
 

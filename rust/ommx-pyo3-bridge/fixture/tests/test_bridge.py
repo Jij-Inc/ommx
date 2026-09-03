@@ -25,6 +25,7 @@ def assert_component_function(value: ommx.Function) -> None:
 
 def assert_component_constraint(value: ommx.Constraint) -> None:
     assert type(value) is ommx.Constraint
+    assert type(value.equality) is ommx.Equality
     assert value.equality == ommx.Equality.LessThanOrEqualToZero
     assert value.function.linear_terms == {7: 1.0}
     assert value.function.constant_term == -3.0
@@ -40,7 +41,8 @@ def assert_component_constraint(value: ommx.Constraint) -> None:
 def assert_component_decision_variable(value: ommx.DecisionVariable) -> None:
     assert type(value) is ommx.DecisionVariable
     assert value.id == 7
-    assert value.kind == 2
+    assert type(value.kind) is ommx.Kind
+    assert value.kind == ommx.Kind.Integer
     assert value.bound.lower == -2.0
     assert value.bound.upper == 8.0
     assert value.name == "x"
@@ -51,13 +53,15 @@ def assert_component_decision_variable(value: ommx.DecisionVariable) -> None:
 
 def assert_component_instance(value: ommx.Instance) -> None:
     assert type(value) is ommx.Instance
-    assert value.sense == ommx.Instance.MINIMIZE
+    assert type(value.sense) is ommx.Sense
+    assert value.sense == ommx.Sense.Minimize
     assert value.objective.linear_terms == {7: 1.0}
     assert value.objective.constant_term == -3.0
     assert len(value.decision_variables) == 1
     variable = value.decision_variables[0]
     assert variable.id == 7
-    assert variable.kind == 2
+    assert type(variable.kind) is ommx.Kind
+    assert variable.kind == ommx.Kind.Integer
     assert variable.bound.lower == -2.0
     assert variable.bound.upper == 8.0
     assert variable.name == "instance_x"
@@ -66,14 +70,20 @@ def assert_component_instance(value: ommx.Instance) -> None:
 
 def assert_component_parametric_instance(value: ommx.ParametricInstance) -> None:
     assert type(value) is ommx.ParametricInstance
+    assert type(value.sense) is ommx.Sense
+    assert value.sense == ommx.Sense.Minimize
     assert value.objective.linear_terms == {7: 1.0}
     assert value.objective.constant_term == -3.0
     assert len(value.decision_variables) == 1
+    assert type(value.decision_variables[0].kind) is ommx.Kind
     assert value.decision_variables[0].name == "instance_x"
 
 
 def assert_component_solution(value: ommx.Solution) -> None:
     assert type(value) is ommx.Solution
+    assert type(value.sense) is ommx.Sense
+    assert value.sense == ommx.Sense.Minimize
+    assert type(value.decision_variables[0].kind) is ommx.Kind
     assert value.objective == 1.0
     assert value.state.entries == {7: 4.0}
     assert value.feasible
@@ -81,6 +91,9 @@ def assert_component_solution(value: ommx.Solution) -> None:
 
 def assert_component_sample_set(value: ommx.SampleSet) -> None:
     assert type(value) is ommx.SampleSet
+    assert type(value.sense) is ommx.Sense
+    assert value.sense == ommx.Sense.Minimize
+    assert type(value.decision_variables[0].kind) is ommx.Kind
     assert value.sample_ids() == {0}
     assert_component_solution(value.get(0))
 
