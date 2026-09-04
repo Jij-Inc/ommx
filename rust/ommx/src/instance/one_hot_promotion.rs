@@ -56,6 +56,22 @@ impl From<&crate::v1::OneHot> for OneHotPromotionRequest {
     }
 }
 
+/// Validate one regular row as a OneHot promotion source without mutating the
+/// instance.
+///
+/// This is shared with the legacy-hint loader through this private module. The
+/// actual promotion still goes through [`Instance::promote_one_hot`], which
+/// rebuilds the candidate while its instance-bound batch plan holds mutation
+/// authority.
+pub fn validate_one_hot_promotion_source(
+    instance: &Instance,
+    source_constraint_id: ConstraintID,
+) -> crate::Result<()> {
+    instance
+        .build_one_hot_promotion_candidate(source_constraint_id)
+        .map(drop)
+}
+
 /// Fully planned OneHot insertion for one validated source row.
 #[derive(Debug)]
 struct PlannedOneHot {

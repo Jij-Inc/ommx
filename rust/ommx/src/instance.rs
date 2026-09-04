@@ -33,6 +33,7 @@ mod sos1_promotion;
 mod stats;
 mod substitute;
 mod unary_encode;
+mod v1_hint_promotion;
 
 pub use analysis::{DecisionVariableRole, DecisionVariableUsage, DecisionVariableUsageEntry};
 pub use arbitrary::{InstanceParameters, InstanceSpace};
@@ -46,6 +47,9 @@ pub use preparation::{
 };
 pub use sos1_promotion::{Sos1BigMPromotion, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim};
 pub use stats::*;
+pub use v1_hint_promotion::{
+    V1ConstraintHintPromotionReport, V1OneHotHintPromotionOutcome, V1Sos1HintPromotionOutcome,
+};
 
 use crate::{
     constraint::{ConstraintContextStore, RemovedReason},
