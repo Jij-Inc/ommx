@@ -38,9 +38,10 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Claimed selector role for one member of an SOS1 Big-M formulation.
 ///
 /// This is an unchecked claim, not a verified fact.
-/// [`Instance::promote_sos1_big_m`] checks the role against the current member
-/// domain and the meaning of the claimed regular rows before changing the
-/// instance.
+/// [`Instance::promote_sos1_big_m`] and
+/// [`Instance::promote_sos1_big_m_batch`] check the role against the current
+/// member domain and the meaning of the claimed regular rows before changing
+/// the instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sos1BigMSelectorClaim {
     /// The member itself is claimed to be a full-domain binary selector.
@@ -69,7 +70,8 @@ pub enum Sos1BigMSelectorClaim {
 /// them from the current [`Instance`]. The request is runtime-only and has no
 /// serialization contract. All fields are untrusted claims; no
 /// instance-dependent validation occurs until
-/// [`Instance::promote_sos1_big_m`] is called.
+/// [`Instance::promote_sos1_big_m`] or
+/// [`Instance::promote_sos1_big_m_batch`] is called.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sos1BigMPromotionRequest {
     /// Claimed member-to-selector roles, keyed by intended SOS1 member ID.
@@ -1556,6 +1558,27 @@ mod tests {
         ] {
             assert!(instance.removed_constraints().contains_key(&id));
         }
+    }
+
+    #[test]
+    fn invalid_request_does_not_conflict_with_a_valid_claim_on_the_same_rows() {
+        let (mut instance, valid) = mixed_instance();
+        let mut invalid = valid.clone();
+        invalid
+            .selector_claims
+            .insert(VariableID::from(999), Sos1BigMSelectorClaim::Reused);
+
+        let outcomes = instance.promote_sos1_big_m_batch(&[invalid, valid], ATol::default());
+
+        assert_eq!(outcomes.len(), 2);
+        assert!(outcomes[0].is_err());
+        assert_eq!(
+            outcomes[1].as_ref().unwrap().sos1_constraint_id(),
+            Sos1ConstraintID::from(0)
+        );
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 3);
+        assert_eq!(instance.sos1_constraints().len(), 1);
     }
 
     #[test]
