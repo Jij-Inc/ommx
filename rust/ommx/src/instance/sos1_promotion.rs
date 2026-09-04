@@ -38,10 +38,9 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Claimed selector role for one member of an SOS1 Big-M formulation.
 ///
 /// This is an unchecked claim, not a verified fact.
-/// [`Instance::promote_sos1_big_m`] and
-/// [`Instance::promote_sos1_big_m_batch`] check the role against the current
-/// member domain and the meaning of the claimed regular rows before changing
-/// the instance.
+/// [`Instance::promote_sos1_big_m`] checks the role against the current member
+/// domain and the meaning of the claimed regular rows before changing the
+/// instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sos1BigMSelectorClaim {
     /// The member itself is claimed to be a full-domain binary selector.
@@ -70,8 +69,7 @@ pub enum Sos1BigMSelectorClaim {
 /// them from the current [`Instance`]. The request is runtime-only and has no
 /// serialization contract. All fields are untrusted claims; no
 /// instance-dependent validation occurs until
-/// [`Instance::promote_sos1_big_m`] or
-/// [`Instance::promote_sos1_big_m_batch`] is called.
+/// [`Instance::promote_sos1_big_m`] is called.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sos1BigMPromotionRequest {
     /// Claimed member-to-selector roles, keyed by intended SOS1 member ID.
@@ -573,9 +571,20 @@ impl Sos1BigMPromotionBatchEffects {
 }
 
 impl Instance {
-    /// Promote one validated Big-M selector formulation to SOS1.
+    /// Check, reconcile, and promote SOS1 Big-M formulations as one batch.
     ///
-    /// The request is untrusted. This method validates all of the following
+    /// Every request is checked against the same unchanged instance. The
+    /// returned vector has exactly the same length and order as `requests`.
+    /// Individually invalid requests are rejected independently. If otherwise
+    /// valid requests consume any of the same regular rows, every participant
+    /// in that conflict is rejected; unrelated requests are still promoted.
+    /// SOS1 members may be shared by independent requests.
+    ///
+    /// An empty `requests` slice is an unconditional no-op: it returns an empty
+    /// vector without inspecting `atol`. The tolerance is validated only for
+    /// requests that are actually checked.
+    ///
+    /// Each request is untrusted. This method validates all of the following
     /// against the current instance before mutation:
     ///
     /// - a non-empty member set with finite supported domains;
@@ -615,52 +624,32 @@ impl Instance {
     /// residual is checked as well as its normalized form to avoid accepting an
     /// f64 normalization-rounding artifact.
     ///
-    /// The supplied `atol` must be finite and smaller than one so the exact
-    /// binary selector-cardinality row still means "at most one". Relation,
-    /// variable support, zero constant, and cardinality remain exact structural
-    /// requirements. Link presence remains determined by the exact sign of the
-    /// stored domain endpoint. The equivalence guarantee is local to the claimed
-    /// formulation and parameterized by this `atol`; callers must use the same
-    /// tolerance for subsequent state reconstruction and evaluation. The
-    /// transformed [`Instance`] does not store a global evaluation tolerance,
-    /// and unrelated removed history is preserved rather than reinterpreted.
+    /// For a non-empty request slice, the supplied `atol` must be finite and
+    /// smaller than one so the exact binary selector-cardinality row still
+    /// means "at most one". Relation, variable support, zero constant, and
+    /// cardinality remain exact structural requirements. Link presence remains
+    /// determined by the exact sign of the stored domain endpoint. The
+    /// equivalence guarantee is local to the claimed formulation and
+    /// parameterized by this `atol`; callers must use the same tolerance for
+    /// subsequent state reconstruction and evaluation. The transformed
+    /// [`Instance`] does not store a global evaluation tolerance, and unrelated
+    /// removed history is preserved rather than reinterpreted.
     ///
-    /// On success the verified formulation rows are relaxed, fresh selectors
-    /// remain registered as dependent variables, and a new active SOS1
-    /// constraint is inserted. The operation is atomic without cloning the
-    /// instance: all invalid requests are rejected by the private plan, and
-    /// commit begins with a batch row move that validates every active ID before
-    /// mutation. A failure while applying the plan is an internal invariant
-    /// violation rather than a recoverable request error.
-    pub fn promote_sos1_big_m(
-        &mut self,
-        request: &Sos1BigMPromotionRequest,
-        atol: ATol,
-    ) -> crate::Result<Sos1BigMPromotion> {
-        // The batch plan guarantees one aligned result for every request. A
-        // missing entry here would be an internal plan-invariant violation,
-        // not a rejection caused by this request.
-        self.promote_sos1_big_m_batch(std::slice::from_ref(request), atol)
-            .pop()
-            .expect("one request must produce one aligned SOS1 promotion outcome")
-    }
-
-    /// Check, reconcile, and apply SOS1 Big-M promotion requests as one batch.
-    ///
-    /// Every request is checked against the same unchanged instance. The
-    /// returned vector has exactly the same length and order as `requests`.
-    /// Individually invalid requests are rejected independently. If otherwise
-    /// valid requests consume any of the same regular rows, every participant
-    /// in that conflict is rejected; unrelated requests are still promoted.
-    /// SOS1 members may be shared by independent requests.
+    /// For each successful request, the verified formulation rows are relaxed,
+    /// fresh selectors remain registered as dependent variables, and a new
+    /// active SOS1 constraint is inserted. Rejected requests have no storage
+    /// effect, but the presence of a rejected result does not make the whole
+    /// batch immutable: independent successful entries are still applied.
     ///
     /// Target IDs are allocated together only after validation and conflict
-    /// detection. The private batch plan then holds an exclusive borrow of this
-    /// instance until its consuming Apply, so successful effects cannot become
-    /// stale and application needs neither an [`Instance`] clone nor a
-    /// recoverable outer error.
+    /// detection. If the target SOS1 ID namespace cannot fit every otherwise
+    /// successful request, those requests are rejected before mutation. The
+    /// private batch plan then holds an exclusive borrow of this instance until
+    /// its consuming Apply, so successful effects cannot become stale and
+    /// application needs neither an [`Instance`] clone nor a recoverable outer
+    /// error.
     #[must_use = "each request has an aligned success or rejection result"]
-    pub fn promote_sos1_big_m_batch(
+    pub fn promote_sos1_big_m(
         &mut self,
         requests: &[Sos1BigMPromotionRequest],
         atol: ATol,
@@ -1377,6 +1366,22 @@ mod tests {
         (instance, requests)
     }
 
+    fn promote_one(
+        instance: &mut Instance,
+        request: &Sos1BigMPromotionRequest,
+        atol: ATol,
+    ) -> crate::Result<Sos1BigMPromotion> {
+        let mut outcomes = instance.promote_sos1_big_m(std::slice::from_ref(request), atol);
+        assert_eq!(
+            outcomes.len(),
+            1,
+            "one request must produce exactly one aligned SOS1 promotion outcome"
+        );
+        outcomes
+            .pop()
+            .expect("one request must retain its aligned SOS1 promotion outcome")
+    }
+
     fn assert_atomic_rejection(
         instance: Instance,
         request: &Sos1BigMPromotionRequest,
@@ -1392,7 +1397,7 @@ mod tests {
         expected: &str,
     ) {
         let before = instance.clone();
-        let error = instance.promote_sos1_big_m(request, atol).unwrap_err();
+        let error = promote_one(&mut instance, request, atol).unwrap_err();
         assert!(
             error.to_string().contains(expected),
             "expected {expected:?} in error, got: {error:#}"
@@ -1407,9 +1412,7 @@ mod tests {
             instance.decision_variable_role(selector_id()),
             Some(DecisionVariableRole::Used)
         );
-        let promotion = instance
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let promotion = promote_one(&mut instance, &request, ATol::default()).unwrap();
 
         assert_eq!(promotion.sos1_constraint_id(), Sos1ConstraintID::from(0));
         assert_eq!(
@@ -1461,7 +1464,7 @@ mod tests {
     fn batch_promotes_disjoint_formulations_with_shared_member() {
         let (mut instance, requests) = shared_member_batch_instance();
 
-        let outcomes = instance.promote_sos1_big_m_batch(&requests, ATol::default());
+        let outcomes = instance.promote_sos1_big_m(&requests, ATol::default());
 
         assert_eq!(outcomes.len(), 2);
         let promotions = outcomes
@@ -1493,11 +1496,11 @@ mod tests {
     }
 
     #[test]
-    fn empty_batch_is_a_no_op() {
+    fn empty_batch_is_an_atol_independent_no_op() {
         let (mut instance, _) = mixed_instance();
         let before = instance.clone();
 
-        let outcomes = instance.promote_sos1_big_m_batch(&[], ATol::default());
+        let outcomes = instance.promote_sos1_big_m(&[], ATol::new(f64::INFINITY).unwrap());
 
         assert!(outcomes.is_empty());
         assert_eq!(instance, before);
@@ -1512,7 +1515,7 @@ mod tests {
             requests[1].clone(),
         ];
 
-        let outcomes = instance.promote_sos1_big_m_batch(&requests, ATol::default());
+        let outcomes = instance.promote_sos1_big_m(&requests, ATol::default());
 
         assert!(outcomes[0]
             .as_ref()
@@ -1540,7 +1543,7 @@ mod tests {
         let (mut instance, mut requests) = shared_member_batch_instance();
         requests[0].cardinality_constraint = ConstraintID::from(999);
 
-        let outcomes = instance.promote_sos1_big_m_batch(&requests, ATol::default());
+        let outcomes = instance.promote_sos1_big_m(&requests, ATol::default());
 
         assert_eq!(outcomes.len(), 2);
         assert!(outcomes[0].is_err());
@@ -1568,7 +1571,7 @@ mod tests {
             .selector_claims
             .insert(VariableID::from(999), Sos1BigMSelectorClaim::Reused);
 
-        let outcomes = instance.promote_sos1_big_m_batch(&[invalid, valid], ATol::default());
+        let outcomes = instance.promote_sos1_big_m(&[invalid, valid], ATol::default());
 
         assert_eq!(outcomes.len(), 2);
         assert!(outcomes[0].is_err());
@@ -1594,7 +1597,7 @@ mod tests {
             .unwrap();
         let before = instance.clone();
 
-        let outcomes = instance.promote_sos1_big_m_batch(&requests, ATol::default());
+        let outcomes = instance.promote_sos1_big_m(&requests, ATol::default());
 
         assert!(outcomes.iter().all(Result::is_err));
         assert!(outcomes.iter().all(|outcome| outcome
@@ -1610,7 +1613,7 @@ mod tests {
         let atol = ATol::default();
         let (original, request) = mixed_instance();
         let mut promoted = original.clone();
-        let _ = promoted.promote_sos1_big_m(&request, atol).unwrap();
+        let _ = promote_one(&mut promoted, &request, atol).unwrap();
 
         for reused_member in [0.0, 1.0] {
             for fresh_member in -2..=3 {
@@ -1668,7 +1671,7 @@ mod tests {
             .constraint_collection
             .replace_active_row(lower_row_id(), lower_link(1.0, 2.0 + atol.into_inner()))
             .unwrap();
-        let promotion = instance.promote_sos1_big_m(&request, atol).unwrap();
+        let promotion = promote_one(&mut instance, &request, atol).unwrap();
 
         let near_zero = instance
             .evaluate(&crate::v1::State::from_iter([(1, 5.0e-7)]), atol)
@@ -1761,7 +1764,7 @@ mod tests {
             fresh_instance(member.clone(), Some(upper_row_id()), Some(lower_row_id()));
         let mut promoted = original.clone();
 
-        let promotion = promoted.promote_sos1_big_m(&request, atol).unwrap();
+        let promotion = promote_one(&mut promoted, &request, atol).unwrap();
         let (lower, upper) = bound.finite_feasible_extrema(atol);
         for member_value in [lower, upper] {
             let original_solution = original
@@ -1812,16 +1815,12 @@ mod tests {
     #[test]
     fn accepts_finite_member_bounds_that_exclude_zero() {
         let (mut positive, request) = fresh_instance(integer(1.0, 3.0), Some(upper_row_id()), None);
-        let _promotion = positive
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let _promotion = promote_one(&mut positive, &request, ATol::default()).unwrap();
         assert_eq!(positive.sos1_constraints().len(), 1);
 
         let (mut negative, request) =
             fresh_instance(integer(-3.0, -1.0), None, Some(lower_row_id()));
-        let _promotion = negative
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let _promotion = promote_one(&mut negative, &request, ATol::default()).unwrap();
         assert_eq!(negative.sos1_constraints().len(), 1);
     }
 
@@ -1850,9 +1849,7 @@ mod tests {
             ]),
             cardinality_constraint: cardinality,
         };
-        let promotion = instance
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let promotion = promote_one(&mut instance, &request, ATol::default()).unwrap();
         assert!(promotion.fresh_selectors().is_empty());
         assert!(instance.decision_variable_dependency().is_empty());
         assert_eq!(instance.decision_variables().len(), 2);
@@ -1874,9 +1871,7 @@ mod tests {
             .replace_active_row(lower_row_id(), lower.clone())
             .unwrap();
 
-        let promotion = instance
-            .promote_sos1_big_m(&request, ATol::new(1.0e-6).unwrap())
-            .unwrap();
+        let promotion = promote_one(&mut instance, &request, ATol::new(1.0e-6).unwrap()).unwrap();
 
         assert_eq!(promotion.relaxed_constraint_ids().len(), 3);
         assert_eq!(instance.removed_constraints()[&upper_row_id()].0, upper);
@@ -1896,7 +1891,7 @@ mod tests {
             .replace_active_row(lower_row_id(), lower_link(4.0, 1.96875))
             .unwrap();
 
-        let _ = instance.promote_sos1_big_m(&request, atol).unwrap();
+        let _ = promote_one(&mut instance, &request, atol).unwrap();
 
         for member_value in [3.0, -2.0] {
             let solution = instance
@@ -2026,9 +2021,7 @@ mod tests {
             .replace_active_row(upper_row_id(), upper_link(2.0, 3.0625))
             .unwrap();
         let original_upper = upper_on_boundary.clone();
-        let _ = upper_on_boundary
-            .promote_sos1_big_m(&request, atol)
-            .unwrap();
+        let _ = promote_one(&mut upper_on_boundary, &request, atol).unwrap();
         let before = original_upper
             .evaluate(&crate::v1::State::from_iter([(1, 3.125), (10, 1.0)]), atol)
             .unwrap();
@@ -2064,9 +2057,7 @@ mod tests {
             .replace_active_row(lower_row_id(), lower_link(0.5, 2.875))
             .unwrap();
         let original_lower = lower_on_boundary.clone();
-        let _ = lower_on_boundary
-            .promote_sos1_big_m(&request, atol)
-            .unwrap();
+        let _ = promote_one(&mut lower_on_boundary, &request, atol).unwrap();
         let before = original_lower
             .evaluate(&crate::v1::State::from_iter([(1, -3.125), (10, 1.0)]), atol)
             .unwrap();
@@ -2101,9 +2092,7 @@ mod tests {
             .constraint_collection
             .replace_active_row(lower_row_id(), lower_link(2.0, 1.0))
             .unwrap();
-        let _ = positive
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let _ = promote_one(&mut positive, &request, ATol::default()).unwrap();
 
         let (mut negative, request) = fresh_instance(
             integer(-3.0, -1.0),
@@ -2114,9 +2103,7 @@ mod tests {
             .constraint_collection
             .replace_active_row(upper_row_id(), upper_link(2.0, 1.0))
             .unwrap();
-        let _ = negative
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let _ = promote_one(&mut negative, &request, ATol::default()).unwrap();
     }
 
     #[test]
@@ -2394,8 +2381,7 @@ mod tests {
             cardinality_constraint: ConstraintID::from(0),
         };
         let before = empty.clone();
-        assert!(empty
-            .promote_sos1_big_m(&empty_request, ATol::default())
+        assert!(promote_one(&mut empty, &empty_request, ATol::default())
             .unwrap_err()
             .to_string()
             .contains("at least one member"));
@@ -2480,9 +2466,7 @@ mod tests {
             .name(upper_row_id())
             .unwrap()
             .as_ptr();
-        let _ = instance
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let _ = promote_one(&mut instance, &request, ATol::default()).unwrap();
 
         assert_eq!(
             instance.variable_labels().name(selector_id()),
@@ -2652,9 +2636,7 @@ mod tests {
         );
         instance.output_objective = Some(output_objective.clone());
 
-        let _ = instance
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let _ = promote_one(&mut instance, &request, ATol::default()).unwrap();
 
         assert!(instance.removed_constraints().contains_key(&regular_id));
         assert!(instance
@@ -2701,9 +2683,7 @@ mod tests {
     #[test]
     fn dependent_selector_reconstruction_validates_input_state() {
         let (mut instance, request) = mixed_instance();
-        let _ = instance
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let _ = promote_one(&mut instance, &request, ATol::default()).unwrap();
 
         let inconsistent = instance
             .populate_state(
