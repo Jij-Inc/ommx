@@ -66,8 +66,12 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
     };
     assert_eq!(request.selector_claims.len(), 2);
 
-    let promotion = instance
-        .promote_sos1_big_m(&request, Default::default())
+    let outcomes = instance.promote_sos1_big_m(&[request], Default::default());
+    assert_eq!(outcomes.len(), 1);
+    let promotion = outcomes
+        .into_iter()
+        .next()
+        .expect("one request has one aligned result")
         .unwrap();
 
     assert_eq!(promotion.relaxed_constraint_ids().len(), 3);
@@ -77,7 +81,7 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
 }
 
 #[test]
-fn public_batch_api_promotes_independent_requests_with_a_shared_member() {
+fn public_api_promotes_independent_requests_with_a_shared_member() {
     let member = VariableID::from(1);
     let selectors = [VariableID::from(10), VariableID::from(11)];
     let row_ids = [
@@ -145,7 +149,7 @@ fn public_batch_api_promotes_independent_requests_with_a_shared_member() {
     )
     .unwrap();
 
-    let outcomes = instance.promote_sos1_big_m_batch(&requests, Default::default());
+    let outcomes = instance.promote_sos1_big_m(&requests, Default::default());
 
     assert_eq!(outcomes.len(), requests.len());
     assert_eq!(

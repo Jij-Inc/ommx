@@ -230,6 +230,16 @@ impl Instance {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        Ok(self.inner.promote_sos1_big_m(&request.inner, atol)?.into())
+        let mut outcomes = self
+            .inner
+            .promote_sos1_big_m(std::slice::from_ref(&request.inner), atol);
+        // The Rust owner API guarantees one result per input request in the
+        // same order. Violating that contract is an internal invariant failure,
+        // not a caller-controlled promotion rejection.
+        let promotion = outcomes
+            .pop()
+            .expect("one request must produce one aligned SOS1 promotion outcome")?;
+        debug_assert!(outcomes.is_empty());
+        Ok(promotion.into())
     }
 }
