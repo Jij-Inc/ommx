@@ -93,9 +93,8 @@ impl Sos1BigMPromotionRequest {
     /// The returned request remains an untrusted claim. In particular, this
     /// conversion does not certify the Big-M bounds, link coefficients,
     /// cardinality semantics, or selector isolation. Pass it to
-    /// [`Instance::promote_sos1_big_m`] or
-    /// [`Instance::promote_sos1_big_m_batch`] for the complete checked
-    /// promotion. Keeping conversion separate lets callers that obtained a raw
+    /// [`Instance::promote_sos1_big_m`] for the complete checked promotion.
+    /// Keeping conversion separate lets callers that obtained a raw
     /// [`crate::v1::Sos1`] independently decide when and how to apply it.
     pub fn from_v1_hint(instance: &Instance, hint: &crate::v1::Sos1) -> crate::Result<Self> {
         instance.sos1_big_m_promotion_request_from_v1_hint(hint)
@@ -1655,7 +1654,7 @@ mod tests {
     ) {
         let before = instance.clone();
         let error = Sos1BigMPromotionRequest::from_v1_hint(&instance, hint)
-            .and_then(|request| instance.promote_sos1_big_m(&request, ATol::default()))
+            .and_then(|request| promote_one(&mut instance, &request, ATol::default()))
             .unwrap_err();
         assert!(
             error.to_string().contains(expected),
@@ -1669,14 +1668,10 @@ mod tests {
         let (mut direct, request) = mixed_instance();
         let mut from_hint = direct.clone();
 
-        let expected = direct
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let expected = promote_one(&mut direct, &request, ATol::default()).unwrap();
         let hint_request =
             Sos1BigMPromotionRequest::from_v1_hint(&from_hint, &mixed_v1_hint()).unwrap();
-        let actual = from_hint
-            .promote_sos1_big_m(&hint_request, ATol::default())
-            .unwrap();
+        let actual = promote_one(&mut from_hint, &hint_request, ATol::default()).unwrap();
 
         assert_eq!(actual, expected);
         assert_eq!(from_hint, direct);
@@ -1711,9 +1706,7 @@ mod tests {
         };
 
         let request = Sos1BigMPromotionRequest::from_v1_hint(&instance, &hint).unwrap();
-        let promotion = instance
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let promotion = promote_one(&mut instance, &request, ATol::default()).unwrap();
 
         assert_eq!(promotion.members(), &VariableIDSet::from([first, second]));
         assert!(promotion.fresh_selectors().is_empty());
@@ -1748,9 +1741,7 @@ mod tests {
         };
 
         let request = Sos1BigMPromotionRequest::from_v1_hint(&instance, &hint).unwrap();
-        let promotion = instance
-            .promote_sos1_big_m(&request, ATol::default())
-            .unwrap();
+        let promotion = promote_one(&mut instance, &request, ATol::default()).unwrap();
 
         assert_eq!(
             promotion.fresh_selectors(),

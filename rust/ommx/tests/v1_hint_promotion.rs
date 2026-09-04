@@ -383,8 +383,13 @@ fn individual_hint_requests_remain_independently_applicable() {
         sos1_request.cardinality_constraint,
         ConstraintID::from(SOS1_SOURCE_ID)
     );
-    let _ = sos1_only
-        .promote_sos1_big_m(&sos1_request, ATol::default())
+    let outcomes =
+        sos1_only.promote_sos1_big_m(std::slice::from_ref(&sos1_request), ATol::default());
+    assert_eq!(outcomes.len(), 1);
+    let _ = outcomes
+        .into_iter()
+        .next()
+        .expect("one request has one aligned result")
         .unwrap();
     assert_eq!(sos1_only.sos1_constraints().len(), 1);
     assert!(sos1_only

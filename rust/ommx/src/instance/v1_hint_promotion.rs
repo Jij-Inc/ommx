@@ -322,7 +322,7 @@ impl<'a> V1ConstraintHintPromotionPlan<'a> {
                 (source_constraint_id, target_id)
             })
             .collect::<std::collections::BTreeMap<_, _>>();
-        let sos1_promotions = instance.promote_sos1_big_m_batch(&sos1_requests, atol);
+        let sos1_promotions = instance.promote_sos1_big_m(&sos1_requests, atol);
 
         let one_hot_outcomes = one_hot_hints
             .into_iter()
