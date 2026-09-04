@@ -8,6 +8,32 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### ⚠ SOS1 Big-M promotionをstrict batch化 ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
+
+{meth}`~ommx.Instance.promote_sos1_big_m`は、
+{class}`~ommx.Sos1BigMPromotionRequest`のlistを受け取り、入力と同じ順序の
+{class}`~ommx.Sos1BigMPromotion`のlistを返すようになりました。pre-releaseで
+提供していた単一request・単一resultのsignatureを置き換えます。
+
+すべてのrequestとrequest間のconflictを、同じ未変更の`Instance`に対して検証します。
+すべてがvalidな場合に限りbatchを適用します。1つでもrejectされたrequestがあれば
+{class}`~ommx.Sos1BigMPromotionBatchRejectedError`を送出し、`Instance`全体を
+変更しません。`request_count` attributeは入力全体の件数を表し、`rejections`は
+rejectされたrequestの0-origin indexから診断文字列へのmapです。
+
+```python
+from ommx import Sos1BigMPromotionBatchRejectedError
+
+try:
+    promotions = instance.promote_sos1_big_m([request_a, request_b])
+except Sos1BigMPromotionBatchRejectedError as error:
+    print(error.request_count)
+    print(error.rejections)
+```
+
+検証とatomicityのcontractについては
+{ref}`SOS1のBig-M定式化 <sos1-big-m-formulation>`を参照してください。
+
 ### 🛠 モデルの識別子を型付きenumへ復元 ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
 
 v3への書き直しで、{class}`~ommx.DecisionVariable`からprotobufの整数識別子を
@@ -151,11 +177,11 @@ Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含
 この条件をbinary selector、memberとselectorのlink制約、およびselectorの
 cardinality制約で表します。
 
-{meth}`~ommx.Instance.promote_sos1_big_m`は、現在の`Instance`がこの
-formulationを持つという申請を受け取ります。これは独立した変形申請であり、
-loweringのrollbackや逆変換ではありません。現在の変数、domain、rowが申請した
-formulationのrowをfirst-classなSOS1制約へ置き換えることを正当化する十分条件を
-満たすことを検証してから、その変形をatomicに適用します。
+{class}`~ommx.Sos1BigMPromotionRequest`は、現在の`Instance`がこの
+formulationを持つことを申請します。これは独立した変形申請であり、loweringの
+rollbackや逆変換ではありません。promotion checkerは、現在の変数、domain、rowが
+申請したformulationのrowをfirst-classなSOS1制約へ置き換えることを正当化する
+十分条件を満たすことを検証します。
 
 ```python
 from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
@@ -171,10 +197,12 @@ request = Sos1BigMPromotionRequest(
     },
     cardinality_constraint=102,
 )
-promotion = instance.promote_sos1_big_m(request)
+[promotion] = instance.promote_sos1_big_m([request])
 ```
 
-申請したformulationの検証に失敗すると`RuntimeError`となり、`Instance`は
+この例は、現在のstrict batch APIで1件のrequestを呼び出す形です。申請した
+formulationの検証に失敗すると
+{class}`~ommx.Sos1BigMPromotionBatchRejectedError`となり、`Instance`は
 変更されません。戻り値の{class}`~ommx.Sos1BigMPromotion`から
 `sos1_constraint_id`、`members`、`fresh_selectors`、
 `relaxed_constraint_ids`を参照できます。

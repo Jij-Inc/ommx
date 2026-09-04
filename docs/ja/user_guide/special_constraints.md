@@ -185,12 +185,32 @@ promotionでは、memberのboundを通常の不等式constraintと同じresidual
 利用できます。検証時には`U + atol`を先に構成せず、実際にbound-feasibleな表現可能domainを
 導出します。
 
-{meth}`~ommx.Instance.promote_sos1_big_m`の呼び出しは、申請した既存の
-Big-M定式化に対する独立した変形申請です。現在の変数、domain、rowが
-この射影上の同値性を保証する十分条件を満たすことを検証してから、
-申請したformulationのrowをfirst-classなSOS1制約へ置き換えます。これらのrowが
-{meth}`~ommx.Instance.convert_sos1_to_constraints`によって生成されたことは
-前提にせず、そのoperationのrollbackでもありません。
+{meth}`~ommx.Instance.promote_sos1_big_m`は、既存のBig-M定式化を変形する
+独立したrequestのlistを受け取ります。すべてのrequestを同じ未変更のInstanceに
+対して検証し、同じ通常制約rowを申請するrequest同士のconflictも判定します。
+これらのrowが{meth}`~ommx.Instance.convert_sos1_to_constraints`によって
+生成されたことは前提にせず、そのoperationのrollbackでもありません。
+
+Python APIはstrict batchです。batch全体がvalidな場合に限り、すべてのrequestを
+適用し、入力と同じ順序の{class}`~ommx.Sos1BigMPromotion`のlistを返します。
+invalidなrequestや他のrequestとconflictするrequestが1つでもあれば、変更を始める前に
+{class}`~ommx.Sos1BigMPromotionBatchRejectedError`を送出します。
+`request_count` attributeは入力全体の件数、`rejections` dictはrejectされたrequestの
+0-origin indexから診断messageへのmapです。`rejections`に含まれないrequestは単独では
+validですが、strict batchがrejectされた場合はそれらも適用されません。
+
+```python
+from ommx import Sos1BigMPromotionBatchRejectedError
+
+requests = [request_a, request_b]
+try:
+    promotions = instance.promote_sos1_big_m(requests)
+except Sos1BigMPromotionBatchRejectedError as error:
+    assert error.request_count == len(requests)
+    for index, message in error.rejections.items():
+        print(f"request {index}: {message}")
+    # `instance`は変更されていない。
+```
 
 ## 制約種別ごとに独立したID空間
 

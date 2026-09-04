@@ -190,12 +190,34 @@ used by regular constraints. Consequently, a canonical unit-scale upper link
 `x - U*y <= 0` may use the tight value `M = U`; validation derives the actual
 representable bound-feasible domain without first constructing `U + atol`.
 
-A call to {meth}`~ommx.Instance.promote_sos1_big_m` is an independent request
-to transform a claimed existing Big-M formulation. It verifies the current
-variables, domains, and rows satisfy sufficient conditions for this projected
-equivalence before replacing the claimed formulation rows with a first-class
-SOS1 constraint. It neither assumes that the rows came from
-{meth}`~ommx.Instance.convert_sos1_to_constraints` nor rolls that operation back.
+{meth}`~ommx.Instance.promote_sos1_big_m` accepts a list of independent
+requests to transform claimed existing Big-M formulations. It checks every
+request against the same unchanged instance, including conflicts between
+requests that claim the same regular row. It neither assumes that the rows came
+from {meth}`~ommx.Instance.convert_sos1_to_constraints` nor rolls that operation
+back.
+
+The Python operation is a strict batch: it applies every request and returns an
+input-aligned list of {class}`~ommx.Sos1BigMPromotion` values only when the
+entire batch is valid. If any request is invalid or conflicts with another,
+{class}`~ommx.Sos1BigMPromotionBatchRejectedError` is raised before mutation.
+Its `request_count` attribute is the total input length, and its `rejections`
+dictionary maps each rejected zero-based input index to a diagnostic string.
+Requests absent from `rejections` were individually valid, but are still not
+applied when the strict batch is rejected.
+
+```python
+from ommx import Sos1BigMPromotionBatchRejectedError
+
+requests = [request_a, request_b]
+try:
+    promotions = instance.promote_sos1_big_m(requests)
+except Sos1BigMPromotionBatchRejectedError as error:
+    assert error.request_count == len(requests)
+    for index, message in error.rejections.items():
+        print(f"request {index}: {message}")
+    # `instance` is unchanged.
+```
 
 ## Independent ID spaces per constraint type
 

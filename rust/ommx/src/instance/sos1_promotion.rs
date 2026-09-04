@@ -116,6 +116,60 @@ impl Sos1BigMPromotion {
     }
 }
 
+/// Signal that a fully-valid SOS1 Big-M promotion batch could not be formed.
+///
+/// This signal is produced by
+/// [`Sos1BigMPromotionBatchPlan::apply_if_fully_valid`] before the bound
+/// [`Instance`] is mutated. It owns every planning rejection together with the
+/// zero-based position of the corresponding input request. Callers can inspect
+/// those positions, repair or remove the rejected requests, and retry against
+/// the unchanged instance.
+///
+/// # Invariants
+///
+/// - `request_count` is the number of requests used to construct the plan;
+/// - `rejections` is non-empty and ordered by strictly increasing input index;
+/// - every rejection index is smaller than `request_count`; and
+/// - no plan effect was applied to the bound instance.
+#[non_exhaustive]
+#[derive(Debug)]
+pub struct Sos1BigMPromotionBatchRejected {
+    request_count: usize,
+    rejections: Vec<(usize, crate::Error)>,
+}
+
+impl Sos1BigMPromotionBatchRejected {
+    /// Number of requests in the rejected batch.
+    pub fn request_count(&self) -> usize {
+        self.request_count
+    }
+
+    /// Iterates over all planning rejections in input order.
+    ///
+    /// Each item contains the zero-based input index and the complete Rust
+    /// error chain for that request.
+    pub fn rejections(&self) -> impl Iterator<Item = (usize, &crate::Error)> + '_ {
+        self.rejections.iter().map(|(index, error)| (*index, error))
+    }
+}
+
+impl std::fmt::Display for Sos1BigMPromotionBatchRejected {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "SOS1 Big-M promotion rejected {} of {} requests",
+            self.rejections.len(),
+            self.request_count
+        )?;
+        for (index, error) in &self.rejections {
+            write!(formatter, "\nrequest[{index}]: {error:#}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for Sos1BigMPromotionBatchRejected {}
+
 /// Instance-validated SOS1 Big-M promotion candidate before batch reconciliation.
 ///
 /// This value is deliberately incomplete. Multiple candidates may consume the
@@ -165,10 +219,10 @@ struct PlannedSos1BigMPromotion {
 /// different instance.
 ///
 /// Use [`Self::is_fully_valid`] and [`Self::rejections`] to inspect the batch.
-/// Dropping the plan applies nothing; [`Self::apply`] applies every successful
-/// entry while preserving every rejection in the aligned result vector. This
-/// makes both all-or-nothing caller policy and best-effort promotion possible
-/// without a rollback operation.
+/// Dropping the plan applies nothing; [`Self::apply_if_fully_valid`] provides
+/// all-or-nothing application, while [`Self::apply`] applies every successful
+/// entry and preserves every rejection in the aligned result vector. Neither
+/// policy requires a rollback operation.
 ///
 /// # Invariants
 ///
@@ -461,6 +515,52 @@ impl<'a> Sos1BigMPromotionBatchPlan<'a> {
             .filter_map(|(index, entry)| entry.as_ref().err().map(|error| (index, error)))
     }
 
+    /// Applies the batch only when every request is valid.
+    ///
+    /// If any request was rejected during planning, this method returns a
+    /// [`Sos1BigMPromotionBatchRejected`] containing every rejected input index
+    /// and error chain, and leaves the bound instance unchanged. Otherwise it
+    /// applies every planned effect and returns promotions in input order.
+    /// An empty plan succeeds with an empty vector.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if an internal plan invariant is violated while applying a
+    /// fully valid plan. Such a panic may occur after some storage effects have
+    /// been applied; panic unwind atomicity and rollback are not part of this
+    /// API's contract.
+    #[must_use = "a rejected batch leaves the instance unchanged"]
+    pub fn apply_if_fully_valid(self) -> crate::Result<Vec<Sos1BigMPromotion>> {
+        if !self.is_fully_valid() {
+            let Self {
+                instance: _,
+                entries,
+            } = self;
+            let request_count = entries.len();
+            let rejections = entries
+                .into_iter()
+                .enumerate()
+                .filter_map(|(index, entry)| entry.err().map(|error| (index, error)))
+                .collect::<Vec<_>>();
+            debug_assert!(!rejections.is_empty());
+            return Err(Sos1BigMPromotionBatchRejected {
+                request_count,
+                rejections,
+            }
+            .into());
+        }
+
+        Ok(self
+            .apply()
+            .into_iter()
+            .map(|outcome| {
+                outcome.expect(
+                    "is_fully_valid guarantees every Sos1BigMPromotionBatchPlan entry succeeds",
+                )
+            })
+            .collect())
+    }
+
     /// Applies every successful entry to the unchanged bound instance.
     ///
     /// The returned vector has exactly one entry per input request, in input
@@ -671,6 +771,33 @@ impl Instance {
         atol: ATol,
     ) -> Vec<crate::Result<Sos1BigMPromotion>> {
         self.plan_promote_sos1_big_m(requests, atol).apply()
+    }
+
+    /// Plans and applies SOS1 Big-M promotions only if the full batch is valid.
+    ///
+    /// This all-or-nothing convenience form leaves the instance unchanged and
+    /// returns [`Sos1BigMPromotionBatchRejected`] in the error chain if any
+    /// request is rejected. On success it returns one promotion per request,
+    /// in input order. An empty request slice succeeds without inspecting
+    /// `atol`.
+    ///
+    /// Use [`Self::promote_sos1_big_m`] when independently valid requests should
+    /// still be applied from a partially rejected batch, or
+    /// [`Self::plan_promote_sos1_big_m`] when the plan must be inspected before
+    /// choosing an application policy.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if an internal plan invariant is violated while applying a
+    /// fully valid plan. See
+    /// [`Sos1BigMPromotionBatchPlan::apply_if_fully_valid`] for details.
+    pub fn promote_sos1_big_m_if_fully_valid(
+        &mut self,
+        requests: &[Sos1BigMPromotionRequest],
+        atol: ATol,
+    ) -> crate::Result<Vec<Sos1BigMPromotion>> {
+        self.plan_promote_sos1_big_m(requests, atol)
+            .apply_if_fully_valid()
     }
 
     fn build_sos1_big_m_promotion_candidate(
@@ -1545,6 +1672,77 @@ mod tests {
                 .contains("cardinality constraint ConstraintID(999) is not active"));
         }
 
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn fully_valid_application_reports_every_rejection_without_mutation() {
+        let (mut instance, mut requests) = shared_member_batch_instance();
+        requests[0].cardinality_constraint = ConstraintID::from(999);
+        let duplicate = requests[1].clone();
+        requests.push(duplicate);
+        let before = instance.clone();
+
+        let error = instance
+            .promote_sos1_big_m_if_fully_valid(&requests, ATol::default())
+            .unwrap_err();
+        let rejected = error
+            .downcast_ref::<Sos1BigMPromotionBatchRejected>()
+            .expect("the strict batch error retains its domain signal");
+
+        assert_eq!(rejected.request_count(), 3);
+        let rejections = rejected.rejections().collect::<Vec<_>>();
+        assert_eq!(
+            rejections
+                .iter()
+                .map(|(index, _)| *index)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2]
+        );
+        assert!(rejections[0]
+            .1
+            .to_string()
+            .contains("cardinality constraint ConstraintID(999) is not active"));
+        assert!(rejections[1..].iter().all(|(_, error)| error
+            .to_string()
+            .contains("conflicts with another individually valid request")));
+        assert!(error
+            .to_string()
+            .contains("SOS1 Big-M promotion rejected 3 of 3 requests"));
+        assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn fully_valid_application_promotes_all_requests_in_input_order() {
+        let (mut instance, requests) = shared_member_batch_instance();
+
+        let promotions = instance
+            .promote_sos1_big_m_if_fully_valid(&requests, ATol::default())
+            .unwrap();
+
+        assert_eq!(promotions.len(), 2);
+        assert_eq!(
+            promotions
+                .iter()
+                .map(Sos1BigMPromotion::sos1_constraint_id)
+                .collect::<Vec<_>>(),
+            vec![Sos1ConstraintID::from(0), Sos1ConstraintID::from(1)]
+        );
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 6);
+        assert_eq!(instance.sos1_constraints().len(), 2);
+    }
+
+    #[test]
+    fn empty_fully_valid_application_is_an_atol_independent_no_op() {
+        let (mut instance, _) = mixed_instance();
+        let before = instance.clone();
+
+        let promotions = instance
+            .promote_sos1_big_m_if_fully_valid(&[], ATol::new(f64::INFINITY).unwrap())
+            .unwrap();
+
+        assert!(promotions.is_empty());
         assert_eq!(instance, before);
     }
 

@@ -110,6 +110,7 @@ __all__ = [
     "Solution",
     "Solve",
     "Sos1BigMPromotion",
+    "Sos1BigMPromotionBatchRejectedError",
     "Sos1BigMPromotionRequest",
     "Sos1BigMSelectorClaim",
     "Sos1Constraint",
@@ -5116,29 +5117,34 @@ class Instance:
         """
     def promote_sos1_big_m(
         self,
-        request: Sos1BigMPromotionRequest,
+        requests: typing.Sequence[Sos1BigMPromotionRequest],
         *,
         atol: typing.Optional[builtins.float] = None,
-    ) -> Sos1BigMPromotion:
+    ) -> builtins.list[Sos1BigMPromotion]:
         r"""
-        Validate and promote one claimed SOS1 Big-M formulation in place.
+        Validate and promote claimed SOS1 Big-M formulations as one strict batch.
 
-        The request supplies stable IDs only. The Rust {class}`Instance` owner
-        reads the current variable domains and regular rows, validates the full
-        formulation, and commits the lifecycle move, selector reconstruction,
-        and SOS1 insertion atomically. Invalid requests leave the instance
-        unchanged.
+        Each request supplies stable IDs only. The Rust {class}`Instance` owner
+        checks every request against the same unchanged instance and reconciles
+        conflicts across the batch. It commits the lifecycle moves, selector
+        reconstruction, and SOS1 insertions only when every request is valid.
+        The returned list has one promotion per request in input order. An empty
+        input returns an empty list without mutating the instance.
 
-        ``atol`` parameterizes the local projected-feasibility check, must be
-        finite and satisfy ``0 < atol < 1``, and must also be used for subsequent
-        state reconstruction and evaluation. Continuous member bounds and link
-        rows use the same inequality-residual feasibility rule, so canonical
+        For a non-empty batch, ``atol`` parameterizes the local
+        projected-feasibility check, must be finite and satisfy
+        ``0 < atol < 1``, and must also be used for subsequent state
+        reconstruction and evaluation. Continuous member bounds and link rows
+        use the same inequality-residual feasibility rule, so canonical
         unit-scale links may use tight Big-M values `U` for an upper link and
         `-L` for a lower link. If omitted, the current default returned by
         {func}`~ommx.get_default_atol` is used.
 
-        Raises {class}`RuntimeError` when the claimed formulation is invalid for
-        the current instance, including a positive-infinite tolerance or a
+        Raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError` when any
+        request is invalid or conflicts with another request. The exception's
+        ``rejections`` dict maps every rejected zero-based input index to its
+        diagnostic message. No request is applied in this case. A non-empty
+        batch also raises this exception for a positive-infinite tolerance or a
         finite ``atol >= 1``.
         Non-positive or NaN values rejected while constructing the tolerance
         raise {class}`ValueError`.
@@ -8807,6 +8813,21 @@ class Sos1BigMPromotion:
         Verified regular-constraint IDs moved from active to removed.
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+
+class Sos1BigMPromotionBatchRejectedError(builtins.RuntimeError):
+    r"""
+    One or more requests in a strict SOS1 Big-M promotion batch were rejected.
+    """
+    @property
+    def request_count(self) -> builtins.int:
+        r"""
+        Number of requests in the rejected strict batch.
+        """
+    @property
+    def rejections(self) -> builtins.dict[builtins.int, builtins.str]:
+        r"""
+        Diagnostic messages keyed by rejected zero-based request index.
+        """
 
 @typing.final
 class Sos1BigMPromotionRequest:

@@ -1,7 +1,7 @@
 use ommx::{
     coeff, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance, Kind, Linear,
-    LinearMonomial, Sense, Sos1BigMPromotionBatchPlan, Sos1BigMPromotionRequest,
-    Sos1BigMSelectorClaim, Sos1ConstraintID, VariableID,
+    LinearMonomial, Sense, Sos1BigMPromotionBatchPlan, Sos1BigMPromotionBatchRejected,
+    Sos1BigMPromotionRequest, Sos1BigMSelectorClaim, Sos1ConstraintID, VariableID,
 };
 use std::collections::BTreeMap;
 
@@ -154,13 +154,37 @@ fn public_api_promotes_independent_requests_with_a_shared_member() {
     )
     .unwrap();
 
-    let outcomes = instance.promote_sos1_big_m(&requests, Default::default());
-
-    assert_eq!(outcomes.len(), requests.len());
+    let before = instance.clone();
+    let conflicting_requests = [
+        requests[0].clone(),
+        requests[0].clone(),
+        requests[1].clone(),
+    ];
+    let error = instance
+        .promote_sos1_big_m_if_fully_valid(&conflicting_requests, Default::default())
+        .unwrap_err();
+    let rejected = error
+        .downcast_ref::<Sos1BigMPromotionBatchRejected>()
+        .expect("the public signal remains downcastable");
+    assert_eq!(rejected.request_count(), 3);
     assert_eq!(
-        outcomes
+        rejected
+            .rejections()
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>(),
+        vec![0, 1]
+    );
+    assert_eq!(instance, before);
+
+    let promotions = instance
+        .promote_sos1_big_m_if_fully_valid(&requests, Default::default())
+        .unwrap();
+
+    assert_eq!(promotions.len(), requests.len());
+    assert_eq!(
+        promotions
             .iter()
-            .map(|outcome| outcome.as_ref().unwrap().sos1_constraint_id())
+            .map(|promotion| promotion.sos1_constraint_id())
             .collect::<Vec<_>>(),
         vec![Sos1ConstraintID::from(0), Sos1ConstraintID::from(1)]
     );

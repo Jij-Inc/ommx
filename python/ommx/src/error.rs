@@ -180,6 +180,50 @@ create_core_exception!(
 );
 pyo3::create_exception!(
     ommx,
+    Sos1BigMPromotionBatchRejectedError,
+    PyRuntimeError,
+    "One or more requests in a strict SOS1 Big-M promotion batch were rejected."
+);
+impl pyo3_stub_gen::PyStubType for Sos1BigMPromotionBatchRejectedError {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::builtin("Sos1BigMPromotionBatchRejectedError")
+    }
+}
+pyo3_stub_gen::impl_py_runtime_type!(Sos1BigMPromotionBatchRejectedError);
+
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::type_info::PyClassInfo {
+        pyclass_name: "Sos1BigMPromotionBatchRejectedError",
+        struct_id: std::any::TypeId::of::<Sos1BigMPromotionBatchRejectedError>,
+        getters: &[
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "request_count",
+                r#type: <usize as pyo3_stub_gen::PyStubType>::type_output,
+                doc: "Number of requests in the rejected strict batch.",
+                default: None,
+                deprecated: None,
+            },
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "rejections",
+                r#type: <std::collections::BTreeMap<usize, String> as pyo3_stub_gen::PyStubType>::type_output,
+                doc: "Diagnostic messages keyed by rejected zero-based request index.",
+                default: None,
+                deprecated: None,
+            },
+        ],
+        setters: &[],
+        module: Some("ommx._ommx_rust"),
+        doc: "One or more requests in a strict SOS1 Big-M promotion batch were rejected.",
+        bases: &[|| <PyRuntimeError as pyo3_stub_gen::PyStubType>::type_output()],
+        has_eq: false,
+        has_ord: false,
+        has_hash: false,
+        has_str: false,
+        subclass: true,
+    }
+}
+pyo3::create_exception!(
+    ommx,
     PreparationTargetNotReachedError,
     PyRuntimeError,
     "Configured Preparation phases were exhausted without reaching the target InstanceClass. The final membership report is available as ``report``."
@@ -431,6 +475,24 @@ fn infeasible_detected_to_pyerr(_: &ommx::InfeasibleDetected, message: String) -
     InfeasibleDetected::new_err(message)
 }
 
+fn sos1_big_m_promotion_batch_rejected_to_pyerr(
+    error: &ommx::Sos1BigMPromotionBatchRejected,
+    message: String,
+) -> PyErr {
+    let pyerr = Sos1BigMPromotionBatchRejectedError::new_err(message);
+    Python::attach(|py| {
+        let value = pyerr.value(py);
+        value.setattr("request_count", error.request_count())?;
+        let rejections = error
+            .rejections()
+            .map(|(index, error)| (index, format!("{error:#}")))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        value.setattr("rejections", rejections)
+    })
+    .expect("Sos1BigMPromotionBatchRejectedError supports diagnostic attributes");
+    pyerr
+}
+
 fn preparation_target_not_reached_to_pyerr(
     error: &ommx::PreparationTargetNotReached,
     message: String,
@@ -448,6 +510,7 @@ fn preparation_target_not_reached_to_pyerr(
 }
 
 define_ommx_error_mappings!(
+    ommx::Sos1BigMPromotionBatchRejected => sos1_big_m_promotion_batch_rejected_to_pyerr,
     ommx::ParseError => parse_error_to_pyerr,
     ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
     ommx::experiment::AttachmentNotFound => attachment_not_found_to_pyerr,
@@ -533,6 +596,10 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
         py.get_type::<ExactIntegerSlackError>(),
     )?;
     module.add("InfeasibleDetected", py.get_type::<InfeasibleDetected>())?;
+    module.add(
+        "Sos1BigMPromotionBatchRejectedError",
+        py.get_type::<Sos1BigMPromotionBatchRejectedError>(),
+    )?;
     module.add(
         "PreparationTargetNotReachedError",
         py.get_type::<PreparationTargetNotReachedError>(),
@@ -715,6 +782,51 @@ mod tests {
             bound: ommx::Bound::new(1.0, 2.0).unwrap(),
         });
         assert_exception::<InfeasibleDetected>(erased.into());
+    }
+
+    fn rejected_sos1_big_m_batch() -> ommx::Sos1BigMPromotionBatchRejected {
+        let request = ommx::Sos1BigMPromotionRequest {
+            selector_claims: std::collections::BTreeMap::new(),
+            cardinality_constraint: ommx::ConstraintID::from(0),
+        };
+        ommx::Instance::default()
+            .promote_sos1_big_m_if_fully_valid(&[request.clone(), request], ommx::ATol::default())
+            .unwrap_err()
+            .downcast()
+            .expect("strict SOS1 batch rejection remains downcastable")
+    }
+
+    #[test]
+    fn sos1_big_m_batch_rejection_mapping_preserves_all_indices() {
+        // The conversion itself attaches diagnostic attributes, so Python must
+        // be initialized before evaluating the arguments to assert_exception.
+        Python::initialize();
+        assert_exception::<Sos1BigMPromotionBatchRejectedError>(rejected_sos1_big_m_batch().into());
+        assert_exception::<Sos1BigMPromotionBatchRejectedError>(
+            ommx::Error::from(rejected_sos1_big_m_batch()).into(),
+        );
+
+        let error: PyErr = OmmxPyError::from(rejected_sos1_big_m_batch()).into();
+        Python::attach(|py| {
+            let value = error.value(py);
+            assert_eq!(
+                value
+                    .getattr("request_count")
+                    .unwrap()
+                    .extract::<usize>()
+                    .unwrap(),
+                2
+            );
+            let rejections = value
+                .getattr("rejections")
+                .unwrap()
+                .extract::<std::collections::BTreeMap<usize, String>>()
+                .unwrap();
+            assert_eq!(rejections.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
+            assert!(rejections
+                .values()
+                .all(|message| message.contains("must contain at least one member")));
+        });
     }
 
     #[test]
