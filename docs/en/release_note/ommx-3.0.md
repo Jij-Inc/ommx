@@ -8,6 +8,34 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Strict-batch SOS1 Big-M promotion ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
+
+{meth}`~ommx.Instance.promote_sos1_big_m` now accepts a list of
+{class}`~ommx.Sos1BigMPromotionRequest` values and returns an input-aligned
+list of {class}`~ommx.Sos1BigMPromotion` values. This replaces the prerelease
+single-request, single-result signature.
+
+The operation checks every request and cross-request conflict against the same
+unchanged `Instance`. It applies the batch only when every request is valid. If
+any request is rejected,
+{class}`~ommx.Sos1BigMPromotionBatchRejectedError` is raised and the entire
+`Instance` remains unchanged. Its `request_count` attribute reports the total
+input length, while `rejections` maps rejected zero-based input indices to
+diagnostic strings.
+
+```python
+from ommx import Sos1BigMPromotionBatchRejectedError
+
+try:
+    promotions = instance.promote_sos1_big_m([request_a, request_b])
+except Sos1BigMPromotionBatchRejectedError as error:
+    print(error.request_count)
+    print(error.rejections)
+```
+
+See {ref}`SOS1 Big-M formulations <sos1-big-m-formulation>` for the validation
+and atomicity contract.
+
 ### 🛠 Restore typed enum model discriminators ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
 
 The v3 rewrite accidentally exposed protobuf integer discriminators through
@@ -167,12 +195,11 @@ non-zero. A {ref}`Big-M formulation <sos1-big-m-formulation>` represents this
 condition with binary selectors, member-selector link constraints, and a
 selector-cardinality constraint.
 
-{meth}`~ommx.Instance.promote_sos1_big_m` accepts a claim that the current
-`Instance` contains such a formulation. This is an independent transformation
-request, not a rollback or inverse of lowering. The method verifies that the
+A {class}`~ommx.Sos1BigMPromotionRequest` claims that the current `Instance`
+contains such a formulation. This is an independent transformation request,
+not a rollback or inverse of lowering. The promotion checker verifies that the
 current variables, domains, and rows satisfy sufficient conditions that justify
-replacing the claimed formulation rows with a first-class SOS1 constraint, then
-applies that transformation atomically.
+replacing the claimed formulation rows with a first-class SOS1 constraint.
 
 ```python
 from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
@@ -188,11 +215,13 @@ request = Sos1BigMPromotionRequest(
     },
     cardinality_constraint=102,
 )
-promotion = instance.promote_sos1_big_m(request)
+[promotion] = instance.promote_sos1_big_m([request])
 ```
 
-If the claimed formulation fails validation, `RuntimeError` is raised and the
-`Instance` remains unchanged. The returned
+The example uses the current strict-batch call shape for one request. If the
+claimed formulation fails validation,
+{class}`~ommx.Sos1BigMPromotionBatchRejectedError` is raised and the `Instance`
+remains unchanged. The returned
 {class}`~ommx.Sos1BigMPromotion` exposes `sos1_constraint_id`, `members`,
 `fresh_selectors`, and `relaxed_constraint_ids`.
 

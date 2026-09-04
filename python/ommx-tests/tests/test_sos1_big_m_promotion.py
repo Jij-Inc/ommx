@@ -7,6 +7,7 @@ from ommx import (
     Instance,
     Sense,
     Sos1BigMPromotion,
+    Sos1BigMPromotionBatchRejectedError,
     Sos1BigMPromotionRequest,
     Sos1BigMSelectorClaim,
 )
@@ -51,8 +52,10 @@ def test_promote_sos1_big_m_exposes_checked_result() -> None:
     assert fresh.lower_link == 101
     assert request.cardinality_constraint == 102
 
-    promotion = instance.promote_sos1_big_m(request)
+    promotions = instance.promote_sos1_big_m([request])
 
+    assert len(promotions) == 1
+    promotion = promotions[0]
     assert isinstance(promotion, Sos1BigMPromotion)
     assert promotion.sos1_constraint_id == 0
     assert promotion.members == {0, 1}
@@ -88,13 +91,47 @@ def test_promote_sos1_big_m_accepts_tight_continuous_links() -> None:
         cardinality_constraint=102,
     )
 
-    promotion = instance.promote_sos1_big_m(request, atol=1e-6)
+    [promotion] = instance.promote_sos1_big_m([request], atol=1e-6)
 
     assert promotion.members == {1}
     assert promotion.fresh_selectors == {1: 10}
 
 
-def test_promote_sos1_big_m_rejects_invalid_request_atomically() -> None:
+def test_promote_sos1_big_m_applies_a_fully_valid_batch_in_order() -> None:
+    first = DecisionVariable.binary(0)
+    second = DecisionVariable.binary(1)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=0,
+        decision_variables=[first, second],
+        constraints={
+            100: first - 1 <= 0,
+            101: first + second - 1 <= 0,
+        },
+    )
+    requests = [
+        Sos1BigMPromotionRequest(
+            selector_claims={0: Sos1BigMSelectorClaim.reused()},
+            cardinality_constraint=100,
+        ),
+        Sos1BigMPromotionRequest(
+            selector_claims={
+                0: Sos1BigMSelectorClaim.reused(),
+                1: Sos1BigMSelectorClaim.reused(),
+            },
+            cardinality_constraint=101,
+        ),
+    ]
+
+    promotions = instance.promote_sos1_big_m(requests)
+
+    assert [promotion.sos1_constraint_id for promotion in promotions] == [0, 1]
+    assert [promotion.members for promotion in promotions] == [{0}, {0, 1}]
+    assert set(instance.removed_constraints) == {100, 101}
+    assert set(instance.sos1_constraints) == {0, 1}
+
+
+def test_promote_sos1_big_m_rejects_the_full_batch_atomically() -> None:
     instance, valid_request = mixed_formulation()
     invalid_request = Sos1BigMPromotionRequest(
         selector_claims=valid_request.selector_claims,
@@ -102,8 +139,40 @@ def test_promote_sos1_big_m_rejects_invalid_request_atomically() -> None:
     )
     before = instance.to_v2_bytes()
 
-    with pytest.raises(RuntimeError, match="is not active"):
-        instance.promote_sos1_big_m(invalid_request)
+    with pytest.raises(
+        Sos1BigMPromotionBatchRejectedError,
+        match="is not active",
+    ) as exc_info:
+        instance.promote_sos1_big_m([invalid_request, valid_request])
+
+    assert isinstance(exc_info.value, RuntimeError)
+    assert exc_info.value.request_count == 2
+    assert set(exc_info.value.rejections) == {0}
+    assert "is not active" in exc_info.value.rejections[0]
+    assert instance.to_v2_bytes() == before
+
+
+def test_promote_sos1_big_m_reports_every_conflicting_request() -> None:
+    instance, request = mixed_formulation()
+    before = instance.to_v2_bytes()
+
+    with pytest.raises(Sos1BigMPromotionBatchRejectedError) as exc_info:
+        instance.promote_sos1_big_m([request, request])
+
+    assert exc_info.value.request_count == 2
+    assert set(exc_info.value.rejections) == {0, 1}
+    assert all(
+        "conflicts with another individually valid request" in message
+        for message in exc_info.value.rejections.values()
+    )
+    assert instance.to_v2_bytes() == before
+
+
+def test_promote_sos1_big_m_accepts_an_empty_batch() -> None:
+    instance, _ = mixed_formulation()
+    before = instance.to_v2_bytes()
+
+    assert instance.promote_sos1_big_m([], atol=float("inf")) == []
 
     assert instance.to_v2_bytes() == before
 
@@ -112,8 +181,8 @@ def test_promote_sos1_big_m_rejects_invalid_request_atomically() -> None:
     ("atol", "error_type"),
     [
         (0.0, ValueError),
-        (1.0, RuntimeError),
-        (float("inf"), RuntimeError),
+        (1.0, Sos1BigMPromotionBatchRejectedError),
+        (float("inf"), Sos1BigMPromotionBatchRejectedError),
     ],
 )
 def test_promote_sos1_big_m_rejects_invalid_atol_atomically(
@@ -124,6 +193,6 @@ def test_promote_sos1_big_m_rejects_invalid_atol_atomically(
     before = instance.to_v2_bytes()
 
     with pytest.raises(error_type):
-        instance.promote_sos1_big_m(request, atol=atol)
+        instance.promote_sos1_big_m([request], atol=atol)
 
     assert instance.to_v2_bytes() == before
