@@ -175,7 +175,7 @@ mod save_tests {
 
         assert!(error
             .to_string()
-            .contains("objective function is not polynomial"));
+            .contains("objective function uses the composed expression representation"));
         assert_eq!(std::fs::read(path).unwrap(), b"existing content");
     }
 

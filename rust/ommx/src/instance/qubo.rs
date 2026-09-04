@@ -50,7 +50,7 @@ impl Instance {
     #[tracing::instrument(skip_all)]
     pub fn as_qubo_format(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
         let Some(terms) = self.objective().iter() else {
-            bail!("QUBO format does not support a non-polynomial objective function.");
+            bail!("QUBO format requires the objective function to use the compact polynomial representation, but it uses the composed expression representation.");
         };
         if self.sense() == Sense::Maximize {
             bail!("QUBO format is only for minimization problems.");
@@ -138,7 +138,7 @@ impl Instance {
     #[tracing::instrument(skip_all)]
     pub fn as_hubo_format(&self) -> Result<(BTreeMap<BinaryIds, f64>, f64)> {
         let Some(terms) = self.objective().iter() else {
-            bail!("HUBO format does not support a non-polynomial objective function.");
+            bail!("HUBO format requires the objective function to use the compact polynomial representation, but it uses the composed expression representation.");
         };
         if self.sense() == Sense::Maximize {
             bail!("HUBO format is only for minimization problems.");
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn qubo_and_hubo_reject_non_polynomial_objectives() {
+    fn qubo_and_hubo_reject_composed_objectives() {
         let objective = Function::from(linear!(VariableID::from(1))).abs();
         let instance = Instance::new(
             Sense::Minimize,
@@ -242,10 +242,16 @@ mod tests {
         .unwrap();
 
         let qubo_error = instance.as_qubo_format().unwrap_err();
-        assert!(qubo_error.to_string().contains("non-polynomial objective"));
+        assert_eq!(
+            qubo_error.to_string(),
+            "QUBO format requires the objective function to use the compact polynomial representation, but it uses the composed expression representation."
+        );
 
         let hubo_error = instance.as_hubo_format().unwrap_err();
-        assert!(hubo_error.to_string().contains("non-polynomial objective"));
+        assert_eq!(
+            hubo_error.to_string(),
+            "HUBO format requires the objective function to use the compact polynomial representation, but it uses the composed expression representation."
+        );
     }
 
     #[test]

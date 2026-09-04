@@ -687,9 +687,9 @@ impl std::fmt::Display for InstanceClassMismatch {
                 actual_degree,
                 bound,
             } => write!(f, "objective degree {actual_degree} exceeds {bound}"),
-            Self::ObjectiveFunctionNotPolynomial => {
-                f.write_str("objective function is not polynomial")
-            }
+            Self::ObjectiveFunctionNotPolynomial => f.write_str(
+                "objective function uses the composed expression representation instead of the compact polynomial representation required by this clause",
+            ),
             Self::RegularConstraintRelationNotAllowed {
                 relation,
                 constraint_ids,
@@ -711,7 +711,7 @@ impl std::fmt::Display for InstanceClassMismatch {
                 constraint_ids,
             } => write!(
                 f,
-                "regular {relation:?} constraint functions for IDs {constraint_ids:?} are not polynomial"
+                "regular {relation:?} constraint functions for IDs {constraint_ids:?} use the composed expression representation instead of the compact polynomial representation required by this clause"
             ),
             Self::IndicatorConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "indicator constraints {constraint_ids:?} are not allowed")
@@ -737,7 +737,7 @@ impl std::fmt::Display for InstanceClassMismatch {
                 constraint_ids,
             } => write!(
                 f,
-                "indicator {relation:?} body functions for IDs {constraint_ids:?} are not polynomial"
+                "indicator {relation:?} body functions for IDs {constraint_ids:?} use the composed expression representation instead of the compact polynomial representation required by this clause"
             ),
             Self::OneHotConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "one-hot constraints {constraint_ids:?} are not allowed")
@@ -1140,6 +1140,18 @@ mod tests {
                         relation: Equality::EqualToZero,
                         constraint_ids: BTreeSet::from([indicator_id]),
                     },
+                ]
+            );
+            assert_eq!(
+                report.clause_reports()[0]
+                    .mismatches()
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>(),
+                [
+                    "objective function uses the composed expression representation instead of the compact polynomial representation required by this clause",
+                    "regular EqualToZero constraint functions for IDs {ConstraintID(10)} use the composed expression representation instead of the compact polynomial representation required by this clause",
+                    "indicator EqualToZero body functions for IDs {IndicatorConstraintID(20)} use the composed expression representation instead of the compact polynomial representation required by this clause",
                 ]
             );
             assert!(!report.is_member());
