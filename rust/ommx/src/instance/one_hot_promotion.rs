@@ -56,6 +56,22 @@ impl From<&crate::v1::OneHot> for OneHotPromotionRequest {
     }
 }
 
+/// Validate one regular row as a OneHot promotion source without mutating the
+/// instance.
+///
+/// This is shared with the legacy-hint loader through this private module. The
+/// actual promotion still goes through [`Instance::promote_one_hot`], which
+/// rebuilds the candidate while its instance-bound batch plan holds mutation
+/// authority.
+pub fn validate_one_hot_promotion_source(
+    instance: &Instance,
+    source_constraint_id: ConstraintID,
+) -> crate::Result<()> {
+    instance
+        .build_one_hot_promotion_candidate(source_constraint_id)
+        .map(drop)
+}
+
 /// Fully planned OneHot insertion for one validated source row.
 #[derive(Debug)]
 struct PlannedOneHot {
@@ -64,19 +80,31 @@ struct PlannedOneHot {
     context: ConstraintContext,
 }
 
-/// Opaque OneHot storage effects prepared against one unchanged [`Instance`].
+/// Aggregate proof object for applying compatible OneHot promotions.
 ///
-/// This value deliberately does not carry mutation authority and is not a
-/// proof object by itself. It is consumed only by an instance-bound
-/// [`OneHotPromotionBatchPlan`] or by the sibling v1 hint batch plan, which
-/// holds the exclusive borrow of the exact source [`Instance`] until Apply.
+/// # Invariants
+///
+/// - `instance` is the exact [`Instance`] against which every request was
+///   validated, and its exclusive borrow prevents any mutation before Apply;
+/// - `plans` has exactly one entry for every requested source ID;
+/// - every successful plan's source row remains active in that instance;
+/// - successful target OneHot IDs are pairwise distinct and absent from both
+///   active and removed OneHot collections;
+/// - every successful structural constraint is non-empty and all of its
+///   members are registered Binary variables; and
+/// - every successful source context was captured before mutation.
+///
+/// The plan is private and Apply consumes it. It cannot be applied to another
+/// instance or become stale between checking and mutation, so every aggregate
+/// storage effect is infallible under these invariants.
 #[derive(Debug)]
-pub(super) struct OneHotPromotionBatchEffects {
+struct OneHotPromotionBatchPlan<'a> {
+    instance: &'a mut Instance,
     plans: BTreeMap<ConstraintID, crate::Result<PlannedOneHot>>,
 }
 
-impl OneHotPromotionBatchEffects {
-    pub(super) fn prepare(instance: &Instance, request: &OneHotPromotionRequest) -> Self {
+impl<'a> OneHotPromotionBatchPlan<'a> {
+    fn new(instance: &'a mut Instance, request: &OneHotPromotionRequest) -> Self {
         let checked: BTreeMap<_, _> = request
             .iter()
             .copied()
@@ -107,7 +135,7 @@ impl OneHotPromotionBatchEffects {
                     (source_constraint_id, plan)
                 })
                 .collect();
-            return Self { plans };
+            return Self { instance, plans };
         }
 
         let first_id = (promotion_count > 0).then(|| {
@@ -138,13 +166,11 @@ impl OneHotPromotionBatchEffects {
             })
             .collect();
 
-        Self { plans }
+        Self { instance, plans }
     }
 
-    /// Apply effects while the caller holds the exclusive borrow that kept the
-    /// source instance unchanged since [`Self::prepare`].
-    pub(super) fn apply(self, instance: &mut Instance) -> OneHotPromotion {
-        let Self { plans } = self;
+    fn apply(self) -> OneHotPromotion {
+        let Self { instance, plans } = self;
 
         let removal_reasons = plans
             .iter()
@@ -167,7 +193,7 @@ impl OneHotPromotionBatchEffects {
         instance
             .constraint_collection
             .move_active_rows_to_removed_with_reasons(removal_reasons)
-            .expect("source rows and bound Instance were validated by OneHot promotion effects");
+            .expect("source rows and bound Instance were validated by OneHotPromotionBatchPlan");
 
         plans
             .into_iter()
@@ -181,48 +207,13 @@ impl OneHotPromotionBatchEffects {
                             planned.context,
                         )
                         .expect(
-                            "target IDs, member IDs, and bound Instance were validated by OneHot promotion effects",
+                            "target IDs, member IDs, and bound Instance were validated by OneHotPromotionBatchPlan",
                         );
                     planned.one_hot_constraint_id
                 });
                 (source_constraint_id, result)
             })
             .collect()
-    }
-}
-
-/// Aggregate proof object for applying compatible OneHot promotions.
-///
-/// # Invariants
-///
-/// - `instance` is the exact [`Instance`] against which every request was
-///   validated, and its exclusive borrow prevents any mutation before Apply;
-/// - `effects` has exactly one entry for every requested source ID;
-/// - every successful effect's source row remains active in that instance;
-/// - successful target OneHot IDs are pairwise distinct and absent from both
-///   active and removed OneHot collections;
-/// - every successful structural constraint is non-empty and all of its
-///   members are registered Binary variables; and
-/// - every successful source context was captured before mutation.
-///
-/// The plan is private and Apply consumes it. It cannot be applied to another
-/// instance or become stale between checking and mutation, so every aggregate
-/// storage effect is infallible under these invariants.
-#[derive(Debug)]
-struct OneHotPromotionBatchPlan<'a> {
-    instance: &'a mut Instance,
-    effects: OneHotPromotionBatchEffects,
-}
-
-impl<'a> OneHotPromotionBatchPlan<'a> {
-    fn new(instance: &'a mut Instance, request: &OneHotPromotionRequest) -> Self {
-        let effects = OneHotPromotionBatchEffects::prepare(instance, request);
-        Self { instance, effects }
-    }
-
-    fn apply(self) -> OneHotPromotion {
-        let Self { instance, effects } = self;
-        effects.apply(instance)
     }
 }
 
@@ -260,7 +251,7 @@ impl Instance {
         OneHotPromotionBatchPlan::new(self, request).apply()
     }
 
-    pub(super) fn build_one_hot_promotion_candidate(
+    fn build_one_hot_promotion_candidate(
         &self,
         source_constraint_id: ConstraintID,
     ) -> crate::Result<(OneHotConstraint, ConstraintContext)> {

@@ -7,8 +7,8 @@
 //! receive the original hint and its error in a structured report.
 
 use super::{
-    one_hot_promotion::OneHotPromotionBatchEffects, sos1_promotion::Sos1BigMPromotionBatchEffects,
-    Instance, OneHotPromotionRequest, Sos1BigMPromotion, Sos1BigMPromotionRequest,
+    one_hot_promotion::validate_one_hot_promotion_source, Instance, OneHotPromotionRequest,
+    Sos1BigMPromotion, Sos1BigMPromotionRequest,
 };
 use crate::{message_io, v1, ATol, ConstraintID, OneHotConstraintID, Parse};
 
@@ -221,26 +221,37 @@ enum PreparedSos1Hint {
 
 /// Instance-bound plan for promoting both legacy hint families.
 ///
-/// Both opaque family effects are prepared from the same unchanged instance.
-/// The exclusive borrow then prevents either family plan from becoming stale
-/// before this plan's consuming Apply. Successful OneHot effects consume only
-/// equality rows, whereas every successful SOS1 effect consumes only
-/// less-than-or-equal-to-zero rows, so their source-row sets are disjoint.
-/// SOS1 fresh-selector isolation is checked while every successful OneHot
-/// source row is still active; consequently no subsequently inserted OneHot
-/// constraint can contain a fresh selector needed by a surviving SOS1 effect.
-/// Shared ordinary members remain valid, and OneHot and SOS1 target IDs occupy
-/// independent namespaces. A decoded v1 instance has no existing OneHot
-/// constraints, so the deduplicated subset of its regular source IDs also fits
-/// in the empty OneHot ID namespace. These facts make applying OneHot first and
-/// SOS1 second valid without rechecking either family or cloning the instance.
+/// # Invariants
+///
+/// - `instance` is the exact decoded v1 [`Instance`] against which every
+///   `PreparedOneHotHint::Promotable` source was validated and every SOS1
+///   request was reconstructed; its exclusive borrow prevents intervening
+///   mutation before Apply;
+/// - `one_hot_request` contains exactly the distinct source IDs of the
+///   promotable OneHot hints, and every such hint retains the same ID for report
+///   lookup;
+/// - v1 parsing initializes both active and removed OneHot collections empty,
+///   so all validated sources fit in that independent target-ID namespace and
+///   [`Instance::promote_one_hot`] returns one successful entry for every ID in
+///   `one_hot_request`;
+/// - `sos1_requests` has exactly one entry, in order, for every
+///   `PreparedSos1Hint::Promotable`; and
+/// - Apply invokes only the family owner APIs. OneHot promotion runs first, and
+///   the SOS1 batch is then checked and applied against that resulting bound
+///   instance, so no detached family effect can become stale.
+///
+/// Consequently, all caller-controlled hint failures are report data. Every
+/// `expect` in Apply asserts one of the cardinality, key-alignment, or empty
+/// OneHot-namespace invariants above; reaching one means this private plan's
+/// construction contract was broken.
 #[derive(Debug)]
 struct V1ConstraintHintPromotionPlan<'a> {
     instance: &'a mut Instance,
-    one_hot_effects: OneHotPromotionBatchEffects,
-    sos1_effects: Sos1BigMPromotionBatchEffects,
+    one_hot_request: OneHotPromotionRequest,
+    sos1_requests: Vec<Sos1BigMPromotionRequest>,
     one_hot_hints: Vec<PreparedOneHotHint>,
     sos1_hints: Vec<PreparedSos1Hint>,
+    atol: ATol,
 }
 
 impl<'a> V1ConstraintHintPromotionPlan<'a> {
@@ -250,12 +261,10 @@ impl<'a> V1ConstraintHintPromotionPlan<'a> {
             .into_iter()
             .enumerate()
             .map(|(index, hint)| {
+                let source_constraint_id = ConstraintID::from(hint.constraint_id);
                 let request = OneHotPromotionRequest::from(&hint);
-                let source_constraint_id = *request
-                    .first()
-                    .expect("one v1 OneHot hint always yields one source ID");
-                match instance.build_one_hot_promotion_candidate(source_constraint_id) {
-                    Ok(_) => {
+                match validate_one_hot_promotion_source(instance, source_constraint_id) {
+                    Ok(()) => {
                         one_hot_request.extend(request);
                         PreparedOneHotHint::Promotable {
                             index,
@@ -267,7 +276,6 @@ impl<'a> V1ConstraintHintPromotionPlan<'a> {
                 }
             })
             .collect();
-        let one_hot_effects = OneHotPromotionBatchEffects::prepare(instance, &one_hot_request);
 
         let mut sos1_requests = Vec::new();
         let sos1_hints = std::mem::take(&mut hints.sos1_constraints)
@@ -283,37 +291,38 @@ impl<'a> V1ConstraintHintPromotionPlan<'a> {
                 },
             )
             .collect();
-        let sos1_effects = Sos1BigMPromotionBatchEffects::prepare(instance, &sos1_requests, atol);
 
         Self {
             instance,
-            one_hot_effects,
-            sos1_effects,
+            one_hot_request,
+            sos1_requests,
             one_hot_hints,
             sos1_hints,
+            atol,
         }
     }
 
     fn apply(self) -> V1ConstraintHintPromotionReport {
         let Self {
             instance,
-            one_hot_effects,
-            sos1_effects,
+            one_hot_request,
+            sos1_requests,
             one_hot_hints,
             sos1_hints,
+            atol,
         } = self;
 
-        let one_hot_promotions = one_hot_effects
-            .apply(instance)
+        let one_hot_promotions = instance
+            .promote_one_hot(&one_hot_request)
             .into_iter()
             .map(|(source_constraint_id, result)| {
                 let target_id = result.expect(
-                    "every prevalidated v1 OneHot source must remain promotable in its bound plan",
+                    "validated v1 OneHot sources must fit in the parsed instance's empty target namespace",
                 );
                 (source_constraint_id, target_id)
             })
             .collect::<std::collections::BTreeMap<_, _>>();
-        let sos1_promotions = sos1_effects.apply(instance);
+        let sos1_promotions = instance.promote_sos1_big_m_batch(&sos1_requests, atol);
 
         let one_hot_outcomes = one_hot_hints
             .into_iter()
@@ -325,7 +334,9 @@ impl<'a> V1ConstraintHintPromotionPlan<'a> {
                 } => V1OneHotHintPromotionOutcome::Promoted {
                     index,
                     hint,
-                    one_hot_constraint_id: one_hot_promotions[&source_constraint_id],
+                    one_hot_constraint_id: *one_hot_promotions.get(&source_constraint_id).expect(
+                        "every promotable v1 OneHot hint must retain its requested source ID",
+                    ),
                 },
                 PreparedOneHotHint::Rejected { index, hint, error } => {
                     V1OneHotHintPromotionOutcome::Rejected { index, hint, error }
@@ -369,17 +380,19 @@ impl Instance {
     ///
     /// This is an explicit best-effort alternative to [`Instance::from_v1_bytes`].
     /// The ordinary parser continues to ignore all legacy hints. This method
-    /// first parses the same base [`Instance`], then prepares both hint
-    /// families against that one unchanged instance. Invalid hints are retained
-    /// as rejected outcomes rather than causing the byte parse to fail.
+    /// first parses the same base [`Instance`] and reconstructs requests from
+    /// its regular rows. Invalid hints are retained as rejected outcomes rather
+    /// than causing the byte parse to fail.
     ///
     /// Repeated valid OneHot hints for the same source ID are one promotion
     /// request, and every raw occurrence reports the same allocated target ID.
     /// The legacy member list is advisory and ignored. SOS1 outcomes retain
     /// their raw-hint order, including the family's all-participants rejection
-    /// policy for incompatible otherwise-valid requests. Compatible OneHot
-    /// effects are applied before compatible SOS1 effects as one
-    /// history-preserving instance-bound plan.
+    /// policy for incompatible otherwise-valid requests. OneHot promotion is
+    /// completed first. The converted SOS1 requests are
+    /// then batch-checked and applied against that resulting instance, so each
+    /// family owner validates the exact state that it mutates. One private
+    /// instance-bound plan retains mutation authority across that sequence.
     ///
     /// The supplied `atol` is used only to verify SOS1 Big-M formulations.
     /// OneHot recognition is exact and, although it preserves the exact

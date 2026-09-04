@@ -39,9 +39,10 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Claimed selector role for one member of an SOS1 Big-M formulation.
 ///
 /// This is an unchecked claim, not a verified fact.
-/// [`Instance::promote_sos1_big_m`] checks the role against the current member
-/// domain and the meaning of the claimed regular rows before changing the
-/// instance.
+/// [`Instance::promote_sos1_big_m`] and
+/// [`Instance::promote_sos1_big_m_batch`] check the role against the current
+/// member domain and the meaning of the claimed regular rows before changing
+/// the instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Sos1BigMSelectorClaim {
     /// The member itself is claimed to be a full-domain binary selector.
@@ -70,7 +71,8 @@ pub enum Sos1BigMSelectorClaim {
 /// them from the current [`Instance`]. The request is runtime-only and has no
 /// serialization contract. All fields are untrusted claims; no
 /// instance-dependent validation occurs until
-/// [`Instance::promote_sos1_big_m`] is called.
+/// [`Instance::promote_sos1_big_m`] or
+/// [`Instance::promote_sos1_big_m_batch`] is called.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sos1BigMPromotionRequest {
     /// Claimed member-to-selector roles, keyed by intended SOS1 member ID.
@@ -93,8 +95,9 @@ impl Sos1BigMPromotionRequest {
     /// The returned request remains an untrusted claim. In particular, this
     /// conversion does not certify the Big-M bounds, link coefficients,
     /// cardinality semantics, or selector isolation. Pass it to
-    /// [`Instance::promote_sos1_big_m`] for the complete checked promotion.
-    /// Keeping conversion separate lets callers that obtained a raw
+    /// [`Instance::promote_sos1_big_m`] or
+    /// [`Instance::promote_sos1_big_m_batch`] for the complete checked
+    /// promotion. Keeping conversion separate lets callers that obtained a raw
     /// [`crate::v1::Sos1`] independently decide when and how to apply it.
     pub fn from_v1_hint(instance: &Instance, hint: &crate::v1::Sos1) -> crate::Result<Self> {
         instance.sos1_big_m_promotion_request_from_v1_hint(hint)
@@ -183,9 +186,21 @@ struct PlannedSos1BigMPromotion {
 
 /// Aggregate proof object bound to the source instance until Apply.
 ///
-/// The exclusive borrow prevents the checked effects from becoming stale or
-/// being applied to another instance along this family-specific path. Apply
-/// consumes the plan and is infallible under the effects' invariants.
+/// # Invariants
+///
+/// - `instance` is the exact [`Instance`] against which `effects` was prepared;
+/// - the exclusive borrow prevents that instance from changing before Apply;
+/// - `effects` has exactly one result for every input request, in input order;
+/// - every successful effect consumes active regular rows disjoint from those
+///   of every other successful effect;
+/// - successful target SOS1 IDs are pairwise distinct and unused;
+/// - every successful SOS1 member is registered, and every combined fresh
+///   selector assignment preserves an acyclic dependency graph; and
+/// - rejected entries have no storage effect.
+///
+/// Apply consumes the plan and cannot return a recoverable error under these
+/// invariants. An `expect` reached while applying it therefore identifies an
+/// internal invariant violation.
 #[derive(Debug)]
 struct Sos1BigMPromotionBatchPlan<'a> {
     instance: &'a mut Instance,
@@ -194,40 +209,32 @@ struct Sos1BigMPromotionBatchPlan<'a> {
 
 /// Prepared SOS1 batch effects for an instance-owned aggregate plan.
 ///
-/// Every successful entry was checked against one unchanged source
-/// [`Instance`]. Consumed regular rows, fresh-selector targets, and allocated
-/// SOS1 constraint IDs are pairwise disjoint. No fresh selector is a member of
-/// any successful entry. Results remain aligned with their input requests.
+/// # Invariants
 ///
-/// This type crosses only the private `instance` module boundary so the v1 hint
-/// orchestrator can prepare OneHot and SOS1 effects against the same snapshot,
-/// then bind both to one exclusively borrowed [`Instance`]. Its fields remain
-/// opaque, and Apply consumes the effects.
+/// [`Self::prepare`] creates exactly one entry per request, preserving input
+/// order. Every successful entry was checked against the same unchanged
+/// [`Instance`], has disjoint consumed rows, has a distinct unused target ID,
+/// and is jointly dependency-compatible with every other successful entry.
+/// Rejected entries carry their caller-facing error and are never applied.
 #[derive(Debug)]
-pub(super) struct Sos1BigMPromotionBatchEffects {
+struct Sos1BigMPromotionBatchEffects {
     plans: Vec<crate::Result<PlannedSos1BigMPromotion>>,
 }
 
 #[derive(Debug, Default)]
 struct Sos1BigMPromotionConflict {
     regular_constraint_ids: BTreeSet<ConstraintID>,
-    duplicate_fresh_selectors: VariableIDSet,
-    selector_member_collisions: VariableIDSet,
 }
 
 impl Sos1BigMPromotionConflict {
     fn into_error(self, index: usize) -> crate::Error {
         let regular_constraint_ids = self.regular_constraint_ids;
-        let duplicate_fresh_selectors = self.duplicate_fresh_selectors;
-        let selector_member_collisions = self.selector_member_collisions;
         crate::error!(
             {
                 index,
-                ?regular_constraint_ids,
-                ?duplicate_fresh_selectors,
-                ?selector_member_collisions
+                ?regular_constraint_ids
             },
-            "SOS1 Big-M promotion request at index {index} conflicts with another individually valid request: consumed regular rows {regular_constraint_ids:?}, duplicate fresh selectors {duplicate_fresh_selectors:?}, selector/member collisions {selector_member_collisions:?}"
+            "SOS1 Big-M promotion request at index {index} conflicts with another individually valid request: consumed regular rows {regular_constraint_ids:?}"
         )
     }
 }
@@ -235,29 +242,20 @@ impl Sos1BigMPromotionConflict {
 fn find_sos1_big_m_promotion_conflicts(
     checked: &[Option<CheckedSos1BigMFormulation>],
 ) -> BTreeMap<usize, Sos1BigMPromotionConflict> {
-    // The current per-candidate isolation check makes cross-candidate fresh
-    // selector aliasing imply an overlapping claimed row. Keep the aggregate
-    // footprint checks explicit nonetheless: the batch plan owns these global
-    // invariants and must not silently depend on that implementation detail of
-    // candidate construction.
+    // Each candidate's selector-isolation check rejects a fresh selector used
+    // by any active solver row outside that candidate's claimed formulation.
+    // Consequently, two individually valid candidates can share a fresh
+    // selector, or use another candidate's fresh selector as a member, only if
+    // they also share at least one claimed regular row. Rejecting every
+    // claimant of an overlapping row therefore establishes the complete
+    // cross-candidate selector and dependency invariant.
     let mut regular_claimants = BTreeMap::<ConstraintID, Vec<usize>>::new();
-    let mut fresh_selector_claimants = BTreeMap::<VariableID, Vec<usize>>::new();
-    let mut member_claimants = BTreeMap::<VariableID, Vec<usize>>::new();
     for (index, formulation) in checked.iter().enumerate() {
         let Some(formulation) = formulation else {
             continue;
         };
         for &id in &formulation.relaxed_constraint_ids {
             regular_claimants.entry(id).or_default().push(index);
-        }
-        for &selector in formulation.fresh_selectors.values() {
-            fresh_selector_claimants
-                .entry(selector)
-                .or_default()
-                .push(index);
-        }
-        for &member in &formulation.members {
-            member_claimants.entry(member).or_default().push(index);
         }
     }
 
@@ -270,26 +268,6 @@ fn find_sos1_big_m_promotion_conflicts(
                     .or_default()
                     .regular_constraint_ids
                     .insert(id);
-            }
-        }
-    }
-    for (&selector, claimants) in &fresh_selector_claimants {
-        if claimants.len() > 1 {
-            for &index in claimants {
-                conflicts
-                    .entry(index)
-                    .or_default()
-                    .duplicate_fresh_selectors
-                    .insert(selector);
-            }
-        }
-        if let Some(member_indices) = member_claimants.get(&selector) {
-            for &index in claimants.iter().chain(member_indices) {
-                conflicts
-                    .entry(index)
-                    .or_default()
-                    .selector_member_collisions
-                    .insert(selector);
             }
         }
     }
@@ -458,16 +436,9 @@ impl Sos1BigMPromotionBatchEffects {
     /// Prepare aligned, mutually compatible effects against one instance
     /// snapshot without mutating it.
     ///
-    /// The caller must keep that instance unchanged until [`Self::apply`]. The
-    /// family-specific path enforces this with
-    /// [`Sos1BigMPromotionBatchPlan`]'s exclusive borrow; the sibling v1 hint
-    /// orchestrator uses these effects only inside its own instance-bound
-    /// aggregate plan.
-    pub(super) fn prepare(
-        instance: &Instance,
-        requests: &[Sos1BigMPromotionRequest],
-        atol: ATol,
-    ) -> Self {
+    /// [`Sos1BigMPromotionBatchPlan`] keeps that exact instance exclusively
+    /// borrowed until [`Self::apply`].
+    fn prepare(instance: &Instance, requests: &[Sos1BigMPromotionRequest], atol: ATol) -> Self {
         let mut checked = Vec::with_capacity(requests.len());
         let mut rejections = Vec::with_capacity(requests.len());
         for request in requests {
@@ -550,12 +521,8 @@ impl Sos1BigMPromotionBatchEffects {
     }
 
     /// Apply effects to the unchanged instance against which they were
-    /// prepared.
-    ///
-    /// This method is visible only to the sibling v1 aggregate-plan owner. Its
-    /// caller must hold the exclusive instance borrow from preparation through
-    /// this consuming call.
-    pub(super) fn apply(self, instance: &mut Instance) -> Vec<crate::Result<Sos1BigMPromotion>> {
+    /// prepared. The bound batch plan is the only caller.
+    fn apply(self, instance: &mut Instance) -> Vec<crate::Result<Sos1BigMPromotion>> {
         let Self { plans } = self;
         if !plans.iter().any(|plan| plan.is_ok()) {
             return plans
@@ -701,19 +668,30 @@ impl Instance {
         request: &Sos1BigMPromotionRequest,
         atol: ATol,
     ) -> crate::Result<Sos1BigMPromotion> {
-        self.promote_compatible_sos1_big_m(std::slice::from_ref(request), atol)
+        // The batch plan guarantees one aligned result for every request. A
+        // missing entry here would be an internal plan-invariant violation,
+        // not a rejection caused by this request.
+        self.promote_sos1_big_m_batch(std::slice::from_ref(request), atol)
             .pop()
             .expect("one request must produce one aligned SOS1 promotion outcome")
     }
 
-    /// Check, reconcile, and apply a batch of SOS1 Big-M promotion requests.
+    /// Check, reconcile, and apply SOS1 Big-M promotion requests as one batch.
     ///
-    /// Results remain aligned with the input requests. Individually invalid
-    /// requests and every participant in a batch conflict are rejected, while
-    /// compatible requests are applied together. Planning and application stay
-    /// inside this SOS1 owner module so callers cannot hold or stale a checked
-    /// plan.
-    fn promote_compatible_sos1_big_m(
+    /// Every request is checked against the same unchanged instance. The
+    /// returned vector has exactly the same length and order as `requests`.
+    /// Individually invalid requests are rejected independently. If otherwise
+    /// valid requests consume any of the same regular rows, every participant
+    /// in that conflict is rejected; unrelated requests are still promoted.
+    /// SOS1 members may be shared by independent requests.
+    ///
+    /// Target IDs are allocated together only after validation and conflict
+    /// detection. The private batch plan then holds an exclusive borrow of this
+    /// instance until its consuming Apply, so successful effects cannot become
+    /// stale and application needs neither an [`Instance`] clone nor a
+    /// recoverable outer error.
+    #[must_use = "each request has an aligned success or rejection result"]
+    pub fn promote_sos1_big_m_batch(
         &mut self,
         requests: &[Sos1BigMPromotionRequest],
         atol: ATol,
@@ -1642,20 +1620,6 @@ mod tests {
         (instance, requests)
     }
 
-    fn checked_footprint(
-        member: VariableID,
-        selector: VariableID,
-        row: ConstraintID,
-    ) -> CheckedSos1BigMFormulation {
-        let members = VariableIDSet::from([member]);
-        CheckedSos1BigMFormulation {
-            members: members.clone(),
-            fresh_selectors: BTreeMap::from([(member, selector)]),
-            relaxed_constraint_ids: BTreeSet::from([row]),
-            sos1_constraint: Sos1Constraint::new(members).unwrap(),
-        }
-    }
-
     fn assert_atomic_rejection(
         instance: Instance,
         request: &Sos1BigMPromotionRequest,
@@ -2071,7 +2035,7 @@ mod tests {
     fn batch_promotes_disjoint_formulations_with_shared_member() {
         let (mut instance, requests) = shared_member_batch_instance();
 
-        let outcomes = instance.promote_compatible_sos1_big_m(&requests, ATol::default());
+        let outcomes = instance.promote_sos1_big_m_batch(&requests, ATol::default());
 
         assert_eq!(outcomes.len(), 2);
         let promotions = outcomes
@@ -2103,6 +2067,17 @@ mod tests {
     }
 
     #[test]
+    fn empty_batch_is_a_no_op() {
+        let (mut instance, _) = mixed_instance();
+        let before = instance.clone();
+
+        let outcomes = instance.promote_sos1_big_m_batch(&[], ATol::default());
+
+        assert!(outcomes.is_empty());
+        assert_eq!(instance, before);
+    }
+
+    #[test]
     fn batch_rejects_all_conflicting_requests_and_promotes_unrelated_request() {
         let (mut instance, requests) = shared_member_batch_instance();
         let requests = vec![
@@ -2111,7 +2086,7 @@ mod tests {
             requests[1].clone(),
         ];
 
-        let outcomes = instance.promote_compatible_sos1_big_m(&requests, ATol::default());
+        let outcomes = instance.promote_sos1_big_m_batch(&requests, ATol::default());
 
         assert!(outcomes[0]
             .as_ref()
@@ -2135,6 +2110,52 @@ mod tests {
     }
 
     #[test]
+    fn batch_rejects_an_invalid_request_and_promotes_an_independent_request() {
+        let (mut instance, mut requests) = shared_member_batch_instance();
+        requests[0].cardinality_constraint = ConstraintID::from(999);
+
+        let outcomes = instance.promote_sos1_big_m_batch(&requests, ATol::default());
+
+        assert_eq!(outcomes.len(), 2);
+        assert!(outcomes[0].is_err());
+        assert_eq!(
+            outcomes[1].as_ref().unwrap().sos1_constraint_id(),
+            Sos1ConstraintID::from(0)
+        );
+        for id in [upper_row_id(), lower_row_id(), cardinality_row_id()] {
+            assert!(instance.constraints().contains_key(&id));
+        }
+        for id in [
+            ConstraintID::from(200),
+            ConstraintID::from(201),
+            ConstraintID::from(202),
+        ] {
+            assert!(instance.removed_constraints().contains_key(&id));
+        }
+    }
+
+    #[test]
+    fn invalid_request_does_not_conflict_with_a_valid_claim_on_the_same_rows() {
+        let (mut instance, valid) = mixed_instance();
+        let mut invalid = valid.clone();
+        invalid
+            .selector_claims
+            .insert(VariableID::from(999), Sos1BigMSelectorClaim::Reused);
+
+        let outcomes = instance.promote_sos1_big_m_batch(&[invalid, valid], ATol::default());
+
+        assert_eq!(outcomes.len(), 2);
+        assert!(outcomes[0].is_err());
+        assert_eq!(
+            outcomes[1].as_ref().unwrap().sos1_constraint_id(),
+            Sos1ConstraintID::from(0)
+        );
+        assert!(instance.constraints().is_empty());
+        assert_eq!(instance.removed_constraints().len(), 3);
+        assert_eq!(instance.sos1_constraints().len(), 1);
+    }
+
+    #[test]
     fn batch_rejects_id_exhaustion_before_any_mutation() {
         let (mut instance, requests) = shared_member_batch_instance();
         instance
@@ -2147,7 +2168,7 @@ mod tests {
             .unwrap();
         let before = instance.clone();
 
-        let outcomes = instance.promote_compatible_sos1_big_m(&requests, ATol::default());
+        let outcomes = instance.promote_sos1_big_m_batch(&requests, ATol::default());
 
         assert!(outcomes.iter().all(Result::is_err));
         assert!(outcomes.iter().all(|outcome| outcome
@@ -2156,41 +2177,6 @@ mod tests {
             .to_string()
             .contains("Cannot allocate SOS1 constraint IDs")));
         assert_eq!(instance, before);
-    }
-
-    #[test]
-    fn batch_footprint_rejects_cross_plan_selector_aliases() {
-        let shared_selector = VariableID::from(10);
-        let checked = vec![
-            Some(checked_footprint(
-                VariableID::from(1),
-                shared_selector,
-                ConstraintID::from(100),
-            )),
-            Some(checked_footprint(
-                shared_selector,
-                VariableID::from(11),
-                ConstraintID::from(200),
-            )),
-            Some(checked_footprint(
-                VariableID::from(2),
-                shared_selector,
-                ConstraintID::from(300),
-            )),
-        ];
-
-        let conflicts = find_sos1_big_m_promotion_conflicts(&checked);
-
-        assert_eq!(conflicts.len(), 3);
-        assert!(conflicts[&0]
-            .duplicate_fresh_selectors
-            .contains(&shared_selector));
-        assert!(conflicts[&2]
-            .duplicate_fresh_selectors
-            .contains(&shared_selector));
-        assert!(conflicts.values().all(|conflict| conflict
-            .selector_member_collisions
-            .contains(&shared_selector)));
     }
 
     #[test]
