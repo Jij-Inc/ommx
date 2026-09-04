@@ -688,7 +688,7 @@ impl std::fmt::Display for InstanceClassMismatch {
                 bound,
             } => write!(f, "objective degree {actual_degree} exceeds {bound}"),
             Self::ObjectiveFunctionNotPolynomial => f.write_str(
-                "objective function uses the composed expression representation instead of the compact polynomial representation required by this clause",
+                "objective function is not stored in the expanded polynomial form required by this clause",
             ),
             Self::RegularConstraintRelationNotAllowed {
                 relation,
@@ -711,7 +711,7 @@ impl std::fmt::Display for InstanceClassMismatch {
                 constraint_ids,
             } => write!(
                 f,
-                "regular {relation:?} constraint functions for IDs {constraint_ids:?} use the composed expression representation instead of the compact polynomial representation required by this clause"
+                "regular {relation:?} constraint functions for IDs {constraint_ids:?} are not stored in the expanded polynomial form required by this clause"
             ),
             Self::IndicatorConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "indicator constraints {constraint_ids:?} are not allowed")
@@ -737,7 +737,7 @@ impl std::fmt::Display for InstanceClassMismatch {
                 constraint_ids,
             } => write!(
                 f,
-                "indicator {relation:?} body functions for IDs {constraint_ids:?} use the composed expression representation instead of the compact polynomial representation required by this clause"
+                "indicator {relation:?} body functions for IDs {constraint_ids:?} are not stored in the expanded polynomial form required by this clause"
             ),
             Self::OneHotConstraintsNotAllowed { constraint_ids } => {
                 write!(f, "one-hot constraints {constraint_ids:?} are not allowed")
@@ -1149,9 +1149,9 @@ mod tests {
                     .map(ToString::to_string)
                     .collect::<Vec<_>>(),
                 [
-                    "objective function uses the composed expression representation instead of the compact polynomial representation required by this clause",
-                    "regular EqualToZero constraint functions for IDs {ConstraintID(10)} use the composed expression representation instead of the compact polynomial representation required by this clause",
-                    "indicator EqualToZero body functions for IDs {IndicatorConstraintID(20)} use the composed expression representation instead of the compact polynomial representation required by this clause",
+                    "objective function is not stored in the expanded polynomial form required by this clause",
+                    "regular EqualToZero constraint functions for IDs {ConstraintID(10)} are not stored in the expanded polynomial form required by this clause",
+                    "indicator EqualToZero body functions for IDs {IndicatorConstraintID(20)} are not stored in the expanded polynomial form required by this clause",
                 ]
             );
             assert!(!report.is_member());

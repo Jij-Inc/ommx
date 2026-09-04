@@ -634,7 +634,7 @@ def test_to_qubo_reduces_repeated_binary_power() -> None:
     assert instance.evaluate({0: 1}).objective == 1.0
 
 
-def test_to_qubo_reports_compact_polynomial_requirement_for_powi() -> None:
+def test_to_qubo_explains_unexpanded_powi() -> None:
     x = [DecisionVariable.binary(i) for i in range(3)]
     g = Function(x[0] + x[1] + x[2] - 1)
     instance = Instance.from_components(
@@ -647,11 +647,13 @@ def test_to_qubo_reports_compact_polynomial_requirement_for_powi() -> None:
     with pytest.raises(PreparationTargetNotReachedError) as error:
         instance.to_qubo()
 
+    message = str(error.value)
     assert (
-        "objective function uses the composed expression representation instead of "
-        "the compact polynomial representation required by this clause"
-        in str(error.value)
+        "objective function is not stored in the expanded polynomial form required by "
+        "this clause" in message
     )
+    assert "Found `powi` (`**` in Python) in the objective function" in message
+    assert "`g * g` instead of `g ** 2`" in message
 
 
 @pytest.mark.parametrize("method_name", ["to_qubo", "to_hubo"])

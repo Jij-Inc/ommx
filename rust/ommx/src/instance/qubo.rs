@@ -3,6 +3,21 @@ use crate::{BinaryIdPair, BinaryIds, Evaluate};
 use anyhow::{bail, Result};
 use std::collections::BTreeMap;
 
+fn expanded_polynomial_objective_error(
+    format_name: &str,
+    objective: &crate::Function,
+) -> anyhow::Error {
+    if objective.contains_powi_operation() {
+        anyhow::anyhow!(
+            "{format_name} format requires the objective function to be stored in expanded polynomial form. The objective contains `powi` (`**` in Python). OMMX does not expand `powi` automatically into polynomial terms. If expansion is intended, write a positive integer power of a polynomial as repeated multiplication (for example, `g * g` instead of `g ** 2`)."
+        )
+    } else {
+        anyhow::anyhow!(
+            "{format_name} format requires the objective function to be stored in expanded polynomial form."
+        )
+    }
+}
+
 impl Instance {
     /// Create QUBO (Quadratic Unconstrained Binary Optimization) dictionary from the instance.
     ///
@@ -50,7 +65,10 @@ impl Instance {
     #[tracing::instrument(skip_all)]
     pub fn as_qubo_format(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
         let Some(terms) = self.objective().iter() else {
-            bail!("QUBO format requires the objective function to use the compact polynomial representation, but it uses the composed expression representation.");
+            return Err(expanded_polynomial_objective_error(
+                "QUBO",
+                self.objective(),
+            ));
         };
         if self.sense() == Sense::Maximize {
             bail!("QUBO format is only for minimization problems.");
@@ -138,7 +156,10 @@ impl Instance {
     #[tracing::instrument(skip_all)]
     pub fn as_hubo_format(&self) -> Result<(BTreeMap<BinaryIds, f64>, f64)> {
         let Some(terms) = self.objective().iter() else {
-            bail!("HUBO format requires the objective function to use the compact polynomial representation, but it uses the composed expression representation.");
+            return Err(expanded_polynomial_objective_error(
+                "HUBO",
+                self.objective(),
+            ));
         };
         if self.sense() == Sense::Maximize {
             bail!("HUBO format is only for minimization problems.");
@@ -244,14 +265,38 @@ mod tests {
         let qubo_error = instance.as_qubo_format().unwrap_err();
         assert_eq!(
             qubo_error.to_string(),
-            "QUBO format requires the objective function to use the compact polynomial representation, but it uses the composed expression representation."
+            "QUBO format requires the objective function to be stored in expanded polynomial form."
         );
 
         let hubo_error = instance.as_hubo_format().unwrap_err();
         assert_eq!(
             hubo_error.to_string(),
-            "HUBO format requires the objective function to use the compact polynomial representation, but it uses the composed expression representation."
+            "HUBO format requires the objective function to be stored in expanded polynomial form."
         );
+    }
+
+    #[test]
+    fn qubo_and_hubo_explain_unexpanded_powi_objectives() {
+        let objective = Function::from(linear!(VariableID::from(1))).powi(2);
+        let instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            BTreeMap::from([(VariableID::from(1), DecisionVariable::binary())]),
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        for (format_name, error) in [
+            ("QUBO", instance.as_qubo_format().unwrap_err()),
+            ("HUBO", instance.as_hubo_format().unwrap_err()),
+        ] {
+            let message = error.to_string();
+            assert!(message.starts_with(&format!(
+                "{format_name} format requires the objective function to be stored in expanded polynomial form."
+            )));
+            assert!(message.contains("The objective contains `powi` (`**` in Python)"));
+            assert!(message.contains("`g * g` instead of `g ** 2`"));
+        }
     }
 
     #[test]

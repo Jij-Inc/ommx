@@ -171,6 +171,20 @@ impl Function {
         !matches!(self, Function::Expression(_))
     }
 
+    /// Return whether the represented expression program contains an integer-power operation.
+    ///
+    /// Compact functions return `false`, including powers folded during construction.
+    pub(crate) fn contains_powi_operation(&self) -> bool {
+        matches!(
+            self,
+            Function::Expression(expression)
+                if operation::instructions(expression).iter().any(|instruction| matches!(
+                    instruction,
+                    operation::Instruction::Unary(operation::UnaryOperator::Powi(_))
+                ))
+        )
+    }
+
     pub fn as_polynomial(&self) -> Option<Cow<'_, Polynomial>> {
         match self {
             Function::Zero => Some(Cow::Owned(Polynomial::zero())),
@@ -334,6 +348,40 @@ impl Function {
                 anyhow::bail!("content_factor is only defined for polynomial functions")
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod operation_introspection_tests {
+    use super::*;
+
+    #[test]
+    fn compact_and_abs_functions_do_not_contain_powi_operation() {
+        let compact = Function::from(crate::linear!(1));
+        let absolute = compact.clone().abs();
+
+        assert!(!compact.contains_powi_operation());
+        assert!(!absolute.contains_powi_operation());
+    }
+
+    #[test]
+    fn non_folded_and_nested_powers_contain_powi_operation() {
+        let power = Function::from(crate::linear!(1)).powi(2);
+        let nested = power.clone().abs();
+
+        assert!(power.contains_powi_operation());
+        assert!(nested.contains_powi_operation());
+    }
+
+    #[test]
+    fn folded_powers_do_not_contain_powi_operation() {
+        let constant_power = Function::try_from(2.0).unwrap().powi(2);
+        let identity_power = Function::from(crate::linear!(1)).powi(1);
+
+        assert!(constant_power.is_polynomial());
+        assert!(identity_power.is_polynomial());
+        assert!(!constant_power.contains_powi_operation());
+        assert!(!identity_power.contains_powi_operation());
     }
 }
 

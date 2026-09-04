@@ -175,7 +175,7 @@ mod save_tests {
 
         assert!(error
             .to_string()
-            .contains("objective function uses the composed expression representation"));
+            .contains("objective function is not stored in the expanded polynomial form"));
         assert_eq!(std::fs::read(path).unwrap(), b"existing content");
     }
 

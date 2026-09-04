@@ -1,6 +1,9 @@
 use super::{ExactIntegerSlackUnavailable, Instance, SpecialConstraintKinds};
-use crate::{ATol, ConstraintID, Equality, InstanceClass, InstanceClassMembershipReport, Sense};
-use std::collections::BTreeMap;
+use crate::{
+    ATol, ConstraintID, Equality, IndicatorConstraintID, InstanceClass,
+    InstanceClassMembershipReport, InstanceClassMismatch, Sense,
+};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Preparation of active special constraints.
 ///
@@ -267,15 +270,109 @@ impl PreparationPolicy {
 /// instance may retain changes committed by configured phases before this
 /// signal is returned.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("Preparation did not reach the target InstanceClass:\n{report}")]
+#[error("Preparation did not reach the target InstanceClass:\n{report}{powi_expansion_hint}")]
 pub struct PreparationTargetNotReached {
     report: InstanceClassMembershipReport,
+    powi_expansion_hint: PowiExpansionHint,
 }
 
 impl PreparationTargetNotReached {
     /// Return the final membership report for the prepared instance.
     pub fn report(&self) -> &InstanceClassMembershipReport {
         &self.report
+    }
+}
+
+/// Operation-specific recovery guidance derived from the final instance and
+/// its structural membership report.
+///
+/// The public report remains limited to instance-class facts. Preparation owns
+/// this hint because it can still inspect the functions that produced those
+/// facts and suggest a caller action without changing the mismatch API.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct PowiExpansionHint {
+    objective: bool,
+    regular_constraint_ids: BTreeSet<ConstraintID>,
+    indicator_constraint_ids: BTreeSet<IndicatorConstraintID>,
+}
+
+impl PowiExpansionHint {
+    fn new(instance: &Instance, report: &InstanceClassMembershipReport) -> Self {
+        let mut hint = Self::default();
+        for clause in report.clause_reports() {
+            for mismatch in clause.mismatches() {
+                match mismatch {
+                    InstanceClassMismatch::ObjectiveFunctionNotPolynomial => {
+                        hint.objective |= instance.objective().contains_powi_operation();
+                    }
+                    InstanceClassMismatch::RegularConstraintFunctionNotPolynomial {
+                        constraint_ids,
+                        ..
+                    } => {
+                        hint.regular_constraint_ids
+                            .extend(constraint_ids.iter().copied().filter(|id| {
+                                instance.constraints().get(id).is_some_and(|constraint| {
+                                    constraint.function().contains_powi_operation()
+                                })
+                            }));
+                    }
+                    InstanceClassMismatch::IndicatorBodyFunctionNotPolynomial {
+                        constraint_ids,
+                        ..
+                    } => {
+                        hint.indicator_constraint_ids.extend(
+                            constraint_ids.iter().copied().filter(|id| {
+                                instance
+                                    .indicator_constraints()
+                                    .get(id)
+                                    .is_some_and(|constraint| {
+                                        constraint.function().contains_powi_operation()
+                                    })
+                            }),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+        hint
+    }
+
+    fn is_empty(&self) -> bool {
+        !self.objective
+            && self.regular_constraint_ids.is_empty()
+            && self.indicator_constraint_ids.is_empty()
+    }
+}
+
+impl std::fmt::Display for PowiExpansionHint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_empty() {
+            return Ok(());
+        }
+
+        let mut locations = Vec::new();
+        if self.objective {
+            locations.push("the objective function".to_owned());
+        }
+        if !self.regular_constraint_ids.is_empty() {
+            locations.push(format!(
+                "regular constraint functions for IDs {:?}",
+                self.regular_constraint_ids
+            ));
+        }
+        if !self.indicator_constraint_ids.is_empty() {
+            locations.push(format!(
+                "indicator body functions for IDs {:?}",
+                self.indicator_constraint_ids
+            ));
+        }
+
+        write!(
+            f,
+            "\nHint: Found `powi` (`**` in Python) in {}. OMMX does not expand `powi` automatically into polynomial terms. If expansion is intended, write a positive integer power of a polynomial as repeated multiplication (for example, `g * g` instead of `g ** 2`).",
+            locations.join(", ")
+        )
     }
 }
 
@@ -486,7 +583,11 @@ impl Instance {
         }
 
         let report = input_class.check_membership(self);
-        crate::bail!(PreparationTargetNotReached { report })
+        let powi_expansion_hint = PowiExpansionHint::new(self, &report);
+        crate::bail!(PreparationTargetNotReached {
+            report,
+            powi_expansion_hint,
+        })
     }
 }
 
@@ -592,6 +693,42 @@ mod tests {
         assert!(InstanceClass::hubo().contains(&hubo));
         assert!(hubo.output_objective().is_none());
         hubo.as_hubo_format().unwrap();
+    }
+
+    #[test]
+    fn target_not_reached_explains_powi_without_mislabeling_other_operations() {
+        let variable = VariableID::from(1);
+        let functions = [
+            (Function::from(linear!(variable)).powi(2), true),
+            (Function::from(linear!(variable)).abs(), false),
+        ];
+
+        for (objective, expects_powi_hint) in functions {
+            let mut instance = Instance::new(
+                Sense::Minimize,
+                objective,
+                BTreeMap::from([(variable, DecisionVariable::binary())]),
+                BTreeMap::new(),
+            )
+            .unwrap();
+
+            let message = instance
+                .prepare(&InstanceClass::qubo(), &PreparationPolicy::default())
+                .unwrap_err()
+                .to_string();
+
+            assert!(message.contains(
+                "objective function is not stored in the expanded polynomial form required by this clause"
+            ));
+            assert_eq!(
+                message.contains("Found `powi` (`**` in Python) in the objective function"),
+                expects_powi_hint
+            );
+            assert_eq!(
+                message.contains("`g * g` instead of `g ** 2`"),
+                expects_powi_hint
+            );
+        }
     }
 
     #[test]
