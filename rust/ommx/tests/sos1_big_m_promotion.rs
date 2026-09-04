@@ -1,6 +1,7 @@
 use ommx::{
     coeff, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance, Kind, Linear,
-    LinearMonomial, Sense, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim, VariableID,
+    LinearMonomial, Sense, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim, Sos1ConstraintID,
+    VariableID,
 };
 use std::collections::BTreeMap;
 
@@ -73,4 +74,88 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
 
     let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
     assert_eq!(restored, instance);
+}
+
+#[test]
+fn public_batch_api_promotes_independent_requests_with_a_shared_member() {
+    let member = VariableID::from(1);
+    let selectors = [VariableID::from(10), VariableID::from(11)];
+    let row_ids = [
+        [
+            ConstraintID::from(100),
+            ConstraintID::from(101),
+            ConstraintID::from(102),
+        ],
+        [
+            ConstraintID::from(200),
+            ConstraintID::from(201),
+            ConstraintID::from(202),
+        ],
+    ];
+    let mut constraints = BTreeMap::new();
+    let mut requests = Vec::new();
+    for (selector, [upper, lower, cardinality]) in selectors.into_iter().zip(row_ids) {
+        constraints.insert(
+            upper,
+            Constraint::less_than_or_equal_to_zero(Function::from(
+                (term(member.into_inner(), 1.0) + term(selector.into_inner(), -3.0)).unwrap(),
+            )),
+        );
+        constraints.insert(
+            lower,
+            Constraint::less_than_or_equal_to_zero(Function::from(
+                (term(member.into_inner(), -1.0) + term(selector.into_inner(), -2.0)).unwrap(),
+            )),
+        );
+        constraints.insert(
+            cardinality,
+            Constraint::less_than_or_equal_to_zero(Function::from(
+                (term(selector.into_inner(), 1.0) + Linear::from(coeff!(-1.0))).unwrap(),
+            )),
+        );
+        requests.push(Sos1BigMPromotionRequest {
+            selector_claims: BTreeMap::from([(
+                member,
+                Sos1BigMSelectorClaim::Fresh {
+                    selector,
+                    upper_link: Some(upper),
+                    lower_link: Some(lower),
+                },
+            )]),
+            cardinality_constraint: cardinality,
+        });
+    }
+    let mut instance = Instance::new(
+        Sense::Minimize,
+        Function::Zero,
+        BTreeMap::from([
+            (
+                member,
+                DecisionVariable::new(
+                    Kind::Integer,
+                    Bound::new(-2.0, 3.0).unwrap(),
+                    Default::default(),
+                )
+                .unwrap(),
+            ),
+            (selectors[0], DecisionVariable::binary()),
+            (selectors[1], DecisionVariable::binary()),
+        ]),
+        constraints,
+    )
+    .unwrap();
+
+    let outcomes = instance.promote_sos1_big_m_batch(&requests, Default::default());
+
+    assert_eq!(outcomes.len(), requests.len());
+    assert_eq!(
+        outcomes
+            .iter()
+            .map(|outcome| outcome.as_ref().unwrap().sos1_constraint_id())
+            .collect::<Vec<_>>(),
+        vec![Sos1ConstraintID::from(0), Sos1ConstraintID::from(1)]
+    );
+    assert!(instance.constraints().is_empty());
+    assert_eq!(instance.removed_constraints().len(), 6);
+    assert_eq!(instance.sos1_constraints().len(), 2);
 }
