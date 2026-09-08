@@ -185,12 +185,61 @@ promotionでは、memberのboundを通常の不等式constraintと同じresidual
 利用できます。検証時には`U + atol`を先に構成せず、実際にbound-feasibleな表現可能domainを
 導出します。
 
-{meth}`~ommx.Instance.promote_sos1_big_m`の呼び出しは、申請した既存の
-Big-M定式化に対する独立した変形申請です。現在の変数、domain、rowが
-この射影上の同値性を保証する十分条件を満たすことを検証してから、
-申請したformulationのrowをfirst-classなSOS1制約へ置き換えます。これらのrowが
-{meth}`~ommx.Instance.convert_sos1_to_constraints`によって生成されたことは
-前提にせず、そのoperationのrollbackでもありません。
+{meth}`~ommx.Instance.promote_sos1_big_m`はbatch全体を表す
+{class}`~ommx.Sos1BigMPromotionRequest`を受け取り、
+{class}`~ommx.Sos1BigMPromotion`を1つ返します。Requestは、通常制約の
+cardinality制約IDから、その定式化のmemberとselector claimのMapへの対応です。
+対応する定式化のrowがInstanceに存在する場合、次のように指定します。
+
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest({
+    102: {
+        0: Sos1BigMSelectorClaim.reused(),
+        1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
+    },
+    202: {
+        2: Sos1BigMSelectorClaim.reused(),
+        3: Sos1BigMSelectorClaim.reused(),
+    },
+})
+report = instance.promote_sos1_big_m(request)  # mode="best_effort"
+print(report.promoted)    # cardinality constraint ID -> SOS1 constraint ID
+print(report.rejections)  # cardinality constraint ID -> diagnostic string
+```
+
+デフォルトの `mode="best_effort"` は、独立して昇格可能な定式化をすべて適用します。
+Reportは、入力したcardinality制約IDごとに成功か拒否のいずれか1つを保持します。
+`promoted` と `rejections` は同じ結果Mapから取り出したスナップショットです。
+両者のキーは重ならず、合わせるとRequestのキーと一致します。
+`request_count` はbatch内の定式化の数です。memberや保持された定式化の履歴は、
+返されたSOS1 IDや元の通常制約IDを使って、変更後のInstanceから取得できます。
+
+全件の昇格が必要なら `mode="strict"` を選びます。成功時は同じReport型を返し、
+`rejections` は空です。1件でも拒否されれば、変更を始める前に
+{class}`~ommx.Sos1BigMPromotionBatchRejectedError`を送出します。
+例外の `request_count` はbatch全体の件数、`rejections` は拒否されたすべての
+cardinality制約IDから診断文字列へのMapです。このMapにない定式化はPlanで受理されて
+いますが、strict batchが失敗した場合は1件も適用されません。
+
+```python
+from ommx import Sos1BigMPromotionBatchRejectedError
+
+try:
+    report = instance.promote_sos1_big_m(request, mode="strict")
+except Sos1BigMPromotionBatchRejectedError as error:
+    for cardinality_id, message in error.rejections.items():
+        print(f"cardinality constraint {cardinality_id}: {message}")
+    # Instanceは変更されていない。
+```
+
+どちらのmodeでも、すべての定式化を同じ未変更のInstanceに対して検証し、
+通常制約rowの重複申請を拒否します。独立した定式化同士でSOS1 memberを共有することは
+可能です。RequestのMapには、各cardinality IDを1回だけ指定できます。
+空batchでは空のReportを返します。RustのPlanが適用までInstanceを排他的に借用する
+ため、rollbackもInstanceのcloneも不要です。この変換は現在のrowを独立に検証し、
+{meth}`~ommx.Instance.convert_sos1_to_constraints`で生成されたことは前提にしません。
 
 ## 制約種別ごとに独立したID空間
 

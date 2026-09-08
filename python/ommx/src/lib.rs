@@ -296,6 +296,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "InfeasibleDetected",
     "LogEncodingError",
     "PreparationTargetNotReachedError",
+    "Sos1BigMPromotionBatchRejectedError",
     // Function types
     "Linear",
     "Quadratic",

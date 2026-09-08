@@ -44,7 +44,10 @@ pub use preparation::{
     IntegerSlackPreparation, ObjectivePreparation, PreparationPolicy, PreparationTargetNotReached,
     SpecialConstraintPreparation,
 };
-pub use sos1_promotion::{Sos1BigMPromotion, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim};
+pub use sos1_promotion::{
+    Sos1BigMPromotion, Sos1BigMPromotionBatchRejected, Sos1BigMPromotionPlan,
+    Sos1BigMPromotionRequest, Sos1BigMSelectorClaim,
+};
 pub use stats::*;
 
 use crate::{

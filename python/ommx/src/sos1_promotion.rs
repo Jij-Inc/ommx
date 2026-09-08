@@ -1,6 +1,6 @@
 use crate::{error::OmmxPyResult, Instance};
-use pyo3::prelude::*;
-use std::collections::{BTreeMap, BTreeSet};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyString};
+use std::collections::BTreeMap;
 
 /// Unchecked selector-role claim for one member of an SOS1 Big-M formulation.
 ///
@@ -87,11 +87,12 @@ impl From<ommx::Sos1BigMSelectorClaim> for Sos1BigMSelectorClaim {
     }
 }
 
-/// Untrusted stable-ID request for one checked SOS1 Big-M promotion.
+/// Untrusted stable-ID request for a batch of SOS1 Big-M promotions.
 ///
-/// Map keys are the intended SOS1 member IDs. Bounds, kinds, coefficients, and
-/// row contents are intentionally absent so the current {class}`Instance`
-/// remains the sole source of truth when the request is validated.
+/// Outer keys are regular cardinality constraint IDs. Each value maps intended
+/// SOS1 member IDs to selector claims for that formulation. A cardinality ID
+/// occurs at most once. Bounds, kinds, coefficients, and row contents are
+/// read from the current {class}`Instance` when the batch is validated.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,47 +104,56 @@ pub struct Sos1BigMPromotionRequest {
 #[pymethods]
 impl Sos1BigMPromotionRequest {
     #[new]
-    #[pyo3(signature = (*, selector_claims, cardinality_constraint))]
-    pub fn new(
-        selector_claims: BTreeMap<u64, Sos1BigMSelectorClaim>,
-        cardinality_constraint: u64,
-    ) -> Self {
+    pub fn new(selector_claims: BTreeMap<u64, BTreeMap<u64, Sos1BigMSelectorClaim>>) -> Self {
         Self {
-            inner: ommx::Sos1BigMPromotionRequest {
-                selector_claims: selector_claims
-                    .into_iter()
-                    .map(|(member, claim)| (member.into(), claim.inner))
-                    .collect(),
-                cardinality_constraint: cardinality_constraint.into(),
-            },
+            inner: selector_claims
+                .into_iter()
+                .map(|(cardinality, claims)| {
+                    (
+                        cardinality.into(),
+                        claims
+                            .into_iter()
+                            .map(|(member, claim)| (member.into(), claim.inner))
+                            .collect(),
+                    )
+                })
+                .collect(),
         }
     }
 
-    /// Claimed selector roles keyed by intended SOS1 member ID.
+    /// Formulation claims keyed by cardinality constraint ID, then member ID.
     #[getter]
-    pub fn selector_claims(&self) -> BTreeMap<u64, Sos1BigMSelectorClaim> {
+    pub fn selector_claims(&self) -> BTreeMap<u64, BTreeMap<u64, Sos1BigMSelectorClaim>> {
         self.inner
-            .selector_claims
             .iter()
-            .map(|(&member, &claim)| (member.into_inner(), claim.into()))
+            .map(|(&cardinality, claims)| {
+                (
+                    cardinality.into_inner(),
+                    claims
+                        .iter()
+                        .map(|(&member, &claim)| (member.into_inner(), claim.into()))
+                        .collect(),
+                )
+            })
             .collect()
-    }
-
-    /// Claimed canonical selector-cardinality constraint ID.
-    #[getter]
-    pub fn cardinality_constraint(&self) -> u64 {
-        self.inner.cardinality_constraint.into_inner()
     }
 }
 
-/// Read-only result of one checked SOS1 Big-M promotion.
+/// Read-only report for an entire SOS1 Big-M promotion batch.
 ///
-/// State reconstruction remains owned by the mutated {class}`Instance`; this
-/// value reports the inserted SOS1 constraint and the retained formulation
-/// history.
+/// Each cardinality constraint ID in the request has exactly one outcome:
+/// promotion to an SOS1 constraint, or rejection with a diagnostic.
+/// The ``promoted`` and ``rejections`` properties return snapshots derived
+/// from that single outcome map. Their keys are disjoint and their union is
+/// exactly the request's cardinality constraint IDs.
+///
+/// Both application modes return this report type. Strict mode returns it
+/// only when all formulations were promoted. Membership, retained formulation
+/// history, and selector reconstruction remain owned by the mutated
+/// {class}`Instance`.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(eq, frozen)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[pyclass(frozen)]
+#[derive(Debug)]
 pub struct Sos1BigMPromotion {
     inner: ommx::Sos1BigMPromotion,
 }
@@ -157,72 +167,134 @@ impl From<ommx::Sos1BigMPromotion> for Sos1BigMPromotion {
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Sos1BigMPromotion {
-    /// ID allocated to the promoted active SOS1 constraint.
+    /// Number of formulations in the original batch request.
     #[getter]
-    pub fn sos1_constraint_id(&self) -> u64 {
-        self.inner.sos1_constraint_id().into_inner()
+    pub fn request_count(&self) -> usize {
+        self.inner.len()
     }
 
-    /// Members of the promoted SOS1 constraint.
+    /// Applied promotions: cardinality constraint ID to allocated SOS1 ID.
     #[getter]
-    pub fn members(&self) -> BTreeSet<u64> {
+    pub fn promoted(&self) -> BTreeMap<u64, u64> {
         self.inner
-            .members()
             .iter()
-            .map(|id| id.into_inner())
+            .filter_map(|(&cardinality, outcome)| {
+                outcome
+                    .as_ref()
+                    .ok()
+                    .map(|id| (cardinality.into_inner(), id.into_inner()))
+            })
             .collect()
     }
 
-    /// Verified fresh selectors keyed by their associated SOS1 member.
+    /// Rejected formulations: cardinality constraint ID to diagnostic message.
+    ///
+    /// These are diagnostic strings, not exception objects. Rejected
+    /// formulations were not applied.
     #[getter]
-    pub fn fresh_selectors(&self) -> BTreeMap<u64, u64> {
+    pub fn rejections(&self) -> BTreeMap<u64, String> {
         self.inner
-            .fresh_selectors()
             .iter()
-            .map(|(member, selector)| (member.into_inner(), selector.into_inner()))
+            .filter_map(|(&cardinality, outcome)| {
+                outcome
+                    .as_ref()
+                    .err()
+                    .map(|error| (cardinality.into_inner(), format!("{error:#}")))
+            })
             .collect()
     }
+}
 
-    /// Verified regular-constraint IDs moved from active to removed.
-    #[getter]
-    pub fn relaxed_constraint_ids(&self) -> BTreeSet<u64> {
-        self.inner
-            .relaxed_constraint_ids()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
+/// Python-owned choice of batch application policy.
+///
+/// This binding-only type validates the two accepted string literals during
+/// argument extraction; the Rust Instance owns both underlying operations.
+#[derive(Debug, Clone, Copy)]
+pub enum Sos1BigMPromotionMode {
+    BestEffort,
+    Strict,
+}
+
+impl<'py> FromPyObject<'_, 'py> for Sos1BigMPromotionMode {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        match ob.extract::<&str>()? {
+            "best_effort" => Ok(Self::BestEffort),
+            "strict" => Ok(Self::Strict),
+            mode => Err(PyValueError::new_err(format!(
+                "Unknown SOS1 promotion mode {mode:?}: expected 'best_effort' or 'strict'"
+            ))),
+        }
+    }
+}
+
+impl<'py> IntoPyObject<'py> for Sos1BigMPromotionMode {
+    type Target = PyString;
+    type Output = Bound<'py, PyString>;
+    type Error = std::convert::Infallible;
+
+    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
+        Ok(PyString::new(
+            py,
+            match self {
+                Self::BestEffort => "best_effort",
+                Self::Strict => "strict",
+            },
+        ))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for Sos1BigMPromotionMode {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: r#"typing.Literal["best_effort", "strict"]"#.to_string(),
+            source_module: None,
+            import: ["typing".into()].into(),
+            type_refs: Default::default(),
+        }
     }
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
-    /// Validate and promote one claimed SOS1 Big-M formulation in place.
+    /// Validate and promote a batch of claimed SOS1 Big-M formulations.
     ///
-    /// The request supplies stable IDs only. The Rust {class}`Instance` owner
-    /// reads the current variable domains and regular rows, validates the full
-    /// formulation, and commits the lifecycle move, selector reconstruction,
-    /// and SOS1 insertion atomically. Invalid requests leave the instance
-    /// unchanged.
+    /// The batch request is keyed by regular cardinality constraint ID.
+    /// The Rust {class}`Instance` checks every formulation against the same
+    /// unchanged instance and reconciles conflicts before applying the plan.
+    /// Both modes return one {class}`~ommx.Sos1BigMPromotion` batch report:
     ///
-    /// ``atol`` parameterizes the local projected-feasibility check, must be
-    /// finite and satisfy ``0 < atol < 1``, and must also be used for subsequent
-    /// state reconstruction and evaluation. Continuous member bounds and link
-    /// rows use the same inequality-residual feasibility rule, so canonical
-    /// unit-scale links may use tight Big-M values `U` for an upper link and
-    /// `-L` for a lower link. If omitted, the current default returned by
-    /// {func}`~ommx.get_default_atol` is used.
+    /// - ``mode="best_effort"`` (default) applies independent valid formulations.
+    ///   The report's ``promoted`` map associates each successful cardinality
+    ///   ID with its allocated SOS1 ID; ``rejections`` maps rejected
+    ///   cardinality IDs to diagnostic strings.
+    /// - ``mode="strict"`` requires every formulation to be valid. Any
+    ///   rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
+    ///   before mutation. The exception's ``request_count`` is the batch
+    ///   size and ``rejections`` contains all rejected cardinality IDs and
+    ///   their diagnostics. A successful strict report has no rejections.
     ///
-    /// Raises {class}`RuntimeError` when the claimed formulation is invalid for
-    /// the current instance, including a positive-infinite tolerance or a
-    /// finite ``atol >= 1``.
-    /// Non-positive or NaN values rejected while constructing the tolerance
-    /// raise {class}`ValueError`.
-    #[pyo3(signature = (request, *, atol=None))]
+    /// Overlapping formulation rows are rejected; independent formulations
+    /// may share SOS1 members. An empty request returns an empty report.
+    /// Planning and application do not clone the instance.
+    ///
+    /// ``atol`` parameterizes the local projected-feasibility check and must
+    /// also be used for subsequent state reconstruction and evaluation.
+    /// Continuous bounds and link rows use the same inequality-residual rule,
+    /// so canonical unit-scale links may use tight Big-M values `U` and `-L`.
+    /// If omitted, {func}`~ommx.get_default_atol` supplies the default.
+    /// Positive-infinite tolerances and finite ``atol >= 1`` reject every
+    /// formulation in a non-empty batch under the selected mode.
+    /// Non-positive or NaN tolerances, and unknown mode strings, raise
+    /// {class}`ValueError` before planning, even for an empty batch.
+    #[pyo3(signature = (request, *, mode=Sos1BigMPromotionMode::BestEffort, atol=None))]
     pub fn promote_sos1_big_m(
         &mut self,
         py: Python<'_>,
         request: &Sos1BigMPromotionRequest,
+        mode: Sos1BigMPromotionMode,
         atol: Option<f64>,
     ) -> OmmxPyResult<Sos1BigMPromotion> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -230,6 +302,14 @@ impl Instance {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        Ok(self.inner.promote_sos1_big_m(&request.inner, atol)?.into())
+        let report = match mode {
+            Sos1BigMPromotionMode::BestEffort => {
+                self.inner.promote_sos1_big_m(&request.inner, atol)
+            }
+            Sos1BigMPromotionMode::Strict => self
+                .inner
+                .promote_sos1_big_m_if_fully_valid(&request.inner, atol)?,
+        };
+        Ok(report.into())
     }
 }
