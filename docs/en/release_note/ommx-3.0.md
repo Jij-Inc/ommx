@@ -8,33 +8,28 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### ⚠ Strict-batch SOS1 Big-M promotion ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
+### ⚠ Batch SOS1 Big-M promotion with selectable application mode ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
-{meth}`~ommx.Instance.promote_sos1_big_m` now accepts a list of
-{class}`~ommx.Sos1BigMPromotionRequest` values and returns an input-aligned
-list of {class}`~ommx.Sos1BigMPromotion` values. This replaces the prerelease
-single-request, single-result signature.
-
-The operation checks every request and cross-request conflict against the same
-unchanged `Instance`. It applies the batch only when every request is valid. If
-any request is rejected,
-{class}`~ommx.Sos1BigMPromotionBatchRejectedError` is raised and the entire
-`Instance` remains unchanged. Its `request_count` attribute reports the total
-input length, while `rejections` maps rejected zero-based input indices to
-diagnostic strings.
+{class}`~ommx.Sos1BigMPromotionRequest` now represents an entire batch:
+cardinality constraint IDs map to member-to-selector claims.
+{meth}`~ommx.Instance.promote_sos1_big_m` returns one
+{class}`~ommx.Sos1BigMPromotion` report in both modes:
 
 ```python
-from ommx import Sos1BigMPromotionBatchRejectedError
-
-try:
-    promotions = instance.promote_sos1_big_m([request_a, request_b])
-except Sos1BigMPromotionBatchRejectedError as error:
-    print(error.request_count)
-    print(error.rejections)
+report = instance.promote_sos1_big_m(request, mode="best_effort")  # default
+# Or, on the original instance, require every formulation to succeed:
+report = instance.promote_sos1_big_m(request, mode="strict")
 ```
 
-See {ref}`SOS1 Big-M formulations <sos1-big-m-formulation>` for the validation
-and atomicity contract.
+Best effort applies valid independent formulations. The report's `promoted`
+maps cardinality IDs to allocated SOS1 IDs; `rejections` maps rejected
+cardinality IDs to diagnostic strings. Strict mode raises
+{class}`~ommx.Sos1BigMPromotionBatchRejectedError` before mutation if any
+formulation is rejected, preserving all rejected IDs and diagnostics.
+
+This replaces the prerelease single-formulation request and result API.
+See {ref}`SOS1 Big-M formulations <sos1-big-m-formulation>` for construction,
+report inspection, and the atomicity contract.
 
 ### 🛠 Restore typed enum model discriminators ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
 
@@ -204,26 +199,22 @@ replacing the claimed formulation rows with a first-class SOS1 constraint.
 ```python
 from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
 
-request = Sos1BigMPromotionRequest(
-    selector_claims={
+request = Sos1BigMPromotionRequest({
+    102: {
         0: Sos1BigMSelectorClaim.reused(),
-        1: Sos1BigMSelectorClaim.fresh(
-            10,
-            upper_link=100,
-            lower_link=101,
-        ),
+        1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
     },
-    cardinality_constraint=102,
-)
-[promotion] = instance.promote_sos1_big_m([request])
+})
+report = instance.promote_sos1_big_m(request, mode="strict")
+sos1_id = report.promoted[102]
 ```
 
 The example uses the current strict-batch call shape for one request. If the
 claimed formulation fails validation,
 {class}`~ommx.Sos1BigMPromotionBatchRejectedError` is raised and the `Instance`
-remains unchanged. The returned
-{class}`~ommx.Sos1BigMPromotion` exposes `sos1_constraint_id`, `members`,
-`fresh_selectors`, and `relaxed_constraint_ids`.
+remains unchanged. The returned {class}`~ommx.Sos1BigMPromotion` is a batch
+report whose `promoted` map identifies the new SOS1 constraint. Membership,
+selector reconstruction, and removed rows can be queried from the Instance.
 
 ### 🆕 Incremental constructors for interval-domain variables ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
 

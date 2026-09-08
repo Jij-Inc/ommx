@@ -5117,37 +5117,42 @@ class Instance:
         """
     def promote_sos1_big_m(
         self,
-        requests: typing.Sequence[Sos1BigMPromotionRequest],
+        request: Sos1BigMPromotionRequest,
         *,
+        mode: typing.Literal["best_effort", "strict"] = "best_effort",
         atol: typing.Optional[builtins.float] = None,
-    ) -> builtins.list[Sos1BigMPromotion]:
+    ) -> Sos1BigMPromotion:
         r"""
-        Validate and promote claimed SOS1 Big-M formulations as one strict batch.
+        Validate and promote a batch of claimed SOS1 Big-M formulations.
 
-        Each request supplies stable IDs only. The Rust {class}`Instance` owner
-        checks every request against the same unchanged instance and reconciles
-        conflicts across the batch. It commits the lifecycle moves, selector
-        reconstruction, and SOS1 insertions only when every request is valid.
-        The returned list has one promotion per request in input order. An empty
-        input returns an empty list without mutating the instance.
+        The batch request is keyed by regular cardinality constraint ID.
+        The Rust {class}`Instance` checks every formulation against the same
+        unchanged instance and reconciles conflicts before applying the plan.
+        Both modes return one {class}`~ommx.Sos1BigMPromotion` batch report:
 
-        For a non-empty batch, ``atol`` parameterizes the local
-        projected-feasibility check, must be finite and satisfy
-        ``0 < atol < 1``, and must also be used for subsequent state
-        reconstruction and evaluation. Continuous member bounds and link rows
-        use the same inequality-residual feasibility rule, so canonical
-        unit-scale links may use tight Big-M values `U` for an upper link and
-        `-L` for a lower link. If omitted, the current default returned by
-        {func}`~ommx.get_default_atol` is used.
+        - ``mode="best_effort"`` (default) applies independent valid formulations.
+          The report's ``promoted`` map associates each successful cardinality
+          ID with its allocated SOS1 ID; ``rejections`` maps rejected
+          cardinality IDs to diagnostic strings.
+        - ``mode="strict"`` requires every formulation to be valid. Any
+          rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
+          before mutation. The exception's ``request_count`` is the batch
+          size and ``rejections`` contains all rejected cardinality IDs and
+          their diagnostics. A successful strict report has no rejections.
 
-        Raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError` when any
-        request is invalid or conflicts with another request. The exception's
-        ``rejections`` dict maps every rejected zero-based input index to its
-        diagnostic message. No request is applied in this case. A non-empty
-        batch also raises this exception for a positive-infinite tolerance or a
-        finite ``atol >= 1``.
-        Non-positive or NaN values rejected while constructing the tolerance
-        raise {class}`ValueError`.
+        Overlapping formulation rows are rejected; independent formulations
+        may share SOS1 members. An empty request returns an empty report.
+        Planning and application do not clone the instance.
+
+        ``atol`` parameterizes the local projected-feasibility check and must
+        also be used for subsequent state reconstruction and evaluation.
+        Continuous bounds and link rows use the same inequality-residual rule,
+        so canonical unit-scale links may use tight Big-M values `U` and `-L`.
+        If omitted, {func}`~ommx.get_default_atol` supplies the default.
+        Positive-infinite tolerances and finite ``atol >= 1`` reject every
+        formulation in a non-empty batch under the selected mode.
+        Non-positive or NaN tolerances, and unknown mode strings, raise
+        {class}`ValueError` before planning, even for an empty batch.
         """
 
 @typing.final
@@ -8786,33 +8791,37 @@ class Solve:
 @typing.final
 class Sos1BigMPromotion:
     r"""
-    Read-only result of one checked SOS1 Big-M promotion.
+    Read-only report for an entire SOS1 Big-M promotion batch.
 
-    State reconstruction remains owned by the mutated {class}`Instance`; this
-    value reports the inserted SOS1 constraint and the retained formulation
-    history.
+    Each cardinality constraint ID in the request has exactly one outcome:
+    promotion to an SOS1 constraint, or rejection with a diagnostic.
+    The ``promoted`` and ``rejections`` properties return snapshots derived
+    from that single outcome map. Their keys are disjoint and their union is
+    exactly the request's cardinality constraint IDs.
+
+    Both application modes return this report type. Strict mode returns it
+    only when all formulations were promoted. Membership, retained formulation
+    history, and selector reconstruction remain owned by the mutated
+    {class}`Instance`.
     """
     @property
-    def sos1_constraint_id(self) -> builtins.int:
+    def request_count(self) -> builtins.int:
         r"""
-        ID allocated to the promoted active SOS1 constraint.
+        Number of formulations in the original batch request.
         """
     @property
-    def members(self) -> builtins.set[builtins.int]:
+    def promoted(self) -> builtins.dict[builtins.int, builtins.int]:
         r"""
-        Members of the promoted SOS1 constraint.
+        Applied promotions: cardinality constraint ID to allocated SOS1 ID.
         """
     @property
-    def fresh_selectors(self) -> builtins.dict[builtins.int, builtins.int]:
+    def rejections(self) -> builtins.dict[builtins.int, builtins.str]:
         r"""
-        Verified fresh selectors keyed by their associated SOS1 member.
+        Rejected formulations: cardinality constraint ID to diagnostic message.
+
+        These are diagnostic strings, not exception objects. Rejected
+        formulations were not applied.
         """
-    @property
-    def relaxed_constraint_ids(self) -> builtins.set[builtins.int]:
-        r"""
-        Verified regular-constraint IDs moved from active to removed.
-        """
-    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
 
 class Sos1BigMPromotionBatchRejectedError(builtins.RuntimeError):
     r"""
@@ -8821,39 +8830,39 @@ class Sos1BigMPromotionBatchRejectedError(builtins.RuntimeError):
     @property
     def request_count(self) -> builtins.int:
         r"""
-        Number of requests in the rejected strict batch.
+        Number of formulations in the rejected strict batch.
         """
     @property
     def rejections(self) -> builtins.dict[builtins.int, builtins.str]:
         r"""
-        Diagnostic messages keyed by rejected zero-based request index.
+        Diagnostic messages keyed by rejected cardinality constraint ID.
         """
 
 @typing.final
 class Sos1BigMPromotionRequest:
     r"""
-    Untrusted stable-ID request for one checked SOS1 Big-M promotion.
+    Untrusted stable-ID request for a batch of SOS1 Big-M promotions.
 
-    Map keys are the intended SOS1 member IDs. Bounds, kinds, coefficients, and
-    row contents are intentionally absent so the current {class}`Instance`
-    remains the sole source of truth when the request is validated.
+    Outer keys are regular cardinality constraint IDs. Each value maps intended
+    SOS1 member IDs to selector claims for that formulation. A cardinality ID
+    occurs at most once. Bounds, kinds, coefficients, and row contents are
+    read from the current {class}`Instance` when the batch is validated.
     """
     @property
-    def selector_claims(self) -> builtins.dict[builtins.int, Sos1BigMSelectorClaim]:
+    def selector_claims(
+        self,
+    ) -> builtins.dict[
+        builtins.int, builtins.dict[builtins.int, Sos1BigMSelectorClaim]
+    ]:
         r"""
-        Claimed selector roles keyed by intended SOS1 member ID.
-        """
-    @property
-    def cardinality_constraint(self) -> builtins.int:
-        r"""
-        Claimed canonical selector-cardinality constraint ID.
+        Formulation claims keyed by cardinality constraint ID, then member ID.
         """
     def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __new__(
         cls,
-        *,
-        selector_claims: typing.Mapping[builtins.int, Sos1BigMSelectorClaim],
-        cardinality_constraint: builtins.int,
+        selector_claims: typing.Mapping[
+            builtins.int, typing.Mapping[builtins.int, Sos1BigMSelectorClaim]
+        ],
     ) -> Sos1BigMPromotionRequest: ...
 
 @typing.final

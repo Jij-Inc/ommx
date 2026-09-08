@@ -39,7 +39,7 @@ returns the typed error directly):
   fixed-penalty weight map, so the caller can correct the keys and retry the
   atomic operation on the unchanged [`Instance`](crate::Instance).
 - [`Sos1BigMPromotionBatchRejected`](crate::Sos1BigMPromotionBatchRejected) —
-  owns every rejected zero-based input index and its error chain when a caller
+  owns every rejected cardinality constraint ID and its error chain when a caller
   requests fully-valid SOS1 Big-M batch application. The caller can repair or
   remove those requests and retry against the unchanged
   [`Instance`](crate::Instance).

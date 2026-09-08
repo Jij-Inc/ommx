@@ -190,34 +190,64 @@ used by regular constraints. Consequently, a canonical unit-scale upper link
 `x - U*y <= 0` may use the tight value `M = U`; validation derives the actual
 representable bound-feasible domain without first constructing `U + atol`.
 
-{meth}`~ommx.Instance.promote_sos1_big_m` accepts a list of independent
-requests to transform claimed existing Big-M formulations. It checks every
-request against the same unchanged instance, including conflicts between
-requests that claim the same regular row. It neither assumes that the rows came
-from {meth}`~ommx.Instance.convert_sos1_to_constraints` nor rolls that operation
-back.
+{meth}`~ommx.Instance.promote_sos1_big_m` takes one
+{class}`~ommx.Sos1BigMPromotionRequest` for the entire batch and returns one
+{class}`~ommx.Sos1BigMPromotion` report. The request maps each regular
+cardinality constraint ID to the member-to-selector claims for that formulation.
+For example, given matching existing formulation rows:
 
-The Python operation is a strict batch: it applies every request and returns an
-input-aligned list of {class}`~ommx.Sos1BigMPromotion` values only when the
-entire batch is valid. If any request is invalid or conflicts with another,
-{class}`~ommx.Sos1BigMPromotionBatchRejectedError` is raised before mutation.
-Its `request_count` attribute is the total input length, and its `rejections`
-dictionary maps each rejected zero-based input index to a diagnostic string.
-Requests absent from `rejections` were individually valid, but are still not
-applied when the strict batch is rejected.
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest({
+    102: {
+        0: Sos1BigMSelectorClaim.reused(),
+        1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
+    },
+    202: {
+        2: Sos1BigMSelectorClaim.reused(),
+        3: Sos1BigMSelectorClaim.reused(),
+    },
+})
+report = instance.promote_sos1_big_m(request)  # mode="best_effort"
+print(report.promoted)    # cardinality constraint ID -> SOS1 constraint ID
+print(report.rejections)  # cardinality constraint ID -> diagnostic string
+```
+
+The default `mode="best_effort"` applies every independent valid formulation.
+The report has exactly one outcome per requested cardinality ID. Its
+`promoted` and `rejections` dictionaries are snapshots of successful and
+rejected outcomes from the same map: their keys are disjoint and together equal
+the request's keys. `request_count` is the number of formulations in the batch.
+Members and retained formulation history can be queried from the mutated
+Instance using the returned SOS1 IDs and the original regular IDs.
+
+Choose `mode="strict"` when every formulation must be promoted. It returns
+the same report type with no rejections on success. If any formulation is
+rejected, it raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError` before
+mutation. The exception's `request_count` is the batch size and `rejections`
+maps every rejected cardinality constraint ID to its diagnostic. Formulations
+absent from that map were accepted by planning, but none are applied when the
+strict batch fails:
 
 ```python
 from ommx import Sos1BigMPromotionBatchRejectedError
 
-requests = [request_a, request_b]
 try:
-    promotions = instance.promote_sos1_big_m(requests)
+    report = instance.promote_sos1_big_m(request, mode="strict")
 except Sos1BigMPromotionBatchRejectedError as error:
-    assert error.request_count == len(requests)
-    for index, message in error.rejections.items():
-        print(f"request {index}: {message}")
-    # `instance` is unchanged.
+    for cardinality_id, message in error.rejections.items():
+        print(f"cardinality constraint {cardinality_id}: {message}")
+    # The instance is unchanged.
 ```
+
+Both modes check all formulations against the same unchanged Instance and
+reject overlapping row claims. Independent formulations may share SOS1
+members. A cardinality ID can occur only once in the request map.
+An empty batch returns an empty report. The Rust plan retains an exclusive
+borrow until application, so neither rollback nor an Instance clone is needed.
+The transformation validates the current rows independently; it does not
+require them to originate from {meth}`~ommx.Instance.convert_sos1_to_constraints`.
 
 ## Independent ID spaces per constraint type
 

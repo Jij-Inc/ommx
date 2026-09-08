@@ -8,30 +8,27 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### ⚠ SOS1 Big-M promotionをstrict batch化 ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
+### ⚠ SOS1 Big-M promotionをbatch化し適用modeを選択可能に ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
-{meth}`~ommx.Instance.promote_sos1_big_m`は、
-{class}`~ommx.Sos1BigMPromotionRequest`のlistを受け取り、入力と同じ順序の
-{class}`~ommx.Sos1BigMPromotion`のlistを返すようになりました。pre-releaseで
-提供していた単一request・単一resultのsignatureを置き換えます。
-
-すべてのrequestとrequest間のconflictを、同じ未変更の`Instance`に対して検証します。
-すべてがvalidな場合に限りbatchを適用します。1つでもrejectされたrequestがあれば
-{class}`~ommx.Sos1BigMPromotionBatchRejectedError`を送出し、`Instance`全体を
-変更しません。`request_count` attributeは入力全体の件数を表し、`rejections`は
-rejectされたrequestの0-origin indexから診断文字列へのmapです。
+{class}`~ommx.Sos1BigMPromotionRequest`はbatch全体を表すようになりました。
+cardinality制約IDからmemberとselector claimのMapへの対応を指定します。
+{meth}`~ommx.Instance.promote_sos1_big_m`は、どちらのmodeでも
+{class}`~ommx.Sos1BigMPromotion`を1つ返します。
 
 ```python
-from ommx import Sos1BigMPromotionBatchRejectedError
-
-try:
-    promotions = instance.promote_sos1_big_m([request_a, request_b])
-except Sos1BigMPromotionBatchRejectedError as error:
-    print(error.request_count)
-    print(error.rejections)
+report = instance.promote_sos1_big_m(request, mode="best_effort")  # デフォルト
+# または、元のInstanceに対して全件の昇格を要求する:
+report = instance.promote_sos1_big_m(request, mode="strict")
 ```
 
-検証とatomicityのcontractについては
+best effortでは独立して昇格可能な定式化を適用します。Reportの `promoted` は
+cardinality IDから割り当てたSOS1 IDへのMap、`rejections` は拒否された
+cardinality IDから診断文字列へのMapです。strictでは1件でも拒否されれば、
+変更を始める前に{class}`~ommx.Sos1BigMPromotionBatchRejectedError`を送出し、
+拒否されたすべてのIDと診断情報を返します。
+
+pre-releaseで提供していた単一定式化のRequestとResultを置き換えます。
+構築例・Reportの参照方法・atomicityについては
 {ref}`SOS1のBig-M定式化 <sos1-big-m-formulation>`を参照してください。
 
 ### 🛠 モデルの識別子を型付きenumへ復元 ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
@@ -186,26 +183,22 @@ rollbackや逆変換ではありません。promotion checkerは、現在の変�
 ```python
 from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
 
-request = Sos1BigMPromotionRequest(
-    selector_claims={
+request = Sos1BigMPromotionRequest({
+    102: {
         0: Sos1BigMSelectorClaim.reused(),
-        1: Sos1BigMSelectorClaim.fresh(
-            10,
-            upper_link=100,
-            lower_link=101,
-        ),
+        1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
     },
-    cardinality_constraint=102,
-)
-[promotion] = instance.promote_sos1_big_m([request])
+})
+report = instance.promote_sos1_big_m(request, mode="strict")
+sos1_id = report.promoted[102]
 ```
 
 この例は、現在のstrict batch APIで1件のrequestを呼び出す形です。申請した
 formulationの検証に失敗すると
 {class}`~ommx.Sos1BigMPromotionBatchRejectedError`となり、`Instance`は
-変更されません。戻り値の{class}`~ommx.Sos1BigMPromotion`から
-`sos1_constraint_id`、`members`、`fresh_selectors`、
-`relaxed_constraint_ids`を参照できます。
+変更されません。戻り値の{class}`~ommx.Sos1BigMPromotion`はbatch全体のReportで、
+`promoted` Mapから新しいSOS1 IDを取得できます。member、selectorの復元、
+removed rowの情報はInstanceから参照できます。
 
 ### 🆕 区間で定義する決定変数の逐次作成 ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
 

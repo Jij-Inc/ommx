@@ -199,14 +199,14 @@ pyo3_stub_gen::inventory::submit! {
             pyo3_stub_gen::type_info::MemberInfo {
                 name: "request_count",
                 r#type: <usize as pyo3_stub_gen::PyStubType>::type_output,
-                doc: "Number of requests in the rejected strict batch.",
+                doc: "Number of formulations in the rejected strict batch.",
                 default: None,
                 deprecated: None,
             },
             pyo3_stub_gen::type_info::MemberInfo {
                 name: "rejections",
-                r#type: <std::collections::BTreeMap<usize, String> as pyo3_stub_gen::PyStubType>::type_output,
-                doc: "Diagnostic messages keyed by rejected zero-based request index.",
+                r#type: <std::collections::BTreeMap<u64, String> as pyo3_stub_gen::PyStubType>::type_output,
+                doc: "Diagnostic messages keyed by rejected cardinality constraint ID.",
                 default: None,
                 deprecated: None,
             },
@@ -485,7 +485,7 @@ fn sos1_big_m_promotion_batch_rejected_to_pyerr(
         value.setattr("request_count", error.request_count())?;
         let rejections = error
             .rejections()
-            .map(|(index, error)| (index, format!("{error:#}")))
+            .map(|(id, error)| (id.into_inner(), format!("{error:#}")))
             .collect::<std::collections::BTreeMap<_, _>>();
         value.setattr("rejections", rejections)
     })
@@ -785,19 +785,25 @@ mod tests {
     }
 
     fn rejected_sos1_big_m_batch() -> ommx::Sos1BigMPromotionBatchRejected {
-        let request = ommx::Sos1BigMPromotionRequest {
-            selector_claims: std::collections::BTreeMap::new(),
-            cardinality_constraint: ommx::ConstraintID::from(0),
-        };
+        let request = ommx::Sos1BigMPromotionRequest::from([
+            (
+                ommx::ConstraintID::from(0),
+                std::collections::BTreeMap::new(),
+            ),
+            (
+                ommx::ConstraintID::from(u64::MAX),
+                std::collections::BTreeMap::new(),
+            ),
+        ]);
         ommx::Instance::default()
-            .promote_sos1_big_m_if_fully_valid(&[request.clone(), request], ommx::ATol::default())
+            .promote_sos1_big_m_if_fully_valid(&request, ommx::ATol::default())
             .unwrap_err()
             .downcast()
             .expect("strict SOS1 batch rejection remains downcastable")
     }
 
     #[test]
-    fn sos1_big_m_batch_rejection_mapping_preserves_all_indices() {
+    fn sos1_big_m_batch_rejection_mapping_preserves_all_cardinality_ids() {
         // The conversion itself attaches diagnostic attributes, so Python must
         // be initialized before evaluating the arguments to assert_exception.
         Python::initialize();
@@ -820,9 +826,12 @@ mod tests {
             let rejections = value
                 .getattr("rejections")
                 .unwrap()
-                .extract::<std::collections::BTreeMap<usize, String>>()
+                .extract::<std::collections::BTreeMap<u64, String>>()
                 .unwrap();
-            assert_eq!(rejections.keys().copied().collect::<Vec<_>>(), vec![0, 1]);
+            assert_eq!(
+                rejections.keys().copied().collect::<Vec<_>>(),
+                vec![0, u64::MAX]
+            );
             assert!(rejections
                 .values()
                 .all(|message| message.contains("must contain at least one member")));
