@@ -87,7 +87,7 @@ pub type Sos1BigMPromotion = BTreeMap<ConstraintID, crate::Result<Sos1Constraint
 /// Signal that a fully-valid SOS1 Big-M promotion batch could not be formed.
 ///
 /// This signal is produced by
-/// [`Sos1BigMPromotionBatchPlan::apply_if_fully_valid`] before the bound
+/// [`Sos1BigMPromotionPlan::apply_if_fully_valid`] before the bound
 /// [`Instance`] is mutated. It owns every planning rejection together with the
 /// cardinality constraint ID of the corresponding formulation. Callers can inspect
 /// those IDs, repair or remove the rejected claims, and retry against
@@ -142,8 +142,20 @@ impl std::error::Error for Sos1BigMPromotionBatchRejected {}
 ///
 /// This value is deliberately incomplete. Multiple candidates may consume the
 /// same regular row, and target SOS1 IDs have not yet been allocated. Only
-/// [`Sos1BigMPromotionBatchPlan::new`] reconciles candidates and finalizes the
+/// [`Sos1BigMPromotionPlan::new`] reconciles candidates and finalizes the
 /// survivors into [`PlannedSos1BigMPromotion`] values.
+///
+/// # Invariants
+///
+/// Only [`Instance::build_sos1_big_m_promotion_candidate`] constructs this
+/// value. Its SOS1 has a non-empty set of registered, finite-domain members
+/// that are neither fixed nor existing assignment targets. Each fresh selector
+/// is a registered, unfixed, full-domain binary variable, is not an existing
+/// assignment target, and is distinct from every member and other fresh
+/// selector in this candidate. The consumed rows are active, have the verified
+/// link/cardinality shapes, and contain every active solver use of its fresh
+/// selectors. These facts hold for the source instance at construction time;
+/// the enclosing plan supplies the exclusive borrow and cross-candidate checks.
 #[derive(Debug)]
 struct Sos1BigMPromotionCandidate {
     fresh_selectors: BTreeMap<VariableID, VariableID>,
@@ -155,7 +167,7 @@ struct Sos1BigMPromotionCandidate {
 ///
 /// # Invariants
 ///
-/// This value is constructed only by [`Sos1BigMPromotionBatchPlan::new`] and
+/// This value is constructed only by [`Sos1BigMPromotionPlan::new`] and
 /// can be applied only through that instance-bound aggregate plan.
 /// For every `(member, selector)` in `candidate.fresh_selectors`:
 ///
@@ -192,6 +204,17 @@ struct PlannedSos1BigMPromotion {
 /// entry and preserves every rejection in the result map. Neither
 /// policy requires a rollback operation.
 ///
+/// The source cannot be changed while a plan remains available for application:
+///
+/// ```compile_fail,E0499
+/// use ommx::{ATol, Function, Instance, Sos1BigMPromotionRequest};
+/// let mut instance = Instance::default();
+/// let request = Sos1BigMPromotionRequest::new();
+/// let plan = instance.plan_promote_sos1_big_m(&request, ATol::default());
+/// instance.set_objective(Function::Zero).unwrap();
+/// let _ = plan.apply();
+/// ```
+///
 /// # Invariants
 ///
 /// - `instance` is the exact [`Instance`] against which `entries` was prepared;
@@ -199,8 +222,12 @@ struct PlannedSos1BigMPromotion {
 /// - `entries` has exactly the same cardinality-constraint keys as the request;
 /// - every successful effect consumes active regular rows disjoint from those
 ///   of every other successful effect;
-/// - successful target SOS1 IDs are pairwise distinct and unused;
+/// - successful target SOS1 IDs are pairwise distinct and absent from both
+///   the active and removed SOS1 collections;
 /// - every successful SOS1 member and fresh selector is registered;
+/// - no successful SOS1 member is an existing assignment target;
+/// - the existing assignments are acyclic, and every new assignment has the
+///   exact form `selector <- abs(signum(member))`;
 /// - successful fresh-selector assignment targets are pairwise distinct,
 ///   absent from the existing assignment targets, and never a member of any
 ///   successful promotion; therefore the combined assignments preserve an
@@ -212,7 +239,7 @@ struct PlannedSos1BigMPromotion {
 /// entry therefore identifies an internal invariant violation.
 #[must_use = "inspect the plan and either apply it or deliberately drop it"]
 #[derive(Debug)]
-pub struct Sos1BigMPromotionBatchPlan<'a> {
+pub struct Sos1BigMPromotionPlan<'a> {
     instance: &'a mut Instance,
     entries: BTreeMap<ConstraintID, crate::Result<PlannedSos1BigMPromotion>>,
 }
@@ -400,7 +427,7 @@ fn canonical_sos1_big_m_cardinality(
     )))
 }
 
-impl<'a> Sos1BigMPromotionBatchPlan<'a> {
+impl<'a> Sos1BigMPromotionPlan<'a> {
     fn new(instance: &'a mut Instance, request: &Sos1BigMPromotionRequest, atol: ATol) -> Self {
         let mut candidates = request
             .iter()
@@ -504,10 +531,9 @@ impl<'a> Sos1BigMPromotionBatchPlan<'a> {
     ///
     /// # Panics
     ///
-    /// Panics only if an internal plan invariant is violated while applying a
-    /// fully valid plan. Such a panic may occur after some storage effects have
-    /// been applied; panic unwind atomicity and rollback are not part of this
-    /// API's contract.
+    /// An `expect` failure denotes an SDK bug that violates the plan's stated
+    /// invariants, not a failure permitted for a constructed plan. Rejected
+    /// caller input takes the pre-application error path below.
     #[must_use = "a rejected batch leaves the instance unchanged"]
     pub fn apply_if_fully_valid(self) -> crate::Result<Sos1BigMPromotion> {
         if !self.is_fully_valid() {
@@ -542,9 +568,9 @@ impl<'a> Sos1BigMPromotionBatchPlan<'a> {
     ///
     /// # Panics
     ///
-    /// Panics only if an internal plan invariant is violated. Such a panic may
-    /// occur after some storage effects have been applied; panic unwind
-    /// atomicity and rollback are not part of this API's contract.
+    /// An `expect` failure denotes an SDK bug that violates the plan's stated
+    /// invariants, not a failure permitted for a constructed plan. Every
+    /// caller-controlled failure has already been recorded during planning.
     #[must_use = "each request has an aligned success or rejection result"]
     pub fn apply(self) -> Sos1BigMPromotion {
         let Self { instance, entries } = self;
@@ -575,7 +601,7 @@ impl<'a> Sos1BigMPromotionBatchPlan<'a> {
             instance
                 .constraint_collection
                 .move_active_rows_to_removed_with_reasons(removal_reasons)
-                .expect("regular row availability is a Sos1BigMPromotionBatchPlan invariant");
+                .expect("regular row availability is a Sos1BigMPromotionPlan invariant");
 
             let dependencies =
                 std::mem::take(&mut instance.decision_variable_dependency)
@@ -598,7 +624,7 @@ impl<'a> Sos1BigMPromotionBatchPlan<'a> {
                             }),
                     );
             instance.decision_variable_dependency = crate::AcyclicAssignments::new(dependencies)
-                .expect("acyclic dependencies are a Sos1BigMPromotionBatchPlan invariant");
+                .expect("acyclic dependencies are a Sos1BigMPromotionPlan invariant");
         }
 
         entries
@@ -621,7 +647,7 @@ impl<'a> Sos1BigMPromotionBatchPlan<'a> {
                                 sos1_constraint,
                                 ConstraintContext::default(),
                             )
-                            .expect("fresh SOS1 IDs are a Sos1BigMPromotionBatchPlan invariant");
+                            .expect("fresh SOS1 IDs are a Sos1BigMPromotionPlan invariant");
                         sos1_constraint_id
                     }),
                 )
@@ -697,9 +723,9 @@ impl Instance {
     /// removed history is preserved rather than reinterpreted.
     ///
     /// Planning does not mutate the instance. The returned plan holds its
-    /// exclusive borrow, so callers may inspect [`Sos1BigMPromotionBatchPlan::rejections`]
+    /// exclusive borrow, so callers may inspect [`Sos1BigMPromotionPlan::rejections`]
     /// and drop it to apply nothing. If the caller invokes
-    /// [`Sos1BigMPromotionBatchPlan::apply`], every successful request relaxes
+    /// [`Sos1BigMPromotionPlan::apply`], every successful request relaxes
     /// its verified formulation rows, retains fresh selectors as dependent
     /// variables, and inserts a new active SOS1 constraint. Rejected requests
     /// have no storage effect, while independent successful entries are still
@@ -717,8 +743,8 @@ impl Instance {
         &mut self,
         request: &Sos1BigMPromotionRequest,
         atol: ATol,
-    ) -> Sos1BigMPromotionBatchPlan<'_> {
-        Sos1BigMPromotionBatchPlan::new(self, request, atol)
+    ) -> Sos1BigMPromotionPlan<'_> {
+        Sos1BigMPromotionPlan::new(self, request, atol)
     }
 
     /// Plans and immediately applies SOS1 Big-M promotions as one batch.
@@ -756,7 +782,7 @@ impl Instance {
     ///
     /// Panics only if an internal plan invariant is violated while applying a
     /// fully valid plan. See
-    /// [`Sos1BigMPromotionBatchPlan::apply_if_fully_valid`] for details.
+    /// [`Sos1BigMPromotionPlan::apply_if_fully_valid`] for details.
     pub fn promote_sos1_big_m_if_fully_valid(
         &mut self,
         request: &Sos1BigMPromotionRequest,
@@ -1638,6 +1664,50 @@ mod tests {
     }
 
     #[test]
+    fn batch_reconstruction_preserves_existing_dependencies_on_both_selectors() {
+        let (mut instance, request) = shared_member_batch_instance();
+        instance
+            .add_decision_variable(unrelated_id(), integer(0.0, 2.0), Default::default())
+            .unwrap();
+        instance.decision_variable_dependency = AcyclicAssignments::new([(
+            unrelated_id(),
+            Function::from((linear!(10) + linear!(11)).unwrap()).abs(),
+        )])
+        .unwrap();
+        let original_dependency = instance
+            .decision_variable_dependency
+            .get(&unrelated_id())
+            .unwrap()
+            .clone();
+
+        let report = instance
+            .promote_sos1_big_m_if_fully_valid(&request, ATol::default())
+            .unwrap();
+
+        assert!(report.values().all(Result::is_ok));
+        assert_eq!(instance.decision_variable_dependency.len(), 3);
+        assert_eq!(
+            instance.decision_variable_dependency.get(&unrelated_id()),
+            Some(&original_dependency)
+        );
+        for (member_value, selector_value) in [(0.0, 0.0), (-2.0, 1.0), (3.0, 1.0)] {
+            let state = instance
+                .populate_state(
+                    crate::v1::State::from_iter([(1, member_value)]),
+                    ATol::default(),
+                )
+                .unwrap();
+            assert_eq!(state.entries[&10], selector_value);
+            assert_eq!(state.entries[&11], selector_value);
+            assert_eq!(state.entries[&20], 2.0 * selector_value);
+        }
+        assert_eq!(
+            Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap(),
+            instance
+        );
+    }
+
+    #[test]
     fn rejected_plan_can_be_inspected_and_dropped_without_mutation() {
         let (mut instance, mut requests) = shared_member_batch_instance();
         let claims = requests.remove(&cardinality_row_id()).unwrap();
@@ -1852,6 +1922,153 @@ mod tests {
             .to_string()
             .contains("Cannot allocate SOS1 constraint IDs")));
         assert_eq!(instance, before);
+    }
+
+    #[test]
+    fn batch_id_reservation_accounts_for_removed_ids_and_the_whole_batch() {
+        for (maximum, fits) in [(u64::MAX - 2, true), (u64::MAX - 1, false)] {
+            for strict in [false, true] {
+                let (mut instance, request) = shared_member_batch_instance();
+                let maximum = Sos1ConstraintID::from(maximum);
+                instance
+                    .sos1_constraint_collection
+                    .insert_active_with_context(
+                        maximum,
+                        Sos1Constraint::new(VariableIDSet::from([member_integer_id()])).unwrap(),
+                        ConstraintContext::default(),
+                    )
+                    .unwrap();
+                instance
+                    .sos1_constraint_collection
+                    .relax(maximum, test_removed_reason())
+                    .unwrap();
+                let before = instance.clone();
+
+                let report = if strict {
+                    match instance.promote_sos1_big_m_if_fully_valid(&request, ATol::default()) {
+                        Ok(report) => report,
+                        Err(error) => {
+                            assert!(!fits);
+                            let rejected = error
+                                .downcast_ref::<Sos1BigMPromotionBatchRejected>()
+                                .unwrap();
+                            assert_eq!(rejected.request_count(), 2);
+                            assert_eq!(rejected.rejections().count(), 2);
+                            assert_eq!(instance, before);
+                            continue;
+                        }
+                    }
+                } else {
+                    instance.promote_sos1_big_m(&request, ATol::default())
+                };
+                assert_eq!(
+                    report.keys().collect::<Vec<_>>(),
+                    request.keys().collect::<Vec<_>>()
+                );
+                if fits {
+                    assert_eq!(
+                        report
+                            .values()
+                            .map(|outcome| outcome.as_ref().unwrap().into_inner())
+                            .collect::<Vec<_>>(),
+                        vec![u64::MAX - 1, u64::MAX],
+                    );
+                    assert!(instance.removed_sos1_constraints().contains_key(&maximum));
+                    assert_eq!(instance.removed_constraints().len(), 6);
+                } else {
+                    assert!(report.values().all(Result::is_err));
+                    assert_eq!(instance, before);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_fresh_selector_cannot_become_a_member_of_another_successful_promotion() {
+        let (mut instance, mut request) = shared_member_batch_instance();
+        let reused_cardinality = instance
+            .add_constraint(
+                canonical_sos1_big_m_cardinality([selector_id()]).unwrap(),
+                ConstraintContext::default(),
+            )
+            .unwrap();
+        request.insert(
+            reused_cardinality,
+            BTreeMap::from([(selector_id(), Sos1BigMSelectorClaim::Reused)]),
+        );
+
+        let report = instance.promote_sos1_big_m(&request, ATol::default());
+
+        assert!(report[&cardinality_row_id()]
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("outside the claimed formulation rows"));
+        assert!(report[&ConstraintID::from(202)].is_ok());
+        let reused_sos1 = report[&reused_cardinality].as_ref().unwrap();
+        assert_eq!(
+            instance.sos1_constraints()[reused_sos1].variables,
+            VariableIDSet::from([selector_id()])
+        );
+        assert!(instance
+            .decision_variable_dependency()
+            .get(&selector_id())
+            .is_none());
+        assert!(instance
+            .decision_variable_dependency()
+            .get(&VariableID::from(11))
+            .is_some());
+        assert!(instance.constraints().contains_key(&cardinality_row_id()));
+    }
+
+    #[test]
+    fn reconciliation_rejects_every_row_claimant_but_ignores_invalid_entries() {
+        let (instance, request) = mixed_instance();
+        let build = || {
+            instance
+                .build_sos1_big_m_promotion_candidate(
+                    cardinality_row_id(),
+                    &request[&cardinality_row_id()],
+                    ATol::default(),
+                )
+                .unwrap()
+        };
+        // Isolate reconciliation from candidate validation: current selector
+        // isolation already rejects duplicate formulations with distinct
+        // cardinality rows. This directly guards the aggregate row invariant
+        // even if candidate validation is extended in the future.
+        let mut first = build();
+        first.relaxed_constraint_ids = BTreeSet::from([ConstraintID::from(1)]);
+        let mut middle = build();
+        middle.relaxed_constraint_ids =
+            BTreeSet::from([ConstraintID::from(1), ConstraintID::from(2)]);
+        let mut last = build();
+        last.relaxed_constraint_ids = BTreeSet::from([ConstraintID::from(2)]);
+        let candidates = BTreeMap::from([
+            (ConstraintID::from(10), Ok(first)),
+            (ConstraintID::from(20), Ok(middle)),
+            (ConstraintID::from(30), Ok(last)),
+            (ConstraintID::from(40), Ok(build())),
+            (ConstraintID::from(50), Err(crate::error!("invalid claim"))),
+        ]);
+
+        assert_eq!(
+            find_sos1_big_m_promotion_conflicts(&candidates),
+            BTreeMap::from([
+                (
+                    ConstraintID::from(10),
+                    BTreeSet::from([ConstraintID::from(1)])
+                ),
+                (
+                    ConstraintID::from(20),
+                    BTreeSet::from([ConstraintID::from(1), ConstraintID::from(2)])
+                ),
+                (
+                    ConstraintID::from(30),
+                    BTreeSet::from([ConstraintID::from(2)])
+                ),
+            ])
+        );
     }
 
     #[test]

@@ -7,7 +7,7 @@
 //! are not SDK signals use direct `From` implementations beside that table.
 
 use pyo3::{
-    exceptions::{PyKeyError, PyRuntimeError, PyValueError},
+    exceptions::{PyBaseException, PyKeyError, PyRuntimeError, PyValueError},
     prelude::*,
 };
 
@@ -419,13 +419,24 @@ fn sample_set_error_to_pyerr(error: &ommx::SampleSetError, message: String) -> P
     }
 }
 
+/// Exception classes can have user-defined descriptors or `__setattr__`.
+/// Their failures belong to Python and must not become Rust invariant panics.
+fn with_diagnostic_attributes(
+    error: PyErr,
+    attach: impl FnOnce(&Bound<'_, PyBaseException>) -> PyResult<()>,
+) -> PyErr {
+    Python::attach(|py| match attach(error.value(py)) {
+        Ok(()) => error,
+        Err(error) => error,
+    })
+}
+
 fn log_encoding_unavailable_to_pyerr(
     error: &ommx::LogEncodingUnavailable,
     message: String,
 ) -> PyErr {
     let pyerr = LogEncodingError::new_err(message);
-    Python::attach(|py| {
-        let value = pyerr.value(py);
+    with_diagnostic_attributes(pyerr, |value| {
         let (kind, variable_id) = match error {
             ommx::LogEncodingUnavailable::NonFiniteBound { id, bound } => {
                 value.setattr(
@@ -460,8 +471,6 @@ fn log_encoding_unavailable_to_pyerr(
         value.setattr("kind", kind)?;
         value.setattr("variable_id", variable_id.into_inner())
     })
-    .expect("LogEncodingError supports diagnostic attributes");
-    pyerr
 }
 
 fn exact_integer_slack_unavailable_to_pyerr(
@@ -480,8 +489,7 @@ fn sos1_big_m_promotion_batch_rejected_to_pyerr(
     message: String,
 ) -> PyErr {
     let pyerr = Sos1BigMPromotionBatchRejectedError::new_err(message);
-    Python::attach(|py| {
-        let value = pyerr.value(py);
+    with_diagnostic_attributes(pyerr, |value| {
         value.setattr("request_count", error.request_count())?;
         let rejections = error
             .rejections()
@@ -489,8 +497,6 @@ fn sos1_big_m_promotion_batch_rejected_to_pyerr(
             .collect::<std::collections::BTreeMap<_, _>>();
         value.setattr("rejections", rejections)
     })
-    .expect("Sos1BigMPromotionBatchRejectedError supports diagnostic attributes");
-    pyerr
 }
 
 fn preparation_target_not_reached_to_pyerr(
@@ -498,15 +504,13 @@ fn preparation_target_not_reached_to_pyerr(
     message: String,
 ) -> PyErr {
     let pyerr = PreparationTargetNotReachedError::new_err(message);
-    Python::attach(|py| {
+    with_diagnostic_attributes(pyerr, |value| {
         let report = Py::new(
-            py,
+            value.py(),
             crate::InstanceClassMembershipReport(error.report().clone()),
         )?;
-        pyerr.value(py).setattr("report", report)
+        value.setattr("report", report)
     })
-    .expect("PreparationTargetNotReachedError supports a report attribute");
-    pyerr
 }
 
 define_ommx_error_mappings!(
@@ -643,6 +647,31 @@ mod tests {
         Python::attach(|py| {
             let error: PyErr = error.into();
             assert!(error.is_instance_of::<T>(py), "{error}");
+        });
+    }
+
+    #[test]
+    fn diagnostic_attachment_preserves_python_exception_identity() {
+        Python::initialize();
+        Python::attach(|py| {
+            let original = PyRuntimeError::new_err("domain error");
+            let original_value = original.value(py).clone();
+            let result = with_diagnostic_attributes(original, |value| value.setattr("detail", 42));
+            assert!(result.value(py).is(&original_value));
+            assert_eq!(
+                result
+                    .value(py)
+                    .getattr("detail")
+                    .unwrap()
+                    .extract::<u64>()
+                    .unwrap(),
+                42
+            );
+
+            let failure = PyValueError::new_err("Python attribute hook failed");
+            let failure_value = failure.value(py).clone();
+            let result = with_diagnostic_attributes(result, |_| Err(failure));
+            assert!(result.value(py).is(&failure_value));
         });
     }
 

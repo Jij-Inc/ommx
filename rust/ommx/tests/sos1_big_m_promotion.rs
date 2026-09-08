@@ -1,8 +1,8 @@
 use ommx::{
     coeff, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance, Kind, Linear,
-    LinearMonomial, Sense, Sos1BigMPromotion, Sos1BigMPromotionBatchPlan,
-    Sos1BigMPromotionBatchRejected, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim,
-    Sos1ConstraintID, VariableID,
+    LinearMonomial, Sense, Sos1BigMPromotion, Sos1BigMPromotionBatchRejected,
+    Sos1BigMPromotionPlan, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim, Sos1ConstraintID,
+    VariableID,
 };
 use std::collections::BTreeMap;
 
@@ -67,7 +67,7 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
     )]);
     assert_eq!(request[&cardinality_id].len(), 2);
 
-    let plan: Sos1BigMPromotionBatchPlan<'_> =
+    let plan: Sos1BigMPromotionPlan<'_> =
         instance.plan_promote_sos1_big_m(&request, Default::default());
     assert!(plan.is_fully_valid());
     assert_eq!(plan.rejections().count(), 0);

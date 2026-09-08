@@ -290,3 +290,29 @@ def test_promote_sos1_big_m_rejects_unknown_mode_before_mutation() -> None:
         instance.promote_sos1_big_m(request, mode="typo")  # type: ignore[arg-type]
 
     assert instance.to_v2_bytes() == before
+
+
+@pytest.mark.parametrize("attribute", ["request_count", "rejections"])
+def test_strict_rejection_preserves_python_attribute_errors(
+    monkeypatch: pytest.MonkeyPatch, attribute: str
+) -> None:
+    instance, _ = mixed_formulation()
+    before = instance.to_v2_bytes()
+    failure = AttributeError("custom rejection descriptor failed")
+
+    def reject_assignment(_self: object, _value: object) -> None:
+        raise failure
+
+    # Exception classes are mutable Python types. Attribute attachment is not
+    # an internal Rust invariant: a user descriptor can reject it.
+    monkeypatch.setattr(
+        Sos1BigMPromotionBatchRejectedError,
+        attribute,
+        property(fset=reject_assignment),
+        raising=False,
+    )
+    with pytest.raises(AttributeError) as exc_info:
+        instance.promote_sos1_big_m(Sos1BigMPromotionRequest({999: {}}), mode="strict")
+
+    assert exc_info.value is failure
+    assert instance.to_v2_bytes() == before

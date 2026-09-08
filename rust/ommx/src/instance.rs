@@ -45,7 +45,7 @@ pub use preparation::{
     SpecialConstraintPreparation,
 };
 pub use sos1_promotion::{
-    Sos1BigMPromotion, Sos1BigMPromotionBatchPlan, Sos1BigMPromotionBatchRejected,
+    Sos1BigMPromotion, Sos1BigMPromotionBatchRejected, Sos1BigMPromotionPlan,
     Sos1BigMPromotionRequest, Sos1BigMSelectorClaim,
 };
 pub use stats::*;

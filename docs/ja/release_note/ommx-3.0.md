@@ -31,6 +31,10 @@ pre-releaseで提供していた単一定式化のRequestとResultを置き換�
 構築例・Reportの参照方法・atomicityについては
 {ref}`SOS1のBig-M定式化 <sos1-big-m-formulation>`を参照してください。
 
+`Sos1BigMPromotionBatchRejectedError`、`LogEncodingError`、
+`PreparationTargetNotReachedError`への診断属性の設定時にPythonの属性hookが
+例外を送出した場合、Rustのpanicにせず、そのPython例外をそのまま伝播します。
+
 ### 🛠 モデルの識別子を型付きenumへ復元 ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
 
 v3への書き直しで、{class}`~ommx.DecisionVariable`からprotobufの整数識別子を

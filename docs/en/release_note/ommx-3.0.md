@@ -31,6 +31,10 @@ This replaces the prerelease single-formulation request and result API.
 See {ref}`SOS1 Big-M formulations <sos1-big-m-formulation>` for construction,
 report inspection, and the atomicity contract.
 
+Attaching diagnostic attributes to `Sos1BigMPromotionBatchRejectedError`,
+`LogEncodingError`, and `PreparationTargetNotReachedError` now preserves any
+exception raised by a Python attribute hook instead of causing a Rust panic.
+
 ### 🛠 Restore typed enum model discriminators ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
 
 The v3 rewrite accidentally exposed protobuf integer discriminators through
