@@ -6,11 +6,12 @@
 //! never prevents an otherwise valid [`Instance`] from being returned; callers
 //! receive the original hint and its error in a structured report.
 
-use super::{
-    one_hot_promotion::validate_one_hot_promotion_source, Instance, OneHotPromotionRequest,
-    Sos1BigMPromotion, Sos1BigMPromotionRequest,
+use super::{Instance, OneHotPromotionRequest, Sos1BigMPromotionRequest};
+use crate::{message_io, v1, ATol, ConstraintID, OneHotConstraintID, Parse, Sos1ConstraintID};
+use std::{
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    sync::Arc,
 };
-use crate::{message_io, v1, ATol, ConstraintID, OneHotConstraintID, Parse};
 
 /// Outcome of attempting one legacy v1 one-hot hint.
 ///
@@ -34,8 +35,8 @@ pub enum V1OneHotHintPromotionOutcome {
         index: usize,
         /// Original untrusted wire-format hint.
         hint: v1::OneHot,
-        /// Validation error.
-        error: crate::Error,
+        /// Shared validation error; duplicate hints retain the same error chain.
+        error: Arc<crate::Error>,
     },
 }
 
@@ -92,17 +93,19 @@ pub enum V1Sos1HintPromotionOutcome {
         index: usize,
         /// Original untrusted wire-format hint.
         hint: v1::Sos1,
-        /// Verified promotion result.
-        promotion: Sos1BigMPromotion,
+        /// ID allocated to the promoted SOS1 constraint.
+        sos1_constraint_id: Sos1ConstraintID,
     },
-    /// The hint could not be verified or conflicted with another valid hint.
+    /// The hint could not be verified or conflicted with another converted
+    /// claim for the same cardinality constraint.
     Rejected {
         /// Original index within the SOS1 hint family.
         index: usize,
         /// Original untrusted wire-format hint.
         hint: v1::Sos1,
-        /// Validation or conflict error.
-        error: crate::Error,
+        /// Original conversion, validation, or conflict error chain.
+        /// Duplicate normalized claims share validation and conflict errors.
+        error: Arc<crate::Error>,
     },
 }
 
@@ -121,10 +124,12 @@ impl V1Sos1HintPromotionOutcome {
         }
     }
 
-    /// Verified promotion result, or `None` when the hint was rejected.
-    pub fn promotion(&self) -> Option<&Sos1BigMPromotion> {
+    /// Allocated SOS1 constraint ID, or `None` when the hint was rejected.
+    pub fn sos1_constraint_id(&self) -> Option<Sos1ConstraintID> {
         match self {
-            Self::Promoted { promotion, .. } => Some(promotion),
+            Self::Promoted {
+                sos1_constraint_id, ..
+            } => Some(*sos1_constraint_id),
             Self::Rejected { .. } => None,
         }
     }
@@ -148,6 +153,16 @@ impl V1Sos1HintPromotionOutcome {
 /// Each family preserves the order of its corresponding repeated protobuf
 /// field. A report can contain both promoted and rejected hints. Rejections are
 /// data, not failures of the surrounding byte-deserialization operation.
+/// Hints that normalize to the same request share their result, including
+/// rejection errors.
+///
+/// # Invariants
+///
+/// Created only by [`Instance::from_v1_bytes_with_promotion`]. Each family has
+/// exactly one outcome per raw hint, in wire order, with its original index and
+/// message unchanged. Each outcome contains either one target ID or one error.
+/// Target IDs identify promotions applied to the returned instance. Duplicate
+/// normalized requests share one target ID or one original error chain.
 #[must_use = "inspect the report for rejected legacy constraint hints"]
 #[derive(Debug)]
 pub struct V1ConstraintHintPromotionReport {
@@ -179,9 +194,9 @@ impl V1ConstraintHintPromotionReport {
 
     /// Consume the report and return both outcome families in wire order.
     ///
-    /// Unlike the borrowed accessors, this transfers ownership of rejection
-    /// errors to the caller, preserving their complete error chains for
-    /// downcasting or propagation.
+    /// This transfers shared ownership of rejection errors to the caller.
+    /// Their complete error chains remain available for downcasting through
+    /// the `Arc`; duplicate normalized requests share the same error allocation.
     pub fn into_parts(
         self,
     ) -> (
@@ -192,173 +207,142 @@ impl V1ConstraintHintPromotionReport {
     }
 }
 
-#[derive(Debug)]
-enum PreparedOneHotHint {
-    Promotable {
-        index: usize,
-        hint: v1::OneHot,
-        source_constraint_id: ConstraintID,
-    },
-    Rejected {
-        index: usize,
-        hint: v1::OneHot,
-        error: crate::Error,
-    },
-}
-
+/// Each variant retains the original wire index and unmodified hint.
+/// Before outcomes are assembled, every converted hint's cardinality ID has
+/// exactly one result from either the SOS1 batch or the conflicting-ID set.
+/// Rejected conversions carry their own error and require no result lookup.
 #[derive(Debug)]
 enum PreparedSos1Hint {
-    Promotable {
+    Converted {
         index: usize,
         hint: v1::Sos1,
     },
     Rejected {
         index: usize,
         hint: v1::Sos1,
-        error: crate::Error,
+        error: Arc<crate::Error>,
     },
 }
 
-/// Instance-bound plan for promoting both legacy hint families.
-///
-/// # Invariants
-///
-/// - `instance` is the exact decoded v1 [`Instance`] against which every
-///   `PreparedOneHotHint::Promotable` source was validated and every SOS1
-///   request was reconstructed; its exclusive borrow prevents intervening
-///   mutation before Apply;
-/// - `one_hot_request` contains exactly the distinct source IDs of the
-///   promotable OneHot hints, and every such hint retains the same ID for report
-///   lookup;
-/// - v1 parsing initializes both active and removed OneHot collections empty,
-///   so all validated sources fit in that independent target-ID namespace and
-///   [`Instance::promote_one_hot`] returns one successful entry for every ID in
-///   `one_hot_request`;
-/// - `sos1_requests` has exactly one entry, in order, for every
-///   `PreparedSos1Hint::Promotable`; and
-/// - Apply invokes only the family owner APIs. OneHot promotion runs first, and
-///   the SOS1 batch is then checked and applied against that resulting bound
-///   instance, so no detached family effect can become stale.
-///
-/// Consequently, all caller-controlled hint failures are report data. Every
-/// `expect` in Apply asserts one of the cardinality, key-alignment, or empty
-/// OneHot-namespace invariants above; reaching one means this private plan's
-/// construction contract was broken.
-#[derive(Debug)]
-struct V1ConstraintHintPromotionPlan<'a> {
-    instance: &'a mut Instance,
-    one_hot_request: OneHotPromotionRequest,
-    sos1_requests: Vec<Sos1BigMPromotionRequest>,
-    one_hot_hints: Vec<PreparedOneHotHint>,
-    sos1_hints: Vec<PreparedSos1Hint>,
-    atol: ATol,
-}
+impl Instance {
+    /// Sequence family-owned promotion operations without introducing a second
+    /// Plan/Apply abstraction. Each family constructs its own validated plan
+    /// against the exact instance it mutates; only planning rejections enter
+    /// this report. The map lookups below assert the family APIs' exact-key
+    /// result contracts and the converted-hint invariant above.
+    fn promote_v1_constraint_hints(
+        &mut self,
+        hints: v1::ConstraintHints,
+        atol: ATol,
+    ) -> V1ConstraintHintPromotionReport {
+        let one_hot_request = hints
+            .one_hot_constraints
+            .iter()
+            .flat_map(OneHotPromotionRequest::from)
+            .collect::<OneHotPromotionRequest>();
 
-impl<'a> V1ConstraintHintPromotionPlan<'a> {
-    fn prepare(instance: &'a mut Instance, mut hints: v1::ConstraintHints, atol: ATol) -> Self {
-        let mut one_hot_request = OneHotPromotionRequest::new();
-        let one_hot_hints = std::mem::take(&mut hints.one_hot_constraints)
-            .into_iter()
-            .enumerate()
-            .map(|(index, hint)| {
-                let source_constraint_id = ConstraintID::from(hint.constraint_id);
-                let request = OneHotPromotionRequest::from(&hint);
-                match validate_one_hot_promotion_source(instance, source_constraint_id) {
-                    Ok(()) => {
-                        one_hot_request.extend(request);
-                        PreparedOneHotHint::Promotable {
-                            index,
-                            hint,
-                            source_constraint_id,
-                        }
-                    }
-                    Err(error) => PreparedOneHotHint::Rejected { index, hint, error },
-                }
-            })
-            .collect();
-
-        let mut sos1_requests = Vec::new();
-        let sos1_hints = std::mem::take(&mut hints.sos1_constraints)
+        // Reconstruct while every original regular row is still available.
+        // Normalization ignores repeated-field order, but never silently
+        // overwrites different claims for the same cardinality constraint.
+        let mut sos1_request = Sos1BigMPromotionRequest::new();
+        let mut conflicting_ids = BTreeSet::new();
+        let sos1_hints = hints
+            .sos1_constraints
             .into_iter()
             .enumerate()
             .map(
-                |(index, hint)| match Sos1BigMPromotionRequest::from_v1_hint(instance, &hint) {
-                    Ok(request) => {
-                        sos1_requests.push(request);
-                        PreparedSos1Hint::Promotable { index, hint }
+                |(index, hint)| match self.sos1_big_m_promotion_request_from_v1_hint(&hint) {
+                    Ok(mut request) => {
+                        let (cardinality, claims) = request
+                            .pop_first()
+                            .expect("v1 SOS1 conversion returns exactly one request");
+                        debug_assert!(request.is_empty());
+                        debug_assert_eq!(
+                            cardinality,
+                            ConstraintID::from(hint.binary_constraint_id)
+                        );
+                        match sos1_request.entry(cardinality) {
+                            Entry::Vacant(entry) => {
+                                entry.insert(claims);
+                            }
+                            Entry::Occupied(entry) if entry.get() != &claims => {
+                                conflicting_ids.insert(cardinality);
+                            }
+                            Entry::Occupied(_) => {}
+                        }
+                        PreparedSos1Hint::Converted { index, hint }
                     }
-                    Err(error) => PreparedSos1Hint::Rejected { index, hint, error },
+                    Err(error) => PreparedSos1Hint::Rejected {
+                        index,
+                        hint,
+                        error: Arc::new(error),
+                    },
                 },
             )
-            .collect();
-
-        Self {
-            instance,
-            one_hot_request,
-            sos1_requests,
-            one_hot_hints,
-            sos1_hints,
-            atol,
+            .collect::<Vec<_>>();
+        for id in &conflicting_ids {
+            sos1_request.remove(id);
         }
-    }
 
-    fn apply(self) -> V1ConstraintHintPromotionReport {
-        let Self {
-            instance,
-            one_hot_request,
-            sos1_requests,
-            one_hot_hints,
-            sos1_hints,
-            atol,
-        } = self;
-
-        let one_hot_promotions = instance
+        // Neither family API can add a rejection during Apply. Their Err
+        // entries were determined by their own plans before storage effects.
+        let one_hot_promotions = self
             .promote_one_hot(&one_hot_request)
             .into_iter()
-            .map(|(source_constraint_id, result)| {
-                let target_id = result.expect(
-                    "validated v1 OneHot sources must fit in the parsed instance's empty target namespace",
-                );
-                (source_constraint_id, target_id)
-            })
-            .collect::<std::collections::BTreeMap<_, _>>();
-        let sos1_promotions = instance.promote_sos1_big_m(&sos1_requests, atol);
-
-        let one_hot_outcomes = one_hot_hints
+            .map(|(id, result)| (id, result.map_err(Arc::new)))
+            .collect::<BTreeMap<_, _>>();
+        let mut sos1_promotions = self
+            .promote_sos1_big_m(&sos1_request, atol)
             .into_iter()
-            .map(|prepared| match prepared {
-                PreparedOneHotHint::Promotable {
-                    index,
-                    hint,
-                    source_constraint_id,
-                } => V1OneHotHintPromotionOutcome::Promoted {
-                    index,
-                    hint,
-                    one_hot_constraint_id: *one_hot_promotions.get(&source_constraint_id).expect(
-                        "every promotable v1 OneHot hint must retain its requested source ID",
-                    ),
-                },
-                PreparedOneHotHint::Rejected { index, hint, error } => {
-                    V1OneHotHintPromotionOutcome::Rejected { index, hint, error }
+            .map(|(id, result)| (id, result.map_err(Arc::new)))
+            .collect::<BTreeMap<_, _>>();
+        for cardinality in conflicting_ids {
+            sos1_promotions.insert(cardinality, Err(Arc::new(crate::error!(
+                { ?cardinality },
+                "Legacy v1 SOS1 hints contain different selector claims for cardinality constraint {cardinality}"
+            ))));
+        }
+
+        let one_hot_outcomes = hints
+            .one_hot_constraints
+            .into_iter()
+            .enumerate()
+            .map(|(index, hint)| {
+                let result = one_hot_promotions
+                    .get(&ConstraintID::from(hint.constraint_id))
+                    .expect("OneHot promotion reports exactly the requested source IDs");
+                match result {
+                    Ok(one_hot_constraint_id) => V1OneHotHintPromotionOutcome::Promoted {
+                        index,
+                        hint,
+                        one_hot_constraint_id: *one_hot_constraint_id,
+                    },
+                    Err(error) => V1OneHotHintPromotionOutcome::Rejected {
+                        index,
+                        hint,
+                        error: Arc::clone(error),
+                    },
                 }
             })
             .collect();
-
-        let mut sos1_promotions = sos1_promotions.into_iter();
         let sos1_outcomes = sos1_hints
             .into_iter()
             .map(|prepared| match prepared {
-                PreparedSos1Hint::Promotable { index, hint } => {
-                    match sos1_promotions
-                        .next()
-                        .expect("every converted v1 SOS1 hint must have one aligned result")
-                    {
-                        Ok(promotion) => V1Sos1HintPromotionOutcome::Promoted {
+                PreparedSos1Hint::Converted { index, hint } => {
+                    let result = sos1_promotions
+                        .get(&ConstraintID::from(hint.binary_constraint_id))
+                        .expect("every converted SOS1 hint has a promotion or conflict outcome");
+                    match result {
+                        Ok(sos1_constraint_id) => V1Sos1HintPromotionOutcome::Promoted {
                             index,
                             hint,
-                            promotion,
+                            sos1_constraint_id: *sos1_constraint_id,
                         },
-                        Err(error) => V1Sos1HintPromotionOutcome::Rejected { index, hint, error },
+                        Err(error) => V1Sos1HintPromotionOutcome::Rejected {
+                            index,
+                            hint,
+                            error: Arc::clone(error),
+                        },
                     }
                 }
                 PreparedSos1Hint::Rejected { index, hint, error } => {
@@ -366,7 +350,6 @@ impl<'a> V1ConstraintHintPromotionPlan<'a> {
                 }
             })
             .collect();
-        debug_assert!(sos1_promotions.next().is_none());
 
         V1ConstraintHintPromotionReport {
             one_hot_outcomes,
@@ -387,12 +370,15 @@ impl Instance {
     /// Repeated valid OneHot hints for the same source ID are one promotion
     /// request, and every raw occurrence reports the same allocated target ID.
     /// The legacy member list is advisory and ignored. SOS1 outcomes retain
-    /// their raw-hint order, including the family's all-participants rejection
-    /// policy for incompatible otherwise-valid requests. OneHot promotion is
-    /// completed first. The converted SOS1 requests are
-    /// then batch-checked and applied against that resulting instance, so each
-    /// family owner validates the exact state that it mutates. One private
-    /// instance-bound plan retains mutation authority across that sequence.
+    /// their raw-hint order. Equivalent converted SOS1 requests with the same
+    /// cardinality ID are promoted once; different claims for that ID are all
+    /// rejected without entering the SOS1 batch. Conversion failures do not
+    /// block other hints. Duplicate normalized requests share the original
+    /// rejection error chain.
+    /// OneHot promotion completes first, then the SOS1 owner batch-checks and
+    /// applies against that resulting instance. Each family owner validates
+    /// the exact state it mutates; this loader does not duplicate its Plan or
+    /// weaken its infallible Apply contract.
     ///
     /// The supplied `atol` is used only to verify SOS1 Big-M formulations.
     /// OneHot recognition is exact and, although it preserves the exact
@@ -411,7 +397,7 @@ impl Instance {
         let mut raw = message_io::decode::<v1::Instance>(bytes, "ommx.v1.Instance")?;
         let hints = raw.constraint_hints.take().unwrap_or_default();
         let mut instance = Parse::parse(raw, &())?;
-        let report = V1ConstraintHintPromotionPlan::prepare(&mut instance, hints, atol).apply();
+        let report = instance.promote_v1_constraint_hints(hints, atol);
         Ok((instance, report))
     }
 }

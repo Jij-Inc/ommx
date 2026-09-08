@@ -3,6 +3,7 @@ use ommx::{
     Linear, LinearMonomial, Message, OneHotConstraintID, OneHotPromotionRequest, ParseError,
     RawParseError, Sense, Sos1BigMPromotionRequest, VariableID,
 };
+use proptest::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error as _;
 
@@ -206,13 +207,11 @@ fn public_loader_promotes_valid_hints_from_real_v1_bytes() {
     assert_eq!(sos1_outcome.index(), 0);
     assert_eq!(sos1_outcome.hint(), &sos1_hint);
     assert!(sos1_outcome.error().is_none());
-    let sos1_promotion = sos1_outcome.promotion().unwrap();
-    assert!(sos1_promotion
-        .relaxed_constraint_ids()
-        .contains(&ConstraintID::from(SOS1_SOURCE_ID)));
+    let sos1_promotion = sos1_outcome.sos1_constraint_id().unwrap();
     assert!(instance
-        .sos1_constraints()
-        .contains_key(&sos1_promotion.sos1_constraint_id()));
+        .removed_constraints()
+        .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
+    assert!(instance.sos1_constraints().contains_key(&sos1_promotion));
 
     assert!(instance.constraints().is_empty());
     assert!(instance
@@ -252,7 +251,7 @@ fn invalid_hints_do_not_block_independent_valid_promotions() {
     assert_eq!(invalid_sos1_outcome.index(), 0);
     assert_eq!(invalid_sos1_outcome.hint(), &invalid_sos1);
     assert!(!invalid_sos1_outcome.is_promoted());
-    assert!(invalid_sos1_outcome.promotion().is_none());
+    assert!(invalid_sos1_outcome.sos1_constraint_id().is_none());
     assert!(invalid_sos1_outcome.error().is_some());
     assert!(report.sos1_outcomes()[1].is_promoted());
 
@@ -377,19 +376,20 @@ fn individual_hint_requests_remain_independently_applicable() {
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
 
     let mut sos1_only = source_instance();
-    let sos1_request =
-        Sos1BigMPromotionRequest::from_v1_hint(&sos1_only, &valid_sos1_hint()).unwrap();
+    let sos1_request: Sos1BigMPromotionRequest = sos1_only
+        .sos1_big_m_promotion_request_from_v1_hint(&valid_sos1_hint())
+        .unwrap();
     assert_eq!(
-        sos1_request.cardinality_constraint,
-        ConstraintID::from(SOS1_SOURCE_ID)
+        sos1_request.keys().copied().collect::<Vec<_>>(),
+        vec![ConstraintID::from(SOS1_SOURCE_ID)]
     );
-    let outcomes =
-        sos1_only.promote_sos1_big_m(std::slice::from_ref(&sos1_request), ATol::default());
+    let outcomes = sos1_only.promote_sos1_big_m(&sos1_request, ATol::default());
     assert_eq!(outcomes.len(), 1);
     let _ = outcomes
         .into_iter()
         .next()
         .expect("one request has one aligned result")
+        .1
         .unwrap();
     assert_eq!(sos1_only.sos1_constraints().len(), 1);
     assert!(sos1_only
@@ -490,6 +490,7 @@ fn repeated_invalid_one_hot_hints_retain_owned_errors_for_each_occurrence() {
     };
     assert!(first_error.to_string().contains("was not found"));
     assert!(second_error.to_string().contains("was not found"));
+    assert!(std::sync::Arc::ptr_eq(&first_error, &second_error));
     assert_eq!(instance.constraints().len(), 2);
     assert!(instance.one_hot_constraints().is_empty());
 }
@@ -559,11 +560,13 @@ fn one_hot_and_sos1_promotions_may_share_an_ordinary_member() {
     let one_hot_id = report.one_hot_outcomes()[0]
         .one_hot_constraint_id()
         .unwrap();
-    let sos1_promotion = report.sos1_outcomes()[0].promotion().unwrap();
+    let sos1_promotion = report.sos1_outcomes()[0].sos1_constraint_id().unwrap();
     assert!(instance.one_hot_constraints()[&one_hot_id]
         .variables
         .contains(&VariableID::from(0)));
-    assert!(sos1_promotion.members().contains(&VariableID::from(0)));
+    assert!(instance.sos1_constraints()[&sos1_promotion]
+        .variables
+        .contains(&VariableID::from(0)));
 }
 
 #[test]
@@ -613,11 +616,15 @@ fn disjoint_one_hot_and_fresh_selector_sos1_effects_apply_together() {
 
     assert!(!report.has_rejections());
     assert!(report.one_hot_outcomes()[0].is_promoted());
-    let sos1_promotion = report.sos1_outcomes()[0].promotion().unwrap();
-    assert_eq!(
-        sos1_promotion.fresh_selectors(),
-        &BTreeMap::from([(VariableID::from(1), VariableID::from(10))])
-    );
+    let sos1_promotion = report.sos1_outcomes()[0].sos1_constraint_id().unwrap();
+    assert!(instance.sos1_constraints().contains_key(&sos1_promotion));
+    let state = instance
+        .populate_state(
+            ommx::v1::State::from_iter([(0, 0.0), (1, -2.0), (11, 1.0), (12, 0.0)]),
+            ATol::default(),
+        )
+        .unwrap();
+    assert_eq!(state.entries[&10], 1.0);
     assert!(instance
         .decision_variable_dependency()
         .get(&VariableID::from(10))
@@ -634,9 +641,9 @@ fn disjoint_one_hot_and_fresh_selector_sos1_effects_apply_together() {
 
 #[test]
 fn sos1_outcomes_remain_aligned_across_conversion_rejections() {
-    let first = sos1_hint(20, vec![0, 1]);
+    let first = sos1_hint(22, vec![4, 5]);
     let invalid = sos1_hint(21, vec![]);
-    let last = sos1_hint(22, vec![4, 5]);
+    let last = sos1_hint(20, vec![0, 1]);
     let bytes = raw_instance_from(
         three_sos1_source_instance(),
         vec![],
@@ -653,22 +660,19 @@ fn sos1_outcomes_remain_aligned_across_conversion_rejections() {
         assert_eq!(outcome.index(), index);
         assert_eq!(outcome.hint(), hint);
     }
-    let first_promotion = outcomes[0].promotion().unwrap();
+    let first_promotion = outcomes[0].sos1_constraint_id().unwrap();
     assert!(!outcomes[1].is_promoted());
-    let last_promotion = outcomes[2].promotion().unwrap();
-    assert_ne!(
-        first_promotion.sos1_constraint_id(),
-        last_promotion.sos1_constraint_id()
-    );
+    let last_promotion = outcomes[2].sos1_constraint_id().unwrap();
+    assert_ne!(first_promotion, last_promotion);
     assert_eq!(
-        first_promotion.members(),
-        &[VariableID::from(0), VariableID::from(1)]
+        &instance.sos1_constraints()[&first_promotion].variables,
+        &[VariableID::from(4), VariableID::from(5)]
             .into_iter()
             .collect()
     );
     assert_eq!(
-        last_promotion.members(),
-        &[VariableID::from(4), VariableID::from(5)]
+        &instance.sos1_constraints()[&last_promotion].variables,
+        &[VariableID::from(0), VariableID::from(1)]
             .into_iter()
             .collect()
     );
@@ -679,32 +683,214 @@ fn sos1_outcomes_remain_aligned_across_conversion_rejections() {
 }
 
 #[test]
-fn conflicting_sos1_hints_are_both_rejected_without_blocking_one_hot() {
+fn equivalent_sos1_hints_share_one_promotion_without_losing_wire_order() {
     let first = valid_sos1_hint();
     let mut second = first.clone();
     second.decision_variables.reverse();
-    let bytes =
-        raw_instance_with_hints(vec![valid_one_hot_hint()], vec![first, second]).encode_to_vec();
+    let bytes = raw_instance_with_hints(
+        vec![valid_one_hot_hint()],
+        vec![first.clone(), second.clone()],
+    )
+    .encode_to_vec();
 
     let (instance, report) =
         Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
 
-    for (index, outcome) in report.sos1_outcomes().iter().enumerate() {
+    assert!(!report.has_rejections());
+    let target = report.sos1_outcomes()[0].sos1_constraint_id().unwrap();
+    for (index, (outcome, hint)) in report
+        .sos1_outcomes()
+        .iter()
+        .zip([&first, &second])
+        .enumerate()
+    {
         assert_eq!(outcome.index(), index);
-        assert!(!outcome.is_promoted());
-        assert!(outcome.promotion().is_none());
-        let error = outcome.error().unwrap().to_string();
-        assert!(error.contains("consumed regular rows"));
-        assert!(error.contains("ConstraintID(20)"));
+        assert_eq!(outcome.hint(), hint);
+        assert_eq!(outcome.sos1_constraint_id(), Some(target));
     }
     assert!(instance
-        .constraints()
+        .removed_constraints()
         .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
-    assert!(instance.sos1_constraints().is_empty());
-
+    assert_eq!(instance.sos1_constraints().len(), 1);
     assert!(report.one_hot_outcomes()[0].is_promoted());
+    assert!(instance.constraints().is_empty());
+}
+
+#[test]
+fn different_claims_for_one_cardinality_are_rejected_regardless_of_order() {
+    let mut first = sos1_hint(102, vec![0, 1]);
+    first.big_m_constraint_ids = vec![100, 101];
+    let second = sos1_hint(102, vec![0, 20]);
+    for hints in [
+        vec![first.clone(), second.clone()],
+        vec![second.clone(), first.clone()],
+        vec![first.clone(), second.clone(), first.clone()],
+        vec![second.clone(), first.clone(), second.clone()],
+    ] {
+        let mut source = fresh_selector_source_instance((11, 12));
+        source
+            .add_decision_variable(
+                VariableID::from(20),
+                DecisionVariable::new(
+                    Kind::Integer,
+                    Bound::new(0.0, 0.0).unwrap(),
+                    Default::default(),
+                )
+                .unwrap(),
+                Default::default(),
+            )
+            .unwrap();
+        let independent_id = source
+            .add_constraint(
+                Constraint::less_than_or_equal_to_zero(binary_pair_cardinality(11, 12)),
+                Default::default(),
+            )
+            .unwrap();
+        let mut all_hints = hints.clone();
+        all_hints.push(sos1_hint(independent_id.into_inner(), vec![11, 12]));
+        let bytes =
+            raw_instance_from(source, vec![one_hot_hint(50, vec![])], all_hints).encode_to_vec();
+        let (instance, report) =
+            Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+
+        for (index, (outcome, hint)) in report.sos1_outcomes().iter().zip(&hints).enumerate() {
+            assert_eq!(outcome.index(), index);
+            assert_eq!(outcome.hint(), hint);
+            assert!(!outcome.is_promoted());
+            assert!(outcome
+                .error()
+                .unwrap()
+                .to_string()
+                .contains("different selector claims"));
+        }
+        assert!(std::ptr::eq(
+            report.sos1_outcomes()[0].error().unwrap(),
+            report.sos1_outcomes()[1].error().unwrap()
+        ));
+        assert_eq!(instance.sos1_constraints().len(), 1);
+        assert!(report.sos1_outcomes()[hints.len()].is_promoted());
+        assert_eq!(instance.constraints().len(), 3);
+        assert!(report.one_hot_outcomes()[0].is_promoted());
+    }
+}
+
+#[test]
+fn equivalent_fresh_claims_ignore_member_and_link_wire_order() {
+    let mut first = sos1_hint(102, vec![0, 1]);
+    first.big_m_constraint_ids = vec![100, 101];
+    let mut second = first.clone();
+    second.decision_variables.reverse();
+    second.big_m_constraint_ids.reverse();
+    let bytes = raw_instance_from(
+        fresh_selector_source_instance((11, 12)),
+        vec![],
+        vec![first.clone(), second.clone()],
+    )
+    .encode_to_vec();
+    let (instance, report) =
+        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+
+    assert!(!report.has_rejections());
+    let target = report.sos1_outcomes()[0].sos1_constraint_id().unwrap();
+    for (index, (outcome, hint)) in report
+        .sos1_outcomes()
+        .iter()
+        .zip([&first, &second])
+        .enumerate()
+    {
+        assert_eq!(outcome.index(), index);
+        assert_eq!(outcome.hint(), hint);
+        assert_eq!(outcome.sos1_constraint_id(), Some(target));
+    }
+    assert_eq!(instance.sos1_constraints().len(), 1);
+    assert_eq!(instance.decision_variable_dependency().len(), 1);
+    assert_eq!(instance.removed_constraints().len(), 3);
+}
+
+#[test]
+fn a_conversion_failure_does_not_poison_the_same_cardinality_id() {
+    let bytes = raw_instance_with_hints(
+        vec![],
+        vec![sos1_hint(SOS1_SOURCE_ID, vec![]), valid_sos1_hint()],
+    )
+    .encode_to_vec();
+    let (instance, report) =
+        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+
+    assert_eq!(report.sos1_outcomes().len(), 2);
+    assert!(!report.sos1_outcomes()[0].is_promoted());
+    assert!(report.sos1_outcomes()[1].is_promoted());
+    assert_eq!(instance.sos1_constraints().len(), 1);
     assert!(!instance
         .constraints()
-        .contains_key(&ConstraintID::from(ONE_HOT_SOURCE_ID)));
-    assert_eq!(instance.one_hot_constraints().len(), 1);
+        .contains_key(&ConstraintID::from(SOS1_SOURCE_ID)));
+}
+
+#[test]
+fn duplicate_sos1_rejections_share_the_original_error_chain() {
+    let hint = valid_sos1_hint();
+    let bytes = raw_instance_with_hints(vec![], vec![hint.clone(), hint]).encode_to_vec();
+    let (instance, report) =
+        Instance::from_v1_bytes_with_promotion(&bytes, ATol::new(f64::INFINITY).unwrap()).unwrap();
+
+    assert_eq!(report.sos1_outcomes().len(), 2);
+    for outcome in report.sos1_outcomes() {
+        assert!(outcome.error().unwrap().to_string().contains("finite ATol"));
+    }
+    assert!(std::ptr::eq(
+        report.sos1_outcomes()[0].error().unwrap(),
+        report.sos1_outcomes()[1].error().unwrap()
+    ));
+    assert!(instance.sos1_constraints().is_empty());
+    assert_eq!(instance.constraints().len(), 2);
+}
+
+proptest! {
+    #[test]
+    fn promotion_loader_round_trips_v1_compatible_instances_without_hints(
+        source in Instance::arbitrary_with(ommx::InstanceParameters::v1_compatible()),
+    ) {
+        let bytes = source.to_v1_bytes().unwrap();
+        let (actual, report) = Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+        prop_assert_eq!(&actual, &source);
+        prop_assert_eq!(actual, Instance::from_v1_bytes(&bytes).unwrap());
+        prop_assert!(report.one_hot_outcomes().is_empty());
+        prop_assert!(report.sos1_outcomes().is_empty());
+    }
+
+    #[test]
+    fn arbitrary_hints_preserve_wire_alignment_and_v2_round_trip(
+        source in Instance::arbitrary_with(ommx::InstanceParameters::v1_compatible()),
+        one_hot_data in prop::collection::vec((0_u64..32, prop::collection::vec(0_u64..32, 0..8)), 0..12),
+        sos1_data in prop::collection::vec((0_u64..32, prop::collection::vec(0_u64..32, 0..8), prop::collection::vec(0_u64..32, 0..8)), 0..12),
+    ) {
+        let one_hot_hints = one_hot_data.into_iter().map(|(id, members)| one_hot_hint(id, members)).collect::<Vec<_>>();
+        let sos1_hints = sos1_data.into_iter().map(|(id, members, links)| {
+            let mut hint = sos1_hint(id, members);
+            hint.big_m_constraint_ids = links;
+            hint
+        }).collect::<Vec<_>>();
+        let bytes = raw_instance_from(source.clone(), one_hot_hints.clone(), sos1_hints.clone()).encode_to_vec();
+        prop_assert_eq!(Instance::from_v1_bytes(&bytes).unwrap(), source);
+        let (actual, report) = Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+        prop_assert_eq!(report.one_hot_outcomes().len(), one_hot_hints.len());
+        prop_assert_eq!(report.sos1_outcomes().len(), sos1_hints.len());
+        for (index, (outcome, hint)) in report.one_hot_outcomes().iter().zip(&one_hot_hints).enumerate() {
+            prop_assert_eq!(outcome.index(), index);
+            prop_assert_eq!(outcome.hint(), hint);
+            prop_assert_eq!(outcome.is_promoted(), outcome.error().is_none());
+            if let Some(id) = outcome.one_hot_constraint_id() {
+                prop_assert!(actual.one_hot_constraints().contains_key(&id));
+            }
+        }
+        for (index, (outcome, hint)) in report.sos1_outcomes().iter().zip(&sos1_hints).enumerate() {
+            prop_assert_eq!(outcome.index(), index);
+            prop_assert_eq!(outcome.hint(), hint);
+            prop_assert_eq!(outcome.is_promoted(), outcome.error().is_none());
+            if let Some(id) = outcome.sos1_constraint_id() {
+                prop_assert!(actual.sos1_constraints().contains_key(&id));
+            }
+        }
+        prop_assert_eq!(Instance::from_v2_bytes(&actual.to_v2_bytes()).unwrap(), actual);
+    }
 }

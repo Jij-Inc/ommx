@@ -7,7 +7,7 @@
 //! are not SDK signals use direct `From` implementations beside that table.
 
 use pyo3::{
-    exceptions::{PyKeyError, PyRuntimeError, PyValueError},
+    exceptions::{PyBaseException, PyKeyError, PyRuntimeError, PyValueError},
     prelude::*,
 };
 
@@ -178,6 +178,50 @@ create_core_exception!(
     PyRuntimeError,
     "The mathematical model was proven infeasible."
 );
+pyo3::create_exception!(
+    ommx,
+    Sos1BigMPromotionBatchRejectedError,
+    PyRuntimeError,
+    "One or more requests in a strict SOS1 Big-M promotion batch were rejected."
+);
+impl pyo3_stub_gen::PyStubType for Sos1BigMPromotionBatchRejectedError {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::builtin("Sos1BigMPromotionBatchRejectedError")
+    }
+}
+pyo3_stub_gen::impl_py_runtime_type!(Sos1BigMPromotionBatchRejectedError);
+
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::type_info::PyClassInfo {
+        pyclass_name: "Sos1BigMPromotionBatchRejectedError",
+        struct_id: std::any::TypeId::of::<Sos1BigMPromotionBatchRejectedError>,
+        getters: &[
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "request_count",
+                r#type: <usize as pyo3_stub_gen::PyStubType>::type_output,
+                doc: "Number of formulations in the rejected strict batch.",
+                default: None,
+                deprecated: None,
+            },
+            pyo3_stub_gen::type_info::MemberInfo {
+                name: "rejections",
+                r#type: <std::collections::BTreeMap<u64, String> as pyo3_stub_gen::PyStubType>::type_output,
+                doc: "Diagnostic messages keyed by rejected cardinality constraint ID.",
+                default: None,
+                deprecated: None,
+            },
+        ],
+        setters: &[],
+        module: Some("ommx._ommx_rust"),
+        doc: "One or more requests in a strict SOS1 Big-M promotion batch were rejected.",
+        bases: &[|| <PyRuntimeError as pyo3_stub_gen::PyStubType>::type_output()],
+        has_eq: false,
+        has_ord: false,
+        has_hash: false,
+        has_str: false,
+        subclass: true,
+    }
+}
 pyo3::create_exception!(
     ommx,
     PreparationTargetNotReachedError,
@@ -375,13 +419,24 @@ fn sample_set_error_to_pyerr(error: &ommx::SampleSetError, message: String) -> P
     }
 }
 
+/// Exception classes can have user-defined descriptors or `__setattr__`.
+/// Their failures belong to Python and must not become Rust invariant panics.
+fn with_diagnostic_attributes(
+    error: PyErr,
+    attach: impl FnOnce(&Bound<'_, PyBaseException>) -> PyResult<()>,
+) -> PyErr {
+    Python::attach(|py| match attach(error.value(py)) {
+        Ok(()) => error,
+        Err(error) => error,
+    })
+}
+
 fn log_encoding_unavailable_to_pyerr(
     error: &ommx::LogEncodingUnavailable,
     message: String,
 ) -> PyErr {
     let pyerr = LogEncodingError::new_err(message);
-    Python::attach(|py| {
-        let value = pyerr.value(py);
+    with_diagnostic_attributes(pyerr, |value| {
         let (kind, variable_id) = match error {
             ommx::LogEncodingUnavailable::NonFiniteBound { id, bound } => {
                 value.setattr(
@@ -416,8 +471,6 @@ fn log_encoding_unavailable_to_pyerr(
         value.setattr("kind", kind)?;
         value.setattr("variable_id", variable_id.into_inner())
     })
-    .expect("LogEncodingError supports diagnostic attributes");
-    pyerr
 }
 
 fn exact_integer_slack_unavailable_to_pyerr(
@@ -431,23 +484,37 @@ fn infeasible_detected_to_pyerr(_: &ommx::InfeasibleDetected, message: String) -
     InfeasibleDetected::new_err(message)
 }
 
+fn sos1_big_m_promotion_batch_rejected_to_pyerr(
+    error: &ommx::Sos1BigMPromotionBatchRejected,
+    message: String,
+) -> PyErr {
+    let pyerr = Sos1BigMPromotionBatchRejectedError::new_err(message);
+    with_diagnostic_attributes(pyerr, |value| {
+        value.setattr("request_count", error.request_count())?;
+        let rejections = error
+            .rejections()
+            .map(|(id, error)| (id.into_inner(), format!("{error:#}")))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        value.setattr("rejections", rejections)
+    })
+}
+
 fn preparation_target_not_reached_to_pyerr(
     error: &ommx::PreparationTargetNotReached,
     message: String,
 ) -> PyErr {
     let pyerr = PreparationTargetNotReachedError::new_err(message);
-    Python::attach(|py| {
+    with_diagnostic_attributes(pyerr, |value| {
         let report = Py::new(
-            py,
+            value.py(),
             crate::InstanceClassMembershipReport(error.report().clone()),
         )?;
-        pyerr.value(py).setattr("report", report)
+        value.setattr("report", report)
     })
-    .expect("PreparationTargetNotReachedError supports a report attribute");
-    pyerr
 }
 
 define_ommx_error_mappings!(
+    ommx::Sos1BigMPromotionBatchRejected => sos1_big_m_promotion_batch_rejected_to_pyerr,
     ommx::ParseError => parse_error_to_pyerr,
     ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
     ommx::experiment::AttachmentNotFound => attachment_not_found_to_pyerr,
@@ -534,6 +601,10 @@ pub fn register_exceptions(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyRe
     )?;
     module.add("InfeasibleDetected", py.get_type::<InfeasibleDetected>())?;
     module.add(
+        "Sos1BigMPromotionBatchRejectedError",
+        py.get_type::<Sos1BigMPromotionBatchRejectedError>(),
+    )?;
+    module.add(
         "PreparationTargetNotReachedError",
         py.get_type::<PreparationTargetNotReachedError>(),
     )?;
@@ -576,6 +647,31 @@ mod tests {
         Python::attach(|py| {
             let error: PyErr = error.into();
             assert!(error.is_instance_of::<T>(py), "{error}");
+        });
+    }
+
+    #[test]
+    fn diagnostic_attachment_preserves_python_exception_identity() {
+        Python::initialize();
+        Python::attach(|py| {
+            let original = PyRuntimeError::new_err("domain error");
+            let original_value = original.value(py).clone();
+            let result = with_diagnostic_attributes(original, |value| value.setattr("detail", 42));
+            assert!(result.value(py).is(&original_value));
+            assert_eq!(
+                result
+                    .value(py)
+                    .getattr("detail")
+                    .unwrap()
+                    .extract::<u64>()
+                    .unwrap(),
+                42
+            );
+
+            let failure = PyValueError::new_err("Python attribute hook failed");
+            let failure_value = failure.value(py).clone();
+            let result = with_diagnostic_attributes(result, |_| Err(failure));
+            assert!(result.value(py).is(&failure_value));
         });
     }
 
@@ -715,6 +811,60 @@ mod tests {
             bound: ommx::Bound::new(1.0, 2.0).unwrap(),
         });
         assert_exception::<InfeasibleDetected>(erased.into());
+    }
+
+    fn rejected_sos1_big_m_batch() -> ommx::Sos1BigMPromotionBatchRejected {
+        let request = ommx::Sos1BigMPromotionRequest::from([
+            (
+                ommx::ConstraintID::from(0),
+                std::collections::BTreeMap::new(),
+            ),
+            (
+                ommx::ConstraintID::from(u64::MAX),
+                std::collections::BTreeMap::new(),
+            ),
+        ]);
+        ommx::Instance::default()
+            .promote_sos1_big_m_if_fully_valid(&request, ommx::ATol::default())
+            .unwrap_err()
+            .downcast()
+            .expect("strict SOS1 batch rejection remains downcastable")
+    }
+
+    #[test]
+    fn sos1_big_m_batch_rejection_mapping_preserves_all_cardinality_ids() {
+        // The conversion itself attaches diagnostic attributes, so Python must
+        // be initialized before evaluating the arguments to assert_exception.
+        Python::initialize();
+        assert_exception::<Sos1BigMPromotionBatchRejectedError>(rejected_sos1_big_m_batch().into());
+        assert_exception::<Sos1BigMPromotionBatchRejectedError>(
+            ommx::Error::from(rejected_sos1_big_m_batch()).into(),
+        );
+
+        let error: PyErr = OmmxPyError::from(rejected_sos1_big_m_batch()).into();
+        Python::attach(|py| {
+            let value = error.value(py);
+            assert_eq!(
+                value
+                    .getattr("request_count")
+                    .unwrap()
+                    .extract::<usize>()
+                    .unwrap(),
+                2
+            );
+            let rejections = value
+                .getattr("rejections")
+                .unwrap()
+                .extract::<std::collections::BTreeMap<u64, String>>()
+                .unwrap();
+            assert_eq!(
+                rejections.keys().copied().collect::<Vec<_>>(),
+                vec![0, u64::MAX]
+            );
+            assert!(rejections
+                .values()
+                .all(|message| message.contains("must contain at least one member")));
+        });
     }
 
     #[test]

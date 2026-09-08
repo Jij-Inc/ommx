@@ -45,7 +45,10 @@ pub use preparation::{
     IntegerSlackPreparation, ObjectivePreparation, PreparationPolicy, PreparationTargetNotReached,
     SpecialConstraintPreparation,
 };
-pub use sos1_promotion::{Sos1BigMPromotion, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim};
+pub use sos1_promotion::{
+    Sos1BigMPromotion, Sos1BigMPromotionBatchRejected, Sos1BigMPromotionPlan,
+    Sos1BigMPromotionRequest, Sos1BigMSelectorClaim,
+};
 pub use stats::*;
 pub use v1_hint_promotion::{
     V1ConstraintHintPromotionReport, V1OneHotHintPromotionOutcome, V1Sos1HintPromotionOutcome,

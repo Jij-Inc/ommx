@@ -1,6 +1,7 @@
 use ommx::{
     coeff, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance, Kind, Linear,
-    LinearMonomial, Sense, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim, Sos1ConstraintID,
+    LinearMonomial, Sense, Sos1BigMPromotion, Sos1BigMPromotionBatchRejected,
+    Sos1BigMPromotionPlan, Sos1BigMPromotionRequest, Sos1BigMSelectorClaim, Sos1ConstraintID,
     VariableID,
 };
 use std::collections::BTreeMap;
@@ -50,8 +51,9 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
         ]),
     )
     .unwrap();
-    let request = Sos1BigMPromotionRequest {
-        selector_claims: BTreeMap::from([
+    let request: Sos1BigMPromotionRequest = BTreeMap::from([(
+        cardinality_id,
+        BTreeMap::from([
             (VariableID::from(0), Sos1BigMSelectorClaim::Reused),
             (
                 VariableID::from(1),
@@ -62,19 +64,20 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
                 },
             ),
         ]),
-        cardinality_constraint: cardinality_id,
-    };
-    assert_eq!(request.selector_claims.len(), 2);
+    )]);
+    assert_eq!(request[&cardinality_id].len(), 2);
 
-    let outcomes = instance.promote_sos1_big_m(&[request], Default::default());
+    let plan: Sos1BigMPromotionPlan<'_> =
+        instance.plan_promote_sos1_big_m(&request, Default::default());
+    assert!(plan.is_fully_valid());
+    assert_eq!(plan.rejections().count(), 0);
+    let outcomes: Sos1BigMPromotion = plan.apply();
     assert_eq!(outcomes.len(), 1);
-    let promotion = outcomes
-        .into_iter()
-        .next()
-        .expect("one request has one aligned result")
-        .unwrap();
-
-    assert_eq!(promotion.relaxed_constraint_ids().len(), 3);
+    assert_eq!(
+        *outcomes[&cardinality_id].as_ref().unwrap(),
+        Sos1ConstraintID::from(0)
+    );
+    assert_eq!(instance.removed_constraints().len(), 3);
 
     let restored = Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
     assert_eq!(restored, instance);
@@ -97,7 +100,7 @@ fn public_api_promotes_independent_requests_with_a_shared_member() {
         ],
     ];
     let mut constraints = BTreeMap::new();
-    let mut requests = Vec::new();
+    let mut request = Sos1BigMPromotionRequest::new();
     for (selector, [upper, lower, cardinality]) in selectors.into_iter().zip(row_ids) {
         constraints.insert(
             upper,
@@ -117,8 +120,9 @@ fn public_api_promotes_independent_requests_with_a_shared_member() {
                 (term(selector.into_inner(), 1.0) + Linear::from(coeff!(-1.0))).unwrap(),
             )),
         );
-        requests.push(Sos1BigMPromotionRequest {
-            selector_claims: BTreeMap::from([(
+        request.insert(
+            cardinality,
+            BTreeMap::from([(
                 member,
                 Sos1BigMSelectorClaim::Fresh {
                     selector,
@@ -126,8 +130,7 @@ fn public_api_promotes_independent_requests_with_a_shared_member() {
                     lower_link: Some(lower),
                 },
             )]),
-            cardinality_constraint: cardinality,
-        });
+        );
     }
     let mut instance = Instance::new(
         Sense::Minimize,
@@ -149,13 +152,35 @@ fn public_api_promotes_independent_requests_with_a_shared_member() {
     )
     .unwrap();
 
-    let outcomes = instance.promote_sos1_big_m(&requests, Default::default());
-
-    assert_eq!(outcomes.len(), requests.len());
+    let before = instance.clone();
+    let mut invalid_request = request.clone();
+    invalid_request.insert(ConstraintID::from(0), BTreeMap::new());
+    invalid_request.insert(ConstraintID::from(u64::MAX), BTreeMap::new());
+    let error = instance
+        .promote_sos1_big_m_if_fully_valid(&invalid_request, Default::default())
+        .unwrap_err();
+    let rejected = error
+        .downcast_ref::<Sos1BigMPromotionBatchRejected>()
+        .expect("the public signal remains downcastable");
+    assert_eq!(rejected.request_count(), 4);
     assert_eq!(
-        outcomes
-            .iter()
-            .map(|outcome| outcome.as_ref().unwrap().sos1_constraint_id())
+        rejected.rejections().map(|(id, _)| id).collect::<Vec<_>>(),
+        vec![ConstraintID::from(0), ConstraintID::from(u64::MAX)]
+    );
+    assert_eq!(instance, before);
+
+    let promotions: Sos1BigMPromotion = instance
+        .promote_sos1_big_m_if_fully_valid(&request, Default::default())
+        .unwrap();
+
+    assert_eq!(
+        promotions.keys().collect::<Vec<_>>(),
+        request.keys().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        promotions
+            .values()
+            .map(|result| *result.as_ref().unwrap())
             .collect::<Vec<_>>(),
         vec![Sos1ConstraintID::from(0), Sos1ConstraintID::from(1)]
     );
