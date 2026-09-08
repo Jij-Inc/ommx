@@ -20,6 +20,7 @@ from ommx import (
     Parameter,
     ParametricInstance,
     PreparationPolicy,
+    PreparationTargetNotReachedError,
     Sense,
 )
 
@@ -631,6 +632,28 @@ def test_to_qubo_reduces_repeated_binary_power() -> None:
     assert offset == 0.0
     assert InstanceClass.qubo().contains(instance)
     assert instance.evaluate({0: 1}).objective == 1.0
+
+
+def test_to_qubo_explains_unexpanded_powi() -> None:
+    x = [DecisionVariable.binary(i) for i in range(3)]
+    g = Function(x[0] + x[1] + x[2] - 1)
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=g**2,
+        constraints={},
+        sense=Sense.Minimize,
+    )
+
+    with pytest.raises(PreparationTargetNotReachedError) as error:
+        instance.to_qubo()
+
+    message = str(error.value)
+    assert (
+        "objective function is not stored in the expanded polynomial form required by "
+        "this clause" in message
+    )
+    assert "Found `powi` (`**` in Python) in the objective function" in message
+    assert "`g * g` instead of `g ** 2`" in message
 
 
 @pytest.mark.parametrize("method_name", ["to_qubo", "to_hubo"])
