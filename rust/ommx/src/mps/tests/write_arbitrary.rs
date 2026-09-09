@@ -38,12 +38,42 @@ proptest! {
     ) {
         let mut buffer = Vec::new();
         prop_assert!(format::format(&instance, &mut buffer).is_ok());
-        let loaded = parse(&buffer[..]).unwrap();
-        prop_assert!(
-            instance.abs_diff_eq(&loaded, crate::ATol::default()),
-            "Instance not matching after roundtrip:\n{}\nMPS:\n{}",
-            take_diff(&instance, &loaded),
-            String::from_utf8(buffer).unwrap()
-        );
+        let mps = String::from_utf8(buffer).unwrap();
+        let binary_names: std::collections::HashSet<_> = instance
+            .decision_variables()
+            .iter()
+            .filter(|(_, variable)| {
+                variable.kind() == crate::decision_variable::Kind::Binary
+                    && variable.bound() == crate::Bound::of_binary()
+            })
+            .map(|(id, _)| format!("{}{}", format::VAR_PREFIX, id.into_inner()))
+            .collect();
+        let mut in_bounds = false;
+        let implicit_binary_bounds = mps
+            .lines()
+            .filter(|line| {
+                if !line.starts_with(' ') {
+                    in_bounds = *line == "BOUNDS";
+                }
+                !in_bounds
+                    || !line
+                        .split_whitespace()
+                        .nth(2)
+                        .is_some_and(|name| binary_names.contains(name))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        // Exercise both explicit bounds and equivalent integer-marker defaults.
+        // Bounds fixing a binary variable to 0 or 1 must remain explicit.
+        for input in [&mps, &implicit_binary_bounds] {
+            let loaded = parse(input.as_bytes()).unwrap();
+            prop_assert!(
+                instance.abs_diff_eq(&loaded, crate::ATol::default()),
+                "Instance not matching after roundtrip:\n{}\nMPS:\n{}",
+                take_diff(&instance, &loaded),
+                input
+            );
+        }
     }
 }

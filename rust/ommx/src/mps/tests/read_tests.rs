@@ -1,6 +1,134 @@
 use crate::{coeff, linear, mps::*, quadratic, Bound, Function};
 use approx::assert_abs_diff_eq;
 
+#[test]
+fn test_neos_2626858_aoos_variable_domains() {
+    use crate::decision_variable::Kind;
+
+    let instance =
+        parse(&include_bytes!("../../../tests/data/mps/neos-2626858-aoos.mps.gz")[..]).unwrap();
+    let variables = instance.decision_variables();
+    assert_eq!(variables.len(), 524);
+    assert_eq!(instance.constraints().len(), 342);
+    assert_eq!(
+        variables
+            .values()
+            .filter(|v| v.kind() == Kind::Binary)
+            .count(),
+        209
+    );
+    assert_eq!(
+        variables
+            .values()
+            .filter(|v| v.kind() == Kind::Integer)
+            .count(),
+        315
+    );
+
+    for index in (493..=508).chain([524]) {
+        let name = format!("C{index:04}");
+        let (_, variable) = variables
+            .iter()
+            .find(|(_, variable)| variable.metadata.name.as_deref() == Some(name.as_str()))
+            .unwrap();
+        assert_eq!(variable.kind(), Kind::Binary, "{name}");
+        assert_eq!(variable.bound(), Bound::of_binary(), "{name}");
+    }
+}
+
+#[test]
+fn test_integer_marker_default_bounds() {
+    use crate::decision_variable::Kind;
+
+    // A bound record overrides the implicit binary domain, including LO/LI 0.
+    // Integer declarations in BOUNDS alone do not use the marker default.
+    for marked in [false, true] {
+        for (bounds, lower, upper) in [
+            ("", 0.0, if marked { 1.0 } else { f64::INFINITY }),
+            ("BOUNDS\n", 0.0, if marked { 1.0 } else { f64::INFINITY }),
+            ("BOUNDS\n LO BND X 0\n", 0.0, f64::INFINITY),
+            ("BOUNDS\n LO BND X 2\n", 2.0, f64::INFINITY),
+            ("BOUNDS\n LI BND X 0\n", 0.0, f64::INFINITY),
+            ("BOUNDS\n LI BND X -2\n", -2.0, f64::INFINITY),
+            ("BOUNDS\n UP BND X 5\n", 0.0, 5.0),
+            ("BOUNDS\n UI BND X 5\n", 0.0, 5.0),
+            ("BOUNDS\n PL BND X\n", 0.0, f64::INFINITY),
+            ("BOUNDS\n MI BND X\n", f64::NEG_INFINITY, f64::INFINITY),
+            ("BOUNDS\n FR BND X\n", f64::NEG_INFINITY, f64::INFINITY),
+            ("BOUNDS\n FX BND X 3\n", 3.0, 3.0),
+            ("BOUNDS\n BV BND X\n", 0.0, 1.0),
+            ("BOUNDS\n UP BND X 1\n", 0.0, 1.0),
+            ("BOUNDS\n LI BND X 0\n UI BND X 5\n", 0.0, 5.0),
+            ("BOUNDS\n UI BND X 5\n LI BND X 0\n", 0.0, 5.0),
+        ] {
+            let (start, end) = if marked {
+                (" MARK0 'MARKER' 'INTORG'\n", " MARK1 'MARKER' 'INTEND'\n")
+            } else {
+                ("", "")
+            };
+            let input = format!(
+                "NAME MarkerBounds\nROWS\n N OBJ\nCOLUMNS\n{start} X OBJ 1\n{end}{bounds}ENDATA\n"
+            );
+            let instance = parse(input.as_bytes()).unwrap();
+            let variable = instance.decision_variables().values().next().unwrap();
+            let integer = marked || bounds.contains(" LI ") || bounds.contains(" UI ");
+            let kind = if bounds.contains(" BV ") || (integer && lower == 0.0 && upper == 1.0) {
+                Kind::Binary
+            } else if integer {
+                Kind::Integer
+            } else {
+                Kind::Continuous
+            };
+            assert_eq!(variable.kind(), kind, "{input}");
+            assert_eq!(
+                variable.bound(),
+                Bound::new(lower, upper).unwrap(),
+                "{input}"
+            );
+        }
+    }
+}
+
+#[test]
+fn test_integer_markers_with_mixed_columns() {
+    let input = indoc::indoc! {"
+        NAME MixedMarkers
+        ROWS
+         N OBJ
+         L ROW
+        COLUMNS
+         BEFORE OBJ 1
+         MARK0 'MARKER' 'INTORG'
+         BINARY1 OBJ 1
+         BINARY1 ROW 1
+         INTEGER OBJ 1
+         MARK1 'MARKER' 'INTEND'
+         BETWEEN OBJ 1
+         MARK2 'MARKER' 'INTORG'
+         BINARY2 OBJ 1
+         MARK3 'MARKER' 'INTEND'
+         AFTER OBJ 1
+        BOUNDS
+         UP BND INTEGER 5
+        ENDATA
+    "};
+    let instance = parse(input.as_bytes()).unwrap();
+    use crate::decision_variable::Kind::{Binary, Continuous, Integer};
+    let expected = [
+        (Continuous, f64::INFINITY),
+        (Binary, 1.0),
+        (Integer, 5.0),
+        (Continuous, f64::INFINITY),
+        (Binary, 1.0),
+        (Continuous, f64::INFINITY),
+    ];
+    assert_eq!(instance.decision_variables().len(), expected.len());
+    for (variable, (kind, upper)) in instance.decision_variables().values().zip(expected) {
+        assert_eq!(variable.kind(), kind);
+        assert_eq!(variable.bound(), Bound::new(0.0, upper).unwrap());
+    }
+}
+
 // Test basic MPS parsing
 #[test]
 fn test_basic_mps_parsing() {

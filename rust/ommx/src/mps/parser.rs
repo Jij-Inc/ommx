@@ -509,6 +509,16 @@ impl State {
     }
 
     fn finish(mut self) -> Mps {
+        // Integer columns introduced by INTORG/INTEND default to [0, 1]
+        // only when no BOUNDS record supplies either bound. LI/UI declarations
+        // always supply a bound, and BV columns are already in `binary`.
+        // In particular, an explicit LO/LI 0 must keep the upper bound infinite.
+        for name in &self.mps.integer {
+            if !self.mps.l.contains_key(name) && !self.mps.u.contains_key(name) {
+                self.mps.u.insert(name.clone(), 1.0);
+            }
+        }
+
         // If an integer variable `x` has a bound `0 <= x <= 1`,
         // regard it as a binary variable.
         let mut as_binary = HashSet::new();
