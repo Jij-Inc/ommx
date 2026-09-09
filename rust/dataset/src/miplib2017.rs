@@ -96,6 +96,6 @@ pub fn package(path: &Path, report: Option<&Path>) -> Result<()> {
         }
     }
     log::info!("MIPLIB2017: {packaged} packaged, {failed} failed");
-    // Do not push here. Review the report, then use `ommx push` to publish.
+    // Do not push here. Review the report before publishing the OCI layouts.
     Ok(())
 }

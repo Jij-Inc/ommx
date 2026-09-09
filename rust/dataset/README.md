@@ -25,6 +25,9 @@ unversioned MIPLIB repository available for existing SDKs and reproducibility.
 The SDK's Rust loader, Python loader, and generator must adopt the same
 distribution repository together. QPLIB retains its existing distribution.
 
+The [v2.7 publication record](distributions/v2.7/README.md) includes source
+provenance, the full instance inventory, unsupported inputs, and model digests.
+
 ## Generate MIPLIB Artifacts
 
 Run from the repository root, with a fresh local registry dedicated to the new
@@ -52,8 +55,9 @@ Record the archive checksum and retain the report with the publication record.
 
 The generator only writes local Artifacts. Before publishing, reconcile the
 report against the archive and MIPLIB metadata, inspect failures, and check the
-affected binary domains. Upload the successful Artifacts with `ommx push` or
-an OCI client using the same dedicated local registry.
+affected binary domains. Upload the successful Artifacts with an OCI client
+that preserves their manifest bytes, such as `oras cp --from-oci-layout`,
+using the same dedicated local registry.
 
 For each target reference, first check the remote registry. If it already
 exists, compare its manifest digest with the local Artifact: an identical
@@ -61,3 +65,9 @@ digest is already published, and a different digest must stop publication.
 After upload, compare remote and local manifest digests and verify anonymous
 read access to the public package. SDK loaders must not fall back to an older
 distribution if the adopted distribution cannot be fetched.
+
+The v2 SDK reserializes manifest JSON when copying Artifacts, which can change
+the manifest digest through annotation key order. Use ORAS to copy the original
+OCI layout for publication. When checking a downloaded model, compare its
+Instance layer digest with the publication record; check the remote manifest
+digest against that record separately.
