@@ -6,7 +6,11 @@ from . import v1, _ommx_rust
 
 def miplib2017(name: str) -> v1.Instance:
     """
-    Load a MIPLIB 2017 instance as OMMX Artifact.
+    Load a MIPLIB 2017 instance from the OMMX v2.7 distribution.
+
+    This distribution was regenerated with the corrected MPS parser. Its
+    repository is fixed across SDK patch releases; previously cached artifacts
+    from the unversioned distribution are not used.
 
     >>> from ommx.dataset import miplib2017
     >>> instance = miplib2017("air05")
@@ -45,7 +49,7 @@ def miplib2017(name: str) -> v1.Instance:
     'benchmark,binary,benchmark_suitable,set_partitioning'
 
     """
-    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/miplib2017:{name}")
+    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/v2.7/miplib2017:{name}")
     return artifact.instance
 
 

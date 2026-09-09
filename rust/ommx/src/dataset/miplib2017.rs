@@ -241,7 +241,10 @@ fn check_unsupported(name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Load an instance from the MIPLIB 2017 dataset
+/// Load an instance from the OMMX v2.7 distribution of MIPLIB 2017.
+///
+/// This repository is fixed across SDK patch releases. Artifacts cached under
+/// the previous, unversioned repository are not used.
 pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
     let annotations = instance_annotations();
     ensure!(
@@ -250,7 +253,7 @@ pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
     );
     check_unsupported(name)?;
 
-    let image_name = ghcr("Jij-Inc", "ommx", "miplib2017", name)?;
+    let image_name = ghcr("Jij-Inc", "ommx", "v2.7/miplib2017", name)?;
     let mut artifact = Artifact::from_remote(image_name)?.pull()?;
     let mut instances = artifact.get_instances()?;
     ensure!(

@@ -16,6 +16,9 @@ enum Command {
     Miplib2017 {
         /// Path to downloaded MIPLIB's `collection.zip` or `benchmark.zip` file
         path: PathBuf,
+        /// CSV report of packaged instances and failures
+        #[arg(long)]
+        report: Option<PathBuf>,
     },
     /// QPLIB collections
     Qplib {
@@ -29,8 +32,8 @@ fn main() -> Result<()> {
 
     let command = Command::parse();
     match command {
-        Command::Miplib2017 { path } => {
-            miplib2017::package(&path)?;
+        Command::Miplib2017 { path, report } => {
+            miplib2017::package(&path, report.as_deref())?;
         }
         Command::Qplib { path } => {
             qplib::package(&path)?;
