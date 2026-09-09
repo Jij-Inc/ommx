@@ -1,10 +1,31 @@
 from pathlib import Path
 
+import pytest
+
 import ommx.mps
 from ommx import Instance, DecisionVariable, Function, Kind, Equality, Sense
 
 
 test_dir = Path(__file__).parent
+
+
+@pytest.mark.parametrize("loader", [Instance.load_mps, ommx.mps.load_file])
+def test_neos_2626858_aoos_variable_domains(loader):
+    path = test_dir.parents[2] / "rust/ommx/tests/data/mps/neos-2626858-aoos.mps.gz"
+    instance = loader(str(path))
+    variables = instance.decision_variables
+    assert len(variables) == 524
+    assert len(instance.constraints) == 342
+    assert sum(v.kind == Kind.Binary for v in variables) == 209
+    assert sum(v.kind == Kind.Integer for v in variables) == 315
+
+    targets = {f"C{i:04d}" for i in range(493, 509)} | {"C0524"}
+    affected = [v for v in variables if v.name in targets]
+    assert len(affected) == 17
+    for variable in affected:
+        assert variable.kind == Kind.Binary, variable.name
+        assert variable.bound.lower == 0, variable.name
+        assert variable.bound.upper == 1, variable.name
 
 
 def test_example_mps():
