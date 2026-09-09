@@ -8,6 +8,18 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🛠 MPS 読み込み時に省略された二値変数の境界を保持 ([#1202](https://github.com/Jij-Inc/ommx/pull/1202))
+
+`Instance.load_mps()` と `ommx.mps.load_file()` が、`INTORG`/`INTEND` 内にあり
+`BOUNDS` の指定がない変数を、Gurobi/HiGHS の MPS 解釈に従って `[0, 1]` の
+二値変数として読み込むようになりました。従来は上限のない一般整数変数として
+読み込んでいました。`neos-2626858-aoos` では17変数が影響を受け、二値変数の数が
+209から192に変わっていました。
+
+明示された境界指定は引き続き優先され、`LO`/`LI 0` で指定した非負の整数変数は
+上限なしのままです。`ommx.dataset` 経由で読み込むものを含め、生成済みの Artifact は
+元の MPS から別途再生成する必要があります。SDK の更新だけでは保存済みの問題は修復されません。
+
 ### ⚠ SOS1 Big-M promotionをbatch化し適用modeを選択可能に ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
 {class}`~ommx.Sos1BigMPromotionRequest`はbatch全体を表すようになりました。
