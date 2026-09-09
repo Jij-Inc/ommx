@@ -25,19 +25,6 @@ See the [ParametricInstance user guide](../user_guide/parametric_instance.ipynb)
 
 ## Bug Fixes
 
-### Preserve implicit binary bounds when loading MPS (2.6.4, [#1203](https://github.com/Jij-Inc/ommx/pull/1203))
-
-`Instance.load_mps()` and `ommx.mps.load_file()` now give columns inside
-`INTORG`/`INTEND` with no `BOUNDS` entry the implicit binary domain `[0, 1]`,
-following the Gurobi/HiGHS MPS convention. Previously, these columns became
-general integers with an infinite upper bound. This affected 17 variables in
-`neos-2626858-aoos`, changing its binary-variable count from 209 to 192.
-
-Explicit bound records remain effective, including `LO`/`LI 0` for nonnegative
-integers with no upper limit. Previously generated Artifacts, including those
-loaded through `ommx.dataset`, require separate regeneration from the source MPS;
-updating the SDK does not repair stored instances.
-
 ### Substitution validation and parameter materialization (2.6.1, [#898](https://github.com/Jij-Inc/ommx/pull/898))
 
 `Instance.substitute` now rejects substitution expressions whose right-hand side references an undefined decision variable ID. `ParametricInstance.substitute` accepts right-hand side references only when they are registered decision variables or parameters.
