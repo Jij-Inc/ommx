@@ -8,6 +8,19 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Preserve implicit binary bounds when loading MPS ([#1202](https://github.com/Jij-Inc/ommx/pull/1202))
+
+`Instance.load_mps()` and `ommx.mps.load_file()` now give columns inside
+`INTORG`/`INTEND` with no `BOUNDS` entry the implicit binary domain `[0, 1]`,
+following the Gurobi/HiGHS MPS convention. Previously, these columns became
+general integers with an infinite upper bound. This affected 17 variables in
+`neos-2626858-aoos`, changing its binary-variable count from 209 to 192.
+
+Explicit bound records remain effective, including `LO`/`LI 0` for nonnegative
+integers with no upper limit. Previously generated Artifacts, including those
+loaded through `ommx.dataset`, require separate regeneration from the source MPS;
+updating the SDK does not repair stored instances.
+
 ### ⚠ Batch SOS1 Big-M promotion with selectable application mode ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
 {class}`~ommx.Sos1BigMPromotionRequest` now represents an entire batch:
