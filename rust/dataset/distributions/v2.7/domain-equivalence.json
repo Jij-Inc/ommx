@@ -1,0 +1,42 @@
+{
+  "ex9": {
+    "domain_check_version": 1,
+    "source_mps_digest": "sha256:9c7758e2a75cb9270f9b09cbd05a7918acf69a4cba1a6ebc6234cf9bff89164c",
+    "instance_digest": "sha256:bed98db9ca7e419e7283a3a9f6a3f65c8c14de597dfdbac131c6360d7431ca70",
+    "metadata_counts": {
+      "variables": 10404,
+      "binaries": 0,
+      "integers": 10404,
+      "continuous": 0
+    },
+    "parsed_counts": {
+      "variables": 10404,
+      "binaries": 10404,
+      "integers": 0,
+      "continuous": 0
+    },
+    "independent_reader": "HiGHS 1.13.1",
+    "variables_compared": 10404,
+    "source_integer_variables_with_bounds_0_1": 10404
+  },
+  "ex10": {
+    "domain_check_version": 1,
+    "source_mps_digest": "sha256:0e6f64cb7caa146c41f7a5257d87f3eefb704e3b5765966d36560891fb95381d",
+    "instance_digest": "sha256:6b1fa0419dcd3156c806e831f5f777eba1731105c478a21860184037c939afbe",
+    "metadata_counts": {
+      "variables": 17680,
+      "binaries": 0,
+      "integers": 17680,
+      "continuous": 0
+    },
+    "parsed_counts": {
+      "variables": 17680,
+      "binaries": 17680,
+      "integers": 0,
+      "continuous": 0
+    },
+    "independent_reader": "HiGHS 1.13.1",
+    "variables_compared": 17680,
+    "source_integer_variables_with_bounds_0_1": 17680
+  }
+}

@@ -8,6 +8,18 @@
 
 ## バグ修正
 
+### 再生成した MIPLIB 配布版を読み込む ([#1204](https://github.com/Jij-Inc/ommx/pull/1204))
+
+`ommx.dataset.miplib2017()` は、修正済みの v2 パーサーで元の MPS ファイルから
+再生成した `ghcr.io/jij-inc/ommx/v2.7/miplib2017:{name}` を読み込みます。
+Rust の MIPLIB ローダーも同じ配布版を使用します。バージョンなしの旧配布先から
+取得したキャッシュが、修正版より優先されることはありません。
+
+公開済みの参照先は固定し、patch 更新では同じ配布版を維持します。
+配布形式または数学モデルを変更するときは minor 以上を更新し、新しい版の
+リポジトリで配布します。取得先は
+[MIPLIB チュートリアル](../tutorial/download_miplib_instance.ipynb)を参照してください。
+
 ### MPS 読み込み時に省略された二値変数の境界を保持 ([#1203](https://github.com/Jij-Inc/ommx/pull/1203))
 
 `Instance.load_mps()` と `ommx.mps.load_file()` が、`INTORG`/`INTEND` 内にあり
@@ -17,5 +29,5 @@
 209から192に変わっていました。
 
 明示された境界指定は引き続き優先され、`LO`/`LI 0` で指定した非負の整数変数は
-上限なしのままです。`ommx.dataset` 経由で読み込むものを含め、生成済みの Artifact は
-元の MPS から別途再生成する必要があります。SDK の更新だけでは保存済みの問題は修復されません。
+上限なしのままです。パーサーの修正は保存済みの Artifact を書き換えません。
+上記の配布先変更により、`ommx.dataset.miplib2017()` から再生成した問題を取得できます。
