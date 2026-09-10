@@ -16,7 +16,21 @@ kernelspec:
 The OMMX repository provides mixed-integer programming benchmark instances from MIPLIB 2017 in OMMX Artifact format.
 
 ```{note}
-More details: The MIPLIB 2017 instances in OMMX Artifact format are hosted in the GitHub Container Registry for the OMMX repository ([link](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017)).
+`dataset.miplib2017` uses the published
+`ghcr.io/jij-inc/ommx/v2.7/miplib2017:{instance-name}` distribution
+([package](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fv2.7%2Fmiplib2017)).
+These Artifacts were generated with the corrected MPS integer bounds in OMMX
+2.7.0 and can also be read by the v3 SDK. The distribution version identifies
+the adopted dataset, independently of the installed SDK version.
+
+Distribution format or mathematical-model changes require an SDK minor or
+major release and a new `/v{major}.{minor}/` namespace. Patch releases keep
+their adopted distribution; published path/tag references are never overwritten.
+The previous unversioned repository remains available for reproducibility,
+but the loader does not fall back to it, including when old Artifacts are cached.
+
+The [v2.7 publication record](https://github.com/Jij-Inc/ommx/blob/1ec99bbe3c36696e5fce3cac2cd87616e457af49/rust/dataset/distributions/v2.7/README.md)
+lists the source archive, published instances, unsupported inputs, and model digests.
 
 Please see [this page](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) for information on GitHub Container Registry.
 ```

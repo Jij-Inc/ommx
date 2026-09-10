@@ -8,6 +8,11 @@ def miplib2017(name: str) -> Instance:
     """
     Load a MIPLIB 2017 instance as OMMX Artifact.
 
+    Uses the published ``ghcr.io/jij-inc/ommx/v2.7/miplib2017`` distribution,
+    generated with the corrected MPS integer bounds in OMMX 2.7.0. The
+    distribution version is fixed independently of the installed SDK version;
+    existing unversioned Artifacts are not used as a fallback.
+
     >>> from ommx.dataset import miplib2017
 
     Loading the instance requires remote registry access, so the following
@@ -49,7 +54,7 @@ def miplib2017(name: str) -> Instance:
     'benchmark,binary,benchmark_suitable,set_partitioning'
 
     """
-    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/miplib2017:{name}")
+    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/v2.7/miplib2017:{name}")
     return artifact.instance
 
 

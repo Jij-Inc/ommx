@@ -59,6 +59,15 @@ unit-scale linkではtightな $M=U$ と $M=-L$ を利用でき、小さすぎる
 拒否されます。詳細は [Instance user guide](../user_guide/instance.md) と
 [special constraint guide](../user_guide/special_constraints.md) を参照してください。
 
+### 🛠 公開済みの v2.7 MIPLIB 配布を採用 ([#1205](https://github.com/Jij-Inc/ommx/pull/1205))
+
+`ommx.dataset.miplib2017` の参照先を
+`ghcr.io/jij-inc/ommx/v2.7/miplib2017:{instance-name}` に変更しました。
+MPS の整数変数の境界を修正した OMMX 2.7.0 で生成された配布を、v3 SDK でも
+利用します。旧バージョンなし配布がキャッシュされている場合もこの配布を読み、
+旧モデルにはフォールバックしません。配布のバージョン規則と配布記録は
+[MIPLIB チュートリアル](../tutorial/download_miplib_instance.md)を参照してください。
+
 ## 3.0.0 Beta 5
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b5)

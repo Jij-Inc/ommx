@@ -263,6 +263,11 @@ fn check_unsupported(name: &str) -> Result<()> {
 }
 
 /// Load an instance from the MIPLIB 2017 dataset
+///
+/// Uses the published `ghcr.io/jij-inc/ommx/v2.7/miplib2017` distribution,
+/// generated with the corrected MPS integer bounds in OMMX 2.7.0. The
+/// distribution version is fixed independently of the installed SDK version;
+/// existing unversioned Artifacts are not used as a fallback.
 pub fn load(name: &str) -> Result<Instance> {
     let annotations = instance_annotations();
     ensure!(
@@ -271,7 +276,7 @@ pub fn load(name: &str) -> Result<Instance> {
     );
     check_unsupported(name)?;
 
-    let image_name = ghcr("Jij-Inc", "ommx", "miplib2017", name)?;
+    let image_name = ghcr("Jij-Inc", "ommx", "v2.7/miplib2017", name)?;
     let registry = LocalRegistry::shared_default()?;
     registry.pull_image(&image_name)?;
     let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
