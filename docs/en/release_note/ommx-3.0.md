@@ -61,6 +61,16 @@ $M=-L$, while undersized links remain rejected. See the
 [Instance user guide](../user_guide/instance.md) and
 [special-constraint guide](../user_guide/special_constraints.md) for details.
 
+### 🛠 Adopt the published v2.7 MIPLIB distribution ([#1205](https://github.com/Jij-Inc/ommx/pull/1205))
+
+`ommx.dataset.miplib2017` now reads
+`ghcr.io/jij-inc/ommx/v2.7/miplib2017:{instance-name}`, the distribution
+generated with corrected MPS integer bounds in OMMX 2.7.0. The v3 SDK reuses
+these published Artifacts, even when the old unversioned distribution is cached,
+and does not fall back to the old models. See the
+[MIPLIB tutorial](../tutorial/download_miplib_instance.md) for distribution
+versioning and the publication record.
+
 ## 3.0.0 Beta 5
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b5)
