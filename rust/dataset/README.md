@@ -55,19 +55,29 @@ Record the archive checksum and retain the report with the publication record.
 
 The generator only writes local Artifacts. Before publishing, reconcile the
 report against the archive and MIPLIB metadata, inspect failures, and check the
-affected binary domains. Upload the successful Artifacts with an OCI client
-that preserves their manifest bytes, such as `oras cp --from-oci-layout`,
+affected binary domains. Upload the successful Artifacts with `ommx push`,
 using the same dedicated local registry.
 
 For each target reference, first check the remote registry. If it already
-exists, compare its manifest digest with the local Artifact: an identical
-digest is already published, and a different digest must stop publication.
-After upload, compare remote and local manifest digests and verify anonymous
-read access to the public package. SDK loaders must not fall back to an older
-distribution if the adopted distribution cannot be fetched.
+exists, do not push it again. Compare its parsed manifest with the local
+Artifact, including config and layer descriptors and annotations: matching
+content is already published, and any difference must stop publication.
+For a reference that does not exist remotely, run:
+
+```sh
+OMMX_LOCAL_REGISTRY_ROOT=/path/to/miplib-v2.7-registry \
+  ommx push "ghcr.io/jij-inc/ommx/v2.7/miplib2017:{instance-name}"
+```
+
+After upload, compare the parsed remote and local manifests, check the Instance
+layer digest against the generation report, and record the remote manifest
+digest in the publication inventory. Verify anonymous read access to the public
+package. SDK loaders must not fall back to an older distribution if the adopted
+distribution cannot be fetched.
 
 The v2 SDK reserializes manifest JSON when copying Artifacts, which can change
-the manifest digest through annotation key order. Use ORAS to copy the original
-OCI layout for publication. When checking a downloaded model, compare its
-Instance layer digest with the publication record; check the remote manifest
-digest against that record separately.
+the manifest digest through annotation key order. Local and remote manifest
+digests therefore need not match even when their parsed contents are equal.
+When checking a downloaded model, compare its Instance layer digest with the
+publication record; check the remote manifest digest against that record
+separately.

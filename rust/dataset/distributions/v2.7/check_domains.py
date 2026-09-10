@@ -14,6 +14,7 @@ import tempfile
 import zipfile
 
 import highspy
+from ommx.artifact import Artifact, get_image_dir, set_local_registry_root
 from ommx.v1 import Instance, DecisionVariable
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -22,6 +23,7 @@ parser.add_argument("--report", type=Path, required=True)
 parser.add_argument("--registry", type=Path, required=True)
 parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
+set_local_registry_root(args.registry)
 repository = Path(__file__).resolve().parents[4]
 fields = {
     "variables": "VariablesVari.",
@@ -52,10 +54,11 @@ for row in rows:
     with zipfile.ZipFile(args.archive) as archive:
         raw_mps = archive.read(name + ".mps.gz")
     source_digest = "sha256:" + hashlib.sha256(raw_mps).hexdigest()
-    layout = args.registry / "ghcr.io/jij-inc/ommx/v2.7/miplib2017" / ("__" + name)
-    raw_instance = (
-        layout / "blobs" / row["instance_digest"].replace(":", "/")
-    ).read_bytes()
+    image_name = f"ghcr.io/jij-inc/ommx/v2.7/miplib2017:{name}"
+    artifact = Artifact.load_archive(get_image_dir(image_name))
+    descriptor = artifact.get_layer_descriptor(row["instance_digest"])
+    assert descriptor.media_type == "application/org.ommx.v1.instance"
+    raw_instance = artifact.get_blob(descriptor)
     assert (
         "sha256:" + hashlib.sha256(raw_instance).hexdigest() == row["instance_digest"]
     )
