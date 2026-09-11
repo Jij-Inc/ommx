@@ -46,6 +46,28 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 
 この機能により、同一のQPLIBインスタンスを使用した二次計画問題ソルバーのベンチマーク測定を効率よく実行できます。
 
+## 公開されている解を評価する
+
+[QPLIBのWebサイト](https://qplib.zib.de/QPLIB_0018.html)から同じ問題の
+`.qplib` と `.sol` をダウンロードすると、ソルバーを実行せずに公開解を評価できます。
+
+```python
+from ommx import Instance, State
+
+instance = Instance.load_qplib("QPLIB_0018.qplib")
+state = State.load_qplib_solution(
+    "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
+)
+solution = instance.evaluate(state, atol=1e-8)
+print(solution.objective, solution.feasible)
+```
+
+元のQPLIB問題の変数数を渡すことで、ファイルで省略された変数の値を0で補います。
+`State.load_qplib_solution` はQPLIB公式の `.sol` ファイルで使われる標準の変数名に
+対応しています。ファイル中の `objvar` は決定変数ではありません。
+`Instance.evaluate` が読み込んだStateから目的値と実行可能性を計算します。
+ファイル形式とエラーの扱いは {meth}`~ommx.State.load_qplib_solution` を参照してください。
+
 +++
 
 ## 補足：インスタンスに付随するアノテーション

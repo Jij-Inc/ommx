@@ -46,6 +46,30 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 
 This makes it easy to benchmark quadratic programming solvers using the same QPLIB instances.
 
+## Evaluate a published solution
+
+Download the `.qplib` and `.sol` files for the same instance from the
+[QPLIB website](https://qplib.zib.de/QPLIB_0018.html), then evaluate the
+published state without running a solver:
+
+```python
+from ommx import Instance, State
+
+instance = Instance.load_qplib("QPLIB_0018.qplib")
+state = State.load_qplib_solution(
+    "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
+)
+solution = instance.evaluate(state, atol=1e-8)
+print(solution.objective, solution.feasible)
+```
+
+Pass the variable count of the original QPLIB instance so that omitted values
+are filled with zero. `State.load_qplib_solution` supports the standard names
+in QPLIB's published `.sol` files. The reported `objvar` value is not a
+decision variable; `Instance.evaluate` computes the objective and feasibility
+from the imported state. See {meth}`~ommx.State.load_qplib_solution` for the
+file format and error behavior.
+
 +++
 
 ## Note about Annotations with the Instance
