@@ -70,7 +70,11 @@ def miplib2017_instance_annotations() -> dict[str, dict[str, str]]:
 
 def qplib(tag: str) -> v1.Instance:
     """
-    Load a QPLIB instance as OMMX Artifact.
+    Load a QPLIB instance from the OMMX v2.8 distribution.
+
+    This distribution corrects the quadratic coefficient scaling. Its repository
+    is fixed across SDK patch releases; previously cached artifacts from the
+    unversioned repository are not used.
 
     >>> from ommx.dataset import qplib
     >>> instance = qplib("0018")
@@ -104,7 +108,7 @@ def qplib(tag: str) -> v1.Instance:
     'http://qplib.zib.de/QPLIB_0018.html'
 
     """
-    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/qplib:{tag}")
+    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/v2.8/qplib:{tag}")
     return artifact.instance
 
 

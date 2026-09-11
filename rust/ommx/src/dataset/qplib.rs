@@ -262,7 +262,11 @@ pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
     entries
 }
 
-/// Load an instance from the QPLIB dataset
+/// Load an instance from the OMMX v2.8 distribution of QPLIB.
+///
+/// This distribution applies QPLIB's factor of 1/2 to quadratic coefficients.
+/// The repository is fixed across SDK patch releases. Artifacts cached under
+/// the previous, unversioned repository are not used.
 ///
 /// # Arguments
 ///
@@ -286,7 +290,7 @@ pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
         "Given tag '{tag}' (QPLIB_{tag}) does not exist in QPLIB"
     );
 
-    let image_name = ghcr("Jij-Inc", "ommx", "qplib", tag)?;
+    let image_name = ghcr("Jij-Inc", "ommx", "v2.8/qplib", tag)?;
     let mut artifact = Artifact::from_remote(image_name)?.pull()?;
     let mut instances = artifact.get_instances()?;
     ensure!(
