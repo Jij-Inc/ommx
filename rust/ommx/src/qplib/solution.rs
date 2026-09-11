@@ -12,7 +12,7 @@ use std::{
 ///
 /// `num_variables` is the variable count of the original QPLIB problem.
 /// See [`parse_solution`] for the supported naming convention and zero filling.
-/// This reads a state only; use [`Instance::evaluate`](crate::Instance::evaluate)
+/// This reads a state only; use [`Evaluate::evaluate`](crate::Evaluate::evaluate)
 /// to compute the objective value and feasibility.
 #[tracing::instrument(skip_all)]
 pub fn load_solution(path: impl AsRef<Path>, num_variables: usize) -> Result<State> {
