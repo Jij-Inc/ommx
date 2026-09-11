@@ -16,6 +16,12 @@ coefficients were doubled, which could change the objective value and make a
 published feasible solution appear infeasible. Existing serialized instances
 must be imported again from their original `.qplib` files to receive the fix.
 
+`ommx.dataset.qplib` now reads the corrected
+`ghcr.io/jij-inc/ommx/v2.8/qplib:{tag}` distribution published for OMMX 2.8.0.
+The v3 SDK reads these Artifacts even when the old distribution is cached.
+See the [QPLIB tutorial](../tutorial/download_qplib_instance.md) for distribution
+versioning and the publication record.
+
 {meth}`~ommx.State.load_qplib_solution` and `ommx.qplib.load_solution` now
 read QPLIB's published `.sol` files into a {class}`~ommx.State`:
 

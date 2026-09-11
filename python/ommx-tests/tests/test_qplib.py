@@ -1,4 +1,7 @@
 from pathlib import Path
+import os
+import subprocess
+import sys
 
 import pytest
 
@@ -6,6 +9,54 @@ from ommx import Instance, State, qplib
 
 
 FIXTURES = Path(__file__).resolve().parents[3] / "rust/ommx/tests/fixtures"
+
+
+def test_dataset_uses_corrected_distribution_with_legacy_cache(tmp_path: Path) -> None:
+    # Isolate the process-global registry root from other tests and the user's cache.
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+from pathlib import Path
+import sys
+from ommx import Instance, State
+from ommx.artifact import Artifact, ArtifactDraft
+from ommx.dataset import qplib
+
+fixtures = Path(sys.argv[1])
+legacy_ref = "ghcr.io/jij-inc/ommx/qplib:0018"
+corrected_ref = "ghcr.io/jij-inc/ommx/v2.8/qplib:0018"
+corrected = Instance.load_qplib(str(fixtures / "QPLIB_0018.qplib"))
+for ref, model in [(legacy_ref, Instance.empty()), (corrected_ref, corrected)]:
+    draft = ArtifactDraft.new(ref)
+    draft.add_layer(
+        "application/org.ommx.v1.instance",
+        model.to_v1_bytes(),
+        {
+            "org.ommx.v1.instance.title": "QPLIB_0018",
+            "org.ommx.qplib.parser_version": "2.8.0",
+        },
+    )
+    draft.commit()
+
+instance = qplib("0018")
+assert instance.title == "QPLIB_0018"
+assert instance.annotations["org.ommx.qplib.parser_version"] == "2.8.0"
+assert len(instance.decision_variables) == 50
+state = State.load_qplib_solution(str(fixtures / "QPLIB_0018.sol"), num_variables=50)
+solution = instance.evaluate(state, atol=1e-8)
+assert abs(solution.objective - (-6.38601498159835)) < 1e-10
+assert solution.feasible
+assert len(Artifact.load(legacy_ref).instance.decision_variables) == 0
+""",
+            str(FIXTURES),
+        ],
+        env={**os.environ, "OMMX_LOCAL_REGISTRY_ROOT": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(

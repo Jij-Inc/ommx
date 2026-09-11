@@ -16,7 +16,22 @@ kernelspec:
 The OMMX repository provides quadratic programming benchmark instances from QPLIB in OMMX Artifact format.
 
 ```{note}
-More details: The QPLIB instances in OMMX Artifact format are hosted in the GitHub Container Registry for the OMMX repository ([link](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fqplib)).
+`dataset.qplib` uses the published
+`ghcr.io/jij-inc/ommx/v2.8/qplib:{numeric-tag}` distribution
+([package](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fv2.8%2Fqplib)).
+These 453 Artifacts were regenerated with corrected quadratic coefficients in
+OMMX 2.8.0 and can also be read by the v3 SDK. The distribution version is
+independent of the installed SDK version.
+
+Distribution format or mathematical-model changes require an SDK minor or
+major release and a new `/v{major}.{minor}/` namespace. Patch releases keep
+their adopted distribution, and published path/tag references remain immutable.
+The loader selects the corrected distribution even when old unversioned
+Artifacts are cached. Previously saved instances must be reimported to receive
+the coefficient correction.
+
+The [v2.8 publication record](https://github.com/Jij-Inc/ommx/blob/b4cffe9f1ce5323c15de67eca55b05d9f87285a0/rust/dataset/distributions/v2.8/README.md)
+contains the source archive, model comparisons, and published digests.
 
 QPLIB is a library of quadratic programming instances. For more information about QPLIB, see the [QPLIB website](http://qplib.zib.de/).
 
