@@ -32,6 +32,8 @@ SDKs and reproducibility.
 
 The [v2.7 publication record](distributions/v2.7/README.md) includes source
 provenance, the full instance inventory, unsupported inputs, and model digests.
+The [v2.8 QPLIB record](distributions/v2.8/README.md) includes its source archive,
+instance inventory, and comparisons with the official GAMS models.
 
 ## Generate MIPLIB Artifacts
 
@@ -78,8 +80,8 @@ publishing the successful rows.
 ## Publish
 
 The generator only writes local Artifacts. Before publishing, reconcile the
-report against the archive and MIPLIB metadata, inspect failures, and check the
-affected binary domains. Upload the successful Artifacts with `ommx push`,
+report against the archive and dataset metadata, inspect failures, and check
+the affected model semantics. Upload the successful Artifacts with `ommx push`,
 using the same dedicated local registry.
 
 For each target reference, first check the remote registry. If it already
