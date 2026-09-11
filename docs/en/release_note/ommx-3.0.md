@@ -8,6 +8,34 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 QPLIB coefficients and published solution states ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+
+{meth}`~ommx.Instance.load_qplib` now applies QPLIB's factor of `1/2` to
+diagonal and cross terms in objectives and constraints. Previously, these
+coefficients were doubled, which could change the objective value and make a
+published feasible solution appear infeasible. Existing serialized instances
+must be imported again from their original `.qplib` files to receive the fix.
+
+`ommx.dataset.qplib` now reads the corrected
+`ghcr.io/jij-inc/ommx/v2.8/qplib:{tag}` distribution published for OMMX 2.8.0.
+The v3 SDK reads these Artifacts even when the old distribution is cached.
+See the [QPLIB tutorial](../tutorial/download_qplib_instance.md) for distribution
+versioning and the publication record.
+
+{meth}`~ommx.State.load_qplib_solution` and `ommx.qplib.load_solution` now
+read QPLIB's published `.sol` files into a {class}`~ommx.State`:
+
+```python
+state = State.load_qplib_solution(
+    "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
+)
+solution = instance.evaluate(state, atol=1e-8)
+```
+
+Omitted variables receive zero, and `objvar` is excluded from the state.
+See the [QPLIB tutorial](../tutorial/download_qplib_instance.md) for a complete
+example and the supported variable naming convention.
+
 ### ⚠ Batch SOS1 Big-M promotion with selectable application mode ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
 {class}`~ommx.Sos1BigMPromotionRequest` now represents an entire batch:

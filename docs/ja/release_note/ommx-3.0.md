@@ -8,6 +8,34 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🛠 QPLIBの二次係数の修正と公開解の読み込み ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+
+{meth}`~ommx.Instance.load_qplib`で、目的関数と制約の対角項・交差項に
+QPLIB形式の係数`1/2`を適用するように修正しました。従来はこれらの係数が
+2倍になっており、目的関数値が変わったり、公開されている実行可能解が
+実行不可能と判定されたりしていました。保存済みのインスタンスに修正を反映するには、
+元の`.qplib`ファイルから読み込み直してください。
+
+`ommx.dataset.qplib` の参照先を、OMMX 2.8.0 向けに公開した修正済みの
+`ghcr.io/jij-inc/ommx/v2.8/qplib:{tag}` 配布へ変更しました。
+旧配布がキャッシュされていても、v3 SDK は修正済みの Artifact を読み込みます。
+配布のバージョン規則と配布記録は
+[QPLIB チュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
+
+{meth}`~ommx.State.load_qplib_solution`と`ommx.qplib.load_solution`で、
+QPLIB公式の`.sol`ファイルを{class}`~ommx.State`として読み込めるようになりました。
+
+```python
+state = State.load_qplib_solution(
+    "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
+)
+solution = instance.evaluate(state, atol=1e-8)
+```
+
+省略された変数の値は0で補い、`objvar`はStateに含めません。
+一連の使用例と対応する変数名の規則は
+[QPLIBチュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
+
 ### ⚠ SOS1 Big-M promotionをbatch化し適用modeを選択可能に ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
 {class}`~ommx.Sos1BigMPromotionRequest`はbatch全体を表すようになりました。

@@ -72,6 +72,11 @@ def qplib(tag: str) -> Instance:
     """
     Load a QPLIB instance as OMMX Artifact.
 
+    Uses the published ``ghcr.io/jij-inc/ommx/v2.8/qplib`` distribution,
+    generated with corrected quadratic coefficients in OMMX 2.8.0. The
+    distribution version is independent of the installed SDK version;
+    old unversioned Artifacts are not used as a fallback.
+
     >>> from ommx.dataset import qplib
 
     Loading the instance requires remote registry access, so the following
@@ -108,7 +113,7 @@ def qplib(tag: str) -> Instance:
     'http://qplib.zib.de/QPLIB_0018.html'
 
     """
-    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/qplib:{tag}")
+    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/v2.8/qplib:{tag}")
     return artifact.instance
 
 
