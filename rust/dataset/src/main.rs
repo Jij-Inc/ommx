@@ -24,6 +24,9 @@ enum Command {
     Qplib {
         /// Path to downloaded QPLIB's zip file containing `*.qplib` files
         path: PathBuf,
+        /// CSV report of packaged instances and failures
+        #[arg(long)]
+        report: Option<PathBuf>,
     },
 }
 
@@ -35,8 +38,8 @@ fn main() -> Result<()> {
         Command::Miplib2017 { path, report } => {
             miplib2017::package(&path, report.as_deref())?;
         }
-        Command::Qplib { path } => {
-            qplib::package(&path)?;
+        Command::Qplib { path, report } => {
+            qplib::package(&path, report.as_deref())?;
         }
     }
     Ok(())

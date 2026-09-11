@@ -23,10 +23,17 @@ SDK package version at runtime.
 A published path/tag reference must never be overwritten. Keep the previous
 unversioned MIPLIB repository available for existing SDKs and reproducibility.
 The SDK's Rust loader, Python loader, and generator must adopt the same
-distribution repository together. QPLIB retains its existing distribution.
+distribution repository together.
+
+SDK 2.8 adopts `ghcr.io/jij-inc/ommx/v2.8/qplib:{numeric-tag}` for QPLIB,
+regenerated with the corrected quadratic coefficient scaling. MIPLIB retains
+its v2.7 distribution. Keep both unversioned repositories available for older
+SDKs and reproducibility.
 
 The [v2.7 publication record](distributions/v2.7/README.md) includes source
 provenance, the full instance inventory, unsupported inputs, and model digests.
+The [v2.8 QPLIB record](distributions/v2.8/README.md) includes its source archive,
+instance inventory, and comparisons with the official GAMS models.
 
 ## Generate MIPLIB Artifacts
 
@@ -51,11 +58,30 @@ The v2.7 distribution uses the current v2 parser. Unsupported MPS constructs
 remain failures; they must not be replaced with relaxed or incomplete models.
 Record the archive checksum and retain the report with the publication record.
 
+## Generate QPLIB Artifacts
+
+Download the official [QPLIB archive](https://qplib.zib.de/qplib.zip) and run
+from the repository root:
+
+```sh
+OMMX_LOCAL_REGISTRY_ROOT=/path/to/qplib-v2.8-registry \
+  cargo run --locked --release -p dataset -- qplib \
+  /path/to/qplib.zip --report /path/to/qplib-v2.8-report.csv
+```
+
+The report covers every `.qplib` archive member, including parse failures,
+missing metadata, variable-count mismatches, and storage failures. Valid inputs
+retain their authors, license, and QPLIB annotations; the Instance counts
+describe the parsed OMMX model. The generator applies the quadratic scaling
+correction without adding parser syntax support. Record the archive checksum
+and verify objective and constraint values against source models before
+publishing the successful rows.
+
 ## Publish
 
 The generator only writes local Artifacts. Before publishing, reconcile the
-report against the archive and MIPLIB metadata, inspect failures, and check the
-affected binary domains. Upload the successful Artifacts with `ommx push`,
+report against the archive and dataset metadata, inspect failures, and check
+the affected model semantics. Upload the successful Artifacts with `ommx push`,
 using the same dedicated local registry.
 
 For each target reference, first check the remote registry. If it already
