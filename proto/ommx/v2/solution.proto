@@ -10,8 +10,6 @@ import "ommx/v2/decision_variable.proto";
 import "ommx/v2/named_function.proto";
 
 // Validated single-state solver output serialization root.
-// Feasibility flags are materialized so consumers can read the result without
-// an OMMX SDK. feasibility_atol records the tolerance used for those flags.
 message Solution {
   repeated Feature required_features = 1;
   double objective = 2;

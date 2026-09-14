@@ -96,14 +96,14 @@ proptest! {
         assert_contract::<OneHotConstraint>(&one_hot, &state, atol);
         assert_contract::<Sos1Constraint>(&sos1, &state, atol);
         let wire: crate::v2::EvaluatedOneHotConstraint = evaluated_one_hot.clone().into();
-        prop_assert_eq!(wire.parse(&atol).unwrap(), evaluated_one_hot.clone());
+        prop_assert_eq!(wire.parse_with_values(|id| state.entries.get(&id.into_inner()).copied(), atol).unwrap(), evaluated_one_hot.clone());
         let wire: crate::v2::EvaluatedSos1Constraint = evaluated_sos1.clone().into();
-        prop_assert_eq!(wire.parse(&atol).unwrap(), evaluated_sos1.clone());
+        prop_assert_eq!(wire.parse_with_values(|id| state.entries.get(&id.into_inner()).copied(), atol).unwrap(), evaluated_sos1.clone());
         let samples = crate::Sampled::from((SampleID::from(0), state));
         let wire: crate::v2::SampledOneHotConstraint = one_hot.evaluate_samples(&samples, atol).unwrap().into();
-        prop_assert_eq!(wire.parse(&atol).unwrap().get(0.into()).unwrap(), evaluated_one_hot);
+        prop_assert_eq!(wire.parse_with_values(|sid, id| samples.get(sid).and_then(|state| state.entries.get(&id.into_inner())).copied(), atol).unwrap().get(0.into()).unwrap(), evaluated_one_hot);
         let wire: crate::v2::SampledSos1Constraint = sos1.evaluate_samples(&samples, atol).unwrap().into();
-        prop_assert_eq!(wire.parse(&atol).unwrap().get(0.into()).unwrap(), evaluated_sos1);
+        prop_assert_eq!(wire.parse_with_values(|sid, id| samples.get(sid).and_then(|state| state.entries.get(&id.into_inner())).copied(), atol).unwrap().get(0.into()).unwrap(), evaluated_sos1);
     }
 }
 
@@ -117,28 +117,35 @@ fn overflowed_violations_are_infeasible_and_survive_wire_roundtrip() {
     assert_eq!(evaluated.violation(), f64::INFINITY);
     assert!(!evaluated.is_feasible());
     let wire: crate::v2::EvaluatedSos1Constraint = evaluated.clone().into();
-    assert_eq!(wire.parse(&atol).unwrap(), evaluated);
+    assert_eq!(
+        wire.parse_with_values(|id| state.entries.get(&id.into_inner()).copied(), atol)
+            .unwrap(),
+        evaluated
+    );
 }
 
 #[test]
-fn malformed_wire_violations_and_feasibility_are_rejected() {
+fn restoration_rejects_invalid_member_values_and_inconsistent_feasibility() {
     let atol = ATol::default();
-    for violation in [-1.0, f64::NAN, f64::NEG_INFINITY] {
+    for value in [
+        None,
+        Some(f64::NAN),
+        Some(f64::NEG_INFINITY),
+        Some(f64::INFINITY),
+    ] {
         let wire = crate::v2::EvaluatedSos1Constraint {
             variables: vec![0],
-            violation,
             ..Default::default()
         };
-        assert!(wire.parse(&atol).is_err());
+        assert!(wire.parse_with_values(|_| value, atol).is_err());
     }
     let wire = crate::v2::EvaluatedSos1Constraint {
         variables: vec![0],
-        violation: 0.0,
         feasible: false,
         ..Default::default()
     };
     assert!(wire
-        .parse(&atol)
+        .parse_with_values(|_| Some(0.0), atol)
         .unwrap_err()
         .to_string()
         .contains("feasible must equal"));
@@ -176,7 +183,9 @@ fn wire_consumers_can_read_feasibility_and_its_tolerance_without_sdk_evaluation(
         assert_eq!(wire.feasible_relaxed, Some(expected));
         let row = &wire.evaluated_sos1_constraints.as_ref().unwrap().entries[&0];
         assert_eq!(row.feasible, expected);
-        assert_eq!(row.violation, 0.00012);
+        let restored = crate::Solution::from_v2_bytes(&solution_bytes).unwrap();
+        assert_eq!(restored.sos1_constraint_violation(0.into()), Some(0.00012));
+        assert_eq!(restored.feasible(), expected);
 
         let sample_bytes = instance
             .evaluate_samples(&samples, atol)
@@ -188,6 +197,12 @@ fn wire_consumers_can_read_feasibility_and_its_tolerance_without_sdk_evaluation(
         assert_eq!(wire.feasible_relaxed[&7], expected);
         let row = &wire.sampled_sos1_constraints.as_ref().unwrap().entries[&0];
         assert_eq!(row.feasible[&7], expected);
+        let restored = crate::SampleSet::from_v2_bytes(&sample_bytes)
+            .unwrap()
+            .get(7.into())
+            .unwrap();
+        assert_eq!(restored.sos1_constraint_violation(0.into()), Some(0.00012));
+        assert_eq!(restored.feasible(), expected);
     }
 }
 
@@ -211,10 +226,19 @@ fn partial_evaluation_preserves_instance_invariants_and_failure_is_atomic() {
         .unwrap();
     let original = instance.clone();
     let fixed = State::from_iter([(1, 0.09375), (2, 0.09375)]);
+    // Dropping the fixed near-zero members would leave a singleton SOS1 and
+    // incorrectly make this infeasible completion feasible.
+    assert!(!original
+        .evaluate(
+            &State::from_iter([(0, 1.0), (1, 0.09375), (2, 0.09375)]),
+            atol
+        )
+        .unwrap()
+        .feasible());
     let error = instance.partial_evaluate(&fixed, atol).unwrap_err();
     assert!(error
         .to_string()
-        .contains("without changing the constraint violation"));
+        .contains("without changing constraint feasibility"));
     assert_eq!(instance, original);
     assert!(original
         .clone()

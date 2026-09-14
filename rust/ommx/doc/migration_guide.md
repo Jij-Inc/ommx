@@ -73,18 +73,23 @@ Implement [`EvaluatedConstraintData`](crate::EvaluatedConstraintData) and
 [`SampledConstraintData`](crate::SampledConstraintData) for new constraint families.
 Their scalar metrics are required; blanket behavior implementations derive
 feasibility. Evaluated and sampled stage data store `atol` instead of independent
-`feasible` flags. OneHot/SOS1 stage data also store `violation`/`violations`,
-including in their v2 wire rows. Use `is_feasible()` / `is_feasible_for(id)` from
+`feasible` flags. OneHot/SOS1 stage data also store `violation`/`violations` in
+the SDK. Use `is_feasible()` / `is_feasible_for(id)` from
 the corresponding behavior trait to query feasibility.
 
 The v2 wire format retains its `feasible` flags/maps and the enclosing
 Solution/SampleSet's `feasibility_atol`, so consumers can read the result and its
 tolerance without an OMMX SDK. Serialization derives those flags from the scalar
-metrics; deserialization validates them using the persisted tolerance.
+metrics; deserialization recomputes OneHot/SOS1 violations from the saved
+decision-variable values and validates the flags using the persisted tolerance.
+The protobuf schema is unchanged. Restore structural evaluated/sampled rows
+through Solution/SampleSet; they no longer implement standalone `Parse`, because
+their wire rows do not carry the member values needed to recover the metric.
 
-Partial evaluation rejects fixings that would discard a nonzero contribution
-from an approximately zero member of an active structural constraint. Exact-zero
-elimination remains supported. Evaluate the complete state or lower special
+Partial evaluation rejects fixings that eliminate approximately zero members
+from an active structural constraint when their accumulated errors could change
+feasibility. Exact-zero elimination remains supported.
+Evaluate the complete state or lower special
 constraints before partial evaluation. Lowering need not preserve the metric;
 retained originals and generated constraints each contribute.
 

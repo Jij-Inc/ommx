@@ -392,13 +392,14 @@ the total violation to be within one shared threshold.
 
 The v2 protobuf format retains `feasible` flags/maps and `feasibility_atol` on
 Solution/SampleSet. Consumers can read the result and its tolerance without an
-OMMX SDK. The SDK validates these flags against violations using the persisted
-tolerance when loading the data.
+OMMX SDK. The protobuf schema is unchanged. When loading the data, the SDK
+recomputes OneHot/SOS1 violations from the saved variable values and validates
+the flags using the persisted tolerance.
 
 Partial evaluation rejects a fixing when eliminating an approximately zero
-structural member would lose its contribution to violation and the constraint
-must remain active. Exact-zero elimination remains supported. Evaluate the
-complete state, or lower special constraints before partial evaluation; lowering
+structural member could change feasibility under the sum of member errors and
+the constraint must remain active. Exact-zero elimination remains supported.
+Evaluate the complete state, or lower special constraints before partial evaluation; lowering
 has its own violation metrics as described below.
 Lowering need not preserve the total: retained originals and generated constraints
 each contribute. See {meth}`~ommx.Solution.total_violation` for the full definitions.

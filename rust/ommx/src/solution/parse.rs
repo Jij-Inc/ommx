@@ -270,13 +270,45 @@ impl Parse for v2::Solution {
         let evaluated_one_hot_constraints = self
             .evaluated_one_hot_constraints
             .map(|value| {
-                value.parse_as(&feasibility_atol, message, "evaluated_one_hot_constraints")
+                for (&id, row) in &value.entries {
+                    for &variable_id in &row.variables {
+                        validate_structural_member_id(
+                            &decision_variables,
+                            variable_id.into(),
+                            "one-hot",
+                            crate::OneHotConstraintID::from(id),
+                        )
+                        .map_err(|error| {
+                            ParseError::new(error).context(message, "evaluated_one_hot_constraints")
+                        })?;
+                    }
+                }
+                value
+                    .parse_with_values(&decision_variables, feasibility_atol)
+                    .map_err(|error| error.context(message, "evaluated_one_hot_constraints"))
             })
             .transpose()?
             .unwrap_or_default();
         let evaluated_sos1_constraints = self
             .evaluated_sos1_constraints
-            .map(|value| value.parse_as(&feasibility_atol, message, "evaluated_sos1_constraints"))
+            .map(|value| {
+                for (&id, row) in &value.entries {
+                    for &variable_id in &row.variables {
+                        validate_structural_member_id(
+                            &decision_variables,
+                            variable_id.into(),
+                            "SOS1",
+                            crate::Sos1ConstraintID::from(id),
+                        )
+                        .map_err(|error| {
+                            ParseError::new(error).context(message, "evaluated_sos1_constraints")
+                        })?;
+                    }
+                }
+                value
+                    .parse_with_values(&decision_variables, feasibility_atol)
+                    .map_err(|error| error.context(message, "evaluated_sos1_constraints"))
+            })
             .transpose()?
             .unwrap_or_default();
 
@@ -1589,14 +1621,6 @@ mod tests {
             .get_mut(&1)
             .unwrap()
             .value = 1.0 + *atol;
-        one_hot
-            .evaluated_one_hot_constraints
-            .as_mut()
-            .unwrap()
-            .entries
-            .get_mut(&1)
-            .unwrap()
-            .violation = *atol;
         Solution::try_from(one_hot).unwrap();
 
         let mut sos1 = v2_solution_with_sos1_constraint();

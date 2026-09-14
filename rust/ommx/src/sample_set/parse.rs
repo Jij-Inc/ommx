@@ -44,6 +44,23 @@ fn validate_sampled_indicator_structural_ids(
     Ok(())
 }
 
+// Shared by SDK row validation and wire restoration before member values are read.
+fn validate_structural_member_id(
+    decision_variables: &crate::SampledDecisionVariableTable,
+    variable_id: VariableID,
+    constraint_family: &'static str,
+    constraint_id: impl std::fmt::Debug,
+) -> Result<(), crate::SampleSetError> {
+    if !decision_variables.contains_key(&variable_id) {
+        return Err(crate::SampleSetError::InvalidConstraintStructure {
+            constraint_family,
+            constraint_id: format!("{constraint_id:?}"),
+            message: format!("variable {variable_id:?} is not in decision_variables"),
+        });
+    }
+    Ok(())
+}
+
 fn validate_sampled_one_hot_structural_ids(
     constraints: &crate::constraint_type::SampledCollection<crate::OneHotConstraint>,
     decision_variables: &crate::SampledDecisionVariableTable,
@@ -51,16 +68,11 @@ fn validate_sampled_one_hot_structural_ids(
 ) -> Result<(), ParseError> {
     for (constraint_id, constraint) in constraints.inner() {
         for id in &constraint.variables {
-            let Some(variable) = decision_variables.get(id) else {
-                return Err(
-                    ParseError::new(crate::SampleSetError::InvalidConstraintStructure {
-                        constraint_family: "one-hot",
-                        constraint_id: format!("{constraint_id:?}"),
-                        message: format!("variable {id:?} is not in decision_variables"),
-                    })
-                    .context(message, "sampled_one_hot_constraints"),
-                );
-            };
+            validate_structural_member_id(decision_variables, *id, "one-hot", constraint_id)
+                .map_err(|error| {
+                    ParseError::new(error).context(message, "sampled_one_hot_constraints")
+                })?;
+            let variable = decision_variables.get(id).expect("member ID was validated");
             if *variable.kind() != crate::decision_variable::Kind::Binary {
                 return Err(
                     ParseError::new(crate::SampleSetError::InvalidConstraintStructure {
@@ -83,16 +95,9 @@ fn validate_sampled_sos1_structural_ids(
 ) -> Result<(), ParseError> {
     for (constraint_id, constraint) in constraints.inner() {
         for id in &constraint.variables {
-            if !decision_variables.contains_key(id) {
-                return Err(
-                    ParseError::new(crate::SampleSetError::InvalidConstraintStructure {
-                        constraint_family: "SOS1",
-                        constraint_id: format!("{constraint_id:?}"),
-                        message: format!("variable {id:?} is not in decision_variables"),
-                    })
-                    .context(message, "sampled_sos1_constraints"),
-                );
-            }
+            validate_structural_member_id(decision_variables, *id, "SOS1", constraint_id).map_err(
+                |error| ParseError::new(error).context(message, "sampled_sos1_constraints"),
+            )?;
         }
     }
     Ok(())
@@ -112,13 +117,13 @@ fn first_feasibility_mismatch(
     })
 }
 
-fn validate_sample_bool_map_ids(
-    map: &BTreeMap<SampleID, bool>,
+fn validate_sample_map_ids<ID: Copy + Into<SampleID>, V>(
+    map: &BTreeMap<ID, V>,
     expected: &SampleIDSet,
     message: &'static str,
     field: &'static str,
 ) -> Result<(), ParseError> {
-    let found = map.keys().copied().collect::<SampleIDSet>();
+    let found = map.keys().copied().map(Into::into).collect::<SampleIDSet>();
     if &found != expected {
         return Err(
             ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
@@ -312,6 +317,19 @@ impl Parse for v2::SampleSet {
             })?
             .parse_as(&(), message, "objectives")?;
         crate::v2_io::validate_sampled_f64_values(&objectives, message, "objectives")?;
+        let objective_sample_ids = objectives.ids();
+        // Establish the source-value shape before reconstructing structural metrics.
+        for sampled_dv in decision_variables.values() {
+            if !sampled_dv.samples().has_same_ids(&objective_sample_ids) {
+                return Err(
+                    ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
+                        expected: objective_sample_ids.clone(),
+                        found: sampled_dv.samples().ids(),
+                    })
+                    .context(message, "decision_variables"),
+                );
+            }
+        }
         let constraints = self
             .sampled_regular_constraints
             .map(|value| value.parse_as(&feasibility_atol, message, "sampled_regular_constraints"))
@@ -326,12 +344,70 @@ impl Parse for v2::SampleSet {
             .unwrap_or_default();
         let one_hot_constraints = self
             .sampled_one_hot_constraints
-            .map(|value| value.parse_as(&feasibility_atol, message, "sampled_one_hot_constraints"))
+            .map(|value| {
+                for (&id, row) in &value.entries {
+                    validate_sample_map_ids(
+                        &row.feasible,
+                        &objective_sample_ids,
+                        message,
+                        "sampled_one_hot_constraints",
+                    )?;
+                    validate_sample_map_ids(
+                        &row.active_variable,
+                        &objective_sample_ids,
+                        message,
+                        "sampled_one_hot_constraints",
+                    )?;
+                    for &variable_id in &row.variables {
+                        validate_structural_member_id(
+                            &decision_variables,
+                            variable_id.into(),
+                            "one-hot",
+                            crate::OneHotConstraintID::from(id),
+                        )
+                        .map_err(|error| {
+                            ParseError::new(error).context(message, "sampled_one_hot_constraints")
+                        })?;
+                    }
+                }
+                value
+                    .parse_with_values(&decision_variables, feasibility_atol)
+                    .map_err(|error| error.context(message, "sampled_one_hot_constraints"))
+            })
             .transpose()?
             .unwrap_or_default();
         let sos1_constraints = self
             .sampled_sos1_constraints
-            .map(|value| value.parse_as(&feasibility_atol, message, "sampled_sos1_constraints"))
+            .map(|value| {
+                for (&id, row) in &value.entries {
+                    validate_sample_map_ids(
+                        &row.feasible,
+                        &objective_sample_ids,
+                        message,
+                        "sampled_sos1_constraints",
+                    )?;
+                    validate_sample_map_ids(
+                        &row.active_variable,
+                        &objective_sample_ids,
+                        message,
+                        "sampled_sos1_constraints",
+                    )?;
+                    for &variable_id in &row.variables {
+                        validate_structural_member_id(
+                            &decision_variables,
+                            variable_id.into(),
+                            "SOS1",
+                            crate::Sos1ConstraintID::from(id),
+                        )
+                        .map_err(|error| {
+                            ParseError::new(error).context(message, "sampled_sos1_constraints")
+                        })?;
+                    }
+                }
+                value
+                    .parse_with_values(&decision_variables, feasibility_atol)
+                    .map_err(|error| error.context(message, "sampled_sos1_constraints"))
+            })
             .transpose()?
             .unwrap_or_default();
 
@@ -342,18 +418,6 @@ impl Parse for v2::SampleSet {
             .unwrap_or_default();
         let sense = crate::v2_io::parse_v2_required_sense(self.sense, message)?;
 
-        let objective_sample_ids = objectives.ids();
-        for sampled_dv in decision_variables.values() {
-            if !sampled_dv.samples().has_same_ids(&objective_sample_ids) {
-                return Err(
-                    ParseError::new(crate::SampleSetError::InconsistentSampleIDs {
-                        expected: objective_sample_ids.clone(),
-                        found: sampled_dv.samples().ids(),
-                    })
-                    .context(message, "decision_variables"),
-                );
-            }
-        }
         constraints
             .validate_sample_ids(&objective_sample_ids)
             .map_err(|found| {
@@ -472,7 +536,7 @@ impl Parse for v2::SampleSet {
             &objective_sample_ids,
         );
         let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
-        validate_sample_bool_map_ids(&feasible, &objective_sample_ids, message, "feasible")?;
+        validate_sample_map_ids(&feasible, &objective_sample_ids, message, "feasible")?;
         if let Some((sample_id, provided_feasible, computed_feasible)) =
             first_feasibility_mismatch(&feasible, &computed_feasible)
         {
@@ -486,7 +550,7 @@ impl Parse for v2::SampleSet {
             );
         }
         let feasible_relaxed = crate::v2_io::sample_bool_map_from_v2(self.feasible_relaxed);
-        validate_sample_bool_map_ids(
+        validate_sample_map_ids(
             &feasible_relaxed,
             &objective_sample_ids,
             message,
@@ -591,6 +655,69 @@ impl From<SampleSet> for crate::v1::SampleSet {
 mod tests {
     use super::*;
     use crate::{v1, Parse};
+
+    #[test]
+    fn structural_restoration_preserves_sample_id_error_classification() {
+        for one_hot in [false, true] {
+            for change in 0..3 {
+                let mut wire = if one_hot {
+                    v2_sample_set_with_one_hot_constraint()
+                } else {
+                    v2_sample_set_with_sos1_constraint()
+                };
+                if change == 2 {
+                    wire.decision_variables
+                        .as_mut()
+                        .unwrap()
+                        .entries
+                        .get_mut(&1)
+                        .unwrap()
+                        .samples
+                        .as_mut()
+                        .unwrap()
+                        .entries[0]
+                        .ids = vec![99];
+                } else {
+                    let (feasible, active) = if one_hot {
+                        let row = wire
+                            .sampled_one_hot_constraints
+                            .as_mut()
+                            .unwrap()
+                            .entries
+                            .get_mut(&1)
+                            .unwrap();
+                        (&mut row.feasible, &mut row.active_variable)
+                    } else {
+                        let row = wire
+                            .sampled_sos1_constraints
+                            .as_mut()
+                            .unwrap()
+                            .entries
+                            .get_mut(&1)
+                            .unwrap();
+                        (&mut row.feasible, &mut row.active_variable)
+                    };
+                    if change == 0 {
+                        let flag = feasible.remove(&0).unwrap();
+                        feasible.insert(99, flag);
+                        let selected = active.remove(&0).unwrap();
+                        active.insert(99, selected);
+                    } else {
+                        active.clear();
+                    }
+                }
+                let error = SampleSet::try_from(wire).unwrap_err();
+                assert!(
+                    matches!(
+                        parse_error_source(&error).downcast_ref::<crate::SampleSetError>(),
+                        Some(crate::SampleSetError::InconsistentSampleIDs { expected, .. })
+                            if expected == &crate::SampleIDSet::from([0.into()])
+                    ),
+                    "unexpected error: {error}"
+                );
+            }
+        }
+    }
 
     fn parse_error_source(error: &ParseError) -> &(dyn std::error::Error + 'static) {
         std::error::Error::source(error).expect("ParseError should expose its cause")
@@ -1715,18 +1842,6 @@ mod tests {
             .unwrap()
             .entries[0]
             .value = 1.0 + *atol;
-        one_hot
-            .sampled_one_hot_constraints
-            .as_mut()
-            .unwrap()
-            .entries
-            .get_mut(&1)
-            .unwrap()
-            .violations
-            .as_mut()
-            .unwrap()
-            .entries[0]
-            .value = *atol;
         SampleSet::try_from(one_hot).unwrap();
 
         let mut sos1 = v2_sample_set_with_sos1_constraint();

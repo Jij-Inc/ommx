@@ -11,8 +11,6 @@ import "ommx/v2/decision_variable.proto";
 import "ommx/v2/named_function.proto";
 
 // Validated multi-sample solver or sampler output serialization root.
-// Feasibility maps are materialized so consumers can read the results without
-// an OMMX SDK. feasibility_atol records the tolerance used for those maps.
 message SampleSet {
   repeated Feature required_features = 1;
   ommx.v1.SampledValues objectives = 2;

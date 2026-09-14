@@ -251,7 +251,6 @@ impl Parse for crate::v2::OneHotConstraint {
 impl From<EvaluatedOneHotConstraint> for crate::v2::EvaluatedOneHotConstraint {
     fn from(constraint: EvaluatedOneHotConstraint) -> Self {
         let feasible = constraint.is_feasible();
-        let violation = constraint.violation();
         Self {
             variables: constraint
                 .variables
@@ -259,7 +258,6 @@ impl From<EvaluatedOneHotConstraint> for crate::v2::EvaluatedOneHotConstraint {
                 .map(|id| id.into_inner())
                 .collect(),
             feasible,
-            violation,
             active_variable: constraint.stage.active_variable.map(|id| id.into_inner()),
             used_decision_variable_ids: constraint
                 .stage
@@ -271,11 +269,14 @@ impl From<EvaluatedOneHotConstraint> for crate::v2::EvaluatedOneHotConstraint {
     }
 }
 
-impl Parse for crate::v2::EvaluatedOneHotConstraint {
-    type Output = EvaluatedOneHotConstraint;
-    type Context = ATol;
-
-    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
+impl crate::v2::EvaluatedOneHotConstraint {
+    /// Restore the SDK metric from values supplied by the enclosing Solution or
+    /// SampleSet. Structural wire rows contain member IDs, not their values.
+    pub(crate) fn parse_with_values(
+        self,
+        value_of: impl FnMut(VariableID) -> Option<f64>,
+        atol: ATol,
+    ) -> Result<EvaluatedOneHotConstraint, ParseError> {
         let message = "ommx.v2.EvaluatedOneHotConstraint";
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
@@ -290,23 +291,23 @@ impl Parse for crate::v2::EvaluatedOneHotConstraint {
             ))
             .context(message, "active_variable"));
         }
-        crate::constraint_type::validate_wire_violation(
-            self.violation,
-            self.feasible,
-            *atol,
-            message,
-        )?;
         if self.feasible != active_variable.is_some() {
             return Err(ParseError::new(crate::error!(
                 "One-hot feasible must be true exactly when active_variable is set"
             ))
             .context(message, "active_variable"));
         }
+        let constraint = OneHotConstraint::new(variables)
+            .map_err(|error| ParseError::new(error).context(message, "variables"))?;
+        let (violation, _) = constraint
+            .evaluate_members(value_of, atol)
+            .map_err(|error| ParseError::new(error).context(message, "variables"))?;
+        crate::constraint_type::validate_wire_feasibility(violation, self.feasible, atol, message)?;
         Ok(OneHotConstraint {
-            variables,
+            variables: constraint.variables,
             stage: OneHotEvaluatedData {
-                atol: *atol,
-                violation: self.violation,
+                atol,
+                violation,
                 active_variable,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
@@ -338,7 +339,6 @@ impl From<SampledOneHotConstraint> for crate::v2::SampledOneHotConstraint {
                 .map(|id| id.into_inner())
                 .collect(),
             feasible,
-            violations: Some(constraint.stage.violations.into()),
             active_variable: constraint
                 .stage
                 .active_variable
@@ -362,11 +362,14 @@ impl From<SampledOneHotConstraint> for crate::v2::SampledOneHotConstraint {
     }
 }
 
-impl Parse for crate::v2::SampledOneHotConstraint {
-    type Output = SampledOneHotConstraint;
-    type Context = ATol;
-
-    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
+impl crate::v2::SampledOneHotConstraint {
+    /// Restore the SDK metric from values supplied by the enclosing Solution or
+    /// SampleSet. Structural wire rows contain member IDs, not their values.
+    pub(crate) fn parse_with_values(
+        self,
+        mut value_of: impl FnMut(SampleID, VariableID) -> Option<f64>,
+        atol: ATol,
+    ) -> Result<SampledOneHotConstraint, ParseError> {
         let message = "ommx.v2.SampledOneHotConstraint";
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
@@ -386,29 +389,14 @@ impl Parse for crate::v2::SampledOneHotConstraint {
             ))
             .context(message, "active_variable"));
         }
-        let violations: crate::Sampled<f64> = self
-            .violations
-            .ok_or(crate::RawParseError::MissingField {
-                message,
-                field: "violations",
-            })?
-            .parse_as(&(), message, "violations")?;
         let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
-        if sample_ids_from_map(&feasible) != violations.ids()
-            || sample_ids_from_map(&active_variable) != violations.ids()
-        {
+        if sample_ids_from_map(&feasible) != sample_ids_from_map(&active_variable) {
             return Err(ParseError::new(crate::error!(
-                "feasible and active_variable sample IDs must match violations"
+                "feasible and active_variable sample IDs must match"
             ))
-            .context(message, "violations"));
+            .context(message, "feasible"));
         }
-        for (id, &violation) in violations.iter() {
-            crate::constraint_type::validate_wire_violation(
-                violation,
-                feasible[id],
-                *atol,
-                message,
-            )?;
+        for id in feasible.keys() {
             if feasible[id] != active_variable[id].is_some() {
                 return Err(ParseError::new(crate::error!(
                     "One-hot feasible must be true exactly when active_variable is set"
@@ -416,10 +404,27 @@ impl Parse for crate::v2::SampledOneHotConstraint {
                 .context(message, "active_variable"));
             }
         }
+        let constraint = OneHotConstraint::new(variables)
+            .map_err(|error| ParseError::new(error).context(message, "variables"))?;
+        let mut violations = crate::Sampled::default();
+        for (&id, &provided_feasible) in &feasible {
+            let (violation, _) = constraint
+                .evaluate_members(|variable_id| value_of(id, variable_id), atol)
+                .map_err(|error| ParseError::new(error).context(message, "variables"))?;
+            crate::constraint_type::validate_wire_feasibility(
+                violation,
+                provided_feasible,
+                atol,
+                message,
+            )?;
+            violations
+                .append([id], violation)
+                .map_err(|error| ParseError::new(error).context(message, "feasible"))?;
+        }
         Ok(OneHotConstraint {
-            variables,
+            variables: constraint.variables,
             stage: OneHotSampledData {
-                atol: *atol,
+                atol,
                 violations,
                 active_variable,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
@@ -544,7 +549,7 @@ mod tests {
     #[test]
     fn parse_v2_evaluated_preserves_empty_variables_signal() {
         let parse_error = crate::v2::EvaluatedOneHotConstraint::default()
-            .parse(&ATol::default())
+            .parse_with_values(|_| None, ATol::default())
             .unwrap_err();
 
         assert!(matches!(
@@ -558,7 +563,7 @@ mod tests {
     #[test]
     fn parse_v2_sampled_preserves_empty_variables_signal() {
         let parse_error = crate::v2::SampledOneHotConstraint::default()
-            .parse(&ATol::default())
+            .parse_with_values(|_, _| None, ATol::default())
             .unwrap_err();
 
         assert!(matches!(
@@ -572,14 +577,15 @@ mod tests {
     #[test]
     fn parse_v2_evaluated_invalid_active_variable_is_an_ordinary_error() {
         let proto = crate::v2::EvaluatedOneHotConstraint {
-            violation: 0.0,
             variables: vec![1],
             feasible: true,
             active_variable: Some(2),
             used_decision_variable_ids: vec![],
         };
 
-        let err = proto.parse(&ATol::default()).unwrap_err();
+        let err = proto
+            .parse_with_values(|_| None, ATol::default())
+            .unwrap_err();
 
         assert!(!error_chain_contains::<crate::RawParseError>(&err));
         assert!(!error_chain_contains::<OneHotConstraintError>(&err));

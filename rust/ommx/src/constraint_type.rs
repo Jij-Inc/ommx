@@ -232,20 +232,14 @@ pub(crate) fn violation_is_feasible(violation: f64, atol: ATol) -> bool {
     violation >= 0.0 && atol.approx_is_zero(violation)
 }
 
-/// Validate persisted structural metrics and their redundant feasibility flag.
+/// Validate a persisted feasibility flag against the metric restored from member values.
 /// Shared by the one-hot and SOS1 wire boundaries.
-pub(crate) fn validate_wire_violation(
+pub(crate) fn validate_wire_feasibility(
     violation: f64,
     provided_feasible: bool,
     atol: ATol,
     message: &'static str,
 ) -> std::result::Result<(), ParseError> {
-    if violation.is_nan() || violation < 0.0 {
-        return Err(ParseError::new(crate::error!(
-            "Constraint violation must be nonnegative and not NaN"
-        ))
-        .context(message, "violation"));
-    }
     if provided_feasible != violation_is_feasible(violation, atol) {
         return Err(ParseError::new(crate::error!(
             "Constraint feasible must equal violation <= atol"
@@ -1088,8 +1082,6 @@ macro_rules! impl_parse_v2_evaluated_collection {
 
 impl_parse_v2_evaluated_collection!(Constraint => crate::v2::EvaluatedRegularConstraintCollection);
 impl_parse_v2_evaluated_collection!(crate::IndicatorConstraint => crate::v2::EvaluatedIndicatorConstraintCollection);
-impl_parse_v2_evaluated_collection!(crate::OneHotConstraint => crate::v2::EvaluatedOneHotConstraintCollection);
-impl_parse_v2_evaluated_collection!(crate::Sos1Constraint => crate::v2::EvaluatedSos1ConstraintCollection);
 
 macro_rules! impl_parse_v2_sampled_collection {
     ($source:ty => $target:ty) => {
@@ -1121,8 +1113,88 @@ macro_rules! impl_parse_v2_sampled_collection {
 
 impl_parse_v2_sampled_collection!(Constraint => crate::v2::SampledRegularConstraintCollection);
 impl_parse_v2_sampled_collection!(crate::IndicatorConstraint => crate::v2::SampledIndicatorConstraintCollection);
-impl_parse_v2_sampled_collection!(crate::OneHotConstraint => crate::v2::SampledOneHotConstraintCollection);
-impl_parse_v2_sampled_collection!(crate::Sos1Constraint => crate::v2::SampledSos1ConstraintCollection);
+
+// Solution and SampleSet supply the cross-table values required to restore a
+// structural constraint's metric. The collection owns its IDs and sidecars.
+macro_rules! impl_restore_v2_structural_collection {
+    ($source:ty => $evaluated:ty, $sampled:ty) => {
+        impl $evaluated {
+            pub(crate) fn parse_with_values(
+                self,
+                variables: &crate::EvaluatedDecisionVariableTable,
+                atol: ATol,
+            ) -> std::result::Result<EvaluatedCollection<$source>, ParseError> {
+                let message = stringify!($evaluated);
+                let entries = self
+                    .entries
+                    .into_iter()
+                    .map(|(id, row)| {
+                        let constraint = row
+                            .parse_with_values(
+                                |variable_id| {
+                                    variables
+                                        .get(&variable_id)
+                                        .map(|variable| *variable.value())
+                                },
+                                atol,
+                            )
+                            .map_err(|error| error.context(message, "entries"))?;
+                        Ok((<<$source as ConstraintType>::ID>::from(id), constraint))
+                    })
+                    .collect::<std::result::Result<BTreeMap<_, _>, ParseError>>()?;
+                let removed_reasons =
+                    parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
+                let context =
+                    constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
+                let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
+                validate_context_reference_ids(&context, &owned_ids)
+                    .map_err(|error| ParseError::new(error).context(message, "contexts"))?;
+                EvaluatedCollection::with_context(entries, removed_reasons, context)
+                    .map_err(|error| ParseError::new(error).context(message, "removed_reasons"))
+            }
+        }
+
+        impl $sampled {
+            pub(crate) fn parse_with_values(
+                self,
+                variables: &crate::SampledDecisionVariableTable,
+                atol: ATol,
+            ) -> std::result::Result<SampledCollection<$source>, ParseError> {
+                let message = stringify!($sampled);
+                let entries = self
+                    .entries
+                    .into_iter()
+                    .map(|(id, row)| {
+                        let constraint = row
+                            .parse_with_values(
+                                |sample_id, variable_id| {
+                                    variables
+                                        .get(&variable_id)
+                                        .and_then(|variable| variable.samples().get(sample_id))
+                                        .copied()
+                                },
+                                atol,
+                            )
+                            .map_err(|error| error.context(message, "entries"))?;
+                        Ok((<<$source as ConstraintType>::ID>::from(id), constraint))
+                    })
+                    .collect::<std::result::Result<BTreeMap<_, _>, ParseError>>()?;
+                let removed_reasons =
+                    parse_v2_removed_reasons(self.removed_reasons, message, "removed_reasons")?;
+                let context =
+                    constraint_context_store_from_v2_map(self.contexts, message, "contexts")?;
+                let owned_ids = entries.keys().copied().collect::<BTreeSet<_>>();
+                validate_context_reference_ids(&context, &owned_ids)
+                    .map_err(|error| ParseError::new(error).context(message, "contexts"))?;
+                SampledCollection::with_context(entries, removed_reasons, context)
+                    .map_err(|error| ParseError::new(error).context(message, "removed_reasons"))
+            }
+        }
+    };
+}
+
+impl_restore_v2_structural_collection!(crate::OneHotConstraint => crate::v2::EvaluatedOneHotConstraintCollection, crate::v2::SampledOneHotConstraintCollection);
+impl_restore_v2_structural_collection!(crate::Sos1Constraint => crate::v2::EvaluatedSos1ConstraintCollection, crate::v2::SampledSos1ConstraintCollection);
 
 fn entries_to_v2_map<ID, Row, V2Row>(entries: BTreeMap<ID, Row>) -> BTreeMap<u64, V2Row>
 where

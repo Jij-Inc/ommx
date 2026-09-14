@@ -426,7 +426,8 @@ def test_partial_evaluation_cannot_discard_small_sos1_member_contributions(atol)
     )
     fixed = {1: 0.75 * atol, 2: 0.75 * atol}
     original = instance.evaluate({0: 1, **fixed}, atol=atol)
-    with pytest.raises(RuntimeError, match="without changing the constraint violation"):
+    assert not original.feasible
+    with pytest.raises(RuntimeError, match="without changing constraint feasibility"):
         instance.partial_evaluate(fixed, atol=atol)
     assert (
         instance.evaluate({0: 1, **fixed}, atol=atol).total_violation()

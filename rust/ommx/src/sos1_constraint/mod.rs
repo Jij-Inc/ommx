@@ -252,7 +252,6 @@ impl Parse for crate::v2::Sos1Constraint {
 impl From<EvaluatedSos1Constraint> for crate::v2::EvaluatedSos1Constraint {
     fn from(constraint: EvaluatedSos1Constraint) -> Self {
         let feasible = constraint.is_feasible();
-        let violation = constraint.violation();
         Self {
             variables: constraint
                 .variables
@@ -260,7 +259,6 @@ impl From<EvaluatedSos1Constraint> for crate::v2::EvaluatedSos1Constraint {
                 .map(|id| id.into_inner())
                 .collect(),
             feasible,
-            violation,
             active_variable: constraint.stage.active_variable.map(|id| id.into_inner()),
             used_decision_variable_ids: constraint
                 .stage
@@ -272,11 +270,14 @@ impl From<EvaluatedSos1Constraint> for crate::v2::EvaluatedSos1Constraint {
     }
 }
 
-impl Parse for crate::v2::EvaluatedSos1Constraint {
-    type Output = EvaluatedSos1Constraint;
-    type Context = ATol;
-
-    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
+impl crate::v2::EvaluatedSos1Constraint {
+    /// Restore the SDK metric from values supplied by the enclosing Solution or
+    /// SampleSet. Structural wire rows contain member IDs, not their values.
+    pub(crate) fn parse_with_values(
+        self,
+        value_of: impl FnMut(VariableID) -> Option<f64>,
+        atol: ATol,
+    ) -> Result<EvaluatedSos1Constraint, ParseError> {
         let message = "ommx.v2.EvaluatedSos1Constraint";
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
@@ -292,23 +293,23 @@ impl Parse for crate::v2::EvaluatedSos1Constraint {
             ))
             .context(message, "active_variable"));
         }
-        crate::constraint_type::validate_wire_violation(
-            self.violation,
-            self.feasible,
-            *atol,
-            message,
-        )?;
         if active_variable.is_some() && !self.feasible {
             return Err(ParseError::new(crate::error!(
                 "SOS1 active_variable must be unset when feasible is false"
             ))
             .context(message, "active_variable"));
         }
+        let constraint = Sos1Constraint::new(variables)
+            .map_err(|error| ParseError::new(error).context(message, "variables"))?;
+        let (violation, _) = constraint
+            .evaluate_members(value_of, atol)
+            .map_err(|error| ParseError::new(error).context(message, "variables"))?;
+        crate::constraint_type::validate_wire_feasibility(violation, self.feasible, atol, message)?;
         Ok(Sos1Constraint {
-            variables,
+            variables: constraint.variables,
             stage: Sos1EvaluatedData {
-                atol: *atol,
-                violation: self.violation,
+                atol,
+                violation,
                 active_variable,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
@@ -340,7 +341,6 @@ impl From<SampledSos1Constraint> for crate::v2::SampledSos1Constraint {
                 .map(|id| id.into_inner())
                 .collect(),
             feasible,
-            violations: Some(constraint.stage.violations.into()),
             active_variable: constraint
                 .stage
                 .active_variable
@@ -364,11 +364,14 @@ impl From<SampledSos1Constraint> for crate::v2::SampledSos1Constraint {
     }
 }
 
-impl Parse for crate::v2::SampledSos1Constraint {
-    type Output = SampledSos1Constraint;
-    type Context = ATol;
-
-    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
+impl crate::v2::SampledSos1Constraint {
+    /// Restore the SDK metric from values supplied by the enclosing Solution or
+    /// SampleSet. Structural wire rows contain member IDs, not their values.
+    pub(crate) fn parse_with_values(
+        self,
+        mut value_of: impl FnMut(SampleID, VariableID) -> Option<f64>,
+        atol: ATol,
+    ) -> Result<SampledSos1Constraint, ParseError> {
         let message = "ommx.v2.SampledSos1Constraint";
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
@@ -389,29 +392,14 @@ impl Parse for crate::v2::SampledSos1Constraint {
             ))
             .context(message, "active_variable"));
         }
-        let violations: crate::Sampled<f64> = self
-            .violations
-            .ok_or(crate::RawParseError::MissingField {
-                message,
-                field: "violations",
-            })?
-            .parse_as(&(), message, "violations")?;
         let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
-        if sample_ids_from_map(&feasible) != violations.ids()
-            || sample_ids_from_map(&active_variable) != violations.ids()
-        {
+        if sample_ids_from_map(&feasible) != sample_ids_from_map(&active_variable) {
             return Err(ParseError::new(crate::error!(
-                "feasible and active_variable sample IDs must match violations"
+                "feasible and active_variable sample IDs must match"
             ))
-            .context(message, "violations"));
+            .context(message, "feasible"));
         }
-        for (id, &violation) in violations.iter() {
-            crate::constraint_type::validate_wire_violation(
-                violation,
-                feasible[id],
-                *atol,
-                message,
-            )?;
+        for id in feasible.keys() {
             if active_variable[id].is_some() && !feasible[id] {
                 return Err(ParseError::new(crate::error!(
                     "SOS1 active_variable must be unset when feasible is false"
@@ -419,10 +407,27 @@ impl Parse for crate::v2::SampledSos1Constraint {
                 .context(message, "active_variable"));
             }
         }
+        let constraint = Sos1Constraint::new(variables)
+            .map_err(|error| ParseError::new(error).context(message, "variables"))?;
+        let mut violations = crate::Sampled::default();
+        for (&id, &provided_feasible) in &feasible {
+            let (violation, _) = constraint
+                .evaluate_members(|variable_id| value_of(id, variable_id), atol)
+                .map_err(|error| ParseError::new(error).context(message, "variables"))?;
+            crate::constraint_type::validate_wire_feasibility(
+                violation,
+                provided_feasible,
+                atol,
+                message,
+            )?;
+            violations
+                .append([id], violation)
+                .map_err(|error| ParseError::new(error).context(message, "feasible"))?;
+        }
         Ok(Sos1Constraint {
-            variables,
+            variables: constraint.variables,
             stage: Sos1SampledData {
-                atol: *atol,
+                atol,
                 violations,
                 active_variable,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
@@ -547,7 +552,7 @@ mod tests {
     #[test]
     fn parse_v2_evaluated_preserves_empty_variables_signal() {
         let parse_error = crate::v2::EvaluatedSos1Constraint::default()
-            .parse(&ATol::default())
+            .parse_with_values(|_| None, ATol::default())
             .unwrap_err();
 
         assert!(matches!(
@@ -561,7 +566,7 @@ mod tests {
     #[test]
     fn parse_v2_sampled_preserves_empty_variables_signal() {
         let parse_error = crate::v2::SampledSos1Constraint::default()
-            .parse(&ATol::default())
+            .parse_with_values(|_, _| None, ATol::default())
             .unwrap_err();
 
         assert!(matches!(
@@ -575,14 +580,15 @@ mod tests {
     #[test]
     fn parse_v2_evaluated_rejects_infeasible_active_variable() {
         let proto = crate::v2::EvaluatedSos1Constraint {
-            violation: 1.0,
             variables: vec![1],
             feasible: false,
             active_variable: Some(1),
             used_decision_variable_ids: vec![],
         };
 
-        let err = proto.parse(&ATol::default()).unwrap_err();
+        let err = proto
+            .parse_with_values(|_| None, ATol::default())
+            .unwrap_err();
 
         assert!(!error_chain_contains::<crate::RawParseError>(&err));
         assert!(!error_chain_contains::<Sos1ConstraintError>(&err));
@@ -596,7 +602,6 @@ mod tests {
     #[test]
     fn parse_v2_sampled_rejects_infeasible_active_variable() {
         let proto = crate::v2::SampledSos1Constraint {
-            violations: Some(crate::Sampled::from((crate::SampleID::from(0), 1.0)).into()),
             variables: vec![1],
             feasible: BTreeMap::from([(0, false)]),
             active_variable: BTreeMap::from([(
@@ -608,7 +613,9 @@ mod tests {
             used_decision_variable_ids: vec![],
         };
 
-        let err = proto.parse(&ATol::default()).unwrap_err();
+        let err = proto
+            .parse_with_values(|_, _| None, ATol::default())
+            .unwrap_err();
 
         assert!(!error_chain_contains::<crate::RawParseError>(&err));
         assert!(!error_chain_contains::<Sos1ConstraintError>(&err));

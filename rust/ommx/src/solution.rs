@@ -801,6 +801,23 @@ fn validate_solution_indicator_constraint_structure(
     Ok(())
 }
 
+// Shared by SDK row validation and wire restoration before member values are read.
+fn validate_structural_member_id(
+    decision_variables: &EvaluatedDecisionVariableTable,
+    variable_id: VariableID,
+    constraint_family: &'static str,
+    constraint_id: impl std::fmt::Debug,
+) -> Result<(), SolutionError> {
+    if !decision_variables.contains_key(&variable_id) {
+        return Err(SolutionError::InvalidConstraintStructure {
+            constraint_family,
+            constraint_id: format!("{constraint_id:?}"),
+            message: format!("variable {variable_id:?} is not in decision_variables"),
+        });
+    }
+    Ok(())
+}
+
 fn validate_solution_one_hot_constraint_structure(
     decision_variables: &EvaluatedDecisionVariableTable,
     one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
@@ -814,13 +831,10 @@ fn validate_solution_one_hot_constraint_structure(
             });
         }
         for variable_id in &constraint.variables {
-            let Some(variable) = decision_variables.get(variable_id) else {
-                return Err(SolutionError::InvalidConstraintStructure {
-                    constraint_family: "one-hot",
-                    constraint_id: format!("{id:?}"),
-                    message: format!("variable {variable_id:?} is not in decision_variables"),
-                });
-            };
+            validate_structural_member_id(decision_variables, *variable_id, "one-hot", id)?;
+            let variable = decision_variables
+                .get(variable_id)
+                .expect("member ID was validated");
             if *variable.kind() != crate::decision_variable::Kind::Binary {
                 return Err(SolutionError::InvalidConstraintStructure {
                     constraint_family: "one-hot",
@@ -858,13 +872,7 @@ fn validate_solution_sos1_constraint_structure(
             });
         }
         for variable_id in &constraint.variables {
-            if !decision_variables.contains_key(variable_id) {
-                return Err(SolutionError::InvalidConstraintStructure {
-                    constraint_family: "SOS1",
-                    constraint_id: format!("{id:?}"),
-                    message: format!("variable {variable_id:?} is not in decision_variables"),
-                });
-            }
+            validate_structural_member_id(decision_variables, *variable_id, "SOS1", id)?;
         }
         if constraint
             .stage

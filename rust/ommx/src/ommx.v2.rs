@@ -270,8 +270,6 @@ pub struct EvaluatedOneHotConstraint {
     pub active_variable: ::core::option::Option<u64>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(double, tag = "5")]
-    pub violation: f64,
 }
 /// Evaluated SOS1 constraint row.
 #[non_exhaustive]
@@ -286,8 +284,6 @@ pub struct EvaluatedSos1Constraint {
     pub active_variable: ::core::option::Option<u64>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(double, tag = "5")]
-    pub violation: f64,
 }
 /// Evaluated regular constraint collection.
 #[non_exhaustive]
@@ -392,8 +388,6 @@ pub struct SampledOneHotConstraint {
     pub active_variable: ::prost::alloc::collections::BTreeMap<u64, SampledActiveVariable>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(message, optional, tag = "5")]
-    pub violations: ::core::option::Option<super::v1::SampledValues>,
 }
 /// Sampled SOS1 constraint row.
 #[non_exhaustive]
@@ -408,8 +402,6 @@ pub struct SampledSos1Constraint {
     pub active_variable: ::prost::alloc::collections::BTreeMap<u64, SampledActiveVariable>,
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(message, optional, tag = "5")]
-    pub violations: ::core::option::Option<super::v1::SampledValues>,
 }
 /// Sampled regular constraint collection.
 #[non_exhaustive]
@@ -720,8 +712,6 @@ pub struct ParametricInstance {
     pub output_objective: ::core::option::Option<OutputObjective>,
 }
 /// Validated multi-sample solver or sampler output serialization root.
-/// Feasibility maps are materialized so consumers can read the results without
-/// an OMMX SDK. feasibility_atol records the tolerance used for those maps.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -761,8 +751,6 @@ pub struct SampleSet {
     pub feasibility_atol: ::core::option::Option<f64>,
 }
 /// Validated single-state solver output serialization root.
-/// Feasibility flags are materialized so consumers can read the result without
-/// an OMMX SDK. feasibility_atol records the tolerance used for those flags.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
