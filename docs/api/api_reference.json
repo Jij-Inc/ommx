@@ -27950,6 +27950,46 @@
               "deprecated": null
             },
             {
+              "name": "load_qplib_solution",
+              "doc": "Load a published QPLIB `.sol` file into a {class}`~ommx.State`.\n\nPass the variable count of the original QPLIB instance as\n`num_variables`. Omitted variables receive zero. The standard QPLIB\nsolution names `xN`, `bN`, and `iN` map to OMMX ID `N - 2`; `objvar`\nis ignored because the objective is computed by\n{meth}`~ommx.Instance.evaluate`. Custom names and other solvers' `.sol`\nformats are not supported. Names are case insensitive.\n\nMalformed input, duplicate IDs, nonfinite values, and out-of-range IDs\nraise `ValueError` with a line number. File read failures raise\n`RuntimeError`. Loading does not check bounds or feasibility.\n\n>>> import tempfile\n>>> from pathlib import Path\n>>> from ommx import State\n>>> with tempfile.TemporaryDirectory() as directory:\n...     path = Path(directory) / \"example.sol\"\n...     _ = path.write_text(\"objvar 12\\nx2 0.5\\nb4 1\\n\")\n...     state = State.load_qplib_solution(str(path), num_variables=3)\n>>> state.entries\n{0: 0.5, 1: 0.0, 2: 1.0}",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "num_variables",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "State",
+                    "link_target": {
+                      "fqn": "ommx.State",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "set",
               "doc": "",
               "signatures": [
