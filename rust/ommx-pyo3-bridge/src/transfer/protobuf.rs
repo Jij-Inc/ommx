@@ -1,6 +1,7 @@
 //! Codecs for the two registered protobuf transfer contracts.
 
 use super::*;
+use crate::protocol;
 use crate::{
     PyConstraint, PyDecisionVariable, PyFunction, PyInstance, PyParametricInstance, PySampleSet,
     PySolution,
@@ -28,7 +29,7 @@ macro_rules! root {
             type Payload = Vec<u8>;
             const PYTHON_NAME: &'static str = concat!("ommx.", $name);
             fn receiver(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
-                public_receiver(module, $name, "from_v1_bytes")
+                public_receiver(module, $name, protocol::FROM_V1_BYTES)
             }
             fn import(payload: Vec<u8>, receiver: &Bound<'_, PyAny>) -> PyResult<Self> {
                 import_bytes(payload, receiver).map(|object| Self(crate::Output::python(object)))
@@ -38,7 +39,7 @@ macro_rules! root {
             type Payload = Vec<u8>;
             const PYTHON_NAME: &'static str = concat!("ommx.", $name);
             fn receiver(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
-                public_receiver(module, $name, "from_v2_bytes")
+                public_receiver(module, $name, protocol::FROM_V2_BYTES)
             }
             fn import(payload: Vec<u8>, receiver: &Bound<'_, PyAny>) -> PyResult<Self> {
                 import_bytes(payload, receiver).map(|object| Self(crate::Output::python(object)))
@@ -81,7 +82,7 @@ checked_v1_root!(PyInstance, Instance);
 checked_v1_root!(PyParametricInstance, ParametricInstance);
 
 macro_rules! v1_component {
-    ($wrapper:ident, $name:literal, $endpoint:literal, $wire:ident) => {
+    ($wrapper:ident, $name:literal, $endpoint:expr, $wire:ident) => {
         impl super::sealed::Type<ProtobufV1> for $wrapper {}
         impl super::sealed::Type<ProtobufV2> for $wrapper {}
         impl TransferVia<ProtobufV1> for $wrapper {
@@ -101,22 +102,17 @@ macro_rules! v1_component {
         }
     };
 }
-v1_component!(
-    PyFunction,
-    "Function",
-    "_bridge_protobuf_v1_function_from_bytes",
-    Function
-);
+v1_component!(PyFunction, "Function", protocol::V1_FUNCTION, Function);
 v1_component!(
     PyConstraint,
     "Constraint",
-    "_bridge_protobuf_v1_constraint_from_bytes",
+    protocol::V1_CONSTRAINT,
     Constraint
 );
 v1_component!(
     PyDecisionVariable,
     "DecisionVariable",
-    "_bridge_protobuf_v1_decision_variable_from_bytes",
+    protocol::V1_DECISION_VARIABLE,
     DecisionVariable
 );
 
@@ -150,7 +146,7 @@ impl TransferVia<ProtobufV2> for PyFunction {
     type Payload = Vec<u8>;
     const PYTHON_NAME: &'static str = "ommx.Function";
     fn receiver(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
-        private_receiver(module, "_pyo3_bridge_v0_function_from_bytes")
+        private_receiver(module, protocol::V0_FUNCTION)
     }
     fn import(payload: Vec<u8>, receiver: &Bound<'_, PyAny>) -> PyResult<Self> {
         import_bytes(payload, receiver).map(|object| Self(crate::Output::python(object)))
@@ -166,7 +162,7 @@ impl TransferVia<ProtobufV2> for PyConstraint {
     type Payload = (Vec<u8>, Vec<u8>);
     const PYTHON_NAME: &'static str = "ommx.Constraint";
     fn receiver(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
-        private_receiver(module, "_pyo3_bridge_v0_constraint_from_bytes")
+        private_receiver(module, protocol::V0_CONSTRAINT)
     }
     fn import((constraint, context): Self::Payload, receiver: &Bound<'_, PyAny>) -> PyResult<Self> {
         let py = receiver.py();
@@ -187,7 +183,7 @@ impl TransferVia<ProtobufV2> for PyDecisionVariable {
     type Payload = (u64, Vec<u8>, Vec<u8>);
     const PYTHON_NAME: &'static str = "ommx.DecisionVariable";
     fn receiver(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
-        private_receiver(module, "_pyo3_bridge_v0_decision_variable_from_bytes")
+        private_receiver(module, protocol::V0_DECISION_VARIABLE)
     }
     fn import((id, variable, label): Self::Payload, receiver: &Bound<'_, PyAny>) -> PyResult<Self> {
         let py = receiver.py();

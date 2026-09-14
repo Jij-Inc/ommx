@@ -1,7 +1,9 @@
 #![doc = include_str!("../README.md")]
 
 mod protocol;
+mod receiver;
 mod transfer;
+pub use receiver::ReceiverConfig;
 pub use transfer::{
     resolve_target, Export, ProtobufV1, ProtobufV2, Target, TransferProtocol, TransferProtocolId,
     TransferVia,

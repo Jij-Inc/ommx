@@ -156,6 +156,30 @@ to reinterpret such payloads. A future shared-memory or Arrow transfer would
 get a new marker, ID, and `TransferVia::Payload` type; payloads are not required
 to be byte buffers and own their resources until import or drop.
 
+## Configure Python SDK receivers
+
+The Python SDK configures [`ReceiverConfig`] with its supported protocols, a
+`legacy_v0` flag, and three factories for its canonical `Function`, `Constraint`,
+and `DecisionVariable` classes. The factories receive parsed Rust values,
+including the complete constraint context or variable ID and label. They only
+construct the SDK's Python objects; they do not define endpoint names, decode
+payloads, or implement the support declaration.
+
+Call `ReceiverConfig::register` after registering the SDK's `Instance`,
+`ParametricInstance`, `Solution`, and `SampleSet` classes on the extension
+module. Registration checks their required public `from_v1_bytes` and
+`from_v2_bytes` decoders before adding the configured component endpoints and
+support declaration. ProtobufV2 reuses the fixed v0 component endpoints even
+when `legacy_v0` is false; the flag also enables them for SDKs that do not
+advertise ProtobufV2.
+
+Sender lookups and receiver registration use the same bridge-owned endpoint
+definitions. Receiver factories are retained locally by private bound Python
+methods, with no global configuration and no Rust object sharing between
+independent extension modules. Call signatures, decoding through the core
+parsers, and bridge error conversion belong to the bridge crate. The Python
+SDK retains ownership of its canonical classes and public root decoding APIs.
+
 ## Existing bridge v0 returns
 
 The bridge serializes each value to protobuf bytes, passes those bytes through

@@ -1,26 +1,22 @@
-//! Versioned production receivers for `ommx-pyo3-bridge`.
-//!
-//! Protocol implementations stay binding-private and out of the generated
-//! Python API. Registering a new protocol alongside an existing one allows
-//! their exact endpoint and payload interpretations to coexist.
+//! Configure the SDK-owned Python constructors for the bridge's receivers.
 
-mod protobuf_v1;
-mod v0;
+use crate::{Constraint, DecisionVariable, Function};
+use ommx_pyo3_bridge::{ReceiverConfig, TransferProtocolId};
+use pyo3::{prelude::*, IntoPyObjectExt};
 
-use pyo3::prelude::*;
-
+// SDK initialization calls this after registering the canonical classes.
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    v0::register(module)?;
-    protobuf_v1::register(module)?;
-    module.add_function(wrap_pyfunction!(_bridge_supported_protocols, module)?)?;
-    Ok(())
-}
-
-#[pyfunction]
-fn _bridge_supported_protocols() -> Vec<u32> {
-    use ommx_pyo3_bridge::TransferProtocolId;
-    vec![
-        TransferProtocolId::ProtobufV1 as u32,
-        TransferProtocolId::ProtobufV2 as u32,
-    ]
+    ReceiverConfig {
+        protocols: vec![
+            TransferProtocolId::ProtobufV1,
+            TransferProtocolId::ProtobufV2,
+        ],
+        legacy_v0: true,
+        function: |py, value| Function(value).into_py_any(py),
+        constraint: |py, value, context| Constraint::from_parts(value, context).into_py_any(py),
+        decision_variable: |py, id, value, label| {
+            DecisionVariable::from_parts(id, value, label).into_py_any(py)
+        },
+    }
+    .register(module)
 }

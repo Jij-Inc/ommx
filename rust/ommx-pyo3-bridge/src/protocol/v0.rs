@@ -11,9 +11,7 @@ use pyo3::{
     types::{PyAny, PyBytes},
 };
 
-const FUNCTION_ENDPOINT: &str = "_pyo3_bridge_v0_function_from_bytes";
-const CONSTRAINT_ENDPOINT: &str = "_pyo3_bridge_v0_constraint_from_bytes";
-const DECISION_VARIABLE_ENDPOINT: &str = "_pyo3_bridge_v0_decision_variable_from_bytes";
+use super::{FROM_V2_BYTES, V0_CONSTRAINT, V0_DECISION_VARIABLE, V0_FUNCTION};
 
 fn incompatible_python_ommx(capability: &str, source: PyErr) -> PyErr {
     PyImportError::new_err(format!(
@@ -24,7 +22,7 @@ fn incompatible_python_ommx(capability: &str, source: PyErr) -> PyErr {
 }
 
 fn incompatible_python_ommx_root(class_name: &str, source: PyErr) -> PyErr {
-    incompatible_python_ommx(&format!("ommx.{class_name}.from_v2_bytes"), source)
+    incompatible_python_ommx(&format!("ommx.{class_name}.{FROM_V2_BYTES}"), source)
 }
 
 fn bridge_endpoint<'py>(py: Python<'py>, endpoint: &str) -> PyResult<Bound<'py, PyAny>> {
@@ -44,7 +42,7 @@ fn root_from_v2_bytes<'py>(py: Python<'py>, class_name: &str) -> PyResult<Bound<
         .getattr(class_name)
         .map_err(|error| incompatible_python_ommx_root(class_name, error))?;
     root_class
-        .getattr("from_v2_bytes")
+        .getattr(FROM_V2_BYTES)
         .map_err(|error| incompatible_python_ommx_root(class_name, error))
 }
 
@@ -79,7 +77,7 @@ pub fn function_into_py<'py>(
     py: Python<'py>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let bytes = function_payload(function);
-    bridge_endpoint(py, FUNCTION_ENDPOINT)?.call1((PyBytes::new(py, &bytes),))
+    bridge_endpoint(py, V0_FUNCTION)?.call1((PyBytes::new(py, &bytes),))
 }
 
 pub fn constraint_into_py<'py>(
@@ -88,7 +86,7 @@ pub fn constraint_into_py<'py>(
     py: Python<'py>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let (constraint, context) = constraint_payloads(constraint, context);
-    bridge_endpoint(py, CONSTRAINT_ENDPOINT)?
+    bridge_endpoint(py, V0_CONSTRAINT)?
         .call1((PyBytes::new(py, &constraint), PyBytes::new(py, &context)))
 }
 
@@ -99,7 +97,7 @@ pub fn decision_variable_into_py<'py>(
     py: Python<'py>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let (id, decision_variable, label) = decision_variable_payloads(id, decision_variable, label);
-    bridge_endpoint(py, DECISION_VARIABLE_ENDPOINT)?.call1((
+    bridge_endpoint(py, V0_DECISION_VARIABLE)?.call1((
         id,
         PyBytes::new(py, &decision_variable),
         PyBytes::new(py, &label),

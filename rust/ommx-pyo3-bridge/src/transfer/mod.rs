@@ -186,13 +186,13 @@ pub fn resolve_target<P: TransferProtocol>(py: Python<'_>) -> PyResult<Option<Ta
     let module = PyModule::import(py, "ommx")?;
     let declaration = module
         .getattr("_ommx_rust")
-        .and_then(|module| module.getattr("_bridge_supported_protocols"))
+        .and_then(|module| module.getattr(crate::protocol::SUPPORTED_PROTOCOLS))
         .and_then(|declare| declare.call0())
         .and_then(|ids| ids.extract::<Vec<u32>>());
     let ids = declaration.map_err(|source| {
-        let error = PyImportError::new_err(concat!(
-            "Python OMMX must declare supported transfer protocols through ",
-            "ommx._ommx_rust._bridge_supported_protocols()",
+        let error = PyImportError::new_err(format!(
+            "Python OMMX must declare supported transfer protocols through ommx._ommx_rust.{}()",
+            crate::protocol::SUPPORTED_PROTOCOLS,
         ));
         error.set_cause(py, Some(source));
         error

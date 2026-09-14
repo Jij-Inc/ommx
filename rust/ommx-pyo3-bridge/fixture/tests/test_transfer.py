@@ -302,3 +302,31 @@ def test_malformed_v1_component_is_a_bridge_runtime_error(kind):
     receive = getattr(receiver, f"_bridge_protobuf_v1_{kind}_from_bytes")
     with pytest.raises(RuntimeError, match="invalid OMMX ProtobufV1 bridge payload"):
         receive(b"\xff")
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "kwargs"),
+    [
+        ("_pyo3_bridge_v0_function_from_bytes", {"bytes": b"\xff"}),
+        (
+            "_pyo3_bridge_v0_constraint_from_bytes",
+            {"constraint": b"\xff", "context": b""},
+        ),
+        (
+            "_pyo3_bridge_v0_decision_variable_from_bytes",
+            {"id": 7, "decision_variable": b"\xff", "label": b""},
+        ),
+        ("_bridge_protobuf_v1_function_from_bytes", {"bytes": b"\xff"}),
+        ("_bridge_protobuf_v1_constraint_from_bytes", {"bytes": b"\xff"}),
+        ("_bridge_protobuf_v1_decision_variable_from_bytes", {"bytes": b"\xff"}),
+    ],
+)
+def test_configured_receivers_preserve_keyword_arguments(endpoint, kwargs):
+    # Argument binding succeeds and the malformed bytes reach the parser.
+    with pytest.raises(RuntimeError, match="invalid OMMX"):
+        getattr(receiver, endpoint)(**kwargs)
+
+
+def test_receiver_implementation_stays_private():
+    assert not hasattr(receiver, "Receiver")
+    assert not hasattr(ommx, "Receiver")
