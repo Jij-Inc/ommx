@@ -1,20 +1,54 @@
 #![doc = include_str!("../README.md")]
 
 mod protocol;
+mod transfer;
+pub use transfer::{
+    resolve_target, Export, ProtobufV1, ProtobufV2, Target, TransferProtocol, TransferProtocolId,
+    TransferVia,
+};
 
 use pyo3::{prelude::*, types::PyAny};
 use pyo3_stub_gen::{PyStubType, TypeInfo};
+use std::sync::Arc;
+
+/// Legacy returns defer conversion; negotiated returns already own the Python
+/// object. Cloning a completed output shares that object without acquiring the
+/// GIL or repeating a transfer.
+#[derive(Debug, Clone)]
+enum Output<T> {
+    Rust(T),
+    Python(Arc<Py<PyAny>>),
+}
+
+impl<T> Output<T> {
+    fn python(object: Bound<'_, PyAny>) -> Self {
+        Self::Python(Arc::new(object.unbind()))
+    }
+
+    fn into_pyobject<'py>(
+        self,
+        py: Python<'py>,
+        convert: impl FnOnce(T, Python<'py>) -> PyResult<Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        match self {
+            Self::Rust(value) => convert(value, py),
+            Self::Python(object) => Ok(object.bind(py).clone()),
+        }
+    }
+}
 
 /// Output wrapper converting a Rust [`ommx::Function`] into `ommx.Function`.
 ///
 /// The function is intrinsic data and needs no owner-side context.
+/// Values returned by [`Target::transfer`] already own the reconstructed Python
+/// object and return it without another conversion.
 #[derive(Debug, Clone)]
-pub struct PyFunction(ommx::Function);
+pub struct PyFunction(Output<ommx::Function>);
 
 impl PyFunction {
     /// Create a Python output wrapper for `function`.
     pub fn new(function: ommx::Function) -> Self {
-        Self(function)
+        Self(Output::Rust(function))
     }
 }
 
@@ -30,7 +64,7 @@ impl<'py> IntoPyObject<'py> for PyFunction {
     type Error = PyErr;
 
     fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        protocol::v0::function_into_py(self.0, py)
+        self.0.into_pyobject(py, protocol::v0::function_into_py)
     }
 }
 
@@ -45,19 +79,15 @@ impl PyStubType for PyFunction {
 /// A detached constraint consists of its intrinsic row and its complete
 /// [`ommx::ConstraintContext`], including its modeling label and provenance.
 /// Its collection-owned constraint ID is intentionally not part of this type.
+/// Values returned by [`Target::transfer`] already own the reconstructed Python
+/// object and return it without another conversion.
 #[derive(Debug, Clone)]
-pub struct PyConstraint {
-    constraint: ommx::Constraint,
-    context: ommx::ConstraintContext,
-}
+pub struct PyConstraint(Output<(ommx::Constraint, ommx::ConstraintContext)>);
 
 impl PyConstraint {
     /// Create a Python output wrapper from the complete detached constraint.
     pub fn new(constraint: ommx::Constraint, context: ommx::ConstraintContext) -> Self {
-        Self {
-            constraint,
-            context,
-        }
+        Self(Output::Rust((constraint, context)))
     }
 }
 
@@ -73,7 +103,9 @@ impl<'py> IntoPyObject<'py> for PyConstraint {
     type Error = PyErr;
 
     fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        protocol::v0::constraint_into_py(self.constraint, self.context, py)
+        self.0.into_pyobject(py, |(constraint, context), py| {
+            protocol::v0::constraint_into_py(constraint, context, py)
+        })
     }
 }
 
@@ -89,12 +121,16 @@ impl PyStubType for PyConstraint {
 /// The variable ID and modeling label are supplied explicitly because they
 /// are owned by an enclosing decision-variable table in the Rust SDK. Fixed
 /// values remain instance-owned and are intentionally not transferred.
+/// Values returned by [`Target::transfer`] already own the reconstructed Python
+/// object and return it without another conversion.
 #[derive(Debug, Clone)]
-pub struct PyDecisionVariable {
-    id: ommx::VariableID,
-    decision_variable: ommx::DecisionVariable,
-    label: ommx::ModelingLabel,
-}
+pub struct PyDecisionVariable(
+    Output<(
+        ommx::VariableID,
+        ommx::DecisionVariable,
+        ommx::ModelingLabel,
+    )>,
+);
 
 impl PyDecisionVariable {
     /// Create a Python output wrapper from the complete detached variable.
@@ -103,11 +139,7 @@ impl PyDecisionVariable {
         decision_variable: ommx::DecisionVariable,
         label: ommx::ModelingLabel,
     ) -> Self {
-        Self {
-            id,
-            decision_variable,
-            label,
-        }
+        Self(Output::Rust((id, decision_variable, label)))
     }
 }
 
@@ -135,7 +167,9 @@ impl<'py> IntoPyObject<'py> for PyDecisionVariable {
     type Error = PyErr;
 
     fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        protocol::v0::decision_variable_into_py(self.id, self.decision_variable, self.label, py)
+        self.0.into_pyobject(py, |(id, variable, label), py| {
+            protocol::v0::decision_variable_into_py(id, variable, label, py)
+        })
     }
 }
 
@@ -148,13 +182,16 @@ impl PyStubType for PyDecisionVariable {
 macro_rules! root_wrapper {
     ($wrapper:ident, $rust_type:ty, $python_name:literal) => {
         #[doc = concat!("Output wrapper converting a Rust [`", stringify!($rust_type), "`] into `ommx.", $python_name, "`.")]
+        ///
+        /// Values returned by [`Target::transfer`] already own the reconstructed
+        /// Python object and return it without another conversion.
         #[derive(Debug, Clone)]
-        pub struct $wrapper($rust_type);
+        pub struct $wrapper(Output<$rust_type>);
 
         impl $wrapper {
             /// Create a Python output wrapper for the value.
             pub fn new(value: $rust_type) -> Self {
-                Self(value)
+                Self(Output::Rust(value))
             }
         }
 
@@ -170,7 +207,9 @@ macro_rules! root_wrapper {
             type Error = PyErr;
 
             fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-                protocol::v0::root_into_py(self.0.to_v2_bytes(), $python_name, py)
+                self.0.into_pyobject(py, |value, py| {
+                    protocol::v0::root_into_py(value.to_v2_bytes(), $python_name, py)
+                })
             }
         }
 

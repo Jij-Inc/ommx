@@ -1,5 +1,7 @@
 //! Downstream PyO3 extension used to exercise the bridge across a DSO boundary.
 
+mod transfer;
+
 use ommx::{Evaluate as _, ParametricInstance};
 use ommx_pyo3_bridge::{
     PyConstraint, PyDecisionVariable, PyFunction, PyInstance, PyParametricInstance, PySampleSet,
@@ -74,10 +76,8 @@ fn composed_function() -> PyFunction {
     composed_component_function().into()
 }
 
-#[pyo3_stub_gen::derive::gen_stub_pyfunction]
-#[pyfunction]
-fn constraint() -> PyConstraint {
-    PyConstraint::new(
+fn component_constraint() -> (ommx::Constraint, ommx::ConstraintContext) {
+    (
         ommx::Constraint::less_than_or_equal_to_zero(component_function()),
         ommx::ConstraintContext {
             label: modeling_label("capacity"),
@@ -86,6 +86,12 @@ fn constraint() -> PyConstraint {
             )],
         },
     )
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+fn constraint() -> PyConstraint {
+    component_constraint().into()
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
@@ -139,6 +145,7 @@ fn sample_set() -> PySampleSet {
 
 #[pymodule(gil_used = false)]
 fn ommx_pyo3_bridge_fixture(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    transfer::register(module)?;
     module.add_function(wrap_pyfunction!(function, module)?)?;
     module.add_function(wrap_pyfunction!(composed_function, module)?)?;
     module.add_function(wrap_pyfunction!(constraint, module)?)?;

@@ -11,6 +11,7 @@ dependencies = [
  "fnv",
  "oci-spec",
  "ommx",
+ "ommx-pyo3-bridge",
  "pyo3",
  "pyo3-stub-gen",
  "pyo3-tracing-opentelemetry",

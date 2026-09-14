@@ -50,7 +50,7 @@ tasks:
     cmds:
       - uv sync --locked --only-group build --only-group test --no-install-workspace --inexact
       - uv run --no-sync maturin develop --manifest-path rust/ommx-pyo3-bridge/fixture/Cargo.toml
-      - uv run --no-sync pytest -vv rust/ommx-pyo3-bridge/fixture/tests/test_bridge.py
+      - uv run --no-sync pytest -vv rust/ommx-pyo3-bridge/fixture/tests
 
   pyo3-bridge:test:
     desc: Run all PyO3 bridge integration checks
