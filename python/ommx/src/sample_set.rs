@@ -209,7 +209,9 @@ impl SampleSet {
             .collect()
     }
 
-    /// Get feasibility status for all samples
+    /// Get feasibility status for all samples, including variable bounds and kinds.
+    ///
+    /// Each value matches the feasibility of the corresponding extracted Solution.
     #[getter]
     pub fn feasible(&self) -> BTreeMap<u64, bool> {
         self.inner
@@ -219,7 +221,9 @@ impl SampleSet {
             .collect()
     }
 
-    /// Get relaxed feasibility status for all samples
+    /// Get relaxed feasibility status for all samples.
+    ///
+    /// Removed constraints are excluded; variable bounds and kinds still apply.
     #[getter]
     pub fn feasible_relaxed(&self) -> BTreeMap<u64, bool> {
         self.inner

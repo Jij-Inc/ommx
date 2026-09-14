@@ -25,6 +25,10 @@ Replace `EvaluatedConstraint.feasible` with `is_feasible(atol=...)`, and
 Solution/SampleSet retain their feasibility properties and expose the associated
 `feasibility_atol`. Queries do not repeat evaluation or change stored decisions.
 
+SampleSet feasibility and best-feasible selection now include variable bounds
+and kinds, matching the extracted Solution. These checks do not contribute to
+`total_violation`.
+
 All Solution constraint DataFrames now expose `feasible` and `violation`.
 All constraint feasibility is derived from `violation <= atol`; OneHot and SOS1
 now apply tolerance to the total change instead of each member separately.

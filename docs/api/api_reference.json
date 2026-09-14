@@ -5775,7 +5775,7 @@
             },
             {
               "name": "violation",
-              "doc": "Calculate the violation (constraint breach) value for this constraint\n\nReturns the amount by which this constraint is violated:\n- For $f(x) = 0$: returns $|f(x)|$\n- For $f(x) \\leq 0$: returns $\\max(0, f(x))$\n\nZero implies feasibility. A small positive violation may also be feasible\nwithin the evaluation tolerance; the residual is not rounded to zero.",
+              "doc": "Calculate the violation (constraint breach) value for this constraint\n\nReturns the amount by which this constraint is violated:\n- For $f(x) = 0$: returns $|f(x)|$\n- For $f(x) \\leq 0$: returns $\\max(0, f(x))$\n\nZero implies feasibility. A small positive violation may also be feasible\nwithin the supplied query tolerance; the residual is not rounded to zero.",
               "signatures": [
                 {
                   "parameters": [],
@@ -24334,7 +24334,7 @@
             },
             {
               "name": "feasible",
-              "doc": "Get feasibility status for all samples",
+              "doc": "Get feasibility status for all samples, including variable bounds and kinds.\n\nEach value matches the feasibility of the corresponding extracted Solution.",
               "type_": {
                 "display": "dict[int, bool]",
                 "link_target": null,
@@ -24356,7 +24356,7 @@
             },
             {
               "name": "feasible_relaxed",
-              "doc": "Get relaxed feasibility status for all samples",
+              "doc": "Get relaxed feasibility status for all samples.\n\nRemoved constraints are excluded; variable bounds and kinds still apply.",
               "type_": {
                 "display": "dict[int, bool]",
                 "link_target": null,

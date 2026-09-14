@@ -280,6 +280,10 @@ Big-M lowering に依存する定義ではありません。
 その後の値を使います。解の制約充足は各制約がそれぞれの閾値を満たすことで判定し、
 `total_violation <= atol` で判定するわけではありません。
 
+SampleSet の feasibility と最良実行可能解の選択も、保存された許容誤差で変数の
+bounds・kind を確認し、取り出した Solution の判定と一致します。そのため、
+`total_violation()` がゼロでも変数が定義域を外れていれば infeasible になります。
+
 制約単体の判定では、許容誤差を明示的に渡します。`evaluated.feasible` は
 `evaluated.is_feasible(atol=...)` に、`sampled.feasible` は
 `sampled.feasible(atol=...)`（sample ID から bool への map）に置き換えてください。

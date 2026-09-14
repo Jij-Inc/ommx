@@ -1806,7 +1806,7 @@ class EvaluatedConstraint:
         - For $f(x) \leq 0$: returns $\max(0, f(x))$
 
         Zero implies feasibility. A small positive violation may also be feasible
-        within the evaluation tolerance; the residual is not rounded to zero.
+        within the supplied query tolerance; the residual is not rounded to zero.
         """
 
 @typing.final
@@ -7732,12 +7732,16 @@ class SampleSet:
     @property
     def feasible(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get feasibility status for all samples
+        Get feasibility status for all samples, including variable bounds and kinds.
+
+        Each value matches the feasibility of the corresponding extracted Solution.
         """
     @property
     def feasible_relaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get relaxed feasibility status for all samples
+        Get relaxed feasibility status for all samples.
+
+        Removed constraints are excluded; variable bounds and kinds still apply.
         """
     @property
     def feasible_unrelaxed(self) -> builtins.dict[builtins.int, builtins.bool]:

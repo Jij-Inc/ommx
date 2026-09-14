@@ -497,6 +497,39 @@ def test_constraint_thresholds_do_not_apply_to_total_violation():
     assert solution.feasible
 
 
+@pytest.mark.parametrize(
+    "variable,invalid,valid",
+    [
+        (DecisionVariable.binary(0), 0.5, 1.0),
+        (DecisionVariable.integer(0), 0.5, 1.0),
+        (DecisionVariable.continuous(0, lower=0, upper=1), -(2**-9), -(2**-10)),
+    ],
+)
+def test_sampleset_feasibility_and_best_sample_include_variable_domains(
+    variable, invalid, valid
+):
+    atol = 2**-10
+    instance = Instance.from_components(
+        decision_variables=[variable],
+        objective=variable,
+        constraints={},
+        sos1_constraints={0: Sos1Constraint(variables=[variable])},
+        sense=Sense.Minimize,
+    )
+    samples = instance.evaluate_samples({0: {0: invalid}, 1: {0: valid}}, atol=atol)
+    for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
+        assert result.feasible == result.feasible_relaxed == {0: False, 1: True}
+        for sample_id in (0, 1):
+            solution = result.get(sample_id)
+            assert result.feasible[sample_id] == solution.feasible
+            # Variable-domain validity does not change the constraint metric.
+            assert solution.total_violation() == 0
+        assert result.best_feasible.objective == valid
+        assert result.best_feasible_relaxed.objective == valid
+        assert result.summary.index.tolist() == [1, 0]
+        assert result.summary["feasible"].to_dict() == result.feasible
+
+
 def test_binary_canonicalization_precedes_constraint_violation():
     xs = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(

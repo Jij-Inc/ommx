@@ -396,3 +396,68 @@ fn hosts_reject_activation_conditions_the_current_wire_format_cannot_represent()
         );
     }
 }
+
+#[test]
+fn sample_feasibility_matches_extracted_solutions_including_variable_domains() {
+    let atol = ATol::new(1.0 / 1024.0).unwrap();
+    for (variable, invalid, valid) in [
+        (crate::DecisionVariable::binary(), 0.5, 1.0),
+        (crate::DecisionVariable::integer(), 0.5, 1.0),
+        (
+            crate::DecisionVariable::continuous()
+                .with_bound(crate::Bound::new(0.0, 1.0).unwrap(), atol)
+                .unwrap(),
+            -2.0 * *atol,
+            -*atol,
+        ),
+    ] {
+        let instance = crate::Instance::builder()
+            .sense(crate::Sense::Minimize)
+            .objective(crate::Function::from(crate::linear!(0)))
+            .constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::from([(0.into(), variable)]))
+            .sos1_constraints(BTreeMap::from([(
+                0.into(),
+                Sos1Constraint::new([0.into()].into()).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        let invalid_state = State::from_iter([(0, invalid)]);
+        let valid_state = State::from_iter([(0, valid)]);
+        let samples = crate::Sampled::new(
+            [vec![0.into()], vec![1.into()]],
+            [invalid_state.clone(), valid_state.clone()],
+        )
+        .unwrap();
+        let sampled = instance.evaluate_samples(&samples, atol).unwrap();
+        let restored = crate::SampleSet::from_v2_bytes(&sampled.to_v2_bytes()).unwrap();
+        // Also exercise the checked builder; Instance evaluation uses the unchecked path.
+        let built = crate::SampleSet::builder()
+            .sense(*sampled.sense())
+            .objectives(sampled.objectives().clone())
+            .constraints_collection(sampled.constraints().clone())
+            .sos1_constraints_collection(sampled.sos1_constraints().clone())
+            .decision_variables(sampled.decision_variables().clone())
+            .feasibility_atol(atol)
+            .build()
+            .unwrap();
+        for result in [sampled, restored, built] {
+            for (id, state, feasible) in [(0, &invalid_state, false), (1, &valid_state, true)] {
+                let single = instance.evaluate(state, atol).unwrap();
+                let extracted = result.get(id.into()).unwrap();
+                assert_eq!(single.total_violation(), 0.0);
+                assert_eq!(extracted.total_violation(), 0.0);
+                assert_eq!(single.feasible(), feasible);
+                assert_eq!(extracted.feasible(), feasible);
+                assert_eq!(result.is_sample_feasible(id.into()), Some(feasible));
+                assert_eq!(result.is_sample_feasible_relaxed(id.into()), Some(feasible));
+            }
+            // The invalid state has a better objective and must still be excluded.
+            assert_eq!(result.best_feasible_id().unwrap(), 1.into());
+            assert_eq!(result.best_feasible_relaxed_id().unwrap(), 1.into());
+            let mut wire: crate::v2::SampleSet = result.into();
+            wire.feasible.insert(0, true);
+            assert!(crate::SampleSet::try_from(wire).is_err());
+        }
+    }
+}

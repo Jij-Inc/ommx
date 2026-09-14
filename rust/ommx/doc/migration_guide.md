@@ -69,6 +69,11 @@ rather than to each member independently. Bounds and kinds remain separate.
 Input canonicalization precedes constraint evaluation and does not change the
 definition of the metric on the values supplied to the constraint.
 
+SampleSet feasibility and best-feasible selection also check variable bounds
+and kinds using the saved tolerance, matching the extracted Solution. Variable
+violations are not added to `total_violation`, so zero total constraint violation
+does not imply feasibility of the whole solution.
+
 Implement [`EvaluatedConstraintData`](crate::EvaluatedConstraintData) and
 [`SampledConstraintData`](crate::SampledConstraintData) for new constraint families.
 Their scalar metrics are required; blanket behavior implementations derive

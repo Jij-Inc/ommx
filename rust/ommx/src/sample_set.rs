@@ -135,10 +135,11 @@ pub enum SampleSetError {
 ///   [`Self::decision_variables`]: `indicator_active` reflects the indicator
 ///   variable values, and one-hot/SOS1 `active_variable` plus scalar violation
 ///   reflect the structural variable values under `feasibility_atol`.
-/// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from all
-///   sampled constraint collections:
-///   - `feasible`: true if all constraints are satisfied for that sample.
-///   - `feasible_relaxed`: true if all non-removed constraints are satisfied.
+/// - [`Self::feasible`] and [`Self::feasible_relaxed`] require every sampled
+///   variable to satisfy its bounds and kind, just as the extracted [`Solution`].
+///   They also check all sampled constraint collections:
+///   - `feasible`: all constraints must be satisfied for that sample.
+///   - `feasible_relaxed`: all non-removed constraints must be satisfied.
 /// - `feasibility_atol` is the absolute tolerance used to validate
 ///   serialized per-constraint feasibility columns and to interpret per-sample
 ///   [`Solution`] values extracted from this sample set.
@@ -1062,8 +1063,9 @@ impl SampleSetBuilder {
             }
         }
 
-        // Derive feasibility from every constraint family.
+        // Derive feasibility from variables and every constraint family.
         let (feasible, feasible_relaxed) = Self::compute_feasibility(
+            &decision_variables,
             &constraints,
             &self.indicator_constraints,
             &self.one_hot_constraints,
@@ -1100,9 +1102,8 @@ impl SampleSetBuilder {
     /// - All `used_decision_variable_ids` in sampled constraints and sampled
     ///   named functions exist in `decision_variables`
     /// - Sample IDs are consistent across all components
-    /// - Special-constraint `indicator_active`, `active_variable`, and
-    ///   per-constraint `feasible` fields are consistent with
-    ///   `decision_variables` under `feasibility_atol`
+    /// - Special-constraint violations and activation decisions are consistent
+    ///   with `decision_variables`; their `activation_atol` equals `feasibility_atol`
     ///
     /// Use [`Self::build`] for validated construction.
     /// This method is useful when invariants are guaranteed by construction,
@@ -1138,6 +1139,7 @@ impl SampleSetBuilder {
 
         let objective_sample_ids = objectives.ids();
         let (feasible, feasible_relaxed) = Self::compute_feasibility(
+            &decision_variables,
             &constraints,
             &self.indicator_constraints,
             &self.one_hot_constraints,
@@ -1172,6 +1174,7 @@ impl SampleSetBuilder {
     }
 
     fn compute_feasibility(
+        decision_variables: &crate::SampledDecisionVariableTable,
         constraints: &SampledCollection<Constraint>,
         indicator_constraints: &SampledCollection<IndicatorConstraint>,
         one_hot_constraints: &SampledCollection<crate::OneHotConstraint>,
@@ -1183,11 +1186,18 @@ impl SampleSetBuilder {
         let mut feasible_relaxed = BTreeMap::new();
 
         for sample_id in sample_ids {
-            let f = constraints.is_feasible_for(*sample_id, atol)
+            let variables_feasible = decision_variables.iter().all(|(id, variable)| {
+                variable
+                    .get(*id, *sample_id)
+                    .is_some_and(|value| value.is_valid(atol))
+            });
+            let f = variables_feasible
+                && constraints.is_feasible_for(*sample_id, atol)
                 && indicator_constraints.is_feasible_for(*sample_id, atol)
                 && one_hot_constraints.is_feasible_for(*sample_id, atol)
                 && sos1_constraints.is_feasible_for(*sample_id, atol);
-            let fr = constraints.is_feasible_relaxed_for(*sample_id, atol)
+            let fr = variables_feasible
+                && constraints.is_feasible_relaxed_for(*sample_id, atol)
                 && indicator_constraints.is_feasible_relaxed_for(*sample_id, atol)
                 && one_hot_constraints.is_feasible_relaxed_for(*sample_id, atol)
                 && sos1_constraints.is_feasible_relaxed_for(*sample_id, atol);

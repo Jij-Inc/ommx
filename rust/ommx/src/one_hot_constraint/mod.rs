@@ -114,7 +114,7 @@ pub struct OneHotSampledData {
     /// Feasibility queries supply their own tolerance and do not change it.
     pub activation_atol: ATol,
     pub violations: crate::Sampled<f64>,
-    /// Selected variable in a nearest feasible one-hot vector for each sample.
+    /// Selected variable at `activation_atol`; None if infeasible at that tolerance.
     pub active_variable: BTreeMap<SampleID, Option<VariableID>>,
     pub used_decision_variable_ids: VariableIDSet,
 }

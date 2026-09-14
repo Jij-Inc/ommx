@@ -529,6 +529,7 @@ impl Parse for v2::SampleSet {
         }
 
         let (computed_feasible, computed_feasible_relaxed) = SampleSetBuilder::compute_feasibility(
+            &decision_variables,
             &constraints,
             &indicator_constraints,
             &one_hot_constraints,

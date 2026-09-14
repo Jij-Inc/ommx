@@ -390,6 +390,11 @@ happens before constraint evaluation; the metric uses the resulting values.
 Solution feasibility requires each constraint to pass its own threshold, not
 the total violation to be within one shared threshold.
 
+SampleSet feasibility and best-feasible selection also check variable bounds
+and kinds at the saved tolerance, matching the extracted Solution. A sample can
+therefore have zero `total_violation()` and still be infeasible because a
+variable is outside its domain.
+
 Constraint-level queries require an explicit tolerance. Replace
 `evaluated.feasible` with `evaluated.is_feasible(atol=...)` and
 `sampled.feasible` with `sampled.feasible(atol=...)` (a sample-ID-to-bool map).

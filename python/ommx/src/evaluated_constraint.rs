@@ -107,7 +107,7 @@ impl EvaluatedConstraint {
     /// - For $f(x) \leq 0$: returns $\max(0, f(x))$
     ///
     /// Zero implies feasibility. A small positive violation may also be feasible
-    /// within the evaluation tolerance; the residual is not rounded to zero.
+    /// within the supplied query tolerance; the residual is not rounded to zero.
     pub fn violation(&self) -> f64 {
         self.0.violation()
     }

@@ -1314,9 +1314,8 @@ impl SolutionBuilder {
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
     /// - All `used_decision_variable_ids` in constraints and evaluated named
     ///   functions exist in `decision_variables`
-    /// - Special-constraint `indicator_active`, `active_variable`, and
-    ///   per-constraint `feasible` fields are consistent with
-    ///   `decision_variables` under `feasibility_atol`
+    /// - Special-constraint violations and activation decisions are consistent
+    ///   with `decision_variables`; their `activation_atol` equals `feasibility_atol`
     ///
     /// Use [`Self::build`] for validated construction.
     /// This method is useful when invariants are guaranteed by construction,
