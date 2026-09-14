@@ -108,6 +108,15 @@ user_guide/tracing
 ```
 
 ```{toctree}
+:caption: Advanced Examples
+:maxdepth: 1
+:hidden:
+
+advanced/about
+advanced/column_generation_openjij
+```
+
+```{toctree}
 :caption: API Reference
 :maxdepth: 2
 :hidden:
