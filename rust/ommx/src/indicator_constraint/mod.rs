@@ -3,7 +3,8 @@ mod evaluate;
 use crate::{
     constraint::{stage, Created, CreatedData, Equality, Evaluated, Stage},
     constraint_type::{
-        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior,
+        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintData,
+        SampledConstraintBehavior, SampledConstraintData,
     },
     ATol, Function, Parse, ParseError, RawParseError, SampleID, SampleIDSet, VariableID,
     VariableIDSet,
@@ -83,7 +84,7 @@ pub struct IndicatorConstraint<S: Stage<Self> = Created> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndicatorEvaluatedData {
     pub evaluated_value: f64,
-    pub feasible: bool,
+    pub atol: ATol,
     /// Whether the indicator variable was active (ON) at evaluation time.
     pub indicator_active: bool,
     pub used_decision_variable_ids: VariableIDSet,
@@ -93,7 +94,7 @@ pub struct IndicatorEvaluatedData {
 #[derive(Debug, Clone)]
 pub struct IndicatorSampledData {
     pub evaluated_values: crate::Sampled<f64>,
-    pub feasible: BTreeMap<SampleID, bool>,
+    pub atol: ATol,
     /// Whether the indicator variable was active (ON) for each sample.
     pub indicator_active: BTreeMap<SampleID, bool>,
     pub used_decision_variable_ids: VariableIDSet,
@@ -124,22 +125,24 @@ impl EvaluatedIndicatorConstraint {
     /// Equality uses `|f(x)|`; inequality uses `max(0, f(x))`. Zero implies
     /// feasibility, but a small positive violation may be feasible within tolerance.
     pub fn violation(&self) -> f64 {
-        if !self.stage.indicator_active {
-            return 0.0;
-        }
-        match self.equality {
-            Equality::EqualToZero => self.stage.evaluated_value.abs(),
-            Equality::LessThanOrEqualToZero => self.stage.evaluated_value.max(0.0),
-        }
+        EvaluatedConstraintData::violation(self)
     }
 }
 
 // ===== HasConstraintID =====
 
-impl EvaluatedConstraintBehavior for EvaluatedIndicatorConstraint {
+impl EvaluatedConstraintData for EvaluatedIndicatorConstraint {
     type ID = IndicatorConstraintID;
-    fn is_feasible(&self) -> bool {
-        self.stage.feasible
+    fn violation(&self) -> f64 {
+        if self.stage.indicator_active {
+            self.equality.violation(self.stage.evaluated_value)
+        } else {
+            0.0
+        }
+    }
+
+    fn feasibility_atol(&self) -> ATol {
+        self.stage.atol
     }
 
     fn used_decision_variable_ids(&self) -> &VariableIDSet {
@@ -147,22 +150,28 @@ impl EvaluatedConstraintBehavior for EvaluatedIndicatorConstraint {
     }
 }
 
-impl SampledConstraintBehavior for SampledIndicatorConstraint {
+impl SampledConstraintData for SampledIndicatorConstraint {
     type ID = IndicatorConstraintID;
     type Evaluated = EvaluatedIndicatorConstraint;
 
-    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
-        self.stage.feasible.get(&sample_id).copied()
+    fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
+        Some(if *self.stage.indicator_active.get(&sample_id)? {
+            self.equality
+                .violation(*self.stage.evaluated_values.get(sample_id)?)
+        } else {
+            0.0
+        })
+    }
+
+    fn feasibility_atol(&self) -> ATol {
+        self.stage.atol
     }
 
     fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet> {
         if !self.stage.evaluated_values.has_same_ids(expected) {
             return Err(self.stage.evaluated_values.ids());
         }
-        let feasible_ids = sample_ids_from_map(&self.stage.feasible);
-        if &feasible_ids != expected {
-            return Err(feasible_ids);
-        }
+
         let indicator_active_ids = sample_ids_from_map(&self.stage.indicator_active);
         if &indicator_active_ids != expected {
             return Err(indicator_active_ids);
@@ -176,7 +185,7 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
 
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
         let evaluated_value = *self.stage.evaluated_values.get(sample_id)?;
-        let feasible = *self.stage.feasible.get(&sample_id)?;
+
         let indicator_active = *self.stage.indicator_active.get(&sample_id)?;
 
         Some(IndicatorConstraint {
@@ -184,7 +193,7 @@ impl SampledConstraintBehavior for SampledIndicatorConstraint {
             equality: self.equality,
             stage: IndicatorEvaluatedData {
                 evaluated_value,
-                feasible,
+                atol: self.stage.atol,
                 indicator_active,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
             },
@@ -264,11 +273,12 @@ impl Parse for crate::v2::IndicatorConstraint {
 
 impl From<EvaluatedIndicatorConstraint> for crate::v2::EvaluatedIndicatorConstraint {
     fn from(constraint: EvaluatedIndicatorConstraint) -> Self {
+        let feasible = constraint.is_feasible();
         Self {
             indicator_variable: constraint.indicator_variable.into_inner(),
             equality: constraint.equality.into(),
             evaluated_value: constraint.stage.evaluated_value,
-            feasible: constraint.stage.feasible,
+            feasible,
             indicator_active: constraint.stage.indicator_active,
             used_decision_variable_ids: constraint
                 .stage
@@ -338,7 +348,7 @@ impl Parse for crate::v2::EvaluatedIndicatorConstraint {
             equality,
             stage: IndicatorEvaluatedData {
                 evaluated_value: self.evaluated_value,
-                feasible: self.feasible,
+                atol: *atol,
                 indicator_active: self.indicator_active,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
@@ -352,16 +362,22 @@ impl Parse for crate::v2::EvaluatedIndicatorConstraint {
 
 impl From<SampledIndicatorConstraint> for crate::v2::SampledIndicatorConstraint {
     fn from(constraint: SampledIndicatorConstraint) -> Self {
+        let feasible = constraint
+            .stage
+            .evaluated_values
+            .iter()
+            .map(|(id, _)| {
+                (
+                    id.into_inner(),
+                    constraint.is_feasible_for(*id).expect("sample exists"),
+                )
+            })
+            .collect();
         Self {
             indicator_variable: constraint.indicator_variable.into_inner(),
             equality: constraint.equality.into(),
             evaluated_values: Some(constraint.stage.evaluated_values.into()),
-            feasible: constraint
-                .stage
-                .feasible
-                .into_iter()
-                .map(|(id, value)| (id.into_inner(), value))
-                .collect(),
+            feasible,
             indicator_active: constraint
                 .stage
                 .indicator_active
@@ -400,6 +416,12 @@ impl Parse for crate::v2::SampledIndicatorConstraint {
             .parse_as(&(), message, "evaluated_values")?;
         crate::v2_io::validate_sampled_f64_values(&evaluated_values, message, "evaluated_values")?;
         let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
+        if sample_ids_from_map(&feasible) != evaluated_values.ids() {
+            return Err(ParseError::new(crate::error!(
+                "feasible sample IDs must match evaluated values"
+            ))
+            .context(message, "feasible"));
+        }
         let indicator_active = crate::v2_io::sample_bool_map_from_v2(self.indicator_active);
         for (sample_id, evaluated_value) in evaluated_values.iter() {
             if let (Some(provided_feasible), Some(indicator_active)) = (
@@ -421,7 +443,7 @@ impl Parse for crate::v2::SampledIndicatorConstraint {
             equality,
             stage: IndicatorSampledData {
                 evaluated_values,
-                feasible,
+                atol: *atol,
                 indicator_active,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,

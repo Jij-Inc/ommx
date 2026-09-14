@@ -1,11 +1,10 @@
+use crate::SampledConstraintData;
 mod extract;
 mod parse;
 mod serialize;
 
 use crate::{
-    constraint_type::{
-        ConstraintType, EvaluatedCollection, SampledCollection, SampledConstraintBehavior,
-    },
+    constraint_type::{ConstraintType, EvaluatedCollection, SampledCollection},
     indicator_constraint::IndicatorConstraint,
     ATol, Constraint, ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable,
     EvaluatedNamedFunction, NamedFunctionID, NamedFunctionTable, SampleID, SampleIDSet, Sampled,
@@ -30,15 +29,6 @@ pub enum SampleSetError {
         sample_id: u64,
         provided_feasible_relaxed: bool,
         computed_feasible_relaxed: bool,
-    },
-
-    #[error("Inconsistent feasibility for {constraint_family} constraint {constraint_id} at sample {sample_id:?}: provided={provided_feasible}, computed={computed_feasible}")]
-    InconsistentConstraintFeasibility {
-        constraint_family: &'static str,
-        constraint_id: String,
-        sample_id: SampleID,
-        provided_feasible: bool,
-        computed_feasible: bool,
     },
 
     #[error("Invalid structure for {constraint_family} constraint {constraint_id}: {message}")]
@@ -143,7 +133,7 @@ pub enum SampleSetError {
 ///   `active_variable` values must belong to their structural variable set.
 /// - Sampled special-constraint stage fields are consistent with
 ///   [`Self::decision_variables`]: `indicator_active` reflects the indicator
-///   variable values, and one-hot/SOS1 `active_variable` plus `feasible`
+///   variable values, and one-hot/SOS1 `active_variable` plus scalar violation
 ///   reflect the structural variable values under `feasibility_atol`.
 /// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from all
 ///   sampled constraint collections:
@@ -316,7 +306,6 @@ impl SampleSet {
         // Get evaluated indicator constraints
         let mut evaluated_indicator_constraints = BTreeMap::default();
         for (constraint_id, constraint) in self.indicator_constraints.iter() {
-            use crate::constraint_type::SampledConstraintBehavior;
             let evaluated = constraint.get(sample_id)?;
             evaluated_indicator_constraints.insert(*constraint_id, evaluated);
         }
@@ -324,7 +313,6 @@ impl SampleSet {
         // Get evaluated one-hot constraints
         let mut evaluated_one_hot_constraints = BTreeMap::default();
         for (constraint_id, constraint) in self.one_hot_constraints.iter() {
-            use crate::constraint_type::SampledConstraintBehavior;
             let evaluated = constraint.get(sample_id)?;
             evaluated_one_hot_constraints.insert(*constraint_id, evaluated);
         }
@@ -332,7 +320,6 @@ impl SampleSet {
         // Get evaluated SOS1 constraints
         let mut evaluated_sos1_constraints = BTreeMap::default();
         for (constraint_id, constraint) in self.sos1_constraints.iter() {
-            use crate::constraint_type::SampledConstraintBehavior;
             let evaluated = constraint.get(sample_id)?;
             evaluated_sos1_constraints.insert(*constraint_id, evaluated);
         }
@@ -481,120 +468,36 @@ pub struct SampleSetBuilder {
     feasibility_atol: ATol,
 }
 
-fn expected_sampled_regular_constraint_feasible(
-    equality: crate::Equality,
-    evaluated_value: f64,
-    atol: ATol,
-) -> bool {
-    equality.is_satisfied(evaluated_value, atol)
-}
-
-fn expected_sampled_indicator_constraint_feasible(
-    equality: crate::Equality,
-    evaluated_value: f64,
-    indicator_active: bool,
-    atol: ATol,
-) -> bool {
-    if !indicator_active {
-        return true;
-    }
-    expected_sampled_regular_constraint_feasible(equality, evaluated_value, atol)
-}
-
-fn validate_sampled_constraint_feasibility(
+fn validate_sampled_constraint_tolerances(
     regular_constraints: &SampledCollection<Constraint>,
     indicator_constraints: &SampledCollection<IndicatorConstraint>,
     one_hot_constraints: &SampledCollection<crate::OneHotConstraint>,
     sos1_constraints: &SampledCollection<crate::Sos1Constraint>,
     atol: ATol,
 ) -> Result<(), SampleSetError> {
-    for (id, constraint) in regular_constraints.inner() {
-        for (sample_id, provided_feasible) in &constraint.stage.feasible {
-            let Some(evaluated_value) = constraint.stage.evaluated_values.get(*sample_id) else {
-                continue;
-            };
-            let computed_feasible = expected_sampled_regular_constraint_feasible(
-                constraint.equality,
-                *evaluated_value,
-                atol,
-            );
-            if *provided_feasible != computed_feasible {
-                return Err(SampleSetError::InconsistentConstraintFeasibility {
-                    constraint_family: "regular",
-                    constraint_id: format!("{id:?}"),
-                    sample_id: *sample_id,
-                    provided_feasible: *provided_feasible,
-                    computed_feasible,
-                });
-            }
+    validate_constraint_tolerances(regular_constraints, "regular", atol)?;
+    validate_constraint_tolerances(indicator_constraints, "indicator", atol)?;
+    validate_constraint_tolerances(one_hot_constraints, "one-hot", atol)?;
+    validate_constraint_tolerances(sos1_constraints, "SOS1", atol)
+}
+
+fn validate_constraint_tolerances<T: crate::ConstraintType>(
+    constraints: &SampledCollection<T>,
+    family: &'static str,
+    atol: ATol,
+) -> Result<(), SampleSetError> {
+    for (id, constraint) in constraints.inner() {
+        if constraint.feasibility_atol() != atol {
+            return Err(SampleSetError::InvalidConstraintStructure {
+                constraint_family: family,
+                constraint_id: format!("{id:?}"),
+                message: format!(
+                    "constraint tolerance {:?} does not match host tolerance {atol:?}",
+                    constraint.feasibility_atol()
+                ),
+            });
         }
     }
-
-    for (id, constraint) in indicator_constraints.inner() {
-        for (sample_id, provided_feasible) in &constraint.stage.feasible {
-            let (Some(evaluated_value), Some(indicator_active)) = (
-                constraint.stage.evaluated_values.get(*sample_id),
-                constraint.stage.indicator_active.get(sample_id),
-            ) else {
-                continue;
-            };
-            let computed_feasible = expected_sampled_indicator_constraint_feasible(
-                constraint.equality,
-                *evaluated_value,
-                *indicator_active,
-                atol,
-            );
-            if *provided_feasible != computed_feasible {
-                return Err(SampleSetError::InconsistentConstraintFeasibility {
-                    constraint_family: "indicator",
-                    constraint_id: format!("{id:?}"),
-                    sample_id: *sample_id,
-                    provided_feasible: *provided_feasible,
-                    computed_feasible,
-                });
-            }
-        }
-    }
-
-    for (id, constraint) in one_hot_constraints.inner() {
-        for (sample_id, provided_feasible) in &constraint.stage.feasible {
-            let computed_feasible = constraint
-                .stage
-                .active_variable
-                .get(sample_id)
-                .is_some_and(Option::is_some);
-            if *provided_feasible != computed_feasible {
-                return Err(SampleSetError::InconsistentConstraintFeasibility {
-                    constraint_family: "one-hot",
-                    constraint_id: format!("{id:?}"),
-                    sample_id: *sample_id,
-                    provided_feasible: *provided_feasible,
-                    computed_feasible,
-                });
-            }
-        }
-    }
-
-    for (id, constraint) in sos1_constraints.inner() {
-        for (sample_id, active_variable) in &constraint.stage.active_variable {
-            if active_variable.is_some()
-                && constraint
-                    .stage
-                    .feasible
-                    .get(sample_id)
-                    .is_some_and(|feasible| !feasible)
-            {
-                return Err(SampleSetError::InconsistentConstraintFeasibility {
-                    constraint_family: "SOS1",
-                    constraint_id: format!("{id:?}"),
-                    sample_id: *sample_id,
-                    provided_feasible: false,
-                    computed_feasible: true,
-                });
-            }
-        }
-    }
-
     Ok(())
 }
 
@@ -705,59 +608,6 @@ fn expected_binary_activity(
     }
 }
 
-fn expected_sampled_one_hot_active_variable(
-    variables: &BTreeSet<VariableID>,
-    decision_variables: &crate::SampledDecisionVariableTable,
-    sample_id: SampleID,
-    atol: ATol,
-) -> (bool, Option<VariableID>) {
-    let mut active = None;
-    for variable_id in variables {
-        let value = *decision_variables
-            .get(variable_id)
-            .expect("one-hot structural variables must be validated first")
-            .samples()
-            .get(sample_id)
-            .expect("sample IDs must be validated first");
-        if value >= 0.5 && atol.approx_eq(value, 1.0) {
-            if active.is_some() {
-                return (false, None);
-            }
-            active = Some(*variable_id);
-        } else if value >= 0.5 || !atol.approx_is_zero(value) {
-            return (false, None);
-        }
-    }
-    match active {
-        Some(variable_id) => (true, Some(variable_id)),
-        None => (false, None),
-    }
-}
-
-fn expected_sampled_sos1_active_variable(
-    variables: &BTreeSet<VariableID>,
-    decision_variables: &crate::SampledDecisionVariableTable,
-    sample_id: SampleID,
-    atol: ATol,
-) -> (bool, Option<VariableID>) {
-    let mut active = None;
-    for variable_id in variables {
-        let value = *decision_variables
-            .get(variable_id)
-            .expect("SOS1 structural variables must be validated first")
-            .samples()
-            .get(sample_id)
-            .expect("sample IDs must be validated first");
-        if !atol.approx_is_zero(value) {
-            if active.is_some() {
-                return (false, None);
-            }
-            active = Some(*variable_id);
-        }
-    }
-    (true, active)
-}
-
 fn validate_sampled_indicator_stage_values(
     decision_variables: &crate::SampledDecisionVariableTable,
     indicator_constraints: &SampledCollection<IndicatorConstraint>,
@@ -790,31 +640,6 @@ fn validate_sampled_indicator_stage_values(
                     ),
                 });
             }
-            let evaluated_value = *constraint
-                .stage
-                .evaluated_values
-                .get(*sample_id)
-                .expect("sample IDs must be validated first");
-            let computed_feasible = expected_sampled_indicator_constraint_feasible(
-                constraint.equality,
-                evaluated_value,
-                computed_indicator_active,
-                atol,
-            );
-            let provided_feasible = *constraint
-                .stage
-                .feasible
-                .get(sample_id)
-                .expect("sample IDs must be validated first");
-            if provided_feasible != computed_feasible {
-                return Err(SampleSetError::InconsistentConstraintFeasibility {
-                    constraint_family: "indicator",
-                    constraint_id: format!("{id:?}"),
-                    sample_id: *sample_id,
-                    provided_feasible,
-                    computed_feasible,
-                });
-            }
         }
     }
     Ok(())
@@ -826,14 +651,27 @@ fn validate_sampled_one_hot_stage_values(
     atol: ATol,
 ) -> Result<(), SampleSetError> {
     for (id, constraint) in one_hot_constraints.inner() {
-        for (sample_id, provided_feasible) in &constraint.stage.feasible {
-            let (computed_feasible, computed_active_variable) =
-                expected_sampled_one_hot_active_variable(
-                    &constraint.variables,
-                    decision_variables,
-                    *sample_id,
+        for (sample_id, &provided_violation) in constraint.stage.violations.iter() {
+            let (computed_violation, computed_active_variable) = constraint
+                .evaluate_members(
+                    |variable_id| {
+                        decision_variables
+                            .get(&variable_id)
+                            .and_then(|variable| variable.samples().get(*sample_id).copied())
+                    },
                     atol,
-                );
+                )
+                .map_err(|error| SampleSetError::InvalidConstraintStructure {
+                    constraint_family: "one-hot",
+                    constraint_id: format!("{id:?}"),
+                    message: error.to_string(),
+                })?;
+            if provided_violation != computed_violation {
+                return Err(SampleSetError::InvalidConstraintStructure {
+                constraint_family: "one-hot", constraint_id: format!("{id:?}"),
+                message: format!("violation={provided_violation} does not match decision-variable values; computed={computed_violation}"),
+            });
+            }
             let provided_active_variable = constraint
                 .stage
                 .active_variable
@@ -842,21 +680,9 @@ fn validate_sampled_one_hot_stage_values(
                 .flatten();
             if provided_active_variable != computed_active_variable {
                 return Err(SampleSetError::InvalidConstraintStructure {
-                    constraint_family: "one-hot",
-                    constraint_id: format!("{id:?}"),
-                    message: format!(
-                        "active_variable={provided_active_variable:?} at sample {sample_id:?} does not match decision-variable values; computed={computed_active_variable:?}",
-                    ),
-                });
-            }
-            if *provided_feasible != computed_feasible {
-                return Err(SampleSetError::InconsistentConstraintFeasibility {
-                    constraint_family: "one-hot",
-                    constraint_id: format!("{id:?}"),
-                    sample_id: *sample_id,
-                    provided_feasible: *provided_feasible,
-                    computed_feasible,
-                });
+                constraint_family: "one-hot", constraint_id: format!("{id:?}"),
+                message: format!("active_variable={provided_active_variable:?} does not match decision-variable values; computed={computed_active_variable:?}"),
+            });
             }
         }
     }
@@ -869,14 +695,27 @@ fn validate_sampled_sos1_stage_values(
     atol: ATol,
 ) -> Result<(), SampleSetError> {
     for (id, constraint) in sos1_constraints.inner() {
-        for (sample_id, provided_feasible) in &constraint.stage.feasible {
-            let (computed_feasible, computed_active_variable) =
-                expected_sampled_sos1_active_variable(
-                    &constraint.variables,
-                    decision_variables,
-                    *sample_id,
+        for (sample_id, &provided_violation) in constraint.stage.violations.iter() {
+            let (computed_violation, computed_active_variable) = constraint
+                .evaluate_members(
+                    |variable_id| {
+                        decision_variables
+                            .get(&variable_id)
+                            .and_then(|variable| variable.samples().get(*sample_id).copied())
+                    },
                     atol,
-                );
+                )
+                .map_err(|error| SampleSetError::InvalidConstraintStructure {
+                    constraint_family: "SOS1",
+                    constraint_id: format!("{id:?}"),
+                    message: error.to_string(),
+                })?;
+            if provided_violation != computed_violation {
+                return Err(SampleSetError::InvalidConstraintStructure {
+                constraint_family: "SOS1", constraint_id: format!("{id:?}"),
+                message: format!("violation={provided_violation} does not match decision-variable values; computed={computed_violation}"),
+            });
+            }
             let provided_active_variable = constraint
                 .stage
                 .active_variable
@@ -885,21 +724,9 @@ fn validate_sampled_sos1_stage_values(
                 .flatten();
             if provided_active_variable != computed_active_variable {
                 return Err(SampleSetError::InvalidConstraintStructure {
-                    constraint_family: "SOS1",
-                    constraint_id: format!("{id:?}"),
-                    message: format!(
-                        "active_variable={provided_active_variable:?} at sample {sample_id:?} does not match decision-variable values; computed={computed_active_variable:?}",
-                    ),
-                });
-            }
-            if *provided_feasible != computed_feasible {
-                return Err(SampleSetError::InconsistentConstraintFeasibility {
-                    constraint_family: "SOS1",
-                    constraint_id: format!("{id:?}"),
-                    sample_id: *sample_id,
-                    provided_feasible: *provided_feasible,
-                    computed_feasible,
-                });
+                constraint_family: "SOS1", constraint_id: format!("{id:?}"),
+                message: format!("active_variable={provided_active_variable:?} does not match decision-variable values; computed={computed_active_variable:?}"),
+            });
             }
         }
     }
@@ -1168,7 +995,7 @@ impl SampleSetBuilder {
                 expected: objective_sample_ids.clone(),
                 found,
             })?;
-        validate_sampled_constraint_feasibility(
+        validate_sampled_constraint_tolerances(
             &constraints,
             &self.indicator_constraints,
             &self.one_hot_constraints,
@@ -1226,7 +1053,7 @@ impl SampleSetBuilder {
             }
         }
 
-        // Compute feasibility (considers both regular and indicator constraints)
+        // Derive feasibility from every constraint family.
         let (feasible, feasible_relaxed) = Self::compute_feasibility(
             &constraints,
             &self.indicator_constraints,
@@ -1390,7 +1217,8 @@ mod tests {
         let sampled_one_hot: crate::SampledOneHotConstraint = crate::OneHotConstraint {
             variables: [var_id].into_iter().collect(),
             stage: crate::OneHotSampledData {
-                feasible: BTreeMap::from([(sample_id, true)]),
+                atol: crate::ATol::default(),
+                violations: crate::Sampled::from((sample_id, 0.0)),
                 active_variable: BTreeMap::from([(unexpected_sample_id, Some(var_id))]),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
@@ -1438,13 +1266,13 @@ mod tests {
     }
 
     #[test]
-    fn builder_rejects_inconsistent_regular_constraint_feasibility() {
+    fn builder_rejects_inconsistent_regular_constraint_tolerance() {
         let sample_id = SampleID::from(0);
         let constraint = SampledConstraint {
             equality: crate::Equality::EqualToZero,
             stage: crate::constraint::SampledData {
                 evaluated_values: crate::Sampled::from((sample_id, 1.0)),
-                feasible: BTreeMap::from([(sample_id, true)]),
+                atol: crate::ATol::default(),
                 used_decision_variable_ids: BTreeSet::new(),
                 dual_variables: None,
             },
@@ -1460,8 +1288,7 @@ mod tests {
             .unwrap_err();
 
         assert!(
-            err.to_string()
-                .contains("Inconsistent feasibility for regular constraint"),
+            err.to_string().contains("does not match host tolerance"),
             "unexpected error: {err}"
         );
     }
@@ -1473,7 +1300,8 @@ mod tests {
         let one_hot = crate::one_hot_constraint::SampledOneHotConstraint {
             variables: BTreeSet::from([variable_id]),
             stage: crate::one_hot_constraint::OneHotSampledData {
-                feasible: BTreeMap::from([(sample_id, false)]),
+                atol: crate::ATol::default(),
+                violations: crate::Sampled::from((sample_id, 1.0)),
                 active_variable: BTreeMap::from([(sample_id, None)]),
                 used_decision_variable_ids: BTreeSet::new(),
             },
@@ -1625,7 +1453,7 @@ mod tests {
             stage: crate::constraint::SampledData {
                 evaluated_values,
                 dual_variables: None,
-                feasible: BTreeMap::from([(sample_id, true)]),
+                atol: crate::ATol::default(),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1682,7 +1510,7 @@ mod tests {
             stage: EvaluatedData {
                 evaluated_value: 1.0,
                 dual_variable: None,
-                feasible: false,
+                atol: crate::ATol::default(),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1690,14 +1518,12 @@ mod tests {
         evaluated_values
             .append([sample_id], evaluated_per_sample.stage.evaluated_value)
             .unwrap();
-        let mut feasible = BTreeMap::new();
-        feasible.insert(sample_id, false);
         let sampled_constraint = crate::Constraint {
             equality: Equality::EqualToZero,
             stage: crate::constraint::SampledData {
                 evaluated_values,
                 dual_variables: None,
-                feasible,
+                atol: crate::ATol::default(),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };

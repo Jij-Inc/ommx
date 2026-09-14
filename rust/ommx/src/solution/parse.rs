@@ -498,7 +498,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,
-                feasible: true,
+                atol: crate::ATol::default(),
                 indicator_active: true,
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -527,7 +527,8 @@ mod tests {
         let constraint = crate::one_hot_constraint::EvaluatedOneHotConstraint {
             variables: std::collections::BTreeSet::from([variable_id]),
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
-                feasible: true,
+                atol: crate::ATol::default(),
+                violation: 0.0,
                 active_variable: Some(variable_id),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -558,7 +559,8 @@ mod tests {
         let constraint = crate::sos1_constraint::EvaluatedSos1Constraint {
             variables: std::collections::BTreeSet::from([variable_id]),
             stage: crate::sos1_constraint::Sos1EvaluatedData {
-                feasible: true,
+                atol: crate::ATol::default(),
+                violation: 0.0,
                 active_variable: None,
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -1441,7 +1443,7 @@ mod tests {
             stage: EvaluatedData {
                 evaluated_value: 0.0,
                 dual_variable: None,
-                feasible: true,
+                atol: crate::ATol::default(),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1519,7 +1521,7 @@ mod tests {
             equality: Equality::EqualToZero,
             stage: EvaluatedData {
                 evaluated_value: 0.0,
-                feasible: true,
+                atol: crate::ATol::default(),
                 used_decision_variable_ids: Default::default(),
                 dual_variable: None,
             },
@@ -1587,6 +1589,14 @@ mod tests {
             .get_mut(&1)
             .unwrap()
             .value = 1.0 + *atol;
+        one_hot
+            .evaluated_one_hot_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .violation = *atol;
         Solution::try_from(one_hot).unwrap();
 
         let mut sos1 = v2_solution_with_sos1_constraint();
@@ -1665,7 +1675,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 0.0,
-                feasible: true,
+                atol: crate::ATol::default(),
                 indicator_active: true,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
@@ -1719,7 +1729,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 1.0,
-                feasible: true,
+                atol: crate::ATol::default(),
                 indicator_active: false,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
@@ -1767,9 +1777,10 @@ mod tests {
         let decision_variable =
             EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 1.0).unwrap();
         let one_hot = EvaluatedOneHotConstraint {
-            variables: BTreeSet::from([var_id]),
+            variables: BTreeSet::from([var_id, VariableID::from(2)]),
             stage: OneHotEvaluatedData {
-                feasible: true,
+                atol: crate::ATol::default(),
+                violation: 0.0,
                 active_variable: Some(var_id),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
@@ -1784,7 +1795,18 @@ mod tests {
                 )
                 .unwrap(),
             )
-            .decision_variables(BTreeMap::from([(var_id, decision_variable)]))
+            .decision_variables(BTreeMap::from([
+                (var_id, decision_variable),
+                (
+                    VariableID::from(2),
+                    EvaluatedDecisionVariable::new(
+                        VariableID::from(2),
+                        DecisionVariable::binary(),
+                        0.0,
+                    )
+                    .unwrap(),
+                ),
+            ]))
             .sense(Sense::Minimize)
             .build()
             .unwrap();
@@ -1797,12 +1819,12 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.feasible = false;
-        row.active_variable = None;
+        row.active_variable = Some(2);
 
         let err = Solution::try_from(proto).unwrap_err();
         assert!(
-            err.to_string().contains("active_variable=None")
+            err.to_string()
+                .contains("active_variable=Some(VariableID(2))")
                 && err
                     .to_string()
                     .contains("does not match decision-variable values"),
@@ -1824,7 +1846,8 @@ mod tests {
         let one_hot = EvaluatedOneHotConstraint {
             variables: BTreeSet::from([var_id]),
             stage: OneHotEvaluatedData {
-                feasible: true,
+                atol: crate::ATol::default(),
+                violation: 0.0,
                 active_variable: Some(var_id),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },

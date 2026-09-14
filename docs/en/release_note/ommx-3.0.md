@@ -21,9 +21,10 @@ solution.constraints_df(kind="sos1")[["feasible", "violation"]]
 ```
 
 All Solution constraint DataFrames now expose `feasible` and `violation`.
-A zero violation implies constraint feasibility; positive values can be feasible
-within tolerance. OneHot and SOS1 use minimum absolute changes to their member
-values, without requiring agreement with Big-M lowering. See the
+All constraint feasibility is derived from `violation <= atol`; OneHot and SOS1
+now apply tolerance to the total change instead of each member separately.
+OneHot and SOS1 use minimum absolute changes to their member values, without
+requiring agreement with Big-M lowering. See the
 {ref}`migration guide <constraint-violation-migration>`
 for definitions and migration details.
 

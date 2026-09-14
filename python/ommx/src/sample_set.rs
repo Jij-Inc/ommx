@@ -6,6 +6,7 @@ use crate::{
     },
     Solution,
 };
+use ommx::SampledConstraintBehavior;
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyTuple},
@@ -604,10 +605,7 @@ impl SampleSet {
                 )?;
                 for (constraint_id, label) in &constraint_labels {
                     let c_feasible = constraints[constraint_id]
-                        .stage
-                        .feasible
-                        .get(sample_id)
-                        .copied()
+                        .is_feasible_for(*sample_id)
                         .unwrap_or(false);
                     dict.set_item(label.as_str(), c_feasible)?;
                 }

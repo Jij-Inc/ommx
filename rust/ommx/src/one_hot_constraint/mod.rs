@@ -3,7 +3,8 @@ mod evaluate;
 use crate::{
     constraint::{stage, Created, Evaluated, Stage},
     constraint_type::{
-        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, SampledConstraintBehavior,
+        sample_ids_from_map, ConstraintType, EvaluatedConstraintBehavior, EvaluatedConstraintData,
+        SampledConstraintBehavior, SampledConstraintData,
     },
     ATol, Parse, ParseError, SampleID, SampleIDSet, VariableID, VariableIDSet,
 };
@@ -87,19 +88,29 @@ pub struct OneHotConstraint<S: Stage<Self> = Created> {
 pub struct OneHotCreatedData;
 
 /// Data carried by a one-hot constraint in the Evaluated stage.
+///
+/// `violation` must be nonnegative and not NaN. Feasibility is derived from
+/// `violation` and `atol`. Evaluation computes these values; Solution validates
+/// the metric and active-variable diagnostic against its decision-variable values.
 #[derive(Debug, Clone, PartialEq)]
 pub struct OneHotEvaluatedData {
-    pub feasible: bool,
-    /// Which variable was 1, if exactly one was (None if infeasible).
+    pub atol: ATol,
+    pub violation: f64,
+    /// Selected variable in a nearest feasible one-hot vector; None if infeasible.
     pub active_variable: Option<VariableID>,
     pub used_decision_variable_ids: VariableIDSet,
 }
 
 /// Data carried by a one-hot constraint in the Sampled stage.
+///
+/// Each violation is nonnegative and not NaN. The violation and active-variable
+/// maps must have the same sample IDs. Evaluation constructs this data and
+/// SampleSet validates the metrics and diagnostics against its sampled variables.
 #[derive(Debug, Clone)]
 pub struct OneHotSampledData {
-    pub feasible: BTreeMap<SampleID, bool>,
-    /// Which variable was 1 for each sample.
+    pub atol: ATol,
+    pub violations: crate::Sampled<f64>,
+    /// Selected variable in a nearest feasible one-hot vector for each sample.
     pub active_variable: BTreeMap<SampleID, Option<VariableID>>,
     pub used_decision_variable_ids: VariableIDSet,
 }
@@ -125,10 +136,14 @@ pub type SampledOneHotConstraint = OneHotConstraint<stage::Sampled>;
 
 // ===== EvaluatedConstraintBehavior / SampledConstraintBehavior =====
 
-impl EvaluatedConstraintBehavior for EvaluatedOneHotConstraint {
+impl EvaluatedConstraintData for EvaluatedOneHotConstraint {
     type ID = OneHotConstraintID;
-    fn is_feasible(&self) -> bool {
-        self.stage.feasible
+    fn violation(&self) -> f64 {
+        self.stage.violation
+    }
+
+    fn feasibility_atol(&self) -> ATol {
+        self.stage.atol
     }
 
     fn used_decision_variable_ids(&self) -> &VariableIDSet {
@@ -136,18 +151,21 @@ impl EvaluatedConstraintBehavior for EvaluatedOneHotConstraint {
     }
 }
 
-impl SampledConstraintBehavior for SampledOneHotConstraint {
+impl SampledConstraintData for SampledOneHotConstraint {
     type ID = OneHotConstraintID;
     type Evaluated = EvaluatedOneHotConstraint;
 
-    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
-        self.stage.feasible.get(&sample_id).copied()
+    fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
+        self.stage.violations.get(sample_id).copied()
+    }
+
+    fn feasibility_atol(&self) -> ATol {
+        self.stage.atol
     }
 
     fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet> {
-        let feasible_ids = sample_ids_from_map(&self.stage.feasible);
-        if &feasible_ids != expected {
-            return Err(feasible_ids);
+        if !self.stage.violations.has_same_ids(expected) {
+            return Err(self.stage.violations.ids());
         }
         let active_variable_ids = sample_ids_from_map(&self.stage.active_variable);
         if &active_variable_ids != expected {
@@ -161,13 +179,14 @@ impl SampledConstraintBehavior for SampledOneHotConstraint {
     }
 
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated> {
-        let feasible = *self.stage.feasible.get(&sample_id)?;
+        let violation = *self.stage.violations.get(sample_id)?;
         let active_variable = *self.stage.active_variable.get(&sample_id)?;
 
         Some(OneHotConstraint {
             variables: self.variables.clone(),
             stage: OneHotEvaluatedData {
-                feasible,
+                atol: self.stage.atol,
+                violation,
                 active_variable,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
             },
@@ -231,13 +250,16 @@ impl Parse for crate::v2::OneHotConstraint {
 
 impl From<EvaluatedOneHotConstraint> for crate::v2::EvaluatedOneHotConstraint {
     fn from(constraint: EvaluatedOneHotConstraint) -> Self {
+        let feasible = constraint.is_feasible();
+        let violation = constraint.violation();
         Self {
             variables: constraint
                 .variables
                 .into_iter()
                 .map(|id| id.into_inner())
                 .collect(),
-            feasible: constraint.stage.feasible,
+            feasible,
+            violation,
             active_variable: constraint.stage.active_variable.map(|id| id.into_inner()),
             used_decision_variable_ids: constraint
                 .stage
@@ -253,7 +275,7 @@ impl Parse for crate::v2::EvaluatedOneHotConstraint {
     type Output = EvaluatedOneHotConstraint;
     type Context = ATol;
 
-    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.EvaluatedOneHotConstraint";
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
@@ -268,6 +290,12 @@ impl Parse for crate::v2::EvaluatedOneHotConstraint {
             ))
             .context(message, "active_variable"));
         }
+        crate::constraint_type::validate_wire_violation(
+            self.violation,
+            self.feasible,
+            *atol,
+            message,
+        )?;
         if self.feasible != active_variable.is_some() {
             return Err(ParseError::new(crate::error!(
                 "One-hot feasible must be true exactly when active_variable is set"
@@ -277,7 +305,8 @@ impl Parse for crate::v2::EvaluatedOneHotConstraint {
         Ok(OneHotConstraint {
             variables,
             stage: OneHotEvaluatedData {
-                feasible: self.feasible,
+                atol: *atol,
+                violation: self.violation,
                 active_variable,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
@@ -291,18 +320,25 @@ impl Parse for crate::v2::EvaluatedOneHotConstraint {
 
 impl From<SampledOneHotConstraint> for crate::v2::SampledOneHotConstraint {
     fn from(constraint: SampledOneHotConstraint) -> Self {
+        let feasible = constraint
+            .stage
+            .violations
+            .iter()
+            .map(|(id, _)| {
+                (
+                    id.into_inner(),
+                    constraint.is_feasible_for(*id).expect("sample exists"),
+                )
+            })
+            .collect();
         Self {
             variables: constraint
                 .variables
                 .into_iter()
                 .map(|id| id.into_inner())
                 .collect(),
-            feasible: constraint
-                .stage
-                .feasible
-                .into_iter()
-                .map(|(id, value)| (id.into_inner(), value))
-                .collect(),
+            feasible,
+            violations: Some(constraint.stage.violations.into()),
             active_variable: constraint
                 .stage
                 .active_variable
@@ -330,7 +366,7 @@ impl Parse for crate::v2::SampledOneHotConstraint {
     type Output = SampledOneHotConstraint;
     type Context = ATol;
 
-    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+    fn parse(self, atol: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v2.SampledOneHotConstraint";
         let variables =
             crate::v2_io::variable_id_set_from_v2(self.variables, message, "variables")?;
@@ -350,21 +386,41 @@ impl Parse for crate::v2::SampledOneHotConstraint {
             ))
             .context(message, "active_variable"));
         }
+        let violations: crate::Sampled<f64> = self
+            .violations
+            .ok_or(crate::RawParseError::MissingField {
+                message,
+                field: "violations",
+            })?
+            .parse_as(&(), message, "violations")?;
         let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
-        for (sample_id, feasible) in &feasible {
-            if let Some(active_variable) = active_variable.get(sample_id) {
-                if *feasible != active_variable.is_some() {
-                    return Err(ParseError::new(crate::error!(
-                        "One-hot feasible must be true exactly when active_variable is set"
-                    ))
-                    .context(message, "active_variable"));
-                }
+        if sample_ids_from_map(&feasible) != violations.ids()
+            || sample_ids_from_map(&active_variable) != violations.ids()
+        {
+            return Err(ParseError::new(crate::error!(
+                "feasible and active_variable sample IDs must match violations"
+            ))
+            .context(message, "violations"));
+        }
+        for (id, &violation) in violations.iter() {
+            crate::constraint_type::validate_wire_violation(
+                violation,
+                feasible[id],
+                *atol,
+                message,
+            )?;
+            if feasible[id] != active_variable[id].is_some() {
+                return Err(ParseError::new(crate::error!(
+                    "One-hot feasible must be true exactly when active_variable is set"
+                ))
+                .context(message, "active_variable"));
             }
         }
         Ok(OneHotConstraint {
             variables,
             stage: OneHotSampledData {
-                feasible,
+                atol: *atol,
+                violations,
                 active_variable,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
@@ -388,6 +444,59 @@ impl std::fmt::Display for OneHotConstraint<Created> {
             "OneHotConstraint(exactly one of {{{}}} = 1)",
             vars.join(", ")
         )
+    }
+}
+
+impl<S: Stage<Self>> OneHotConstraint<S> {
+    /// Evaluate structural member values supplied by a state or a validated host.
+    /// The constraint owns both its metric and the active-variable diagnostic;
+    /// Solution and SampleSet use this same operation when validating restored rows.
+    pub(crate) fn evaluate_members(
+        &self,
+        mut value_of: impl FnMut(VariableID) -> Option<f64>,
+        atol: ATol,
+    ) -> crate::Result<(f64, Option<VariableID>)> {
+        let mut values = Vec::with_capacity(self.variables.len());
+        for &id in &self.variables {
+            let value = value_of(id).ok_or_else(|| {
+                crate::error!("Variable {id:?} not found in state for one-hot constraint")
+            })?;
+            crate::ensure!(
+                value.is_finite(),
+                "Variable {id:?} in one-hot constraint must be finite (value={value})"
+            );
+            values.push((id, value));
+        }
+        let &(selected, _selected_value) = values
+            .iter()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            .ok_or_else(|| {
+                crate::error!("one-hot constraints must contain at least one variable")
+            })?;
+        // Sum nonnegative terms directly: sum-minus-maximum can erase small violations.
+        let violation = values
+            .iter()
+            .map(|&(id, value)| {
+                if id == selected {
+                    (value - 1.0).abs()
+                } else {
+                    value.abs()
+                }
+            })
+            .fold(0.0, |total, value| total + value);
+        let active_variable = if crate::constraint_type::violation_is_feasible(violation, atol) {
+            Some(selected)
+        } else {
+            None
+        };
+        Ok((violation, active_variable))
+    }
+}
+
+impl EvaluatedOneHotConstraint {
+    /// Minimum sum of absolute member changes needed to satisfy this constraint.
+    pub fn violation(&self) -> f64 {
+        EvaluatedConstraintData::violation(self)
     }
 }
 
@@ -463,6 +572,7 @@ mod tests {
     #[test]
     fn parse_v2_evaluated_invalid_active_variable_is_an_ordinary_error() {
         let proto = crate::v2::EvaluatedOneHotConstraint {
+            violation: 0.0,
             variables: vec![1],
             feasible: true,
             active_variable: Some(2),

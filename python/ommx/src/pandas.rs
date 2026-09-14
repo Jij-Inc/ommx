@@ -1,6 +1,8 @@
 //! Thin wrapper around `pandas.DataFrame` for type-safe PyO3 bindings,
 //! plus shared helpers for building DataFrames from domain objects.
 
+use ommx::EvaluatedConstraintBehavior;
+use ommx::SampledConstraintBehavior;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
@@ -983,7 +985,7 @@ impl<'m> ToPandasEntry
         dict.set_item("indicator_variable_id", c.indicator_variable.into_inner())?;
         set_equality(&dict, c.equality)?;
         dict.set_item("value", c.stage.evaluated_value)?;
-        dict.set_item("feasible", c.stage.feasible)?;
+        dict.set_item("feasible", c.is_feasible())?;
         dict.set_item("indicator_active", c.stage.indicator_active)?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_label_columns(
@@ -1028,7 +1030,7 @@ impl<'a, 'm> ToPandasEntry
         for &sample_id in self.item.sample_ids {
             let value = ic.stage.evaluated_values.get(sample_id).copied();
             dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
-            let feas = ic.stage.feasible.get(&sample_id).copied();
+            let feas = ic.is_feasible_for(sample_id);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
             let active = ic.stage.indicator_active.get(&sample_id).copied();
             dict.set_item(
@@ -1072,7 +1074,7 @@ impl<'m> ToPandasEntry
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
-        dict.set_item("feasible", c.stage.feasible)?;
+        dict.set_item("feasible", c.is_feasible())?;
         match c.stage.active_variable {
             Some(v) => dict.set_item("active_variable", v.into_inner())?,
             None => dict.set_item("active_variable", &na)?,
@@ -1111,7 +1113,7 @@ impl<'a, 'm> ToPandasEntry
         )?;
         set_parameter_columns(&dict, &m.parameters)?;
         for &sample_id in self.item.sample_ids {
-            let feas = c.stage.feasible.get(&sample_id).copied();
+            let feas = c.is_feasible_for(sample_id);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
             let active_col = format!("active_variable.{}", sample_id.into_inner());
             match c.stage.active_variable.get(&sample_id) {
@@ -1136,7 +1138,7 @@ impl<'m> ToPandasEntry
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
-        dict.set_item("feasible", c.stage.feasible)?;
+        dict.set_item("feasible", c.is_feasible())?;
         match c.stage.active_variable {
             Some(v) => dict.set_item("active_variable", v.into_inner())?,
             None => dict.set_item("active_variable", &na)?,
@@ -1175,7 +1177,7 @@ impl<'a, 'm> ToPandasEntry
         )?;
         set_parameter_columns(&dict, &m.parameters)?;
         for &sample_id in self.item.sample_ids {
-            let feas = c.stage.feasible.get(&sample_id).copied();
+            let feas = c.is_feasible_for(sample_id);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
             let active_col = format!("active_variable.{}", sample_id.into_inner());
             match c.stage.active_variable.get(&sample_id) {
@@ -1378,7 +1380,7 @@ impl<'m> ToPandasEntry
         dict.set_item("id", id.into_inner())?;
         set_equality(&dict, c.equality)?;
         dict.set_item("value", c.stage.evaluated_value)?;
-        dict.set_item("feasible", c.stage.feasible)?;
+        dict.set_item("feasible", c.is_feasible())?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_label_columns(
             &dict,
@@ -1485,7 +1487,7 @@ impl<'a, 'm> ToPandasEntry
         for &sample_id in self.item.sample_ids {
             let value = sc.stage.evaluated_values.get(sample_id).copied();
             dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
-            let feas = sc.stage.feasible.get(&sample_id).copied();
+            let feas = sc.is_feasible_for(sample_id);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
         }
         Ok(dict)

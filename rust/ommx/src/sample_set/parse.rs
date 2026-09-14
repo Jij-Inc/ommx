@@ -649,7 +649,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((sample_id, 0.0)),
-                feasible: BTreeMap::from([(sample_id, true)]),
+                atol: crate::ATol::default(),
                 indicator_active: BTreeMap::from([(sample_id, true)]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -682,7 +682,8 @@ mod tests {
         let constraint = SampledOneHotConstraint {
             variables: BTreeSet::from([variable_id]),
             stage: OneHotSampledData {
-                feasible: BTreeMap::from([(sample_id, true)]),
+                atol: crate::ATol::default(),
+                violations: crate::Sampled::from((sample_id, 0.0)),
                 active_variable: BTreeMap::from([(sample_id, Some(variable_id))]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -715,7 +716,8 @@ mod tests {
         let constraint = SampledSos1Constraint {
             variables: BTreeSet::from([variable_id]),
             stage: Sos1SampledData {
-                feasible: BTreeMap::from([(sample_id, true)]),
+                atol: crate::ATol::default(),
+                violations: crate::Sampled::from((sample_id, 0.0)),
                 active_variable: BTreeMap::from([(sample_id, None)]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -805,7 +807,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
-                feasible: BTreeMap::from([(crate::SampleID::from(0), true)]),
+                atol: crate::ATol::default(),
                 indicator_active: BTreeMap::from([(crate::SampleID::from(0), false)]),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -861,7 +863,8 @@ mod tests {
                     SampledOneHotConstraint {
                         variables: [structural_id].into_iter().collect(),
                         stage: OneHotSampledData {
-                            feasible: BTreeMap::from([(crate::SampleID::from(0), true)]),
+                            atol: crate::ATol::default(),
+                            violations: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
                             active_variable: BTreeMap::from([(
                                 crate::SampleID::from(0),
                                 Some(structural_id),
@@ -911,7 +914,8 @@ mod tests {
         let constraint = SampledSos1Constraint {
             variables: [undefined_id].into_iter().collect(),
             stage: Sos1SampledData {
-                feasible: BTreeMap::from([(crate::SampleID::from(0), true)]),
+                atol: crate::ATol::default(),
+                violations: crate::Sampled::from((crate::SampleID::from(0), 0.0)),
                 active_variable: BTreeMap::from([(crate::SampleID::from(0), None)]),
                 used_decision_variable_ids: [crate::VariableID::from(1)].into_iter().collect(),
             },
@@ -1535,14 +1539,12 @@ mod tests {
 
         let mut evaluated_values = crate::Sampled::default();
         evaluated_values.append([sample_id], 0.0).unwrap();
-        let mut feasible = BTreeMap::new();
-        feasible.insert(sample_id, true);
         let sampled_constraint = crate::Constraint {
             equality: Equality::EqualToZero,
             stage: SampledData {
                 evaluated_values,
                 dual_variables: None,
-                feasible,
+                atol: crate::ATol::default(),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1631,7 +1633,7 @@ mod tests {
             equality: Equality::EqualToZero,
             stage: SampledData {
                 evaluated_values,
-                feasible: BTreeMap::from([(sample_id, true)]),
+                atol: crate::ATol::default(),
                 used_decision_variable_ids: Default::default(),
                 dual_variables: None,
             },
@@ -1713,6 +1715,18 @@ mod tests {
             .unwrap()
             .entries[0]
             .value = 1.0 + *atol;
+        one_hot
+            .sampled_one_hot_constraints
+            .as_mut()
+            .unwrap()
+            .entries
+            .get_mut(&1)
+            .unwrap()
+            .violations
+            .as_mut()
+            .unwrap()
+            .entries[0]
+            .value = *atol;
         SampleSet::try_from(one_hot).unwrap();
 
         let mut sos1 = v2_sample_set_with_sos1_constraint();
@@ -1786,7 +1800,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: IndicatorSampledData {
                 evaluated_values: Sampled::from((sample_id, 0.0)),
-                feasible: BTreeMap::from([(sample_id, true)]),
+                atol: crate::ATol::default(),
                 indicator_active: BTreeMap::from([(sample_id, true)]),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
@@ -1843,15 +1857,27 @@ mod tests {
         )
         .unwrap();
         let one_hot = SampledOneHotConstraint {
-            variables: BTreeSet::from([var_id]),
+            variables: BTreeSet::from([var_id, VariableID::from(2)]),
             stage: OneHotSampledData {
-                feasible: BTreeMap::from([(sample_id, true)]),
+                atol: crate::ATol::default(),
+                violations: crate::Sampled::from((sample_id, 0.0)),
                 active_variable: BTreeMap::from([(sample_id, Some(var_id))]),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
         let sample_set = SampleSet::builder()
-            .decision_variables(BTreeMap::from([(var_id, sampled_variable)]))
+            .decision_variables(BTreeMap::from([
+                (var_id, sampled_variable),
+                (
+                    VariableID::from(2),
+                    SampledDecisionVariable::new(
+                        VariableID::from(2),
+                        DecisionVariable::binary(),
+                        Sampled::from((sample_id, 0.0)),
+                    )
+                    .unwrap(),
+                ),
+            ]))
             .objectives(Sampled::from((sample_id, 0.0)))
             .constraints(BTreeMap::new())
             .one_hot_constraints_collection(
@@ -1873,15 +1899,17 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.feasible.insert(sample_id.into_inner(), false);
         row.active_variable.insert(
             sample_id.into_inner(),
-            crate::v2::SampledActiveVariable { variable_id: None },
+            crate::v2::SampledActiveVariable {
+                variable_id: Some(2),
+            },
         );
 
         let err = SampleSet::try_from(proto).unwrap_err();
         assert!(
-            err.to_string().contains("active_variable=None")
+            err.to_string()
+                .contains("active_variable=Some(VariableID(2))")
                 && err
                     .to_string()
                     .contains("does not match decision-variable values"),

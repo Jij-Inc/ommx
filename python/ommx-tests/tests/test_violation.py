@@ -374,3 +374,98 @@ def test_feasible_sos1_can_have_positive_violation_within_tolerance():
     solution = instance.evaluate({0: 3, 1: 0.125}, atol=0.125)
     assert solution.total_violation() == 0.125
     assert solution.feasible
+
+
+@pytest.mark.parametrize("atol", [1e-4, 1e-8])
+@pytest.mark.parametrize("lowered", [False, True])
+def test_sos1_feasibility_uses_total_member_error_across_evaluation_paths(
+    atol, lowered
+):
+    xs = [DecisionVariable.continuous(i, lower=-2, upper=2) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        constraints={},
+        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    if lowered:
+        instance.convert_sos1_to_constraints(0)
+    state = {0: 1, 1: 0.75 * atol, 2: 0.75 * atol}
+    if lowered:
+        # The generated selectors correspond to x0, x1, and x2 in order.
+        state.update({3: 1, 4: 0, 5: 0})
+    solution = instance.evaluate(state, atol=atol)
+    samples = instance.evaluate_samples({7: state}, atol=atol)
+    for result in [
+        solution,
+        samples.get(7),
+        Solution.from_v2_bytes(solution.to_v2_bytes()),
+        SampleSet.from_v2_bytes(samples.to_v2_bytes()).get(7),
+    ]:
+        violation = result.constraint_violation(0, kind="sos1")
+        assert violation == pytest.approx(1.5 * atol)
+        regular_total = sum(c.violation() for c in result.constraints.values())
+        assert result.total_violation() == pytest.approx(violation + regular_total)
+        row = result.constraints_df(kind="sos1").loc[0]
+        assert row["violation"] == violation
+        assert not row["feasible"]
+        assert not result.feasible
+        assert result.feasible_relaxed == lowered
+
+
+@pytest.mark.parametrize("atol", [1e-4, 1e-8])
+def test_partial_evaluation_cannot_discard_small_sos1_member_contributions(atol):
+    xs = [DecisionVariable.continuous(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        constraints={},
+        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    fixed = {1: 0.75 * atol, 2: 0.75 * atol}
+    original = instance.evaluate({0: 1, **fixed}, atol=atol)
+    with pytest.raises(RuntimeError, match="without changing the constraint violation"):
+        instance.partial_evaluate(fixed, atol=atol)
+    assert (
+        instance.evaluate({0: 1, **fixed}, atol=atol).total_violation()
+        == original.total_violation()
+    )
+
+    # Exact zero elimination preserves both the scalar metric and a valid Instance.
+    original = instance.evaluate({0: 1, 1: 0.75 * atol, 2: 0}, atol=atol)
+    partial = instance.partial_evaluate({2: 0}, atol=atol)
+    restored = Instance.from_v2_bytes(partial.to_v2_bytes())
+    for problem in [partial, restored]:
+        result = problem.evaluate({0: 1, 1: 0.75 * atol}, atol=atol)
+        assert result.total_violation() == original.total_violation()
+        assert result.feasible
+
+
+def test_constraint_thresholds_do_not_apply_to_total_violation():
+    x = DecisionVariable.continuous(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=0,
+        constraints={0: x == 0, 1: x <= 0},
+        sense=Sense.Minimize,
+    )
+    solution = instance.evaluate({0: 0.000075}, atol=0.0001)
+    assert solution.total_violation() == pytest.approx(0.00015)
+    assert solution.feasible
+
+
+def test_binary_canonicalization_precedes_constraint_violation():
+    xs = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        constraints={},
+        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    solution = instance.evaluate({0: 1, 1: 0.000075, 2: 0.000075}, atol=0.0001)
+    assert solution.state.entries == {0: 1, 1: 0, 2: 0}
+    assert solution.constraint_violation(0, kind="one_hot") == 0
+    assert solution.feasible

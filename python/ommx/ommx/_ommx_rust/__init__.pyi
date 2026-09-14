@@ -8733,8 +8733,10 @@ class Solution:
         - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
         - SOS1: `min_i sum_{j != i} abs(x_j)`.
 
-        Zero implies that all constraints are feasible. A small positive violation
-        may also be feasible within tolerance. Variable bound and kind violations
+        Each constraint is feasible exactly when its violation is at most the
+        evaluation tolerance. This threshold applies to each constraint separately,
+        not to the total. Zero therefore implies that all constraints are feasible.
+        Variable bound and kind violations
         are not added. Values use the evaluated state after discrete-value
         canonicalization. Lowering need not preserve the metric: a retained
         original and its generated constraints each contribute.

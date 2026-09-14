@@ -379,10 +379,27 @@ OneHot uses the minimum sum of absolute changes to make exactly one member 1 and
 the rest 0. SOS1 uses the minimum sum of absolute changes to leave at most one
 nonzero member. These definitions do not depend on Big-M lowering.
 
-A zero violation implies constraint feasibility; a small positive value can still
-be feasible within tolerance. Variable bounds and kinds are checked separately.
-OneHot classifies each value by its nearest binary value before applying tolerance
-(ties select 1), including when the tolerance neighborhoods overlap.
+Every constraint is feasible exactly when `violation <= atol`. For OneHot and
+SOS1, tolerance applies to the total absolute change, rather than to each member
+independently. For example, SOS1 values `(1, 0.00006, 0.00006)` have violation
+`0.00012` and are infeasible with `atol=0.0001`, although each small member is
+individually within tolerance of zero.
+
+Variable bounds and kinds are checked separately. Discrete-value canonicalization
+happens before constraint evaluation; the metric uses the resulting values.
+Solution feasibility requires each constraint to pass its own threshold, not
+the total violation to be within one shared threshold.
+
+The v2 protobuf format retains `feasible` flags/maps and `feasibility_atol` on
+Solution/SampleSet. Consumers can read the result and its tolerance without an
+OMMX SDK. The SDK validates these flags against violations using the persisted
+tolerance when loading the data.
+
+Partial evaluation rejects a fixing when eliminating an approximately zero
+structural member would lose its contribution to violation and the constraint
+must remain active. Exact-zero elimination remains supported. Evaluate the
+complete state, or lower special constraints before partial evaluation; lowering
+has its own violation metrics as described below.
 Lowering need not preserve the total: retained originals and generated constraints
 each contribute. See {meth}`~ommx.Solution.total_violation` for the full definitions.
 

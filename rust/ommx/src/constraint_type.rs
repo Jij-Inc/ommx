@@ -21,7 +21,10 @@
 //! 2. Implement `Stage<NewConstraint<S>>` for each stage marker (reuse `CreatedData`,
 //!    `EvaluatedData`, etc. if the stage data is the same as regular constraints).
 //! 3. Implement `ConstraintType for NewConstraint` mapping all three stages.
-//! 4. Implement `Evaluate` for `NewConstraint<Created>`.
+//! 4. Implement `Evaluate` for `NewConstraint<Created>`,
+//!    [`EvaluatedConstraintData`] and [`SampledConstraintData`]. Every family must
+//!    provide a nonnegative scalar violation. Feasibility is derived by the
+//!    blanket behavior implementations; families cannot supply a separate rule.
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
 //! 6. Add a variant to [`SpecialConstraintKind`] and update
 //!    `Instance::active_special_constraint_kinds`.
@@ -42,6 +45,9 @@ use std::sync::LazyLock;
 
 static EMPTY_VARIABLE_ID_SET: LazyLock<VariableIDSet> = LazyLock::new(VariableIDSet::default);
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+
+#[cfg(test)]
+mod violation_tests;
 
 fn validate_no_key_overlap<ID, L, R>(
     left: &BTreeMap<ID, L>,
@@ -96,7 +102,7 @@ where
 /// Return the sample IDs carried by a sample-keyed side map.
 ///
 /// Sampled stage data is split across multiple per-sample side maps
-/// (`feasible`, `active_variable`, `indicator_active`, ...). Constraint
+/// (`active_variable`, `indicator_active`, ...). Constraint
 /// families use this helper to validate that those maps stay aligned with the
 /// canonical sampled values for the same constraint.
 pub(crate) fn sample_ids_from_map<V>(map: &BTreeMap<SampleID, V>) -> SampleIDSet {
@@ -168,22 +174,98 @@ pub trait ConstraintType {
     type Sampled: SampledConstraintBehavior<ID = Self::ID, Evaluated = Self::Evaluated>;
 }
 
-/// Common behavior for an evaluated constraint (single state evaluation result).
-pub trait EvaluatedConstraintBehavior {
+/// The data each constraint family must provide after a single evaluation.
+///
+/// `violation` is nonnegative and independent of the feasibility tolerance.
+/// It is zero exactly when the constraint is satisfied without tolerance.
+/// Positive infinity represents an overflowed
+/// violation and is never feasible. NaN and negative values are invalid.
+/// Input canonicalization belongs to the evaluation procedure, before this
+/// contract applies. Each family defines its metric on the values it receives.
+pub trait EvaluatedConstraintData {
     type ID;
-    fn is_feasible(&self) -> bool;
+    fn violation(&self) -> f64;
+    fn feasibility_atol(&self) -> ATol;
     fn used_decision_variable_ids(&self) -> &VariableIDSet {
         &EMPTY_VARIABLE_ID_SET
     }
 }
 
-/// Common behavior for a sampled constraint (multi-sample evaluation result).
-pub trait SampledConstraintBehavior {
+/// Feasibility derived from a constraint's scalar violation.
+///
+/// The blanket implementation prevents constraint families from implementing
+/// a second, independent feasibility rule.
+/// A finite, nonnegative violation is feasible exactly when `violation <= atol`.
+///
+/// ```compile_fail,E0119
+/// use ommx::{ATol, ConstraintID, EvaluatedConstraintData, EvaluatedConstraintBehavior};
+/// struct NewConstraint;
+/// impl EvaluatedConstraintData for NewConstraint {
+///     type ID = ConstraintID;
+///     fn violation(&self) -> f64 { 0.0 }
+///     fn feasibility_atol(&self) -> ATol { ATol::default() }
+/// }
+/// // This conflicts with the common blanket implementation.
+/// impl EvaluatedConstraintBehavior for NewConstraint {
+///     fn is_feasible(&self) -> bool { false }
+///     fn is_feasible_with_tolerance(&self, _: ATol) -> bool { false }
+/// }
+/// ```
+pub trait EvaluatedConstraintBehavior: EvaluatedConstraintData {
+    fn is_feasible(&self) -> bool;
+    fn is_feasible_with_tolerance(&self, atol: ATol) -> bool;
+}
+
+impl<T: EvaluatedConstraintData + ?Sized> EvaluatedConstraintBehavior for T {
+    fn is_feasible(&self) -> bool {
+        self.is_feasible_with_tolerance(self.feasibility_atol())
+    }
+
+    fn is_feasible_with_tolerance(&self, atol: ATol) -> bool {
+        violation_is_feasible(self.violation(), atol)
+    }
+}
+
+/// Shared constraint predicate, also used while evaluating residuals and parsing
+/// their wire representations across the constraint-family owner modules.
+pub(crate) fn violation_is_feasible(violation: f64, atol: ATol) -> bool {
+    violation >= 0.0 && atol.approx_is_zero(violation)
+}
+
+/// Validate persisted structural metrics and their redundant feasibility flag.
+/// Shared by the one-hot and SOS1 wire boundaries.
+pub(crate) fn validate_wire_violation(
+    violation: f64,
+    provided_feasible: bool,
+    atol: ATol,
+    message: &'static str,
+) -> std::result::Result<(), ParseError> {
+    if violation.is_nan() || violation < 0.0 {
+        return Err(ParseError::new(crate::error!(
+            "Constraint violation must be nonnegative and not NaN"
+        ))
+        .context(message, "violation"));
+    }
+    if provided_feasible != violation_is_feasible(violation, atol) {
+        return Err(ParseError::new(crate::error!(
+            "Constraint feasible must equal violation <= atol"
+        ))
+        .context(message, "feasible"));
+    }
+    Ok(())
+}
+
+/// The data each constraint family must provide after sample evaluation.
+pub trait SampledConstraintData {
     type ID;
     /// The evaluated constraint type returned by [`get`](Self::get).
-    type Evaluated;
+    type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
 
-    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
+    /// The same scalar metric as single-state evaluation, or `None` for a
+    /// missing sample. Implementations must satisfy [`EvaluatedConstraintData`]'s
+    /// nonnegativity contract.
+    fn violation_for(&self, sample_id: SampleID) -> Option<f64>;
+    fn feasibility_atol(&self) -> ATol;
 
     /// Validate that every sample-keyed field inside this sampled constraint
     /// uses exactly `expected` sample IDs.
@@ -202,6 +284,18 @@ pub trait SampledConstraintBehavior {
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated>;
 }
 
+/// Common sample feasibility, derived from each sample's violation.
+pub trait SampledConstraintBehavior: SampledConstraintData {
+    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
+}
+
+impl<T: SampledConstraintData + ?Sized> SampledConstraintBehavior for T {
+    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
+        self.violation_for(sample_id)
+            .map(|violation| violation_is_feasible(violation, self.feasibility_atol()))
+    }
+}
+
 /// Storage effect produced by a by-value rewrite of an active constraint row.
 ///
 /// The enclosing domain owner decides which effect applies. The collection only
@@ -212,14 +306,16 @@ pub(crate) enum ActiveRowRewrite<T> {
     Removed(T, RemovedReason),
 }
 
-// ===== Blanket-like impls for Constraint<Evaluated> and Constraint<Sampled> =====
-// Both Constraint and IndicatorConstraint share EvaluatedData/SampledData in their stage,
-// so the implementations are identical.
+// ===== Evaluation data supplied by regular constraints =====
 
-impl EvaluatedConstraintBehavior for EvaluatedConstraint {
+impl EvaluatedConstraintData for EvaluatedConstraint {
     type ID = ConstraintID;
-    fn is_feasible(&self) -> bool {
-        self.stage.feasible
+    fn violation(&self) -> f64 {
+        self.equality.violation(self.stage.evaluated_value)
+    }
+
+    fn feasibility_atol(&self) -> ATol {
+        self.stage.atol
     }
 
     fn used_decision_variable_ids(&self) -> &VariableIDSet {
@@ -227,22 +323,26 @@ impl EvaluatedConstraintBehavior for EvaluatedConstraint {
     }
 }
 
-impl SampledConstraintBehavior for SampledConstraint {
+impl SampledConstraintData for SampledConstraint {
     type ID = ConstraintID;
     type Evaluated = EvaluatedConstraint;
 
-    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
-        self.stage.feasible.get(&sample_id).copied()
+    fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
+        self.stage
+            .evaluated_values
+            .get(sample_id)
+            .map(|value| self.equality.violation(*value))
+    }
+
+    fn feasibility_atol(&self) -> ATol {
+        self.stage.atol
     }
 
     fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet> {
         if !self.stage.evaluated_values.has_same_ids(expected) {
             return Err(self.stage.evaluated_values.ids());
         }
-        let feasible_ids = sample_ids_from_map(&self.stage.feasible);
-        if &feasible_ids != expected {
-            return Err(feasible_ids);
-        }
+
         if let Some(dual_variables) = &self.stage.dual_variables {
             if !dual_variables.has_same_ids(expected) {
                 return Err(dual_variables.ids());
@@ -264,14 +364,13 @@ impl SampledConstraintBehavior for SampledConstraint {
             .as_ref()
             .and_then(|duals| duals.get(sample_id))
             .copied();
-        let feasible = *self.stage.feasible.get(&sample_id)?;
 
         Some(crate::Constraint {
             equality: self.equality,
             stage: EvaluatedData {
                 evaluated_value,
                 dual_variable,
-                feasible,
+                atol: self.stage.atol,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
             },
         })
@@ -1577,13 +1676,18 @@ fn sampled_constraint_to_v1_unremoved(
     context: ConstraintContext,
 ) -> v1::SampledConstraint {
     let label = context.label;
-    let evaluated_values: v1::SampledValues = constraint.stage.evaluated_values.into();
     let feasible = constraint
         .stage
-        .feasible
-        .into_iter()
-        .map(|(id, value)| (id.into_inner(), value))
+        .evaluated_values
+        .iter()
+        .map(|(id, _)| {
+            (
+                id.into_inner(),
+                constraint.is_feasible_for(*id).expect("sample exists"),
+            )
+        })
         .collect();
+    let evaluated_values: v1::SampledValues = constraint.stage.evaluated_values.into();
 
     v1::SampledConstraint {
         id: id.into_inner(),
@@ -1620,6 +1724,7 @@ fn sampled_constraint_to_v1(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::EvaluatedConstraintBehavior;
     use crate::{coeff, constraint::ConstraintID, linear, Equality, Function, ModelingLabel};
 
     fn parse_error_source(error: &ParseError) -> &(dyn std::error::Error + 'static) {
@@ -1685,8 +1790,8 @@ mod tests {
         let results = collection.evaluate(&state, ATol::default()).unwrap();
 
         assert_eq!(results.len(), 2);
-        assert!(!results[&ConstraintID::from(1)].stage.feasible);
-        assert!(!results[&ConstraintID::from(2)].stage.feasible);
+        assert!(!results[&ConstraintID::from(1)].is_feasible());
+        assert!(!results[&ConstraintID::from(2)].is_feasible());
         assert!(results.removed_reasons().is_empty());
     }
 

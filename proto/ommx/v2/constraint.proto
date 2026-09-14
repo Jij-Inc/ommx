@@ -114,6 +114,7 @@ message EvaluatedOneHotConstraint {
   bool feasible = 2;
   optional uint64 active_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
+  double violation = 5;
 }
 
 // Evaluated SOS1 constraint row.
@@ -122,6 +123,7 @@ message EvaluatedSos1Constraint {
   bool feasible = 2;
   optional uint64 active_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
+  double violation = 5;
 }
 
 // Evaluated regular constraint collection.
@@ -182,6 +184,7 @@ message SampledOneHotConstraint {
   map<uint64, bool> feasible = 2;
   map<uint64, SampledActiveVariable> active_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
+  ommx.v1.SampledValues violations = 5;
 }
 
 // Sampled SOS1 constraint row.
@@ -190,6 +193,7 @@ message SampledSos1Constraint {
   map<uint64, bool> feasible = 2;
   map<uint64, SampledActiveVariable> active_variable = 3;
   repeated uint64 used_decision_variable_ids = 4;
+  ommx.v1.SampledValues violations = 5;
 }
 
 // Sampled regular constraint collection.

@@ -21,7 +21,8 @@ solution.constraints_df(kind="sos1")[["feasible", "violation"]]
 ```
 
 Solution の全制約種別の DataFrame に `feasible` と `violation` を追加しました。
-違反量が 0 なら制約は feasible ですが、許容誤差内では正の値でも feasible になります。
+すべての制約を `violation <= atol` で判定します。OneHot と SOS1 の許容誤差は
+各メンバーへの個別適用から、変更量の合計への適用に変わります。
 OneHot と SOS1 はメンバー値の絶対変更量の最小値で定義し、Big-M lowering との一致は
 要求しません。定義と移行方法は
 {ref}`移行ガイド <constraint-violation-migration>`を参照してください。

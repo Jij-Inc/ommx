@@ -1,4 +1,5 @@
 use super::*;
+use crate::EvaluatedConstraintBehavior;
 use crate::{ATol, Evaluate, Propagate, PropagateOutcome, VariableIDSet};
 
 fn ensure_sos1_value_is_finite(var_id: VariableID, value: f64) -> crate::Result<()> {
@@ -23,6 +24,7 @@ impl Propagate for Sos1Constraint<Created> {
     ) -> crate::Result<(PropagateOutcome<Self>, crate::v1::State)> {
         let mut fixed_nonzero: Option<VariableID> = None;
         let mut unfixed = BTreeSet::new();
+        let mut fixed_deviation = 0.0;
 
         for &var_id in &self.variables {
             let Some(&value) = state.entries.get(&var_id.into_inner()) else {
@@ -32,7 +34,7 @@ impl Propagate for Sos1Constraint<Created> {
 
             ensure_sos1_value_is_finite(var_id, value)?;
             if atol.approx_is_zero(value) {
-                // Variable is ~0, removed from set
+                fixed_deviation += value.abs();
             } else {
                 // Variable is non-zero
                 if let Some(first) = fixed_nonzero {
@@ -47,6 +49,10 @@ impl Propagate for Sos1Constraint<Created> {
         }
 
         if fixed_nonzero.is_some() {
+            crate::ensure!(
+                crate::constraint_type::violation_is_feasible(fixed_deviation, atol),
+                "Fixed SOS1 values exceed the constraint tolerance: violation={fixed_deviation}"
+            );
             // One variable is non-zero → constraint satisfied, fix remaining unfixed to 0
             let mut additional = crate::v1::State::default();
             for var_id in &unfixed {
@@ -54,14 +60,22 @@ impl Propagate for Sos1Constraint<Created> {
             }
             Ok((PropagateOutcome::Consumed(self), additional))
         } else if unfixed.is_empty() {
-            // All variables fixed to 0 → vacuously satisfied for SOS1
+            let evaluated = self.evaluate(state, atol)?;
+            crate::ensure!(
+                evaluated.is_feasible(),
+                "Fixed SOS1 values exceed the constraint tolerance: violation={}",
+                evaluated.violation()
+            );
             Ok((
                 PropagateOutcome::Consumed(self),
                 crate::v1::State::default(),
             ))
         } else {
             // Multiple unfixed variables remain — modify and stay active
-            self.variables = unfixed;
+            // Keep approximate zeros: their contributions still belong to this
+            // constraint's violation. Only exact zeros can be eliminated.
+            self.variables
+                .retain(|id| state.entries.get(&id.into_inner()) != Some(&0.0));
             Ok((PropagateOutcome::Active(self), crate::v1::State::default()))
         }
     }
@@ -73,12 +87,14 @@ impl Evaluate for Sos1Constraint<Created> {
 
     fn evaluate(&self, state: &crate::v1::State, atol: ATol) -> crate::Result<Self::Output> {
         let used_decision_variable_ids = self.required_ids();
-        let (feasible, active_variable) = check_sos1(&self.variables, state, atol)?;
+        let (violation, active_variable) =
+            self.evaluate_members(|id| state.entries.get(&id.into_inner()).copied(), atol)?;
 
         Ok(Sos1Constraint {
             variables: self.variables.clone(),
             stage: Sos1EvaluatedData {
-                feasible,
+                atol,
+                violation,
                 active_variable,
                 used_decision_variable_ids,
             },
@@ -90,19 +106,21 @@ impl Evaluate for Sos1Constraint<Created> {
         samples: &crate::Sampled<crate::v1::State>,
         atol: ATol,
     ) -> crate::Result<Self::SampledOutput> {
-        let mut feasible = BTreeMap::new();
+        let mut violations = crate::Sampled::default();
         let mut active_variable = BTreeMap::new();
 
         for (sample_id, state) in samples.iter() {
-            let (f, av) = check_sos1(&self.variables, state, atol)?;
-            feasible.insert(*sample_id, f);
+            let (violation, av) =
+                self.evaluate_members(|id| state.entries.get(&id.into_inner()).copied(), atol)?;
+            violations.append([*sample_id], violation)?;
             active_variable.insert(*sample_id, av);
         }
 
         Ok(Sos1Constraint {
             variables: self.variables.clone(),
             stage: Sos1SampledData {
-                feasible,
+                atol,
+                violations,
                 active_variable,
                 used_decision_variable_ids: self.required_ids(),
             },
@@ -127,45 +145,11 @@ impl Evaluate for Sos1Constraint<Created> {
     }
 }
 
-/// Check SOS1 feasibility for a single state.
-///
-/// Returns `(feasible, active_variable)`:
-/// - feasible: at most one variable is non-zero
-/// - active_variable: the variable that is non-zero (None if all zero or infeasible)
-fn check_sos1(
-    variables: &BTreeSet<VariableID>,
-    state: &crate::v1::State,
-    atol: ATol,
-) -> crate::Result<(bool, Option<VariableID>)> {
-    let mut active: Option<VariableID> = None;
-
-    for &var_id in variables {
-        let value = state.entries.get(&var_id.into_inner()).ok_or_else(|| {
-            crate::error!(
-                "Variable {:?} not found in state for SOS1 constraint",
-                var_id,
-            )
-        })?;
-
-        ensure_sos1_value_is_finite(var_id, *value)?;
-        if !atol.approx_is_zero(*value) {
-            // Variable is non-zero
-            if active.is_some() {
-                // Multiple variables are non-zero → infeasible
-                return Ok((false, None));
-            }
-            active = Some(var_id);
-        }
-    }
-
-    // SOS1 allows all zeros (unlike one-hot)
-    Ok((true, active))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{Evaluate, Propagate, PropagateOutcome};
+    use crate::{EvaluatedConstraintBehavior, SampledConstraintBehavior};
     use std::collections::HashMap;
 
     #[test]
@@ -176,7 +160,7 @@ mod tests {
 
         let boundary = crate::v1::State::from(HashMap::from([(1, *atol), (2, 1.0)]));
         let evaluated = constraint.evaluate(&boundary, atol).unwrap();
-        assert!(evaluated.stage.feasible);
+        assert!(evaluated.is_feasible());
         assert_eq!(evaluated.stage.active_variable, Some(VariableID::from(2)));
 
         let outside_state = crate::v1::State::from(HashMap::from([(1, outside), (2, 1.0)]));
@@ -190,12 +174,12 @@ mod tests {
             .append([outside_sample_id], outside_state.clone())
             .unwrap();
         let sampled = constraint.evaluate_samples(&samples, atol).unwrap();
-        assert!(sampled.stage.feasible[&boundary_sample_id]);
+        assert!(sampled.is_feasible_for(boundary_sample_id).unwrap());
         assert_eq!(
             sampled.stage.active_variable[&boundary_sample_id],
             Some(VariableID::from(2))
         );
-        assert!(!sampled.stage.feasible[&outside_sample_id]);
+        assert!(!sampled.is_feasible_for(outside_sample_id).unwrap());
         assert_eq!(sampled.stage.active_variable[&outside_sample_id], None);
 
         let (boundary_outcome, _) = constraint
@@ -204,13 +188,10 @@ mod tests {
             .unwrap();
         assert!(matches!(boundary_outcome, PropagateOutcome::Active(_)));
 
-        assert!(
-            !constraint
-                .evaluate(&outside_state, atol)
-                .unwrap()
-                .stage
-                .feasible
-        );
+        assert!(!constraint
+            .evaluate(&outside_state, atol)
+            .unwrap()
+            .is_feasible());
         let (outside_outcome, _) = constraint
             .propagate(&crate::v1::State::from(HashMap::from([(1, outside)])), atol)
             .unwrap();
@@ -228,7 +209,7 @@ mod tests {
         // x1=0, x2=5.0, x3=0 → feasible, active=x2
         let state = crate::v1::State::from(HashMap::from([(1, 0.0), (2, 5.0), (3, 0.0)]));
         let result = c.evaluate(&state, ATol::default()).unwrap();
-        assert!(result.stage.feasible);
+        assert!(result.is_feasible());
         assert_eq!(result.stage.active_variable, Some(VariableID::from(2)));
     }
 
@@ -238,7 +219,7 @@ mod tests {
         // All zeros → feasible for SOS1 (unlike one-hot)
         let state = crate::v1::State::from(HashMap::from([(1, 0.0), (2, 0.0), (3, 0.0)]));
         let result = c.evaluate(&state, ATol::default()).unwrap();
-        assert!(result.stage.feasible);
+        assert!(result.is_feasible());
         assert_eq!(result.stage.active_variable, None);
     }
 
@@ -248,7 +229,7 @@ mod tests {
         // x1=1, x2=2, x3=0 → infeasible
         let state = crate::v1::State::from(HashMap::from([(1, 1.0), (2, 2.0), (3, 0.0)]));
         let result = c.evaluate(&state, ATol::default()).unwrap();
-        assert!(!result.stage.feasible);
+        assert!(!result.is_feasible());
         assert_eq!(result.stage.active_variable, None);
     }
 
@@ -320,9 +301,9 @@ mod tests {
         let s1 = crate::SampleID::from(1);
         let s2 = crate::SampleID::from(2);
 
-        assert!(result.stage.feasible[&s0]);
-        assert!(!result.stage.feasible[&s1]);
-        assert!(result.stage.feasible[&s2]);
+        assert!(result.is_feasible_for(s0).unwrap());
+        assert!(!result.is_feasible_for(s1).unwrap());
+        assert!(result.is_feasible_for(s2).unwrap());
 
         assert_eq!(result.stage.active_variable[&s0], Some(VariableID::from(2)));
         assert_eq!(result.stage.active_variable[&s1], None);

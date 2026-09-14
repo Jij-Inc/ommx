@@ -1,3 +1,4 @@
+use ommx::SampledConstraintBehavior;
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -77,9 +78,14 @@ impl SampledConstraint {
     pub fn feasible(&self) -> BTreeMap<u64, bool> {
         self.0
             .stage
-            .feasible
+            .evaluated_values
             .iter()
-            .map(|(&sample_id, feasible)| (sample_id.into_inner(), *feasible))
+            .map(|(&sample_id, _)| {
+                (
+                    sample_id.into_inner(),
+                    self.0.is_feasible_for(sample_id).expect("sample exists"),
+                )
+            })
             .collect()
     }
 }

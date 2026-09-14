@@ -1,3 +1,4 @@
+use ommx::EvaluatedConstraintBehavior;
 use std::collections::BTreeSet;
 
 use pyo3::prelude::*;
@@ -46,7 +47,7 @@ impl EvaluatedConstraint {
     /// Get the feasibility status
     #[getter]
     pub fn feasible(&self) -> bool {
-        self.0.stage.feasible
+        self.0.is_feasible()
     }
 
     /// Get the constraint name
