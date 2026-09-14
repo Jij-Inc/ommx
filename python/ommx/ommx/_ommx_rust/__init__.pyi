@@ -1803,7 +1803,8 @@ class EvaluatedConstraint:
         - For $f(x) = 0$: returns $|f(x)|$
         - For $f(x) \leq 0$: returns $\max(0, f(x))$
 
-        Returns 0.0 if the constraint is satisfied.
+        Zero implies feasibility. A small positive violation may also be feasible
+        within the evaluation tolerance; the residual is not rounded to zero.
         """
 
 @typing.final
@@ -8663,7 +8664,9 @@ class Solution:
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of evaluated constraints, dispatched on `kind=`. See
+        DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.
+
+        The `violation` column uses {meth}`constraint_violation`. Dispatched on `kind=`. See
         {meth}`ommx.Instance.constraints_df` for column / `kind=` /
         `include=` semantics.
 
@@ -8721,37 +8724,36 @@ class Solution:
         """
     def __copy__(self) -> Solution: ...
     def __deepcopy__(self, _memo: typing.Any) -> Solution: ...
-    def total_violation_l1(self) -> builtins.float:
+    def total_violation(self) -> builtins.float:
         r"""
-        Calculate total constraint violation using L1 norm (sum of absolute violations)
+        Sum the nonnegative scalar violation of every constraint, including removed constraints.
 
-        Includes all regular and special constraints, including removed constraints:
-        - Equality: $|f(x)|$; inequality: $\max(0, f(x))$.
-        - Indicator: the inner constraint's violation when active, otherwise zero.
-        - One-hot: $|\sum_i x_i - 1|$.
-        - SOS1: the sum of violations of its canonical Big-M link rows and
-          cardinality row $\sum_i y_i - 1 \leq 0$. A binary member with bounds
-          $[0, 1]$ is reused as $y_i = x_i$ without link rows. Otherwise, $y_i$
-          is zero when $x_i$ is approximately zero under this solution's
-          feasibility tolerance, and one otherwise, matching SOS1 promotion's
-          selector reconstruction. The upper link $x_i - u_i y_i \leq 0$ is
-          included when $u_i > 0$, and the lower link $l_i y_i - x_i \leq 0$
-          when $l_i < 0$. An unbounded side contributes zero when its selector
-          is one.
+        - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
+        - Indicator: the inner violation when active, otherwise zero.
+        - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
+        - SOS1: `min_i sum_{j != i} abs(x_j)`.
 
-        Residuals are not rounded to zero by the feasibility tolerance. Decision
-        variable kind and bound violations are not separately added. Lowering
-        retains removed special constraints, so both those originals and their
-        generated regular rows contribute when present in this solution.
+        Zero implies that all constraints are feasible. A small positive violation
+        may also be feasible within tolerance. Variable bound and kind violations
+        are not added. Values use the evaluated state after discrete-value
+        canonicalization. Lowering need not preserve the metric: a retained
+        original and its generated constraints each contribute.
+
+        Use {meth}`constraint_violation` for individual values, also available in
+        the `violation` column of {meth}`constraints_df` for every constraint kind.
         """
-    def total_violation_l2(self) -> builtins.float:
+    def constraint_violation(
+        self,
+        constraint_id: builtins.int,
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+    ) -> builtins.float:
         r"""
-        Calculate total constraint violation using L2 norm squared (sum of squared violations)
+        Get one constraint's nonnegative scalar violation.
 
-        Uses the same constraints and residuals as {meth}`~ommx.Solution.total_violation_l1`,
-        including removed constraints. Each residual is squared separately;
-        for SOS1, this squares each Big-M link and cardinality violation before
-        summing, rather than squaring their sum. No square root is taken.
+        Uses the definitions in {meth}`total_violation`, including for removed
+        constraints. IDs are independent for each `kind`. Raises `KeyError` when
+        the ID is absent from that constraint family.
         """
 
 @typing.final

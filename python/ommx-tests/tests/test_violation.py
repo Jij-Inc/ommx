@@ -1,11 +1,14 @@
 """Tests for constraint violation calculation methods."""
 
+from typing import Literal
+
 import pytest
 from ommx import (
     DecisionVariable,
     Instance,
     OneHotConstraint,
     Sense,
+    SampleSet,
     Solution,
     Sos1Constraint,
 )
@@ -77,8 +80,8 @@ def test_evaluated_constraint_violation_inequality_satisfied():
     assert evaluated_constraint.violation() == pytest.approx(0.0)
 
 
-def test_solution_total_violation_l1():
-    """Test total L1 violation calculation."""
+def test_solution_total_violation():
+    """Test total violation calculation."""
     x = DecisionVariable.continuous(id=1, lower=0, upper=10)
 
     instance = Instance.from_components(
@@ -97,29 +100,7 @@ def test_solution_total_violation_l1():
 
     # L1 = |5-2.5| + max(0, 5-1.5) = 2.5 + 3.5 = 6.0
     expected_l1 = 2.5 + 3.5
-    assert solution.total_violation_l1() == pytest.approx(expected_l1)
-
-
-def test_solution_total_violation_l2():
-    """Test total L2 violation calculation."""
-    x = DecisionVariable.continuous(id=1, lower=0, upper=10)
-
-    instance = Instance.from_components(
-        decision_variables=[x],
-        objective=x,
-        constraints={
-            0: x == 2.5,  # Equality: x = 2.5
-            1: x <= 1.5,  # Inequality: x <= 1.5
-        },
-        sense=Sense.Minimize,
-    )
-
-    # Evaluate at x=5: equality violation = 2.5, inequality violation = 3.5
-    solution = instance.evaluate({1: 5.0})
-
-    # L2 = (2.5)^2 + (3.5)^2 = 6.25 + 12.25 = 18.5
-    expected_l2 = 2.5**2 + 3.5**2
-    assert solution.total_violation_l2() == pytest.approx(expected_l2)
+    assert solution.total_violation() == pytest.approx(expected_l1)
 
 
 def test_solution_total_violation_with_satisfied_constraints():
@@ -140,10 +121,7 @@ def test_solution_total_violation_with_satisfied_constraints():
     solution = instance.evaluate({1: 5.0})
 
     # L1 = |5-2.0| + max(0, 5-10) = 3.0 + 0.0 = 3.0
-    assert solution.total_violation_l1() == pytest.approx(3.0)
-
-    # L2 = (3.0)^2 + (0.0)^2 = 9.0 + 0.0 = 9.0
-    assert solution.total_violation_l2() == pytest.approx(9.0)
+    assert solution.total_violation() == pytest.approx(3.0)
 
 
 def test_solution_total_violation_empty():
@@ -159,8 +137,7 @@ def test_solution_total_violation_empty():
     solution = instance.evaluate({1: 5.0})
 
     # No constraints means no violations
-    assert solution.total_violation_l1() == pytest.approx(0.0)
-    assert solution.total_violation_l2() == pytest.approx(0.0)
+    assert solution.total_violation() == pytest.approx(0.0)
 
 
 @pytest.mark.parametrize("active", [False, True])
@@ -182,13 +159,29 @@ def test_total_violation_indicator(active, equality, removed, value):
         instance.relax_indicator_constraint(0, "test relaxation")
     solution = instance.evaluate({0: float(active), 1: value})
     violation = (abs(value) if equality else max(0, value)) if active else 0
-    assert solution.total_violation_l1() == pytest.approx(violation)
-    assert solution.total_violation_l2() == pytest.approx(violation**2)
+    assert solution.constraint_violation(0, kind="indicator") == pytest.approx(
+        violation
+    )
+    assert solution.total_violation() == pytest.approx(violation)
+    assert solution.constraints_df(kind="indicator").loc[
+        0, "violation"
+    ] == pytest.approx(violation)
 
 
-@pytest.mark.parametrize("values", [[0, 0, 0], [0, 1, 0], [1, 1, 1], [0.5, 0.5, 0.5]])
-def test_total_violation_one_hot_matches_lowering(values):
-    xs = [DecisionVariable.binary(i) for i in range(3)]
+@pytest.mark.parametrize(
+    "values, violation",
+    [
+        ([0, 0, 0], 1),
+        ([0, 1, 0], 0),
+        ([1, 1, 1], 2),
+        ([0.5, 0.5], 1),
+        ([-1, 2], 2),
+        ([0.5, 0.5, 0.5], 1.5),
+        ([1, 1e-8], 1e-8),
+    ],
+)
+def test_one_hot_violation(values, violation):
+    xs = [DecisionVariable.binary(i) for i in range(len(values))]
     instance = Instance.from_components(
         decision_variables=xs,
         objective=0,
@@ -197,41 +190,40 @@ def test_total_violation_one_hot_matches_lowering(values):
         sense=Sense.Minimize,
     )
     state = dict(enumerate(values))
-    solution = instance.evaluate(state)
-    row = instance.convert_one_hot_to_constraint(0)
-    lowered = instance.evaluate(state)
-    violation = lowered.constraints[row].violation()
-    assert solution.total_violation_l1() == pytest.approx(violation)
-    assert solution.total_violation_l2() == pytest.approx(violation**2)
+    # A small tolerance retains the tiny member rather than canonicalizing it.
+    solution = instance.evaluate(state, atol=1e-12)
+    samples = instance.evaluate_samples({7: state}, atol=1e-12)
+    for result in [
+        solution,
+        samples.get(7),
+        Solution.from_v2_bytes(solution.to_v2_bytes()),
+        SampleSet.from_v2_bytes(samples.to_v2_bytes()).get(7),
+    ]:
+        assert result.constraint_violation(0, kind="one_hot") == pytest.approx(
+            violation
+        )
+        assert result.total_violation() == pytest.approx(violation)
+        frame = result.constraints_df(kind="one_hot")
+        assert frame.loc[0, "violation"] == pytest.approx(violation)
+        if violation == 0:
+            assert frame.loc[0, "feasible"]
 
 
 @pytest.mark.parametrize(
-    "values, expected_l1, expected_l2",
+    "values, violation",
     [
-        ([0.0, 0.0, 0.0, 0.0, 0.0], 0.0, 0.0),
-        ([3.0, 0.0, 0.0, 0.0, 0.0], 0.0, 0.0),
-        ([3.0, -5.0, 1.0, 4.0, -6.0], 4.0, 16.0),
-        # Link violations 1, 2, 2, 3 plus cardinality violation 4.
-        ([4.0, -7.0, 1.0, 6.0, -9.0], 12.0, 34.0),
-        # Fresh selectors are zero at the inclusive tolerance boundary.
-        # Instance.evaluate first canonicalizes the integer member to zero.
-        ([0.25, -0.25, 0.0, 0.25, -0.25], 0.75, 0.1875),
-        # The binary member is also canonicalized at the tolerance boundary.
-        ([3.0, 0.0, 0.25, 0.0, 0.0], 0.0, 0.0),
-        # Outside the tolerance it is reused verbatim, not converted to one.
-        ([3.0, 0.0, 0.5, 0.0, 0.0], 0.5, 0.25),
-        ([0.5, -0.5, 0.0, 0.5, -0.5], 3.0, 9.0),
+        ([0, 0, 0], 0),
+        ([3, 0, 0], 0),
+        ([3, -2, 0], 2),
+        ([3, -5, 1, 4, -6], 13),
+        ([4, -7, 1, 6, -9], 18),
+        ([0.5, -0.5, 0, 0.5, -0.5], 1.5),
+        ([1e20, 1, -2], 3),
+        ([1, 1e-8], 1e-8),
     ],
 )
-def test_total_violation_sos1_matches_big_m_lowering(values, expected_l1, expected_l2):
-    atol = 0.25
-    xs = [
-        DecisionVariable.continuous(0, lower=-2, upper=3),
-        DecisionVariable.integer(1, lower=-5, upper=7),
-        DecisionVariable.binary(2),
-        DecisionVariable.continuous(3, lower=0, upper=4),
-        DecisionVariable.continuous(4, lower=-6, upper=0),
-    ]
+def test_sos1_violation(values, violation):
+    xs = [DecisionVariable.continuous(i) for i in range(len(values))]
     instance = Instance.from_components(
         decision_variables=xs,
         objective=0,
@@ -240,28 +232,137 @@ def test_total_violation_sos1_matches_big_m_lowering(values, expected_l1, expect
         sense=Sense.Minimize,
     )
     state = dict(enumerate(values))
+    solution = instance.evaluate(state)
+    samples = instance.evaluate_samples({7: state})
+    for result in [
+        solution,
+        samples.get(7),
+        Solution.from_v2_bytes(solution.to_v2_bytes()),
+        SampleSet.from_v2_bytes(samples.to_v2_bytes()).get(7),
+    ]:
+        assert result.constraint_violation(0, kind="sos1") == pytest.approx(violation)
+        assert result.total_violation() == pytest.approx(violation)
+        frame = result.constraints_df(kind="sos1")
+        assert frame.loc[0, "violation"] == pytest.approx(violation)
+        if violation == 0:
+            assert frame.loc[0, "feasible"]
+
+
+def test_violation_uses_evaluated_discrete_values():
+    xs = [DecisionVariable.binary(i) for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        constraints={},
+        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    solution = instance.evaluate({0: 0.125, 1: 0.875}, atol=0.125)
+    assert solution.total_violation() == 0
+    assert solution.feasible
+
+
+@pytest.mark.parametrize("atol", [1e-12, 0.5, 1.0, 2.0])
+def test_zero_violation_implies_one_hot_feasibility_with_large_tolerance(atol):
+    xs = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        constraints={},
+        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    state = {0: 0, 1: 1, 2: 0}
     solution = instance.evaluate(state, atol=atol)
-    sampled = instance.evaluate_samples({7: state}, atol=atol).get(7)
-    restored = Solution.from_v2_bytes(solution.to_v2_bytes())
-
-    rows = instance.convert_sos1_to_constraints(0)
-    extended_state = state.copy()
-    for variable in instance.decision_variables:
-        if variable.id not in state:
-            assert variable.name == "ommx.sos1_indicator"
-            member_id = variable.subscripts[1]
-            extended_state[variable.id] = float(abs(state[member_id]) > atol)
-    lowered = instance.evaluate(extended_state, atol=atol)
-    violations = [lowered.constraints[row].violation() for row in rows]
-    assert sum(violations) == pytest.approx(expected_l1)
-    assert sum(v**2 for v in violations) == pytest.approx(expected_l2)
-    for result in [solution, sampled, restored]:
-        assert result.total_violation_l1() == pytest.approx(expected_l1)
-        assert result.total_violation_l2() == pytest.approx(expected_l2)
+    samples = instance.evaluate_samples({7: state}, atol=atol)
+    for result in [
+        solution,
+        samples.get(7),
+        Solution.from_v2_bytes(solution.to_v2_bytes()),
+        SampleSet.from_v2_bytes(samples.to_v2_bytes()).get(7),
+    ]:
+        assert result.total_violation() == 0
+        assert result.feasible
 
 
-@pytest.mark.parametrize("values, violation", [([0.0, 0.0], 0.0), ([1.0, -2.0], 1.0)])
-def test_total_violation_sos1_with_unbounded_members(values, violation):
+def test_total_is_sum_of_individual_and_dataframe_violations():
+    xs = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        constraints={0: xs[0] == 3},
+        indicator_constraints={0: (xs[1] <= 0).with_indicator(xs[0])},
+        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    instance.relax_constraint(0, "test relaxation")
+    one_hot_row = instance.convert_one_hot_to_constraint(0)
+    sos1_rows = instance.convert_sos1_to_constraints(0)
+    solution = instance.evaluate({0: 1, 1: 1, 2: 1})
+    kinds: list[Literal["regular", "indicator", "one_hot", "sos1"]] = [
+        "regular",
+        "indicator",
+        "one_hot",
+        "sos1",
+    ]
+    assert [solution.constraint_violation(0, kind=kind) for kind in kinds] == [
+        2,
+        1,
+        2,
+        2,
+    ]
+    assert solution.constraint_violation(one_hot_row) == 2
+    assert sum(solution.constraint_violation(row) for row in sos1_rows) == 2
+    # Generated rows and retained removed originals both contribute.
+    assert solution.total_violation() == 11
+    assert (
+        sum(solution.constraints_df(kind=kind)["violation"].sum() for kind in kinds)
+        == 11
+    )
+    assert solution.constraints[0].violation() == solution.constraint_violation(0)
+    for kind in kinds:
+        with pytest.raises(KeyError, match="42"):
+            solution.constraint_violation(42, kind=kind)
+    assert not hasattr(solution, "total_violation_l1")
+    assert not hasattr(solution, "total_violation_l2")
+
+
+def test_lowering_may_change_total_violation():
+    xs = [DecisionVariable.binary(i) for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        constraints={},
+        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    state = {0: 0.5, 1: 0.5}
+    assert instance.evaluate(state).total_violation() == 1
+    row = instance.convert_one_hot_to_constraint(0)
+    lowered = instance.evaluate(state)
+    assert lowered.constraint_violation(row) == 0
+    assert lowered.constraint_violation(0, kind="one_hot") == 1
+    # Removed native constraints and generated regular constraints both contribute.
+    assert instance.evaluate({0: 1, 1: 1}).total_violation() == 2
+
+
+def test_zero_constraint_violation_does_not_validate_variable_bounds():
+    x = DecisionVariable.continuous(0, lower=0, upper=1)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=0,
+        constraints={},
+        sos1_constraints={0: Sos1Constraint(variables=[x])},
+        sense=Sense.Minimize,
+    )
+    solution = instance.evaluate({0: 10})
+    assert solution.total_violation() == 0
+    assert solution.constraints_df(kind="sos1").loc[0, "feasible"]
+    assert not solution.feasible
+
+
+def test_feasible_sos1_can_have_positive_violation_within_tolerance():
     xs = [DecisionVariable.continuous(i) for i in range(2)]
     instance = Instance.from_components(
         decision_variables=xs,
@@ -270,6 +371,6 @@ def test_total_violation_sos1_with_unbounded_members(values, violation):
         sos1_constraints={0: Sos1Constraint(variables=xs)},
         sense=Sense.Minimize,
     )
-    solution = instance.evaluate(dict(enumerate(values)))
-    assert solution.total_violation_l1() == pytest.approx(violation)
-    assert solution.total_violation_l2() == pytest.approx(violation**2)
+    solution = instance.evaluate({0: 3, 1: 0.125}, atol=0.125)
+    assert solution.total_violation() == 0.125
+    assert solution.feasible

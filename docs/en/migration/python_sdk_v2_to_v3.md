@@ -360,6 +360,32 @@ on its preparation-free method.
 HiGHS and Python-MIP no longer attach dual values when the Adapter input has an
 `output_objective`.
 
+(constraint-violation-migration)=
+### 5.8 Constraint violation metrics ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+Rename `solution.total_violation_l1()` to {meth}`~ommx.Solution.total_violation`.
+`total_violation_l2()` is removed. The total is the sum of one nonnegative scalar
+per constraint, including removed constraints and all special constraint kinds.
+Regular equality and inequality violations retain their existing definitions.
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+Indicator constraints contribute the inner violation when active and zero otherwise.
+OneHot uses the minimum sum of absolute changes to make exactly one member 1 and
+the rest 0. SOS1 uses the minimum sum of absolute changes to leave at most one
+nonzero member. These definitions do not depend on Big-M lowering.
+
+A zero violation implies constraint feasibility; a small positive value can still
+be feasible within tolerance. Variable bounds and kinds are checked separately.
+OneHot classifies each value by its nearest binary value before applying tolerance
+(ties select 1), including when the tolerance neighborhoods overlap.
+Lowering need not preserve the total: retained originals and generated constraints
+each contribute. See {meth}`~ommx.Solution.total_violation` for the full definitions.
+
 ## 6. Return-type changes
 
 ### 6.1 `Constraint.name` / `Constraint.description` are `Optional[str]` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))

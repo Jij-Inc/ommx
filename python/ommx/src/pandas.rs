@@ -983,6 +983,7 @@ impl<'m> ToPandasEntry
         dict.set_item("indicator_variable_id", c.indicator_variable.into_inner())?;
         set_equality(&dict, c.equality)?;
         dict.set_item("value", c.stage.evaluated_value)?;
+        dict.set_item("feasible", c.stage.feasible)?;
         dict.set_item("indicator_active", c.stage.indicator_active)?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_label_columns(
@@ -1377,6 +1378,7 @@ impl<'m> ToPandasEntry
         dict.set_item("id", id.into_inner())?;
         set_equality(&dict, c.equality)?;
         dict.set_item("value", c.stage.evaluated_value)?;
+        dict.set_item("feasible", c.stage.feasible)?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_label_columns(
             &dict,

@@ -47,6 +47,28 @@ is queried through narrow per-collection accessors on `Instance` /
 Decision variables and named functions additionally follow the table-owned ID
 rule: the row data no longer stores its own ID.
 
+## Constraint violation metrics
+
+`Solution::total_violation_l1()` is renamed to
+[`Solution::total_violation`](crate::Solution::total_violation), and
+`Solution::total_violation_l2()` is removed. The total sums one nonnegative
+scalar per constraint, including removed constraints and all special kinds.
+Regular equality and inequality definitions are unchanged.
+
+Query individual values with [`Solution::constraint_violation`](crate::Solution::constraint_violation),
+[`Solution::indicator_constraint_violation`](crate::Solution::indicator_constraint_violation),
+[`Solution::one_hot_constraint_violation`](crate::Solution::one_hot_constraint_violation), or
+[`Solution::sos1_constraint_violation`](crate::Solution::sos1_constraint_violation),
+passing the corresponding typed ID. Unknown IDs return `None`.
+
+Indicator uses its inner violation when active and zero otherwise. OneHot and
+SOS1 measure the minimum sum of absolute changes needed to satisfy their
+structural condition. Zero implies constraint feasibility, while small positive
+values can be feasible within tolerance. Bounds and kinds remain separate.
+OneHot resolves overlapping tolerance neighborhoods by the nearest binary value
+(ties select one). Lowering need not preserve the metric; retained originals
+and generated constraints each contribute.
+
 ## Breaking Changes
 
 ### 1. Constraint Field Access

@@ -8,6 +8,25 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### ⚠ Unified constraint violation metrics ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+Rename `Solution.total_violation_l1()` to {meth}`~ommx.Solution.total_violation`
+and remove `total_violation_l2()`. The total sums one nonnegative violation per
+constraint, including Indicator, OneHot, SOS1, and removed constraints.
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+All Solution constraint DataFrames now expose `feasible` and `violation`.
+A zero violation implies constraint feasibility; positive values can be feasible
+within tolerance. OneHot and SOS1 use minimum absolute changes to their member
+values, without requiring agreement with Big-M lowering. See the
+{ref}`migration guide <constraint-violation-migration>`
+for definitions and migration details.
+
 ### ⚠ Batch SOS1 Big-M promotion with selectable application mode ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
 {class}`~ommx.Sos1BigMPromotionRequest` now represents an entire batch:

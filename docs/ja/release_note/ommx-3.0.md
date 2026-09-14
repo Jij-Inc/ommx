@@ -8,6 +8,24 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### ⚠ 制約の違反量 API の統一 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+`Solution.total_violation_l1()` を {meth}`~ommx.Solution.total_violation` に改名し、
+`total_violation_l2()` を削除しました。Indicator・OneHot・SOS1 と removed 制約を含め、
+制約ごとの非負の違反量を足し合わせます。
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+Solution の全制約種別の DataFrame に `feasible` と `violation` を追加しました。
+違反量が 0 なら制約は feasible ですが、許容誤差内では正の値でも feasible になります。
+OneHot と SOS1 はメンバー値の絶対変更量の最小値で定義し、Big-M lowering との一致は
+要求しません。定義と移行方法は
+{ref}`移行ガイド <constraint-violation-migration>`を参照してください。
+
 ### ⚠ SOS1 Big-M promotionをbatch化し適用modeを選択可能に ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
 {class}`~ommx.Sos1BigMPromotionRequest`はbatch全体を表すようになりました。

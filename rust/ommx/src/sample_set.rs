@@ -719,12 +719,12 @@ fn expected_sampled_one_hot_active_variable(
             .samples()
             .get(sample_id)
             .expect("sample IDs must be validated first");
-        if atol.approx_eq(value, 1.0) {
+        if value >= 0.5 && atol.approx_eq(value, 1.0) {
             if active.is_some() {
                 return (false, None);
             }
             active = Some(*variable_id);
-        } else if !atol.approx_is_zero(value) {
+        } else if value >= 0.5 || !atol.approx_is_zero(value) {
             return (false, None);
         }
     }

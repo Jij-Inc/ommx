@@ -253,6 +253,30 @@ solution = OMMXHighsAdapter.solve_without_preparation(instance)
 preparation-free methodだけに公開できます。Adapter inputに
 `output_objective`がある場合、HiGHSとPython-MIPはdual valueを付与しません。
 
+(constraint-violation-migration)=
+### 5.8 制約の違反量 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+`solution.total_violation_l1()` は {meth}`~ommx.Solution.total_violation` に改名し、
+`total_violation_l2()` は削除しました。各制約に定義した非負のスカラー値を足し合わせ、
+removed 制約とすべての特殊制約を含めます。通常の等式・不等式の違反量の定義は変わりません。
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+Indicator は有効時の内部制約の違反量、無効時は 0 です。OneHot は一つを 1、残りを 0 にする
+絶対変更量の最小値、SOS1 は非ゼロを高々一つにする絶対変更量の最小値です。
+Big-M lowering に依存する定義ではありません。
+
+違反量が 0 ならその制約は feasible ですが、許容誤差内では正の違反量でも feasible に
+なります。変数の bounds・kind の判定は別です。OneHot は最も近い 0 または 1 に分類して
+から許容誤差を適用します（等距離なら 1）。大きな許容誤差で両者の近傍が重なる場合も
+同じ規則を使います。lowering 前後で総和の一致は保証しません。元の removed 制約と
+生成した制約が残っていれば、それぞれを集計します。数式は
+{meth}`~ommx.Solution.total_violation` を参照してください。
+
 ## 6. return type の変更
 
 `Constraint.name` / `Constraint.description` などは、未設定時に空文字列ではなく `None` を返します。

@@ -118,6 +118,22 @@ impl Stage<IndicatorConstraint<stage::Sampled>> for stage::Sampled {
 pub type EvaluatedIndicatorConstraint = IndicatorConstraint<Evaluated>;
 pub type SampledIndicatorConstraint = IndicatorConstraint<stage::Sampled>;
 
+impl EvaluatedIndicatorConstraint {
+    /// The inner constraint's nonnegative violation when active, otherwise zero.
+    ///
+    /// Equality uses `|f(x)|`; inequality uses `max(0, f(x))`. Zero implies
+    /// feasibility, but a small positive violation may be feasible within tolerance.
+    pub fn violation(&self) -> f64 {
+        if !self.stage.indicator_active {
+            return 0.0;
+        }
+        match self.equality {
+            Equality::EqualToZero => self.stage.evaluated_value.abs(),
+            Equality::LessThanOrEqualToZero => self.stage.evaluated_value.max(0.0),
+        }
+    }
+}
+
 // ===== HasConstraintID =====
 
 impl EvaluatedConstraintBehavior for EvaluatedIndicatorConstraint {

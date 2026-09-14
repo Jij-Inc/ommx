@@ -18,7 +18,7 @@ impl Propagate for OneHotConstraint<Created> {
                 continue;
             };
 
-            if atol.approx_eq(value, 1.0) {
+            if value >= 0.5 && atol.approx_eq(value, 1.0) {
                 // Variable is ~1
                 if let Some(first) = fixed_to_one {
                     crate::bail!(
@@ -28,7 +28,7 @@ impl Propagate for OneHotConstraint<Created> {
                     );
                 }
                 fixed_to_one = Some(var_id);
-            } else if atol.approx_is_zero(value) {
+            } else if value < 0.5 && atol.approx_is_zero(value) {
                 // Variable is ~0, removed from set
             } else {
                 crate::bail!(
@@ -130,6 +130,9 @@ impl Evaluate for OneHotConstraint<Created> {
 /// Returns `(feasible, active_variable)`:
 /// - feasible: exactly one variable is 1, the rest are 0
 /// - active_variable: the variable that is 1 (None if infeasible)
+///
+/// Classify by the nearest binary value before applying tolerance, so overlapping
+/// neighborhoods cannot classify an exact zero as one. Ties select one.
 fn check_one_hot(
     variables: &BTreeSet<VariableID>,
     state: &crate::v1::State,
@@ -145,14 +148,14 @@ fn check_one_hot(
             )
         })?;
 
-        if atol.approx_eq(*value, 1.0) {
+        if *value >= 0.5 && atol.approx_eq(*value, 1.0) {
             // Variable is ~1
             if active.is_some() {
                 // Multiple variables are 1 → infeasible
                 return Ok((false, None));
             }
             active = Some(var_id);
-        } else if atol.approx_is_zero(*value) {
+        } else if *value < 0.5 && atol.approx_is_zero(*value) {
             // Variable is ~0, OK
         } else {
             // Variable is neither 0 nor 1 → infeasible
@@ -222,6 +225,18 @@ mod tests {
     fn make_one_hot(_id: u64, var_ids: &[u64]) -> OneHotConstraint {
         let vars = var_ids.iter().copied().map(VariableID::from).collect();
         OneHotConstraint::new(vars).unwrap()
+    }
+
+    #[test]
+    fn overlapping_tolerance_neighborhoods_preserve_exact_one_hot_values() {
+        let constraint = make_one_hot(0, &[1, 2, 3]);
+        let state = crate::v1::State::from(HashMap::from([(1, 0.0), (2, 1.0), (3, 0.0)]));
+        let atol = ATol::new(2.0).unwrap();
+        let evaluated = constraint.evaluate(&state, atol).unwrap();
+        assert!(evaluated.stage.feasible);
+        assert_eq!(evaluated.stage.active_variable, Some(2.into()));
+        let (outcome, _) = constraint.propagate(&state, atol).unwrap();
+        assert!(matches!(outcome, PropagateOutcome::Consumed(_)));
     }
 
     #[test]
