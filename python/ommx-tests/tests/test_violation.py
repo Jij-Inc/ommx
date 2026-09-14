@@ -1,7 +1,14 @@
 """Tests for constraint violation calculation methods."""
 
 import pytest
-from ommx import Instance, DecisionVariable, Sense
+from ommx import (
+    DecisionVariable,
+    Instance,
+    OneHotConstraint,
+    Sense,
+    Solution,
+    Sos1Constraint,
+)
 
 
 def test_evaluated_constraint_violation_equality():
@@ -154,3 +161,115 @@ def test_solution_total_violation_empty():
     # No constraints means no violations
     assert solution.total_violation_l1() == pytest.approx(0.0)
     assert solution.total_violation_l2() == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("active", [False, True])
+@pytest.mark.parametrize("equality", [False, True])
+@pytest.mark.parametrize("removed", [False, True])
+@pytest.mark.parametrize("value", [-2.5, 0.0, 1.5])
+def test_total_violation_indicator(active, equality, removed, value):
+    z = DecisionVariable.binary(0)
+    x = DecisionVariable.continuous(1, lower=-10, upper=10)
+    constraint = x == 0 if equality else x <= 0
+    instance = Instance.from_components(
+        decision_variables=[z, x],
+        objective=0,
+        constraints={},
+        indicator_constraints={0: constraint.with_indicator(z)},
+        sense=Sense.Minimize,
+    )
+    if removed:
+        instance.relax_indicator_constraint(0, "test relaxation")
+    solution = instance.evaluate({0: float(active), 1: value})
+    violation = (abs(value) if equality else max(0, value)) if active else 0
+    assert solution.total_violation_l1() == pytest.approx(violation)
+    assert solution.total_violation_l2() == pytest.approx(violation**2)
+
+
+@pytest.mark.parametrize("values", [[0, 0, 0], [0, 1, 0], [1, 1, 1], [0.5, 0.5, 0.5]])
+def test_total_violation_one_hot_matches_lowering(values):
+    xs = [DecisionVariable.binary(i) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        constraints={},
+        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    state = dict(enumerate(values))
+    solution = instance.evaluate(state)
+    row = instance.convert_one_hot_to_constraint(0)
+    lowered = instance.evaluate(state)
+    violation = lowered.constraints[row].violation()
+    assert solution.total_violation_l1() == pytest.approx(violation)
+    assert solution.total_violation_l2() == pytest.approx(violation**2)
+
+
+@pytest.mark.parametrize(
+    "values, expected_l1, expected_l2",
+    [
+        ([0.0, 0.0, 0.0, 0.0, 0.0], 0.0, 0.0),
+        ([3.0, 0.0, 0.0, 0.0, 0.0], 0.0, 0.0),
+        ([3.0, -5.0, 1.0, 4.0, -6.0], 4.0, 16.0),
+        # Link violations 1, 2, 2, 3 plus cardinality violation 4.
+        ([4.0, -7.0, 1.0, 6.0, -9.0], 12.0, 34.0),
+        # Fresh selectors are zero at the inclusive tolerance boundary.
+        # Instance.evaluate first canonicalizes the integer member to zero.
+        ([0.25, -0.25, 0.0, 0.25, -0.25], 0.75, 0.1875),
+        # The binary member is also canonicalized at the tolerance boundary.
+        ([3.0, 0.0, 0.25, 0.0, 0.0], 0.0, 0.0),
+        # Outside the tolerance it is reused verbatim, not converted to one.
+        ([3.0, 0.0, 0.5, 0.0, 0.0], 0.5, 0.25),
+        ([0.5, -0.5, 0.0, 0.5, -0.5], 3.0, 9.0),
+    ],
+)
+def test_total_violation_sos1_matches_big_m_lowering(values, expected_l1, expected_l2):
+    atol = 0.25
+    xs = [
+        DecisionVariable.continuous(0, lower=-2, upper=3),
+        DecisionVariable.integer(1, lower=-5, upper=7),
+        DecisionVariable.binary(2),
+        DecisionVariable.continuous(3, lower=0, upper=4),
+        DecisionVariable.continuous(4, lower=-6, upper=0),
+    ]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        constraints={},
+        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    state = dict(enumerate(values))
+    solution = instance.evaluate(state, atol=atol)
+    sampled = instance.evaluate_samples({7: state}, atol=atol).get(7)
+    restored = Solution.from_v2_bytes(solution.to_v2_bytes())
+
+    rows = instance.convert_sos1_to_constraints(0)
+    extended_state = state.copy()
+    for variable in instance.decision_variables:
+        if variable.id not in state:
+            assert variable.name == "ommx.sos1_indicator"
+            member_id = variable.subscripts[1]
+            extended_state[variable.id] = float(abs(state[member_id]) > atol)
+    lowered = instance.evaluate(extended_state, atol=atol)
+    violations = [lowered.constraints[row].violation() for row in rows]
+    assert sum(violations) == pytest.approx(expected_l1)
+    assert sum(v**2 for v in violations) == pytest.approx(expected_l2)
+    for result in [solution, sampled, restored]:
+        assert result.total_violation_l1() == pytest.approx(expected_l1)
+        assert result.total_violation_l2() == pytest.approx(expected_l2)
+
+
+@pytest.mark.parametrize("values, violation", [([0.0, 0.0], 0.0), ([1.0, -2.0], 1.0)])
+def test_total_violation_sos1_with_unbounded_members(values, violation):
+    xs = [DecisionVariable.continuous(i) for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=xs,
+        objective=0,
+        constraints={},
+        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        sense=Sense.Minimize,
+    )
+    solution = instance.evaluate(dict(enumerate(values)))
+    assert solution.total_violation_l1() == pytest.approx(violation)
+    assert solution.total_violation_l2() == pytest.approx(violation**2)

@@ -367,39 +367,118 @@ impl Solution {
 
     /// Calculate total constraint violation using L1 norm (sum of absolute violations)
     ///
-    /// Returns the sum of violations across all constraints (including removed constraints):
-    /// - For equality constraints: `Σ|f(x)|`
-    /// - For inequality constraints: `Σmax(0, f(x))`
+    /// Includes all regular and special constraints, including removed constraints:
+    /// - Equality: `|f(x)|`; inequality: `max(0, f(x))`.
+    /// - Indicator: the inner constraint's violation when active, otherwise zero.
+    /// - One-hot: `|Σx_i - 1|`.
+    /// - SOS1: the sum of violations of its canonical Big-M link rows and
+    ///   cardinality row `Σy_i - 1 <= 0`. A binary member with bounds `[0, 1]`
+    ///   is reused as `y_i = x_i` without link rows. Otherwise, `y_i` is zero
+    ///   when `x_i` is approximately zero under this solution's feasibility
+    ///   tolerance, and one otherwise, matching SOS1 promotion's selector
+    ///   reconstruction. The upper link `x_i - u_i*y_i <= 0` is included when
+    ///   `u_i > 0`, and the lower link `l_i*y_i - x_i <= 0` when `l_i < 0`.
+    ///   An unbounded side contributes zero when its selector is one.
+    ///
+    /// Residuals are not rounded to zero by the feasibility tolerance. Decision
+    /// variable kind and bound violations are not separately added. Lowering
+    /// retains removed special constraints, so both those originals and their
+    /// generated regular rows contribute when present in this solution.
     ///
     /// This metric is useful for:
     /// - Assessing solution quality when constraints are violated
     /// - Penalty method implementations
     /// - Comparing different solutions
     pub fn total_violation_l1(&self) -> f64 {
-        self.evaluated_constraints
-            .values()
-            .map(|c| c.violation())
-            .sum()
+        self.constraint_violations().sum()
     }
 
     /// Calculate total constraint violation using L2 norm squared (sum of squared violations)
     ///
-    /// Returns the sum of squared violations across all constraints (including removed constraints):
-    /// - For equality constraints: `Σ(f(x))²`
-    /// - For inequality constraints: `Σ(max(0, f(x)))²`
+    /// Uses the same constraints and residuals as [`Self::total_violation_l1`],
+    /// including removed constraints. Each residual is squared separately;
+    /// for SOS1, this squares each Big-M link and cardinality violation before
+    /// summing, rather than squaring their sum. No square root is taken.
     ///
     /// This metric is useful for:
     /// - Penalty methods that use quadratic penalties
     /// - Emphasizing larger violations over smaller ones
-    /// - Smooth optimization objectives
     pub fn total_violation_l2(&self) -> f64 {
+        self.constraint_violations().map(|v| v * v).sum()
+    }
+
+    fn constraint_violations(&self) -> impl Iterator<Item = f64> + '_ {
         self.evaluated_constraints
             .values()
-            .map(|c| {
-                let v = c.violation();
-                v * v
+            .map(|c| c.violation())
+            .chain(self.evaluated_indicator_constraints.values().map(|c| {
+                if c.stage.indicator_active {
+                    match c.equality {
+                        crate::Equality::EqualToZero => c.stage.evaluated_value.abs(),
+                        crate::Equality::LessThanOrEqualToZero => c.stage.evaluated_value.max(0.0),
+                    }
+                } else {
+                    0.0
+                }
+            }))
+            .chain(self.evaluated_one_hot_constraints.values().map(|c| {
+                (c.variables
+                    .iter()
+                    .map(|id| self.decision_variables()[id].value())
+                    .sum::<f64>()
+                    - 1.0)
+                    .abs()
+            }))
+            .chain(
+                self.evaluated_sos1_constraints
+                    .values()
+                    .flat_map(|c| self.sos1_constraint_violations(c)),
+            )
+    }
+
+    fn sos1_constraint_violations<'a>(
+        &'a self,
+        constraint: &'a crate::EvaluatedSos1Constraint,
+    ) -> impl Iterator<Item = f64> + 'a {
+        let selector = |dv: &EvaluatedDecisionVariable| {
+            if *dv.kind() == crate::Kind::Binary && *dv.bound() == crate::Bound::of_binary() {
+                *dv.value()
+            } else {
+                f64::from(!self.feasibility_atol.approx_is_zero(*dv.value()))
+            }
+        };
+        let cardinality = (constraint
+            .variables
+            .iter()
+            .map(|id| selector(&self.decision_variables()[id]))
+            .sum::<f64>()
+            - 1.0)
+            .max(0.0);
+
+        constraint
+            .variables
+            .iter()
+            .flat_map(move |id| {
+                let dv = &self.decision_variables()[id];
+                let bound = dv.bound();
+                if *dv.kind() == crate::Kind::Binary && *bound == crate::Bound::of_binary() {
+                    // Lowering reuses this member without emitting link constraints.
+                    return [None, None];
+                }
+                let active = selector(dv) != 0.0;
+                // Branch before applying the bound so an inactive selector never
+                // multiplies an infinite bound by zero. An active selector has no
+                // violation on an unbounded side.
+                [
+                    (bound.upper() > 0.0)
+                        .then(|| (*dv.value() - if active { bound.upper() } else { 0.0 }).max(0.0)),
+                    (bound.lower() < 0.0).then(|| {
+                        ((if active { bound.lower() } else { 0.0 }) - *dv.value()).max(0.0)
+                    }),
+                ]
             })
-            .sum()
+            .flatten()
+            .chain(std::iter::once(cardinality))
     }
 
     /// Generate state from decision variables (for backward compatibility)
@@ -1403,6 +1482,119 @@ impl SolutionBuilder {
 mod tests {
     use super::*;
     use crate::{Coefficient, Constraint, Evaluate, Function};
+
+    #[test]
+    fn test_total_violation_includes_special_constraints() {
+        use crate::{DecisionVariable, Equality, Instance, OneHotConstraint, Sos1Constraint};
+
+        let variables: BTreeSet<_> = (0..3).map(VariableID::from).collect();
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(
+                variables
+                    .iter()
+                    .map(|&id| (id, DecisionVariable::binary()))
+                    .collect(),
+            )
+            .constraints(BTreeMap::from([(
+                ConstraintID::from(0),
+                Constraint::equal_to_zero(Function::from(crate::coeff!(2.5))),
+            )]))
+            .indicator_constraints(BTreeMap::from([(
+                crate::IndicatorConstraintID::from(0),
+                IndicatorConstraint::new(
+                    VariableID::from(0),
+                    Equality::LessThanOrEqualToZero,
+                    Function::from(crate::coeff!(1.5)),
+                ),
+            )]))
+            .one_hot_constraints(BTreeMap::from([(
+                crate::OneHotConstraintID::from(0),
+                OneHotConstraint::new(variables.clone()).unwrap(),
+            )]))
+            .sos1_constraints(BTreeMap::from([(
+                crate::Sos1ConstraintID::from(0),
+                Sos1Constraint::new(variables).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+
+        for (values, l1, l2) in [
+            ([0.0, 0.0, 0.0], 3.5, 7.25),
+            ([1.0, 0.0, 0.0], 4.0, 8.5),
+            ([1.0, 1.0, 1.0], 8.0, 16.5),
+            ([0.0, 1.0, 1.0], 4.5, 8.25),
+        ] {
+            let state = crate::v1::State {
+                entries: values
+                    .into_iter()
+                    .enumerate()
+                    .map(|(id, value)| (id as u64, value))
+                    .collect(),
+            };
+            let solution = instance.evaluate(&state, ATol::default()).unwrap();
+            assert_eq!(solution.total_violation_l1(), l1, "{state:?}");
+            assert_eq!(solution.total_violation_l2(), l2, "{state:?}");
+
+            let sampled = instance
+                .evaluate_samples(
+                    &crate::Sampled::from((crate::SampleID::from(7), state)),
+                    ATol::default(),
+                )
+                .unwrap()
+                .get(crate::SampleID::from(7))
+                .unwrap();
+            let restored = Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap();
+            for derived in [sampled, restored] {
+                assert_eq!(derived.total_violation_l1(), l1);
+                assert_eq!(derived.total_violation_l2(), l2);
+            }
+
+            fn removed<T: crate::constraint_type::ConstraintType>(
+                collection: &EvaluatedCollection<T>,
+            ) -> EvaluatedCollection<T>
+            where
+                T::Evaluated: Clone,
+            {
+                EvaluatedCollection::new(
+                    collection.inner().clone(),
+                    collection
+                        .keys()
+                        .map(|&id| {
+                            (
+                                id,
+                                crate::RemovedReason {
+                                    reason: "test relaxation".into(),
+                                    parameters: Default::default(),
+                                },
+                            )
+                        })
+                        .collect(),
+                )
+                .unwrap()
+            }
+            let removed_solution = Solution::builder()
+                .sense(Sense::Minimize)
+                .objective(0.0)
+                .decision_variables(solution.decision_variables().clone())
+                .evaluated_constraints_collection(removed(&solution.evaluated_constraints))
+                .evaluated_indicator_constraints_collection(removed(
+                    &solution.evaluated_indicator_constraints,
+                ))
+                .evaluated_one_hot_constraints_collection(removed(
+                    &solution.evaluated_one_hot_constraints,
+                ))
+                .evaluated_sos1_constraints_collection(removed(
+                    &solution.evaluated_sos1_constraints,
+                ))
+                .build()
+                .unwrap();
+            assert!(removed_solution.feasible_constraints_relaxed());
+            assert_eq!(removed_solution.total_violation_l1(), l1);
+            assert_eq!(removed_solution.total_violation_l2(), l2);
+        }
+    }
 
     #[test]
     fn test_total_violation_l1_all_satisfied() {

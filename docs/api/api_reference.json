@@ -26289,7 +26289,7 @@
             },
             {
               "name": "total_violation_l1",
-              "doc": "Calculate total constraint violation using L1 norm (sum of absolute violations)\n\nReturns the sum of violations across all constraints (including removed constraints):\n- For equality constraints: $\\sum |f(x)|$\n- For inequality constraints: $\\sum \\max(0, f(x))$",
+              "doc": "Calculate total constraint violation using L1 norm (sum of absolute violations)\n\nIncludes all regular and special constraints, including removed constraints:\n- Equality: $|f(x)|$; inequality: $\\max(0, f(x))$.\n- Indicator: the inner constraint's violation when active, otherwise zero.\n- One-hot: $|\\sum_i x_i - 1|$.\n- SOS1: the sum of violations of its canonical Big-M link rows and\n  cardinality row $\\sum_i y_i - 1 \\leq 0$. A binary member with bounds\n  $[0, 1]$ is reused as $y_i = x_i$ without link rows. Otherwise, $y_i$\n  is zero when $x_i$ is approximately zero under this solution's\n  feasibility tolerance, and one otherwise, matching SOS1 promotion's\n  selector reconstruction. The upper link $x_i - u_i y_i \\leq 0$ is\n  included when $u_i > 0$, and the lower link $l_i y_i - x_i \\leq 0$\n  when $l_i < 0$. An unbounded side contributes zero when its selector\n  is one.\n\nResiduals are not rounded to zero by the feasibility tolerance. Decision\nvariable kind and bound violations are not separately added. Lowering\nretains removed special constraints, so both those originals and their\ngenerated regular rows contribute when present in this solution.",
               "signatures": [
                 {
                   "parameters": [],
@@ -26305,7 +26305,7 @@
             },
             {
               "name": "total_violation_l2",
-              "doc": "Calculate total constraint violation using L2 norm squared (sum of squared violations)\n\nReturns the sum of squared violations across all constraints (including removed constraints):\n- For equality constraints: $\\sum (f(x))^2$\n- For inequality constraints: $\\sum (\\max(0, f(x)))^2$",
+              "doc": "Calculate total constraint violation using L2 norm squared (sum of squared violations)\n\nUses the same constraints and residuals as {meth}`~ommx.Solution.total_violation_l1`,\nincluding removed constraints. Each residual is squared separately;\nfor SOS1, this squares each Big-M link and cardinality violation before\nsumming, rather than squaring their sum. No square root is taken.",
               "signatures": [
                 {
                   "parameters": [],

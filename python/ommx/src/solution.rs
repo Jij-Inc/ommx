@@ -757,18 +757,34 @@ impl Solution {
 
     /// Calculate total constraint violation using L1 norm (sum of absolute violations)
     ///
-    /// Returns the sum of violations across all constraints (including removed constraints):
-    /// - For equality constraints: $\sum |f(x)|$
-    /// - For inequality constraints: $\sum \max(0, f(x))$
+    /// Includes all regular and special constraints, including removed constraints:
+    /// - Equality: $|f(x)|$; inequality: $\max(0, f(x))$.
+    /// - Indicator: the inner constraint's violation when active, otherwise zero.
+    /// - One-hot: $|\sum_i x_i - 1|$.
+    /// - SOS1: the sum of violations of its canonical Big-M link rows and
+    ///   cardinality row $\sum_i y_i - 1 \leq 0$. A binary member with bounds
+    ///   $[0, 1]$ is reused as $y_i = x_i$ without link rows. Otherwise, $y_i$
+    ///   is zero when $x_i$ is approximately zero under this solution's
+    ///   feasibility tolerance, and one otherwise, matching SOS1 promotion's
+    ///   selector reconstruction. The upper link $x_i - u_i y_i \leq 0$ is
+    ///   included when $u_i > 0$, and the lower link $l_i y_i - x_i \leq 0$
+    ///   when $l_i < 0$. An unbounded side contributes zero when its selector
+    ///   is one.
+    ///
+    /// Residuals are not rounded to zero by the feasibility tolerance. Decision
+    /// variable kind and bound violations are not separately added. Lowering
+    /// retains removed special constraints, so both those originals and their
+    /// generated regular rows contribute when present in this solution.
     pub fn total_violation_l1(&self) -> f64 {
         self.inner.total_violation_l1()
     }
 
     /// Calculate total constraint violation using L2 norm squared (sum of squared violations)
     ///
-    /// Returns the sum of squared violations across all constraints (including removed constraints):
-    /// - For equality constraints: $\sum (f(x))^2$
-    /// - For inequality constraints: $\sum (\max(0, f(x)))^2$
+    /// Uses the same constraints and residuals as {meth}`~ommx.Solution.total_violation_l1`,
+    /// including removed constraints. Each residual is squared separately;
+    /// for SOS1, this squares each Big-M link and cardinality violation before
+    /// summing, rather than squaring their sum. No square root is taken.
     pub fn total_violation_l2(&self) -> f64 {
         self.inner.total_violation_l2()
     }
