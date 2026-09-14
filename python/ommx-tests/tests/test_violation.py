@@ -14,6 +14,46 @@ from ommx import (
 )
 
 
+def test_explicit_feasibility_queries_preserve_evaluation_and_saved_conditions():
+    x = DecisionVariable.continuous(0, lower=-1, upper=1)
+    constraint = x == 0
+    evaluated = constraint.evaluate({0: 0.0625}, atol=0.5)
+    assert not evaluated.is_feasible(atol=0.03125)
+    assert evaluated.is_feasible(atol=0.125)
+    assert evaluated.evaluated_value == evaluated.violation() == 0.0625
+
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=0,
+        constraints={1: constraint},
+        sense=Sense.Minimize,
+    )
+    solution = instance.evaluate({0: 0.0625}, atol=0.125)
+    wire = solution.to_v2_bytes()
+    for result in [solution, Solution.from_v2_bytes(wire)]:
+        assert result.feasibility_atol == 0.125
+        assert not result.constraints[1].is_feasible(atol=0.03125)
+        assert result.constraints[1].is_feasible(atol=result.feasibility_atol)
+        assert result.feasible
+        assert result.constraints_df().loc[1, "feasible"]
+        assert result.to_v2_bytes() == wire
+
+    samples = instance.evaluate_samples({7: {0: 0.0625}, 8: {0: 0.25}}, atol=0.125)
+    wire = samples.to_v2_bytes()
+    for result in [samples, SampleSet.from_v2_bytes(wire)]:
+        assert result.feasibility_atol == 0.125
+        sampled_constraint = result.constraints[0]
+        assert sampled_constraint.feasible(atol=0.03125) == {7: False, 8: False}
+        assert sampled_constraint.feasible(atol=result.feasibility_atol) == {
+            7: True,
+            8: False,
+        }
+        assert result.feasible == {7: True, 8: False}
+        assert result.get(7).feasibility_atol == result.feasibility_atol
+        assert sampled_constraint.evaluated_values == {7: 0.0625, 8: 0.25}
+        assert result.to_v2_bytes() == wire
+
+
 def test_evaluated_constraint_violation_equality():
     """Test violation calculation for equality constraints."""
     # Create instance with equality constraint: x = 2.5 evaluated at x=0

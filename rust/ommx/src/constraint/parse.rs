@@ -171,8 +171,6 @@ impl Parse for v1::EvaluatedConstraint {
             provenance: Vec::new(),
         };
 
-        let atol = crate::ATol::default();
-
         let removed_reason = self.removed_reason.map(|reason| RemovedReason {
             reason,
             parameters: self.removed_reason_parameters.into_iter().collect(),
@@ -185,7 +183,6 @@ impl Parse for v1::EvaluatedConstraint {
                 stage: EvaluatedData {
                     evaluated_value: self.evaluated_value,
                     dual_variable: self.dual_variable,
-                    atol,
                     used_decision_variable_ids: self
                         .used_decision_variable_ids
                         .into_iter()
@@ -261,7 +258,6 @@ impl Parse for v1::SampledConstraint {
                 stage: SampledData {
                     evaluated_values,
                     dual_variables: None,
-                    atol: crate::ATol::default(),
                     used_decision_variable_ids: self
                         .used_decision_variable_ids
                         .into_iter()
@@ -277,7 +273,6 @@ impl Parse for v1::SampledConstraint {
 
 #[cfg(test)]
 mod tests {
-    use crate::EvaluatedConstraintBehavior;
     use std::error::Error as _;
 
     use super::*;
@@ -377,7 +372,7 @@ mod tests {
         );
         assert_eq!(context.label.subscripts, vec![10, 20]);
         // feasible should be false because 1.5 > ATol::default() for EqualToZero constraint
-        assert!(!parsed.is_feasible());
+        assert!(!parsed.is_feasible(crate::ATol::default()));
     }
 
     #[test]
@@ -395,7 +390,7 @@ mod tests {
             let (_, parsed, _, _): (ConstraintID, EvaluatedConstraint, ConstraintContext, _) =
                 proto.parse(&()).unwrap();
 
-            assert!(parsed.is_feasible());
+            assert!(parsed.is_feasible(crate::ATol::default()));
         }
     }
 }

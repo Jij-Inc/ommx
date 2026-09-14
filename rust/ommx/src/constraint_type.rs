@@ -182,10 +182,11 @@ pub trait ConstraintType {
 /// violation and is never feasible. NaN and negative values are invalid.
 /// Input canonicalization belongs to the evaluation procedure, before this
 /// contract applies. Each family defines its metric on the values it receives.
+/// This trait does not require a stored tolerance. A family retaining a
+/// tolerance-dependent decision must retain that decision's conditions itself.
 pub trait EvaluatedConstraintData {
     type ID;
     fn violation(&self) -> f64;
-    fn feasibility_atol(&self) -> ATol;
     fn used_decision_variable_ids(&self) -> &VariableIDSet {
         &EMPTY_VARIABLE_ID_SET
     }
@@ -203,25 +204,20 @@ pub trait EvaluatedConstraintData {
 /// impl EvaluatedConstraintData for NewConstraint {
 ///     type ID = ConstraintID;
 ///     fn violation(&self) -> f64 { 0.0 }
-///     fn feasibility_atol(&self) -> ATol { ATol::default() }
 /// }
 /// // This conflicts with the common blanket implementation.
 /// impl EvaluatedConstraintBehavior for NewConstraint {
-///     fn is_feasible(&self) -> bool { false }
-///     fn is_feasible_with_tolerance(&self, _: ATol) -> bool { false }
+///     fn is_feasible(&self, _: ATol) -> bool { false }
 /// }
 /// ```
 pub trait EvaluatedConstraintBehavior: EvaluatedConstraintData {
-    fn is_feasible(&self) -> bool;
-    fn is_feasible_with_tolerance(&self, atol: ATol) -> bool;
+    /// Compare the stored violation with `atol`, without re-evaluating inputs
+    /// or changing any retained activation decisions.
+    fn is_feasible(&self, atol: ATol) -> bool;
 }
 
 impl<T: EvaluatedConstraintData + ?Sized> EvaluatedConstraintBehavior for T {
-    fn is_feasible(&self) -> bool {
-        self.is_feasible_with_tolerance(self.feasibility_atol())
-    }
-
-    fn is_feasible_with_tolerance(&self, atol: ATol) -> bool {
+    fn is_feasible(&self, atol: ATol) -> bool {
         violation_is_feasible(self.violation(), atol)
     }
 }
@@ -259,7 +255,6 @@ pub trait SampledConstraintData {
     /// missing sample. Implementations must satisfy [`EvaluatedConstraintData`]'s
     /// nonnegativity contract.
     fn violation_for(&self, sample_id: SampleID) -> Option<f64>;
-    fn feasibility_atol(&self) -> ATol;
 
     /// Validate that every sample-keyed field inside this sampled constraint
     /// uses exactly `expected` sample IDs.
@@ -280,13 +275,14 @@ pub trait SampledConstraintData {
 
 /// Common sample feasibility, derived from each sample's violation.
 pub trait SampledConstraintBehavior: SampledConstraintData {
-    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
+    /// Query a stored sample's violation without changing evaluation decisions.
+    fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> Option<bool>;
 }
 
 impl<T: SampledConstraintData + ?Sized> SampledConstraintBehavior for T {
-    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool> {
+    fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> Option<bool> {
         self.violation_for(sample_id)
-            .map(|violation| violation_is_feasible(violation, self.feasibility_atol()))
+            .map(|violation| violation_is_feasible(violation, atol))
     }
 }
 
@@ -308,10 +304,6 @@ impl EvaluatedConstraintData for EvaluatedConstraint {
         self.equality.violation(self.stage.evaluated_value)
     }
 
-    fn feasibility_atol(&self) -> ATol {
-        self.stage.atol
-    }
-
     fn used_decision_variable_ids(&self) -> &VariableIDSet {
         &self.stage.used_decision_variable_ids
     }
@@ -326,10 +318,6 @@ impl SampledConstraintData for SampledConstraint {
             .evaluated_values
             .get(sample_id)
             .map(|value| self.equality.violation(*value))
-    }
-
-    fn feasibility_atol(&self) -> ATol {
-        self.stage.atol
     }
 
     fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet> {
@@ -364,7 +352,6 @@ impl SampledConstraintData for SampledConstraint {
             stage: EvaluatedData {
                 evaluated_value,
                 dual_variable,
-                atol: self.stage.atol,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
             },
         })
@@ -948,16 +935,21 @@ impl_v2_created_collection!(crate::OneHotConstraint => crate::v2::OneHotConstrai
 impl_v2_created_collection!(crate::Sos1Constraint => crate::v2::Sos1ConstraintCollection);
 
 macro_rules! impl_v2_evaluated_collection {
-    ($source:ty => $target:ty) => {
-        impl From<EvaluatedCollection<$source>> for $target {
-            fn from(value: EvaluatedCollection<$source>) -> Self {
+    ($source:ty => $target:ident) => {
+        impl EvaluatedCollection<$source> {
+            /// Solution/SampleSet supplies the shared wire feasibility tolerance.
+            pub(crate) fn into_v2(self, atol: ATol) -> crate::v2::$target {
+                let value = self;
                 let EvaluatedCollection {
                     constraints,
                     removed_reasons,
                     context,
                 } = value;
-                Self {
-                    entries: entries_to_v2_map(constraints),
+                crate::v2::$target {
+                    entries: constraints
+                        .into_iter()
+                        .map(|(id, row)| (id.into(), row.into_v2(atol)))
+                        .collect(),
                     removed_reasons: removed_reasons_to_v2_map(removed_reasons),
                     contexts: constraint_context_store_to_v2_map(&context),
                 }
@@ -966,22 +958,27 @@ macro_rules! impl_v2_evaluated_collection {
     };
 }
 
-impl_v2_evaluated_collection!(Constraint => crate::v2::EvaluatedRegularConstraintCollection);
-impl_v2_evaluated_collection!(crate::IndicatorConstraint => crate::v2::EvaluatedIndicatorConstraintCollection);
-impl_v2_evaluated_collection!(crate::OneHotConstraint => crate::v2::EvaluatedOneHotConstraintCollection);
-impl_v2_evaluated_collection!(crate::Sos1Constraint => crate::v2::EvaluatedSos1ConstraintCollection);
+impl_v2_evaluated_collection!(Constraint => EvaluatedRegularConstraintCollection);
+impl_v2_evaluated_collection!(crate::IndicatorConstraint => EvaluatedIndicatorConstraintCollection);
+impl_v2_evaluated_collection!(crate::OneHotConstraint => EvaluatedOneHotConstraintCollection);
+impl_v2_evaluated_collection!(crate::Sos1Constraint => EvaluatedSos1ConstraintCollection);
 
 macro_rules! impl_v2_sampled_collection {
-    ($source:ty => $target:ty) => {
-        impl From<SampledCollection<$source>> for $target {
-            fn from(value: SampledCollection<$source>) -> Self {
+    ($source:ty => $target:ident) => {
+        impl SampledCollection<$source> {
+            /// Solution/SampleSet supplies the shared wire feasibility tolerance.
+            pub(crate) fn into_v2(self, atol: ATol) -> crate::v2::$target {
+                let value = self;
                 let SampledCollection {
                     constraints,
                     removed_reasons,
                     context,
                 } = value;
-                Self {
-                    entries: entries_to_v2_map(constraints),
+                crate::v2::$target {
+                    entries: constraints
+                        .into_iter()
+                        .map(|(id, row)| (id.into(), row.into_v2(atol)))
+                        .collect(),
                     removed_reasons: removed_reasons_to_v2_map(removed_reasons),
                     contexts: constraint_context_store_to_v2_map(&context),
                 }
@@ -990,10 +987,10 @@ macro_rules! impl_v2_sampled_collection {
     };
 }
 
-impl_v2_sampled_collection!(Constraint => crate::v2::SampledRegularConstraintCollection);
-impl_v2_sampled_collection!(crate::IndicatorConstraint => crate::v2::SampledIndicatorConstraintCollection);
-impl_v2_sampled_collection!(crate::OneHotConstraint => crate::v2::SampledOneHotConstraintCollection);
-impl_v2_sampled_collection!(crate::Sos1Constraint => crate::v2::SampledSos1ConstraintCollection);
+impl_v2_sampled_collection!(Constraint => SampledRegularConstraintCollection);
+impl_v2_sampled_collection!(crate::IndicatorConstraint => SampledIndicatorConstraintCollection);
+impl_v2_sampled_collection!(crate::OneHotConstraint => SampledOneHotConstraintCollection);
+impl_v2_sampled_collection!(crate::Sos1Constraint => SampledSos1ConstraintCollection);
 
 fn constraint_context_store_to_v2_map<ID: IDType>(
     store: &ConstraintContextStore<ID>,
@@ -1497,16 +1494,16 @@ impl<T: ConstraintType> EvaluatedCollection<T> {
     }
 
     /// Check if all constraints are feasible.
-    pub fn is_feasible(&self) -> bool {
-        self.constraints.values().all(|c| c.is_feasible())
+    pub fn is_feasible(&self, atol: ATol) -> bool {
+        self.constraints.values().all(|c| c.is_feasible(atol))
     }
 
     /// Check if all non-removed constraints are feasible.
-    pub fn is_feasible_relaxed(&self) -> bool {
+    pub fn is_feasible_relaxed(&self, atol: ATol) -> bool {
         self.constraints
             .iter()
             .filter(|(id, _)| !self.removed_reasons.contains_key(id))
-            .all(|(_, c)| c.is_feasible())
+            .all(|(_, c)| c.is_feasible(atol))
     }
 }
 
@@ -1707,23 +1704,25 @@ impl<T: ConstraintType> SampledCollection<T> {
     }
 
     /// Check if all constraints are feasible for a given sample.
-    pub fn is_feasible_for(&self, sample_id: SampleID) -> bool {
+    pub fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> bool {
         self.constraints
             .values()
-            .all(|c| c.is_feasible_for(sample_id).unwrap_or(false))
+            .all(|c| c.is_feasible_for(sample_id, atol).unwrap_or(false))
     }
 
     /// Check if all non-removed constraints are feasible for a given sample.
-    pub fn is_feasible_relaxed_for(&self, sample_id: SampleID) -> bool {
+    pub fn is_feasible_relaxed_for(&self, sample_id: SampleID, atol: ATol) -> bool {
         self.constraints
             .iter()
             .filter(|(id, _)| !self.removed_reasons.contains_key(id))
-            .all(|(_, c)| c.is_feasible_for(sample_id).unwrap_or(false))
+            .all(|(_, c)| c.is_feasible_for(sample_id, atol).unwrap_or(false))
     }
 }
 
-impl From<SampledCollection<Constraint>> for Vec<v1::SampledConstraint> {
-    fn from(value: SampledCollection<Constraint>) -> Self {
+impl SampledCollection<Constraint> {
+    /// SampleSet supplies the tolerance for legacy wire feasibility maps.
+    pub(crate) fn into_v1(self, atol: ATol) -> Vec<v1::SampledConstraint> {
+        let value = self;
         let SampledCollection {
             constraints,
             mut removed_reasons,
@@ -1734,8 +1733,8 @@ impl From<SampledCollection<Constraint>> for Vec<v1::SampledConstraint> {
             .map(|(id, constraint)| {
                 let context = context.remove(id);
                 match removed_reasons.remove(&id) {
-                    Some(reason) => sampled_constraint_to_v1(id, constraint, context, reason),
-                    None => sampled_constraint_to_v1_unremoved(id, constraint, context),
+                    Some(reason) => sampled_constraint_to_v1(id, constraint, context, reason, atol),
+                    None => sampled_constraint_to_v1_unremoved(id, constraint, context, atol),
                 }
             })
             .collect()
@@ -1746,6 +1745,7 @@ fn sampled_constraint_to_v1_unremoved(
     id: ConstraintID,
     constraint: SampledConstraint,
     context: ConstraintContext,
+    atol: ATol,
 ) -> v1::SampledConstraint {
     let label = context.label;
     let feasible = constraint
@@ -1755,7 +1755,9 @@ fn sampled_constraint_to_v1_unremoved(
         .map(|(id, _)| {
             (
                 id.into_inner(),
-                constraint.is_feasible_for(*id).expect("sample exists"),
+                constraint
+                    .is_feasible_for(*id, atol)
+                    .expect("sample exists"),
             )
         })
         .collect();
@@ -1786,8 +1788,9 @@ fn sampled_constraint_to_v1(
     constraint: SampledConstraint,
     context: ConstraintContext,
     removed_reason: RemovedReason,
+    atol: ATol,
 ) -> v1::SampledConstraint {
-    let mut value = sampled_constraint_to_v1_unremoved(id, constraint, context);
+    let mut value = sampled_constraint_to_v1_unremoved(id, constraint, context, atol);
     value.removed_reason = Some(removed_reason.reason);
     value.removed_reason_parameters = removed_reason.parameters.into_iter().collect();
     value
@@ -1796,7 +1799,6 @@ fn sampled_constraint_to_v1(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::EvaluatedConstraintBehavior;
     use crate::{coeff, constraint::ConstraintID, linear, Equality, Function, ModelingLabel};
 
     fn parse_error_source(error: &ParseError) -> &(dyn std::error::Error + 'static) {
@@ -1862,8 +1864,8 @@ mod tests {
         let results = collection.evaluate(&state, ATol::default()).unwrap();
 
         assert_eq!(results.len(), 2);
-        assert!(!results[&ConstraintID::from(1)].is_feasible());
-        assert!(!results[&ConstraintID::from(2)].is_feasible());
+        assert!(!results[&ConstraintID::from(1)].is_feasible(crate::ATol::default()));
+        assert!(!results[&ConstraintID::from(2)].is_feasible(crate::ATol::default()));
         assert!(results.removed_reasons().is_empty());
     }
 

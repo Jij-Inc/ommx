@@ -1433,7 +1433,7 @@ class Constraint:
         - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
         - `atol`: Optional absolute tolerance for evaluation
 
-        **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility
+        **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -1759,11 +1759,6 @@ class EvaluatedConstraint:
         Set the dual variable value
         """
     @property
-    def feasible(self) -> builtins.bool:
-        r"""
-        Get the feasibility status
-        """
-    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Get the constraint name
@@ -1794,6 +1789,13 @@ class EvaluatedConstraint:
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
         Get the used decision variable IDs
+        """
+    def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
+        r"""
+        Check feasibility using the supplied absolute tolerance.
+
+        The query compares the stored violation with ``atol``. It does not
+        re-evaluate the function or canonicalize the input state.
         """
     def violation(self) -> builtins.float:
         r"""
@@ -7743,6 +7745,14 @@ class SampleSet:
         Get unrelaxed feasibility status for all samples
         """
     @property
+    def feasibility_atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance associated with the stored evaluation and feasibility results.
+
+        Pass this to an extracted constraint's explicit feasibility query to use
+        the enclosing result's threshold.
+        """
+    @property
     def sense(self) -> Sense:
         r"""
         Get the optimization sense (minimize or maximize)
@@ -8044,10 +8054,13 @@ class SampledConstraint:
         r"""
         Get the evaluated values for all samples
         """
-    @property
-    def feasible(self) -> builtins.dict[builtins.int, builtins.bool]:
+    def feasible(
+        self, *, atol: builtins.float
+    ) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get the feasibility status for all samples
+        Compute feasibility for every sample using the supplied tolerance.
+
+        This query does not re-evaluate the functions or change stored values.
         """
 
 @typing.final
@@ -8423,6 +8436,14 @@ class Solution:
     def feasible_unrelaxed(self) -> builtins.bool:
         r"""
         Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
+        """
+    @property
+    def feasibility_atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance associated with the stored evaluation and feasibility results.
+
+        Pass this to an extracted constraint's explicit feasibility query to use
+        the enclosing result's threshold.
         """
     @property
     def sense(self) -> Sense:

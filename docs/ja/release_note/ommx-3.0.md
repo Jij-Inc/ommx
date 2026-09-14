@@ -20,6 +20,11 @@ solution.constraint_violation(30, kind="one_hot")
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
 ```
 
+`EvaluatedConstraint.feasible` は `is_feasible(atol=...)` に、
+`SampledConstraint.feasible` は `feasible(atol=...)` メソッドに置き換わります。
+Solution/SampleSet の feasibility プロパティは維持し、その判定条件を
+`feasibility_atol` で取得できます。問い合わせは再評価や保存済み判断の変更を行いません。
+
 Solution の全制約種別の DataFrame に `feasible` と `violation` を追加しました。
 すべての制約を `violation <= atol` で判定します。OneHot と SOS1 の許容誤差は
 各メンバーへの個別適用から、変更量の合計への適用に変わります。

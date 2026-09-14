@@ -280,6 +280,24 @@ Big-M lowering に依存する定義ではありません。
 その後の値を使います。解の制約充足は各制約がそれぞれの閾値を満たすことで判定し、
 `total_violation <= atol` で判定するわけではありません。
 
+制約単体の判定では、許容誤差を明示的に渡します。`evaluated.feasible` は
+`evaluated.is_feasible(atol=...)` に、`sampled.feasible` は
+`sampled.feasible(atol=...)`（sample ID から bool への map）に置き換えてください。
+Solution/SampleSet の feasibility プロパティは引き続き利用できます。
+`feasibility_atol` プロパティから、取り出した制約にも同じ判定条件を渡せます。
+
+```python
+evaluated = solution.constraints[1]
+evaluated.is_feasible(atol=solution.feasibility_atol)
+evaluated.is_feasible(atol=1e-8)  # 保存済みの同じ違反量に対する別の問い合わせ
+```
+
+問い合わせの許容誤差を変えても、入力の丸めや活性判定はやり直しません。
+許容誤差に依存する判断結果を保持する場合に、その判断条件も保持します。
+通常制約の評価値は許容誤差を保持せず、特殊制約の活性判定には使用した条件を残します。
+許容誤差の役割分離と評価コンテキストの保存形式は
+[Issue #1180](https://github.com/Jij-Inc/ommx/issues/1180) で扱います。
+
 v2 protobuf 形式は `feasible` のフラグ・map と、Solution/SampleSet の
 `feasibility_atol` を引き続き保存します。OMMX SDK がなくても判定結果とその許容誤差を
 読み取れます。protobuf スキーマは変更しません。SDK は読み込み時に、保存された変数値から

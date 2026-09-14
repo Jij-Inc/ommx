@@ -20,6 +20,11 @@ solution.constraint_violation(30, kind="one_hot")
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
 ```
 
+Replace `EvaluatedConstraint.feasible` with `is_feasible(atol=...)`, and
+`SampledConstraint.feasible` with the explicit `feasible(atol=...)` method.
+Solution/SampleSet retain their feasibility properties and expose the associated
+`feasibility_atol`. Queries do not repeat evaluation or change stored decisions.
+
 All Solution constraint DataFrames now expose `feasible` and `violation`.
 All constraint feasibility is derived from `violation <= atol`; OneHot and SOS1
 now apply tolerance to the total change instead of each member separately.

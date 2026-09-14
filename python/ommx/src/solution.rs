@@ -116,6 +116,15 @@ impl Solution {
         self.inner.feasible()
     }
 
+    /// Absolute tolerance associated with the stored evaluation and feasibility results.
+    ///
+    /// Pass this to an extracted constraint's explicit feasibility query to use
+    /// the enclosing result's threshold.
+    #[getter]
+    pub fn feasibility_atol(&self) -> f64 {
+        self.inner.feasibility_atol().into_inner()
+    }
+
     /// Get the optimization sense (minimize or maximize)
     #[getter]
     pub fn sense(&self) -> PyResult<crate::Sense> {
@@ -560,8 +569,11 @@ impl Solution {
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
                 for (id, c) in coll.inner().iter() {
                     let m = meta.collect_for(*id);
-                    let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
-                        .to_pandas_entry(py)?;
+                    let dict = crate::pandas::WithModelingContext::new(
+                        (*id, c, self.inner.feasibility_atol()),
+                        &m,
+                    )
+                    .to_pandas_entry(py)?;
                     dict.set_item(
                         "violation",
                         self.constraint_violation(id.into_inner(), kind)?,

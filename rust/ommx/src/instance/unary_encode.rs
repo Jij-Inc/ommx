@@ -439,8 +439,8 @@ mod tests {
                 actual_constraint.stage.evaluated_value,
             )?;
             prop_assert_eq!(
-                expected_constraint.is_feasible(),
-                actual_constraint.is_feasible()
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
         }
 
@@ -459,8 +459,8 @@ mod tests {
                 actual_constraint.stage.evaluated_value,
             )?;
             prop_assert_eq!(
-                expected_constraint.is_feasible(),
-                actual_constraint.is_feasible()
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
                 expected_constraint.stage.indicator_active,
@@ -478,8 +478,8 @@ mod tests {
             }
             let actual_constraint = actual.evaluated_one_hot_constraints().get(id).unwrap();
             prop_assert_eq!(
-                expected_constraint.is_feasible(),
-                actual_constraint.is_feasible()
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
                 expected_constraint.stage.active_variable,
@@ -497,8 +497,8 @@ mod tests {
             }
             let actual_constraint = actual.evaluated_sos1_constraints().get(id).unwrap();
             prop_assert_eq!(
-                expected_constraint.is_feasible(),
-                actual_constraint.is_feasible()
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
                 expected_constraint.stage.active_variable,

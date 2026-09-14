@@ -162,7 +162,6 @@ pub struct Solution {
     #[getset(get = "pub")]
     sense: Option<Sense>,
     /// Absolute tolerance used to compute and validate feasibility fields.
-    #[getset(get_copy = "pub")]
     feasibility_atol: ATol,
     /// OMMX-defined provenance metadata.
     pub metadata: Option<crate::v1::ProcessMetadata>,
@@ -264,6 +263,14 @@ fn validate_all_solution_constraint_used_ids(
 }
 
 impl Solution {
+    /// The tolerance used by this solution's feasibility queries and wire flags.
+    ///
+    /// Explicit constraint queries may use a different tolerance without
+    /// changing evaluation-time canonicalization or activation decisions.
+    pub fn feasibility_atol(&self) -> ATol {
+        self.feasibility_atol
+    }
+
     /// Access evaluated named-function rows plus their modeling labels.
     pub fn evaluated_named_function_table(&self) -> &NamedFunctionTable<EvaluatedNamedFunction> {
         &self.evaluated_named_functions
@@ -322,10 +329,17 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible()`](Self::feasible)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints(&self) -> bool {
-        self.evaluated_constraints.is_feasible()
-            && self.evaluated_indicator_constraints.is_feasible()
-            && self.evaluated_one_hot_constraints.is_feasible()
-            && self.evaluated_sos1_constraints.is_feasible()
+        self.evaluated_constraints
+            .is_feasible(self.feasibility_atol)
+            && self
+                .evaluated_indicator_constraints
+                .is_feasible(self.feasibility_atol)
+            && self
+                .evaluated_one_hot_constraints
+                .is_feasible(self.feasibility_atol)
+            && self
+                .evaluated_sos1_constraints
+                .is_feasible(self.feasibility_atol)
     }
 
     /// Check if all constraints and decision variables are feasible
@@ -343,10 +357,17 @@ impl Solution {
     /// - To check both constraints and decision variables, use [`feasible_relaxed()`](Self::feasible_relaxed)
     /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
     pub fn feasible_constraints_relaxed(&self) -> bool {
-        self.evaluated_constraints.is_feasible_relaxed()
-            && self.evaluated_indicator_constraints.is_feasible_relaxed()
-            && self.evaluated_one_hot_constraints.is_feasible_relaxed()
-            && self.evaluated_sos1_constraints.is_feasible_relaxed()
+        self.evaluated_constraints
+            .is_feasible_relaxed(self.feasibility_atol)
+            && self
+                .evaluated_indicator_constraints
+                .is_feasible_relaxed(self.feasibility_atol)
+            && self
+                .evaluated_one_hot_constraints
+                .is_feasible_relaxed(self.feasibility_atol)
+            && self
+                .evaluated_sos1_constraints
+                .is_feasible_relaxed(self.feasibility_atol)
     }
 
     /// Check if all constraints and decision variables are feasible in the relaxed problem
@@ -743,35 +764,41 @@ pub struct SolutionBuilder {
     relaxation: crate::v1::Relaxation,
 }
 
-fn validate_solution_constraint_tolerances(
-    regular_constraints: &EvaluatedCollection<Constraint>,
+// The current wire format has one shared tolerance. Retained activation
+// decisions must carry that condition; ordinary residuals have no such context.
+fn validate_solution_activation_tolerances(
     indicator_constraints: &EvaluatedCollection<IndicatorConstraint>,
     one_hot_constraints: &EvaluatedCollection<crate::OneHotConstraint>,
     sos1_constraints: &EvaluatedCollection<crate::Sos1Constraint>,
     atol: ATol,
 ) -> Result<(), SolutionError> {
-    validate_constraint_tolerances(regular_constraints, "regular", atol)?;
-    validate_constraint_tolerances(indicator_constraints, "indicator", atol)?;
-    validate_constraint_tolerances(one_hot_constraints, "one-hot", atol)?;
-    validate_constraint_tolerances(sos1_constraints, "SOS1", atol)
-}
-
-fn validate_constraint_tolerances<T: crate::ConstraintType>(
-    constraints: &EvaluatedCollection<T>,
-    family: &'static str,
-    atol: ATol,
-) -> Result<(), SolutionError> {
-    for (id, constraint) in constraints.inner() {
-        if constraint.feasibility_atol() != atol {
-            return Err(SolutionError::InvalidConstraintStructure {
-                constraint_family: family,
-                constraint_id: format!("{id:?}"),
-                message: format!(
-                    "constraint tolerance {:?} does not match host tolerance {atol:?}",
-                    constraint.feasibility_atol()
-                ),
-            });
-        }
+    let mismatch = indicator_constraints
+        .inner()
+        .iter()
+        .find_map(|(id, c)| {
+            (c.stage.activation_atol != atol)
+                .then(|| ("indicator", format!("{id:?}"), c.stage.activation_atol))
+        })
+        .or_else(|| {
+            one_hot_constraints.inner().iter().find_map(|(id, c)| {
+                (c.stage.activation_atol != atol)
+                    .then(|| ("one-hot", format!("{id:?}"), c.stage.activation_atol))
+            })
+        })
+        .or_else(|| {
+            sos1_constraints.inner().iter().find_map(|(id, c)| {
+                (c.stage.activation_atol != atol)
+                    .then(|| ("SOS1", format!("{id:?}"), c.stage.activation_atol))
+            })
+        });
+    if let Some((family, constraint_id, activation_atol)) = mismatch {
+        return Err(SolutionError::InvalidConstraintStructure {
+            constraint_family: family,
+            constraint_id,
+            message: format!(
+                "activation tolerance {activation_atol:?} does not match host tolerance {atol:?}"
+            ),
+        });
     }
     Ok(())
 }
@@ -1228,8 +1255,7 @@ impl SolutionBuilder {
             .validate_context_ids()?;
         self.evaluated_one_hot_constraints.validate_context_ids()?;
         self.evaluated_sos1_constraints.validate_context_ids()?;
-        validate_solution_constraint_tolerances(
-            &evaluated_constraints,
+        validate_solution_activation_tolerances(
             &self.evaluated_indicator_constraints,
             &self.evaluated_one_hot_constraints,
             &self.evaluated_sos1_constraints,
@@ -1394,10 +1420,10 @@ mod tests {
                 prop_assert_eq!(result.total_violation(), one_hot + sos1);
                 prop_assert!(one_hot >= 0.0 && sos1 >= 0.0);
                 if one_hot == 0.0 {
-                    prop_assert!(result.evaluated_one_hot_constraints()[&0.into()].is_feasible());
+                    prop_assert!(result.evaluated_one_hot_constraints()[&0.into()].is_feasible(atol));
                 }
                 if sos1 == 0.0 {
-                    prop_assert!(result.evaluated_sos1_constraints()[&0.into()].is_feasible());
+                    prop_assert!(result.evaluated_sos1_constraints()[&0.into()].is_feasible(atol));
                 }
                 if result.total_violation() == 0.0 {
                     prop_assert!(result.feasible_constraints());
@@ -1836,30 +1862,35 @@ mod tests {
     }
 
     #[test]
-    fn builder_rejects_inconsistent_regular_constraint_tolerance() {
+    fn regular_constraint_feasibility_uses_only_the_host_tolerance() {
         let constraint = EvaluatedConstraint {
             equality: crate::Equality::EqualToZero,
             stage: crate::constraint::EvaluatedData {
-                evaluated_value: 1.0,
-                atol: crate::ATol::default(),
+                evaluated_value: 0.0625,
                 used_decision_variable_ids: BTreeSet::new(),
                 dual_variable: None,
             },
         };
-
-        let err = Solution::builder()
-            .objective(0.0)
-            .evaluated_constraints(BTreeMap::from([(ConstraintID::from(1), constraint)]))
-            .decision_variables(BTreeMap::new())
-            .sense(Sense::Minimize)
-            .feasibility_atol(ATol::new(0.1).unwrap())
-            .build()
-            .unwrap_err();
-
-        assert!(
-            err.to_string().contains("does not match host tolerance"),
-            "unexpected error: {err}"
-        );
+        for (tolerance, expected) in [(0.03125, false), (0.125, true)] {
+            let atol = ATol::new(tolerance).unwrap();
+            let result = Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::from([(
+                    ConstraintID::from(1),
+                    constraint.clone(),
+                )]))
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .feasibility_atol(atol)
+                .build()
+                .unwrap();
+            let restored = Solution::from_v2_bytes(&result.to_v2_bytes()).unwrap();
+            for result in [result, restored] {
+                assert_eq!(result.feasible(), expected);
+                assert_eq!(result.total_violation(), 0.0625);
+                assert_eq!(result.feasibility_atol(), atol);
+            }
+        }
     }
 
     #[test]
@@ -1868,7 +1899,7 @@ mod tests {
         let one_hot = crate::one_hot_constraint::EvaluatedOneHotConstraint {
             variables: BTreeSet::from([variable_id]),
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 active_variable: None,
                 used_decision_variable_ids: BTreeSet::new(),
@@ -2047,7 +2078,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 indicator_active: true,
                 used_decision_variable_ids: BTreeSet::from([missing_id]),
             },
@@ -2074,7 +2105,7 @@ mod tests {
         let one_hot = crate::one_hot_constraint::EvaluatedOneHotConstraint {
             variables: BTreeSet::from([structural_id]),
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 active_variable: Some(structural_id),
                 used_decision_variable_ids: BTreeSet::from([missing_id]),
@@ -2105,7 +2136,7 @@ mod tests {
         let sos1 = crate::sos1_constraint::EvaluatedSos1Constraint {
             variables: BTreeSet::from([structural_id]),
             stage: crate::sos1_constraint::Sos1EvaluatedData {
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 active_variable: Some(structural_id),
                 used_decision_variable_ids: BTreeSet::from([missing_id]),

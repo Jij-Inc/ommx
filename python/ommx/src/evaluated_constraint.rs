@@ -1,4 +1,3 @@
-use ommx::EvaluatedConstraintBehavior;
 use std::collections::BTreeSet;
 
 use pyo3::prelude::*;
@@ -44,10 +43,13 @@ impl EvaluatedConstraint {
         self.0.stage.dual_variable = value;
     }
 
-    /// Get the feasibility status
-    #[getter]
-    pub fn feasible(&self) -> bool {
-        self.0.is_feasible()
+    /// Check feasibility using the supplied absolute tolerance.
+    ///
+    /// The query compares the stored violation with ``atol``. It does not
+    /// re-evaluate the function or canonicalize the input state.
+    #[pyo3(signature = (*, atol))]
+    pub fn is_feasible(&self, atol: f64) -> crate::error::OmmxPyResult<bool> {
+        Ok(self.0.is_feasible(ommx::ATol::new(atol)?))
     }
 
     /// Get the constraint name

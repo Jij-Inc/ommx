@@ -235,6 +235,15 @@ impl SampleSet {
         self.feasible()
     }
 
+    /// Absolute tolerance associated with the stored evaluation and feasibility results.
+    ///
+    /// Pass this to an extracted constraint's explicit feasibility query to use
+    /// the enclosing result's threshold.
+    #[getter]
+    pub fn feasibility_atol(&self) -> f64 {
+        self.inner.feasibility_atol().into_inner()
+    }
+
     /// Get the optimization sense (minimize or maximize)
     #[getter]
     pub fn sense(&self) -> crate::Sense {
@@ -605,7 +614,7 @@ impl SampleSet {
                 )?;
                 for (constraint_id, label) in &constraint_labels {
                     let c_feasible = constraints[constraint_id]
-                        .is_feasible_for(*sample_id)
+                        .is_feasible_for(*sample_id, self.inner.feasibility_atol())
                         .unwrap_or(false);
                     dict.set_item(label.as_str(), c_feasible)?;
                 }
@@ -695,7 +704,7 @@ impl SampleSet {
                     let m = meta.collect_for(*id);
                     let dict = crate::pandas::WithModelingContext::new(
                         WithSampleIds {
-                            item: (*id, c),
+                            item: (*id, c, self.inner.feasibility_atol()),
                             sample_ids: &sample_ids,
                         },
                         &m,

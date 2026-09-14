@@ -68,13 +68,11 @@ pub struct Sampled;
 
 /// Data carried by a constraint in the Evaluated stage.
 ///
-/// Feasibility is derived from the equality's residual violation and `atol`.
-/// Evaluation and wire parsing set the tolerance; Solution validates that it
-/// agrees with the enclosing host's tolerance.
+/// Stores numeric results, with no retained feasibility decision or tolerance.
+/// Feasibility queries receive their own absolute tolerance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluatedData {
     pub evaluated_value: f64,
-    pub atol: crate::ATol,
     pub used_decision_variable_ids: VariableIDSet,
     pub dual_variable: Option<f64>,
 }
@@ -82,11 +80,11 @@ pub struct EvaluatedData {
 /// Data carried by a constraint in the Sampled stage.
 ///
 /// Sample IDs in dual values, when present, must match evaluated values.
-/// Sample feasibility is derived from each residual and `atol`.
+/// Feasibility queries receive their own absolute tolerance; the numeric results
+/// do not retain a feasibility decision or its tolerance.
 #[derive(Debug, Clone)]
 pub struct SampledData {
     pub evaluated_values: crate::Sampled<f64>,
-    pub atol: crate::ATol,
     pub used_decision_variable_ids: VariableIDSet,
     pub dual_variables: Option<crate::Sampled<f64>>,
 }

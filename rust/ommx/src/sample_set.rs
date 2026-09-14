@@ -165,7 +165,6 @@ pub struct SampleSet {
     #[getset(get = "pub")]
     feasible_relaxed: BTreeMap<SampleID, bool>,
     /// Absolute tolerance used to compute and validate feasibility fields.
-    #[getset(get_copy = "pub")]
     feasibility_atol: ATol,
     /// OMMX-defined provenance metadata.
     pub metadata: Option<crate::v1::ProcessMetadata>,
@@ -190,6 +189,11 @@ fn validate_sampled_constraint_used_ids<T: ConstraintType>(
 }
 
 impl SampleSet {
+    /// The tolerance used to compute the retained sample feasibility maps.
+    pub fn feasibility_atol(&self) -> ATol {
+        self.feasibility_atol
+    }
+
     /// Create a new SampleSet
     ///
     /// # Deprecated
@@ -468,35 +472,41 @@ pub struct SampleSetBuilder {
     feasibility_atol: ATol,
 }
 
-fn validate_sampled_constraint_tolerances(
-    regular_constraints: &SampledCollection<Constraint>,
+// The current wire format has one shared tolerance. Retained activation
+// decisions must carry that condition; ordinary residuals have no such context.
+fn validate_sampled_activation_tolerances(
     indicator_constraints: &SampledCollection<IndicatorConstraint>,
     one_hot_constraints: &SampledCollection<crate::OneHotConstraint>,
     sos1_constraints: &SampledCollection<crate::Sos1Constraint>,
     atol: ATol,
 ) -> Result<(), SampleSetError> {
-    validate_constraint_tolerances(regular_constraints, "regular", atol)?;
-    validate_constraint_tolerances(indicator_constraints, "indicator", atol)?;
-    validate_constraint_tolerances(one_hot_constraints, "one-hot", atol)?;
-    validate_constraint_tolerances(sos1_constraints, "SOS1", atol)
-}
-
-fn validate_constraint_tolerances<T: crate::ConstraintType>(
-    constraints: &SampledCollection<T>,
-    family: &'static str,
-    atol: ATol,
-) -> Result<(), SampleSetError> {
-    for (id, constraint) in constraints.inner() {
-        if constraint.feasibility_atol() != atol {
-            return Err(SampleSetError::InvalidConstraintStructure {
-                constraint_family: family,
-                constraint_id: format!("{id:?}"),
-                message: format!(
-                    "constraint tolerance {:?} does not match host tolerance {atol:?}",
-                    constraint.feasibility_atol()
-                ),
-            });
-        }
+    let mismatch = indicator_constraints
+        .inner()
+        .iter()
+        .find_map(|(id, c)| {
+            (c.stage.activation_atol != atol)
+                .then(|| ("indicator", format!("{id:?}"), c.stage.activation_atol))
+        })
+        .or_else(|| {
+            one_hot_constraints.inner().iter().find_map(|(id, c)| {
+                (c.stage.activation_atol != atol)
+                    .then(|| ("one-hot", format!("{id:?}"), c.stage.activation_atol))
+            })
+        })
+        .or_else(|| {
+            sos1_constraints.inner().iter().find_map(|(id, c)| {
+                (c.stage.activation_atol != atol)
+                    .then(|| ("SOS1", format!("{id:?}"), c.stage.activation_atol))
+            })
+        });
+    if let Some((family, constraint_id, activation_atol)) = mismatch {
+        return Err(SampleSetError::InvalidConstraintStructure {
+            constraint_family: family,
+            constraint_id,
+            message: format!(
+                "activation tolerance {activation_atol:?} does not match host tolerance {atol:?}"
+            ),
+        });
     }
     Ok(())
 }
@@ -995,8 +1005,7 @@ impl SampleSetBuilder {
                 expected: objective_sample_ids.clone(),
                 found,
             })?;
-        validate_sampled_constraint_tolerances(
-            &constraints,
+        validate_sampled_activation_tolerances(
             &self.indicator_constraints,
             &self.one_hot_constraints,
             &self.sos1_constraints,
@@ -1060,6 +1069,7 @@ impl SampleSetBuilder {
             &self.one_hot_constraints,
             &self.sos1_constraints,
             &objective_sample_ids,
+            self.feasibility_atol,
         );
 
         Ok(SampleSet {
@@ -1133,6 +1143,7 @@ impl SampleSetBuilder {
             &self.one_hot_constraints,
             &self.sos1_constraints,
             &objective_sample_ids,
+            self.feasibility_atol,
         );
 
         let named_functions = match self.named_function_table {
@@ -1166,19 +1177,20 @@ impl SampleSetBuilder {
         one_hot_constraints: &SampledCollection<crate::OneHotConstraint>,
         sos1_constraints: &SampledCollection<crate::Sos1Constraint>,
         sample_ids: &SampleIDSet,
+        atol: ATol,
     ) -> (BTreeMap<SampleID, bool>, BTreeMap<SampleID, bool>) {
         let mut feasible = BTreeMap::new();
         let mut feasible_relaxed = BTreeMap::new();
 
         for sample_id in sample_ids {
-            let f = constraints.is_feasible_for(*sample_id)
-                && indicator_constraints.is_feasible_for(*sample_id)
-                && one_hot_constraints.is_feasible_for(*sample_id)
-                && sos1_constraints.is_feasible_for(*sample_id);
-            let fr = constraints.is_feasible_relaxed_for(*sample_id)
-                && indicator_constraints.is_feasible_relaxed_for(*sample_id)
-                && one_hot_constraints.is_feasible_relaxed_for(*sample_id)
-                && sos1_constraints.is_feasible_relaxed_for(*sample_id);
+            let f = constraints.is_feasible_for(*sample_id, atol)
+                && indicator_constraints.is_feasible_for(*sample_id, atol)
+                && one_hot_constraints.is_feasible_for(*sample_id, atol)
+                && sos1_constraints.is_feasible_for(*sample_id, atol);
+            let fr = constraints.is_feasible_relaxed_for(*sample_id, atol)
+                && indicator_constraints.is_feasible_relaxed_for(*sample_id, atol)
+                && one_hot_constraints.is_feasible_relaxed_for(*sample_id, atol)
+                && sos1_constraints.is_feasible_relaxed_for(*sample_id, atol);
 
             feasible.insert(*sample_id, f);
             feasible_relaxed.insert(*sample_id, fr);
@@ -1217,7 +1229,7 @@ mod tests {
         let sampled_one_hot: crate::SampledOneHotConstraint = crate::OneHotConstraint {
             variables: [var_id].into_iter().collect(),
             stage: crate::OneHotSampledData {
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 0.0)),
                 active_variable: BTreeMap::from([(unexpected_sample_id, Some(var_id))]),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
@@ -1266,31 +1278,36 @@ mod tests {
     }
 
     #[test]
-    fn builder_rejects_inconsistent_regular_constraint_tolerance() {
+    fn regular_constraint_feasibility_uses_only_the_host_tolerance() {
         let sample_id = SampleID::from(0);
         let constraint = SampledConstraint {
             equality: crate::Equality::EqualToZero,
             stage: crate::constraint::SampledData {
-                evaluated_values: crate::Sampled::from((sample_id, 1.0)),
-                atol: crate::ATol::default(),
+                evaluated_values: crate::Sampled::from((sample_id, 0.0625)),
                 used_decision_variable_ids: BTreeSet::new(),
                 dual_variables: None,
             },
         };
-
-        let err = SampleSet::builder()
-            .decision_variables(BTreeMap::new())
-            .objectives(crate::Sampled::from((sample_id, 0.0)))
-            .constraints(BTreeMap::from([(ConstraintID::from(1), constraint)]))
-            .sense(Sense::Minimize)
-            .feasibility_atol(ATol::new(0.1).unwrap())
-            .build()
-            .unwrap_err();
-
-        assert!(
-            err.to_string().contains("does not match host tolerance"),
-            "unexpected error: {err}"
-        );
+        for (tolerance, expected) in [(0.03125, false), (0.125, true)] {
+            let atol = ATol::new(tolerance).unwrap();
+            let result = SampleSet::builder()
+                .objectives(crate::Sampled::from((sample_id, 0.0)))
+                .constraints(BTreeMap::from([(
+                    ConstraintID::from(1),
+                    constraint.clone(),
+                )]))
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .feasibility_atol(atol)
+                .build()
+                .unwrap();
+            let restored = SampleSet::from_v2_bytes(&result.to_v2_bytes()).unwrap();
+            for result in [result, restored] {
+                assert_eq!(result.is_sample_feasible(sample_id), Some(expected));
+                assert_eq!(result.get(sample_id).unwrap().total_violation(), 0.0625);
+                assert_eq!(result.feasibility_atol(), atol);
+            }
+        }
     }
 
     #[test]
@@ -1300,7 +1317,7 @@ mod tests {
         let one_hot = crate::one_hot_constraint::SampledOneHotConstraint {
             variables: BTreeSet::from([variable_id]),
             stage: crate::one_hot_constraint::OneHotSampledData {
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 violations: crate::Sampled::from((sample_id, 1.0)),
                 active_variable: BTreeMap::from([(sample_id, None)]),
                 used_decision_variable_ids: BTreeSet::new(),
@@ -1453,7 +1470,6 @@ mod tests {
             stage: crate::constraint::SampledData {
                 evaluated_values,
                 dual_variables: None,
-                atol: crate::ATol::default(),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1510,7 +1526,6 @@ mod tests {
             stage: EvaluatedData {
                 evaluated_value: 1.0,
                 dual_variable: None,
-                atol: crate::ATol::default(),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1523,7 +1538,6 @@ mod tests {
             stage: crate::constraint::SampledData {
                 evaluated_values,
                 dual_variables: None,
-                atol: crate::ATol::default(),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };

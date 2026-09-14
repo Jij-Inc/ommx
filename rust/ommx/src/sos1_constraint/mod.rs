@@ -90,14 +90,16 @@ pub struct Sos1CreatedData;
 /// Data carried by a SOS1 constraint in the Evaluated stage.
 ///
 /// `violation` must be nonnegative and not NaN. Feasibility is derived from
-/// `violation` and `atol`. Evaluation computes these values; Solution validates
+/// `violation` and the query tolerance. Evaluation computes these values; Solution validates
 /// the metric and active-variable diagnostic against its decision-variable values.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sos1EvaluatedData {
-    pub atol: ATol,
+    /// Tolerance used to determine the retained activation diagnostic.
+    /// Feasibility queries supply their own tolerance and do not change it.
+    pub activation_atol: ATol,
     pub violation: f64,
-    /// Retained member with largest absolute value when feasible; None when
-    /// infeasible or all members are approximately zero.
+    /// Retained member at `activation_atol`; None when infeasible at that
+    /// tolerance or all members are approximately zero under it.
     pub active_variable: Option<VariableID>,
     pub used_decision_variable_ids: VariableIDSet,
 }
@@ -109,7 +111,9 @@ pub struct Sos1EvaluatedData {
 /// SampleSet validates the metrics and diagnostics against its sampled variables.
 #[derive(Debug, Clone)]
 pub struct Sos1SampledData {
-    pub atol: ATol,
+    /// Tolerance used to determine the retained activation diagnostic.
+    /// Feasibility queries supply their own tolerance and do not change it.
+    pub activation_atol: ATol,
     pub violations: crate::Sampled<f64>,
     /// Retained member for each sample, with the same meaning as the evaluated stage.
     pub active_variable: BTreeMap<SampleID, Option<VariableID>>,
@@ -143,10 +147,6 @@ impl EvaluatedConstraintData for EvaluatedSos1Constraint {
         self.stage.violation
     }
 
-    fn feasibility_atol(&self) -> ATol {
-        self.stage.atol
-    }
-
     fn used_decision_variable_ids(&self) -> &VariableIDSet {
         &self.stage.used_decision_variable_ids
     }
@@ -158,10 +158,6 @@ impl SampledConstraintData for SampledSos1Constraint {
 
     fn violation_for(&self, sample_id: SampleID) -> Option<f64> {
         self.stage.violations.get(sample_id).copied()
-    }
-
-    fn feasibility_atol(&self) -> ATol {
-        self.stage.atol
     }
 
     fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet> {
@@ -186,7 +182,7 @@ impl SampledConstraintData for SampledSos1Constraint {
         Some(Sos1Constraint {
             variables: self.variables.clone(),
             stage: Sos1EvaluatedData {
-                atol: self.stage.atol,
+                activation_atol: self.stage.activation_atol,
                 violation,
                 active_variable,
                 used_decision_variable_ids: self.stage.used_decision_variable_ids.clone(),
@@ -249,10 +245,12 @@ impl Parse for crate::v2::Sos1Constraint {
     }
 }
 
-impl From<EvaluatedSos1Constraint> for crate::v2::EvaluatedSos1Constraint {
-    fn from(constraint: EvaluatedSos1Constraint) -> Self {
-        let feasible = constraint.is_feasible();
-        Self {
+impl EvaluatedSos1Constraint {
+    /// Solution/SampleSet supplies the tolerance for the wire feasibility field.
+    pub(crate) fn into_v2(self, atol: ATol) -> crate::v2::EvaluatedSos1Constraint {
+        let constraint = self;
+        let feasible = constraint.is_feasible(atol);
+        crate::v2::EvaluatedSos1Constraint {
             variables: constraint
                 .variables
                 .into_iter()
@@ -308,7 +306,7 @@ impl crate::v2::EvaluatedSos1Constraint {
         Ok(Sos1Constraint {
             variables: constraint.variables,
             stage: Sos1EvaluatedData {
-                atol,
+                activation_atol: atol,
                 violation,
                 active_variable,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
@@ -321,8 +319,10 @@ impl crate::v2::EvaluatedSos1Constraint {
     }
 }
 
-impl From<SampledSos1Constraint> for crate::v2::SampledSos1Constraint {
-    fn from(constraint: SampledSos1Constraint) -> Self {
+impl SampledSos1Constraint {
+    /// Solution/SampleSet supplies the tolerance for the wire feasibility field.
+    pub(crate) fn into_v2(self, atol: ATol) -> crate::v2::SampledSos1Constraint {
+        let constraint = self;
         let feasible = constraint
             .stage
             .violations
@@ -330,11 +330,13 @@ impl From<SampledSos1Constraint> for crate::v2::SampledSos1Constraint {
             .map(|(id, _)| {
                 (
                     id.into_inner(),
-                    constraint.is_feasible_for(*id).expect("sample exists"),
+                    constraint
+                        .is_feasible_for(*id, atol)
+                        .expect("sample exists"),
                 )
             })
             .collect();
-        Self {
+        crate::v2::SampledSos1Constraint {
             variables: constraint
                 .variables
                 .into_iter()
@@ -427,7 +429,7 @@ impl crate::v2::SampledSos1Constraint {
         Ok(Sos1Constraint {
             variables: constraint.variables,
             stage: Sos1SampledData {
-                atol,
+                activation_atol: atol,
                 violations,
                 active_variable,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(

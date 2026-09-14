@@ -530,7 +530,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 indicator_active: true,
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -559,7 +559,7 @@ mod tests {
         let constraint = crate::one_hot_constraint::EvaluatedOneHotConstraint {
             variables: std::collections::BTreeSet::from([variable_id]),
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 active_variable: Some(variable_id),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
@@ -591,7 +591,7 @@ mod tests {
         let constraint = crate::sos1_constraint::EvaluatedSos1Constraint {
             variables: std::collections::BTreeSet::from([variable_id]),
             stage: crate::sos1_constraint::Sos1EvaluatedData {
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 active_variable: None,
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
@@ -1475,7 +1475,6 @@ mod tests {
             stage: EvaluatedData {
                 evaluated_value: 0.0,
                 dual_variable: None,
-                atol: crate::ATol::default(),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1553,7 +1552,6 @@ mod tests {
             equality: Equality::EqualToZero,
             stage: EvaluatedData {
                 evaluated_value: 0.0,
-                atol: crate::ATol::default(),
                 used_decision_variable_ids: Default::default(),
                 dual_variable: None,
             },
@@ -1699,7 +1697,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 0.0,
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 indicator_active: true,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
@@ -1753,7 +1751,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 1.0,
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 indicator_active: false,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
@@ -1803,7 +1801,7 @@ mod tests {
         let one_hot = EvaluatedOneHotConstraint {
             variables: BTreeSet::from([var_id, VariableID::from(2)]),
             stage: OneHotEvaluatedData {
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 active_variable: Some(var_id),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
@@ -1870,7 +1868,7 @@ mod tests {
         let one_hot = EvaluatedOneHotConstraint {
             variables: BTreeSet::from([var_id]),
             stage: OneHotEvaluatedData {
-                atol: crate::ATol::default(),
+                activation_atol: crate::ATol::default(),
                 violation: 0.0,
                 active_variable: Some(var_id),
                 used_decision_variable_ids: [var_id].into_iter().collect(),

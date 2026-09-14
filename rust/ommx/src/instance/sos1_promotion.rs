@@ -2145,7 +2145,7 @@ mod tests {
             .evaluated_sos1_constraints()
             .get(&promotion)
             .unwrap();
-        assert!(evaluated.is_feasible());
+        assert!(evaluated.is_feasible(atol));
         assert_eq!(evaluated.stage.active_variable, None);
 
         let on_boundary = instance
@@ -2159,13 +2159,13 @@ mod tests {
             .evaluated_sos1_constraints()
             .get(&promotion)
             .unwrap();
-        assert!(evaluated.is_feasible());
+        assert!(evaluated.is_feasible(atol));
         assert_eq!(evaluated.stage.active_variable, None);
         assert!(on_boundary
             .evaluated_constraints()
             .get(&upper_row_id())
             .unwrap()
-            .is_feasible());
+            .is_feasible(atol));
         assert!(on_boundary.feasible());
         assert!(on_boundary.feasible_relaxed());
 
@@ -2183,7 +2183,7 @@ mod tests {
             Some(&0.0)
         );
         let sampled = &sample_set.sos1_constraints()[&promotion];
-        assert!(sampled.is_feasible_for(sample_id).unwrap());
+        assert!(sampled.is_feasible_for(sample_id, atol).unwrap());
         assert_eq!(sampled.stage.active_variable[&sample_id], None);
         assert_eq!(sample_set.is_sample_feasible(sample_id), Some(true));
         assert_eq!(sample_set.is_sample_feasible_relaxed(sample_id), Some(true));
@@ -2208,7 +2208,7 @@ mod tests {
             .evaluated_constraints()
             .get(&lower_row_id())
             .unwrap()
-            .is_feasible());
+            .is_feasible(atol));
         assert!(negative_boundary.feasible());
         assert!(negative_boundary.feasible_relaxed());
     }

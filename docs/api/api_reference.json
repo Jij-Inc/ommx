@@ -3640,7 +3640,7 @@
             },
             {
               "name": "evaluate",
-              "doc": "Evaluate the constraint with the given state.\n\n**Args:**\n\n- `state`: A State object, dict[int, float], or iterable of (int, float) tuples\n- `atol`: Optional absolute tolerance for evaluation\n\n**Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility",
+              "doc": "Evaluate the constraint with the given state.\n\n**Args:**\n\n- `state`: A State object, dict[int, float], or iterable of (int, float) tuples\n- `atol`: Optional absolute tolerance for evaluation\n\n**Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``",
               "signatures": [
                 {
                   "parameters": [
@@ -5748,6 +5748,32 @@
           "bases": [],
           "methods": [
             {
+              "name": "is_feasible",
+              "doc": "Check feasibility using the supplied absolute tolerance.\n\nThe query compares the stored violation with ``atol``. It does not\nre-evaluate the function or canonicalize the input state.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "violation",
               "doc": "Calculate the violation (constraint breach) value for this constraint\n\nReturns the amount by which this constraint is violated:\n- For $f(x) = 0$: returns $|f(x)|$\n- For $f(x) \\leq 0$: returns $\\max(0, f(x))$\n\nZero implies feasibility. A small positive violation may also be feasible\nwithin the evaluation tolerance; the residual is not rounded to zero.",
               "signatures": [
@@ -5814,17 +5840,6 @@
               "doc": "Get the evaluated constraint value",
               "type_": {
                 "display": "float",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "feasible",
-              "doc": "Get the feasibility status",
-              "type_": {
-                "display": "bool",
                 "link_target": null,
                 "children": []
               },
@@ -24307,6 +24322,17 @@
               "is_property": true
             },
             {
+              "name": "feasibility_atol",
+              "doc": "Absolute tolerance associated with the stored evaluation and feasibility results.\n\nPass this to an extracted constraint's explicit feasibility query to use\nthe enclosing result's threshold.",
+              "type_": {
+                "display": "float",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "feasible",
               "doc": "Get feasibility status for all samples",
               "type_": {
@@ -24598,7 +24624,45 @@
           "name": "SampledConstraint",
           "doc": "",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "feasible",
+              "doc": "Compute feasibility for every sample using the supplied tolerance.\n\nThis query does not re-evaluate the functions or change stored values.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[int, bool]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "description",
@@ -24642,28 +24706,6 @@
                   },
                   {
                     "display": "float",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "feasible",
-              "doc": "Get the feasibility status for all samples  ",
-              "type_": {
-                "display": "dict[int, bool]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "bool",
                     "link_target": null,
                     "children": []
                   }
@@ -26550,6 +26592,17 @@
                 ]
               },
               "is_property": true
+            },
+            {
+              "name": "feasibility_atol",
+              "doc": "Absolute tolerance associated with the stored evaluation and feasibility results.\n\nPass this to an extracted constraint's explicit feasibility query to use\nthe enclosing result's threshold.",
+              "type_": {
+                "display": "float",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "feasible",

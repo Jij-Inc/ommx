@@ -390,6 +390,25 @@ happens before constraint evaluation; the metric uses the resulting values.
 Solution feasibility requires each constraint to pass its own threshold, not
 the total violation to be within one shared threshold.
 
+Constraint-level queries require an explicit tolerance. Replace
+`evaluated.feasible` with `evaluated.is_feasible(atol=...)` and
+`sampled.feasible` with `sampled.feasible(atol=...)` (a sample-ID-to-bool map).
+Solution/SampleSet keep their existing feasibility properties and expose
+`feasibility_atol` so extracted constraints can use the same threshold:
+
+```python
+evaluated = solution.constraints[1]
+evaluated.is_feasible(atol=solution.feasibility_atol)
+evaluated.is_feasible(atol=1e-8)  # A separate query on the same stored violation
+```
+
+Changing the query tolerance does not repeat input canonicalization or activation
+classification. Tolerances are retained only with tolerance-dependent decisions:
+regular constraint values retain none, while special-constraint activation
+records retain the conditions used to classify them. The separation of tolerance
+roles and the persisted evaluation context is tracked in
+[issue #1180](https://github.com/Jij-Inc/ommx/issues/1180).
+
 The v2 protobuf format retains `feasible` flags/maps and `feasibility_atol` on
 Solution/SampleSet. Consumers can read the result and its tolerance without an
 OMMX SDK. The protobuf schema is unchanged. When loading the data, the SDK

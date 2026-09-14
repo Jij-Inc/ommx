@@ -54,7 +54,7 @@ impl From<Solution> for v2::Solution {
             required_features,
             objective,
             decision_variables: Some(decision_variables.into()),
-            evaluated_regular_constraints: Some(evaluated_constraints.into()),
+            evaluated_regular_constraints: Some(evaluated_constraints.into_v2(feasibility_atol)),
             feasible,
             optimality: optimality.into(),
             relaxation: relaxation.into(),
@@ -63,9 +63,13 @@ impl From<Solution> for v2::Solution {
             evaluated_named_functions: Some(evaluated_named_functions.into()),
             metadata,
             annotations: crate::v2_io::extension_annotations_to_v2_map(annotations),
-            evaluated_indicator_constraints: Some(evaluated_indicator_constraints.into()),
-            evaluated_one_hot_constraints: Some(evaluated_one_hot_constraints.into()),
-            evaluated_sos1_constraints: Some(evaluated_sos1_constraints.into()),
+            evaluated_indicator_constraints: Some(
+                evaluated_indicator_constraints.into_v2(feasibility_atol),
+            ),
+            evaluated_one_hot_constraints: Some(
+                evaluated_one_hot_constraints.into_v2(feasibility_atol),
+            ),
+            evaluated_sos1_constraints: Some(evaluated_sos1_constraints.into_v2(feasibility_atol)),
             feasibility_atol: Some(feasibility_atol.into_inner()),
         }
     }

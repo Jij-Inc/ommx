@@ -38,7 +38,7 @@ impl Evaluate for Constraint<Created> {
             stage: EvaluatedData {
                 evaluated_value,
                 dual_variable: None,
-                atol,
+
                 used_decision_variable_ids,
             },
         })
@@ -56,7 +56,6 @@ impl Evaluate for Constraint<Created> {
             stage: SampledData {
                 evaluated_values,
                 dual_variables: None,
-                atol,
                 used_decision_variable_ids: self.stage.function.required_ids(),
             },
         })
@@ -78,8 +77,8 @@ impl Evaluate for Constraint<Created> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SampledConstraintData;
     use crate::{random::*, Sampled};
-    use crate::{EvaluatedConstraintBehavior, SampledConstraintData};
     use proptest::prelude::*;
 
     #[test]
@@ -103,7 +102,7 @@ mod tests {
                 .unwrap();
             let sampled = constraint.evaluate_samples(&samples, atol).unwrap();
 
-            assert!(evaluated.is_feasible());
+            assert!(evaluated.is_feasible(atol));
             assert_eq!(sampled.is_feasible(sample_id, atol), Some(true));
             assert!(sampled.feasible_ids(atol).contains(&sample_id));
 
@@ -118,7 +117,7 @@ mod tests {
                 .unwrap();
             let sampled = outside_constraint.evaluate_samples(&samples, atol).unwrap();
 
-            assert!(!evaluated.is_feasible());
+            assert!(!evaluated.is_feasible(atol));
             assert_eq!(sampled.is_feasible(sample_id, atol), Some(false));
             assert!(sampled.infeasible_ids(atol).contains(&sample_id));
         }

@@ -99,7 +99,7 @@ impl Evaluate for IndicatorConstraint<Created> {
             equality: self.equality,
             stage: IndicatorEvaluatedData {
                 evaluated_value,
-                atol,
+                activation_atol: atol,
                 indicator_active: indicator_on,
                 used_decision_variable_ids,
             },
@@ -145,7 +145,7 @@ impl Evaluate for IndicatorConstraint<Created> {
             equality: self.equality,
             stage: IndicatorSampledData {
                 evaluated_values,
-                atol,
+                activation_atol: atol,
                 indicator_active,
                 used_decision_variable_ids: self.required_ids(),
             },
@@ -195,7 +195,7 @@ mod tests {
 
         let evaluated = boundary_constraint.evaluate(&boundary_state, atol).unwrap();
         assert!(evaluated.stage.indicator_active);
-        assert!(evaluated.is_feasible());
+        assert!(evaluated.is_feasible(atol));
 
         let sample_id = crate::SampleID::from(7);
         let sampled = boundary_constraint
@@ -205,7 +205,10 @@ mod tests {
             )
             .unwrap();
         assert_eq!(sampled.stage.indicator_active.get(&sample_id), Some(&true));
-        assert_eq!(sampled.is_feasible_for(sample_id).as_ref(), Some(&true));
+        assert_eq!(
+            sampled.is_feasible_for(sample_id, atol).as_ref(),
+            Some(&true)
+        );
 
         let (outcome, _) = boundary_constraint
             .clone()
@@ -222,7 +225,7 @@ mod tests {
         assert!(!outside_constraint
             .evaluate(&exact_on, atol)
             .unwrap()
-            .is_feasible());
+            .is_feasible(atol));
 
         let outside_indicator = f64::from_bits(indicator_boundary.to_bits() + 1);
         let invalid_state = crate::v1::State::from(HashMap::from([(10, outside_indicator)]));
@@ -241,7 +244,7 @@ mod tests {
         // x1 = 3, x10 = 1 (indicator ON, 3 - 5 = -2 <= 0 → feasible)
         let state = crate::v1::State::from(HashMap::from([(1, 3.0), (10, 1.0)]));
         let result = ic.evaluate(&state, ATol::default()).unwrap();
-        assert!(result.is_feasible());
+        assert!(result.is_feasible(crate::ATol::default()));
         assert!(result.stage.indicator_active);
         assert_eq!(result.stage.evaluated_value, -2.0);
     }
@@ -258,7 +261,7 @@ mod tests {
         // x1 = 7, x10 = 1 (indicator ON, 7 - 5 = 2 > 0 → infeasible)
         let state = crate::v1::State::from(HashMap::from([(1, 7.0), (10, 1.0)]));
         let result = ic.evaluate(&state, ATol::default()).unwrap();
-        assert!(!result.is_feasible());
+        assert!(!result.is_feasible(crate::ATol::default()));
         assert!(result.stage.indicator_active);
         assert_eq!(result.stage.evaluated_value, 2.0);
     }
@@ -275,7 +278,7 @@ mod tests {
         // x1 = 100, x10 = 0 (indicator OFF → always feasible regardless of f(x))
         let state = crate::v1::State::from(HashMap::from([(1, 100.0), (10, 0.0)]));
         let result = ic.evaluate(&state, ATol::default()).unwrap();
-        assert!(result.is_feasible());
+        assert!(result.is_feasible(crate::ATol::default()));
         assert!(!result.stage.indicator_active);
         assert_eq!(result.stage.evaluated_value, 95.0); // f(x) still evaluated for diagnostics
     }
@@ -390,9 +393,9 @@ mod tests {
         let s2 = crate::SampleID::from(2);
 
         // Feasibility
-        assert!(result.is_feasible_for(s0).unwrap());
-        assert!(!result.is_feasible_for(s1).unwrap());
-        assert!(result.is_feasible_for(s2).unwrap());
+        assert!(result.is_feasible_for(s0, crate::ATol::default()).unwrap());
+        assert!(!result.is_feasible_for(s1, crate::ATol::default()).unwrap());
+        assert!(result.is_feasible_for(s2, crate::ATol::default()).unwrap());
 
         // Indicator active
         assert!(result.stage.indicator_active[&s0]);
