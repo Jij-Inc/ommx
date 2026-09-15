@@ -20,6 +20,7 @@ __all__ = [
     "negotiated_sample_set",
     "negotiated_solution",
     "parametric_instance",
+    "raw_v1_instance",
     "sample_set",
     "solution",
     "v1_constraint",
@@ -58,6 +59,8 @@ def negotiated_sample_set() -> ommx.SampleSet: ...
 def negotiated_solution() -> ommx.Solution: ...
 
 def parametric_instance() -> ommx.ParametricInstance: ...
+
+def raw_v1_instance() -> ommx.Instance: ...
 
 def sample_set() -> ommx.SampleSet: ...
 

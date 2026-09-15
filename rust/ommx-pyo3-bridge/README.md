@@ -78,27 +78,59 @@ Probe one protocol at a time with `resolve_target::<P>`. The order of the
 caller's `if` statements expresses its preference:
 
 ```rust,no_run
+use ommx::{Constraint, ConstraintID, DecisionVariable, Instance, Sense};
 use ommx_pyo3_bridge::{resolve_target, ProtobufV1, ProtobufV2, PyInstance};
 use pyo3::{exceptions::PyImportError, prelude::*};
+use std::collections::BTreeMap;
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn compile(py: Python<'_>) -> PyResult<PyInstance> {
     if let Some(target) = resolve_target::<ProtobufV2>(py)? {
-        // Compile the v3 model, including special-constraint promotions.
-        let instance: ommx::Instance = compile_normalized();
+        let mut instance: Instance = compile_regular();
+        // Promote x + y = 1 to a first-class one-hot constraint, requiring v2.
+        let source = ConstraintID::from(23);
+        let promoted = instance.promote_one_hot(&[source].into_iter().collect());
+        promoted[&source]
+            .as_ref()
+            .expect("the example is exactly one-hot");
         return target.transfer(py, instance);
     }
     if let Some(target) = resolve_target::<ProtobufV1>(py)? {
-        // Compile ordinary constraints and advisory ConstraintHints.
-        let instance: ommx::v1::Instance = compile_legacy();
+        // Keep x + y = 1 as a regular constraint in the same Rust domain model.
+        let instance: Instance = compile_regular();
         return target.transfer(py, instance);
     }
     Err(PyImportError::new_err("No supported OMMX transfer protocol"))
 }
-# fn compile_normalized() -> ommx::Instance { unimplemented!() }
-# fn compile_legacy() -> ommx::v1::Instance { unimplemented!() }
+
+fn compile_regular() -> Instance {
+    // Minimize x subject to x + y = 1, with binary x and y.
+    let equality =
+        ((ommx::linear!(7) + ommx::linear!(8)).unwrap() + ommx::coeff!(-1.0)).unwrap();
+    Instance::builder()
+        .sense(Sense::Minimize)
+        .objective(ommx::Function::from(ommx::linear!(7)))
+        .decision_variables(BTreeMap::from([
+            (7.into(), DecisionVariable::binary()),
+            (8.into(), DecisionVariable::binary()),
+        ]))
+        .constraints(BTreeMap::from([(
+            23.into(),
+            Constraint::equal_to_zero(equality.into()),
+        )]))
+        .build()
+        .unwrap()
+}
 ```
+
+Both paths construct `ommx::Instance`. `Target<ProtobufV1>::transfer` calls
+its checked `to_v1_bytes()` serializer; `Target<ProtobufV2>::transfer` calls
+`to_v2_bytes()`. The promoted instance contains a first-class one-hot constraint
+that v1 cannot represent: sending it over ProtobufV1 would fail during export.
+The V1 path keeps the regular equality so it can be serialized without losing
+the model's meaning. The compiler chooses this representation before transfer;
+the bridge does not lower special constraints or retry after an export error.
 
 The stub is `def compile() -> ommx.Instance`. Protocols belong to target
 selection and transfer; the return type is simply `PyInstance` on both paths.
@@ -161,18 +193,19 @@ They use private receivers on `ommx._ommx_rust`, named
 `_bridge_protobuf_v2_<kind>_from_bytes(bytes)`, where `<kind>` is `instance`,
 `parametric_instance`, `solution`, or `sample_set`. Public Python class
 constructors and decoding methods are not part of the transfer contract.
-ProtobufV1 accepts complete raw `ommx::v1`
-roots without parsing them into the Rust v3 domain model. This preserves
-advisory `ConstraintHints` until they reach the receiver. A v3 receiver may
-ignore those hints, as allowed by the schema.
 
-`ommx::Instance` and `ommx::ParametricInstance` also export over ProtobufV1
+`ommx::Instance` and `ommx::ParametricInstance` export over ProtobufV1
 through their checked v1 serializers. Special constraints that cannot be
 represented in v1 cause an export error. Domain `Solution` and `SampleSet` only
 export
 over ProtobufV2: their existing v1 conversions discard special-constraint
 results, so callers choosing ProtobufV1 must explicitly construct v1 messages.
 All four domain roots export over ProtobufV2.
+
+For callers that already hold complete raw `ommx::v1` roots, ProtobufV1 also
+accepts those messages without parsing them into the Rust v3 domain model.
+This preserves advisory `ConstraintHints` until they reach the receiver. A v3
+receiver may ignore those hints, as allowed by the schema.
 
 Components use binding-private receivers on `ommx._ommx_rust`:
 

@@ -26,8 +26,7 @@ fn negotiated_instance(
         if let Some(callback) = after_resolve {
             callback.call0(py)?;
         }
-        let value: ommx::v1::Instance = component_instance().try_into().unwrap();
-        return target.transfer(py, value);
+        return target.transfer(py, component_instance());
     }
     Err(no_supported_protocol())
 }
@@ -88,6 +87,24 @@ fn special_instance() -> ommx::Instance {
         .unwrap()
 }
 
+fn regular_instance() -> ommx::Instance {
+    ommx::Instance::builder()
+        .sense(ommx::Sense::Minimize)
+        .objective(component_function())
+        .decision_variables(BTreeMap::from([(
+            7.into(),
+            ommx::DecisionVariable::binary(),
+        )]))
+        .constraints(BTreeMap::from([(
+            23.into(),
+            ommx::Constraint::equal_to_zero(
+                (ommx::linear!(7) + ommx::coeff!(-1.0)).unwrap().into(),
+            ),
+        )]))
+        .build()
+        .unwrap()
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn compile_for_target(py: Python<'_>) -> PyResult<PyInstance> {
@@ -95,9 +112,17 @@ fn compile_for_target(py: Python<'_>) -> PyResult<PyInstance> {
         return target.transfer(py, special_instance());
     }
     if let Some(target) = resolve_target::<ProtobufV1>(py)? {
-        return target.transfer(py, hinted_instance());
+        return target.transfer(py, regular_instance());
     }
     Err(no_supported_protocol())
+}
+
+// Raw-message transport is separate from compiling a Rust SDK domain model.
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+fn raw_v1_instance(py: Python<'_>) -> PyResult<PyInstance> {
+    let target = resolve_target::<ProtobufV1>(py)?.ok_or_else(no_supported_protocol)?;
+    target.transfer(py, hinted_instance())
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
@@ -227,6 +252,7 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(negotiated_instance, module)?)?;
     module.add_function(wrap_pyfunction!(completed_instance, module)?)?;
     module.add_function(wrap_pyfunction!(compile_for_target, module)?)?;
+    module.add_function(wrap_pyfunction!(raw_v1_instance, module)?)?;
     module.add_function(wrap_pyfunction!(v1_first_instance, module)?)?;
     module.add_function(wrap_pyfunction!(has_legacy_hint, module)?)?;
     module.add_function(wrap_pyfunction!(invalid_instance, module)?)?;

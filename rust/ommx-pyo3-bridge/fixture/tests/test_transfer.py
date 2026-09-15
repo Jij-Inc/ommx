@@ -223,7 +223,7 @@ def test_completed_output_returns_the_received_python_object(monkeypatch):
     assert len(received) == 1
 
 
-def test_compilation_uses_selected_target_and_preserves_v1_hints(monkeypatch):
+def test_compilation_uses_selected_target_with_rust_domain_instances(monkeypatch):
     value = fixture.compile_for_target()
     assert set(value.one_hot_constraints) == {23}
     assert value.constraints == {}
@@ -235,10 +235,24 @@ def test_compilation_uses_selected_target_and_preserves_v1_hints(monkeypatch):
     assert legacy.one_hot_constraints == {}
     assert len(calls) == 1
     assert calls[0][0] == 1
-    # Check the complete wire message, before the v3 parser ignores advisory hints.
-    assert fixture.has_legacy_hint(calls[0][1])
+    restored = INSTANCE.from_v1_bytes(calls[0][1])
+    assert set(restored.constraints) == {23}
+    assert restored.one_hot_constraints == {}
     for state in ({7: 0.0}, {7: 1.0}):
         assert legacy.evaluate(state).feasible == value.evaluate(state).feasible
+        assert legacy.evaluate(state).objective == value.evaluate(state).objective
+
+
+def test_raw_v1_transport_preserves_advisory_hints(monkeypatch):
+    advertise(monkeypatch, [1])
+    calls = spy_instance(monkeypatch)
+    value = fixture.raw_v1_instance()
+    assert set(value.constraints) == {23}
+    assert value.one_hot_constraints == {}
+    assert len(calls) == 1
+    assert calls[0][0] == 1
+    # Check the complete wire message, before the v3 parser ignores advisory hints.
+    assert fixture.has_legacy_hint(calls[0][1])
 
 
 def test_v1_export_error_does_not_retry_v2(monkeypatch):
