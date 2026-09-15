@@ -116,6 +116,15 @@ impl Solution {
         self.inner.feasible()
     }
 
+    /// Absolute tolerance associated with the stored evaluation and feasibility results.
+    ///
+    /// Pass this to an extracted constraint's explicit feasibility query to use
+    /// the enclosing result's threshold.
+    #[getter]
+    pub fn feasibility_atol(&self) -> f64 {
+        self.inner.feasibility_atol().into_inner()
+    }
+
     /// Get the optimization sense (minimize or maximize)
     #[getter]
     pub fn sense(&self) -> PyResult<crate::Sense> {
@@ -525,7 +534,9 @@ impl Solution {
         )
     }
 
-    /// DataFrame of evaluated constraints, dispatched on `kind=`. See
+    /// DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.
+    ///
+    /// The `violation` column uses {meth}`constraint_violation`. Dispatched on `kind=`. See
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` semantics.
     ///
@@ -558,8 +569,15 @@ impl Solution {
                 let mut entries: Vec<Bound<'py, pyo3::types::PyAny>> = Vec::new();
                 for (id, c) in coll.inner().iter() {
                     let m = meta.collect_for(*id);
-                    let dict = crate::pandas::WithModelingContext::new((*id, c), &m)
-                        .to_pandas_entry(py)?;
+                    let dict = crate::pandas::WithModelingContext::new(
+                        (*id, c, self.inner.feasibility_atol()),
+                        &m,
+                    )
+                    .to_pandas_entry(py)?;
+                    dict.set_item(
+                        "violation",
+                        self.constraint_violation(id.into_inner(), kind)?,
+                    )?;
                     if flags.removed_reason {
                         // Always emit the `removed_reason` column when
                         // requested so its existence in the resulting
@@ -755,21 +773,49 @@ impl Solution {
         self.clone()
     }
 
-    /// Calculate total constraint violation using L1 norm (sum of absolute violations)
+    /// Sum the nonnegative scalar violation of every constraint, including removed constraints.
     ///
-    /// Returns the sum of violations across all constraints (including removed constraints):
-    /// - For equality constraints: $\sum |f(x)|$
-    /// - For inequality constraints: $\sum \max(0, f(x))$
-    pub fn total_violation_l1(&self) -> f64 {
-        self.inner.total_violation_l1()
+    /// - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
+    /// - Indicator: the inner violation when active, otherwise zero.
+    /// - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
+    /// - SOS1: `min_i sum_{j != i} abs(x_j)`.
+    ///
+    /// Each constraint is feasible exactly when its violation is at most the
+    /// evaluation tolerance. This threshold applies to each constraint separately,
+    /// not to the total. Zero therefore implies that all constraints are feasible.
+    /// Variable bound and kind violations
+    /// are not added. Values use the evaluated state after discrete-value
+    /// canonicalization. Lowering need not preserve the metric: a retained
+    /// original and its generated constraints each contribute.
+    ///
+    /// Use {meth}`constraint_violation` for individual values, also available in
+    /// the `violation` column of {meth}`constraints_df` for every constraint kind.
+    pub fn total_violation(&self) -> f64 {
+        self.inner.total_violation()
     }
 
-    /// Calculate total constraint violation using L2 norm squared (sum of squared violations)
+    /// Get one constraint's nonnegative scalar violation.
     ///
-    /// Returns the sum of squared violations across all constraints (including removed constraints):
-    /// - For equality constraints: $\sum (f(x))^2$
-    /// - For inequality constraints: $\sum (\max(0, f(x)))^2$
-    pub fn total_violation_l2(&self) -> f64 {
-        self.inner.total_violation_l2()
+    /// Uses the definitions in {meth}`total_violation`, including for removed
+    /// constraints. IDs are independent for each `kind`. Raises `KeyError` when
+    /// the ID is absent from that constraint family.
+    #[pyo3(signature = (constraint_id, *, kind = ConstraintKind::Regular))]
+    pub fn constraint_violation(&self, constraint_id: u64, kind: ConstraintKind) -> PyResult<f64> {
+        let violation = match kind {
+            ConstraintKind::Regular => self.inner.constraint_violation(constraint_id.into()),
+            ConstraintKind::Indicator => self
+                .inner
+                .indicator_constraint_violation(constraint_id.into()),
+            ConstraintKind::OneHot => self
+                .inner
+                .one_hot_constraint_violation(constraint_id.into()),
+            ConstraintKind::Sos1 => self.inner.sos1_constraint_violation(constraint_id.into()),
+        };
+        violation.ok_or_else(|| {
+            PyKeyError::new_err(format!(
+                "Unknown {} constraint ID: {constraint_id}",
+                kind.as_str()
+            ))
+        })
     }
 }

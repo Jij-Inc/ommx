@@ -411,8 +411,8 @@ mod tests {
                 atol,
             )
             .unwrap();
-        assert!(feasible.is_feasible_with_tolerance(atol));
-        assert!(!infeasible.is_feasible_with_tolerance(atol));
+        assert!(feasible.is_feasible(atol));
+        assert!(!infeasible.is_feasible(atol));
     }
 
     #[test]
@@ -432,8 +432,8 @@ mod tests {
         let infeasible = constraint
             .evaluate(&crate::v1::State::from_iter([(1, 1.0)]), atol)
             .unwrap();
-        assert!(feasible.is_feasible_with_tolerance(atol));
-        assert!(!infeasible.is_feasible_with_tolerance(atol));
+        assert!(feasible.is_feasible(atol));
+        assert!(!infeasible.is_feasible(atol));
     }
 
     #[test]
