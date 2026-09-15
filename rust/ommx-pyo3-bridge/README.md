@@ -26,7 +26,49 @@ At runtime this return value is an `ommx.Function`. `pyo3-stub-gen` also emits
 `PySolution`, and `PySampleSet`. Each wrapper owns a completed Python object
 and is constructed through `Target::transfer`.
 
-The consuming extension and the bridge must resolve a compatible PyO3 version.
+## Sender and receiver contract
+
+This crate serves two independently built extensions: a producer such as
+JijModeling, and the installed OMMX Python SDK. They communicate through a
+Python callable contract.
+
+| Side | Responsibility |
+| --- | --- |
+| Sender / transfer API | Read `ommx._ommx_rust._bridge_supported_protocols()`, select a protocol, and call its named receiver functions under `ommx._ommx_rust` with the specified arguments. |
+| Python SDK / receiver API | Supply factories through protocol-specific configurations. `register_receivers` implements the required functions and derives the supported-protocol list from those configurations. |
+
+The sender relies on those functions and their behavior, not on how the SDK
+implements them. A receiver can implement the same contract without using this
+crate. The receiver API is an implementation aid: keeping both sides' endpoint
+names, call signatures, and codecs in the bridge crate makes their definitions
+easier to maintain together.
+
+The contract specifies payload representations, ownership, and canonical
+Python return types such as `ommx.Instance`. It does not require public Python
+constructors or `from_v1_bytes` / `from_v2_bytes` methods. The SDK's factories
+must construct the promised Python classes and preserve the supplied domain
+data; the sender does not inspect their private Rust implementation or validate
+the returned Python class at runtime. Rust values and factory pointers stay
+inside their respective extensions.
+
+Compatibility is determined by the selected protocol, not by matching SDK or
+bridge crate version numbers:
+
+- Once a protocol is published, its ID and callable contract must retain their
+  meaning. The underscore-prefixed receiver functions are internal to the
+  bridge, but independently distributed senders depend on them. Incompatible
+  contract changes, including adding required receiver functions, need a new
+  protocol ID.
+- Protocol support covers the transfer representation, not every payload
+  feature. Serializers and parsers decide whether a particular value is
+  supported. A failed transfer never automatically retries another protocol.
+- A receiver can register old and new protocol configurations together during
+  migration. Removing support breaks senders that rely on that protocol and
+  must be treated as an explicit compatibility change.
+
+The two extensions may use different bridge crate versions while honoring the
+same runtime contract. Within each extension, the SDK, bridge, and PyO3 Rust
+dependencies must resolve compatible types.
 This release accepts PyO3 0.27.2 through the 0.29 release line and uses
 `pyo3-stub-gen` 0.23.
 
