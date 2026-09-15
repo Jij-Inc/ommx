@@ -35,8 +35,6 @@ tasks:
 
   pyo3-bridge:check:
     desc: Check generated PyO3 bridge stubs and fixture typing
-    env:
-      VIRTUAL_ENV: "{{.ROOT_DIR}}/.venv"
     cmds:
       - uv sync --locked --only-group typecheck --no-install-workspace --inexact
       - cargo run -p ommx-pyo3-bridge-fixture --bin stub_gen
