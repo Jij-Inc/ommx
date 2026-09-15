@@ -1720,7 +1720,8 @@ impl<T: ConstraintType> SampledCollection<T> {
 }
 
 impl SampledCollection<Constraint> {
-    /// SampleSet supplies the tolerance for legacy wire feasibility maps.
+    /// SampleSet supplies the v1 parser's default tolerance so row feasibility
+    /// maps use the same conditions as the serialized root maps.
     pub(crate) fn into_v1(self, atol: ATol) -> Vec<v1::SampledConstraint> {
         let value = self;
         let SampledCollection {

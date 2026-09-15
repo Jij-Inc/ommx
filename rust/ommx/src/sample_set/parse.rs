@@ -605,6 +605,9 @@ impl TryFrom<v2::SampleSet> for SampleSet {
 /// `Parse` impl above initializes those collections to
 /// `Default::default()` for symmetry. Round-trip through `to_v1_bytes` /
 /// `from_v1_bytes` preserves variable labels and regular-constraint context.
+/// Since v1 cannot store a tolerance, row and root feasibility maps are
+/// recomputed from the retained constraints and variable values using
+/// [`ATol::default`], which the v1 parser also uses.
 impl From<SampleSet> for crate::v1::SampleSet {
     fn from(sample_set: SampleSet) -> Self {
         let SampleSet {
@@ -616,16 +619,26 @@ impl From<SampleSet> for crate::v1::SampleSet {
             sos1_constraints: _,
             named_functions,
             sense,
-            feasible,
-            feasible_relaxed,
-            feasibility_atol,
+            feasible: _,
+            feasible_relaxed: _,
+            feasibility_atol: _,
             metadata,
             annotations,
         } = sample_set;
+        let atol = ATol::default();
+        let (feasible, feasible_relaxed) = SampleSetBuilder::compute_feasibility(
+            &decision_variables,
+            &constraints,
+            &Default::default(),
+            &Default::default(),
+            &Default::default(),
+            &objectives.ids(),
+            atol,
+        );
         let decision_variables: Vec<crate::v1::SampledDecisionVariable> =
             (&decision_variables).into();
         let objectives = Some(objectives.into());
-        let constraints: Vec<crate::v1::SampledConstraint> = constraints.into_v1(feasibility_atol);
+        let constraints: Vec<crate::v1::SampledConstraint> = constraints.into_v1(atol);
         let named_functions: Vec<crate::v1::SampledNamedFunction> = named_functions.into();
         let sense = sense.into();
         let feasible = feasible

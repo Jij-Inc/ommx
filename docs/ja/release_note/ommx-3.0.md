@@ -29,6 +29,10 @@ SampleSet の feasibility と最良実行可能解の選択でも変数の bound
 取り出した Solution の判定と一致するようにしました。変数の違反は
 `total_violation` の集計には含めません。
 
+旧 v1 形式への書き出しでは、保存される通常制約と変数値から SDK の既定の許容誤差で
+feasibility を再計算し、読み込み時の判定と揃えます。元の許容誤差とネイティブの
+特殊制約を保存するには v2 を使用してください。
+
 Solution の全制約種別の DataFrame に `feasible` と `violation` を追加しました。
 すべての制約を `violation <= atol` で判定します。OneHot と SOS1 の許容誤差は
 各メンバーへの個別適用から、変更量の合計への適用に変わります。

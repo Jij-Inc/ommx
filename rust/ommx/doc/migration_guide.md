@@ -32,8 +32,8 @@ Three lifecycle stages are defined:
 | Type alias | Full type | Stage data |
 |---|---|---|
 | `Constraint` | `Constraint<Created>` | `CreatedData { function }` |
-| `EvaluatedConstraint` | `Constraint<Evaluated>` | `EvaluatedData { evaluated_value, atol, ... }` |
-| `SampledConstraint` | `Constraint<SampledStage>` | `SampledData { evaluated_values, atol, ... }` |
+| `EvaluatedConstraint` | `Constraint<Evaluated>` | `EvaluatedData { evaluated_value, used_decision_variable_ids, dual_variable }` |
+| `SampledConstraint` | `Constraint<SampledStage>` | `SampledData { evaluated_values, used_decision_variable_ids, dual_variables }` |
 
 Removed constraints are managed at the collection level —
 `ConstraintCollection` stores them as `(Constraint<Created>, RemovedReason)`
@@ -104,6 +104,13 @@ their wire rows do not carry the member values needed to recover the metric.
 Evaluated/sampled v2 row and collection `From` conversions, and sampled v1
 collection `From` conversions, are also removed. Serialize through
 Solution/SampleSet, which supply the tolerance for the wire feasibility fields.
+
+The legacy v1 format cannot store the tolerance or native special constraints.
+Its exporters recompute all feasibility flags from retained regular constraints
+and variable values at `ATol::default()`, as its parsers do. A v1 round-trip
+therefore requires the same default tolerance on write and read, and may change
+feasibility from the original result. Use v2 to preserve the original tolerance
+and special constraints.
 
 Partial evaluation rejects fixings that eliminate approximately zero members
 from an active structural constraint when their accumulated errors could change

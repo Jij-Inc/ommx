@@ -29,6 +29,10 @@ SampleSet feasibility and best-feasible selection now include variable bounds
 and kinds, matching the extracted Solution. These checks do not contribute to
 `total_violation`.
 
+Legacy v1 export recomputes feasibility at the SDK default tolerance for retained
+regular constraints and variable values, matching v1 import. Use v2 to preserve
+custom tolerance and native special constraints.
+
 All Solution constraint DataFrames now expose `feasible` and `violation`.
 All constraint feasibility is derived from `violation <= atol`; OneHot and SOS1
 now apply tolerance to the total change instead of each member separately.

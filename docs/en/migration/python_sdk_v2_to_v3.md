@@ -420,6 +420,13 @@ OMMX SDK. The protobuf schema is unchanged. When loading the data, the SDK
 recomputes OneHot/SOS1 violations from the saved variable values and validates
 the flags using the persisted tolerance.
 
+The legacy v1 format cannot store the tolerance or native special constraints.
+`to_v1_bytes()` recomputes feasibility from the retained regular constraints and
+variable values using the SDK's default tolerance, as `from_v1_bytes()` does.
+Use the same default tolerance when writing and reading v1 data. This conversion
+may change feasibility; use v2 to preserve the original tolerance and special
+constraints.
+
 Partial evaluation rejects a fixing when eliminating an approximately zero
 structural member could change feasibility under the sum of member errors and
 the constraint must remain active. Exact-zero elimination remains supported.

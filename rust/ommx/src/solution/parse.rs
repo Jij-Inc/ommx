@@ -106,7 +106,12 @@ impl Parse for crate::v1::Solution {
 
         let mut decision_variables = std::collections::BTreeMap::default();
         let mut variable_labels = crate::VariableLabelStore::default();
-        for dv in self.decision_variables {
+        for mut dv in self.decision_variables {
+            // In a Solution, substituted_value is a saved evaluation value,
+            // not a model fixing. It may violate the variable's domain; the
+            // root feasibility flags describe that result. Parse the definition
+            // separately and validate finiteness/value agreement below.
+            let saved_value = dv.substituted_value.take();
             // Parse the DecisionVariable to get strongly-typed version + drained label
             let parsed: crate::decision_variable::parse::ParsedDecisionVariable =
                 dv.parse_as(&(), message, "decision_variables")?;
@@ -114,12 +119,11 @@ impl Parse for crate::v1::Solution {
             let dv_id = parsed_id.into_inner();
             let parsed_dv = parsed.variable;
             let label = parsed.label;
-            let parsed_fixed_value = parsed.fixed_value;
 
             // Get the value from state or substituted_value
             let atol = ATol::default();
             let (value, substituted_value_assertion) =
-                match (state.entries.get(&dv_id), parsed_fixed_value.as_ref()) {
+                match (state.entries.get(&dv_id), saved_value.as_ref()) {
                     (Some(value), None) | (None, Some(value)) => (*value, None),
                     (Some(value), Some(substituted_value)) => (*value, Some(*substituted_value)),
                     (None, None) => {
@@ -440,10 +444,11 @@ impl TryFrom<v2::Solution> for Solution {
 /// `Parse` impl above initializes those collections to
 /// `Default::default()` for symmetry. Round-trip through `to_v1_bytes` /
 /// `from_v1_bytes` preserves variable labels and regular-constraint context.
+/// Since v1 cannot store a tolerance, feasibility flags are recomputed from
+/// the retained constraints and variable values using [`ATol::default`],
+/// which the v1 parser also uses.
 impl From<Solution> for crate::v1::Solution {
     fn from(solution: Solution) -> Self {
-        let feasible = solution.feasible();
-        let feasible_relaxed = Some(solution.feasible_relaxed());
         let Solution {
             objective,
             evaluated_constraints,
@@ -459,6 +464,11 @@ impl From<Solution> for crate::v1::Solution {
             metadata,
             annotations,
         } = solution;
+        let atol = ATol::default();
+        let variables_feasible = decision_variables.values().all(|dv| dv.is_valid(atol));
+        let feasible = variables_feasible && evaluated_constraints.is_feasible(atol);
+        let feasible_relaxed =
+            Some(variables_feasible && evaluated_constraints.is_feasible_relaxed(atol));
         let state = {
             let entries = decision_variables
                 .iter()

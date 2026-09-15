@@ -54,6 +54,43 @@ def test_explicit_feasibility_queries_preserve_evaluation_and_saved_conditions()
         assert result.to_v2_bytes() == wire
 
 
+@pytest.mark.parametrize(
+    "atol,value,expected", [(1e-4, 1e-5, False), (1e-8, 1e-7, True)]
+)
+def test_v1_roundtrip_uses_default_feasibility_tolerance(atol, value, expected):
+    x = DecisionVariable.continuous(0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=0,
+        constraints={0: x == 0},
+        sense=Sense.Minimize,
+    )
+    solution = instance.evaluate({0: value}, atol=atol)
+    samples = instance.evaluate_samples({7: {0: value}, 8: {0: 0}}, atol=atol)
+    assert solution.feasible is not expected
+    assert samples.feasible == {7: not expected, 8: True}
+
+    restored = Solution.from_v1_bytes(solution.to_v1_bytes())
+    restored_samples = SampleSet.from_v1_bytes(samples.to_v1_bytes())
+    assert restored_samples.feasible == {7: expected, 8: True}
+    assert restored_samples.feasible_relaxed == {7: expected, 8: True}
+    assert restored_samples.constraints[0].feasible(
+        atol=restored_samples.feasibility_atol
+    ) == {7: expected, 8: True}
+    for result in [restored, restored_samples.get(7)]:
+        assert result.feasibility_atol == 1e-6
+        assert result.feasible is expected
+        assert result.feasible_relaxed is expected
+        assert result.constraints[0].violation() == value
+
+    restored_v2 = Solution.from_v2_bytes(solution.to_v2_bytes())
+    restored_samples_v2 = SampleSet.from_v2_bytes(samples.to_v2_bytes())
+    assert restored_v2.feasibility_atol == atol
+    assert restored_v2.feasible is solution.feasible
+    assert restored_samples_v2.feasibility_atol == atol
+    assert restored_samples_v2.feasible == samples.feasible
+
+
 def test_evaluated_constraint_violation_equality():
     """Test violation calculation for equality constraints."""
     # Create instance with equality constraint: x = 2.5 evaluated at x=0
