@@ -1,9 +1,14 @@
 use super::*;
-use pyo3::{
-    exceptions::{PyRuntimeError, PyValueError},
-    types::PyBytes,
-    IntoPyObjectExt,
-};
+use pyo3::{exceptions::PyValueError, types::PyBytes, IntoPyObjectExt};
+
+pyo3::create_exception!(sdk, TestBridgeError, pyo3::exceptions::PyRuntimeError);
+
+fn register(
+    module: &Bound<'_, PyModule>,
+    configs: impl IntoIterator<Item = ReceiverConfig>,
+) -> PyResult<()> {
+    super::register_receivers(module, &module.py().get_type::<TestBridgeError>(), configs)
+}
 
 macro_rules! config {
     ($config:ident, $value:expr) => {
@@ -50,7 +55,7 @@ fn advertisement_matches_registered_endpoints_without_public_classes() {
         ] {
             // Registration needs no Python classes or public byte decoders.
             let module = PyModule::new(py, "sdk").unwrap();
-            register_receivers(&module, configs).unwrap();
+            register(&module, configs).unwrap();
             assert_eq!(advertised(&module), expected);
             for version in [1, 2] {
                 for kind in [
@@ -87,11 +92,25 @@ fn duplicate_protocols_are_rejected_before_registration() {
         ] {
             let module = PyModule::new(py, "sdk").unwrap();
             let before = module.dict().copy().unwrap();
-            let error = register_receivers(&module, configs).unwrap_err();
-            assert!(error.is_instance_of::<PyImportError>(py));
+            let error = register(&module, configs).unwrap_err();
+            assert!(error.get_type(py).is(py.get_type::<TestBridgeError>()));
             assert!(error.to_string().contains("repeats ProtobufV"));
             assert!(module.dict().eq(before).unwrap());
         }
+    });
+}
+
+#[test]
+fn invalid_exception_type_does_not_publish_receivers() {
+    Python::initialize();
+    Python::attach(|py| {
+        let module = PyModule::new(py, "sdk").unwrap();
+        let before = module.dict().copy().unwrap();
+        let error =
+            super::register_receivers(&module, &py.get_type::<pyo3::types::PyInt>(), [v1().into()])
+                .unwrap_err();
+        assert!(error.is_instance_of::<pyo3::exceptions::PyTypeError>(py));
+        assert!(module.dict().eq(before).unwrap());
     });
 }
 
@@ -102,8 +121,8 @@ fn occupied_endpoint_does_not_publish_partial_support() {
         let module = PyModule::new(py, "sdk").unwrap();
         module.add(protocol::V2_SAMPLE_SET, 123).unwrap();
         let before = module.dict().copy().unwrap();
-        let error = register_receivers(&module, [v1().into(), v2().into()]).unwrap_err();
-        assert!(error.is_instance_of::<PyImportError>(py));
+        let error = register(&module, [v1().into(), v2().into()]).unwrap_err();
+        assert!(error.get_type(py).is(py.get_type::<TestBridgeError>()));
         assert!(error.to_string().contains(protocol::V2_SAMPLE_SET));
         assert!(module.dict().eq(before).unwrap());
     });
@@ -114,10 +133,10 @@ fn repeated_registration_preserves_the_original_receivers() {
     Python::initialize();
     Python::attach(|py| {
         let module = PyModule::new(py, "sdk").unwrap();
-        register_receivers(&module, [v1().into()]).unwrap();
+        register(&module, [v1().into()]).unwrap();
         let before = module.dict().copy().unwrap();
-        let error = register_receivers(&module, [v2().into()]).unwrap_err();
-        assert!(error.is_instance_of::<PyImportError>(py));
+        let error = register(&module, [v2().into()]).unwrap_err();
+        assert!(error.get_type(py).is(py.get_type::<TestBridgeError>()));
         assert!(error.to_string().contains("already registered"));
         assert!(module.dict().eq(before).unwrap());
     });
@@ -128,9 +147,9 @@ fn factories_are_local_to_each_protocol_and_module() {
     Python::initialize();
     Python::attach(|py| {
         let first = PyModule::new(py, "first").unwrap();
-        register_receivers(&first, [v1().into(), v2().into()]).unwrap();
+        register(&first, [v1().into(), v2().into()]).unwrap();
         let second = PyModule::new(py, "second").unwrap();
-        register_receivers(
+        register(
             &second,
             [
                 config!(ProtobufV1ReceiverConfig, 3).into(),
@@ -176,7 +195,7 @@ fn invalid_payload_is_rejected_before_calling_the_factory() {
         first.instance = |_, _| Err(PyValueError::new_err("factory called"));
         second.instance = first.instance;
         let module = PyModule::new(py, "sdk").unwrap();
-        register_receivers(&module, [first.into(), second.into()]).unwrap();
+        register(&module, [first.into(), second.into()]).unwrap();
         for version in [1, 2] {
             for kind in [
                 "function",
@@ -191,7 +210,7 @@ fn invalid_payload_is_rejected_before_calling_the_factory() {
                     .unwrap()
                     .call1((PyBytes::new(py, b"\xff"),))
                     .unwrap_err();
-                assert!(error.is_instance_of::<PyRuntimeError>(py));
+                assert!(error.get_type(py).is(py.get_type::<TestBridgeError>()));
                 assert!(error
                     .to_string()
                     .contains(&format!("invalid OMMX ProtobufV{version} bridge payload")));
@@ -211,7 +230,7 @@ fn constructor_errors_keep_their_python_classification() {
         first.instance = |_, _| Err(PyValueError::new_err("constructor failed"));
         second.instance = first.instance;
         let module = PyModule::new(py, "sdk").unwrap();
-        register_receivers(&module, [first.into(), second.into()]).unwrap();
+        register(&module, [first.into(), second.into()]).unwrap();
         let instance = ommx::Instance::default();
         for (endpoint, bytes) in [
             (protocol::V1_FUNCTION, ommx::Function::default().to_bytes()),

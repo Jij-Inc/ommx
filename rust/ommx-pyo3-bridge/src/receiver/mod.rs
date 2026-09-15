@@ -8,7 +8,11 @@ pub use protobuf_v1::ProtobufV1ReceiverConfig;
 pub use protobuf_v2::ProtobufV2ReceiverConfig;
 
 use crate::{protocol, TransferProtocolId};
-use pyo3::{exceptions::PyImportError, prelude::*};
+use pyo3::{
+    exceptions::{PyBaseException, PyTypeError},
+    prelude::*,
+    types::PyType,
+};
 
 /// One complete protocol configuration in a receiver registration list.
 ///
@@ -44,10 +48,10 @@ impl ReceiverConfig {
         }
     }
 
-    fn bindings(self, py: Python<'_>) -> PyResult<Vec<Binding>> {
+    fn bindings(self, error_type: &Bound<'_, PyType>) -> PyResult<Vec<Binding>> {
         match self {
-            Self::ProtobufV1(config) => protobuf_v1::bindings(config, py),
-            Self::ProtobufV2(config) => protobuf_v2::bindings(config, py),
+            Self::ProtobufV1(config) => protobuf_v1::bindings(config, error_type),
+            Self::ProtobufV2(config) => protobuf_v2::bindings(config, error_type),
         }
     }
 }
@@ -72,36 +76,52 @@ fn bind_methods(
 /// and class constructors are not consulted.
 ///
 /// Duplicate protocols, an existing declaration, or occupied endpoint names
-/// raise `ImportError` before any attributes are added. Supply the complete
+/// raise `BridgeError` before any attributes are added. Supply the complete
 /// list in one call per module. An empty list advertises no supported protocols.
 /// Factories and their Python objects belong to this receiving extension; no
 /// process-global receiver state or cross-extension Rust objects are used.
+/// The SDK supplies its canonical exception class, which is exposed as
+/// `BridgeError` on the module and retained by each receiver.
+/// A type that does not inherit from `BaseException` is rejected with `TypeError`.
 pub fn register_receivers(
     module: &Bound<'_, PyModule>,
+    error_type: &Bound<'_, PyType>,
     configs: impl IntoIterator<Item = ReceiverConfig>,
 ) -> PyResult<()> {
+    if !error_type.is_subclass_of::<PyBaseException>()? {
+        return Err(PyTypeError::new_err(
+            "BridgeError must be a Python exception class",
+        ));
+    }
+    let py = module.py();
     let configs: Vec<_> = configs.into_iter().collect();
     let mut ids = Vec::new();
     for config in &configs {
         let id = config.id() as u32;
         if ids.contains(&id) {
-            return Err(PyImportError::new_err(format!(
-                "OMMX bridge receiver configuration repeats {:?}",
-                config.id(),
-            )));
+            return Err(PyErr::from_type(
+                error_type.clone(),
+                format!(
+                    "OMMX bridge receiver configuration repeats {:?}",
+                    config.id(),
+                ),
+            ));
         }
         ids.push(id);
     }
     if module.hasattr(protocol::SUPPORTED_PROTOCOLS)? {
-        return Err(PyImportError::new_err(
+        return Err(PyErr::from_type(
+            error_type.clone(),
             "OMMX bridge receivers are already registered",
         ));
     }
 
-    let py = module.py();
-    let mut bindings = Vec::new();
+    let mut bindings = vec![(
+        protocol::BRIDGE_ERROR,
+        error_type.clone().unbind().into_any(),
+    )];
     for config in configs {
-        bindings.extend(config.bindings(py)?);
+        bindings.extend(config.bindings(error_type)?);
     }
     let declaration = Py::new(py, ProtocolDeclaration { ids })?.into_bound(py);
     bindings.push((
@@ -110,9 +130,10 @@ pub fn register_receivers(
     ));
     for (name, _) in &bindings {
         if module.hasattr(*name)? {
-            return Err(PyImportError::new_err(format!(
-                "OMMX bridge receiver endpoint {name} already exists",
-            )));
+            return Err(PyErr::from_type(
+                error_type.clone(),
+                format!("OMMX bridge receiver endpoint {name} already exists"),
+            ));
         }
     }
     // All Python allocations and contract checks complete before publication.

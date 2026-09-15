@@ -3,6 +3,7 @@
 // Runtime names shared by senders and receiver registration. The enclosing
 // private module keeps these details out of the consumer API.
 pub const SUPPORTED_PROTOCOLS: &str = "_bridge_supported_protocols";
+pub const BRIDGE_ERROR: &str = "BridgeError";
 pub const V1_INSTANCE: &str = "_bridge_protobuf_v1_instance_from_bytes";
 pub const V1_PARAMETRIC_INSTANCE: &str = "_bridge_protobuf_v1_parametric_instance_from_bytes";
 pub const V1_SOLUTION: &str = "_bridge_protobuf_v1_solution_from_bytes";

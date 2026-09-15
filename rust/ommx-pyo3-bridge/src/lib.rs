@@ -1,8 +1,10 @@
 #![doc = include_str!("../README.md")]
 
+mod error;
 mod protocol;
 mod receiver;
 mod transfer;
+pub use error::BridgeError;
 pub use receiver::{
     register_receivers, ProtobufV1ReceiverConfig, ProtobufV2ReceiverConfig, ReceiverConfig,
 };

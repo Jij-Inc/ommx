@@ -6,6 +6,13 @@ use crate::{
 use ommx_pyo3_bridge::{register_receivers, ProtobufV1ReceiverConfig, ProtobufV2ReceiverConfig};
 use pyo3::{prelude::*, IntoPyObjectExt};
 
+pyo3_stub_gen::create_exception!(
+    ommx._ommx_rust,
+    BridgeError,
+    pyo3::exceptions::PyRuntimeError,
+    "An OMMX bridge protocol, registration, or transfer failure after loading the SDK."
+);
+
 pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     // Both protobuf protocols construct the same SDK classes after parsing.
     // The configuration types independently define their factory signatures.
@@ -28,6 +35,7 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     }
     register_receivers(
         module,
+        &module.py().get_type::<BridgeError>(),
         [
             config!(ProtobufV1ReceiverConfig).into(),
             config!(ProtobufV2ReceiverConfig).into(),

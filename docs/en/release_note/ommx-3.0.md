@@ -8,6 +8,15 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### Shared bridge exception ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
+
+The Python SDK defines {class}`~ommx.BridgeError` for protocol incompatibility,
+receiver registration failures, and transfer errors. Independently built Rust
+extensions using the bridge raise this same SDK-owned class, so callers can
+handle their failures with `except ommx.BridgeError`. Transfer failures retain
+the original Python exception in `__cause__`. A missing SDK or required bridge
+API raises `ImportError`.
+
 ### ⚠ Batch SOS1 Big-M promotion with selectable application mode ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
 {class}`~ommx.Sos1BigMPromotionRequest` now represents an entire batch:

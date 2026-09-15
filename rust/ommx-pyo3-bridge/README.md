@@ -8,14 +8,18 @@ or private PyO3 wrapper types across a shared-library boundary.
 Select a supported protocol and transfer the value before returning it:
 
 ```rust,no_run
-use ommx_pyo3_bridge::{resolve_target, ProtobufV2, PyFunction};
-use pyo3::{exceptions::PyImportError, prelude::*};
+use ommx_pyo3_bridge::{resolve_target, BridgeError, ProtobufV2, PyFunction};
+use pyo3::prelude::*;
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn objective(py: Python<'_>) -> PyResult<PyFunction> {
-    let target = resolve_target::<ProtobufV2>(py)?
-        .ok_or_else(|| PyImportError::new_err("Python OMMX does not support ProtobufV2"))?;
+    let target = resolve_target::<ProtobufV2>(py)?.ok_or_else(|| {
+        BridgeError::new_err(
+            py,
+            "The loaded OMMX Python SDK does not support the protobuf v2 transfer protocol",
+        )
+    })?;
     target.transfer(py, ommx::Function::default())
 }
 ```
@@ -79,8 +83,8 @@ caller's `if` statements expresses its preference:
 
 ```rust,no_run
 use ommx::{Constraint, ConstraintID, DecisionVariable, Instance, Sense};
-use ommx_pyo3_bridge::{resolve_target, ProtobufV1, ProtobufV2, PyInstance};
-use pyo3::{exceptions::PyImportError, prelude::*};
+use ommx_pyo3_bridge::{resolve_target, BridgeError, ProtobufV1, ProtobufV2, PyInstance};
+use pyo3::prelude::*;
 use std::collections::BTreeMap;
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
@@ -101,7 +105,10 @@ fn compile(py: Python<'_>) -> PyResult<PyInstance> {
         let instance: Instance = compile_regular();
         return target.transfer(py, instance);
     }
-    Err(PyImportError::new_err("No supported OMMX transfer protocol"))
+    Err(BridgeError::new_err(
+        py,
+        "The loaded OMMX Python SDK does not support any requested transfer protocol",
+    ))
 }
 
 fn compile_regular() -> Instance {
@@ -142,13 +149,19 @@ type/protocol pairs are bridge-owned. A target can transfer multiple supported
 types through the same protocol without probing the SDK again.
 
 `resolve_target` imports `ommx` and calls the binding-private declaration
-`ommx._ommx_rust._bridge_supported_protocols() -> list[int]`. It returns `Some`
+`ommx._ommx_rust._bridge_supported_protocols() -> list[int]`. It also loads the
+SDK's `ommx._ommx_rust.BridgeError` class. It returns `Some`
 with a `Target<P>` if `P` is advertised, or `None` otherwise. Each probe reads
 the declaration anew; callers decide which protocol to try next and what to do
 if none are supported. Errors propagate with `?` instead of being interpreted
 as lack of support.
 
-A successful target retains the selected protocol and loaded SDK module.
+The examples raise `BridgeError` when the loaded SDK supports none of the
+caller's requested protocols. This is a caller-owned compatibility decision
+after a successful import and protocol probe.
+
+A successful target retains the selected protocol, loaded SDK module, and its
+exception class.
 `Target::transfer` resolves the type-specific reconstruction callable on that
 module, exports the payload, and imports it. Receiver lookup errors therefore
 occur at transfer, when the return type is known. Replacing `sys.modules["ommx"]`
@@ -164,12 +177,32 @@ wrappers are output values. Components with owner-side data use tuples:
 `(Constraint, ConstraintContext)` and `(VariableID, DecisionVariable, ModelingLabel)`.
 
 There is no SDK version comparison, attribute-based capability inference, or
-global negotiation cache. Unknown IDs are ignored. A missing or malformed
-declaration, or an advertised but unavailable receiver
-raises `ImportError`. Export/import failures raise `RuntimeError` identifying
+global negotiation cache. Unknown IDs are ignored. A missing SDK, exception
+class, declaration API, or receiver raises `ImportError`. Non-callable bridge
+APIs also raise `ImportError`. Invalid declarations and export/import failures
+raise the SDK's `BridgeError`, with transfer failures identifying
 the Python type, protocol, and stage, with the underlying exception in
 `__cause__`. Failure after selection never retries another protocol. Payload
 features are validated by the serializers and parsers, not by negotiation.
+
+## Bridge errors
+
+The Python SDK defines `ommx.BridgeError`, a `RuntimeError` subclass used by
+senders and receivers. Invalid protocol declarations, receiver registration
+errors, and payload/transfer failures use this class. Callers can also construct
+it with
+`BridgeError::new_err(py, message)` when their requested protocols are unsupported.
+Transfer wrappers retain the original Python exception in `__cause__`.
+Python argument-binding errors and exceptions raised directly by SDK factories
+keep their original types; a sender wraps factory failures during transfer.
+
+The SDK supplies its exception class to `register_receivers`, which publishes it
+as `ommx._ommx_rust.BridgeError`. The SDK re-exports that class as
+`ommx.BridgeError`; the sender retrieves the actual Python class from the SDK.
+Independently built senders do not define their own exception classes, so
+`except ommx.BridgeError` catches their transfer failures too. SDK imports and
+missing bridge APIs raise `ImportError` because the expected SDK interface is
+unavailable. No Rust exception object or layout is shared across extensions.
 
 Python v3 advertises both protocols. A future Python v2 compatibility release
 must explicitly advertise the contracts it implements and provide the same
@@ -258,24 +291,29 @@ the complete list to [`register_receivers`] once during SDK initialization:
 use ommx_pyo3_bridge::{
     register_receivers, ProtobufV1ReceiverConfig, ProtobufV2ReceiverConfig, ReceiverConfig,
 };
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyType};
 
 fn install_receivers(
     module: &Bound<'_, PyModule>,
+    bridge_error: &Bound<'_, PyType>,
     v1: ProtobufV1ReceiverConfig,
     v2: ProtobufV2ReceiverConfig,
 ) -> PyResult<()> {
     let configs: Vec<ReceiverConfig> = vec![v1.into(), v2.into()];
-    register_receivers(module, configs)
+    register_receivers(module, bridge_error, configs)
 }
 ```
 
 The list determines the supported protocols and their declaration order;
 there is no separate list of protocol IDs to keep in sync. Registration
-prepares all private receivers and publishes the support declaration last.
+receives the SDK-defined `BridgeError` class alongside that list and retains it
+for receiver failures. Sender-side errors use the same class via Python lookup.
+Registration prepares all private receivers and publishes the support
+declaration last.
 Duplicate protocols, repeated registration, and occupied endpoint names
-raise `ImportError` before any module attributes are changed. An empty list
-advertises no supported protocols. No public Python classes or decoding
+raise `BridgeError` before any module attributes are changed. An empty list
+advertises no supported protocols. Registration also exposes the shared
+`BridgeError` class. No public Python domain classes or decoding
 methods need to be present for registration.
 
 Sender lookups and receiver registration use the same bridge-owned endpoint

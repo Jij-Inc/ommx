@@ -5,6 +5,7 @@ import builtins
 import collections.abc
 import ommx
 __all__ = [
+    "bridge_error_type",
     "compile_for_target",
     "completed_instance",
     "composed_constraint",
@@ -29,6 +30,8 @@ __all__ = [
     "v1_function",
     "v2_components",
 ]
+
+def bridge_error_type() -> type: ...
 
 def compile_for_target() -> ommx.Instance: ...
 

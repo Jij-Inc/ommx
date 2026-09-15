@@ -33,6 +33,7 @@ __all__ = [
     "AutosavePolicy",
     "BinaryPowerPreparation",
     "Bound",
+    "BridgeError",
     "Constraint",
     "DecisionVariable",
     "DecisionVariableRole",
@@ -1354,6 +1355,13 @@ class Bound:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Bound: ...
     def __deepcopy__(self, _memo: typing.Any) -> Bound: ...
+
+class BridgeError(builtins.RuntimeError):
+    r"""
+    An OMMX bridge protocol, registration, or transfer failure after loading the SDK.
+    """
+
+    ...
 
 @typing.final
 class Constraint:

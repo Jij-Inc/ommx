@@ -3,10 +3,8 @@
 
 mod protobuf;
 
-use pyo3::{
-    exceptions::{PyImportError, PyRuntimeError},
-    prelude::*,
-};
+use crate::BridgeError;
+use pyo3::{exceptions::PyImportError, prelude::*, types::PyType};
 use pyo3_stub_gen::PyStubType;
 use std::marker::PhantomData;
 
@@ -106,10 +104,12 @@ pub trait Export<P: TransferProtocol, T: TransferVia<P>> {
 /// A loaded Python SDK that explicitly supports protocol `P`.
 ///
 /// Only [`resolve_target`] constructs a target, after checking the SDK's
-/// declaration. The protocol and SDK module stay fixed. Each transfer resolves
-/// its type-specific receiver on that module without probing protocols again.
+/// declaration. The protocol, SDK module, and SDK exception class stay fixed.
+/// Each transfer resolves its type-specific receiver on that module without
+/// probing protocols again.
 pub struct Target<P: TransferProtocol> {
     module: Py<PyModule>,
+    error_type: Py<PyType>,
     marker: PhantomData<P>,
 }
 
@@ -121,7 +121,7 @@ impl<P: TransferProtocol> Target<P> {
     /// pairs and source types fail to compile. The target can transfer multiple
     /// types supported by the same protocol.
     ///
-    /// A missing or invalid receiver raises `ImportError` before export. Export
+    /// A missing or non-callable receiver raises `ImportError` before export. Export
     /// and import failures preserve the original cause and identify the type,
     /// protocol, and stage. No failure triggers another protocol probe.
     ///
@@ -138,13 +138,14 @@ impl<P: TransferProtocol> Target<P> {
         value: impl Export<P, T>,
     ) -> PyResult<T> {
         let module = self.module.bind(py);
+        let error_type = self.error_type.bind(py);
         let receiver = T::receiver(module).map_err(|source| {
             let error = PyImportError::new_err(format!(
                 "Python OMMX advertises {}, but its receiver for {} is unavailable",
                 P::NAME,
                 T::PYTHON_NAME,
             ));
-            error.set_cause(module.py(), Some(source));
+            error.set_cause(py, Some(source));
             error
         })?;
         if !receiver.bind(module.py()).is_callable() {
@@ -155,25 +156,31 @@ impl<P: TransferProtocol> Target<P> {
             )));
         }
         let payload = value.export().map_err(|source| {
-            transfer_error::<P, T>(py, "export", PyRuntimeError::new_err(format!("{source:#}")))
+            transfer_error::<P, T>(
+                error_type,
+                "export",
+                PyErr::from_type(error_type.clone(), format!("{source:#}")),
+            )
         })?;
         T::import(payload, receiver.bind(py))
-            .map_err(|source| transfer_error::<P, T>(py, "import", source))
+            .map_err(|source| transfer_error::<P, T>(error_type, "import", source))
     }
 }
 
 fn transfer_error<P: TransferProtocol, T: TransferVia<P>>(
-    py: Python<'_>,
+    error_type: &Bound<'_, PyType>,
     stage: &str,
     source: PyErr,
 ) -> PyErr {
-    let error = PyRuntimeError::new_err(format!(
-        "OMMX bridge failed to transfer {} using {} during {stage}: {source}",
-        T::PYTHON_NAME,
-        P::NAME,
-    ));
-    error.set_cause(py, Some(source));
-    error
+    BridgeError::with_cause(
+        error_type,
+        format!(
+            "OMMX bridge failed to transfer {} using {} during {stage}: {source}",
+            T::PYTHON_NAME,
+            P::NAME,
+        ),
+        source,
+    )
 }
 
 /// Load Python OMMX and probe its explicit support for one protocol.
@@ -184,24 +191,40 @@ fn transfer_error<P: TransferProtocol, T: TransferVia<P>>(
 /// a successful target retains that SDK module and never renegotiates.
 pub fn resolve_target<P: TransferProtocol>(py: Python<'_>) -> PyResult<Option<Target<P>>> {
     let module = PyModule::import(py, "ommx")?;
+    let error_type = BridgeError::from_module(&module)?;
     let declaration = module
         .getattr("_ommx_rust")
         .and_then(|module| module.getattr(crate::protocol::SUPPORTED_PROTOCOLS))
-        .and_then(|declare| declare.call0())
-        .and_then(|ids| ids.extract::<Vec<u32>>());
-    let ids = declaration.map_err(|source| {
-        let error = PyImportError::new_err(format!(
-            "Python OMMX must declare supported transfer protocols through ommx._ommx_rust.{}()",
+        .map_err(|source| {
+            let error = PyImportError::new_err(format!(
+                "Python OMMX must declare supported transfer protocols through ommx._ommx_rust.{}()",
+                crate::protocol::SUPPORTED_PROTOCOLS,
+            ));
+            error.set_cause(py, Some(source));
+            error
+        })?;
+    if !declaration.is_callable() {
+        return Err(PyImportError::new_err(format!(
+            "Python OMMX bridge API ommx._ommx_rust.{} is not callable",
             crate::protocol::SUPPORTED_PROTOCOLS,
-        ));
-        error.set_cause(py, Some(source));
-        error
+        )));
+    }
+    let ids = declaration.call0().and_then(|ids| ids.extract::<Vec<u32>>()).map_err(|source| {
+        BridgeError::with_cause(
+            &error_type,
+            format!(
+                "Python OMMX must declare supported transfer protocols through ommx._ommx_rust.{}()",
+                crate::protocol::SUPPORTED_PROTOCOLS,
+            ),
+            source,
+        )
     })?;
     if !ids.contains(&(P::ID as u32)) {
         return Ok(None);
     }
     Ok(Some(Target {
         module: module.unbind(),
+        error_type: error_type.unbind(),
         marker: PhantomData,
     }))
 }

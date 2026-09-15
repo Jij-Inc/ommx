@@ -4,16 +4,27 @@ mod transfer;
 
 use ommx::{Evaluate as _, ParametricInstance};
 use ommx_pyo3_bridge::{
-    PyConstraint, PyDecisionVariable, PyFunction, PyInstance, PyParametricInstance, PySampleSet,
-    PySolution,
+    BridgeError, PyConstraint, PyDecisionVariable, PyFunction, PyInstance, PyParametricInstance,
+    PySampleSet, PySolution,
 };
-use pyo3::{exceptions::PyImportError, prelude::*};
+use pyo3::{prelude::*, types::PyType};
 use std::collections::{BTreeMap, HashMap};
 
 fn v2_target(py: Python<'_>) -> PyResult<ommx_pyo3_bridge::Target<ommx_pyo3_bridge::ProtobufV2>> {
-    ommx_pyo3_bridge::resolve_target::<ommx_pyo3_bridge::ProtobufV2>(py)?
-        .ok_or_else(|| PyImportError::new_err("Python OMMX does not support ProtobufV2"))
+    ommx_pyo3_bridge::resolve_target::<ommx_pyo3_bridge::ProtobufV2>(py)?.ok_or_else(|| {
+        BridgeError::new_err(
+            py,
+            "The loaded OMMX Python SDK does not support the protobuf v2 transfer protocol",
+        )
+    })
 }
+
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+fn bridge_error_type(py: Python<'_>) -> PyResult<Py<PyType>> {
+    BridgeError::type_object(py).map(Bound::unbind)
+}
+
 fn component_function() -> ommx::Function {
     let linear = (ommx::linear!(7) + ommx::coeff!(-3.0))
         .expect("the fixture uses finite, non-zero coefficients");
@@ -153,6 +164,7 @@ fn sample_set(py: Python<'_>) -> PyResult<PySampleSet> {
 #[pymodule(gil_used = false)]
 fn ommx_pyo3_bridge_fixture(module: &Bound<'_, PyModule>) -> PyResult<()> {
     transfer::register(module)?;
+    module.add_function(wrap_pyfunction!(bridge_error_type, module)?)?;
     module.add_function(wrap_pyfunction!(function, module)?)?;
     module.add_function(wrap_pyfunction!(composed_function, module)?)?;
     module.add_function(wrap_pyfunction!(constraint, module)?)?;

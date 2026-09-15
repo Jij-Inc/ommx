@@ -66,6 +66,33 @@ def test_python_sdk_explicitly_advertises_fixed_protocol_ids():
         assert not hasattr(ommx, endpoint)
 
 
+def test_bridge_exception_is_owned_by_the_python_sdk():
+    assert fixture.bridge_error_type() is ommx.BridgeError
+    assert receiver.BridgeError is ommx.BridgeError
+    assert issubclass(ommx.BridgeError, RuntimeError)
+
+
+def test_sdk_import_failure_stays_an_import_error(monkeypatch):
+    monkeypatch.setitem(sys.modules, "ommx", None)
+    with pytest.raises(ModuleNotFoundError):
+        fixture.negotiated_instance()
+
+
+def test_missing_sdk_exception_class_is_an_import_error(monkeypatch):
+    monkeypatch.delattr(receiver, "BridgeError")
+    with pytest.raises(ImportError, match="ommx._ommx_rust.BridgeError") as error:
+        fixture.negotiated_instance()
+    assert isinstance(error.value.__cause__, AttributeError)
+
+
+@pytest.mark.parametrize("invalid", [None, object])
+def test_invalid_sdk_exception_class_is_an_import_error(monkeypatch, invalid):
+    monkeypatch.setattr(receiver, "BridgeError", invalid)
+    with pytest.raises(ImportError, match="ommx._ommx_rust.BridgeError") as error:
+        fixture.negotiated_instance()
+    assert isinstance(error.value.__cause__, TypeError)
+
+
 @pytest.mark.parametrize(
     ("advertised", "expected"),
     [([1, 2], 2), ([2, 1], 2), ([1], 1), ([2], 2), ([999, 1], 1), ([2, 2], 2)],
@@ -90,9 +117,22 @@ def test_caller_can_prefer_v1_even_when_v2_is_available(monkeypatch):
 def test_no_common_protocol_fails_before_compilation(monkeypatch, ids):
     advertise(monkeypatch, ids)
     compiled = []
-    with pytest.raises(ImportError, match="No supported OMMX transfer protocol"):
+    with pytest.raises(
+        ommx.BridgeError,
+        match="The loaded OMMX Python SDK does not support any requested transfer protocol",
+    ):
         fixture.negotiated_instance(lambda: compiled.append(True))
     assert compiled == []
+
+
+def test_required_protocol_is_unsupported_bridge_error(monkeypatch):
+    advertise(monkeypatch, [1])
+    with pytest.raises(
+        ommx.BridgeError,
+        match="The loaded OMMX Python SDK does not support the protobuf v2 transfer protocol",
+    ) as error:
+        fixture.function()
+    assert type(error.value) is ommx.BridgeError
 
 
 def test_missing_declaration_is_not_inferred_from_existing_methods(monkeypatch):
@@ -104,11 +144,17 @@ def test_missing_declaration_is_not_inferred_from_existing_methods(monkeypatch):
     assert isinstance(error.value.__cause__, AttributeError)
 
 
+def test_noncallable_protocol_api_is_an_import_error(monkeypatch):
+    monkeypatch.setattr(receiver, DECLARATION, None)
+    with pytest.raises(ImportError, match="not callable"):
+        fixture.negotiated_instance()
+
+
 @pytest.mark.parametrize("ids", [None, [-1], ["ProtobufV1"]])
 def test_malformed_declaration_preserves_cause(monkeypatch, ids):
     advertise(monkeypatch, ids)
     with pytest.raises(
-        ImportError, match="must declare supported transfer protocols"
+        ommx.BridgeError, match="must declare supported transfer protocols"
     ) as error:
         fixture.negotiated_instance()
     assert error.value.__cause__ is not None
@@ -162,7 +208,7 @@ def test_probe_errors_are_not_treated_as_unsupported_protocols(monkeypatch):
         return [1]
 
     monkeypatch.setattr(receiver, DECLARATION, declaration)
-    with pytest.raises(ImportError, match="must declare") as error:
+    with pytest.raises(ommx.BridgeError, match="must declare") as error:
         fixture.negotiated_instance()
     assert error.value.__cause__ is original
     assert calls == [True]
@@ -258,7 +304,7 @@ def test_raw_v1_transport_preserves_advisory_hints(monkeypatch):
 def test_v1_export_error_does_not_retry_v2(monkeypatch):
     calls = spy_instance(monkeypatch)
     with pytest.raises(
-        RuntimeError, match="ommx.Instance using ProtobufV1 during export"
+        ommx.BridgeError, match="ommx.Instance using ProtobufV1 during export"
     ) as error:
         fixture.v1_first_instance(special=True)
     assert error.value.__cause__ is not None
@@ -277,16 +323,37 @@ def test_receiver_exception_is_preserved_as_cause_without_retry(monkeypatch):
     monkeypatch.setattr(receiver, V2_INSTANCE, fail)
     monkeypatch.setattr(receiver, V1_INSTANCE, lambda _: calls.append(1))
     with pytest.raises(
-        RuntimeError, match="ommx.Instance using ProtobufV2 during import"
+        ommx.BridgeError, match="ommx.Instance using ProtobufV2 during import"
     ) as error:
         fixture.negotiated_instance()
     assert error.value.__cause__ is original
     assert calls == [2]
 
 
+def test_target_retains_the_loaded_sdk_exception_class(monkeypatch):
+    original = ValueError("receiver rejected the payload")
+
+    def fail(_):
+        raise original
+
+    monkeypatch.setattr(receiver, V2_INSTANCE, fail)
+
+    def after_resolve():
+        # The transfer must use the class retained with the original SDK.
+        replacement = ModuleType("ommx")
+        replacement._ommx_rust = ModuleType("ommx._ommx_rust")
+        replacement._ommx_rust.BridgeError = type("BridgeError", (RuntimeError,), {})
+        monkeypatch.setitem(sys.modules, "ommx", replacement)
+
+    with pytest.raises(ommx.BridgeError) as error:
+        fixture.negotiated_instance(after_resolve)
+    assert type(error.value) is ommx.BridgeError
+    assert error.value.__cause__ is original
+
+
 def test_invalid_raw_root_is_rejected_by_the_receiver_parser():
     with pytest.raises(
-        RuntimeError, match="ommx.Instance using ProtobufV1 during import"
+        ommx.BridgeError, match="ommx.Instance using ProtobufV1 during import"
     ) as error:
         fixture.invalid_instance()
     assert error.value.__cause__ is not None
@@ -305,7 +372,7 @@ def test_v1_components_reconstruct_canonical_types():
 
 def test_fixed_value_stays_with_its_root_owner():
     with pytest.raises(
-        RuntimeError, match="ommx.DecisionVariable using ProtobufV1 during import"
+        ommx.BridgeError, match="ommx.DecisionVariable using ProtobufV1 during import"
     ) as error:
         fixture.v1_decision_variable(fixed=True)
     assert "transfer its Instance" in str(error.value.__cause__)
@@ -351,18 +418,18 @@ def test_root_transfer_does_not_look_up_public_classes_or_decoders(monkeypatch, 
 @pytest.mark.parametrize(
     "kind", ["instance", "parametric_instance", "solution", "sample_set"]
 )
-def test_malformed_root_is_a_bridge_runtime_error(version, kind):
+def test_malformed_root_is_a_bridge_error(version, kind):
     receive = getattr(receiver, f"_bridge_protobuf_v{version}_{kind}_from_bytes")
     with pytest.raises(
-        RuntimeError, match=f"invalid OMMX ProtobufV{version} bridge payload"
+        ommx.BridgeError, match=f"invalid OMMX ProtobufV{version} bridge payload"
     ):
         receive(b"\xff")
 
 
 @pytest.mark.parametrize("kind", ["function", "constraint", "decision_variable"])
-def test_malformed_v1_component_is_a_bridge_runtime_error(kind):
+def test_malformed_v1_component_is_a_bridge_error(kind):
     receive = getattr(receiver, f"_bridge_protobuf_v1_{kind}_from_bytes")
-    with pytest.raises(RuntimeError, match="invalid OMMX ProtobufV1 bridge payload"):
+    with pytest.raises(ommx.BridgeError, match="invalid OMMX ProtobufV1 bridge payload"):
         receive(b"\xff")
 
 
@@ -390,7 +457,7 @@ def test_malformed_v1_component_is_a_bridge_runtime_error(kind):
 )
 def test_configured_receivers_preserve_keyword_arguments(endpoint, kwargs):
     # Argument binding succeeds and the malformed bytes reach the parser.
-    with pytest.raises(RuntimeError, match="invalid OMMX"):
+    with pytest.raises(ommx.BridgeError, match="invalid OMMX"):
         getattr(receiver, endpoint)(**kwargs)
 
 

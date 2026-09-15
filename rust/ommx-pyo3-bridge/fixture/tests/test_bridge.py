@@ -227,6 +227,7 @@ def test_sender_matches_protobuf_v2_endpoint_signatures_and_payloads() -> None:
         fake_ommx = types.ModuleType("ommx")
         fake_ommx.__path__ = []
         fake_rust = types.ModuleType("ommx._ommx_rust")
+        fake_rust.BridgeError = type("BridgeError", (RuntimeError,), {})
         fake_ommx._ommx_rust = fake_rust
         fake_rust._bridge_supported_protocols = lambda: [2]
 
@@ -310,6 +311,7 @@ def test_missing_python_bridge_endpoint_has_a_clear_error() -> None:
         fake_ommx = types.ModuleType("ommx")
         fake_ommx.__path__ = []
         fake_rust = types.ModuleType("ommx._ommx_rust")
+        fake_rust.BridgeError = type("BridgeError", (RuntimeError,), {})
         fake_ommx._ommx_rust = fake_rust
         fake_rust._bridge_supported_protocols = lambda: [2]
         fake_ommx.Instance = type("Instance", (), {})

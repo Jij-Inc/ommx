@@ -2,7 +2,10 @@
 
 use super::{bind_methods, protobuf, Binding};
 use crate::protocol;
-use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyBytes};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyType},
+};
 
 /// Python SDK factories for the complete ProtobufV1 transfer contract.
 ///
@@ -37,8 +40,20 @@ pub struct ProtobufV1ReceiverConfig {
     pub sample_set: fn(Python<'_>, ommx::SampleSet) -> PyResult<Py<PyAny>>,
 }
 
-pub fn bindings(config: ProtobufV1ReceiverConfig, py: Python<'_>) -> PyResult<Vec<Binding>> {
-    let receiver = Py::new(py, Receiver { config })?.into_bound(py).into_any();
+pub fn bindings(
+    config: ProtobufV1ReceiverConfig,
+    error_type: &Bound<'_, PyType>,
+) -> PyResult<Vec<Binding>> {
+    let py = error_type.py();
+    let receiver = Py::new(
+        py,
+        Receiver {
+            config,
+            error_type: error_type.clone().unbind(),
+        },
+    )?
+    .into_bound(py)
+    .into_any();
     bind_methods(
         receiver,
         &[
@@ -57,48 +72,60 @@ pub fn bindings(config: ProtobufV1ReceiverConfig, py: Python<'_>) -> PyResult<Ve
 #[pyclass(frozen, module = "ommx._ommx_rust")]
 struct Receiver {
     config: ProtobufV1ReceiverConfig,
+    error_type: Py<PyType>,
 }
 
-fn parse_error(error: ommx::Error) -> PyErr {
-    PyRuntimeError::new_err(format!("invalid OMMX ProtobufV1 bridge payload: {error:#}"))
+fn parse_error<'py>(error_type: &Bound<'py, PyType>) -> impl FnOnce(ommx::Error) -> PyErr + 'py {
+    let error_type = error_type.clone();
+    move |error| {
+        PyErr::from_type(
+            error_type,
+            format!("invalid OMMX ProtobufV1 bridge payload: {error:#}"),
+        )
+    }
 }
 
 #[pymethods]
 impl Receiver {
     fn function(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let value = protobuf::function(bytes.as_bytes()).map_err(parse_error)?;
+        let value = protobuf::function(bytes.as_bytes())
+            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
         (self.config.function)(bytes.py(), value)
     }
 
     fn constraint(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let (value, context) = protobuf::constraint_v1(bytes.as_bytes()).map_err(parse_error)?;
+        let (value, context) = protobuf::constraint_v1(bytes.as_bytes())
+            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
         (self.config.constraint)(bytes.py(), value, context)
     }
 
     fn decision_variable(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let (id, value, label) =
-            protobuf::decision_variable_v1(bytes.as_bytes()).map_err(parse_error)?;
+        let (id, value, label) = protobuf::decision_variable_v1(bytes.as_bytes())
+            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
         (self.config.decision_variable)(bytes.py(), id, value, label)
     }
 
     fn instance(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let value = ommx::Instance::from_v1_bytes(bytes.as_bytes()).map_err(parse_error)?;
+        let value = ommx::Instance::from_v1_bytes(bytes.as_bytes())
+            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
         (self.config.instance)(bytes.py(), value)
     }
 
     fn parametric_instance(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let value =
-            ommx::ParametricInstance::from_v1_bytes(bytes.as_bytes()).map_err(parse_error)?;
+        let value = ommx::ParametricInstance::from_v1_bytes(bytes.as_bytes())
+            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
         (self.config.parametric_instance)(bytes.py(), value)
     }
 
     fn solution(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let value = ommx::Solution::from_v1_bytes(bytes.as_bytes()).map_err(parse_error)?;
+        let value = ommx::Solution::from_v1_bytes(bytes.as_bytes())
+            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
         (self.config.solution)(bytes.py(), value)
     }
 
     fn sample_set(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let value = ommx::SampleSet::from_v1_bytes(bytes.as_bytes()).map_err(parse_error)?;
+        let value = ommx::SampleSet::from_v1_bytes(bytes.as_bytes())
+            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
         (self.config.sample_set)(bytes.py(), value)
     }
 }
