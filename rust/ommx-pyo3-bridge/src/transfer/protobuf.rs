@@ -353,6 +353,31 @@ mod tests {
         }
 
         #[test]
+        fn v1_decision_variable_payload_preserves_identity_intrinsic_and_owner_data(
+            id in any::<u64>(),
+            decision_variable in any::<ommx::DecisionVariable>(),
+            label in arbitrary_label(),
+        ) {
+            let expected_id = ommx::VariableID::from(id);
+            let expected_decision_variable = decision_variable.clone();
+            let expected_label = label.clone();
+            let payload = Export::<ProtobufV1, PyDecisionVariable>::export((
+                expected_id,
+                decision_variable,
+                label,
+            ))
+            .unwrap();
+            let actual = ommx::v1::DecisionVariable::decode(payload.as_slice())
+                .unwrap()
+                .parse(&())
+                .unwrap();
+            prop_assert_eq!(actual.id, expected_id);
+            prop_assert_eq!(actual.variable, expected_decision_variable);
+            prop_assert_eq!(actual.label, expected_label);
+            prop_assert_eq!(actual.fixed_value, None);
+        }
+
+        #[test]
         fn instance_payload_preserves_owner_complete_root(instance in any::<ommx::Instance>()) {
             let expected = instance.clone();
             let payload = export::<PyInstance>(instance);

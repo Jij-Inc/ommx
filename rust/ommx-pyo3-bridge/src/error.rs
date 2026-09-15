@@ -1,5 +1,6 @@
 //! Construct exceptions using the Python SDK's canonical class.
 
+use crate::TransferProtocolId;
 use pyo3::{
     exceptions::{PyBaseException, PyImportError, PyTypeError},
     prelude::*,
@@ -27,6 +28,32 @@ impl BridgeError {
             Ok(class) => PyErr::from_type(class, message.into()),
             Err(error) => error,
         }
+    }
+
+    /// Report that none of the caller's requested protocols is supported.
+    ///
+    /// Call this after [`crate::resolve_target`] returns `None` for every
+    /// acceptable protocol. The diagnostic lists the requested protocols in
+    /// caller order; this constructor does not probe support or retry transfers.
+    /// A missing SDK or bridge exception class raises `ImportError`.
+    pub fn no_supported_protocol(py: Python<'_>, requested: &[TransferProtocolId]) -> PyErr {
+        let message = match requested {
+            [] => "No OMMX transfer protocols were requested".to_owned(),
+            [protocol] => format!(
+                "The loaded OMMX Python SDK does not support the {protocol} transfer protocol"
+            ),
+            protocols => {
+                let names = protocols
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "The loaded OMMX Python SDK does not support any requested transfer protocol: {names}"
+                )
+            }
+        };
+        Self::new_err(py, message)
     }
 
     // Protocol discovery retains the class from the same SDK as the receivers.

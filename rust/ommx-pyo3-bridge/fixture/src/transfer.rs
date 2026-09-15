@@ -5,13 +5,6 @@ use ommx::Message;
 use ommx_pyo3_bridge::{resolve_target, ProtobufV1, ProtobufV2};
 use pyo3::types::PyBytes;
 
-fn no_supported_protocol(py: Python<'_>) -> PyErr {
-    BridgeError::new_err(
-        py,
-        "The loaded OMMX Python SDK does not support any requested transfer protocol",
-    )
-}
-
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction(signature = (after_resolve=None))]
 fn negotiated_instance(
@@ -31,7 +24,13 @@ fn negotiated_instance(
         }
         return target.transfer(py, component_instance());
     }
-    Err(no_supported_protocol(py))
+    Err(BridgeError::no_supported_protocol(
+        py,
+        &[
+            TransferProtocolId::ProtobufV2,
+            TransferProtocolId::ProtobufV1,
+        ],
+    ))
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
@@ -42,7 +41,7 @@ fn completed_instance(
     after_transfer: Py<PyAny>,
 ) -> PyResult<PyInstance> {
     let value: PyInstance = resolve_target::<ProtobufV2>(py)?
-        .ok_or_else(|| no_supported_protocol(py))?
+        .ok_or_else(|| BridgeError::no_supported_protocol(py, &[TransferProtocolId::ProtobufV2]))?
         .transfer(py, component_instance())?;
     after_transfer.call0(py)?;
     Ok(value)
@@ -117,14 +116,21 @@ fn compile_for_target(py: Python<'_>) -> PyResult<PyInstance> {
     if let Some(target) = resolve_target::<ProtobufV1>(py)? {
         return target.transfer(py, regular_instance());
     }
-    Err(no_supported_protocol(py))
+    Err(BridgeError::no_supported_protocol(
+        py,
+        &[
+            TransferProtocolId::ProtobufV2,
+            TransferProtocolId::ProtobufV1,
+        ],
+    ))
 }
 
 // Raw-message transport is separate from compiling a Rust SDK domain model.
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn raw_v1_instance(py: Python<'_>) -> PyResult<PyInstance> {
-    let target = resolve_target::<ProtobufV1>(py)?.ok_or_else(|| no_supported_protocol(py))?;
+    let target = resolve_target::<ProtobufV1>(py)?
+        .ok_or_else(|| BridgeError::no_supported_protocol(py, &[TransferProtocolId::ProtobufV1]))?;
     target.transfer(py, hinted_instance())
 }
 
@@ -144,7 +150,13 @@ fn v1_first_instance(py: Python<'_>, special: bool) -> PyResult<PyInstance> {
     if let Some(target) = resolve_target::<ProtobufV2>(py)? {
         return target.transfer(py, component_instance());
     }
-    Err(no_supported_protocol(py))
+    Err(BridgeError::no_supported_protocol(
+        py,
+        &[
+            TransferProtocolId::ProtobufV1,
+            TransferProtocolId::ProtobufV2,
+        ],
+    ))
 }
 
 // Decode at the Rust wire boundary to check preservation of advisory v1 data.
@@ -158,21 +170,24 @@ fn has_legacy_hint(bytes: &Bound<'_, PyBytes>) -> bool {
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn invalid_instance(py: Python<'_>) -> PyResult<PyInstance> {
-    let target = resolve_target::<ProtobufV1>(py)?.ok_or_else(|| no_supported_protocol(py))?;
+    let target = resolve_target::<ProtobufV1>(py)?
+        .ok_or_else(|| BridgeError::no_supported_protocol(py, &[TransferProtocolId::ProtobufV1]))?;
     target.transfer(py, ommx::v1::Instance::default())
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn v1_function(py: Python<'_>) -> PyResult<PyFunction> {
-    let target = resolve_target::<ProtobufV1>(py)?.ok_or_else(|| no_supported_protocol(py))?;
+    let target = resolve_target::<ProtobufV1>(py)?
+        .ok_or_else(|| BridgeError::no_supported_protocol(py, &[TransferProtocolId::ProtobufV1]))?;
     target.transfer(py, component_function())
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn v1_constraint(py: Python<'_>) -> PyResult<PyConstraint> {
-    let target = resolve_target::<ProtobufV1>(py)?.ok_or_else(|| no_supported_protocol(py))?;
+    let target = resolve_target::<ProtobufV1>(py)?
+        .ok_or_else(|| BridgeError::no_supported_protocol(py, &[TransferProtocolId::ProtobufV1]))?;
     let mut value = hinted_instance().constraints.remove(0);
     value.name = Some("choice".to_owned());
     target.transfer(py, value)
@@ -181,7 +196,8 @@ fn v1_constraint(py: Python<'_>) -> PyResult<PyConstraint> {
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction(signature = (fixed=false))]
 fn v1_decision_variable(py: Python<'_>, fixed: bool) -> PyResult<PyDecisionVariable> {
-    let target = resolve_target::<ProtobufV1>(py)?.ok_or_else(|| no_supported_protocol(py))?;
+    let target = resolve_target::<ProtobufV1>(py)?
+        .ok_or_else(|| BridgeError::no_supported_protocol(py, &[TransferProtocolId::ProtobufV1]))?;
     if fixed {
         let mut variable = hinted_instance().decision_variables.remove(0);
         variable.substituted_value = Some(1.0);
@@ -204,7 +220,13 @@ macro_rules! negotiated_root {
                 let value: ommx::v1::$wire = ($source).into();
                 return target.transfer(py, value);
             }
-            Err(no_supported_protocol(py))
+            Err(BridgeError::no_supported_protocol(
+                py,
+                &[
+                    TransferProtocolId::ProtobufV2,
+                    TransferProtocolId::ProtobufV1,
+                ],
+            ))
         }
     };
 }
@@ -218,7 +240,13 @@ fn negotiated_parametric_instance(py: Python<'_>) -> PyResult<PyParametricInstan
     if let Some(target) = resolve_target::<ProtobufV1>(py)? {
         return target.transfer(py, ParametricInstance::from(component_instance()));
     }
-    Err(no_supported_protocol(py))
+    Err(BridgeError::no_supported_protocol(
+        py,
+        &[
+            TransferProtocolId::ProtobufV2,
+            TransferProtocolId::ProtobufV1,
+        ],
+    ))
 }
 negotiated_root!(
     negotiated_solution,
@@ -243,7 +271,8 @@ negotiated_root!(
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn v2_components(py: Python<'_>) -> PyResult<(PyFunction, PyConstraint, PyDecisionVariable)> {
-    let target = resolve_target::<ProtobufV2>(py)?.ok_or_else(|| no_supported_protocol(py))?;
+    let target = resolve_target::<ProtobufV2>(py)?
+        .ok_or_else(|| BridgeError::no_supported_protocol(py, &[TransferProtocolId::ProtobufV2]))?;
     Ok((
         target.transfer(py, component_function())?,
         target.transfer(py, component_constraint())?,

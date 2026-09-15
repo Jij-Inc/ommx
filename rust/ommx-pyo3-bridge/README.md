@@ -8,17 +8,16 @@ or private PyO3 wrapper types across a shared-library boundary.
 Select a supported protocol and transfer the value before returning it:
 
 ```rust,no_run
-use ommx_pyo3_bridge::{resolve_target, BridgeError, ProtobufV2, PyFunction};
+use ommx_pyo3_bridge::{
+    resolve_target, BridgeError, ProtobufV2, PyFunction, TransferProtocolId,
+};
 use pyo3::prelude::*;
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 fn objective(py: Python<'_>) -> PyResult<PyFunction> {
     let target = resolve_target::<ProtobufV2>(py)?.ok_or_else(|| {
-        BridgeError::new_err(
-            py,
-            "The loaded OMMX Python SDK does not support the protobuf v2 transfer protocol",
-        )
+        BridgeError::no_supported_protocol(py, &[TransferProtocolId::ProtobufV2])
     })?;
     target.transfer(py, ommx::Function::default())
 }
@@ -83,7 +82,9 @@ caller's `if` statements expresses its preference:
 
 ```rust,no_run
 use ommx::{Constraint, ConstraintID, DecisionVariable, Instance, Sense};
-use ommx_pyo3_bridge::{resolve_target, BridgeError, ProtobufV1, ProtobufV2, PyInstance};
+use ommx_pyo3_bridge::{
+    resolve_target, BridgeError, ProtobufV1, ProtobufV2, PyInstance, TransferProtocolId,
+};
 use pyo3::prelude::*;
 use std::collections::BTreeMap;
 
@@ -105,9 +106,9 @@ fn compile(py: Python<'_>) -> PyResult<PyInstance> {
         let instance: Instance = compile_regular();
         return target.transfer(py, instance);
     }
-    Err(BridgeError::new_err(
+    Err(BridgeError::no_supported_protocol(
         py,
-        "The loaded OMMX Python SDK does not support any requested transfer protocol",
+        &[TransferProtocolId::ProtobufV2, TransferProtocolId::ProtobufV1],
     ))
 }
 
@@ -189,9 +190,12 @@ features are validated by the serializers and parsers, not by negotiation.
 
 The Python SDK defines `ommx.BridgeError`, a `RuntimeError` subclass used by
 senders and receivers. Invalid protocol declarations, receiver registration
-errors, and payload/transfer failures use this class. Callers can also construct
-it with
-`BridgeError::new_err(py, message)` when their requested protocols are unsupported.
+errors, and payload/transfer failures use this class. After all acceptable
+protocol probes return `None`, callers use
+`BridgeError::no_supported_protocol(py, &requested)` to report the mismatch.
+It includes the requested protocol names in caller order without probing the
+SDK again. `BridgeError::new_err(py, message)` is available for other
+caller-defined bridge failures.
 Transfer wrappers retain the original Python exception in `__cause__`.
 Python argument-binding errors and exceptions raised directly by SDK factories
 keep their original types; a sender wraps factory failures during transfer.

@@ -5,18 +5,14 @@ mod transfer;
 use ommx::{Evaluate as _, ParametricInstance};
 use ommx_pyo3_bridge::{
     BridgeError, PyConstraint, PyDecisionVariable, PyFunction, PyInstance, PyParametricInstance,
-    PySampleSet, PySolution,
+    PySampleSet, PySolution, TransferProtocolId,
 };
 use pyo3::{prelude::*, types::PyType};
 use std::collections::{BTreeMap, HashMap};
 
 fn v2_target(py: Python<'_>) -> PyResult<ommx_pyo3_bridge::Target<ommx_pyo3_bridge::ProtobufV2>> {
-    ommx_pyo3_bridge::resolve_target::<ommx_pyo3_bridge::ProtobufV2>(py)?.ok_or_else(|| {
-        BridgeError::new_err(
-            py,
-            "The loaded OMMX Python SDK does not support the protobuf v2 transfer protocol",
-        )
-    })
+    ommx_pyo3_bridge::resolve_target::<ommx_pyo3_bridge::ProtobufV2>(py)?
+        .ok_or_else(|| BridgeError::no_supported_protocol(py, &[TransferProtocolId::ProtobufV2]))
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]

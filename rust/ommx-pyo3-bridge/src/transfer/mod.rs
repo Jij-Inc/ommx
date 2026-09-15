@@ -20,6 +20,15 @@ pub enum TransferProtocolId {
     ProtobufV2 = 2,
 }
 
+impl std::fmt::Display for TransferProtocolId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::ProtobufV1 => "protobuf v1",
+            Self::ProtobufV2 => "protobuf v2",
+        })
+    }
+}
+
 mod sealed {
     pub trait Protocol {}
     pub trait Type<P> {}

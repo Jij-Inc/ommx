@@ -119,10 +119,29 @@ def test_no_common_protocol_fails_before_compilation(monkeypatch, ids):
     compiled = []
     with pytest.raises(
         ommx.BridgeError,
-        match="The loaded OMMX Python SDK does not support any requested transfer protocol",
-    ):
+        match="does not support any requested transfer protocol: protobuf v2, protobuf v1",
+    ) as error:
         fixture.negotiated_instance(lambda: compiled.append(True))
+    assert type(error.value) is ommx.BridgeError
     assert compiled == []
+
+
+def test_unsupported_protocol_error_preserves_caller_preference(monkeypatch):
+    advertise(monkeypatch, [])
+    with pytest.raises(
+        ommx.BridgeError,
+        match="does not support any requested transfer protocol: protobuf v1, protobuf v2",
+    ):
+        fixture.v1_first_instance()
+
+
+def test_v1_only_consumer_reports_its_requested_protocol(monkeypatch):
+    advertise(monkeypatch, [2])
+    with pytest.raises(
+        ommx.BridgeError,
+        match="does not support the protobuf v1 transfer protocol",
+    ):
+        fixture.v1_function()
 
 
 def test_required_protocol_is_unsupported_bridge_error(monkeypatch):
