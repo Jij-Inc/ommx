@@ -186,20 +186,27 @@ def test_one_target_transfers_multiple_types_without_reprobing(monkeypatch):
     assert calls == [True]
 
 
-def test_completed_output_returns_and_clones_the_same_python_object(monkeypatch):
-    calls = spy_instance(monkeypatch)
+def test_completed_output_returns_the_received_python_object(monkeypatch):
+    received = []
+
+    def receive(payload):
+        value = INSTANCE.from_v2_bytes(payload)
+        received.append(value)
+        return value
+
+    monkeypatch.setattr(ommx, "Instance", SimpleNamespace(from_v2_bytes=receive))
 
     def after_transfer():
         # Import is complete while the Rust function is still executing.
-        assert [protocol for protocol, _ in calls] == [2]
+        assert len(received) == 1
         monkeypatch.setattr(ommx, "Instance", SimpleNamespace())
         monkeypatch.delattr(receiver, DECLARATION)
 
-    value, cloned = fixture.completed_instance(after_transfer)
+    value = fixture.completed_instance(after_transfer)
     assert type(value) is INSTANCE
-    assert value is cloned
+    assert value is received[0]
     assert value.objective.linear_terms == {7: 1.0}
-    assert [protocol for protocol, _ in calls] == [2]
+    assert len(received) == 1
 
 
 def test_compilation_uses_selected_target_and_preserves_v1_hints(monkeypatch):
@@ -307,13 +314,13 @@ def test_malformed_v1_component_is_a_bridge_runtime_error(kind):
 @pytest.mark.parametrize(
     ("endpoint", "kwargs"),
     [
-        ("_pyo3_bridge_v0_function_from_bytes", {"bytes": b"\xff"}),
+        ("_bridge_protobuf_v2_function_from_bytes", {"bytes": b"\xff"}),
         (
-            "_pyo3_bridge_v0_constraint_from_bytes",
+            "_bridge_protobuf_v2_constraint_from_bytes",
             {"constraint": b"\xff", "context": b""},
         ),
         (
-            "_pyo3_bridge_v0_decision_variable_from_bytes",
+            "_bridge_protobuf_v2_decision_variable_from_bytes",
             {"id": 7, "decision_variable": b"\xff", "label": b""},
         ),
         ("_bridge_protobuf_v1_function_from_bytes", {"bytes": b"\xff"}),

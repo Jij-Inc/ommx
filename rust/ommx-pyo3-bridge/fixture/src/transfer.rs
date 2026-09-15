@@ -38,14 +38,12 @@ fn completed_instance(
     py: Python<'_>,
     #[gen_stub(override_type(type_repr="collections.abc.Callable[[], None]", imports=("collections.abc",)))]
     after_transfer: Py<PyAny>,
-) -> PyResult<(PyInstance, PyInstance)> {
+) -> PyResult<PyInstance> {
     let value: PyInstance = resolve_target::<ProtobufV2>(py)?
         .ok_or_else(no_supported_protocol)?
         .transfer(py, component_instance())?;
     after_transfer.call0(py)?;
-    // Completed output wrappers can be cloned without the GIL or a new transfer.
-    let cloned = py.detach(|| value.clone());
-    Ok((value, cloned))
+    Ok(value)
 }
 
 fn variable_parts() -> (

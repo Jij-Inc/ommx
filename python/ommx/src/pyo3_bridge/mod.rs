@@ -11,7 +11,6 @@ pub(crate) fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
             TransferProtocolId::ProtobufV1,
             TransferProtocolId::ProtobufV2,
         ],
-        legacy_v0: true,
         function: |py, value| Function(value).into_py_any(py),
         constraint: |py, value, context| Constraint::from_parts(value, context).into_py_any(py),
         decision_variable: |py, id, value, label| {

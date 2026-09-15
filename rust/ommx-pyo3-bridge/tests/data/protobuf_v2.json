@@ -1,15 +1,15 @@
 {
   "function": {
-    "endpoint": "_pyo3_bridge_v0_function_from_bytes",
+    "endpoint": "_bridge_protobuf_v2_function_from_bytes",
     "payload": "12160a0b080711000000000000f03f1100000000000008c0"
   },
   "constraint": {
-    "endpoint": "_pyo3_bridge_v0_constraint_from_bytes",
+    "endpoint": "_bridge_protobuf_v2_constraint_from_bytes",
     "constraint": "0802121812160a0b080711000000000000f03f1100000000000008c0",
     "context": "0a2b0a086361706163697479120202051a0b0a04617869731203726f77220e627269646765206669787475726512021017"
   },
   "decision_variable": {
-    "endpoint": "_pyo3_bridge_v0_decision_variable_from_bytes",
+    "endpoint": "_bridge_protobuf_v2_decision_variable_from_bytes",
     "id": 7,
     "decision_variable": "080212120900000000000000c0110000000000002040",
     "label": "0a0178120202051a0b0a04617869731203726f77220e6272696467652066697874757265"

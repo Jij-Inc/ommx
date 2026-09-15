@@ -23,9 +23,6 @@ use pyo3::{
 pub struct ReceiverConfig {
     /// Protocols this SDK supports, in declaration order. Duplicates are removed.
     pub protocols: Vec<TransferProtocolId>,
-    /// Also expose the fixed v0 component endpoints for existing constructors.
-    /// ProtobufV2 always uses these endpoints, independently of this flag.
-    pub legacy_v0: bool,
     /// Construct the SDK's `ommx.Function` from a parsed function.
     pub function: fn(Python<'_>, ommx::Function) -> PyResult<Py<PyAny>>,
     /// Construct its detached `ommx.Constraint` with the complete context.
@@ -56,10 +53,7 @@ impl ReceiverConfig {
         self.protocols = protocols;
         let v1 = self.protocols.contains(&TransferProtocolId::ProtobufV1);
         let v2 = self.protocols.contains(&TransferProtocolId::ProtobufV2);
-        for (required, method) in [
-            (v1, protocol::FROM_V1_BYTES),
-            (v2 || self.legacy_v0, protocol::FROM_V2_BYTES),
-        ] {
+        for (required, method) in [(v1, protocol::FROM_V1_BYTES), (v2, protocol::FROM_V2_BYTES)] {
             if !required {
                 continue;
             }
@@ -81,7 +75,6 @@ impl ReceiverConfig {
                 }
             }
         }
-        let v0 = self.legacy_v0 || v2;
         let receiver = Py::new(module.py(), Receiver { config: self })?.into_bound(module.py());
         // Prepare all bindings before publishing the declaration. Only the
         // bound methods are exported; the implementation class stays private.
@@ -91,10 +84,10 @@ impl ReceiverConfig {
                 bindings.push(($name, receiver.getattr(stringify!($method))?));
             };
         }
-        if v0 {
-            bind!(protocol::V0_FUNCTION, function_v0);
-            bind!(protocol::V0_CONSTRAINT, constraint_v0);
-            bind!(protocol::V0_DECISION_VARIABLE, decision_variable_v0);
+        if v2 {
+            bind!(protocol::V2_FUNCTION, function_v2);
+            bind!(protocol::V2_CONSTRAINT, constraint_v2);
+            bind!(protocol::V2_DECISION_VARIABLE, decision_variable_v2);
         }
         if v1 {
             bind!(protocol::V1_FUNCTION, function_v1);
@@ -116,8 +109,8 @@ struct Receiver {
     config: ReceiverConfig,
 }
 
-fn v0_error(error: ommx::Error) -> PyErr {
-    PyRuntimeError::new_err(format!("invalid OMMX PyO3 bridge v0 payload: {error:#}"))
+fn v2_error(error: ommx::Error) -> PyErr {
+    PyRuntimeError::new_err(format!("invalid OMMX ProtobufV2 bridge payload: {error:#}"))
 }
 
 fn v1_error(error: ommx::Error) -> PyErr {
@@ -130,30 +123,30 @@ impl Receiver {
         self.config.protocols.iter().map(|id| *id as u32).collect()
     }
 
-    fn function_v0(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let function = protobuf::function(bytes.as_bytes()).map_err(v0_error)?;
+    fn function_v2(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
+        let function = protobuf::function(bytes.as_bytes()).map_err(v2_error)?;
         (self.config.function)(bytes.py(), function)
     }
 
-    fn constraint_v0(
+    fn constraint_v2(
         &self,
         constraint: &Bound<'_, PyBytes>,
         context: &Bound<'_, PyBytes>,
     ) -> PyResult<Py<PyAny>> {
         let (value, context) =
-            protobuf::constraint_v0(constraint.as_bytes(), context.as_bytes()).map_err(v0_error)?;
+            protobuf::constraint_v2(constraint.as_bytes(), context.as_bytes()).map_err(v2_error)?;
         (self.config.constraint)(constraint.py(), value, context)
     }
 
-    fn decision_variable_v0(
+    fn decision_variable_v2(
         &self,
         id: u64,
         decision_variable: &Bound<'_, PyBytes>,
         label: &Bound<'_, PyBytes>,
     ) -> PyResult<Py<PyAny>> {
         let (id, variable, label) =
-            protobuf::decision_variable_v0(id, decision_variable.as_bytes(), label.as_bytes())
-                .map_err(v0_error)?;
+            protobuf::decision_variable_v2(id, decision_variable.as_bytes(), label.as_bytes())
+                .map_err(v2_error)?;
         (self.config.decision_variable)(decision_variable.py(), id, variable, label)
     }
 
@@ -196,10 +189,9 @@ mod tests {
         module
     }
 
-    fn config(protocols: Vec<TransferProtocolId>, legacy_v0: bool) -> ReceiverConfig {
+    fn config(protocols: Vec<TransferProtocolId>) -> ReceiverConfig {
         ReceiverConfig {
             protocols,
-            legacy_v0,
             function: |py, _| 1.into_py_any(py),
             constraint: |py, _, _| Ok(py.None()),
             decision_variable: |py, _, _, _| Ok(py.None()),
@@ -210,21 +202,19 @@ mod tests {
     fn advertisement_matches_registered_endpoints() {
         Python::initialize();
         Python::attach(|py| {
-            for (ids, legacy, expected, v1, v0) in [
-                (vec![], false, vec![], false, false),
-                (vec![], true, vec![], false, true),
-                (vec![ProtobufV1], false, vec![1], true, false),
-                (vec![ProtobufV2], false, vec![2], false, true),
+            for (ids, expected, v1, v2) in [
+                (vec![], vec![], false, false),
+                (vec![ProtobufV1], vec![1], true, false),
+                (vec![ProtobufV2], vec![2], false, true),
                 (
                     vec![ProtobufV2, ProtobufV1, ProtobufV2],
-                    false,
                     vec![2, 1],
                     true,
                     true,
                 ),
             ] {
                 let module = sdk_module(py);
-                config(ids, legacy).register(&module).unwrap();
+                config(ids).register(&module).unwrap();
                 let advertised: Vec<u32> = module
                     .getattr("_bridge_supported_protocols")
                     .unwrap()
@@ -242,9 +232,9 @@ mod tests {
                     );
                     assert_eq!(
                         module
-                            .hasattr(format!("_pyo3_bridge_v0_{kind}_from_bytes"))
+                            .hasattr(format!("_bridge_protobuf_v2_{kind}_from_bytes"))
                             .unwrap(),
-                        v0
+                        v2
                     );
                 }
                 assert!(!module.hasattr("Receiver").unwrap());
@@ -266,7 +256,7 @@ mod tests {
                         } else {
                             root.setattr(method, py.None()).unwrap();
                         }
-                        let error = config(vec![id], false).register(&module).unwrap_err();
+                        let error = config(vec![id]).register(&module).unwrap_err();
                         assert!(error.is_instance_of::<PyImportError>(py));
                         assert!(error.to_string().contains(&format!("{class}.{method}")));
                         assert!(!module.hasattr("_bridge_supported_protocols").unwrap());
@@ -274,7 +264,7 @@ mod tests {
                             .hasattr("_bridge_protobuf_v1_function_from_bytes")
                             .unwrap());
                         assert!(!module
-                            .hasattr("_pyo3_bridge_v0_function_from_bytes")
+                            .hasattr("_bridge_protobuf_v2_function_from_bytes")
                             .unwrap());
                     }
                 }
@@ -287,9 +277,9 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let first = sdk_module(py);
-            config(vec![ProtobufV1], false).register(&first).unwrap();
+            config(vec![ProtobufV1]).register(&first).unwrap();
             let second = sdk_module(py);
-            let mut other = config(vec![ProtobufV2], false);
+            let mut other = config(vec![ProtobufV2]);
             other.function = |py, _| 2.into_py_any(py);
             other.register(&second).unwrap();
             let bytes = ommx::Function::default().to_bytes();
@@ -302,7 +292,7 @@ mod tests {
                 .extract()
                 .unwrap();
             let second_value: i32 = second
-                .getattr(protocol::V0_FUNCTION)
+                .getattr(protocol::V2_FUNCTION)
                 .unwrap()
                 .call1((&bytes,))
                 .unwrap()
@@ -327,16 +317,16 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let module = sdk_module(py);
-            config(vec![], true).register(&module).unwrap();
+            config(vec![ProtobufV2]).register(&module).unwrap();
             let error = module
-                .getattr(protocol::V0_FUNCTION)
+                .getattr(protocol::V2_FUNCTION)
                 .unwrap()
                 .call1((PyBytes::new(py, b"\xff"),))
                 .unwrap_err();
             assert!(error.is_instance_of::<PyRuntimeError>(py));
             assert!(error
                 .to_string()
-                .contains("invalid OMMX PyO3 bridge v0 payload"));
+                .contains("invalid OMMX ProtobufV2 bridge payload"));
         });
     }
 
@@ -345,7 +335,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let module = sdk_module(py);
-            let mut receiver = config(vec![ProtobufV1], false);
+            let mut receiver = config(vec![ProtobufV1]);
             receiver.function = |_, _| Err(PyValueError::new_err("constructor failed"));
             receiver.register(&module).unwrap();
             let bytes = ommx::Function::default().to_bytes();

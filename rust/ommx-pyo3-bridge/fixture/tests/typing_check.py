@@ -24,9 +24,7 @@ assert_type(sample_set(), ommx.SampleSet)
 
 # Route parameters and different Rust source types never enter Python stubs.
 assert_type(fixture.negotiated_instance(), ommx.Instance)
-assert_type(
-    fixture.completed_instance(lambda: None), tuple[ommx.Instance, ommx.Instance]
-)
+assert_type(fixture.completed_instance(lambda: None), ommx.Instance)
 assert_type(fixture.compile_for_target(), ommx.Instance)
 assert_type(fixture.v1_first_instance(), ommx.Instance)
 assert_type(fixture.invalid_instance(), ommx.Instance)
