@@ -208,9 +208,10 @@ def test_protobuf_v2_payloads_reconstruct_canonical_values() -> None:
     )
 
     instance = V2_CONTRACT["instance"]
-    assert instance["capability"] == "ommx.Instance.from_v2_bytes"
     assert_component_instance(
-        ommx.Instance.from_v2_bytes(bytes.fromhex(instance["payload"]))
+        getattr(ommx._ommx_rust, instance["endpoint"])(
+            bytes.fromhex(instance["payload"])
+        )
     )
 
 
@@ -255,13 +256,10 @@ def test_sender_matches_protobuf_v2_endpoint_signatures_and_payloads() -> None:
         )
 
         instance = contract["instance"]
-        assert instance["capability"] == "ommx.Instance.from_v2_bytes"
-        class Instance:
-            @staticmethod
-            def from_v2_bytes(payload):
-                assert payload.hex() == instance["payload"]
-                return "instance"
-        fake_ommx.Instance = Instance
+        def receive_instance(payload):
+            assert payload.hex() == instance["payload"]
+            return "instance"
+        setattr(fake_rust, instance["endpoint"], receive_instance)
 
         sys.modules["ommx"] = fake_ommx
         sys.modules["ommx._ommx_rust"] = fake_rust
@@ -346,12 +344,19 @@ def test_missing_python_bridge_endpoint_has_a_clear_error() -> None:
             fixture.decision_variable, "ommx.DecisionVariable",
             "_bridge_protobuf_v2_decision_variable_from_bytes",
         )
-        assert_missing_receiver(fixture.instance, "ommx.Instance", "from_v2_bytes")
         assert_missing_receiver(
-            fixture.parametric_instance, "ommx.ParametricInstance", "from_v2_bytes",
+            fixture.instance, "ommx.Instance", "_bridge_protobuf_v2_instance_from_bytes",
         )
-        assert_missing_receiver(fixture.solution, "ommx.Solution", "from_v2_bytes")
-        assert_missing_receiver(fixture.sample_set, "ommx.SampleSet", "from_v2_bytes")
+        assert_missing_receiver(
+            fixture.parametric_instance, "ommx.ParametricInstance",
+            "_bridge_protobuf_v2_parametric_instance_from_bytes",
+        )
+        assert_missing_receiver(
+            fixture.solution, "ommx.Solution", "_bridge_protobuf_v2_solution_from_bytes",
+        )
+        assert_missing_receiver(
+            fixture.sample_set, "ommx.SampleSet", "_bridge_protobuf_v2_sample_set_from_bytes",
+        )
         """
     )
     result = subprocess.run(

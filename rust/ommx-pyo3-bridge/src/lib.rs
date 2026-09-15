@@ -3,7 +3,9 @@
 mod protocol;
 mod receiver;
 mod transfer;
-pub use receiver::ReceiverConfig;
+pub use receiver::{
+    register_receivers, ProtobufV1ReceiverConfig, ProtobufV2ReceiverConfig, ReceiverConfig,
+};
 pub use transfer::{
     resolve_target, Export, ProtobufV1, ProtobufV2, Target, TransferProtocol, TransferProtocolId,
     TransferVia,

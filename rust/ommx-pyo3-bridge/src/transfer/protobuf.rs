@@ -9,10 +9,6 @@ use crate::{
 use ommx::Message;
 use pyo3::types::PyBytes;
 
-fn public_receiver(module: &Bound<'_, PyModule>, class: &str, method: &str) -> PyResult<Py<PyAny>> {
-    Ok(module.getattr(class)?.getattr(method)?.unbind())
-}
-
 fn private_receiver(module: &Bound<'_, PyModule>, endpoint: &str) -> PyResult<Py<PyAny>> {
     Ok(module.getattr("_ommx_rust")?.getattr(endpoint)?.unbind())
 }
@@ -22,14 +18,14 @@ fn import_bytes<'py>(bytes: Vec<u8>, receiver: &Bound<'py, PyAny>) -> PyResult<B
 }
 
 macro_rules! root {
-    ($wrapper:ident, $domain:ident, $name:literal) => {
+    ($wrapper:ident, $domain:ident, $name:literal, $v1:expr, $v2:expr) => {
         impl super::sealed::Type<ProtobufV1> for $wrapper {}
         impl super::sealed::Type<ProtobufV2> for $wrapper {}
         impl TransferVia<ProtobufV1> for $wrapper {
             type Payload = Vec<u8>;
             const PYTHON_NAME: &'static str = concat!("ommx.", $name);
             fn receiver(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
-                public_receiver(module, $name, protocol::FROM_V1_BYTES)
+                private_receiver(module, $v1)
             }
             fn import(payload: Vec<u8>, receiver: &Bound<'_, PyAny>) -> PyResult<Self> {
                 import_bytes(payload, receiver).map(|object| Self(object.unbind()))
@@ -39,7 +35,7 @@ macro_rules! root {
             type Payload = Vec<u8>;
             const PYTHON_NAME: &'static str = concat!("ommx.", $name);
             fn receiver(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
-                public_receiver(module, $name, protocol::FROM_V2_BYTES)
+                private_receiver(module, $v2)
             }
             fn import(payload: Vec<u8>, receiver: &Bound<'_, PyAny>) -> PyResult<Self> {
                 import_bytes(payload, receiver).map(|object| Self(object.unbind()))
@@ -57,14 +53,34 @@ macro_rules! root {
         }
     };
 }
-root!(PyInstance, Instance, "Instance");
+root!(
+    PyInstance,
+    Instance,
+    "Instance",
+    protocol::V1_INSTANCE,
+    protocol::V2_INSTANCE
+);
 root!(
     PyParametricInstance,
     ParametricInstance,
-    "ParametricInstance"
+    "ParametricInstance",
+    protocol::V1_PARAMETRIC_INSTANCE,
+    protocol::V2_PARAMETRIC_INSTANCE
 );
-root!(PySolution, Solution, "Solution");
-root!(PySampleSet, SampleSet, "SampleSet");
+root!(
+    PySolution,
+    Solution,
+    "Solution",
+    protocol::V1_SOLUTION,
+    protocol::V2_SOLUTION
+);
+root!(
+    PySampleSet,
+    SampleSet,
+    "SampleSet",
+    protocol::V1_SAMPLE_SET,
+    protocol::V2_SAMPLE_SET
+);
 
 // Only use checked v1 domain conversions. Solution/SampleSet's legacy `From`
 // conversions intentionally discard special-constraint results; those roots

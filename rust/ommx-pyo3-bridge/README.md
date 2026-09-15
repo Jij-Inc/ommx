@@ -114,8 +114,12 @@ receiver signatures, and ownership, independently of SDK release numbers.
 | 2 | `ProtobufV2` | `ommx.v2` protobuf messages |
 
 The root types are `Instance`, `ParametricInstance`, `Solution`, and `SampleSet`.
-Their receivers are `ommx.<Type>.from_v1_bytes(bytes)` and
-`ommx.<Type>.from_v2_bytes(bytes)`. ProtobufV1 accepts complete raw `ommx::v1`
+They use private receivers on `ommx._ommx_rust`, named
+`_bridge_protobuf_v1_<kind>_from_bytes(bytes)` and
+`_bridge_protobuf_v2_<kind>_from_bytes(bytes)`, where `<kind>` is `instance`,
+`parametric_instance`, `solution`, or `sample_set`. Public Python class
+constructors and decoding methods are not part of the transfer contract.
+ProtobufV1 accepts complete raw `ommx::v1`
 roots without parsing them into the Rust v3 domain model. This preserves
 advisory `ConstraintHints` until they reach the receiver. A v3 receiver may
 ignore those hints, as allowed by the schema.
@@ -159,23 +163,50 @@ to be byte buffers and own their resources until import or drop.
 
 ## Configure Python SDK receivers
 
-The Python SDK configures [`ReceiverConfig`] with its supported protocols and
-three factories for its canonical `Function`, `Constraint`, and
-`DecisionVariable` classes. The factories receive parsed Rust values,
-including the complete constraint context or variable ID and label. They only
-construct the SDK's Python objects; they do not define endpoint names, decode
-payloads, or implement the support declaration.
+The Python SDK supplies a [`ProtobufV1ReceiverConfig`] and/or
+[`ProtobufV2ReceiverConfig`]. These are distinct concrete types, each defining
+the required factory signatures for its protocol. Both currently require
+factories for all seven canonical classes: `Function`, `Constraint`,
+`DecisionVariable`, `Instance`, `ParametricInstance`, `Solution`, and
+`SampleSet`.
 
-Call `ReceiverConfig::register` after registering the SDK's `Instance`,
-`ParametricInstance`, `Solution`, and `SampleSet` classes on the extension
-module. Registration checks their required public `from_v1_bytes` and
-`from_v2_bytes` decoders before adding the configured component endpoints and
-support declaration. Component endpoints are registered only for the selected
-protocols.
+Factories run after the protocol's Rust SDK parser and construct the Python
+objects from the parsed values. Complete constraint context, variable IDs and
+labels, and root-owned data are preserved. The same factory implementation can
+be supplied to both protobuf configurations. Future protocol configurations
+can require different input types or ownership rules.
+
+Collect the concrete configurations as [`ReceiverConfig`] enum values and pass
+the complete list to [`register_receivers`] once during SDK initialization:
+
+```rust,no_run
+use ommx_pyo3_bridge::{
+    register_receivers, ProtobufV1ReceiverConfig, ProtobufV2ReceiverConfig, ReceiverConfig,
+};
+use pyo3::prelude::*;
+
+fn install_receivers(
+    module: &Bound<'_, PyModule>,
+    v1: ProtobufV1ReceiverConfig,
+    v2: ProtobufV2ReceiverConfig,
+) -> PyResult<()> {
+    let configs: Vec<ReceiverConfig> = vec![v1.into(), v2.into()];
+    register_receivers(module, configs)
+}
+```
+
+The list determines the supported protocols and their declaration order;
+there is no separate list of protocol IDs to keep in sync. Registration
+prepares all private receivers and publishes the support declaration last.
+Duplicate protocols, repeated registration, and occupied endpoint names
+raise `ImportError` before any module attributes are changed. An empty list
+advertises no supported protocols. No public Python classes or decoding
+methods need to be present for registration.
 
 Sender lookups and receiver registration use the same bridge-owned endpoint
 definitions. Receiver factories are retained locally by private bound Python
 methods, with no global configuration and no Rust object sharing between
 independent extension modules. Call signatures, decoding through the core
 parsers, and bridge error conversion belong to the bridge crate. The Python
-SDK retains ownership of its canonical classes and public root decoding APIs.
+SDK retains ownership of its canonical classes and public decoding APIs;
+bridge transfers do not look up or call those public methods.

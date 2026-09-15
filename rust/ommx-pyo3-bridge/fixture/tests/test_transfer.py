@@ -1,7 +1,7 @@
 """Negotiated transfers through a separately compiled PyO3 consumer."""
 
 import sys
-from types import ModuleType, SimpleNamespace
+from types import ModuleType
 
 import ommx
 import ommx._ommx_rust as receiver
@@ -20,6 +20,8 @@ from test_bridge import (
 
 INSTANCE = ommx.Instance
 DECLARATION = "_bridge_supported_protocols"
+V1_INSTANCE = "_bridge_protobuf_v1_instance_from_bytes"
+V2_INSTANCE = "_bridge_protobuf_v2_instance_from_bytes"
 
 
 def advertise(monkeypatch, ids):
@@ -28,29 +30,38 @@ def advertise(monkeypatch, ids):
 
 def spy_instance(monkeypatch):
     calls = []
+    original_v1 = getattr(receiver, V1_INSTANCE)
+    original_v2 = getattr(receiver, V2_INSTANCE)
 
     def v1(payload):
         calls.append((1, payload))
-        return INSTANCE.from_v1_bytes(payload)
+        return original_v1(payload)
 
     def v2(payload):
         calls.append((2, payload))
-        return INSTANCE.from_v2_bytes(payload)
+        return original_v2(payload)
 
-    monkeypatch.setattr(
-        ommx, "Instance", SimpleNamespace(from_v1_bytes=v1, from_v2_bytes=v2)
-    )
+    monkeypatch.setattr(receiver, V1_INSTANCE, v1)
+    monkeypatch.setattr(receiver, V2_INSTANCE, v2)
     return calls
 
 
 def test_python_sdk_explicitly_advertises_fixed_protocol_ids():
     assert getattr(receiver, DECLARATION)() == [1, 2]
-    for endpoint in (
-        DECLARATION,
-        "_bridge_protobuf_v1_function_from_bytes",
-        "_bridge_protobuf_v1_constraint_from_bytes",
-        "_bridge_protobuf_v1_decision_variable_from_bytes",
-    ):
+    endpoints = [DECLARATION] + [
+        f"_bridge_protobuf_v{version}_{kind}_from_bytes"
+        for version in (1, 2)
+        for kind in (
+            "function",
+            "constraint",
+            "decision_variable",
+            "instance",
+            "parametric_instance",
+            "solution",
+            "sample_set",
+        )
+    ]
+    for endpoint in endpoints:
         assert callable(getattr(receiver, endpoint))
         assert not hasattr(ommx, endpoint)
 
@@ -106,10 +117,11 @@ def test_malformed_declaration_preserves_cause(monkeypatch, ids):
 @pytest.mark.parametrize("missing", [True, False])
 def test_broken_receiver_fails_at_transfer_without_falling_back(monkeypatch, missing):
     calls = []
-    root = SimpleNamespace(from_v1_bytes=lambda _: calls.append(1))
-    if not missing:
-        root.from_v2_bytes = None
-    monkeypatch.setattr(ommx, "Instance", root)
+    monkeypatch.setattr(receiver, V1_INSTANCE, lambda _: calls.append(1))
+    if missing:
+        monkeypatch.delattr(receiver, V2_INSTANCE)
+    else:
+        monkeypatch.setattr(receiver, V2_INSTANCE, None)
     with pytest.raises(ImportError, match="ProtobufV2"):
         fixture.negotiated_instance(lambda: calls.append("compiled"))
     # A protocol probe does not inspect type-specific receivers. The compiler
@@ -158,13 +170,14 @@ def test_probe_errors_are_not_treated_as_unsupported_protocols(monkeypatch):
 
 def test_receiver_is_resolved_at_transfer(monkeypatch):
     calls = []
+    original = getattr(receiver, V2_INSTANCE)
 
     def after_resolve():
         def receive(payload):
             calls.append(2)
-            return INSTANCE.from_v2_bytes(payload)
+            return original(payload)
 
-        monkeypatch.setattr(ommx, "Instance", SimpleNamespace(from_v2_bytes=receive))
+        monkeypatch.setattr(receiver, V2_INSTANCE, receive)
 
     value = fixture.negotiated_instance(after_resolve)
     assert type(value) is INSTANCE
@@ -188,18 +201,19 @@ def test_one_target_transfers_multiple_types_without_reprobing(monkeypatch):
 
 def test_completed_output_returns_the_received_python_object(monkeypatch):
     received = []
+    original = getattr(receiver, V2_INSTANCE)
 
     def receive(payload):
-        value = INSTANCE.from_v2_bytes(payload)
+        value = original(payload)
         received.append(value)
         return value
 
-    monkeypatch.setattr(ommx, "Instance", SimpleNamespace(from_v2_bytes=receive))
+    monkeypatch.setattr(receiver, V2_INSTANCE, receive)
 
     def after_transfer():
         # Import is complete while the Rust function is still executing.
         assert len(received) == 1
-        monkeypatch.setattr(ommx, "Instance", SimpleNamespace())
+        monkeypatch.delattr(receiver, V2_INSTANCE)
         monkeypatch.delattr(receiver, DECLARATION)
 
     value = fixture.completed_instance(after_transfer)
@@ -246,14 +260,8 @@ def test_receiver_exception_is_preserved_as_cause_without_retry(monkeypatch):
         calls.append(2)
         raise original
 
-    monkeypatch.setattr(
-        ommx,
-        "Instance",
-        SimpleNamespace(
-            from_v2_bytes=fail,
-            from_v1_bytes=lambda _: calls.append(1),
-        ),
-    )
+    monkeypatch.setattr(receiver, V2_INSTANCE, fail)
+    monkeypatch.setattr(receiver, V1_INSTANCE, lambda _: calls.append(1))
     with pytest.raises(
         RuntimeError, match="ommx.Instance using ProtobufV2 during import"
     ) as error:
@@ -304,6 +312,39 @@ def test_all_root_types_support_both_protocols(monkeypatch, ids):
     assert_component_sample_set(fixture.negotiated_sample_set())
 
 
+@pytest.mark.parametrize("ids", [[1], [2]])
+def test_root_transfer_does_not_look_up_public_classes_or_decoders(monkeypatch, ids):
+    advertise(monkeypatch, ids)
+    roots = [
+        ("Instance", fixture.negotiated_instance),
+        ("ParametricInstance", fixture.negotiated_parametric_instance),
+        ("Solution", fixture.negotiated_solution),
+        ("SampleSet", fixture.negotiated_sample_set),
+    ]
+    classes = {name: getattr(ommx, name) for name, _ in roots}
+    for name, _ in roots:
+        monkeypatch.delattr(ommx, name)
+        monkeypatch.delattr(receiver, name)
+    for name, transfer in roots:
+        value = transfer()
+        assert type(value) is classes[name]
+        # Use the preserved class only to compare the complete reconstructed root.
+        restored = classes[name].from_v2_bytes(value.to_v2_bytes())
+        assert restored.to_v2_bytes() == value.to_v2_bytes()
+
+
+@pytest.mark.parametrize("version", [1, 2])
+@pytest.mark.parametrize(
+    "kind", ["instance", "parametric_instance", "solution", "sample_set"]
+)
+def test_malformed_root_is_a_bridge_runtime_error(version, kind):
+    receive = getattr(receiver, f"_bridge_protobuf_v{version}_{kind}_from_bytes")
+    with pytest.raises(
+        RuntimeError, match=f"invalid OMMX ProtobufV{version} bridge payload"
+    ):
+        receive(b"\xff")
+
+
 @pytest.mark.parametrize("kind", ["function", "constraint", "decision_variable"])
 def test_malformed_v1_component_is_a_bridge_runtime_error(kind):
     receive = getattr(receiver, f"_bridge_protobuf_v1_{kind}_from_bytes")
@@ -326,6 +367,11 @@ def test_malformed_v1_component_is_a_bridge_runtime_error(kind):
         ("_bridge_protobuf_v1_function_from_bytes", {"bytes": b"\xff"}),
         ("_bridge_protobuf_v1_constraint_from_bytes", {"bytes": b"\xff"}),
         ("_bridge_protobuf_v1_decision_variable_from_bytes", {"bytes": b"\xff"}),
+        *[
+            (f"_bridge_protobuf_v{version}_{kind}_from_bytes", {"bytes": b"\xff"})
+            for version in (1, 2)
+            for kind in ("instance", "parametric_instance", "solution", "sample_set")
+        ],
     ],
 )
 def test_configured_receivers_preserve_keyword_arguments(endpoint, kwargs):
@@ -335,5 +381,12 @@ def test_configured_receivers_preserve_keyword_arguments(endpoint, kwargs):
 
 
 def test_receiver_implementation_stays_private():
-    assert not hasattr(receiver, "Receiver")
-    assert not hasattr(ommx, "Receiver")
+    for name in (
+        "Receiver",
+        "ProtocolDeclaration",
+        "ReceiverConfig",
+        "ProtobufV1ReceiverConfig",
+        "ProtobufV2ReceiverConfig",
+    ):
+        assert not hasattr(receiver, name)
+        assert not hasattr(ommx, name)
