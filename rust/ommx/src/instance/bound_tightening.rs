@@ -1,7 +1,9 @@
 use super::Instance;
 use crate::{
-    ATol, Bound, Bounds, ConstraintID, Equality, Evaluate, Kind, LinearMonomial, VariableIDSet,
+    ATol, Bound, Bounds, ConstraintID, Equality, Evaluate, Function, FunctionEvaluationError, Kind,
+    LinearMonomial, VariableIDSet,
 };
+use num::Zero;
 use std::collections::BTreeSet;
 
 impl Instance {
@@ -83,30 +85,46 @@ pub fn infer_bounds_simultaneously_once(
         let Some(linear) = row.function().as_linear() else {
             continue;
         };
-        let mut minimum = crate::v1::State::default();
-        let mut maximum = crate::v1::State::default();
-        for (monomial, coefficient) in linear.iter() {
+        let function = Function::from(linear.into_owned());
+        let linear = function.as_linear().expect("converted affine row");
+        let mut domains = Bounds::new();
+        for (monomial, _) in linear.iter() {
             let LinearMonomial::Variable(id) = monomial else {
                 continue;
             };
             let (lower, upper) = instance
                 .decision_variable_domain_bounds(*id, atol)
                 .expect("constraint variables are registered in the instance");
-            let (min, max) = if coefficient.into_inner() > 0.0 {
-                (lower, upper)
-            } else {
-                (upper, lower)
-            };
-            minimum.entries.insert(id.into_inner(), min);
-            maximum.entries.insert(id.into_inner(), max);
+            domains.insert(*id, Bound::new(lower, upper)?);
         }
         let directions: &[f64] = match row.equality {
             Equality::LessThanOrEqualToZero => &[1.0],
             Equality::EqualToZero => &[1.0, -1.0],
         };
         for &direction in directions {
-            let best = if direction > 0.0 { &minimum } else { &maximum };
-            let best_value = direction * linear.evaluate(best, atol)?;
+            let mut best = crate::v1::State::default();
+            let mut residual_bounds = Bounds::new();
+            for (monomial, coefficient) in linear.iter() {
+                let LinearMonomial::Variable(id) = monomial else {
+                    continue;
+                };
+                let domain = domains[id];
+                // Widen only the side irrelevant to minimizing direction*f.
+                // For an affine row this preserves the needed extremum while
+                // preventing evaluate_bound's opposite endpoint from failing
+                // due to an overflow that does not affect this candidate.
+                let (value, bound) = if direction * coefficient.into_inner() > 0.0 {
+                    (domain.lower(), Bound::new(domain.lower(), f64::INFINITY)?)
+                } else {
+                    (
+                        domain.upper(),
+                        Bound::new(f64::NEG_INFINITY, domain.upper())?,
+                    )
+                };
+                best.entries.insert(id.into_inner(), value);
+                residual_bounds.insert(*id, bound);
+            }
+            let best_value = direction * linear.evaluate(&best, atol)?;
             // A finite row minimum can prove infeasibility. A non-finite
             // minimum says nothing about the individual bound candidates.
             if best_value.is_finite() && best_value > atol.into_inner() {
@@ -126,12 +144,26 @@ pub fn infer_bounds_simultaneously_once(
                 }
                 let sign = (direction * coefficient.into_inner()).signum();
                 let first = sign * best.entries[&id.into_inner()];
-                let mut state = best.clone();
-                // Exclude the target term before evaluating the residual.
-                // Its own domain may be unbounded or its extremal product may
-                // overflow, without preventing a finite bound on this side.
-                state.entries.insert(id.into_inner(), 0.0);
-                let residual = direction * linear.evaluate(&state, atol)?;
+                // A zero interval excludes the target term. Delegate all
+                // residual interval arithmetic and outward rounding to Function.
+                let domain = residual_bounds
+                    .insert(*id, Bound::zero())
+                    .expect("row variable has a domain");
+                let residual = function.evaluate_bound(&residual_bounds, atol);
+                residual_bounds.insert(*id, domain);
+                let residual = match residual {
+                    Ok(bound) if direction > 0.0 => bound.lower(),
+                    Ok(bound) => -bound.upper(),
+                    Err(error)
+                        if matches!(
+                            error.downcast_ref::<FunctionEvaluationError>(),
+                            Some(FunctionEvaluationError::NonFiniteResult { .. })
+                        ) =>
+                    {
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
                 if !residual.is_finite() {
                     continue;
                 }
@@ -143,6 +175,7 @@ pub fn infer_bounds_simultaneously_once(
                 if !estimate.is_finite() {
                     continue;
                 }
+                let mut state = best.clone();
                 let mut feasible = |value| {
                     state.entries.insert(id.into_inner(), sign * value);
                     let residual = direction
@@ -630,6 +663,55 @@ mod tests {
             problem.decision_variables()[&1.into()].bound(),
             Bound::new(1.0, f64::INFINITY).unwrap()
         );
+    }
+
+    #[test]
+    fn overflow_on_the_unused_interval_side_does_not_discard_a_candidate() {
+        let atol = ATol::new(0.125).unwrap();
+        for direction in [-1.0, 1.0] {
+            for coefficient_sign in [-1.0, 1.0] {
+                let y_bound = if direction * coefficient_sign > 0.0 {
+                    Bound::new(0.0, 2.0).unwrap()
+                } else {
+                    Bound::new(-2.0, 0.0).unwrap()
+                };
+                let coefficient = crate::Coefficient::try_from(coefficient_sign * 1e308).unwrap();
+                let function =
+                    Function::from((linear!(0) + (coefficient * linear!(1)).unwrap()).unwrap());
+                // Evaluating both finite sides of the residual would fail,
+                // even though the endpoint needed for this direction is zero.
+                let error = function
+                    .evaluate_bound(
+                        &BTreeMap::from([(0.into(), Bound::zero()), (1.into(), y_bound)]),
+                        atol,
+                    )
+                    .unwrap_err();
+                assert!(matches!(
+                    error.downcast_ref::<FunctionEvaluationError>(),
+                    Some(FunctionEvaluationError::NonFiniteResult { .. })
+                ));
+                let mut problem = instance(
+                    vec![
+                        DecisionVariable::continuous(),
+                        DecisionVariable::new(Kind::Integer, y_bound, atol).unwrap(),
+                    ],
+                    vec![Constraint::equal_to_zero(function)],
+                );
+                let original = problem.clone();
+                let bounds = problem.tighten_bounds_simultaneously_once(atol).unwrap();
+                let expected = if direction > 0.0 {
+                    Bound::new(f64::NEG_INFINITY, 0.0).unwrap()
+                } else {
+                    Bound::new(0.0, f64::INFINITY).unwrap()
+                };
+                assert_eq!(bounds, BTreeMap::from([(0.into(), expected)]));
+                for x in [-0.125, 0.0, 0.125] {
+                    let state = crate::v1::State::from_iter([(0, x), (1, 0.0)]);
+                    assert!(original.evaluate(&state, atol).unwrap().feasible());
+                    assert!(problem.evaluate(&state, atol).unwrap().feasible());
+                }
+            }
+        }
     }
 
     #[test]
