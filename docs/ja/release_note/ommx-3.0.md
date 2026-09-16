@@ -8,6 +8,14 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### bridge共通の例外型 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
+
+プロトコルの不整合、receiver登録失敗、転送エラーを表す
+{class}`~ommx.BridgeError`をPython SDKに追加しました。bridgeを使う独立した
+Rust拡張もSDK側の同じ例外クラスを送出するため、`except ommx.BridgeError`で
+まとめて捕捉できます。転送に失敗した原因のPython例外は`__cause__`に保持します。
+SDKや必要なbridge APIが見つからない場合は`ImportError`になります。
+
 ### ⚠ 制約の違反量 API の統一 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
 
 `Solution.total_violation_l1()` を {meth}`~ommx.Solution.total_violation` に改名し、
