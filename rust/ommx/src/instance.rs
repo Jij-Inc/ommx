@@ -544,6 +544,45 @@ impl Instance {
         self.decision_variables.fixed_value(id)
     }
 
+    /// Return the finite extrema of one variable's declared domain.
+    ///
+    /// The instance owns the complete domain information: a fixed value takes
+    /// precedence over the row's kind and bound. Otherwise, continuous bounds
+    /// use residual membership under `atol`, discrete kinds use their canonical
+    /// endpoints, and semi kinds include the zero alternative. Unbounded sides
+    /// are limited to the finite `f64` range.
+    ///
+    /// This does not infer ranges from constraints or dependency expressions.
+    /// Returns `None` for an unknown ID. Callers must supply finite `atol < 1`.
+    fn decision_variable_finite_extrema(
+        &self,
+        id: VariableID,
+        atol: crate::ATol,
+    ) -> Option<(f64, f64)> {
+        debug_assert!(atol.into_inner().is_finite() && atol.into_inner() < 1.0);
+        let variable = self.decision_variables().get(&id)?;
+        if let Some(value) = self.fixed_decision_variable_value(id) {
+            return Some((value, value));
+        }
+        let (mut lower, mut upper) = match variable.kind() {
+            crate::Kind::Continuous | crate::Kind::SemiContinuous => {
+                variable.bound().finite_feasible_extrema(atol)
+            }
+            crate::Kind::Integer | crate::Kind::SemiInteger | crate::Kind::Binary => (
+                variable.bound().lower().max(-f64::MAX),
+                variable.bound().upper().min(f64::MAX),
+            ),
+        };
+        if matches!(
+            variable.kind(),
+            crate::Kind::SemiContinuous | crate::Kind::SemiInteger
+        ) {
+            lower = lower.min(0.0);
+            upper = upper.max(0.0);
+        }
+        Some((lower, upper))
+    }
+
     /// Access named-function rows plus their modeling labels.
     pub fn named_function_table(&self) -> &NamedFunctionTable<NamedFunction> {
         &self.named_functions
