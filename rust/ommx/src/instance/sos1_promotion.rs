@@ -1523,6 +1523,7 @@ mod tests {
         Evaluate, Function, IndicatorConstraint, ModelingLabel, NamedFunction, OneHotConstraint,
         RemovedReason, Sense,
     };
+    use crate::{EvaluatedConstraintBehavior, SampledConstraintBehavior};
 
     fn member_binary_id() -> VariableID {
         VariableID::from(0)
@@ -2370,7 +2371,7 @@ mod tests {
             .evaluated_sos1_constraints()
             .get(&promotion)
             .unwrap();
-        assert!(evaluated.stage.feasible);
+        assert!(evaluated.is_feasible(atol));
         assert_eq!(evaluated.stage.active_variable, None);
 
         let on_boundary = instance
@@ -2384,16 +2385,13 @@ mod tests {
             .evaluated_sos1_constraints()
             .get(&promotion)
             .unwrap();
-        assert!(evaluated.stage.feasible);
+        assert!(evaluated.is_feasible(atol));
         assert_eq!(evaluated.stage.active_variable, None);
-        assert!(
-            on_boundary
-                .evaluated_constraints()
-                .get(&upper_row_id())
-                .unwrap()
-                .stage
-                .feasible
-        );
+        assert!(on_boundary
+            .evaluated_constraints()
+            .get(&upper_row_id())
+            .unwrap()
+            .is_feasible(atol));
         assert!(on_boundary.feasible());
         assert!(on_boundary.feasible_relaxed());
 
@@ -2411,7 +2409,7 @@ mod tests {
             Some(&0.0)
         );
         let sampled = &sample_set.sos1_constraints()[&promotion];
-        assert!(sampled.stage.feasible[&sample_id]);
+        assert!(sampled.is_feasible_for(sample_id, atol).unwrap());
         assert_eq!(sampled.stage.active_variable[&sample_id], None);
         assert_eq!(sample_set.is_sample_feasible(sample_id), Some(true));
         assert_eq!(sample_set.is_sample_feasible_relaxed(sample_id), Some(true));
@@ -2432,14 +2430,11 @@ mod tests {
                 .active_variable,
             None
         );
-        assert!(
-            negative_boundary
-                .evaluated_constraints()
-                .get(&lower_row_id())
-                .unwrap()
-                .stage
-                .feasible
-        );
+        assert!(negative_boundary
+            .evaluated_constraints()
+            .get(&lower_row_id())
+            .unwrap()
+            .is_feasible(atol));
         assert!(negative_boundary.feasible());
         assert!(negative_boundary.feasible_relaxed());
     }

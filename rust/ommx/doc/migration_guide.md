@@ -32,8 +32,8 @@ Three lifecycle stages are defined:
 | Type alias | Full type | Stage data |
 |---|---|---|
 | `Constraint` | `Constraint<Created>` | `CreatedData { function }` |
-| `EvaluatedConstraint` | `Constraint<Evaluated>` | `EvaluatedData { evaluated_value, feasible, ... }` |
-| `SampledConstraint` | `Constraint<SampledStage>` | `SampledData { evaluated_values, feasible, ... }` |
+| `EvaluatedConstraint` | `Constraint<Evaluated>` | `EvaluatedData { evaluated_value, used_decision_variable_ids, dual_variable }` |
+| `SampledConstraint` | `Constraint<SampledStage>` | `SampledData { evaluated_values, used_decision_variable_ids, dual_variables }` |
 
 Removed constraints are managed at the collection level —
 `ConstraintCollection` stores them as `(Constraint<Created>, RemovedReason)`
@@ -46,6 +46,78 @@ is queried through narrow per-collection accessors on `Instance` /
 `ParametricInstance` (see [Modeling labels and constraint context](#modeling-labels-and-constraint-context)).
 Decision variables and named functions additionally follow the table-owned ID
 rule: the row data no longer stores its own ID.
+
+## Constraint violation metrics
+
+`Solution::total_violation_l1()` is renamed to
+[`Solution::total_violation`](crate::Solution::total_violation), and
+`Solution::total_violation_l2()` is removed. The total sums one nonnegative
+scalar per constraint, including removed constraints and all special kinds.
+Regular equality and inequality definitions are unchanged.
+
+Query individual values with [`Solution::constraint_violation`](crate::Solution::constraint_violation),
+[`Solution::indicator_constraint_violation`](crate::Solution::indicator_constraint_violation),
+[`Solution::one_hot_constraint_violation`](crate::Solution::one_hot_constraint_violation), or
+[`Solution::sos1_constraint_violation`](crate::Solution::sos1_constraint_violation),
+passing the corresponding typed ID. Unknown IDs return `None`.
+
+Indicator uses its inner violation when active and zero otherwise. OneHot and
+SOS1 measure the minimum sum of absolute changes needed to satisfy their
+structural condition. Every constraint is feasible exactly when its violation is
+at most `atol`. For OneHot and SOS1, tolerance now applies to the total change,
+rather than to each member independently. Bounds and kinds remain separate.
+Input canonicalization precedes constraint evaluation and does not change the
+definition of the metric on the values supplied to the constraint.
+
+SampleSet feasibility and best-feasible selection also check variable bounds
+and kinds using the saved tolerance, matching the extracted Solution. Variable
+violations are not added to `total_violation`, so zero total constraint violation
+does not imply feasibility of the whole solution.
+
+Implement [`EvaluatedConstraintData`](crate::EvaluatedConstraintData) and
+[`SampledConstraintData`](crate::SampledConstraintData) for new constraint families.
+Their scalar metrics are required; blanket behavior implementations derive
+feasibility through `is_feasible(atol)` and `is_feasible_for(id, atol)`.
+`EvaluatedConstraint::is_feasible_with_tolerance(atol)` is renamed to
+`is_feasible(atol)`. The data traits no longer require a stored tolerance.
+Regular `EvaluatedData` / `SampledData` retain numeric results only. OneHot/SOS1
+stage data also store `violation`/`violations` in the SDK.
+
+A retained tolerance-dependent decision must retain its conditions. Indicator,
+OneHot, and SOS1 stage data therefore retain `activation_atol` alongside
+`indicator_active` / `active_variable`. Feasibility queries do not change these
+decisions or repeat input canonicalization. Solution/SampleSet retain their
+shared `feasibility_atol`, exposed by an accessor, and pass it to constraint
+queries. The current wire format requires retained activation conditions to
+match this shared tolerance; builders and parsers enforce that invariant.
+Tolerance-role separation and a split persisted context are tracked in
+[issue #1180](https://github.com/Jij-Inc/ommx/issues/1180).
+
+The v2 wire format retains its `feasible` flags/maps and the enclosing
+Solution/SampleSet's `feasibility_atol`, so consumers can read the result and its
+tolerance without an OMMX SDK. Serialization derives those flags from the scalar
+metrics; deserialization recomputes OneHot/SOS1 violations from the saved
+decision-variable values and validates the flags using the persisted tolerance.
+The protobuf schema is unchanged. Restore structural evaluated/sampled rows
+through Solution/SampleSet; they no longer implement standalone `Parse`, because
+their wire rows do not carry the member values needed to recover the metric.
+Evaluated/sampled v2 row and collection `From` conversions, and sampled v1
+collection `From` conversions, are also removed. Serialize through
+Solution/SampleSet, which supply the tolerance for the wire feasibility fields.
+
+The legacy v1 format cannot store the tolerance or native special constraints.
+Its exporters recompute all feasibility flags from retained regular constraints
+and variable values at `ATol::default()`, as its parsers do. A v1 round-trip
+therefore requires the same default tolerance on write and read, and may change
+feasibility from the original result. Use v2 to preserve the original tolerance
+and special constraints.
+
+Partial evaluation rejects fixings that eliminate approximately zero members
+from an active structural constraint when their accumulated errors could change
+feasibility. Exact-zero elimination remains supported.
+Evaluate the complete state or lower special
+constraints before partial evaluation. Lowering need not preserve the metric;
+retained originals and generated constraints each contribute.
 
 ## Breaking Changes
 
@@ -121,9 +193,10 @@ evaluated.dual_variable
 evaluated.removed_reason()
 evaluated.used_decision_variable_ids()
 
-// ✅ After (direct stage field access)
+// ✅ After (stage data and derived feasibility)
+use ommx::EvaluatedConstraintBehavior;
 evaluated.stage.evaluated_value
-evaluated.stage.feasible
+evaluated.is_feasible(atol)
 evaluated.stage.dual_variable
 evaluated.stage.used_decision_variable_ids
 ```
@@ -138,8 +211,9 @@ sampled.feasible()
 sampled.dual_variables
 
 // ✅ After
+use ommx::SampledConstraintBehavior;
 sampled.stage.evaluated_values
-sampled.stage.feasible
+sampled.is_feasible_for(sample_id, atol)
 sampled.stage.dual_variables
 ```
 
@@ -231,7 +305,6 @@ Constraint {
     equality,
     stage: EvaluatedData {
         evaluated_value,
-        feasible,
         dual_variable: None,
         used_decision_variable_ids,
     },
@@ -301,7 +374,9 @@ collection effects rather than raw active / removed / context map mutation.
 
 `EvaluatedConstraint` and `SampledConstraint` no longer use the `getset` crate. All fields are accessed directly via `self.equality` and `self.stage.*`. (`self.id` and `self.metadata` no longer exist on the struct — see [Modeling labels and constraint context](#modeling-labels-and-constraint-context) and the constraint-field-access section above.)
 
-Methods like `.id()`, `.equality()`, `.evaluated_value()`, `.feasible()` are **removed**. Use field access instead.
+Methods like `.id()`, `.equality()`, `.evaluated_value()`, `.feasible()` are **removed**.
+Use field access for stored data, and the behavior traits' `is_feasible(atol)` /
+`is_feasible_for(sample_id, atol)` methods for derived feasibility.
 
 ### 7. Error Surface Call-Site Rewrites
 
@@ -399,7 +474,7 @@ A type family mapping lifecycle stages to concrete types (HKT defunctionalizatio
 
 ```rust,ignore
 pub trait ConstraintType {
-    type ID: Clone + Copy + Ord + Hash + Debug;
+    type ID: IDType;
     type Created: Evaluate<Output = Self::Evaluated, SampledOutput = Self::Sampled>
         + Clone + Debug + PartialEq;
     type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
@@ -419,25 +494,39 @@ impl ConstraintType for IndicatorConstraint {
 }
 ```
 
-### Behavior Traits
+### Constraint Data and Behavior Traits
 
-Two traits define common behavior for evaluated and sampled constraints:
+Each family supplies its scalar violations through the data traits.
+The caller supplies the feasibility tolerance to the behavior methods. The behavior traits have blanket implementations that derive
+feasibility from `violation <= atol`; families cannot override that predicate.
+The core methods are:
 
 ```rust,ignore
-pub trait EvaluatedConstraintBehavior {
+pub trait EvaluatedConstraintData {
     type ID;
-    fn is_feasible(&self) -> bool;
+    fn violation(&self) -> f64;
+    // Optional used_decision_variable_ids() override.
 }
 
-pub trait SampledConstraintBehavior {
+pub trait EvaluatedConstraintBehavior: EvaluatedConstraintData {
+    fn is_feasible(&self, atol: ATol) -> bool;
+}
+
+pub trait SampledConstraintData {
     type ID;
-    type Evaluated;
-    fn is_feasible_for(&self, sample_id: SampleID) -> Option<bool>;
+    type Evaluated: EvaluatedConstraintBehavior<ID = Self::ID>;
+    fn violation_for(&self, sample_id: SampleID) -> Option<f64>;
+    fn validate_sample_ids(&self, expected: &SampleIDSet) -> std::result::Result<(), SampleIDSet>;
     fn get(&self, sample_id: SampleID) -> Option<Self::Evaluated>;
+    // Optional used_decision_variable_ids() override.
+}
+
+pub trait SampledConstraintBehavior: SampledConstraintData {
+    fn is_feasible_for(&self, sample_id: SampleID, atol: ATol) -> Option<bool>;
 }
 ```
 
-Neither trait exposes the constraint's ID — it lives on the enclosing
+These traits do not expose the constraint's ID — it lives on the enclosing
 `BTreeMap` key. `is_removed()` is similarly absent from the traits;
 use `EvaluatedCollection::is_removed(&id)` or
 `SampledCollection::is_removed(&id)` instead.
@@ -492,8 +581,8 @@ pub struct SampledCollection<T: ConstraintType> {
 
 // Both Deref to BTreeMap<T::ID, T::Evaluated/Sampled> for backward-compatible access
 // and provide feasibility / removal / context accessors:
-collection.is_feasible()               // all constraints feasible
-collection.is_feasible_relaxed()       // all non-removed constraints feasible
+collection.is_feasible(atol)               // all constraints feasible
+collection.is_feasible_relaxed(atol)       // all non-removed constraints feasible
 collection.is_removed(&id)             // check if a constraint was removed
 collection.removed_reasons()           // &BTreeMap<T::ID, RemovedReason>
 collection.context()                   // &ConstraintContextStore<T::ID>

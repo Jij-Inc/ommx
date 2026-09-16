@@ -92,31 +92,31 @@ def test_constraint_boundary_matches_scalar_sample_and_v2_validation():
 
     boundary_solution = instance.evaluate({1: atol}, atol=atol)
     outside_solution = instance.evaluate({1: outside}, atol=atol)
-    assert boundary_solution.constraints[1].feasible
-    assert boundary_solution.constraints[2].feasible
-    assert not outside_solution.constraints[1].feasible
-    assert not outside_solution.constraints[2].feasible
+    assert boundary_solution.constraints[1].is_feasible(atol=atol)
+    assert boundary_solution.constraints[2].is_feasible(atol=atol)
+    assert not outside_solution.constraints[1].is_feasible(atol=atol)
+    assert not outside_solution.constraints[2].is_feasible(atol=atol)
 
     restored_solution = type(boundary_solution).from_v2_bytes(
         boundary_solution.to_v2_bytes()
     )
-    assert restored_solution.constraints[1].feasible
-    assert restored_solution.constraints[2].feasible
+    assert restored_solution.constraints[1].is_feasible(atol=atol)
+    assert restored_solution.constraints[2].is_feasible(atol=atol)
 
     sample_set = instance.evaluate_samples(
         {7: {1: atol}, 8: {1: outside}},
         atol=atol,
     )
-    assert sample_set.get(7).constraints[1].feasible
-    assert sample_set.get(7).constraints[2].feasible
-    assert not sample_set.get(8).constraints[1].feasible
-    assert not sample_set.get(8).constraints[2].feasible
+    assert sample_set.get(7).constraints[1].is_feasible(atol=atol)
+    assert sample_set.get(7).constraints[2].is_feasible(atol=atol)
+    assert not sample_set.get(8).constraints[1].is_feasible(atol=atol)
+    assert not sample_set.get(8).constraints[2].is_feasible(atol=atol)
 
     restored_sample_set = type(sample_set).from_v2_bytes(sample_set.to_v2_bytes())
-    assert restored_sample_set.get(7).constraints[1].feasible
-    assert restored_sample_set.get(7).constraints[2].feasible
-    assert not restored_sample_set.get(8).constraints[1].feasible
-    assert not restored_sample_set.get(8).constraints[2].feasible
+    assert restored_sample_set.get(7).constraints[1].is_feasible(atol=atol)
+    assert restored_sample_set.get(7).constraints[2].is_feasible(atol=atol)
+    assert not restored_sample_set.get(8).constraints[1].is_feasible(atol=atol)
+    assert not restored_sample_set.get(8).constraints[2].is_feasible(atol=atol)
 
 
 def test_bound_membership_matches_inequality_residual_feasibility():
@@ -132,12 +132,16 @@ def test_bound_membership_matches_inequality_residual_feasibility():
     )
 
     above = upper + atol
-    upper_feasible = instance.evaluate({1: above}, atol=atol).constraints[1].feasible
+    upper_feasible = (
+        instance.evaluate({1: above}, atol=atol).constraints[1].is_feasible(atol=atol)
+    )
     assert Bound(float("-inf"), upper).contains(above, atol) == upper_feasible
     assert not upper_feasible
 
     below = 2.0
-    lower_feasible = instance.evaluate({1: below}, atol=atol).constraints[2].feasible
+    lower_feasible = (
+        instance.evaluate({1: below}, atol=atol).constraints[2].is_feasible(atol=atol)
+    )
     assert Bound(lower, float("inf")).contains(below, atol) == lower_feasible
     assert not lower_feasible
 

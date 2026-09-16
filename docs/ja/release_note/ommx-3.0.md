@@ -8,6 +8,86 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### 🛠 QPLIBの二次係数の修正と公開解の読み込み ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+
+{meth}`~ommx.Instance.load_qplib`で、目的関数と制約の対角項・交差項に
+QPLIB形式の係数`1/2`を適用するように修正しました。従来はこれらの係数が
+2倍になっており、目的関数値が変わったり、公開されている実行可能解が
+実行不可能と判定されたりしていました。保存済みのインスタンスに修正を反映するには、
+元の`.qplib`ファイルから読み込み直してください。
+
+`ommx.dataset.qplib` の参照先を、OMMX 2.8.0 向けに公開した修正済みの
+`ghcr.io/jij-inc/ommx/v2.8/qplib:{tag}` 配布へ変更しました。
+旧配布がキャッシュされていても、v3 SDK は修正済みの Artifact を読み込みます。
+配布のバージョン規則と配布記録は
+[QPLIB チュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
+
+{meth}`~ommx.State.load_qplib_solution`と`ommx.qplib.load_solution`で、
+QPLIB公式の`.sol`ファイルを{class}`~ommx.State`として読み込めるようになりました。
+
+```python
+state = State.load_qplib_solution(
+    "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
+)
+solution = instance.evaluate(state, atol=1e-8)
+```
+
+省略された変数の値は0で補い、`objvar`はStateに含めません。
+一連の使用例と対応する変数名の規則は
+[QPLIBチュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
+
+### 🛠 MPS 読み込み時に省略された二値変数の境界を保持 ([#1202](https://github.com/Jij-Inc/ommx/pull/1202))
+
+`Instance.load_mps()` と `ommx.mps.load_file()` が、`INTORG`/`INTEND` 内にあり
+`BOUNDS` の指定がない変数を、Gurobi/HiGHS の MPS 解釈に従って `[0, 1]` の
+二値変数として読み込むようになりました。従来は上限のない一般整数変数として
+読み込んでいました。`neos-2626858-aoos` では17変数が影響を受け、二値変数の数が
+209から192に変わっていました。
+
+明示された境界指定は引き続き優先され、`LO`/`LI 0` で指定した非負の整数変数は
+上限なしのままです。`ommx.dataset` 経由で読み込むものを含め、生成済みの Artifact は
+元の MPS から別途再生成する必要があります。SDK の更新だけでは保存済みの問題は修復されません。
+
+### bridge共通の例外型 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
+
+プロトコルの不整合、receiver登録失敗、転送エラーを表す
+{class}`~ommx.BridgeError`をPython SDKに追加しました。bridgeを使う独立した
+Rust拡張もSDK側の同じ例外クラスを送出するため、`except ommx.BridgeError`で
+まとめて捕捉できます。転送に失敗した原因のPython例外は`__cause__`に保持します。
+SDKや必要なbridge APIが見つからない場合は`ImportError`になります。
+
+### ⚠ 制約の違反量 API の統一 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+`Solution.total_violation_l1()` を {meth}`~ommx.Solution.total_violation` に改名し、
+`total_violation_l2()` を削除しました。Indicator・OneHot・SOS1 と removed 制約を含め、
+制約ごとの非負の違反量を足し合わせます。
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+`EvaluatedConstraint.feasible` は `is_feasible(atol=...)` に、
+`SampledConstraint.feasible` は `feasible(atol=...)` メソッドに置き換わります。
+Solution/SampleSet の feasibility プロパティは維持し、その判定条件を
+`feasibility_atol` で取得できます。問い合わせは再評価や保存済み判断の変更を行いません。
+
+SampleSet の feasibility と最良実行可能解の選択でも変数の bounds・kind を確認し、
+取り出した Solution の判定と一致するようにしました。変数の違反は
+`total_violation` の集計には含めません。
+
+旧 v1 形式への書き出しでは、保存される通常制約と変数値から SDK の既定の許容誤差で
+feasibility を再計算し、読み込み時の判定と揃えます。元の許容誤差とネイティブの
+特殊制約を保存するには v2 を使用してください。
+
+Solution の全制約種別の DataFrame に `feasible` と `violation` を追加しました。
+すべての制約を `violation <= atol` で判定します。OneHot と SOS1 の許容誤差は
+各メンバーへの個別適用から、変更量の合計への適用に変わります。
+OneHot と SOS1 はメンバー値の絶対変更量の最小値で定義し、Big-M lowering との一致は
+要求しません。定義と移行方法は
+{ref}`移行ガイド <constraint-violation-migration>`を参照してください。
+
 ### ⚠ SOS1 Big-M promotionをbatch化し適用modeを選択可能に ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
 {class}`~ommx.Sos1BigMPromotionRequest`はbatch全体を表すようになりました。
@@ -58,6 +138,15 @@ Integer、SemiInteger、Binaryのbound正規化も、toleranceで拡張したend
 unit-scale linkではtightな $M=U$ と $M=-L$ を利用でき、小さすぎるlinkは引き続き
 拒否されます。詳細は [Instance user guide](../user_guide/instance.md) と
 [special constraint guide](../user_guide/special_constraints.md) を参照してください。
+
+### 🛠 公開済みの v2.7 MIPLIB 配布を採用 ([#1205](https://github.com/Jij-Inc/ommx/pull/1205))
+
+`ommx.dataset.miplib2017` の参照先を
+`ghcr.io/jij-inc/ommx/v2.7/miplib2017:{instance-name}` に変更しました。
+MPS の整数変数の境界を修正した OMMX 2.7.0 で生成された配布を、v3 SDK でも
+利用します。旧バージョンなし配布がキャッシュされている場合もこの配布を読み、
+旧モデルにはフォールバックしません。配布のバージョン規則と配布記録は
+[MIPLIB チュートリアル](../tutorial/download_miplib_instance.md)を参照してください。
 
 ## 3.0.0 Beta 5
 

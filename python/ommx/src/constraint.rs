@@ -143,7 +143,7 @@ impl Constraint {
     /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
     /// - `atol`: Optional absolute tolerance for evaluation
     ///
-    /// **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility
+    /// **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(
         &self,

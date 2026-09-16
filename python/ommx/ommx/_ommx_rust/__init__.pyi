@@ -33,6 +33,7 @@ __all__ = [
     "AutosavePolicy",
     "BinaryPowerPreparation",
     "Bound",
+    "BridgeError",
     "Constraint",
     "DecisionVariable",
     "DecisionVariableRole",
@@ -1355,6 +1356,13 @@ class Bound:
     def __copy__(self) -> Bound: ...
     def __deepcopy__(self, _memo: typing.Any) -> Bound: ...
 
+class BridgeError(builtins.RuntimeError):
+    r"""
+    An OMMX bridge protocol, registration, or transfer failure after loading the SDK.
+    """
+
+    ...
+
 @typing.final
 class Constraint:
     r"""
@@ -1433,7 +1441,7 @@ class Constraint:
         - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
         - `atol`: Optional absolute tolerance for evaluation
 
-        **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility
+        **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -1759,11 +1767,6 @@ class EvaluatedConstraint:
         Set the dual variable value
         """
     @property
-    def feasible(self) -> builtins.bool:
-        r"""
-        Get the feasibility status
-        """
-    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Get the constraint name
@@ -1795,6 +1798,13 @@ class EvaluatedConstraint:
         r"""
         Get the used decision variable IDs
         """
+    def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
+        r"""
+        Check feasibility using the supplied absolute tolerance.
+
+        The query compares the stored violation with ``atol``. It does not
+        re-evaluate the function or canonicalize the input state.
+        """
     def violation(self) -> builtins.float:
         r"""
         Calculate the violation (constraint breach) value for this constraint
@@ -1803,7 +1813,8 @@ class EvaluatedConstraint:
         - For $f(x) = 0$: returns $|f(x)|$
         - For $f(x) \leq 0$: returns $\max(0, f(x))$
 
-        Returns 0.0 if the constraint is satisfied.
+        Zero implies feasibility. A small positive violation may also be feasible
+        within the supplied query tolerance; the residual is not rounded to zero.
         """
 
 @typing.final
@@ -7729,17 +7740,29 @@ class SampleSet:
     @property
     def feasible(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get feasibility status for all samples
+        Get feasibility status for all samples, including variable bounds and kinds.
+
+        Each value matches the feasibility of the corresponding extracted Solution.
         """
     @property
     def feasible_relaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get relaxed feasibility status for all samples
+        Get relaxed feasibility status for all samples.
+
+        Removed constraints are excluded; variable bounds and kinds still apply.
         """
     @property
     def feasible_unrelaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
         Get unrelaxed feasibility status for all samples
+        """
+    @property
+    def feasibility_atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance associated with the stored evaluation and feasibility results.
+
+        Pass this to an extracted constraint's explicit feasibility query to use
+        the enclosing result's threshold.
         """
     @property
     def sense(self) -> Sense:
@@ -8043,10 +8066,13 @@ class SampledConstraint:
         r"""
         Get the evaluated values for all samples
         """
-    @property
-    def feasible(self) -> builtins.dict[builtins.int, builtins.bool]:
+    def feasible(
+        self, *, atol: builtins.float
+    ) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get the feasibility status for all samples
+        Compute feasibility for every sample using the supplied tolerance.
+
+        This query does not re-evaluate the functions or change stored values.
         """
 
 @typing.final
@@ -8424,6 +8450,14 @@ class Solution:
         Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
         """
     @property
+    def feasibility_atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance associated with the stored evaluation and feasibility results.
+
+        Pass this to an extracted constraint's explicit feasibility query to use
+        the enclosing result's threshold.
+        """
+    @property
     def sense(self) -> Sense:
         r"""
         Get the optimization sense (minimize or maximize)
@@ -8663,7 +8697,9 @@ class Solution:
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of evaluated constraints, dispatched on `kind=`. See
+        DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.
+
+        The `violation` column uses {meth}`constraint_violation`. Dispatched on `kind=`. See
         {meth}`ommx.Instance.constraints_df` for column / `kind=` /
         `include=` semantics.
 
@@ -8721,21 +8757,38 @@ class Solution:
         """
     def __copy__(self) -> Solution: ...
     def __deepcopy__(self, _memo: typing.Any) -> Solution: ...
-    def total_violation_l1(self) -> builtins.float:
+    def total_violation(self) -> builtins.float:
         r"""
-        Calculate total constraint violation using L1 norm (sum of absolute violations)
+        Sum the nonnegative scalar violation of every constraint, including removed constraints.
 
-        Returns the sum of violations across all constraints (including removed constraints):
-        - For equality constraints: $\sum |f(x)|$
-        - For inequality constraints: $\sum \max(0, f(x))$
+        - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
+        - Indicator: the inner violation when active, otherwise zero.
+        - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
+        - SOS1: `min_i sum_{j != i} abs(x_j)`.
+
+        Each constraint is feasible exactly when its violation is at most the
+        evaluation tolerance. This threshold applies to each constraint separately,
+        not to the total. Zero therefore implies that all constraints are feasible.
+        Variable bound and kind violations
+        are not added. Values use the evaluated state after discrete-value
+        canonicalization. Lowering need not preserve the metric: a retained
+        original and its generated constraints each contribute.
+
+        Use {meth}`constraint_violation` for individual values, also available in
+        the `violation` column of {meth}`constraints_df` for every constraint kind.
         """
-    def total_violation_l2(self) -> builtins.float:
+    def constraint_violation(
+        self,
+        constraint_id: builtins.int,
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+    ) -> builtins.float:
         r"""
-        Calculate total constraint violation using L2 norm squared (sum of squared violations)
+        Get one constraint's nonnegative scalar violation.
 
-        Returns the sum of squared violations across all constraints (including removed constraints):
-        - For equality constraints: $\sum (f(x))^2$
-        - For inequality constraints: $\sum (\max(0, f(x)))^2$
+        Uses the definitions in {meth}`total_violation`, including for removed
+        constraints. IDs are independent for each `kind`. Raises `KeyError` when
+        the ID is absent from that constraint family.
         """
 
 @typing.final
@@ -9005,6 +9058,34 @@ class State:
     @entries.setter
     def entries(self, value: typing.Mapping[builtins.int, builtins.float]) -> None: ...
     def __new__(cls, entries: ToState) -> State: ...
+    @staticmethod
+    def load_qplib_solution(
+        path: builtins.str, *, num_variables: builtins.int
+    ) -> State:
+        r"""
+        Load a published QPLIB `.sol` file into a {class}`~ommx.State`.
+
+        Pass the variable count of the original QPLIB instance as
+        `num_variables`. Omitted variables receive zero. The standard QPLIB
+        solution names `xN`, `bN`, and `iN` map to OMMX ID `N - 2`; `objvar`
+        is ignored because the objective is computed by
+        {meth}`~ommx.Instance.evaluate`. Custom names and other solvers' `.sol`
+        formats are not supported. Names are case insensitive.
+
+        Malformed input, duplicate IDs, nonfinite values, and out-of-range IDs
+        raise `ValueError` with a line number. File read failures raise
+        `RuntimeError`. Loading does not check bounds or feasibility.
+
+        >>> import tempfile
+        >>> from pathlib import Path
+        >>> from ommx import State
+        >>> with tempfile.TemporaryDirectory() as directory:
+        ...     path = Path(directory) / "example.sol"
+        ...     _ = path.write_text("objvar 12\nx2 0.5\nb4 1\n")
+        ...     state = State.load_qplib_solution(str(path), num_variables=3)
+        >>> state.entries
+        {0: 0.5, 1: 0.0, 2: 1.0}
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> State: ...
     def to_v1_bytes(self) -> bytes: ...
