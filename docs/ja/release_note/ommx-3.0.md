@@ -8,6 +8,13 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### SOS1 promotionでの自動bound tightening ([#1221](https://github.com/Jij-Inc/ommx/pull/1221))
+
+{meth}`~ommx.Instance.promote_sos1_big_m`は、最初の検証に失敗した場合、申請された
+link制約からmemberのboundを締め、定式化全体を再検証します。導出したboundは
+promotionに成功した場合だけ適用し、strict batchの拒否ではInstanceを変更しません。
+詳細は{ref}`SOS1のBig-M定式化 <sos1-big-m-formulation>`を参照してください。
+
 ### Bound tighteningの一括適用 ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
 
 すべての有効な通常制約、または指定した制約IDの集合を使って、変数のboundを締められます。
@@ -101,8 +108,8 @@ Integer、SemiInteger、Binaryのbound正規化も、toleranceで拡張したend
 
 検証付きSOS1 Big-M promotionは、`lower - atol`や`upper + atol`を先に計算せず、
 これらのresidualが実際に受理する表現可能domainを導出します。そのためcanonicalな
-unit-scale linkではtightな $M=U$ と $M=-L$ を利用でき、小さすぎるlinkは引き続き
-拒否されます。詳細は [Instance user guide](../user_guide/instance.md) と
+unit-scale linkではtightな $M=U$ と $M=-L$ を利用でき、linkの十分性も同じ許容誤差で
+検証します。詳細は [Instance user guide](../user_guide/instance.md) と
 [special constraint guide](../user_guide/special_constraints.md) を参照してください。
 
 ## 3.0.0 Beta 5

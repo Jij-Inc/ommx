@@ -8,6 +8,14 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### Automatic bound tightening for SOS1 promotion ([#1221](https://github.com/Jij-Inc/ommx/pull/1221))
+
+{meth}`~ommx.Instance.promote_sos1_big_m` now tries tightening member bounds
+from the claimed link rows when the initial validation fails, then validates
+the complete formulation again. Only successful promotions apply the derived
+bounds; a rejected strict batch leaves the instance unchanged. See
+{ref}`SOS1 Big-M formulations <sos1-big-m-formulation>` for details.
+
 ### Simultaneous bound tightening ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
 
 Tighten variable bounds using all active regular constraints or a selected set
@@ -105,7 +113,7 @@ membership rule instead of constructing tolerance-expanded endpoints.
 Checked SOS1 Big-M promotion derives the actual representable domain accepted
 by those residuals without first computing `lower - atol` or `upper + atol`.
 Canonical unit-scale links can therefore use the tight values $M=U$ and
-$M=-L$, while undersized links remain rejected. See the
+$M=-L$, with link sufficiency checked under the same tolerance. See the
 [Instance user guide](../user_guide/instance.md) and
 [special-constraint guide](../user_guide/special_constraints.md) for details.
 
