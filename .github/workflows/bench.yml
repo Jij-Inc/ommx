@@ -62,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@v10.1.0
         with:
           # CodSpeed looks working with `sys.monitoring`, which has been introduced in 3.12,
           # but updates in 3.13 seems to be required for generating trace information.

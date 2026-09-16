@@ -8,6 +8,61 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### 🛠 Preserve implicit binary bounds when loading MPS ([#1202](https://github.com/Jij-Inc/ommx/pull/1202))
+
+`Instance.load_mps()` and `ommx.mps.load_file()` now give columns inside
+`INTORG`/`INTEND` with no `BOUNDS` entry the implicit binary domain `[0, 1]`,
+following the Gurobi/HiGHS MPS convention. Previously, these columns became
+general integers with an infinite upper bound. This affected 17 variables in
+`neos-2626858-aoos`, changing its binary-variable count from 209 to 192.
+
+Explicit bound records remain effective, including `LO`/`LI 0` for nonnegative
+integers with no upper limit. Previously generated Artifacts, including those
+loaded through `ommx.dataset`, require separate regeneration from the source MPS;
+updating the SDK does not repair stored instances.
+
+### Shared bridge exception ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
+
+The Python SDK defines {class}`~ommx.BridgeError` for protocol incompatibility,
+receiver registration failures, and transfer errors. Independently built Rust
+extensions using the bridge raise this same SDK-owned class, so callers can
+handle their failures with `except ommx.BridgeError`. Transfer failures retain
+the original Python exception in `__cause__`. A missing SDK or required bridge
+API raises `ImportError`.
+
+### ⚠ Unified constraint violation metrics ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+Rename `Solution.total_violation_l1()` to {meth}`~ommx.Solution.total_violation`
+and remove `total_violation_l2()`. The total sums one nonnegative violation per
+constraint, including Indicator, OneHot, SOS1, and removed constraints.
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+Replace `EvaluatedConstraint.feasible` with `is_feasible(atol=...)`, and
+`SampledConstraint.feasible` with the explicit `feasible(atol=...)` method.
+Solution/SampleSet retain their feasibility properties and expose the associated
+`feasibility_atol`. Queries do not repeat evaluation or change stored decisions.
+
+SampleSet feasibility and best-feasible selection now include variable bounds
+and kinds, matching the extracted Solution. These checks do not contribute to
+`total_violation`.
+
+Legacy v1 export recomputes feasibility at the SDK default tolerance for retained
+regular constraints and variable values, matching v1 import. Use v2 to preserve
+custom tolerance and native special constraints.
+
+All Solution constraint DataFrames now expose `feasible` and `violation`.
+All constraint feasibility is derived from `violation <= atol`; OneHot and SOS1
+now apply tolerance to the total change instead of each member separately.
+OneHot and SOS1 use minimum absolute changes to their member values, without
+requiring agreement with Big-M lowering. See the
+{ref}`migration guide <constraint-violation-migration>`
+for definitions and migration details.
+
 ### ⚠ Batch SOS1 Big-M promotion with selectable application mode ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
 {class}`~ommx.Sos1BigMPromotionRequest` now represents an entire batch:

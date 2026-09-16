@@ -59,6 +59,9 @@ jobs:
       - name: Run tests
         run: cargo test
 
+      - name: Test SDK-independent bridge receivers
+        run: task pyo3-bridge:receiver-test
+
   doc:
     # Gate cargo doc against broken rustdoc: any unresolved intra-doc
     # link or "public documentation links to private item" warning

@@ -15,6 +15,7 @@ ommx
    _items/ommx.State
    _items/ommx.Samples
    _items/ommx.Bound
+   _items/ommx.BridgeError
    _items/ommx.ExactIntegerSlackError
    _items/ommx.InfeasibleDetected
    _items/ommx.LogEncodingError

@@ -43,10 +43,13 @@ impl EvaluatedConstraint {
         self.0.stage.dual_variable = value;
     }
 
-    /// Get the feasibility status
-    #[getter]
-    pub fn feasible(&self) -> bool {
-        self.0.stage.feasible
+    /// Check feasibility using the supplied absolute tolerance.
+    ///
+    /// The query compares the stored violation with ``atol``. It does not
+    /// re-evaluate the function or canonicalize the input state.
+    #[pyo3(signature = (*, atol))]
+    pub fn is_feasible(&self, atol: f64) -> crate::error::OmmxPyResult<bool> {
+        Ok(self.0.is_feasible(ommx::ATol::new(atol)?))
     }
 
     /// Get the constraint name
@@ -103,7 +106,8 @@ impl EvaluatedConstraint {
     /// - For $f(x) = 0$: returns $|f(x)|$
     /// - For $f(x) \leq 0$: returns $\max(0, f(x))$
     ///
-    /// Returns 0.0 if the constraint is satisfied.
+    /// Zero implies feasibility. A small positive violation may also be feasible
+    /// within the supplied query tolerance; the residual is not rounded to zero.
     pub fn violation(&self) -> f64 {
         self.0.violation()
     }
