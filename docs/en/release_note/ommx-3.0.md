@@ -8,6 +8,21 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### Simultaneous bound tightening ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
+
+Tighten variable bounds using all active regular constraints or a selected set
+of constraint IDs. Both methods return the updated bounds by variable ID:
+
+```python
+changed = instance.tighten_bounds_simultaneously_once()
+changed = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+```
+
+Every row reads the bounds at entry, and updates are applied together once.
+Call again to propagate the new bounds through other rows. See
+{ref}`Bound tightening <simultaneous-bound-tightening>` for supported domains,
+tolerance semantics, and atomicity.
+
 ### ⚠ Unified constraint violation metrics ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
 
 Rename `Solution.total_violation_l1()` to {meth}`~ommx.Solution.total_violation`

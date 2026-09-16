@@ -8,6 +8,20 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### Bound tighteningの一括適用 ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
+
+すべての有効な通常制約、または指定した制約IDの集合を使って、変数のboundを締められます。
+どちらのメソッドも、変数IDから更新後のboundへのMapを返します。
+
+```python
+changed = instance.tighten_bounds_simultaneously_once()
+changed = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+```
+
+すべてのrowが呼び出し開始時のboundを読み、更新をまとめて1回適用します。
+新しいboundを他のrowへ伝播させるには再度呼び出します。対応するdomain、許容誤差、
+atomicityについては{ref}`Bound tightening <simultaneous-bound-tightening>`を参照してください。
+
 ### ⚠ 制約の違反量 API の統一 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
 
 `Solution.total_violation_l1()` を {meth}`~ommx.Solution.total_violation` に改名し、
