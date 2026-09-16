@@ -360,6 +360,81 @@ on its preparation-free method.
 HiGHS and Python-MIP no longer attach dual values when the Adapter input has an
 `output_objective`.
 
+(constraint-violation-migration)=
+### 5.8 Constraint violation metrics ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+Rename `solution.total_violation_l1()` to {meth}`~ommx.Solution.total_violation`.
+`total_violation_l2()` is removed. The total is the sum of one nonnegative scalar
+per constraint, including removed constraints and all special constraint kinds.
+Regular equality and inequality violations retain their existing definitions.
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+Indicator constraints contribute the inner violation when active and zero otherwise.
+OneHot uses the minimum sum of absolute changes to make exactly one member 1 and
+the rest 0. SOS1 uses the minimum sum of absolute changes to leave at most one
+nonzero member. These definitions do not depend on Big-M lowering.
+
+Every constraint is feasible exactly when `violation <= atol`. For OneHot and
+SOS1, tolerance applies to the total absolute change, rather than to each member
+independently. For example, SOS1 values `(1, 0.00006, 0.00006)` have violation
+`0.00012` and are infeasible with `atol=0.0001`, although each small member is
+individually within tolerance of zero.
+
+Variable bounds and kinds are checked separately. Discrete-value canonicalization
+happens before constraint evaluation; the metric uses the resulting values.
+Solution feasibility requires each constraint to pass its own threshold, not
+the total violation to be within one shared threshold.
+
+SampleSet feasibility and best-feasible selection also check variable bounds
+and kinds at the saved tolerance, matching the extracted Solution. A sample can
+therefore have zero `total_violation()` and still be infeasible because a
+variable is outside its domain.
+
+Constraint-level queries require an explicit tolerance. Replace
+`evaluated.feasible` with `evaluated.is_feasible(atol=...)` and
+`sampled.feasible` with `sampled.feasible(atol=...)` (a sample-ID-to-bool map).
+Solution/SampleSet keep their existing feasibility properties and expose
+`feasibility_atol` so extracted constraints can use the same threshold:
+
+```python
+evaluated = solution.constraints[1]
+evaluated.is_feasible(atol=solution.feasibility_atol)
+evaluated.is_feasible(atol=1e-8)  # A separate query on the same stored violation
+```
+
+Changing the query tolerance does not repeat input canonicalization or activation
+classification. Tolerances are retained only with tolerance-dependent decisions:
+regular constraint values retain none, while special-constraint activation
+records retain the conditions used to classify them. The separation of tolerance
+roles and the persisted evaluation context is tracked in
+[issue #1180](https://github.com/Jij-Inc/ommx/issues/1180).
+
+The v2 protobuf format retains `feasible` flags/maps and `feasibility_atol` on
+Solution/SampleSet. Consumers can read the result and its tolerance without an
+OMMX SDK. The protobuf schema is unchanged. When loading the data, the SDK
+recomputes OneHot/SOS1 violations from the saved variable values and validates
+the flags using the persisted tolerance.
+
+The legacy v1 format cannot store the tolerance or native special constraints.
+`to_v1_bytes()` recomputes feasibility from the retained regular constraints and
+variable values using the SDK's default tolerance, as `from_v1_bytes()` does.
+Use the same default tolerance when writing and reading v1 data. This conversion
+may change feasibility; use v2 to preserve the original tolerance and special
+constraints.
+
+Partial evaluation rejects a fixing when eliminating an approximately zero
+structural member could change feasibility under the sum of member errors and
+the constraint must remain active. Exact-zero elimination remains supported.
+Evaluate the complete state, or lower special constraints before partial evaluation; lowering
+has its own violation metrics as described below.
+Lowering need not preserve the total: retained originals and generated constraints
+each contribute. See {meth}`~ommx.Solution.total_violation` for the full definitions.
+
 ## 6. Return-type changes
 
 ### 6.1 `Constraint.name` / `Constraint.description` are `Optional[str]` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))

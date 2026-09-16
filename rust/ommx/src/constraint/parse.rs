@@ -171,8 +171,6 @@ impl Parse for v1::EvaluatedConstraint {
             provenance: Vec::new(),
         };
 
-        let feasible = equality.is_satisfied(self.evaluated_value, crate::ATol::default());
-
         let removed_reason = self.removed_reason.map(|reason| RemovedReason {
             reason,
             parameters: self.removed_reason_parameters.into_iter().collect(),
@@ -185,7 +183,6 @@ impl Parse for v1::EvaluatedConstraint {
                 stage: EvaluatedData {
                     evaluated_value: self.evaluated_value,
                     dual_variable: self.dual_variable,
-                    feasible,
                     used_decision_variable_ids: self
                         .used_decision_variable_ids
                         .into_iter()
@@ -222,6 +219,23 @@ impl Parse for v1::SampledConstraint {
             })?
             .parse_as(&(), message, "evaluated_values")?;
 
+        let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible.into_iter().collect());
+        if crate::constraint_type::sample_ids_from_map(&feasible) != evaluated_values.ids() {
+            return Err(ParseError::new(crate::error!(
+                "feasible sample IDs must match evaluated values"
+            ))
+            .context(message, "feasible"));
+        }
+        for (id, &value) in evaluated_values.iter() {
+            validate_feasible_from_evaluated_value(
+                equality,
+                value,
+                feasible[id],
+                crate::ATol::default(),
+                message,
+            )?;
+        }
+
         let context = ConstraintContext {
             label: crate::ModelingLabel {
                 name: self.name,
@@ -244,11 +258,6 @@ impl Parse for v1::SampledConstraint {
                 stage: SampledData {
                     evaluated_values,
                     dual_variables: None,
-                    feasible: self
-                        .feasible
-                        .into_iter()
-                        .map(|(id, value)| (SampleID::from(id), value))
-                        .collect(),
                     used_decision_variable_ids: self
                         .used_decision_variable_ids
                         .into_iter()
@@ -363,7 +372,7 @@ mod tests {
         );
         assert_eq!(context.label.subscripts, vec![10, 20]);
         // feasible should be false because 1.5 > ATol::default() for EqualToZero constraint
-        assert!(!parsed.stage.feasible);
+        assert!(!parsed.is_feasible(crate::ATol::default()));
     }
 
     #[test]
@@ -381,7 +390,7 @@ mod tests {
             let (_, parsed, _, _): (ConstraintID, EvaluatedConstraint, ConstraintContext, _) =
                 proto.parse(&()).unwrap();
 
-            assert!(parsed.stage.feasible);
+            assert!(parsed.is_feasible(crate::ATol::default()));
         }
     }
 }

@@ -17,10 +17,16 @@ categories = ["api-bindings", "mathematics", "science"]
 [lints]
 workspace = true
 
+[features]
+default = ["sender"]
+# Rust SDK conversions and canonical Python return-type stubs for producers.
+# Receivers only need the protocol contract and PyO3 registration helpers.
+sender = ["dep:ommx", "dep:pyo3-stub-gen"]
+
 [dependencies]
-ommx = { path = "../ommx", version = "=3.0.0-beta.6", default-features = false }
+ommx = { path = "../ommx", version = "=3.0.0-beta.6", default-features = false, optional = true }
 pyo3 = ">=0.27.2, <0.30"
-pyo3-stub-gen.workspace = true
+pyo3-stub-gen = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest.workspace = true
