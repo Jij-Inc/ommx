@@ -3242,22 +3242,28 @@ class Instance:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     def tighten_bounds_simultaneously_once(
-        self, *, atol: typing.Optional[builtins.float] = None
+        self,
+        *,
+        max_terms: builtins.int = 32,
+        atol: typing.Optional[builtins.float] = None,
     ) -> builtins.dict[builtins.int, Bound]:
         r"""
         Apply one simultaneous bound-tightening pass using all active regular constraints.
 
         Calls {meth}`tighten_bounds_simultaneously_once_using_constraints` with
-        every active regular constraint ID. Non-affine rows are skipped. All
+        every active regular constraint ID and the same ``max_terms`` limit.
+        Non-affine rows and rows exceeding ``max_terms`` variable terms are skipped. All
         rows read the bounds at entry, and updates are applied together once.
         Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
         The same tolerance, supported-domain and atomicity rules apply as for
         the explicitly selected form.
+        ``max_terms`` defaults to 32 and excludes the constant term.
         """
     def tighten_bounds_simultaneously_once_using_constraints(
         self,
         constraint_ids: builtins.set[builtins.int],
         *,
+        max_terms: builtins.int = 32,
         atol: typing.Optional[builtins.float] = None,
     ) -> builtins.dict[builtins.int, Bound]:
         r"""
@@ -3267,6 +3273,12 @@ class Instance:
         and removed IDs are errors; an empty set applies no updates. Selected
         non-affine rows are skipped. All eligible variables in the selected
         rows may have their bounds tightened.
+
+        ``max_terms`` limits each affine row to this many variable terms
+        (default: 32). The constant term does not count. Rows exceeding the
+        limit are skipped before domain lookup or candidate evaluation. Terms
+        of fixed, semi and dependent variables still count. With a zero limit,
+        only constant rows are processed, including contradiction detection.
 
         Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
         Every row reads the bounds at entry; all updates are collected and applied

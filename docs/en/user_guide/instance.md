@@ -167,6 +167,8 @@ of constraint IDs:
 changed_bounds = instance.tighten_bounds_simultaneously_once()  # variable ID -> updated Bound
 # Use only the regular constraints with IDs 100 and 101:
 changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+# Override the per-row variable-term limit (default: 32).
+changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
 ```
 
 Both methods make one simultaneous pass: every constraint reads the bounds at
@@ -177,6 +179,11 @@ the call; call it again to propagate updates through other constraints.
 constraint. {meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`
 uses only the supplied IDs; unknown or removed IDs fail without applying changes,
 and an empty set applies no updates. Both methods skip non-affine rows.
+They also skip rows with more than `max_terms` variable terms (default: 32),
+before evaluating any bound candidates. The constant term does not count;
+terms of fixed, semi and dependent variables do count. A limit of zero processes
+only constant rows, including detection of their contradictions. Skipped rows
+remain in the instance.
 
 Both sides of equalities are processed, respecting the supplied `atol` on continuous
 domains and row residuals. Use the same tolerance for later evaluation. Unbounded

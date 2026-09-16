@@ -150,22 +150,25 @@ impl Instance {
     /// Apply one simultaneous bound-tightening pass using all active regular constraints.
     ///
     /// Calls {meth}`tighten_bounds_simultaneously_once_using_constraints` with
-    /// every active regular constraint ID. Non-affine rows are skipped. All
+    /// every active regular constraint ID and the same ``max_terms`` limit.
+    /// Non-affine rows and rows exceeding ``max_terms`` variable terms are skipped. All
     /// rows read the bounds at entry, and updates are applied together once.
     /// Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
     /// The same tolerance, supported-domain and atomicity rules apply as for
     /// the explicitly selected form.
-    #[pyo3(signature = (*, atol=None))]
+    /// ``max_terms`` defaults to 32 and excludes the constant term.
+    #[pyo3(signature = (*, max_terms=32, atol=None))]
     pub fn tighten_bounds_simultaneously_once(
         &mut self,
         py: Python<'_>,
+        max_terms: usize,
         atol: Option<f64>,
     ) -> OmmxPyResult<BTreeMap<u64, crate::VariableBound>> {
         let _guard = crate::TRACING.attach_parent_context(py);
         let atol = atol.map(ommx::ATol::new).transpose()?.unwrap_or_default();
         Ok(self
             .inner
-            .tighten_bounds_simultaneously_once(atol)?
+            .tighten_bounds_simultaneously_once(max_terms, atol)?
             .into_iter()
             .map(|(id, bound)| (id.into_inner(), crate::VariableBound(bound)))
             .collect())
@@ -177,6 +180,12 @@ impl Instance {
     /// and removed IDs are errors; an empty set applies no updates. Selected
     /// non-affine rows are skipped. All eligible variables in the selected
     /// rows may have their bounds tightened.
+    ///
+    /// ``max_terms`` limits each affine row to this many variable terms
+    /// (default: 32). The constant term does not count. Rows exceeding the
+    /// limit are skipped before domain lookup or candidate evaluation. Terms
+    /// of fixed, semi and dependent variables still count. With a zero limit,
+    /// only constant rows are processed, including contradiction detection.
     ///
     /// Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
     /// Every row reads the bounds at entry; all updates are collected and applied
@@ -195,11 +204,12 @@ impl Instance {
     ///
     /// Requires finite ``atol < 1``. On failure the instance is unchanged.
     /// If omitted, {func}`~ommx.get_default_atol` supplies the tolerance.
-    #[pyo3(signature = (constraint_ids, *, atol=None))]
+    #[pyo3(signature = (constraint_ids, *, max_terms=32, atol=None))]
     pub fn tighten_bounds_simultaneously_once_using_constraints(
         &mut self,
         py: Python<'_>,
         constraint_ids: BTreeSet<u64>,
+        max_terms: usize,
         atol: Option<f64>,
     ) -> OmmxPyResult<BTreeMap<u64, crate::VariableBound>> {
         let _guard = crate::TRACING.attach_parent_context(py);
@@ -207,7 +217,7 @@ impl Instance {
         let ids = constraint_ids.into_iter().map(ConstraintID::from).collect();
         Ok(self
             .inner
-            .tighten_bounds_simultaneously_once_using_constraints(&ids, atol)?
+            .tighten_bounds_simultaneously_once_using_constraints(&ids, max_terms, atol)?
             .into_iter()
             .map(|(id, bound)| (id.into_inner(), crate::VariableBound(bound)))
             .collect())

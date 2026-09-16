@@ -1,4 +1,4 @@
-from ommx import Bound, DecisionVariable, Instance, Sense
+from ommx import Bound, DecisionVariable, Function, Instance, Sense
 import pytest
 
 
@@ -19,6 +19,59 @@ def test_tighten_bounds_simultaneously_once_returns_changed_domains() -> None:
     assert instance.get_decision_variable_by_id(0).bound == Bound(-2, 3)
     assert instance.tighten_bounds_simultaneously_once(atol=0.125) == {}
     assert set(instance.constraints) == {0, 1}
+
+
+@pytest.mark.parametrize("selected", [False, True])
+@pytest.mark.parametrize("num_terms", [32, 33])
+def test_default_term_limit_and_explicit_override(
+    selected: bool, num_terms: int
+) -> None:
+    variables = [
+        DecisionVariable.integer(i, lower=0, upper=10) for i in range(num_terms)
+    ]
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=0,
+        decision_variables=variables,
+        constraints={0: sum(variables, Function(0)) <= 2},
+    )
+    if selected:
+        changed = instance.tighten_bounds_simultaneously_once_using_constraints({0})
+    else:
+        changed = instance.tighten_bounds_simultaneously_once()
+    assert changed == (
+        {i: Bound(0, 2) for i in range(num_terms)} if num_terms == 32 else {}
+    )
+    if num_terms == 33:
+        if selected:
+            changed = instance.tighten_bounds_simultaneously_once_using_constraints(
+                {0}, max_terms=33
+            )
+        else:
+            changed = instance.tighten_bounds_simultaneously_once(max_terms=33)
+        assert changed == {i: Bound(0, 2) for i in range(num_terms)}
+
+
+@pytest.mark.parametrize("selected", [False, True])
+def test_zero_and_negative_term_limits(selected: bool) -> None:
+    instance = bound_tightening_instance()
+    before = instance.to_v2_bytes()
+    if selected:
+        assert (
+            instance.tighten_bounds_simultaneously_once_using_constraints(
+                {0, 1}, max_terms=0
+            )
+            == {}
+        )
+        with pytest.raises(OverflowError):
+            instance.tighten_bounds_simultaneously_once_using_constraints(
+                {0, 1}, max_terms=-1
+            )
+    else:
+        assert instance.tighten_bounds_simultaneously_once(max_terms=0) == {}
+        with pytest.raises(OverflowError):
+            instance.tighten_bounds_simultaneously_once(max_terms=-1)
+    assert instance.to_v2_bytes() == before
 
 
 @pytest.mark.parametrize("selected", [False, True])

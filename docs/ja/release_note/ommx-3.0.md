@@ -18,7 +18,8 @@ changed = instance.tighten_bounds_simultaneously_once()
 changed = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
 ```
 
-すべてのrowが呼び出し開始時のboundを読み、更新をまとめて1回適用します。
+変数項が`max_terms`（既定値: 32、定数項を除く）を超えるrowはスキップします。
+処理するすべてのrowが呼び出し開始時のboundを読み、更新をまとめて1回適用します。
 新しいboundを他のrowへ伝播させるには再度呼び出します。対応するdomain、許容誤差、
 atomicityについては{ref}`Bound tightening <simultaneous-bound-tightening>`を参照してください。
 

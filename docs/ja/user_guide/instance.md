@@ -145,6 +145,8 @@ for cid, c in instance.constraints.items():
 changed_bounds = instance.tighten_bounds_simultaneously_once()  # 変数ID -> 更新後のBound
 # 通常制約のID 100と101だけを使う:
 changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+# rowごとの変数項数の上限を変更する（既定値: 32）。
+changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
 ```
 
 どちらのメソッドも、すべての対象制約が呼び出し開始時のboundを使い、導出した更新を
@@ -155,6 +157,10 @@ changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({
 {meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`は指定したIDの
 制約だけを使います。不明・削除済みのIDは何も変更せずにエラーとし、空集合は更新しません。
 どちらも非線形のrowは処理しません。
+また、変数項が`max_terms`（既定値: 32）を超えるrowは、bound候補を評価する前に
+スキップします。定数項は数えませんが、固定変数・semi変数・従属変数の項は数えます。
+上限を0にすると定数だけのrowを処理し、その矛盾は引き続き検出します。
+スキップしたrowもInstance内には残ります。
 
 等式は両方向を処理し、連続変数のdomainと制約のresidualには指定した`atol`を使います。
 後の評価にも同じ許容誤差を指定してください。非有界なdomainの端点は無限のまま扱います。

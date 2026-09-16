@@ -11,15 +11,20 @@ impl Instance {
     ///
     /// This is the convenience form of
     /// [`Self::tighten_bounds_simultaneously_once_using_constraints`] with every
-    /// active regular constraint ID. Non-affine rows are skipped. Every row
-    /// reads the bounds at entry, and all updates are applied together once.
+    /// active regular constraint ID and the same `max_terms` limit. Non-affine
+    /// rows and rows with more than `max_terms` variable terms are skipped.
+    /// Every row reads the bounds at entry, and all updates are applied together once.
     /// Returns the new bounds of the variables actually changed.
     ///
     /// The same tolerance, supported-domain and atomicity rules apply as for
     /// the explicitly selected form.
-    pub fn tighten_bounds_simultaneously_once(&mut self, atol: ATol) -> crate::Result<Bounds> {
+    pub fn tighten_bounds_simultaneously_once(
+        &mut self,
+        max_terms: usize,
+        atol: ATol,
+    ) -> crate::Result<Bounds> {
         let rows = self.constraints().keys().copied().collect();
-        self.tighten_bounds_simultaneously_once_using_constraints(&rows, atol)
+        self.tighten_bounds_simultaneously_once_using_constraints(&rows, max_terms, atol)
     }
 
     /// Apply one simultaneous bound-tightening pass using selected regular constraints.
@@ -28,6 +33,12 @@ impl Instance {
     /// removed IDs are errors; an empty set applies no updates. Non-affine
     /// selected rows are skipped, as in [`Self::tighten_bounds_simultaneously_once`].
     /// All eligible variables in the selected rows may have their bounds tightened.
+    ///
+    /// `max_terms` limits the number of variable terms in each affine row;
+    /// the constant term does not count. Rows exceeding the limit are skipped
+    /// before domain lookup or candidate evaluation. Terms of fixed, semi and
+    /// dependent variables still count. A zero limit processes constant rows
+    /// only, so their contradictions can still be detected.
     ///
     /// For each variable in `a*x + r <= 0`, minimize `r` over the current
     /// variable domains and derive an upper or lower bound on `x`. Equalities
@@ -57,10 +68,10 @@ impl Instance {
     pub fn tighten_bounds_simultaneously_once_using_constraints(
         &mut self,
         constraint_ids: &BTreeSet<ConstraintID>,
+        max_terms: usize,
         atol: ATol,
     ) -> crate::Result<Bounds> {
-        let targets = self.decision_variables().keys().copied().collect();
-        let bounds = infer_bounds_simultaneously_once(self, constraint_ids, &targets, atol)?;
+        let bounds = infer_bounds_simultaneously_once(self, constraint_ids, max_terms, atol)?;
         self.clip_bounds(&bounds, atol)?;
         Ok(bounds)
     }
@@ -71,12 +82,24 @@ impl Instance {
 pub fn infer_bounds_simultaneously_once(
     instance: &Instance,
     rows: &BTreeSet<ConstraintID>,
-    targets: &VariableIDSet,
+    max_terms: usize,
     atol: ATol,
 ) -> crate::Result<Bounds> {
     if !atol.into_inner().is_finite() || atol.into_inner() >= 1.0 {
         crate::bail!("Bound tightening requires a finite ATol smaller than one");
     }
+    // Eligibility is an instance-level fact shared by every selected row.
+    // Excluded variables still supply their domains when inferring other bounds.
+    let excluded_variables: VariableIDSet = instance
+        .decision_variables()
+        .iter()
+        .filter_map(|(id, variable)| {
+            (matches!(variable.kind(), Kind::SemiContinuous | Kind::SemiInteger)
+                || instance.fixed_decision_variable_values().contains_key(id)
+                || instance.decision_variable_dependency.get(id).is_some())
+            .then_some(*id)
+        })
+        .collect();
     let mut updates = std::collections::BTreeMap::new();
     for &row_id in rows {
         let row = instance.constraints().get(&row_id).ok_or_else(
@@ -85,6 +108,11 @@ pub fn infer_bounds_simultaneously_once(
         let Some(linear) = row.function().as_linear() else {
             continue;
         };
+        let variable_terms =
+            linear.num_terms() - usize::from(linear.get(&LinearMonomial::Constant).is_some());
+        if variable_terms > max_terms {
+            continue;
+        }
         let function = Function::from(linear.into_owned());
         let linear = function.as_linear().expect("converted affine row");
         let mut domains = Bounds::new();
@@ -134,14 +162,10 @@ pub fn infer_bounds_simultaneously_once(
                 let LinearMonomial::Variable(id) = monomial else {
                     continue;
                 };
-                let original = &instance.decision_variables()[id];
-                if !targets.contains(id)
-                    || matches!(original.kind(), Kind::SemiContinuous | Kind::SemiInteger)
-                    || instance.fixed_decision_variable_values().contains_key(id)
-                    || instance.decision_variable_dependency.get(id).is_some()
-                {
+                if excluded_variables.contains(id) {
                     continue;
                 }
+                let original = &instance.decision_variables()[id];
                 let sign = (direction * coefficient.into_inner()).signum();
                 let first = sign * best.entries[&id.into_inner()];
                 // A zero interval excludes the target term. Delegate all
@@ -363,15 +387,20 @@ mod tests {
         let mut explicit_all = selected.clone();
         let atol = ATol::new(0.125).unwrap();
         let bounds = selected
-            .tighten_bounds_simultaneously_once_using_constraints(&BTreeSet::from([0.into()]), atol)
+            .tighten_bounds_simultaneously_once_using_constraints(
+                &BTreeSet::from([0.into()]),
+                32,
+                atol,
+            )
             .unwrap();
         assert_eq!(bounds[&0.into()], Bound::new(-10.0, 2.0).unwrap());
-        let all_bounds = all.tighten_bounds_simultaneously_once(atol).unwrap();
+        let all_bounds = all.tighten_bounds_simultaneously_once(32, atol).unwrap();
         assert_eq!(all_bounds[&0.into()], Bound::new(-3.0, 2.0).unwrap());
         assert_eq!(
             explicit_all
                 .tighten_bounds_simultaneously_once_using_constraints(
                     &BTreeSet::from([0.into(), 1.into()]),
+                    32,
                     atol
                 )
                 .unwrap(),
@@ -380,10 +409,90 @@ mod tests {
         assert_eq!(explicit_all, all);
         let before_empty = selected.clone();
         assert!(selected
-            .tighten_bounds_simultaneously_once_using_constraints(&BTreeSet::new(), atol)
+            .tighten_bounds_simultaneously_once_using_constraints(&BTreeSet::new(), 32, atol)
             .unwrap()
             .is_empty());
         assert_eq!(selected, before_empty);
+    }
+
+    #[test]
+    fn term_limit_is_inclusive_excludes_constants_and_skips_only_large_rows() {
+        let atol = ATol::new(0.125).unwrap();
+        for num_terms in [32_u64, 33] {
+            let mut row = crate::Linear::from(coeff!(-2.0));
+            for id in 0..num_terms {
+                row.add_term(LinearMonomial::Variable(id.into()), coeff!(1.0))
+                    .unwrap();
+            }
+            let original = instance(
+                (0..=num_terms)
+                    .map(|_| {
+                        DecisionVariable::new(Kind::Integer, Bound::new(0.0, 10.0).unwrap(), atol)
+                            .unwrap()
+                    })
+                    .collect(),
+                vec![
+                    Constraint::less_than_or_equal_to_zero(row.into()),
+                    Constraint::less_than_or_equal_to_zero(
+                        (linear!(num_terms) - coeff!(3.0)).unwrap().into(),
+                    ),
+                ],
+            );
+            for selected in [false, true] {
+                let mut problem = original.clone();
+                let ids = BTreeSet::from([0.into(), 1.into()]);
+                let updates = if selected {
+                    problem.tighten_bounds_simultaneously_once_using_constraints(&ids, 32, atol)
+                } else {
+                    problem.tighten_bounds_simultaneously_once(32, atol)
+                }
+                .unwrap();
+                assert_eq!(updates[&num_terms.into()], Bound::new(0.0, 3.0).unwrap());
+                assert_eq!(updates.len(), if num_terms == 32 { 33 } else { 1 });
+                for id in 0..num_terms {
+                    assert_eq!(
+                        problem.decision_variables()[&id.into()].bound(),
+                        Bound::new(0.0, if num_terms == 32 { 2.0 } else { 10.0 }).unwrap()
+                    );
+                }
+                // Raising the limit admits the previously skipped row.
+                if num_terms == 33 {
+                    let updates = if selected {
+                        problem.tighten_bounds_simultaneously_once_using_constraints(&ids, 33, atol)
+                    } else {
+                        problem.tighten_bounds_simultaneously_once(33, atol)
+                    }
+                    .unwrap();
+                    assert_eq!(updates.len(), 33);
+                    assert!(updates
+                        .values()
+                        .all(|b| *b == Bound::new(0.0, 2.0).unwrap()));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn zero_term_limit_still_checks_constant_rows() {
+        for constant in [-1.0, 1.0] {
+            let mut problem = instance(
+                vec![continuous(-10.0, 10.0)],
+                vec![
+                    Constraint::less_than_or_equal_to_zero(linear!(0).into()),
+                    Constraint::less_than_or_equal_to_zero(
+                        crate::Coefficient::try_from(constant).unwrap().into(),
+                    ),
+                ],
+            );
+            let original = problem.clone();
+            let result = problem.tighten_bounds_simultaneously_once(0, ATol::default());
+            if constant < 0.0 {
+                assert!(result.unwrap().is_empty());
+            } else {
+                assert!(result.unwrap_err().to_string().contains("infeasible"));
+            }
+            assert_eq!(problem, original);
+        }
     }
 
     #[test]
@@ -403,6 +512,7 @@ mod tests {
             let error = problem
                 .tighten_bounds_simultaneously_once_using_constraints(
                     &BTreeSet::from([0.into(), invalid.into()]),
+                    32,
                     ATol::default(),
                 )
                 .unwrap_err();
@@ -430,13 +540,15 @@ mod tests {
             ],
         );
         let original = problem.clone();
-        let bounds = problem.tighten_bounds_simultaneously_once(atol).unwrap();
+        let bounds = problem
+            .tighten_bounds_simultaneously_once(32, atol)
+            .unwrap();
         assert_eq!(
             bounds,
             BTreeMap::from([(0.into(), Bound::new(-2.0, 3.0).unwrap())])
         );
         assert!(problem
-            .tighten_bounds_simultaneously_once(atol)
+            .tighten_bounds_simultaneously_once(32, atol)
             .unwrap()
             .is_empty());
         for value in [
@@ -468,7 +580,7 @@ mod tests {
             )],
         );
         let bounds = problem
-            .tighten_bounds_simultaneously_once(ATol::new(0.125).unwrap())
+            .tighten_bounds_simultaneously_once(32, ATol::new(0.125).unwrap())
             .unwrap();
         let bound = bounds[&0.into()];
         // The affine evaluator adds the constant first. Its cancellation can
@@ -512,20 +624,21 @@ mod tests {
         );
         let mut selected = problem.clone();
         let first = problem
-            .tighten_bounds_simultaneously_once(ATol::new(0.125).unwrap())
+            .tighten_bounds_simultaneously_once(32, ATol::new(0.125).unwrap())
             .unwrap();
         assert_eq!(first[&0.into()].upper(), 2.0);
         assert!(!first.contains_key(&1.into()));
         let selected_first = selected
             .tighten_bounds_simultaneously_once_using_constraints(
                 &BTreeSet::from([0.into(), 1.into()]),
+                32,
                 ATol::new(0.125).unwrap(),
             )
             .unwrap();
         assert_eq!(selected_first, first);
         assert_eq!(selected, problem);
         let second = problem
-            .tighten_bounds_simultaneously_once(ATol::new(0.125).unwrap())
+            .tighten_bounds_simultaneously_once(32, ATol::new(0.125).unwrap())
             .unwrap();
         assert_eq!(second[&1.into()].upper(), 2.0);
     }
@@ -541,12 +654,12 @@ mod tests {
         );
         let original = problem.clone();
         assert!(problem
-            .tighten_bounds_simultaneously_once(ATol::default())
+            .tighten_bounds_simultaneously_once(32, ATol::default())
             .is_err());
         assert_eq!(problem, original);
         for tolerance in [1.0, f64::INFINITY] {
             assert!(problem
-                .tighten_bounds_simultaneously_once(ATol::new(tolerance).unwrap())
+                .tighten_bounds_simultaneously_once(32, ATol::new(tolerance).unwrap())
                 .is_err());
             assert_eq!(problem, original);
         }
@@ -567,7 +680,7 @@ mod tests {
             )],
         );
         let bounds = problem
-            .tighten_bounds_simultaneously_once(ATol::new(0.125).unwrap())
+            .tighten_bounds_simultaneously_once(32, ATol::new(0.125).unwrap())
             .unwrap();
         assert_eq!(bounds[&0.into()].upper(), 0.0);
         assert!(!bounds.contains_key(&1.into()));
@@ -590,7 +703,9 @@ mod tests {
             .unwrap();
         let original = problem.clone();
         let atol = ATol::default();
-        let bounds = problem.tighten_bounds_simultaneously_once(atol).unwrap();
+        let bounds = problem
+            .tighten_bounds_simultaneously_once(32, atol)
+            .unwrap();
         // MAX*x overflows at the old endpoints, but excluding x leaves zero.
         assert_eq!(
             bounds[&0.into()],
@@ -620,7 +735,9 @@ mod tests {
                     )],
                 );
                 let original = problem.clone();
-                let bounds = problem.tighten_bounds_simultaneously_once(atol).unwrap();
+                let bounds = problem
+                    .tighten_bounds_simultaneously_once(32, atol)
+                    .unwrap();
                 let endpoint = if kind == Kind::Integer { 3.0 } else { 2.9375 };
                 let expected = if sign > 0.0 {
                     Bound::new(f64::NEG_INFINITY, endpoint).unwrap()
@@ -653,7 +770,7 @@ mod tests {
             )],
         );
         let bounds = problem
-            .tighten_bounds_simultaneously_once(ATol::new(0.125).unwrap())
+            .tighten_bounds_simultaneously_once(32, ATol::new(0.125).unwrap())
             .unwrap();
         assert_eq!(
             bounds,
@@ -698,7 +815,9 @@ mod tests {
                     vec![Constraint::equal_to_zero(function)],
                 );
                 let original = problem.clone();
-                let bounds = problem.tighten_bounds_simultaneously_once(atol).unwrap();
+                let bounds = problem
+                    .tighten_bounds_simultaneously_once(32, atol)
+                    .unwrap();
                 let expected = if direction > 0.0 {
                     Bound::new(f64::NEG_INFINITY, 0.0).unwrap()
                 } else {
@@ -727,7 +846,7 @@ mod tests {
         );
         let original = overflowing_residuals.clone();
         assert!(overflowing_residuals
-            .tighten_bounds_simultaneously_once(ATol::default())
+            .tighten_bounds_simultaneously_once(32, ATol::default())
             .unwrap()
             .is_empty());
         assert_eq!(overflowing_residuals, original);
@@ -747,7 +866,7 @@ mod tests {
             ],
         );
         let bounds = overflowing_division
-            .tighten_bounds_simultaneously_once(ATol::new(0.125).unwrap())
+            .tighten_bounds_simultaneously_once(32, ATol::new(0.125).unwrap())
             .unwrap();
         assert_eq!(
             bounds,
@@ -771,7 +890,9 @@ mod tests {
             )],
         );
         let original = problem.clone();
-        let bounds = problem.tighten_bounds_simultaneously_once(atol).unwrap();
+        let bounds = problem
+            .tighten_bounds_simultaneously_once(32, atol)
+            .unwrap();
         assert_eq!(
             bounds[&0.into()],
             Bound::new(f64::NEG_INFINITY, 0.875).unwrap()
@@ -802,7 +923,7 @@ mod tests {
                 .unwrap()
                 .feasible());
             assert!(problem
-                .tighten_bounds_simultaneously_once(ATol::default())
+                .tighten_bounds_simultaneously_once(32, ATol::default())
                 .unwrap()
                 .is_empty());
             assert!(problem
@@ -834,12 +955,42 @@ mod tests {
             .build()
             .unwrap();
         let bounds = problem
-            .tighten_bounds_simultaneously_once(ATol::default())
+            .tighten_bounds_simultaneously_once(32, ATol::default())
             .unwrap();
         assert_eq!(bounds.keys().copied().collect::<Vec<_>>(), vec![2.into()]);
         assert_eq!(problem.decision_variables()[&0.into()].bound(), bound);
         assert_eq!(problem.decision_variables()[&1.into()].bound(), bound);
         assert_eq!(problem.fixed_decision_variable_value(0.into()), Some(3.0));
+    }
+
+    #[test]
+    fn excluded_semi_variables_still_supply_domains_to_other_candidates() {
+        let atol = ATol::new(0.125).unwrap();
+        let semi_bound = Bound::new(2.0, 3.0).unwrap();
+        for kind in [Kind::SemiContinuous, Kind::SemiInteger] {
+            let mut problem = instance(
+                vec![
+                    continuous(-10.0, 10.0),
+                    DecisionVariable::new(kind, semi_bound, atol).unwrap(),
+                ],
+                vec![
+                    Constraint::less_than_or_equal_to_zero(
+                        (linear!(1) - coeff!(2.0)).unwrap().into(),
+                    ),
+                    Constraint::less_than_or_equal_to_zero(
+                        (linear!(0) + linear!(1)).unwrap().into(),
+                    ),
+                ],
+            );
+            let updates = problem
+                .tighten_bounds_simultaneously_once(32, atol)
+                .unwrap();
+            assert_eq!(
+                updates,
+                BTreeMap::from([(0.into(), Bound::new(-10.0, 0.0).unwrap())])
+            );
+            assert_eq!(problem.decision_variables()[&1.into()].bound(), semi_bound);
+        }
     }
 
     proptest::proptest! {
@@ -859,7 +1010,7 @@ mod tests {
             let atol = ATol::new(0.125).unwrap();
             let state = crate::v1::State::from_iter([(0, x), (1, y)]);
             if original.evaluate(&state, atol).unwrap().feasible() {
-                problem.tighten_bounds_simultaneously_once(atol).unwrap();
+                problem.tighten_bounds_simultaneously_once(32, atol).unwrap();
                 proptest::prop_assert!(problem.evaluate(&state, atol).unwrap().feasible());
             }
         }
@@ -887,7 +1038,7 @@ mod tests {
             let atol = ATol::new(0.125).unwrap();
             let state = crate::v1::State::from_iter([(0, x), (1, y)]);
             if original.evaluate(&state, atol).unwrap().feasible() {
-                problem.tighten_bounds_simultaneously_once(atol).unwrap();
+                problem.tighten_bounds_simultaneously_once(32, atol).unwrap();
                 proptest::prop_assert!(problem.evaluate(&state, atol).unwrap().feasible());
             }
         }
