@@ -5,6 +5,7 @@ from typing import Literal
 import pytest
 
 from ommx import (
+    Bound,
     DecisionVariable,
     Instance,
     Sense,
@@ -15,6 +16,38 @@ from ommx import (
 )
 
 Mode = Literal["best_effort", "strict"]
+
+
+@pytest.mark.parametrize("mode", ["best_effort", "strict"])
+def test_promotion_automatically_tightens_big_m_member_bounds(mode: Mode) -> None:
+    member = DecisionVariable.continuous(1, lower=-100, upper=100)
+    selector = DecisionVariable.binary(10)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=0,
+        decision_variables=[member, selector],
+        constraints={
+            100: member - 3 * selector <= 0,
+            101: -member - 2 * selector <= 0,
+            102: selector - 1 <= 0,
+        },
+    )
+    claims = {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101)}}
+    before = instance.to_v2_bytes()
+    with pytest.raises(Sos1BigMPromotionBatchRejectedError):
+        instance.promote_sos1_big_m(
+            Sos1BigMPromotionRequest({**claims, 999: {}}), mode="strict", atol=0.125
+        )
+    assert instance.to_v2_bytes() == before
+
+    report = instance.promote_sos1_big_m(
+        Sos1BigMPromotionRequest(claims), mode=mode, atol=0.125
+    )
+    assert report.promoted == {102: 0}
+    assert report.rejections == {}
+    assert instance.get_decision_variable_by_id(1).bound == Bound(-2, 3)
+    assert instance.constraints == {}
+    assert set(instance.removed_constraints) == {100, 101, 102}
 
 
 def mixed_formulation() -> tuple[Instance, Sos1BigMPromotionRequest]:

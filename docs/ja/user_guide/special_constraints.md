@@ -185,6 +185,15 @@ promotionでは、memberのboundを通常の不等式constraintと同じresidual
 利用できます。検証時には`U + atol`を先に構成せず、実際にbound-feasibleな表現可能domainを
 導出します。
 
+memberの保存されたdomainがlink係数で許される範囲より広い場合、promotionは
+申請されたlink制約からbound tighteningを試し、改めて検証します。
+たとえば、binaryな`y`に対する`x - 3*y <= 0`から、`x`の上界を`100`から`3`に
+締められます。締めたmemberのboundはpromotionに成功した場合だけ適用します。
+候補の拒否、RustのPlanの破棄、strict batchの失敗では、boundは変更されません。
+
+すべての通常制約、または指定した制約IDを使って独立にboundを締める方法は、
+{ref}`Bound tightening <simultaneous-bound-tightening>`を参照してください。
+
 {meth}`~ommx.Instance.promote_sos1_big_m`はbatch全体を表す
 {class}`~ommx.Sos1BigMPromotionRequest`を受け取り、
 {class}`~ommx.Sos1BigMPromotion`を1つ返します。Requestは、通常制約の

@@ -190,6 +190,16 @@ used by regular constraints. Consequently, a canonical unit-scale upper link
 `x - U*y <= 0` may use the tight value `M = U`; validation derives the actual
 representable bound-feasible domain without first constructing `U + atol`.
 
+If a member's stored domain is wider than its link coefficients allow,
+promotion automatically tries bound tightening from the claimed link rows
+before validating again. For example, `x - 3*y <= 0` with binary `y` can
+tighten an upper bound of `100` to `3`. Only successful promotions apply the
+tightened member bounds. Rejected candidates, a dropped Rust plan, and a failed
+strict batch leave those bounds unchanged.
+
+To tighten bounds independently using all regular constraints or selected
+constraint IDs, see {ref}`Bound tightening <simultaneous-bound-tightening>`.
+
 {meth}`~ommx.Instance.promote_sos1_big_m` takes one
 {class}`~ommx.Sos1BigMPromotionRequest` for the entire batch and returns one
 {class}`~ommx.Sos1BigMPromotion` report. The request maps each regular

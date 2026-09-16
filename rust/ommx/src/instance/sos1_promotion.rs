@@ -156,8 +156,13 @@ impl std::error::Error for Sos1BigMPromotionBatchRejected {}
 /// link/cardinality shapes, and contain every active solver use of its fresh
 /// selectors. These facts hold for the source instance at construction time;
 /// the enclosing plan supplies the exclusive borrow and cross-candidate checks.
+/// Where `tightened_bounds` is nonempty, the domains above are the prepared
+/// domains inferred from the candidate's link rows. Each changed domain is an
+/// intersection with its original domain and retains the original point nearest
+/// zero. This makes shared-member intersections nonempty at batch application.
 #[derive(Debug)]
 struct Sos1BigMPromotionCandidate {
+    tightened_bounds: crate::Bounds,
     fresh_selectors: BTreeMap<VariableID, VariableID>,
     relaxed_constraint_ids: BTreeSet<ConstraintID>,
     sos1_constraint: Sos1Constraint,
@@ -242,6 +247,7 @@ struct PlannedSos1BigMPromotion {
 pub struct Sos1BigMPromotionPlan<'a> {
     instance: &'a mut Instance,
     entries: BTreeMap<ConstraintID, crate::Result<PlannedSos1BigMPromotion>>,
+    atol: ATol,
 }
 
 fn find_sos1_big_m_promotion_conflicts(
@@ -470,7 +476,11 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
                     Err(error) => Err(error),
                 }))
                 .collect();
-            return Self { instance, entries };
+            return Self {
+                instance,
+                entries,
+                atol,
+            };
         }
 
         let first_id = (survivor_count > 0)
@@ -498,7 +508,11 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
             })
             .collect();
 
-        Self { instance, entries }
+        Self {
+            instance,
+            entries,
+            atol,
+        }
     }
 
     /// Returns `true` when every request can be promoted.
@@ -540,6 +554,7 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
             let Self {
                 instance: _,
                 entries,
+                atol: _,
             } = self;
             let request_count = entries.len();
             let rejections = entries
@@ -573,8 +588,31 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
     /// caller-controlled failure has already been recorded during planning.
     #[must_use = "each request has an aligned success or rejection result"]
     pub fn apply(self) -> Sos1BigMPromotion {
-        let Self { instance, entries } = self;
+        let Self {
+            instance,
+            entries,
+            atol,
+        } = self;
         if entries.values().any(Result::is_ok) {
+            let mut bounds = crate::Bounds::new();
+            for planned in entries.values().filter_map(|entry| entry.as_ref().ok()) {
+                for (&id, &bound) in &planned.candidate.tightened_bounds {
+                    bounds
+                        .entry(id)
+                        .and_modify(|existing| {
+                            // Valid links only cut the member domain toward zero.
+                            // Shared members therefore retain the original point
+                            // nearest zero in every candidate's bound intersection.
+                            *existing = existing
+                                .intersection(&bound)
+                                .expect("compatible SOS1 member bounds are a plan invariant");
+                        })
+                        .or_insert(bound);
+                }
+            }
+            instance
+                .clip_bounds(&bounds, atol)
+                .expect("member bound updates were validated during SOS1 planning");
             let removal_reasons = entries
                 .values()
                 .filter_map(|entry| entry.as_ref().ok())
@@ -666,6 +704,12 @@ impl Instance {
     /// regular rows, every participant in that conflict is rejected; unrelated
     /// requests remain applicable. SOS1 members may be shared by independent
     /// requests.
+    ///
+    /// If the stored member bounds prevent validation, planning automatically
+    /// tries one bound-tightening pass using only that request's claimed link
+    /// rows, then validates the entire formulation again. The tightened member
+    /// bounds are committed only with successful promotions; dropping a plan,
+    /// rejecting a candidate, or rejecting a strict batch applies no bounds.
     ///
     /// An empty request map produces an empty, fully valid plan without
     /// inspecting `atol`. The tolerance is validated only for requests that
@@ -798,6 +842,56 @@ impl Instance {
         selector_claims: &BTreeMap<VariableID, Sos1BigMSelectorClaim>,
         atol: ATol,
     ) -> crate::Result<Sos1BigMPromotionCandidate> {
+        match self.check_sos1_big_m_promotion_candidate(
+            cardinality_constraint,
+            selector_claims,
+            atol,
+            crate::Bounds::new(),
+        ) {
+            Ok(candidate) => Ok(candidate),
+            Err(original_error) => {
+                let mut rows = BTreeSet::new();
+                let mut targets = VariableIDSet::new();
+                for (&member, claim) in selector_claims {
+                    if let Sos1BigMSelectorClaim::Fresh {
+                        upper_link,
+                        lower_link,
+                        ..
+                    } = claim
+                    {
+                        targets.insert(member);
+                        rows.extend(upper_link);
+                        rows.extend(lower_link);
+                    }
+                }
+                let Ok(bounds) = super::bound_tightening::infer_bounds_simultaneously_once(
+                    self, &rows, &targets, atol,
+                ) else {
+                    return Err(original_error);
+                };
+                if bounds.is_empty() {
+                    return Err(original_error);
+                }
+                // Preserve the original diagnostic when tightening cannot make
+                // the complete request valid. No error-string classification.
+                self.check_sos1_big_m_promotion_candidate(
+                    cardinality_constraint,
+                    selector_claims,
+                    atol,
+                    bounds,
+                )
+                .map_err(|_| original_error)
+            }
+        }
+    }
+
+    fn check_sos1_big_m_promotion_candidate(
+        &self,
+        cardinality_constraint: ConstraintID,
+        selector_claims: &BTreeMap<VariableID, Sos1BigMSelectorClaim>,
+        atol: ATol,
+        tightened_bounds: crate::Bounds,
+    ) -> crate::Result<Sos1BigMPromotionCandidate> {
         if !atol.into_inner().is_finite() {
             crate::bail!(
                 { atol = atol.into_inner() },
@@ -826,6 +920,11 @@ impl Instance {
                     "SOS1 Big-M promotion member {member:?} is not registered"
                 )
             })?;
+            let mut variable = variable.clone();
+            if let Some(&bound) = tightened_bounds.get(&member) {
+                variable.clip_bound(member, bound, atol)?;
+            }
+            let variable = &variable;
             let bound = variable.bound();
             if !bound.is_finite() {
                 crate::bail!(
@@ -953,6 +1052,7 @@ impl Instance {
         let sos1_constraint = Sos1Constraint::new(members)?;
 
         Ok(Sos1BigMPromotionCandidate {
+            tightened_bounds,
             fresh_selectors,
             relaxed_constraint_ids,
             sos1_constraint,
@@ -1665,6 +1765,50 @@ mod tests {
     }
 
     #[test]
+    fn shared_member_combines_only_successful_candidates_bounds() {
+        let (mut instance, request) = shared_member_batch_instance();
+        instance
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(1.0, 2.0))
+            .unwrap();
+        instance
+            .constraint_collection
+            .replace_active_row(
+                201.into(),
+                two_term_link_for(member_integer_id(), 11.into(), -1.0, -1.0),
+            )
+            .unwrap();
+        let original = instance.clone();
+        let outcomes = instance
+            .promote_sos1_big_m_if_fully_valid(&request, ATol::default())
+            .unwrap();
+        assert!(outcomes.values().all(Result::is_ok));
+        assert_eq!(
+            instance.decision_variables()[&member_integer_id()].bound(),
+            Bound::new(-1.0, 2.0).unwrap()
+        );
+
+        let mut rejected = original;
+        rejected
+            .constraint_collection
+            .replace_active_row(
+                202.into(),
+                Constraint::less_than_or_equal_to_zero(Function::Zero),
+            )
+            .unwrap();
+        let outcomes = rejected.promote_sos1_big_m(&request, ATol::default());
+        assert!(outcomes[&cardinality_row_id()].is_ok());
+        assert!(outcomes[&ConstraintID::from(202)].is_err());
+        assert_eq!(
+            rejected.decision_variables()[&member_integer_id()].bound(),
+            Bound::new(-2.0, 2.0).unwrap()
+        );
+        assert!(rejected
+            .constraints()
+            .contains_key(&ConstraintID::from(201)));
+    }
+
+    #[test]
     fn batch_reconstruction_preserves_existing_dependencies_on_both_selectors() {
         let (mut instance, request) = shared_member_batch_instance();
         instance
@@ -2370,11 +2514,11 @@ mod tests {
             .constraint_collection
             .replace_active_row(upper_row_id(), upper_link(2.0, 2.875))
             .unwrap();
-        assert_atomic_rejection_with_atol(
-            upper_outside,
-            &request,
-            atol,
-            "does not cover the ATol-feasible member domain",
+        let upper_original = upper_outside.clone();
+        promote_one(&mut upper_outside, &request, atol).unwrap();
+        assert_eq!(
+            upper_outside.decision_variables()[&member_integer_id()].bound(),
+            Bound::new(-2.0, 2.0).unwrap()
         );
 
         let (mut lower_outside, request) = mixed_instance();
@@ -2382,12 +2526,34 @@ mod tests {
             .constraint_collection
             .replace_active_row(lower_row_id(), lower_link(4.0, 1.875))
             .unwrap();
-        assert_atomic_rejection_with_atol(
-            lower_outside,
-            &request,
-            atol,
-            "does not cover the ATol-feasible member domain",
+        let lower_original = lower_outside.clone();
+        promote_one(&mut lower_outside, &request, atol).unwrap();
+        assert_eq!(
+            lower_outside.decision_variables()[&member_integer_id()].bound(),
+            Bound::new(-1.0, 3.0).unwrap()
         );
+        for (original, promoted) in [
+            (upper_original, upper_outside),
+            (lower_original, lower_outside),
+        ] {
+            for value in -2..=3 {
+                let value = f64::from(value);
+                let feasible_before = [0.0, 1.0].into_iter().any(|selector| {
+                    original
+                        .evaluate(
+                            &crate::v1::State::from_iter([(0, 0.0), (1, value), (10, selector)]),
+                            atol,
+                        )
+                        .unwrap()
+                        .feasible()
+                });
+                let feasible_after = promoted
+                    .evaluate(&crate::v1::State::from_iter([(0, 0.0), (1, value)]), atol)
+                    .unwrap()
+                    .feasible_relaxed();
+                assert_eq!(feasible_before, feasible_after);
+            }
+        }
 
         let (mut threshold_too_weak, request) = mixed_instance();
         threshold_too_weak
@@ -2832,6 +2998,113 @@ mod tests {
         instance.decision_variable_dependency =
             AcyclicAssignments::new([(member_integer_id(), Function::Zero)]).unwrap();
         assert_atomic_rejection(instance, &request, "dependency target");
+    }
+
+    #[test]
+    fn automatically_tightens_wide_member_bounds_only_when_applied() {
+        let atol = ATol::new(0.125).unwrap();
+        for kind in [Kind::Continuous, Kind::Integer] {
+            let member =
+                DecisionVariable::new(kind, Bound::new(-100.0, 100.0).unwrap(), atol).unwrap();
+            let (mut instance, request) =
+                fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
+            instance
+                .constraint_collection
+                .replace_active_row(upper_row_id(), upper_link(1.0, 3.0))
+                .unwrap();
+            instance
+                .constraint_collection
+                .replace_active_row(lower_row_id(), lower_link(1.0, 2.0))
+                .unwrap();
+            let original = instance.clone();
+            let plan = instance.plan_promote_sos1_big_m(&request, atol);
+            assert!(
+                plan.is_fully_valid(),
+                "{:?}",
+                plan.rejections().collect::<Vec<_>>()
+            );
+            drop(plan);
+            assert_eq!(instance, original);
+
+            let mut invalid_request = request.clone();
+            invalid_request.insert(ConstraintID::from(999), BTreeMap::new());
+            assert!(instance
+                .promote_sos1_big_m_if_fully_valid(&invalid_request, atol)
+                .is_err());
+            assert_eq!(instance, original);
+
+            let report = instance.promote_sos1_big_m(&invalid_request, atol);
+            assert!(report[&cardinality_row_id()].is_ok());
+            assert!(report[&ConstraintID::from(999)].is_err());
+            assert_eq!(
+                instance.decision_variables()[&member_integer_id()].bound(),
+                Bound::new(-2.0, 3.0).unwrap()
+            );
+            assert_eq!(
+                Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap(),
+                instance
+            );
+
+            let points: &[f64] = if kind == Kind::Continuous {
+                &[-2.125, -2.0, -0.125, 0.0, 0.125, 3.0, 3.125, 3.25]
+            } else {
+                &[-3.0, -2.0, 0.0, 3.0, 4.0]
+            };
+            for &value in points {
+                let projected = instance
+                    .evaluate(
+                        &crate::v1::State::from_iter([(member_integer_id().into_inner(), value)]),
+                        atol,
+                    )
+                    .unwrap();
+                let original_feasible = [0.0, 1.0].into_iter().any(|selector| {
+                    original
+                        .evaluate(
+                            &crate::v1::State::from_iter([
+                                (member_integer_id().into_inner(), value),
+                                (selector_id().into_inner(), selector),
+                            ]),
+                            atol,
+                        )
+                        .unwrap()
+                        .feasible()
+                });
+                assert_eq!(
+                    projected.feasible_relaxed(),
+                    original_feasible,
+                    "kind={kind:?}, x={value}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn tightening_does_not_commit_for_a_structurally_invalid_candidate() {
+        let (mut instance, request) = fresh_instance(
+            integer(-100.0, 100.0),
+            Some(upper_row_id()),
+            Some(lower_row_id()),
+        );
+        instance
+            .constraint_collection
+            .replace_active_row(upper_row_id(), upper_link(1.0, 3.0))
+            .unwrap();
+        instance
+            .constraint_collection
+            .replace_active_row(lower_row_id(), lower_link(1.0, 2.0))
+            .unwrap();
+        instance
+            .constraint_collection
+            .replace_active_row(
+                cardinality_row_id(),
+                Constraint::less_than_or_equal_to_zero(Function::Zero),
+            )
+            .unwrap();
+        let original = instance.clone();
+        assert!(
+            instance.promote_sos1_big_m(&request, ATol::default())[&cardinality_row_id()].is_err()
+        );
+        assert_eq!(instance, original);
     }
 
     #[test]

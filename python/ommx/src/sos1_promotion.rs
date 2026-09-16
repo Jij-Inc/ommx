@@ -279,6 +279,10 @@ impl Instance {
     /// Overlapping formulation rows are rejected; independent formulations
     /// may share SOS1 members. An empty request returns an empty report.
     /// Planning and application do not clone the instance.
+    /// If member bounds prevent validation, the planner automatically tightens
+    /// them using that formulation's claimed link rows and validates again.
+    /// Only successful promotions apply these bounds. A rejected strict batch
+    /// leaves bounds, constraints, and selector dependencies unchanged.
     ///
     /// ``atol`` parameterizes the local projected-feasibility check and must
     /// also be used for subsequent state reconstruction and evaluation.
