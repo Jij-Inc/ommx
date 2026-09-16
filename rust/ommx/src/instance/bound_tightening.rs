@@ -87,24 +87,9 @@ pub fn infer_bounds_simultaneously_once(
             let LinearMonomial::Variable(id) = monomial else {
                 continue;
             };
-            let variable = &instance.decision_variables()[id];
-            let (mut lower, mut upper) = match variable.kind() {
-                Kind::Continuous | Kind::SemiContinuous => {
-                    variable.bound().finite_feasible_extrema(atol)
-                }
-                _ => (
-                    variable.bound().lower().max(-f64::MAX),
-                    variable.bound().upper().min(f64::MAX),
-                ),
-            };
-            if matches!(variable.kind(), Kind::SemiContinuous | Kind::SemiInteger) {
-                lower = lower.min(0.0);
-                upper = upper.max(0.0);
-            }
-            if let Some(&value) = instance.fixed_decision_variable_values().get(id) {
-                lower = value;
-                upper = value;
-            }
+            let (lower, upper) = instance
+                .decision_variable_finite_extrema(*id, atol)
+                .expect("constraint variables are registered in the instance");
             let (min, max) = if coefficient.into_inner() > 0.0 {
                 (lower, upper)
             } else {
