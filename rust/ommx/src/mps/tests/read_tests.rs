@@ -115,17 +115,20 @@ fn test_integer_markers_with_mixed_columns() {
     let instance = parse(input.as_bytes()).unwrap();
     use crate::decision_variable::Kind::{Binary, Continuous, Integer};
     let expected = [
-        (Continuous, f64::INFINITY),
-        (Binary, 1.0),
-        (Integer, 5.0),
-        (Continuous, f64::INFINITY),
-        (Binary, 1.0),
-        (Continuous, f64::INFINITY),
+        ("AFTER", Continuous, f64::INFINITY),
+        ("BEFORE", Continuous, f64::INFINITY),
+        ("BETWEEN", Continuous, f64::INFINITY),
+        ("BINARY1", Binary, 1.0),
+        ("BINARY2", Binary, 1.0),
+        ("INTEGER", Integer, 5.0),
     ];
     assert_eq!(instance.decision_variables().len(), expected.len());
-    for (variable, (kind, upper)) in instance.decision_variables().values().zip(expected) {
-        assert_eq!(variable.kind(), kind);
-        assert_eq!(variable.bound(), Bound::new(0.0, upper).unwrap());
+    for (name, kind, upper) in expected {
+        let (_, variable) = instance
+            .get_decision_variable_by_name(name, vec![])
+            .unwrap();
+        assert_eq!(variable.kind(), kind, "{name}");
+        assert_eq!(variable.bound(), Bound::new(0.0, upper).unwrap(), "{name}");
     }
 }
 
