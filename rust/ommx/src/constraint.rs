@@ -9,8 +9,11 @@ pub(crate) mod stage;
 
 pub use context_store::ConstraintContextStore;
 
+use crate::constraint_type::sample_ids_from_map;
 use crate::logical_memory::LogicalMemoryProfile;
+use crate::SampledConstraintBehavior;
 use crate::{ATol, Function, Parse, ParseError, RawParseError, SampleID, VariableID};
+use crate::{EvaluatedConstraintBehavior, EvaluatedConstraintData};
 pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::FnvHashSet;
@@ -39,9 +42,17 @@ impl Equality {
     /// public callers use the owning constraint, [`crate::Solution`], or
     /// [`crate::SampleSet`] APIs that also preserve their host invariants.
     pub(crate) fn is_satisfied(self, evaluated_value: f64, atol: ATol) -> bool {
+        crate::constraint_type::violation_is_feasible(self.violation(evaluated_value), atol)
+    }
+
+    /// Residual metric shared by regular constraints and active indicators.
+    pub(crate) fn violation(self, evaluated_value: f64) -> f64 {
+        if !evaluated_value.is_finite() {
+            return f64::INFINITY;
+        }
         match self {
-            Self::EqualToZero => atol.approx_is_zero(evaluated_value),
-            Self::LessThanOrEqualToZero => atol.approx_le(evaluated_value, 0.0),
+            Self::EqualToZero => evaluated_value.abs(),
+            Self::LessThanOrEqualToZero => evaluated_value.max(0.0),
         }
     }
 }
@@ -315,12 +326,15 @@ fn validate_feasible_from_evaluated_value(
     Ok(())
 }
 
-impl From<EvaluatedConstraint> for crate::v2::EvaluatedRegularConstraint {
-    fn from(constraint: EvaluatedConstraint) -> Self {
-        Self {
+impl EvaluatedConstraint {
+    /// Solution/SampleSet supplies the tolerance for the wire feasibility field.
+    pub(crate) fn into_v2(self, atol: ATol) -> crate::v2::EvaluatedRegularConstraint {
+        let constraint = self;
+        let feasible = constraint.is_feasible(atol);
+        crate::v2::EvaluatedRegularConstraint {
             equality: constraint.equality.into(),
             evaluated_value: constraint.stage.evaluated_value,
-            feasible: constraint.stage.feasible,
+            feasible,
             used_decision_variable_ids: constraint
                 .stage
                 .used_decision_variable_ids
@@ -360,7 +374,6 @@ impl Parse for crate::v2::EvaluatedRegularConstraint {
             equality,
             stage: EvaluatedData {
                 evaluated_value: self.evaluated_value,
-                feasible: self.feasible,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
                     message,
@@ -378,8 +391,8 @@ impl EvaluatedConstraint {
     /// Equality residuals are feasible when approximately zero, including
     /// `abs(value) == atol`. Inequality residuals are feasible when negative or
     /// approximately zero, so a finite `value == atol` is also feasible.
-    pub fn is_feasible_with_tolerance(&self, atol: crate::ATol) -> bool {
-        self.equality.is_satisfied(self.stage.evaluated_value, atol)
+    pub fn is_feasible(&self, atol: crate::ATol) -> bool {
+        EvaluatedConstraintBehavior::is_feasible(self, atol)
     }
 
     /// Calculate the violation (constraint breach) value for this constraint
@@ -388,12 +401,10 @@ impl EvaluatedConstraint {
     /// - For `f(x) = 0`: returns `|f(x)|`
     /// - For `f(x) ≤ 0`: returns `max(0, f(x))`
     ///
-    /// Returns 0.0 if the constraint is satisfied.
+    /// Zero implies feasibility. A small positive violation may also be feasible
+    /// within the supplied query tolerance; the residual is not rounded to zero.
     pub fn violation(&self) -> f64 {
-        match self.equality {
-            Equality::EqualToZero => self.stage.evaluated_value.abs(),
-            Equality::LessThanOrEqualToZero => self.stage.evaluated_value.max(0.0),
-        }
+        EvaluatedConstraintData::violation(self)
     }
 }
 
@@ -402,17 +413,27 @@ impl EvaluatedConstraint {
 /// Type alias for a sampled constraint.
 pub type SampledConstraint = Constraint<SampledStage>;
 
-impl From<SampledConstraint> for crate::v2::SampledRegularConstraint {
-    fn from(constraint: SampledConstraint) -> Self {
-        Self {
+impl SampledConstraint {
+    /// Solution/SampleSet supplies the tolerance for the wire feasibility field.
+    pub(crate) fn into_v2(self, atol: ATol) -> crate::v2::SampledRegularConstraint {
+        let constraint = self;
+        let feasible = constraint
+            .stage
+            .evaluated_values
+            .iter()
+            .map(|(id, _)| {
+                (
+                    id.into_inner(),
+                    constraint
+                        .is_feasible_for(*id, atol)
+                        .expect("sample exists"),
+                )
+            })
+            .collect();
+        crate::v2::SampledRegularConstraint {
             equality: constraint.equality.into(),
             evaluated_values: Some(constraint.stage.evaluated_values.into()),
-            feasible: constraint
-                .stage
-                .feasible
-                .into_iter()
-                .map(|(id, value)| (id.into_inner(), value))
-                .collect(),
+            feasible,
             used_decision_variable_ids: constraint
                 .stage
                 .used_decision_variable_ids
@@ -446,6 +467,12 @@ impl Parse for crate::v2::SampledRegularConstraint {
             .parse_as(&(), message, "evaluated_values")?;
         crate::v2_io::validate_sampled_f64_values(&evaluated_values, message, "evaluated_values")?;
         let feasible = crate::v2_io::sample_bool_map_from_v2(self.feasible);
+        if sample_ids_from_map(&feasible) != evaluated_values.ids() {
+            return Err(ParseError::new(crate::error!(
+                "feasible sample IDs must match evaluated values"
+            ))
+            .context(message, "feasible"));
+        }
         for (sample_id, evaluated_value) in evaluated_values.iter() {
             if let Some(provided_feasible) = feasible.get(sample_id).copied() {
                 validate_feasible_from_evaluated_value(
@@ -468,7 +495,6 @@ impl Parse for crate::v2::SampledRegularConstraint {
             equality,
             stage: SampledData {
                 evaluated_values,
-                feasible,
                 used_decision_variable_ids: crate::v2_io::variable_id_set_from_v2(
                     self.used_decision_variable_ids,
                     message,
@@ -484,7 +510,7 @@ impl SampledConstraint {
     /// Check feasibility for a specific sample.
     ///
     /// This uses the same inclusive equality and inequality boundaries as
-    /// [`EvaluatedConstraint::is_feasible_with_tolerance`].
+    /// [`EvaluatedConstraint::is_feasible`].
     ///
     /// Returns [`None`] if `sample_id` is not present in the sampled data.
     pub fn is_feasible(&self, sample_id: SampleID, atol: crate::ATol) -> Option<bool> {
@@ -528,6 +554,7 @@ impl SampledConstraint {
 
 #[cfg(test)]
 mod tests {
+    use crate::SampledConstraintBehavior;
     use std::error::Error as _;
 
     use super::*;
@@ -648,7 +675,7 @@ mod tests {
             }
             .parse(&atol)
             .unwrap();
-            assert!(evaluated.stage.feasible);
+            assert!(evaluated.is_feasible(atol));
 
             let sampled = crate::v2::SampledRegularConstraint {
                 equality: equality.into(),
@@ -664,7 +691,10 @@ mod tests {
             }
             .parse(&atol)
             .unwrap();
-            assert_eq!(sampled.stage.feasible.get(&sample_id), Some(&true));
+            assert_eq!(
+                sampled.is_feasible_for(sample_id, atol).as_ref(),
+                Some(&true)
+            );
         }
     }
 

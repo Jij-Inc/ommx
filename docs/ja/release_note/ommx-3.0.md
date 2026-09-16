@@ -16,6 +16,38 @@ Rust拡張もSDK側の同じ例外クラスを送出するため、`except ommx.
 まとめて捕捉できます。転送に失敗した原因のPython例外は`__cause__`に保持します。
 SDKや必要なbridge APIが見つからない場合は`ImportError`になります。
 
+### ⚠ 制約の違反量 API の統一 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+`Solution.total_violation_l1()` を {meth}`~ommx.Solution.total_violation` に改名し、
+`total_violation_l2()` を削除しました。Indicator・OneHot・SOS1 と removed 制約を含め、
+制約ごとの非負の違反量を足し合わせます。
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+`EvaluatedConstraint.feasible` は `is_feasible(atol=...)` に、
+`SampledConstraint.feasible` は `feasible(atol=...)` メソッドに置き換わります。
+Solution/SampleSet の feasibility プロパティは維持し、その判定条件を
+`feasibility_atol` で取得できます。問い合わせは再評価や保存済み判断の変更を行いません。
+
+SampleSet の feasibility と最良実行可能解の選択でも変数の bounds・kind を確認し、
+取り出した Solution の判定と一致するようにしました。変数の違反は
+`total_violation` の集計には含めません。
+
+旧 v1 形式への書き出しでは、保存される通常制約と変数値から SDK の既定の許容誤差で
+feasibility を再計算し、読み込み時の判定と揃えます。元の許容誤差とネイティブの
+特殊制約を保存するには v2 を使用してください。
+
+Solution の全制約種別の DataFrame に `feasible` と `violation` を追加しました。
+すべての制約を `violation <= atol` で判定します。OneHot と SOS1 の許容誤差は
+各メンバーへの個別適用から、変更量の合計への適用に変わります。
+OneHot と SOS1 はメンバー値の絶対変更量の最小値で定義し、Big-M lowering との一致は
+要求しません。定義と移行方法は
+{ref}`移行ガイド <constraint-violation-migration>`を参照してください。
+
 ### ⚠ SOS1 Big-M promotionをbatch化し適用modeを選択可能に ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
 
 {class}`~ommx.Sos1BigMPromotionRequest`はbatch全体を表すようになりました。

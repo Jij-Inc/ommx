@@ -477,8 +477,10 @@ def test_convert_inequality_to_equality_with_integer_slack_uses_atol():
 
     constraint = instance.constraints[0]
     slack_id = (constraint.function.required_ids() - {0}).pop()
-    assert constraint.evaluate({0: 0.0, slack_id: 0.0}, atol=0.4).feasible
-    assert not constraint.evaluate({0: 1.0, slack_id: 0.0}, atol=0.4).feasible
+    assert constraint.evaluate({0: 0.0, slack_id: 0.0}, atol=0.4).is_feasible(atol=0.4)
+    assert not constraint.evaluate({0: 1.0, slack_id: 0.0}, atol=0.4).is_feasible(
+        atol=0.4
+    )
 
 
 def test_add_integer_slack_to_inequality_infeasible():

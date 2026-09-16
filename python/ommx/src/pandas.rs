@@ -1,6 +1,8 @@
 //! Thin wrapper around `pandas.DataFrame` for type-safe PyO3 bindings,
 //! plus shared helpers for building DataFrames from domain objects.
 
+use ommx::EvaluatedConstraintBehavior;
+use ommx::SampledConstraintBehavior;
 use std::collections::HashMap;
 use std::hash::BuildHasher;
 
@@ -971,18 +973,20 @@ impl<'m> ToPandasEntry
         (
             ommx::IndicatorConstraintID,
             &ommx::EvaluatedIndicatorConstraint,
+            ommx::ATol,
         ),
         ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let (id, c) = self.item;
+        let (id, c, atol) = self.item;
         let m = &self.context.label;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         dict.set_item("indicator_variable_id", c.indicator_variable.into_inner())?;
         set_equality(&dict, c.equality)?;
         dict.set_item("value", c.stage.evaluated_value)?;
+        dict.set_item("feasible", c.is_feasible(atol))?;
         dict.set_item("indicator_active", c.stage.indicator_active)?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_label_columns(
@@ -1004,13 +1008,14 @@ impl<'a, 'm> ToPandasEntry
             (
                 ommx::IndicatorConstraintID,
                 &'a ommx::SampledIndicatorConstraint,
+                ommx::ATol,
             ),
         >,
         ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let (id, ic) = &self.item.item;
+        let (id, ic, atol) = &self.item.item;
         let m = &self.context.label;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
@@ -1027,7 +1032,7 @@ impl<'a, 'm> ToPandasEntry
         for &sample_id in self.item.sample_ids {
             let value = ic.stage.evaluated_values.get(sample_id).copied();
             dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
-            let feas = ic.stage.feasible.get(&sample_id).copied();
+            let feas = ic.is_feasible_for(sample_id, *atol);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
             let active = ic.stage.indicator_active.get(&sample_id).copied();
             dict.set_item(
@@ -1061,17 +1066,21 @@ impl<'m> ToPandasEntry
 impl<'m> ToPandasEntry
     for WithModelingContext<
         'm,
-        (ommx::OneHotConstraintID, &ommx::EvaluatedOneHotConstraint),
+        (
+            ommx::OneHotConstraintID,
+            &ommx::EvaluatedOneHotConstraint,
+            ommx::ATol,
+        ),
         ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let (id, c) = self.item;
+        let (id, c, atol) = self.item;
         let m = &self.context.label;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
-        dict.set_item("feasible", c.stage.feasible)?;
+        dict.set_item("feasible", c.is_feasible(atol))?;
         match c.stage.active_variable {
             Some(v) => dict.set_item("active_variable", v.into_inner())?,
             None => dict.set_item("active_variable", &na)?,
@@ -1091,12 +1100,19 @@ impl<'m> ToPandasEntry
 impl<'a, 'm> ToPandasEntry
     for WithModelingContext<
         'm,
-        WithSampleIds<'a, (ommx::OneHotConstraintID, &'a ommx::SampledOneHotConstraint)>,
+        WithSampleIds<
+            'a,
+            (
+                ommx::OneHotConstraintID,
+                &'a ommx::SampledOneHotConstraint,
+                ommx::ATol,
+            ),
+        >,
         ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let (id, c) = &self.item.item;
+        let (id, c, atol) = &self.item.item;
         let m = &self.context.label;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
@@ -1110,7 +1126,7 @@ impl<'a, 'm> ToPandasEntry
         )?;
         set_parameter_columns(&dict, &m.parameters)?;
         for &sample_id in self.item.sample_ids {
-            let feas = c.stage.feasible.get(&sample_id).copied();
+            let feas = c.is_feasible_for(sample_id, *atol);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
             let active_col = format!("active_variable.{}", sample_id.into_inner());
             match c.stage.active_variable.get(&sample_id) {
@@ -1125,17 +1141,21 @@ impl<'a, 'm> ToPandasEntry
 impl<'m> ToPandasEntry
     for WithModelingContext<
         'm,
-        (ommx::Sos1ConstraintID, &ommx::EvaluatedSos1Constraint),
+        (
+            ommx::Sos1ConstraintID,
+            &ommx::EvaluatedSos1Constraint,
+            ommx::ATol,
+        ),
         ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let (id, c) = self.item;
+        let (id, c, atol) = self.item;
         let m = &self.context.label;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
-        dict.set_item("feasible", c.stage.feasible)?;
+        dict.set_item("feasible", c.is_feasible(atol))?;
         match c.stage.active_variable {
             Some(v) => dict.set_item("active_variable", v.into_inner())?,
             None => dict.set_item("active_variable", &na)?,
@@ -1155,12 +1175,19 @@ impl<'m> ToPandasEntry
 impl<'a, 'm> ToPandasEntry
     for WithModelingContext<
         'm,
-        WithSampleIds<'a, (ommx::Sos1ConstraintID, &'a ommx::SampledSos1Constraint)>,
+        WithSampleIds<
+            'a,
+            (
+                ommx::Sos1ConstraintID,
+                &'a ommx::SampledSos1Constraint,
+                ommx::ATol,
+            ),
+        >,
         ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let (id, c) = &self.item.item;
+        let (id, c, atol) = &self.item.item;
         let m = &self.context.label;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
@@ -1174,7 +1201,7 @@ impl<'a, 'm> ToPandasEntry
         )?;
         set_parameter_columns(&dict, &m.parameters)?;
         for &sample_id in self.item.sample_ids {
-            let feas = c.stage.feasible.get(&sample_id).copied();
+            let feas = c.is_feasible_for(sample_id, *atol);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
             let active_col = format!("active_variable.{}", sample_id.into_inner());
             match c.stage.active_variable.get(&sample_id) {
@@ -1367,16 +1394,21 @@ impl<'m> ToPandasEntry
 }
 
 impl<'m> ToPandasEntry
-    for WithModelingContext<'m, (ommx::ConstraintID, &ommx::EvaluatedConstraint), ConstraintContext>
+    for WithModelingContext<
+        'm,
+        (ommx::ConstraintID, &ommx::EvaluatedConstraint, ommx::ATol),
+        ConstraintContext,
+    >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let (id, c) = self.item;
+        let (id, c, atol) = self.item;
         let m = &self.context.label;
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
         set_equality(&dict, c.equality)?;
         dict.set_item("value", c.stage.evaluated_value)?;
+        dict.set_item("feasible", c.is_feasible(atol))?;
         set_used_ids(&dict, &c.stage.used_decision_variable_ids)?;
         set_label_columns(
             &dict,
@@ -1462,12 +1494,12 @@ impl<'a, 'm> ToPandasEntry
 impl<'a, 'm> ToPandasEntry
     for WithModelingContext<
         'm,
-        WithSampleIds<'a, (ommx::ConstraintID, &'a ommx::SampledConstraint)>,
+        WithSampleIds<'a, (ommx::ConstraintID, &'a ommx::SampledConstraint, ommx::ATol)>,
         ConstraintContext,
     >
 {
     fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let (id, sc) = &self.item.item;
+        let (id, sc, atol) = &self.item.item;
         let m = &self.context.label;
         let dict = PyDict::new(py);
         dict.set_item("id", id.into_inner())?;
@@ -1483,7 +1515,7 @@ impl<'a, 'm> ToPandasEntry
         for &sample_id in self.item.sample_ids {
             let value = sc.stage.evaluated_values.get(sample_id).copied();
             dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
-            let feas = sc.stage.feasible.get(&sample_id).copied();
+            let feas = sc.is_feasible_for(sample_id, *atol);
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
         }
         Ok(dict)

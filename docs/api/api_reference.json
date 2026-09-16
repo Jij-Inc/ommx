@@ -3655,7 +3655,7 @@
             },
             {
               "name": "evaluate",
-              "doc": "Evaluate the constraint with the given state.\n\n**Args:**\n\n- `state`: A State object, dict[int, float], or iterable of (int, float) tuples\n- `atol`: Optional absolute tolerance for evaluation\n\n**Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility",
+              "doc": "Evaluate the constraint with the given state.\n\n**Args:**\n\n- `state`: A State object, dict[int, float], or iterable of (int, float) tuples\n- `atol`: Optional absolute tolerance for evaluation\n\n**Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``",
               "signatures": [
                 {
                   "parameters": [
@@ -5763,8 +5763,34 @@
           "bases": [],
           "methods": [
             {
+              "name": "is_feasible",
+              "doc": "Check feasibility using the supplied absolute tolerance.\n\nThe query compares the stored violation with ``atol``. It does not\nre-evaluate the function or canonicalize the input state.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "violation",
-              "doc": "Calculate the violation (constraint breach) value for this constraint\n\nReturns the amount by which this constraint is violated:\n- For $f(x) = 0$: returns $|f(x)|$\n- For $f(x) \\leq 0$: returns $\\max(0, f(x))$\n\nReturns 0.0 if the constraint is satisfied.",
+              "doc": "Calculate the violation (constraint breach) value for this constraint\n\nReturns the amount by which this constraint is violated:\n- For $f(x) = 0$: returns $|f(x)|$\n- For $f(x) \\leq 0$: returns $\\max(0, f(x))$\n\nZero implies feasibility. A small positive violation may also be feasible\nwithin the supplied query tolerance; the residual is not rounded to zero.",
               "signatures": [
                 {
                   "parameters": [],
@@ -5829,17 +5855,6 @@
               "doc": "Get the evaluated constraint value",
               "type_": {
                 "display": "float",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "feasible",
-              "doc": "Get the feasibility status",
-              "type_": {
-                "display": "bool",
                 "link_target": null,
                 "children": []
               },
@@ -24322,8 +24337,19 @@
               "is_property": true
             },
             {
+              "name": "feasibility_atol",
+              "doc": "Absolute tolerance associated with the stored evaluation and feasibility results.\n\nPass this to an extracted constraint's explicit feasibility query to use\nthe enclosing result's threshold.",
+              "type_": {
+                "display": "float",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "feasible",
-              "doc": "Get feasibility status for all samples",
+              "doc": "Get feasibility status for all samples, including variable bounds and kinds.\n\nEach value matches the feasibility of the corresponding extracted Solution.",
               "type_": {
                 "display": "dict[int, bool]",
                 "link_target": null,
@@ -24345,7 +24371,7 @@
             },
             {
               "name": "feasible_relaxed",
-              "doc": "Get relaxed feasibility status for all samples",
+              "doc": "Get relaxed feasibility status for all samples.\n\nRemoved constraints are excluded; variable bounds and kinds still apply.",
               "type_": {
                 "display": "dict[int, bool]",
                 "link_target": null,
@@ -24613,7 +24639,45 @@
           "name": "SampledConstraint",
           "doc": "",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "feasible",
+              "doc": "Compute feasibility for every sample using the supplied tolerance.\n\nThis query does not re-evaluate the functions or change stored values.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[int, bool]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "description",
@@ -24657,28 +24721,6 @@
                   },
                   {
                     "display": "float",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "feasible",
-              "doc": "Get the feasibility status for all samples  ",
-              "type_": {
-                "display": "dict[int, bool]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "bool",
                     "link_target": null,
                     "children": []
                   }
@@ -25661,8 +25703,67 @@
               "deprecated": null
             },
             {
+              "name": "constraint_violation",
+              "doc": "Get one constraint's nonnegative scalar violation.\n\nUses the definitions in {meth}`total_violation`, including for removed\nconstraints. IDs are independent for each `kind`. Raises `KeyError` when\nthe ID is absent from that constraint family.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "constraints_df",
-              "doc": "DataFrame of evaluated constraints, dispatched on `kind=`. See\n{meth}`ommx.Instance.constraints_df` for column / `kind=` /\n`include=` semantics.\n\n`Solution` has no `removed=` parameter (no active/removed\ndistinction at the evaluated stage); reason data is gated by\n`\"removed_reason\"` in `include=`. When the flag is on, rows for\nconstraints removed before evaluation get `removed_reason` /\n`removed_reason.{key}` columns populated; other rows have NA.",
+              "doc": "DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.\n\nThe `violation` column uses {meth}`constraint_violation`. Dispatched on `kind=`. See\n{meth}`ommx.Instance.constraints_df` for column / `kind=` /\n`include=` semantics.\n\n`Solution` has no `removed=` parameter (no active/removed\ndistinction at the evaluated stage); reason data is gated by\n`\"removed_reason\"` in `include=`. When the flag is on, rows for\nconstraints removed before evaluation get `removed_reason` /\n`removed_reason.{key}` columns populated; other rows have NA.",
               "signatures": [
                 {
                   "parameters": [
@@ -26303,24 +26404,8 @@
               "deprecated": null
             },
             {
-              "name": "total_violation_l1",
-              "doc": "Calculate total constraint violation using L1 norm (sum of absolute violations)\n\nReturns the sum of violations across all constraints (including removed constraints):\n- For equality constraints: $\\sum |f(x)|$\n- For inequality constraints: $\\sum \\max(0, f(x))$",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "float",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "total_violation_l2",
-              "doc": "Calculate total constraint violation using L2 norm squared (sum of squared violations)\n\nReturns the sum of squared violations across all constraints (including removed constraints):\n- For equality constraints: $\\sum (f(x))^2$\n- For inequality constraints: $\\sum (\\max(0, f(x)))^2$",
+              "name": "total_violation",
+              "doc": "Sum the nonnegative scalar violation of every constraint, including removed constraints.\n\n- Equality: `abs(f(x))`; inequality: `max(0, f(x))`.\n- Indicator: the inner violation when active, otherwise zero.\n- OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.\n- SOS1: `min_i sum_{j != i} abs(x_j)`.\n\nEach constraint is feasible exactly when its violation is at most the\nevaluation tolerance. This threshold applies to each constraint separately,\nnot to the total. Zero therefore implies that all constraints are feasible.\nVariable bound and kind violations\nare not added. Values use the evaluated state after discrete-value\ncanonicalization. Lowering need not preserve the metric: a retained\noriginal and its generated constraints each contribute.\n\nUse {meth}`constraint_violation` for individual values, also available in\nthe `violation` column of {meth}`constraints_df` for every constraint kind.",
               "signatures": [
                 {
                   "parameters": [],
@@ -26522,6 +26607,17 @@
                 ]
               },
               "is_property": true
+            },
+            {
+              "name": "feasibility_atol",
+              "doc": "Absolute tolerance associated with the stored evaluation and feasibility results.\n\nPass this to an extracted constraint's explicit feasibility query to use\nthe enclosing result's threshold.",
+              "type_": {
+                "display": "float",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "feasible",

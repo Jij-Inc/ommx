@@ -1,3 +1,4 @@
+use ommx::SampledConstraintBehavior;
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -72,14 +73,25 @@ impl SampledConstraint {
             .collect()
     }
 
-    /// Get the feasibility status for all samples  
-    #[getter]
-    pub fn feasible(&self) -> BTreeMap<u64, bool> {
-        self.0
+    /// Compute feasibility for every sample using the supplied tolerance.
+    ///
+    /// This query does not re-evaluate the functions or change stored values.
+    #[pyo3(signature = (*, atol))]
+    pub fn feasible(&self, atol: f64) -> crate::error::OmmxPyResult<BTreeMap<u64, bool>> {
+        let atol = ommx::ATol::new(atol)?;
+        Ok(self
+            .0
             .stage
-            .feasible
+            .evaluated_values
             .iter()
-            .map(|(&sample_id, feasible)| (sample_id.into_inner(), *feasible))
-            .collect()
+            .map(|(&sample_id, _)| {
+                (
+                    sample_id.into_inner(),
+                    self.0
+                        .is_feasible_for(sample_id, atol)
+                        .expect("sample exists"),
+                )
+            })
+            .collect())
     }
 }
