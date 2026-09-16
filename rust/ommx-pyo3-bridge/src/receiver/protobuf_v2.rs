@@ -1,59 +1,46 @@
 //! ProtobufV2 receiver configuration and Python call signatures.
 
-use super::{bind_methods, protobuf, Binding};
+use super::{bind_methods, Binding};
 use crate::protocol;
-use pyo3::{
-    prelude::*,
-    types::{PyBytes, PyType},
-};
+use pyo3::{prelude::*, types::PyBytes};
 
 /// Python SDK factories for the complete ProtobufV2 transfer contract.
 ///
 /// Register with [`super::register_receivers`]. This type fixes the protocol ID,
-/// supported types, payloads, and parser selection. All factories are required
-/// and must preserve the parsed domain data when constructing the SDK's
-/// canonical Python classes. They run inside the receiving extension; no Rust
-/// value or factory pointer crosses the shared-library boundary.
+/// supported types, and wire arguments, without depending on a Rust SDK version.
+/// All factories are required. Each factory must parse and validate its payload
+/// using the receiving SDK's parser, then construct the canonical Python class.
+/// Preserve all data required by the protocol, including owner-side context.
+/// Unsupported features must be rejected by the parser rather than silently lost.
 ///
-/// ProtobufV2 supplies parsed Rust SDK values. Other protocol configurations
-/// may define different factory inputs and ownership rules.
+/// Byte slices are borrowed for the duration of the call and are passed unchanged.
+/// Factories own the returned Python objects. No Rust value or factory pointer
+/// crosses the shared-library boundary. Factory errors propagate unchanged; the
+/// SDK maps payload errors to its `BridgeError`, while Python-owned errors keep
+/// their original classification. A sender adds transfer context and a cause.
+/// Other protocol configurations may define different inputs and ownership rules.
 pub struct ProtobufV2ReceiverConfig {
-    /// Construct the SDK's canonical `ommx.Function`.
-    pub function: fn(Python<'_>, ommx::Function) -> PyResult<Py<PyAny>>,
-    /// Construct its detached `ommx.Constraint`, preserving the complete context.
-    pub constraint:
-        fn(Python<'_>, ommx::Constraint, ommx::ConstraintContext) -> PyResult<Py<PyAny>>,
-    /// Construct its detached `ommx.DecisionVariable`, preserving its ID and label.
-    pub decision_variable: fn(
-        Python<'_>,
-        ommx::VariableID,
-        ommx::DecisionVariable,
-        ommx::ModelingLabel,
-    ) -> PyResult<Py<PyAny>>,
-    /// Construct `ommx.Instance` with all root-owned data.
-    pub instance: fn(Python<'_>, ommx::Instance) -> PyResult<Py<PyAny>>,
-    /// Construct `ommx.ParametricInstance` with all root-owned data.
-    pub parametric_instance: fn(Python<'_>, ommx::ParametricInstance) -> PyResult<Py<PyAny>>,
-    /// Construct `ommx.Solution` with all evaluated data.
-    pub solution: fn(Python<'_>, ommx::Solution) -> PyResult<Py<PyAny>>,
-    /// Construct `ommx.SampleSet` with all sampled data.
-    pub sample_set: fn(Python<'_>, ommx::SampleSet) -> PyResult<Py<PyAny>>,
+    /// Parse an `ommx.v1.Function` and construct `ommx.Function`.
+    pub function: fn(Python<'_>, &[u8]) -> PyResult<Py<PyAny>>,
+    /// Parse an `ommx.v2.RegularConstraint` and its `ommx.v2.ConstraintContext`.
+    // Keep the protocol's wire arguments explicit in the configuration API.
+    #[allow(clippy::type_complexity)]
+    pub constraint: fn(Python<'_>, &[u8], &[u8]) -> PyResult<Py<PyAny>>,
+    /// Parse the variable and label with their owner-supplied ID.
+    #[allow(clippy::type_complexity)]
+    pub decision_variable: fn(Python<'_>, u64, &[u8], &[u8]) -> PyResult<Py<PyAny>>,
+    /// Parse an `ommx.v2.Instance` and construct `ommx.Instance`.
+    pub instance: fn(Python<'_>, &[u8]) -> PyResult<Py<PyAny>>,
+    /// Parse an `ommx.v2.ParametricInstance` and construct `ommx.ParametricInstance`.
+    pub parametric_instance: fn(Python<'_>, &[u8]) -> PyResult<Py<PyAny>>,
+    /// Parse an `ommx.v2.Solution` and construct `ommx.Solution`.
+    pub solution: fn(Python<'_>, &[u8]) -> PyResult<Py<PyAny>>,
+    /// Parse an `ommx.v2.SampleSet` and construct `ommx.SampleSet`.
+    pub sample_set: fn(Python<'_>, &[u8]) -> PyResult<Py<PyAny>>,
 }
 
-pub fn bindings(
-    config: ProtobufV2ReceiverConfig,
-    error_type: &Bound<'_, PyType>,
-) -> PyResult<Vec<Binding>> {
-    let py = error_type.py();
-    let receiver = Py::new(
-        py,
-        Receiver {
-            config,
-            error_type: error_type.clone().unbind(),
-        },
-    )?
-    .into_bound(py)
-    .into_any();
+pub fn bindings(py: Python<'_>, config: ProtobufV2ReceiverConfig) -> PyResult<Vec<Binding>> {
+    let receiver = Py::new(py, Receiver { config })?.into_bound(py).into_any();
     bind_methods(
         receiver,
         &[
@@ -72,25 +59,12 @@ pub fn bindings(
 #[pyclass(frozen, module = "ommx._ommx_rust")]
 struct Receiver {
     config: ProtobufV2ReceiverConfig,
-    error_type: Py<PyType>,
-}
-
-fn parse_error<'py>(error_type: &Bound<'py, PyType>) -> impl FnOnce(ommx::Error) -> PyErr + 'py {
-    let error_type = error_type.clone();
-    move |error| {
-        PyErr::from_type(
-            error_type,
-            format!("invalid OMMX ProtobufV2 bridge payload: {error:#}"),
-        )
-    }
 }
 
 #[pymethods]
 impl Receiver {
     fn function(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let value = protobuf::function(bytes.as_bytes())
-            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
-        (self.config.function)(bytes.py(), value)
+        (self.config.function)(bytes.py(), bytes.as_bytes())
     }
 
     fn constraint(
@@ -98,9 +72,7 @@ impl Receiver {
         constraint: &Bound<'_, PyBytes>,
         context: &Bound<'_, PyBytes>,
     ) -> PyResult<Py<PyAny>> {
-        let (value, context) = protobuf::constraint_v2(constraint.as_bytes(), context.as_bytes())
-            .map_err(parse_error(self.error_type.bind(constraint.py())))?;
-        (self.config.constraint)(constraint.py(), value, context)
+        (self.config.constraint)(constraint.py(), constraint.as_bytes(), context.as_bytes())
     }
 
     fn decision_variable(
@@ -109,33 +81,27 @@ impl Receiver {
         decision_variable: &Bound<'_, PyBytes>,
         label: &Bound<'_, PyBytes>,
     ) -> PyResult<Py<PyAny>> {
-        let (id, value, label) =
-            protobuf::decision_variable_v2(id, decision_variable.as_bytes(), label.as_bytes())
-                .map_err(parse_error(self.error_type.bind(decision_variable.py())))?;
-        (self.config.decision_variable)(decision_variable.py(), id, value, label)
+        (self.config.decision_variable)(
+            decision_variable.py(),
+            id,
+            decision_variable.as_bytes(),
+            label.as_bytes(),
+        )
     }
 
     fn instance(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let value = ommx::Instance::from_v2_bytes(bytes.as_bytes())
-            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
-        (self.config.instance)(bytes.py(), value)
+        (self.config.instance)(bytes.py(), bytes.as_bytes())
     }
 
     fn parametric_instance(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let value = ommx::ParametricInstance::from_v2_bytes(bytes.as_bytes())
-            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
-        (self.config.parametric_instance)(bytes.py(), value)
+        (self.config.parametric_instance)(bytes.py(), bytes.as_bytes())
     }
 
     fn solution(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let value = ommx::Solution::from_v2_bytes(bytes.as_bytes())
-            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
-        (self.config.solution)(bytes.py(), value)
+        (self.config.solution)(bytes.py(), bytes.as_bytes())
     }
 
     fn sample_set(&self, bytes: &Bound<'_, PyBytes>) -> PyResult<Py<PyAny>> {
-        let value = ommx::SampleSet::from_v2_bytes(bytes.as_bytes())
-            .map_err(parse_error(self.error_type.bind(bytes.py())))?;
-        (self.config.sample_set)(bytes.py(), value)
+        (self.config.sample_set)(bytes.py(), bytes.as_bytes())
     }
 }

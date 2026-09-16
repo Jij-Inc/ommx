@@ -1,6 +1,5 @@
 //! Register protocol-specific receivers inside the installed Python SDK.
 
-mod protobuf;
 mod protobuf_v1;
 mod protobuf_v2;
 
@@ -48,10 +47,10 @@ impl ReceiverConfig {
         }
     }
 
-    fn bindings(self, error_type: &Bound<'_, PyType>) -> PyResult<Vec<Binding>> {
+    fn bindings(self, py: Python<'_>) -> PyResult<Vec<Binding>> {
         match self {
-            Self::ProtobufV1(config) => protobuf_v1::bindings(config, error_type),
-            Self::ProtobufV2(config) => protobuf_v2::bindings(config, error_type),
+            Self::ProtobufV1(config) => protobuf_v1::bindings(py, config),
+            Self::ProtobufV2(config) => protobuf_v2::bindings(py, config),
         }
     }
 }
@@ -81,7 +80,9 @@ fn bind_methods(
 /// Factories and their Python objects belong to this receiving extension; no
 /// process-global receiver state or cross-extension Rust objects are used.
 /// The SDK supplies its canonical exception class, which is exposed as
-/// `BridgeError` on the module and retained by each receiver.
+/// `BridgeError` on the module. Factories parse and validate payloads using
+/// their SDK, classify payload errors with that exception, and construct
+/// canonical Python objects. Factory exceptions propagate unchanged.
 /// A type that does not inherit from `BaseException` is rejected with `TypeError`.
 pub fn register_receivers(
     module: &Bound<'_, PyModule>,
@@ -121,7 +122,7 @@ pub fn register_receivers(
         error_type.clone().unbind().into_any(),
     )];
     for config in configs {
-        bindings.extend(config.bindings(error_type)?);
+        bindings.extend(config.bindings(py)?);
     }
     let declaration = Py::new(py, ProtocolDeclaration { ids })?.into_bound(py);
     bindings.push((

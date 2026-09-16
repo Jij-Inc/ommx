@@ -18,3 +18,24 @@ pub const V2_DECISION_VARIABLE: &str = "_bridge_protobuf_v2_decision_variable_fr
 pub const V1_FUNCTION: &str = "_bridge_protobuf_v1_function_from_bytes";
 pub const V1_CONSTRAINT: &str = "_bridge_protobuf_v1_constraint_from_bytes";
 pub const V1_DECISION_VARIABLE: &str = "_bridge_protobuf_v1_decision_variable_from_bytes";
+
+/// Fixed transfer contracts, independent of SDK and protobuf version numbers.
+/// IDs are never reused and their numeric order does not express preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum TransferProtocolId {
+    /// Legacy protobuf roots and complete, ID-bearing component messages.
+    ProtobufV1 = 1,
+    /// Normalized protobuf roots and detached component reconstruction.
+    ProtobufV2 = 2,
+}
+
+impl std::fmt::Display for TransferProtocolId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::ProtobufV1 => "protobuf v1",
+            Self::ProtobufV2 => "protobuf v2",
+        })
+    }
+}

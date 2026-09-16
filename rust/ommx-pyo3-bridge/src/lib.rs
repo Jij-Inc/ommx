@@ -3,20 +3,26 @@
 mod error;
 mod protocol;
 mod receiver;
+#[cfg(feature = "sender")]
 mod transfer;
 pub use error::BridgeError;
+pub use protocol::TransferProtocolId;
 pub use receiver::{
     register_receivers, ProtobufV1ReceiverConfig, ProtobufV2ReceiverConfig, ReceiverConfig,
 };
+#[cfg(feature = "sender")]
 pub use transfer::{
-    resolve_target, Export, ProtobufV1, ProtobufV2, Target, TransferProtocol, TransferProtocolId,
-    TransferVia,
+    resolve_target, Export, ProtobufV1, ProtobufV2, Target, TransferProtocol, TransferVia,
 };
 
+#[cfg(feature = "sender")]
 use pyo3::{prelude::*, types::PyAny};
+#[cfg(feature = "sender")]
 use pyo3_stub_gen::{PyStubType, TypeInfo};
+#[cfg(feature = "sender")]
 use std::convert::Infallible;
 
+#[cfg(feature = "sender")]
 macro_rules! output_wrapper {
     ($wrapper:ident, $python_name:literal) => {
         #[doc = concat!("A completed transfer of `ommx.", $python_name, "`.")]
@@ -45,15 +51,22 @@ macro_rules! output_wrapper {
     };
 }
 
+#[cfg(feature = "sender")]
 output_wrapper!(PyFunction, "Function");
+#[cfg(feature = "sender")]
 output_wrapper!(PyConstraint, "Constraint");
+#[cfg(feature = "sender")]
 output_wrapper!(PyDecisionVariable, "DecisionVariable");
+#[cfg(feature = "sender")]
 output_wrapper!(PyInstance, "Instance");
+#[cfg(feature = "sender")]
 output_wrapper!(PyParametricInstance, "ParametricInstance");
+#[cfg(feature = "sender")]
 output_wrapper!(PySolution, "Solution");
+#[cfg(feature = "sender")]
 output_wrapper!(PySampleSet, "SampleSet");
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sender"))]
 mod tests {
     use super::*;
 

@@ -5,9 +5,26 @@ canonical classes provided by the installed Python `ommx` package. It is for
 independently built PyO3 extension modules that cannot safely pass Rust values
 or private PyO3 wrapper types across a shared-library boundary.
 
+The default `sender` feature provides Rust SDK v3 conversions and
+`pyo3-stub-gen` return types. A receiving Python SDK disables it:
+
+```toml
+ommx-pyo3-bridge = { version = "=3.0.0-beta.6", default-features = false }
+```
+
+Without `sender`, the crate depends only on PyO3: protocol IDs, receiver
+configurations, registration, and SDK exception lookup remain available.
+It does not depend on `ommx`, protobuf codecs, or `pyo3-stub-gen`. The receiving
+SDK supplies its own parsers and constructors, so a Rust SDK v2 receiver does
+not need to compile or pass through Rust SDK v3. Producers use the default
+features for `resolve_target`, `Target::transfer`, and the `Py*` return types.
+
 Select a supported protocol and transfer the value before returning it:
 
 ```rust,no_run
+# #[cfg(feature = "sender")]
+# mod example {
+# use super::*;
 use ommx_pyo3_bridge::{
     resolve_target, BridgeError, ProtobufV2, PyFunction, TransferProtocolId,
 };
@@ -21,6 +38,7 @@ fn objective(py: Python<'_>) -> PyResult<PyFunction> {
     })?;
     target.transfer(py, ommx::Function::default())
 }
+# }
 ```
 
 At runtime this return value is an `ommx.Function`. `pyo3-stub-gen` also emits
@@ -38,13 +56,15 @@ Python callable contract.
 | Side | Responsibility |
 | --- | --- |
 | Sender / transfer API | Read `ommx._ommx_rust._bridge_supported_protocols()`, select a protocol, and call its named receiver functions under `ommx._ommx_rust` with the specified arguments. |
-| Python SDK / receiver API | Supply factories through protocol-specific configurations. `register_receivers` implements the required functions and derives the supported-protocol list from those configurations. |
+| Python SDK / receiver API | Supply factories that parse protocol payloads with the receiving SDK and construct its canonical classes. `register_receivers` implements the required functions and derives the supported-protocol list from those configurations. |
 
 The sender relies on those functions and their behavior, not on how the SDK
 implements them. A receiver can implement the same contract without using this
 crate. The receiver API is an implementation aid: keeping both sides' endpoint
-names, call signatures, and codecs in the bridge crate makes their definitions
-easier to maintain together.
+names, call signatures, and registration in the bridge crate makes their
+definitions easier to maintain together. Payload parsing and feature validation
+belong to the receiving SDK; Rust SDK serialization belongs to the optional
+sender implementation.
 
 The contract specifies payload representations, ownership, and canonical
 Python return types such as `ommx.Instance`. It does not require public Python
@@ -72,8 +92,9 @@ bridge crate version numbers:
 The two extensions may use different bridge crate versions while honoring the
 same runtime contract. Within each extension, the SDK, bridge, and PyO3 Rust
 dependencies must resolve compatible types.
-This release accepts PyO3 0.27.2 through the 0.29 release line and uses
-`pyo3-stub-gen` 0.23.
+This release accepts PyO3 0.27.2 through the 0.29 release line. The `sender`
+feature uses `pyo3-stub-gen` 0.23; a receiving SDK can use its own stub generator
+version without taking a dependency on the bridge's generator.
 
 ## Select a transfer target before compilation
 
@@ -81,6 +102,9 @@ Probe one protocol at a time with `resolve_target::<P>`. The order of the
 caller's `if` statements expresses its preference:
 
 ```rust,no_run
+# #[cfg(feature = "sender")]
+# mod example {
+# use super::*;
 use ommx::{Constraint, ConstraintID, DecisionVariable, Instance, Sense};
 use ommx_pyo3_bridge::{
     resolve_target, BridgeError, ProtobufV1, ProtobufV2, PyInstance, TransferProtocolId,
@@ -130,6 +154,7 @@ fn compile_regular() -> Instance {
         .build()
         .unwrap()
 }
+# }
 ```
 
 Both paths construct `ommx::Instance`. `Target<ProtobufV1>::transfer` calls
@@ -282,11 +307,22 @@ factories for all seven canonical classes: `Function`, `Constraint`,
 `DecisionVariable`, `Instance`, `ParametricInstance`, `Solution`, and
 `SampleSet`.
 
-Factories run after the protocol's Rust SDK parser and construct the Python
-objects from the parsed values. Complete constraint context, variable IDs and
-labels, and root-owned data are preserved. The same factory implementation can
-be supplied to both protobuf configurations. Future protocol configurations
-can require different input types or ownership rules.
+Factories receive the protocol's wire arguments unchanged. ProtobufV1 factories
+accept `(Python, &[u8])` containing complete v1 messages. ProtobufV2 uses the
+same shape for roots and Function, `(Python, &[u8], &[u8])` for Constraint,
+and `(Python, u64, &[u8], &[u8])` for DecisionVariable, matching the argument
+table above. Borrowed bytes remain valid for the call; factories return owned
+Python objects. Future protocols may use representations other than bytes.
+
+Each SDK factory parses and validates with its own SDK, then constructs the
+promised Python class. The bridge does not decode into an intermediate Rust
+SDK domain model. In particular, a v2 factory can preserve complete v1
+`ConstraintHints` and component IDs without going through a v3 parser.
+A v3 factory uses the v3 parsers, which may ignore advisory v1 hints.
+Factories must preserve domain data required by the contract, reject unsupported
+features through their parsers, and classify malformed or unsupported payloads
+using the SDK's `BridgeError`. Python-owned constructor exceptions propagate
+unchanged; senders wrap failures with transfer context and `__cause__`.
 
 Collect the concrete configurations as [`ReceiverConfig`] enum values and pass
 the complete list to [`register_receivers`] once during SDK initialization:
@@ -310,8 +346,8 @@ fn install_receivers(
 
 The list determines the supported protocols and their declaration order;
 there is no separate list of protocol IDs to keep in sync. Registration
-receives the SDK-defined `BridgeError` class alongside that list and retains it
-for receiver failures. Sender-side errors use the same class via Python lookup.
+receives the SDK-defined `BridgeError` class alongside that list and uses it
+for registration failures. Sender-side errors use the same class via Python lookup.
 Registration prepares all private receivers and publishes the support
 declaration last.
 Duplicate protocols, repeated registration, and occupied endpoint names
@@ -323,7 +359,7 @@ methods need to be present for registration.
 Sender lookups and receiver registration use the same bridge-owned endpoint
 definitions. Receiver factories are retained locally by private bound Python
 methods, with no global configuration and no Rust object sharing between
-independent extension modules. Call signatures, decoding through the core
-parsers, and bridge error conversion belong to the bridge crate. The Python
-SDK retains ownership of its canonical classes and public decoding APIs;
-bridge transfers do not look up or call those public methods.
+independent extension modules. Call signatures, registration, and sender error
+conversion belong to the bridge crate. Each Python SDK owns payload decoding,
+feature validation, its canonical classes, and public decoding APIs. The bridge
+does not look up or call public domain constructors or decoding methods.

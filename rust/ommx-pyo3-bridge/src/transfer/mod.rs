@@ -3,31 +3,10 @@
 
 mod protobuf;
 
-use crate::BridgeError;
+use crate::{BridgeError, TransferProtocolId};
 use pyo3::{exceptions::PyImportError, prelude::*, types::PyType};
 use pyo3_stub_gen::PyStubType;
 use std::marker::PhantomData;
-
-/// Fixed transfer contracts, independent of SDK and protobuf version numbers.
-/// IDs are never reused and their numeric order does not express preference.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u32)]
-#[non_exhaustive]
-pub enum TransferProtocolId {
-    /// Legacy protobuf roots and complete, ID-bearing component messages.
-    ProtobufV1 = 1,
-    /// Normalized protobuf roots and detached component reconstruction.
-    ProtobufV2 = 2,
-}
-
-impl std::fmt::Display for TransferProtocolId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::ProtobufV1 => "protobuf v1",
-            Self::ProtobufV2 => "protobuf v2",
-        })
-    }
-}
 
 mod sealed {
     pub trait Protocol {}

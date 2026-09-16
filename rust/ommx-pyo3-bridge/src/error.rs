@@ -32,7 +32,7 @@ impl BridgeError {
 
     /// Report that none of the caller's requested protocols is supported.
     ///
-    /// Call this after [`crate::resolve_target`] returns `None` for every
+    /// Call this after `resolve_target` (the `sender` feature) returns `None` for every
     /// acceptable protocol. The diagnostic lists the requested protocols in
     /// caller order; this constructor does not probe support or retry transfers.
     /// A missing SDK or bridge exception class raises `ImportError`.
@@ -81,6 +81,7 @@ impl BridgeError {
     }
 
     // Sender error conversion keeps the SDK class and original Python cause.
+    #[cfg(feature = "sender")]
     pub(crate) fn with_cause(
         class: &Bound<'_, PyType>,
         message: impl Into<String>,
