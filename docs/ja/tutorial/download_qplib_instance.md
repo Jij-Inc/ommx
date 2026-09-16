@@ -16,7 +16,21 @@ kernelspec:
 OMMXリポジトリでは、QPLIBの二次計画問題ベンチマークインスタンスをOMMX Artifact形式のデータとして提供しています。
 
 ```{note}
-より詳細な説明：QPLIBインスタンスに対応するOMMX ArtifactはOMMXリポジトリのGitHub コンテナーレジストリ ([link](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fqplib))で管理されています。
+`dataset.qplib` は、公開済みの
+`ghcr.io/jij-inc/ommx/v2.8/qplib:{numeric-tag}` 配布を使用します
+（[パッケージ](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fv2.8%2Fqplib)）。
+453件の Artifact は二次係数を修正した OMMX 2.8.0 で再生成されており、
+v3 SDK でも読み込めます。配布バージョンはインストール済み SDK の
+バージョンとは独立しています。
+
+配布フォーマットや数学的モデルを変更する場合は、SDK の minor または major
+リリースと新しい `/v{major}.{minor}/` 名前空間が必要です。patch リリースでは
+採用済みの配布を維持し、公開済みのパス・タグは上書きしません。
+旧バージョンなし Artifact がキャッシュされていても、修正済みの配布を選択します。
+別途保存したインスタンスへ係数の修正を反映するには、読み込み直してください。
+
+[v2.8 の配布記録](https://github.com/Jij-Inc/ommx/blob/b4cffe9f1ce5323c15de67eca55b05d9f87285a0/rust/dataset/distributions/v2.8/README.md)
+に、元アーカイブ、モデルの比較結果、公開済みのダイジェストを記載しています。
 
 QPLIBは二次計画問題のインスタンスライブラリです。QPLIBの詳細については [QPLIB website](http://qplib.zib.de/) を参照してください。
 
@@ -45,6 +59,28 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
 この機能により、同一のQPLIBインスタンスを使用した二次計画問題ソルバーのベンチマーク測定を効率よく実行できます。
+
+## 公開されている解を評価する
+
+[QPLIBのWebサイト](https://qplib.zib.de/QPLIB_0018.html)から同じ問題の
+`.qplib` と `.sol` をダウンロードすると、ソルバーを実行せずに公開解を評価できます。
+
+```python
+from ommx import Instance, State
+
+instance = Instance.load_qplib("QPLIB_0018.qplib")
+state = State.load_qplib_solution(
+    "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
+)
+solution = instance.evaluate(state, atol=1e-8)
+print(solution.objective, solution.feasible)
+```
+
+元のQPLIB問題の変数数を渡すことで、ファイルで省略された変数の値を0で補います。
+`State.load_qplib_solution` はQPLIB公式の `.sol` ファイルで使われる標準の変数名に
+対応しています。ファイル中の `objvar` は決定変数ではありません。
+`Instance.evaluate` が読み込んだStateから目的値と実行可能性を計算します。
+ファイル形式とエラーの扱いは {meth}`~ommx.State.load_qplib_solution` を参照してください。
 
 +++
 

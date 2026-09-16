@@ -277,6 +277,11 @@ pub fn instance_annotations() -> HashMap<String, HashMap<String, String>> {
 
 /// Load an instance from the QPLIB dataset
 ///
+/// Uses the published `ghcr.io/jij-inc/ommx/v2.8/qplib` distribution,
+/// generated with corrected quadratic coefficients in OMMX 2.8.0. The
+/// distribution version is independent of the installed SDK version;
+/// old unversioned Artifacts are not used as a fallback.
+///
 /// # Arguments
 ///
 /// * `tag` - The numeric tag of the QPLIB instance (e.g., "0018" for QPLIB_0018)
@@ -300,7 +305,7 @@ pub fn load(tag: &str) -> Result<Instance> {
         "Given tag '{tag}' (QPLIB_{tag}) does not exist in QPLIB"
     );
 
-    let image_name = ghcr("Jij-Inc", "ommx", "qplib", tag)?;
+    let image_name = ghcr("Jij-Inc", "ommx", "v2.8/qplib", tag)?;
     let registry = LocalRegistry::shared_default()?;
     registry.pull_image(&image_name)?;
     let artifact = LocalArtifact::open_in_registry(registry, image_name)?;
