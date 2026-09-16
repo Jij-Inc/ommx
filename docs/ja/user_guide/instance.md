@@ -136,6 +136,32 @@ for cid, c in instance.constraints.items():
     print(f"id={cid}: {c}")
 ```
 
+(simultaneous-bound-tightening)=
+## Bound tightening
+
+すべての有効な通常制約を使う方法と、制約IDの集合を指定する方法で、変数のboundを締められます。
+
+```python
+changed_bounds = instance.tighten_bounds_simultaneously_once()  # 変数ID -> 更新後のBound
+# 通常制約のID 100と101だけを使う:
+changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+```
+
+どちらのメソッドも、すべての対象制約が呼び出し開始時のboundを使い、導出した更新を
+まとめて1回適用します。同じ呼び出しの途中では新しいboundを再利用しません。
+更新を他の制約へ伝播させるには再度呼び出します。
+
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once`はすべての有効な通常制約を使います。
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`は指定したIDの
+制約だけを使います。不明・削除済みのIDは何も変更せずにエラーとし、空集合は更新しません。
+どちらも非線形のrowは処理しません。
+
+等式は両方向を処理し、連続変数のdomainと制約のresidualには指定した`atol`を使います。
+後の評価にも同じ許容誤差を指定してください。端点での評価がoverflowする制約は処理しません。
+特殊制約は使いません。semi変数のdomainは他の変数を締める際に0を含めて扱いますが、
+semi変数、固定変数、従属変数自身のboundは変更しません。`atol`以内の変更は無視します。
+処理はatomicであり、実行不可能性を網羅的に検出するものではありません。
+
 ## 記号的な代入
 
 `Instance.substitute` は目的関数と有効な制約条件に現れる決定変数を、指定した関数式で置き換えます。これは整数変数を新しいバイナリ変数で表現する binary encoding のような変換で使われます。

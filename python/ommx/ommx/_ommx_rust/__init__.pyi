@@ -3241,6 +3241,49 @@ class Instance:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def tighten_bounds_simultaneously_once(
+        self, *, atol: typing.Optional[builtins.float] = None
+    ) -> builtins.dict[builtins.int, Bound]:
+        r"""
+        Apply one simultaneous bound-tightening pass using all active regular constraints.
+
+        Calls {meth}`tighten_bounds_simultaneously_once_using_constraints` with
+        every active regular constraint ID. Non-affine rows are skipped. All
+        rows read the bounds at entry, and updates are applied together once.
+        Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
+        The same tolerance, supported-domain and atomicity rules apply as for
+        the explicitly selected form.
+        """
+    def tighten_bounds_simultaneously_once_using_constraints(
+        self,
+        constraint_ids: builtins.set[builtins.int],
+        *,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> builtins.dict[builtins.int, Bound]:
+        r"""
+        Apply one simultaneous bound-tightening pass using selected regular constraints.
+
+        ``constraint_ids`` is a set of active regular constraint IDs. Unknown
+        and removed IDs are errors; an empty set applies no updates. Selected
+        non-affine rows are skipped. All eligible variables in the selected
+        rows may have their bounds tightened.
+
+        Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
+        Every row reads the bounds at entry; all updates are collected and applied
+        together. Newly tightened bounds are not reused during this call. Call
+        again to propagate changes through further rows.
+        Both sides of equalities are used. Constraint residuals
+        and continuous bounds use the supplied ``atol``; changes within that
+        tolerance are ignored. Use the same tolerance for subsequent evaluation.
+
+        Only the selected active regular constraints are used. Rows whose
+        extremal evaluations overflow are skipped. Semi-variable domains include
+        zero when deriving other bounds, but semi, fixed and dependent variables
+        are not changed. This is not a complete infeasibility detector.
+
+        Requires finite ``atol < 1``. On failure the instance is unchanged.
+        If omitted, {func}`~ommx.get_default_atol` supplies the tolerance.
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Instance:
         r"""

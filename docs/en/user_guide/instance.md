@@ -157,6 +157,34 @@ for cid, c in instance.constraints.items():
     print(f"id={cid}: {c}")
 ```
 
+(simultaneous-bound-tightening)=
+## Bound tightening
+
+Tighten variable bounds using all active regular constraints or a selected set
+of constraint IDs:
+
+```python
+changed_bounds = instance.tighten_bounds_simultaneously_once()  # variable ID -> updated Bound
+# Use only the regular constraints with IDs 100 and 101:
+changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+```
+
+Both methods make one simultaneous pass: every constraint reads the bounds at
+entry, and the updates are applied together. New bounds are not reused during
+the call; call it again to propagate updates through other constraints.
+
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once` uses every active regular
+constraint. {meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`
+uses only the supplied IDs; unknown or removed IDs fail without applying changes,
+and an empty set applies no updates. Both methods skip non-affine rows.
+
+Both sides of equalities are processed, respecting the supplied `atol` on continuous
+domains and row residuals. Use the same tolerance for later evaluation. Rows with
+overflowing extremal evaluations are skipped. Special constraints are not used.
+Semi-variable domains include zero when tightening other variables, but semi,
+fixed and dependent variables are not changed. Changes within `atol` are ignored.
+The operation is atomic and is not a complete infeasibility detector.
+
 ## Symbolic substitution
 
 `Instance.substitute` replaces decision variables with function expressions in the objective and active constraints. This is useful for transformations such as binary encodings, where an integer variable is removed and represented by newly introduced binary variables.

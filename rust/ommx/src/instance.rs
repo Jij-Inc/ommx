@@ -1,6 +1,7 @@
 mod analysis;
 mod approx;
 pub(crate) mod arbitrary;
+mod bound_tightening;
 mod builder;
 mod clip_bounds;
 mod convert;
