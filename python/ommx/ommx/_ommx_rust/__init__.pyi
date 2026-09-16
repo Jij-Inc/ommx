@@ -3276,8 +3276,10 @@ class Instance:
         and continuous bounds use the supplied ``atol``; changes within that
         tolerance are ignored. Use the same tolerance for subsequent evaluation.
 
-        Only the selected active regular constraints are used. Rows whose
-        extremal evaluations overflow are skipped. Semi-variable domains include
+        Only the selected active regular constraints are used. Unbounded domains
+        remain infinite. An upper/lower candidate with a non-finite residual or
+        boundary calculation is skipped; other candidates in the same row are
+        still processed. Semi-variable domains include
         zero when deriving other bounds, but semi, fixed and dependent variables
         are not changed. This is not a complete infeasibility detector.
 

@@ -42,7 +42,9 @@ impl Instance {
     /// within `atol` are ignored.
     ///
     /// Only the selected active regular constraints are used.
-    /// Rows whose extremal evaluations overflow are also skipped. Semi-variable
+    /// Each upper/lower candidate is skipped if its required residual or
+    /// boundary calculation is non-finite. Other candidates from that row are
+    /// still processed. Unbounded variable domains remain infinite. Semi-variable
     /// domains include zero when deriving bounds on other variables, but their
     /// own bounds are not changed. Fixed and dependent variables are not changed.
     /// This is a conservative propagation pass, not a complete infeasibility
@@ -88,7 +90,7 @@ pub fn infer_bounds_simultaneously_once(
                 continue;
             };
             let (lower, upper) = instance
-                .decision_variable_finite_extrema(*id, atol)
+                .decision_variable_domain_bounds(*id, atol)
                 .expect("constraint variables are registered in the instance");
             let (min, max) = if coefficient.into_inner() > 0.0 {
                 (lower, upper)
@@ -98,24 +100,16 @@ pub fn infer_bounds_simultaneously_once(
             minimum.entries.insert(id.into_inner(), min);
             maximum.entries.insert(id.into_inner(), max);
         }
-        let min_value = linear.evaluate(&minimum, atol)?;
-        let max_value = linear.evaluate(&maximum, atol)?;
-        // Finite extremal sums enclose every intermediate evaluation because
-        // the compact affine evaluator is monotone in every signed variable.
-        if !min_value.is_finite() || !max_value.is_finite() {
-            continue;
-        }
         let directions: &[f64] = match row.equality {
             Equality::LessThanOrEqualToZero => &[1.0],
             Equality::EqualToZero => &[1.0, -1.0],
         };
         for &direction in directions {
-            let (best, worst, best_value) = if direction > 0.0 {
-                (&minimum, &maximum, min_value)
-            } else {
-                (&maximum, &minimum, -max_value)
-            };
-            if best_value > atol.into_inner() {
+            let best = if direction > 0.0 { &minimum } else { &maximum };
+            let best_value = direction * linear.evaluate(best, atol)?;
+            // A finite row minimum can prove infeasibility. A non-finite
+            // minimum says nothing about the individual bound candidates.
+            if best_value.is_finite() && best_value > atol.into_inner() {
                 crate::bail!({ ?row_id, best_value }, "Bound tightening found constraint {row_id:?} infeasible over the current variable domains");
             }
             for (monomial, coefficient) in linear.iter() {
@@ -132,23 +126,43 @@ pub fn infer_bounds_simultaneously_once(
                 }
                 let sign = (direction * coefficient.into_inner()).signum();
                 let first = sign * best.entries[&id.into_inner()];
-                let last = sign * worst.entries[&id.into_inner()];
                 let mut state = best.clone();
-                let mut feasible = |value| {
-                    state.entries.insert(id.into_inner(), sign * value);
-                    // All IDs and finite evaluations were established above.
-                    direction
-                        * linear
-                            .evaluate(&state, atol)
-                            .expect("complete affine state")
-                        <= atol.into_inner()
-                };
-                if feasible(last) {
+                // Exclude the target term before evaluating the residual.
+                // Its own domain may be unbounded or its extremal product may
+                // overflow, without preventing a finite bound on this side.
+                state.entries.insert(id.into_inner(), 0.0);
+                let residual = direction * linear.evaluate(&state, atol)?;
+                if !residual.is_finite() {
                     continue;
                 }
-                let extremum = last_satisfying(first, last, &mut feasible);
+                let numerator = atol.into_inner() - residual;
+                if !numerator.is_finite() {
+                    continue;
+                }
+                let estimate = numerator / coefficient.into_inner().abs();
+                if !estimate.is_finite() {
+                    continue;
+                }
+                let mut feasible = |value| {
+                    state.entries.insert(id.into_inner(), sign * value);
+                    let residual = direction
+                        * linear
+                            .evaluate(&state, atol)
+                            .expect("complete affine state");
+                    residual
+                        .is_finite()
+                        .then_some(residual <= atol.into_inner())
+                };
+                let Some(extremum) = last_satisfying_near(estimate, &mut feasible) else {
+                    continue;
+                };
                 let endpoint = match original.kind() {
-                    Kind::Continuous => upper_endpoint_containing(extremum, atol),
+                    Kind::Continuous => {
+                        let Some(endpoint) = upper_endpoint_containing(extremum, atol) else {
+                            continue;
+                        };
+                        endpoint
+                    }
                     Kind::Integer | Kind::Binary => extremum.floor(),
                     _ => unreachable!(),
                 };
@@ -156,7 +170,15 @@ pub fn infer_bounds_simultaneously_once(
                 // at the opposite end of the feasible projection. Otherwise
                 // replacing an infinite endpoint could reject valid extreme
                 // values merely because Bound::contains overflows.
-                if !(first - endpoint).is_finite() {
+                // For an unbounded opposite side, test the most extreme
+                // representable state only for this overflow guard. This is
+                // not an endpoint used in interval inference or searching.
+                let residual_is_finite = if first == f64::NEG_INFINITY {
+                    (-f64::MAX - endpoint).is_finite()
+                } else {
+                    (first - endpoint).is_finite()
+                };
+                if !residual_is_finite {
                     continue;
                 }
                 let updated = updates.entry(*id).or_insert_with(|| original.clone());
@@ -209,35 +231,61 @@ fn from_ordered_key(key: u64) -> f64 {
     })
 }
 
-// Search the representable values rather than dividing a rounded residual.
-// This preserves the affine evaluator's operation order and inclusive ATol
-// boundary, including cancellation, subnormals and non-unit coefficients.
-fn last_satisfying(first: f64, last: f64, mut predicate: impl FnMut(f64) -> bool) -> f64 {
-    let mut low = ordered_key(first);
-    let mut high = ordered_key(last);
-    while low < high {
-        let distance = high - low;
-        let middle = low + distance / 2 + distance % 2;
-        if predicate(from_ordered_key(middle)) {
+// The residual interval gives a finite estimate. Refine near that estimate
+// using the original evaluator, whose rounding/order can move the boundary.
+// Do not synthesize finite endpoints for unbounded domains. A non-finite probe
+// abandons only this candidate. Exponential bracketing uses representable-value
+// distances so cancellation around zero does not require a walk over every ULP.
+fn last_satisfying_near(
+    estimate: f64,
+    mut predicate: impl FnMut(f64) -> Option<bool>,
+) -> Option<f64> {
+    if !estimate.is_finite() {
+        return None;
+    }
+    let initial = predicate(estimate)?;
+    let key = ordered_key(estimate);
+    let mut distance = 1_u64;
+    let (mut low, mut high) = loop {
+        let probe = if initial {
+            key.checked_add(distance)?
+        } else {
+            key.checked_sub(distance)?
+        };
+        let value = from_ordered_key(probe);
+        if !value.is_finite() {
+            return None;
+        }
+        if predicate(value)? != initial {
+            break if initial { (key, probe) } else { (probe, key) };
+        }
+        distance = distance.checked_mul(2)?;
+    };
+    while high - low > 1 {
+        let middle = low + (high - low) / 2;
+        if predicate(from_ordered_key(middle))? {
             low = middle;
         } else {
-            high = middle - 1;
+            high = middle;
         }
     }
-    from_ordered_key(low)
+    Some(from_ordered_key(low))
 }
 
-fn upper_endpoint_containing(value: f64, atol: ATol) -> f64 {
+fn upper_endpoint_containing(value: f64, atol: ATol) -> Option<f64> {
     // A stored upper bound contributes its own residual tolerance. Invert
     // that comparison so tightening does not add a second ATol to the row.
-    let least_endpoint = -last_satisfying(-value, f64::MAX, |negative_endpoint| {
+    let estimate = value - atol.into_inner();
+    let least_endpoint = -last_satisfying_near(-estimate, |negative_endpoint| {
         let residual = value + negative_endpoint;
-        residual.is_finite() && residual <= atol.into_inner()
-    });
+        residual
+            .is_finite()
+            .then_some(residual <= atol.into_inner())
+    })?;
     // Prefer the ordinary subtraction when it is conservative. In particular,
     // an exact zero endpoint stays zero rather than a tiny negative value
     // whose difference is hidden by rounding the residual.
-    (value - atol.into_inner()).max(least_endpoint)
+    Some(estimate.max(least_endpoint))
 }
 
 #[cfg(test)]
@@ -493,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn ignores_nonlinear_removed_and_overflowing_rows() {
+    fn ignores_nonlinear_and_removed_rows_but_uses_a_finite_candidate() {
         let mut problem = instance(
             vec![continuous(-10.0, 10.0)],
             vec![
@@ -508,11 +556,151 @@ mod tests {
             .relax_constraint(1.into(), "test".to_string(), [])
             .unwrap();
         let original = problem.clone();
-        assert!(problem
+        let atol = ATol::default();
+        let bounds = problem.tighten_bounds_simultaneously_once(atol).unwrap();
+        // MAX*x overflows at the old endpoints, but excluding x leaves zero.
+        assert_eq!(
+            bounds[&0.into()],
+            Bound::new(-10.0, -atol.into_inner()).unwrap()
+        );
+        for value in [-1e-308, 0.0, 1e-315, 1e-307] {
+            let state = crate::v1::State::from_iter([(0, value)]);
+            assert_eq!(
+                original.evaluate(&state, atol).unwrap().feasible(),
+                problem.evaluate(&state, atol).unwrap().feasible()
+            );
+        }
+    }
+
+    #[test]
+    fn unbounded_target_uses_only_the_other_terms_for_each_side() {
+        let atol = ATol::new(0.125).unwrap();
+        for sign in [-1.0, 1.0] {
+            for kind in [Kind::Continuous, Kind::Integer] {
+                let coefficient = crate::Coefficient::try_from(2.0 * sign).unwrap();
+                let mut problem = instance(
+                    vec![DecisionVariable::new(kind, Bound::unbounded(), atol).unwrap()],
+                    vec![Constraint::less_than_or_equal_to_zero(
+                        ((coefficient * linear!(0)).unwrap() - coeff!(6.0))
+                            .unwrap()
+                            .into(),
+                    )],
+                );
+                let original = problem.clone();
+                let bounds = problem.tighten_bounds_simultaneously_once(atol).unwrap();
+                let endpoint = if kind == Kind::Integer { 3.0 } else { 2.9375 };
+                let expected = if sign > 0.0 {
+                    Bound::new(f64::NEG_INFINITY, endpoint).unwrap()
+                } else {
+                    Bound::new(-endpoint, f64::INFINITY).unwrap()
+                };
+                assert_eq!(bounds[&0.into()], expected);
+                for value in [-4.0, -3.0625, -3.0, 0.0, 3.0, 3.0625, 4.0] {
+                    let state = crate::v1::State::from_iter([(0, value)]);
+                    assert_eq!(
+                        original.evaluate(&state, atol).unwrap().feasible(),
+                        problem.evaluate(&state, atol).unwrap().feasible()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn equality_retains_a_finite_upper_candidate_when_other_candidates_are_infinite() {
+        let mut problem = instance(
+            vec![
+                DecisionVariable::continuous(),
+                continuous(1.0, f64::INFINITY),
+            ],
+            vec![Constraint::equal_to_zero(
+                ((linear!(0) + linear!(1)).unwrap() - coeff!(6.0))
+                    .unwrap()
+                    .into(),
+            )],
+        );
+        let bounds = problem
+            .tighten_bounds_simultaneously_once(ATol::new(0.125).unwrap())
+            .unwrap();
+        assert_eq!(
+            bounds,
+            BTreeMap::from([(0.into(), Bound::new(f64::NEG_INFINITY, 5.125).unwrap(),)])
+        );
+        assert_eq!(
+            problem.decision_variables()[&1.into()].bound(),
+            Bound::new(1.0, f64::INFINITY).unwrap()
+        );
+    }
+
+    #[test]
+    fn nonfinite_residual_or_division_discards_only_its_candidate() {
+        let mut overflowing_residuals = instance(
+            vec![continuous(2.0, 3.0), continuous(2.0, 3.0)],
+            vec![Constraint::less_than_or_equal_to_zero(
+                ((coeff!(f64::MAX) * linear!(0)).unwrap()
+                    + (coeff!(f64::MAX) * linear!(1)).unwrap())
+                .unwrap()
+                .into(),
+            )],
+        );
+        let original = overflowing_residuals.clone();
+        assert!(overflowing_residuals
             .tighten_bounds_simultaneously_once(ATol::default())
             .unwrap()
             .is_empty());
-        assert_eq!(problem, original);
+        assert_eq!(overflowing_residuals, original);
+
+        let mut overflowing_division = instance(
+            vec![
+                DecisionVariable::continuous(),
+                DecisionVariable::continuous(),
+            ],
+            vec![
+                Constraint::less_than_or_equal_to_zero(
+                    ((coeff!(1e-308) * linear!(0)).unwrap() - coeff!(f64::MAX))
+                        .unwrap()
+                        .into(),
+                ),
+                Constraint::less_than_or_equal_to_zero((linear!(1) - coeff!(3.0)).unwrap().into()),
+            ],
+        );
+        let bounds = overflowing_division
+            .tighten_bounds_simultaneously_once(ATol::new(0.125).unwrap())
+            .unwrap();
+        assert_eq!(
+            bounds,
+            BTreeMap::from([(1.into(), Bound::new(f64::NEG_INFINITY, 3.0).unwrap(),)])
+        );
+        assert_eq!(
+            overflowing_division.decision_variables()[&0.into()].bound(),
+            Bound::unbounded()
+        );
+    }
+
+    #[test]
+    fn unbounded_target_preserves_cancellation_in_the_original_evaluation_order() {
+        let atol = ATol::new(0.125).unwrap();
+        let mut problem = instance(
+            vec![DecisionVariable::continuous(), continuous(1e16, 1e16)],
+            vec![Constraint::less_than_or_equal_to_zero(
+                ((linear!(0) - linear!(1)).unwrap() + coeff!(1e16))
+                    .unwrap()
+                    .into(),
+            )],
+        );
+        let original = problem.clone();
+        let bounds = problem.tighten_bounds_simultaneously_once(atol).unwrap();
+        assert_eq!(
+            bounds[&0.into()],
+            Bound::new(f64::NEG_INFINITY, 0.875).unwrap()
+        );
+        for value in [0.125, 1.0, 1.0_f64.next_up()] {
+            let state = crate::v1::State::from_iter([(0, value), (1, 1e16)]);
+            assert_eq!(
+                original.evaluate(&state, atol).unwrap().feasible(),
+                problem.evaluate(&state, atol).unwrap().feasible()
+            );
+        }
     }
 
     #[test]
@@ -585,6 +773,34 @@ mod tests {
                 }
             }
             let mut problem = instance(vec![continuous(-1.0, 1.0), continuous(-1.0, 1.0)], vec![Constraint::less_than_or_equal_to_zero(row.into())]);
+            let original = problem.clone();
+            let atol = ATol::new(0.125).unwrap();
+            let state = crate::v1::State::from_iter([(0, x), (1, y)]);
+            if original.evaluate(&state, atol).unwrap().feasible() {
+                problem.tighten_bounds_simultaneously_once(atol).unwrap();
+                proptest::prop_assert!(problem.evaluate(&state, atol).unwrap().feasible());
+            }
+        }
+
+        #[test]
+        fn partially_unbounded_domains_preserve_feasible_states(
+            a in -10.0_f64..10.0, b in -10.0_f64..10.0, c in -10.0_f64..10.0,
+            x in -10.0_f64..10.0, y in -10.0_f64..10.0,
+            infinite_sides in proptest::array::uniform4(proptest::bool::ANY),
+        ) {
+            let mut row = crate::Linear::default();
+            for (monomial, value) in [(LinearMonomial::Variable(0.into()), a), (LinearMonomial::Variable(1.into()), b), (LinearMonomial::Constant, c)] {
+                if let Ok(coefficient) = crate::Coefficient::try_from(value) {
+                    row.add_term(monomial, coefficient).unwrap();
+                }
+            }
+            let mut problem = instance(
+                infinite_sides.chunks_exact(2).map(|sides| continuous(
+                    if sides[0] { f64::NEG_INFINITY } else { -1.0 },
+                    if sides[1] { f64::INFINITY } else { 1.0 },
+                )).collect(),
+                vec![Constraint::less_than_or_equal_to_zero(row.into())],
+            );
             let original = problem.clone();
             let atol = ATol::new(0.125).unwrap();
             let state = crate::v1::State::from_iter([(0, x), (1, y)]);

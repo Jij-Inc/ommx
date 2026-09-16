@@ -179,8 +179,11 @@ uses only the supplied IDs; unknown or removed IDs fail without applying changes
 and an empty set applies no updates. Both methods skip non-affine rows.
 
 Both sides of equalities are processed, respecting the supplied `atol` on continuous
-domains and row residuals. Use the same tolerance for later evaluation. Rows with
-overflowing extremal evaluations are skipped. Special constraints are not used.
+domains and row residuals. Use the same tolerance for later evaluation. Unbounded
+domains remain infinite. Each upper/lower candidate is derived after excluding
+its own variable's term. A non-finite residual or boundary calculation skips only
+that candidate; other candidates in the same row are still processed.
+Special constraints are not used.
 Semi-variable domains include zero when tightening other variables, but semi,
 fixed and dependent variables are not changed. Changes within `atol` are ignored.
 The operation is atomic and is not a complete infeasibility detector.

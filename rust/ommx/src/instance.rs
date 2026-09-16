@@ -544,17 +544,17 @@ impl Instance {
         self.decision_variables.fixed_value(id)
     }
 
-    /// Return the finite extrema of one variable's declared domain.
+    /// Return bounds enclosing one variable's declared domain.
     ///
     /// The instance owns the complete domain information: a fixed value takes
     /// precedence over the row's kind and bound. Otherwise, continuous bounds
     /// use residual membership under `atol`, discrete kinds use their canonical
     /// endpoints, and semi kinds include the zero alternative. Unbounded sides
-    /// are limited to the finite `f64` range.
+    /// remain infinite; they are not replaced by finite evaluation endpoints.
     ///
     /// This does not infer ranges from constraints or dependency expressions.
     /// Returns `None` for an unknown ID. Callers must supply finite `atol < 1`.
-    fn decision_variable_finite_extrema(
+    fn decision_variable_domain_bounds(
         &self,
         id: VariableID,
         atol: crate::ATol,
@@ -566,12 +566,28 @@ impl Instance {
         }
         let (mut lower, mut upper) = match variable.kind() {
             crate::Kind::Continuous | crate::Kind::SemiContinuous => {
-                variable.bound().finite_feasible_extrema(atol)
+                let bound = variable.bound();
+                if !bound.lower().is_finite() && !bound.upper().is_finite() {
+                    (bound.lower(), bound.upper())
+                } else {
+                    let (lower, upper) = bound.finite_feasible_extrema(atol);
+                    (
+                        if bound.lower().is_finite() {
+                            lower
+                        } else {
+                            bound.lower()
+                        },
+                        if bound.upper().is_finite() {
+                            upper
+                        } else {
+                            bound.upper()
+                        },
+                    )
+                }
             }
-            crate::Kind::Integer | crate::Kind::SemiInteger | crate::Kind::Binary => (
-                variable.bound().lower().max(-f64::MAX),
-                variable.bound().upper().min(f64::MAX),
-            ),
+            crate::Kind::Integer | crate::Kind::SemiInteger | crate::Kind::Binary => {
+                (variable.bound().lower(), variable.bound().upper())
+            }
         };
         if matches!(
             variable.kind(),

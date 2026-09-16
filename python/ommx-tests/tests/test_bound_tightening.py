@@ -21,6 +21,43 @@ def test_tighten_bounds_simultaneously_once_returns_changed_domains() -> None:
     assert set(instance.constraints) == {0, 1}
 
 
+@pytest.mark.parametrize("selected", [False, True])
+def test_unbounded_target_can_be_tightened_from_a_scaled_row(selected: bool) -> None:
+    x = DecisionVariable.continuous(0)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=0,
+        decision_variables=[x],
+        constraints={0: 2 * x <= 6},
+    )
+    if selected:
+        changed = instance.tighten_bounds_simultaneously_once_using_constraints(
+            {0}, atol=0.125
+        )
+    else:
+        changed = instance.tighten_bounds_simultaneously_once(atol=0.125)
+    # The row permits x <= 3.0625, including the bound's own tolerance.
+    assert changed == {0: Bound(float("-inf"), 2.9375)}
+    assert instance.get_decision_variable_by_id(0).bound == changed[0]
+
+
+def test_nonfinite_candidates_do_not_discard_a_finite_candidate_in_the_same_row() -> (
+    None
+):
+    x = DecisionVariable.continuous(0)
+    y = DecisionVariable.continuous(1, lower=1)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=0,
+        decision_variables=[x, y],
+        constraints={0: x + y == 6},
+    )
+    assert instance.tighten_bounds_simultaneously_once(atol=0.125) == {
+        0: Bound(float("-inf"), 5.125)
+    }
+    assert instance.get_decision_variable_by_id(1).bound == Bound(1, float("inf"))
+
+
 @pytest.mark.parametrize(
     ("constraint_ids", "expected"),
     [
