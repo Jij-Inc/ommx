@@ -90,69 +90,10 @@ fn hints(instance: &mut Instance) -> v1::ConstraintHints {
         .unwrap();
     hints.sos1_constraints = instance
         .plan_promote_sos1_big_m(&sos1_request())
-        .into_v1_hints()
+        .apply_bound_tightening_and_convert_to_v1_hints()
         .unwrap()
         .sos1_constraints;
     hints
-}
-
-#[test]
-fn tightening_precedes_both_hint_export_and_native_promotion() {
-    let original = source(100.0);
-    let mut regular = original.clone();
-    let request = sos1_request();
-    let hints = regular
-        .tighten_bounds_and_plan_promote_sos1_big_m(&request, ATol::new(0.125).unwrap())
-        .unwrap()
-        .into_v1_hints()
-        .unwrap();
-    assert_eq!(regular, source(3.0));
-    assert_eq!(hints.sos1_constraints[0].binary_constraint_id, 20);
-    assert_eq!(hints.sos1_constraints[0].big_m_constraint_ids, [21, 22]);
-    assert_eq!(hints.sos1_constraints[0].decision_variables, [0, 2]);
-    // Final export revalidates against the actual, already-tightened bounds.
-    let bytes = regular
-        .clone()
-        .into_v1_with_hints(hints)
-        .unwrap()
-        .encode_to_vec();
-    let ignored = Instance::from_v1_bytes(&bytes).unwrap();
-    assert_eq!(ignored, regular);
-    let (imported, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
-    assert!(report
-        .sos1_outcomes()
-        .iter()
-        .all(|entry| entry.is_promoted()));
-    let mut native = original.clone();
-    native
-        .tighten_bounds_and_plan_promote_sos1_big_m(&request, ATol::new(0.125).unwrap())
-        .unwrap()
-        .apply_if_fully_valid()
-        .unwrap();
-    assert_eq!(native, imported);
-
-    // Compare projected feasible assignments and their objectives for exact
-    // dyadic data, including models whose readers ignore or consume the hints.
-    for x in [0.0, 1.0] {
-        for y in [0.0, 1.0] {
-            for member in [-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 100.0] {
-                let projected = v1::State::from_iter([(0, x), (1, y), (2, member)]);
-                let promoted = native.evaluate(&projected, ATol::default()).unwrap();
-                let mut original_feasible = false;
-                for selector in [0.0, 1.0] {
-                    let mut state = projected.clone();
-                    state.entries.insert(3, selector);
-                    let baseline = original.evaluate(&state, ATol::default()).unwrap();
-                    let exported = ignored.evaluate(&state, ATol::default()).unwrap();
-                    assert_eq!(baseline.feasible(), exported.feasible());
-                    assert_eq!(baseline.objective(), exported.objective());
-                    assert_eq!(baseline.objective(), promoted.objective());
-                    original_feasible |= baseline.feasible();
-                }
-                assert_eq!(original_feasible, promoted.feasible_relaxed());
-            }
-        }
-    }
 }
 
 #[test]
@@ -250,7 +191,7 @@ fn rejected_plans_export_no_hints_and_apply_nothing() {
     request.insert(999.into(), BTreeMap::new());
     let error = instance
         .plan_promote_sos1_big_m(&request)
-        .into_v1_hints()
+        .apply_bound_tightening_and_convert_to_v1_hints()
         .unwrap_err();
     assert!(error.is::<Sos1BigMPromotionBatchRejected>());
     assert_eq!(instance, original);
@@ -272,7 +213,54 @@ fn detached_hints_are_revalidated_against_the_final_instance() {
     let mut invalid = valid.clone();
     invalid.sos1_constraints[0].big_m_constraint_ids.push(21);
     assert!(instance.clone().into_v1_with_hints(invalid).is_err());
-    assert!(source(4.0).into_v1_with_hints(valid).is_err());
+    // A changed bound is revalidated and tightened from the backing links.
+    let raw = source(4.0).into_v1_with_hints(valid).unwrap();
+    let imported = Instance::try_from(raw).unwrap();
+    assert_eq!(
+        imported.decision_variables()[&2.into()].bound(),
+        Bound::new(-2.0, 3.0).unwrap()
+    );
+}
+
+#[test]
+fn hint_conversion_commits_only_bounds_and_retains_the_regular_formulation() {
+    let mut instance = source(100.0);
+    let before = instance.clone();
+    let plan = instance.plan_promote_sos1_big_m(&sos1_request());
+    assert!(plan.is_fully_valid());
+    drop(plan);
+    assert_eq!(instance, before);
+    let hints = instance
+        .plan_promote_sos1_big_m(&sos1_request())
+        .apply_bound_tightening_and_convert_to_v1_hints()
+        .unwrap();
+    assert_eq!(instance, source(3.0));
+    let raw = instance.into_v1_with_hints(hints).unwrap();
+    let bytes = raw.encode_to_vec();
+    let ordinary = Instance::from_v1_bytes(&bytes).unwrap();
+    let (promoted, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
+    assert!(report.sos1_outcomes()[0].is_promoted());
+    assert_eq!(
+        ordinary.decision_variables()[&2.into()].bound(),
+        Bound::new(-2.0, 3.0).unwrap()
+    );
+    assert!(ordinary.sos1_constraints().is_empty());
+    assert_eq!(promoted.sos1_constraints().len(), 1);
+    for value in [-3.0, -2.0, 0.0, 3.0, 4.0] {
+        let regular = ordinary
+            .evaluate(
+                &v1::State::from_iter([(0, 0.0), (1, 1.0), (2, value), (3, 1.0)]),
+                ATol::default(),
+            )
+            .unwrap();
+        let native = promoted
+            .evaluate(
+                &v1::State::from_iter([(0, 0.0), (1, 1.0), (2, value)]),
+                ATol::default(),
+            )
+            .unwrap();
+        assert_eq!(regular.feasible(), native.feasible());
+    }
 }
 
 #[test]
@@ -306,7 +294,7 @@ fn empty_plans_release_the_borrow_without_effects() {
     assert_eq!(
         instance
             .plan_promote_sos1_big_m(&Default::default())
-            .into_v1_hints()
+            .apply_bound_tightening_and_convert_to_v1_hints()
             .unwrap(),
         v1::ConstraintHints::default()
     );
@@ -327,15 +315,41 @@ fn ambiguous_zero_bound_selectors_are_rejected_without_changing_the_model() {
         BTreeMap::from([
             (0.into(), zero.clone()),
             (1.into(), zero),
+            (
+                2.into(),
+                DecisionVariable::new(
+                    Kind::Continuous,
+                    Bound::new(-2.0, 100.0).unwrap(),
+                    ATol::default(),
+                )
+                .unwrap(),
+            ),
             (10.into(), DecisionVariable::binary()),
             (11.into(), DecisionVariable::binary()),
+            (12.into(), DecisionVariable::binary()),
         ]),
-        BTreeMap::from([(
-            20.into(),
-            Constraint::less_than_or_equal_to_zero(Function::from(
-                ((term(10, 1.0) + term(11, 1.0)).unwrap() + Linear::from(coeff!(-1.0))).unwrap(),
-            )),
-        )]),
+        BTreeMap::from([
+            (
+                20.into(),
+                Constraint::less_than_or_equal_to_zero(Function::from(
+                    (((term(10, 1.0) + term(11, 1.0)).unwrap() + term(12, 1.0)).unwrap()
+                        + Linear::from(coeff!(-1.0)))
+                    .unwrap(),
+                )),
+            ),
+            (
+                21.into(),
+                Constraint::less_than_or_equal_to_zero(
+                    (term(2, 1.0) + term(12, -3.0)).unwrap().into(),
+                ),
+            ),
+            (
+                22.into(),
+                Constraint::less_than_or_equal_to_zero(
+                    (term(2, -1.0) + term(12, -2.0)).unwrap().into(),
+                ),
+            ),
+        ]),
     )
     .unwrap();
     let request = BTreeMap::from([(
@@ -357,13 +371,21 @@ fn ambiguous_zero_bound_selectors_are_rejected_without_changing_the_model() {
                     lower_link: None,
                 },
             ),
+            (
+                2.into(),
+                Sos1BigMSelectorClaim::Fresh {
+                    selector: 12.into(),
+                    upper_link: Some(21.into()),
+                    lower_link: Some(22.into()),
+                },
+            ),
         ]),
     )]);
     let before = instance.clone();
     let plan = instance.plan_promote_sos1_big_m(&request);
     assert!(plan.is_fully_valid());
     assert!(plan
-        .into_v1_hints()
+        .apply_bound_tightening_and_convert_to_v1_hints()
         .unwrap_err()
         .to_string()
         .contains("ambiguous"));
@@ -542,12 +564,26 @@ proptest! {
         let original = source.clone();
         let plan = source.plan_promote_sos1_big_m(&request);
         prop_assert!(plan.is_fully_valid(), "{:?}", plan.rejections().collect::<Vec<_>>());
-        let exported = plan.into_v1_hints();
-        prop_assert_eq!(&source, &original);
+        let exported = plan.apply_bound_tightening_and_convert_to_v1_hints();
         if zero_members > 1 {
             prop_assert!(exported.unwrap_err().to_string().contains("ambiguous"));
+            prop_assert_eq!(&source, &original);
         } else {
             let mut hints = exported.unwrap();
+            // Tight links already cover every member domain. Only selectors
+            // whose members cannot be zero can acquire a singleton bound.
+            let mut expected = original.clone();
+            let mut bounds = ommx::Bounds::new();
+            for (&member, claim) in &request[&cardinality_id.into()] {
+                if let Sos1BigMSelectorClaim::Fresh { selector, .. } = claim {
+                    let bound = original.decision_variables()[&member].bound();
+                    if bound.lower() > 0.0 || bound.upper() < 0.0 {
+                        bounds.insert(*selector, Bound::new(1.0, 1.0).unwrap());
+                    }
+                }
+            }
+            expected.clip_bounds(&bounds, ATol::default()).unwrap();
+            prop_assert_eq!(&source, &expected);
             prop_assert_eq!(hints.sos1_constraints.len(), 1);
             if reverse_hints {
                 hints.sos1_constraints[0].decision_variables.reverse();
@@ -555,7 +591,7 @@ proptest! {
             }
             prop_assert_eq!(source.sos1_big_m_promotion_request_from_v1_hint(&hints.sos1_constraints[0]).unwrap(), request.clone());
             let bytes = source.into_v1_with_hints(hints).unwrap().encode_to_vec();
-            prop_assert_eq!(Instance::from_v1_bytes(&bytes).unwrap(), original.clone());
+            prop_assert_eq!(Instance::from_v1_bytes(&bytes).unwrap(), expected);
             let (imported, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
             prop_assert_eq!(report.sos1_outcomes().len(), 1);
             prop_assert!(report.sos1_outcomes()[0].is_promoted());

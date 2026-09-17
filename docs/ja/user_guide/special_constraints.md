@@ -177,14 +177,22 @@ $y_i = 0$のときlink制約は$x_i = 0$を強制し、cardinality制約は
 値の割り当てに対しても、非零のmemberがあればそのselectorだけを1、
 その他を0にできます。すべてのmemberが0なら、すべてのselectorを0にできます。
 したがって、fresh selectorを除いてmemberだけを見ると、両方のformulationは
-同じ実行可能集合を表します。domainが$[0, 1]$のbinary memberはそれ自身を
+同じ実行可能集合を表します。binary memberはそれ自身を
 selectorとして再利用でき、memberのdomainから自明な側のlinkは省略できます。
 
-promotionでは、保存されたmemberのboundに対して数学的な同値性を検証します。
+promotionでは、最初に指定されたBig-M linkだけを使ってboundの更新を準備します。
+例えばbinaryの`z`に対する`x <= 3z`から、`x`の上限を`100`から`3`へ縮められます。
+各rowは呼び出し開始時のdomainを参照し、cardinality制約や無関係な制約は使いません。
+成功したpromotionのboundだけを適用し、strictで拒否された場合はboundも含めて
+Instance全体を変更しません。
+
+promotionでは、準備したmemberのboundに対して数学的な同値性を検証します。
 link制約の正のスケーリングを許容し、tightなBig-M値`U`と`-L`を利用できます。
-Big-Mが不足する場合は、評価時の許容誤差より小さい不足でも拒否します。
-検証には`atol`を指定しません。制約ごとのviolationや、有限の許容誤差に対する
-実行可能性判定の一致は保証しません。
+推論にはデフォルトの絶対許容誤差を使い、linkの数学的な実行可能領域を保ちます。
+許容誤差以内として無視された更新も含め、Big-Mがまだ不足する場合は拒否します。
+制約ごとのviolationや、有限の許容誤差に対する実行可能性判定の一致は保証しません。
+縮小されたfresh selectorのdomainは、memberの取りうる各値の非零indicatorを
+表現できる場合に受け入れます。
 
 {meth}`~ommx.Instance.promote_sos1_big_m`はbatch全体を表す
 {class}`~ommx.Sos1BigMPromotionRequest`を受け取り、
@@ -241,46 +249,6 @@ except Sos1BigMPromotionBatchRejectedError as error:
 空batchでは空のReportを返します。RustのPlanが適用までInstanceを排他的に借用する
 ため、rollbackもInstanceのcloneも不要です。この変換は現在のrowを独立に検証し、
 {meth}`~ommx.Instance.convert_sos1_to_constraints`で生成されたことは前提にしません。
-
-#### 昇格前のbound tightening
-
-保存されたmemberのboundがlink係数より広い場合は、
-{meth}`~ommx.Instance.tighten_bounds_and_promote_sos1_big_m`を使います。
-
-```python
-report = instance.tighten_bounds_and_promote_sos1_big_m(
-    request, mode="strict", atol=1e-6,
-)
-```
-
-まずrequestに指定されたupper/lower link制約IDを使い、変数項数の上限を2として
-同時bound tighteningを1回適用します。その後、更新済みInstanceに対して昇格を検証します。
-例えばbinary selectorを使う`x <= 3*z`から、連続memberの保存上限を100から3へ
-削減できます。指定したrow内の更新可能な変数はselectorも含めてtighteningの対象です。
-requestが主張する役割はその後に検証します。cardinality制約や無関係な制約は
-自動的には選択しません。
-
-tightening自体が失敗した場合、Instanceは変更されません。成功したtighteningの結果は、
-`mode="strict"`を含め、後続の昇格が拒否されても残ります。通常の昇格メソッドは
-この前処理を行わず、既存の動作を維持します。`atol`はtighteningだけに使い、
-省略時はSDKの既定値を使います。
-{ref}`bound tightening <simultaneous-bound-tightening>`の数値計算と代数的許容誤差の
-制約が適用されます。昇格は変更後の保存domainに対して厳密に被覆を検証するため、
-tighteningが成功しても拒否される場合があります。この組み合わせは、元のモデルに
-対するtighteningの保証を強めるものではありません。
-
-Rustでは`Instance::tighten_bounds_and_plan_promote_sos1_big_m(&request, atol)`を使います。
-tighteningの失敗は`Err`で返し、成功後は昇格の拒否理由も含む`Ok(plan)`を返します。
-Planの破棄、strict適用の拒否、Hint出力の拒否でもtightening済みのboundは残ります。
-native SOS1へ進むなら`apply()`または`apply_if_fully_valid()`、通常制約を維持するなら
-`into_v1_hints()`を選びます。両経路ともInstanceに反映済みのboundを使います。
-
-```rust
-let hints = instance
-    .tighten_bounds_and_plan_promote_sos1_big_m(&request, atol)?
-    .into_v1_hints()?;
-let raw = instance.into_v1_with_hints(hints)?;
-```
 
 ## 制約種別ごとに独立したID空間
 

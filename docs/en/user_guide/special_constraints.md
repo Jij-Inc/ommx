@@ -182,14 +182,23 @@ domains, every SOS1-feasible member assignment can set the selector of its
 non-zero member to one and every other selector to zero, or set all selectors
 to zero when all members are zero. The two formulations therefore have the same
 feasible member assignments after fresh selectors are projected out. A
-full-domain binary member can be reused as its own selector, and a link whose
+binary member can be reused as its own selector, and a link whose
 side is already implied by the member's domain can be omitted.
 
-Promotion checks mathematical equivalence using the stored member bounds.
+Promotion first prepares tighter bounds using only the claimed Big-M links.
+For example, `x <= 3z` with binary `z` can reduce a stored upper bound of `100`
+to `3`. All rows read the original domains; cardinality rows and unrelated
+constraints do not participate. Only successful promotions commit their bounds.
+Strict rejection leaves the entire Instance unchanged, including its bounds.
+
+Promotion checks mathematical equivalence using the prepared member bounds.
 Positive scaling of link rows is allowed, and tight Big-M values `U` and `-L`
-are sufficient. Even a shortfall smaller than an evaluation tolerance is
-rejected. Planning takes no `atol`: equal per-row violations and identical
-feasibility classification at a finite evaluation tolerance are not guaranteed.
+are sufficient. Inference uses the default absolute tolerance while preserving
+the mathematical projection of the links. Any remaining Big-M shortfall is
+rejected, including updates ignored within that tolerance. Equal per-row
+violations and identical feasibility classification at a finite evaluation
+tolerance are not guaranteed. A narrowed fresh selector is accepted only when
+its domain permits the canonical indicator for every possible member value.
 
 {meth}`~ommx.Instance.promote_sos1_big_m` takes one
 {class}`~ommx.Sos1BigMPromotionRequest` for the entire batch and returns one
@@ -249,49 +258,6 @@ An empty batch returns an empty report. The Rust plan retains an exclusive
 borrow until application, so neither rollback nor an Instance clone is needed.
 The transformation validates the current rows independently; it does not
 require them to originate from {meth}`~ommx.Instance.convert_sos1_to_constraints`.
-
-#### Tightening bounds before promotion
-
-When stored member bounds are wider than the link coefficients, use
-{meth}`~ommx.Instance.tighten_bounds_and_promote_sos1_big_m`:
-
-```python
-report = instance.tighten_bounds_and_promote_sos1_big_m(
-    request, mode="strict", atol=1e-6,
-)
-```
-
-This first applies one simultaneous tightening pass using the upper/lower link
-IDs in the request, with a two-variable-term limit, then validates promotion
-against the updated Instance. For example, `x <= 3*z` with a binary selector
-can reduce a continuous member's stored upper bound from 100 to 3. All eligible
-variables in the selected rows can be tightened, including selectors; the
-request's claimed roles are checked afterwards. Cardinality rows and unrelated
-constraints are not selected automatically.
-
-A tightening error leaves the Instance unchanged. Once tightening succeeds,
-its changes remain even if promotion is rejected, including in `mode="strict"`.
-The ordinary promotion method keeps its existing behavior without this
-preprocessing. `atol` controls only tightening and defaults to the SDK tolerance.
-The numerical and algebraic-tolerance limitations of
-{ref}`bound tightening <simultaneous-bound-tightening>` apply. Promotion checks
-exact coverage of the resulting stored domains; tightening may succeed while
-promotion is still rejected, and the combined operation does not strengthen
-tightening's guarantees about the original model.
-
-Rust exposes `Instance::tighten_bounds_and_plan_promote_sos1_big_m(&request, atol)`.
-It returns `Err` only when tightening fails; after successful tightening,
-`Ok(plan)` can contain promotion rejections. Dropping the plan, strict rejection,
-or hint-export rejection retains the tightened bounds. Choose `apply()` or
-`apply_if_fully_valid()` for native SOS1, or `into_v1_hints()` to keep the ordinary
-formulation. Both paths use the bounds already stored in the Instance:
-
-```rust
-let hints = instance
-    .tighten_bounds_and_plan_promote_sos1_big_m(&request, atol)?
-    .into_v1_hints()?;
-let raw = instance.into_v1_with_hints(hints)?;
-```
 
 ## Independent ID spaces per constraint type
 

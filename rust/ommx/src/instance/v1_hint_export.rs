@@ -1,4 +1,4 @@
-//! Checked attachment of legacy hints to an unchanged regular formulation.
+//! Checked attachment of legacy hints to a retained regular formulation.
 
 use super::{Instance, OneHotPromotionRequest, Sos1BigMPromotionRequest};
 use crate::{v1, ConstraintID};
@@ -17,6 +17,8 @@ impl Instance {
     /// by a promotion plan. Revalidate their membership, backing rows, selector
     /// isolation, and compatibility against this instance. The full ordinary
     /// formulation is retained so readers may safely ignore all hints.
+    /// SOS1 validation may tighten variable bounds using the hinted Big-M links;
+    /// these bounds are included in the returned V1 message.
     ///
     /// This operation does not apply promotion, lower special constraints,
     /// allocate auxiliary IDs, or reconstruct historical rows. The usual
@@ -96,7 +98,7 @@ impl Instance {
         }
         let checked_sos1 = self
             .plan_promote_sos1_big_m(&sos1_request)
-            .into_v1_hints()?
+            .apply_bound_tightening_and_convert_to_v1_hints()?
             .sos1_constraints
             .into_iter()
             .map(|hint| (hint.binary_constraint_id, hint))

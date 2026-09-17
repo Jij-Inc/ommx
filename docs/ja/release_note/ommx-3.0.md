@@ -8,18 +8,13 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
-### SOS1昇格前のbound tightening ([#1221](https://github.com/Jij-Inc/ommx/pull/1221))
+### SOS1昇格時のlinkによるbound tightening ([#1221](https://github.com/Jij-Inc/ommx/pull/1221))
 
-{meth}`~ommx.Instance.tighten_bounds_and_promote_sos1_big_m`は、requestのlink制約を
-使ってboundをtighteningした後、昇格の検証と適用を行います。
-
-```python
-report = instance.tighten_bounds_and_promote_sos1_big_m(request, mode="strict")
-```
-
-tightening自体の失敗時はInstanceを変更しません。成功したtighteningの結果は、
-strictモードを含め、昇格が拒否されても残ります。2段階の処理とRustのPlan-to-Hint
-経路については{ref}`SOS1のBig-M定式化 <sos1-big-m-formulation>`を参照してください。
+{meth}`~ommx.Instance.promote_sos1_big_m`は、指定されたBig-M linkだけを使って
+boundの更新を準備します。成功した定式化のboundを昇格と一緒に適用し、strictで
+拒否された場合はInstance全体を変更しません。縮小されたbinary selectorのdomainも、
+memberの取りうる各値の非零indicatorを表現できれば受け入れます。
+詳細は{ref}`SOS1昇格ガイド <sos1-big-m-formulation>`を参照してください。
 
 ### Bound tighteningの一括適用 ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
 

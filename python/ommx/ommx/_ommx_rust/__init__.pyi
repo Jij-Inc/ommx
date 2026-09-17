@@ -5210,6 +5210,10 @@ class Instance:
         The batch request is keyed by regular cardinality constraint ID.
         The Rust {class}`Instance` checks every formulation against the same
         unchanged instance and reconciles conflicts before applying the plan.
+        Bounds are inferred using only each formulation's claimed Big-M links.
+        Successful entries apply their prepared bounds together with promotion;
+        rejected entries contribute no bound changes, and strict rejection
+        leaves the entire instance unchanged.
         Both modes return one {class}`~ommx.Sos1BigMPromotion` batch report:
 
         - ``mode="best_effort"`` (default) applies independent valid formulations.
@@ -5228,42 +5232,12 @@ class Instance:
 
         Promotion preserves the objective and mathematical feasible region on
         original members after projecting out fresh selectors. Positive link
-        scaling is allowed; Big-M must cover the stored member bounds exactly.
-        Planning uses no evaluation tolerance and does not promise identical
+        scaling is allowed; Big-M must cover the prepared member bounds exactly.
+        Bound inference uses the default absolute tolerance and preserves the
+        mathematical projection of the links. Coverage validation is exact.
+        Promotion does not promise identical
         violations or feasibility classification at finite tolerance.
         Unknown mode strings raise {class}`ValueError` before planning.
-        """
-    def tighten_bounds_and_promote_sos1_big_m(
-        self,
-        request: Sos1BigMPromotionRequest,
-        *,
-        mode: typing.Literal["best_effort", "strict"] = "best_effort",
-        atol: typing.Optional[builtins.float] = None,
-    ) -> Sos1BigMPromotion:
-        r"""
-        Tighten claimed link rows, then validate and apply SOS1 promotions.
-
-        Applies one simultaneous bound-tightening pass to the request's upper
-        and lower link IDs with a two-variable-term limit. Cardinality rows and
-        unrelated constraints are not selected automatically. All eligible
-        variables in those rows, including selectors, may be tightened, even
-        when their claimed SOS1 roles are subsequently rejected.
-
-        A tightening failure leaves the instance unchanged. Once tightening
-        succeeds, its changes remain even if promotion is rejected. In
-        ``mode="strict"``, {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
-        prevents all promotions but retains the tightened bounds. The default
-        ``mode="best_effort"`` applies independent valid promotions and returns
-        a report containing every success or rejection.
-
-        ``atol`` is used only for tightening and defaults to
-        {func}`~ommx.get_default_atol`. Its algebraic tolerance and numerical
-        limitations are those of
-        {meth}`tighten_bounds_simultaneously_once_using_constraints`.
-        Promotion checks the resulting stored bounds without a tolerance;
-        successful tightening does not guarantee successful promotion or
-        strengthen tightening's guarantees about the original model.
-        Unknown mode strings are rejected before any mutation.
         """
 
 @typing.final
@@ -9052,7 +9026,7 @@ class Sos1BigMSelectorClaim:
     @staticmethod
     def reused() -> Sos1BigMSelectorClaim:
         r"""
-        Claim that the promoted member is itself a full-domain Binary selector.
+        Claim that the promoted member is itself a Binary selector.
         """
     @staticmethod
     def fresh(

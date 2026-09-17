@@ -11569,7 +11569,7 @@
             },
             {
               "name": "promote_sos1_big_m",
-              "doc": "Validate and promote a batch of claimed SOS1 Big-M formulations.\n\nThe batch request is keyed by regular cardinality constraint ID.\nThe Rust {class}`Instance` checks every formulation against the same\nunchanged instance and reconciles conflicts before applying the plan.\nBoth modes return one {class}`~ommx.Sos1BigMPromotion` batch report:\n\n- ``mode=\"best_effort\"`` (default) applies independent valid formulations.\n  The report's ``promoted`` map associates each successful cardinality\n  ID with its allocated SOS1 ID; ``rejections`` maps rejected\n  cardinality IDs to diagnostic strings.\n- ``mode=\"strict\"`` requires every formulation to be valid. Any\n  rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`\n  before mutation. The exception's ``request_count`` is the batch\n  size and ``rejections`` contains all rejected cardinality IDs and\n  their diagnostics. A successful strict report has no rejections.\n\nOverlapping formulation rows are rejected; independent formulations\nmay share SOS1 members. An empty request returns an empty report.\nPlanning and application do not clone the instance.\n\nPromotion preserves the objective and mathematical feasible region on\noriginal members after projecting out fresh selectors. Positive link\nscaling is allowed; Big-M must cover the stored member bounds exactly.\nPlanning uses no evaluation tolerance and does not promise identical\nviolations or feasibility classification at finite tolerance.\nUnknown mode strings raise {class}`ValueError` before planning.",
+              "doc": "Validate and promote a batch of claimed SOS1 Big-M formulations.\n\nThe batch request is keyed by regular cardinality constraint ID.\nThe Rust {class}`Instance` checks every formulation against the same\nunchanged instance and reconciles conflicts before applying the plan.\nBounds are inferred using only each formulation's claimed Big-M links.\nSuccessful entries apply their prepared bounds together with promotion;\nrejected entries contribute no bound changes, and strict rejection\nleaves the entire instance unchanged.\nBoth modes return one {class}`~ommx.Sos1BigMPromotion` batch report:\n\n- ``mode=\"best_effort\"`` (default) applies independent valid formulations.\n  The report's ``promoted`` map associates each successful cardinality\n  ID with its allocated SOS1 ID; ``rejections`` maps rejected\n  cardinality IDs to diagnostic strings.\n- ``mode=\"strict\"`` requires every formulation to be valid. Any\n  rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`\n  before mutation. The exception's ``request_count`` is the batch\n  size and ``rejections`` contains all rejected cardinality IDs and\n  their diagnostics. A successful strict report has no rejections.\n\nOverlapping formulation rows are rejected; independent formulations\nmay share SOS1 members. An empty request returns an empty report.\nPlanning and application do not clone the instance.\n\nPromotion preserves the objective and mathematical feasible region on\noriginal members after projecting out fresh selectors. Positive link\nscaling is allowed; Big-M must cover the prepared member bounds exactly.\nBound inference uses the default absolute tolerance and preserves the\nmathematical projection of the links. Coverage validation is exact.\nPromotion does not promise identical\nviolations or feasibility classification at finite tolerance.\nUnknown mode strings raise {class}`ValueError` before planning.",
               "signatures": [
                 {
                   "parameters": [
@@ -12023,73 +12023,6 @@
                   ],
                   "return_type": {
                     "display": "None",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "tighten_bounds_and_promote_sos1_big_m",
-              "doc": "Tighten claimed link rows, then validate and apply SOS1 promotions.\n\nApplies one simultaneous bound-tightening pass to the request's upper\nand lower link IDs with a two-variable-term limit. Cardinality rows and\nunrelated constraints are not selected automatically. All eligible\nvariables in those rows, including selectors, may be tightened, even\nwhen their claimed SOS1 roles are subsequently rejected.\n\nA tightening failure leaves the instance unchanged. Once tightening\nsucceeds, its changes remain even if promotion is rejected. In\n``mode=\"strict\"``, {class}`~ommx.Sos1BigMPromotionBatchRejectedError`\nprevents all promotions but retains the tightened bounds. The default\n``mode=\"best_effort\"`` applies independent valid promotions and returns\na report containing every success or rejection.\n\n``atol`` is used only for tightening and defaults to\n{func}`~ommx.get_default_atol`. Its algebraic tolerance and numerical\nlimitations are those of\n{meth}`tighten_bounds_simultaneously_once_using_constraints`.\nPromotion checks the resulting stored bounds without a tolerance;\nsuccessful tightening does not guarantee successful promotion or\nstrengthen tightening's guarantees about the original model.\nUnknown mode strings are rejected before any mutation.",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "request",
-                      "type_": {
-                        "display": "Sos1BigMPromotionRequest",
-                        "link_target": null,
-                        "children": []
-                      },
-                      "default": null
-                    },
-                    {
-                      "name": "mode",
-                      "type_": {
-                        "display": "Literal[\"best_effort\", \"strict\"]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "\"best_effort\"",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "\"strict\"",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'best_effort'"
-                      }
-                    },
-                    {
-                      "name": "atol",
-                      "type_": {
-                        "display": "Optional[float]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
-                      }
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Sos1BigMPromotion",
                     "link_target": null,
                     "children": []
                   }
@@ -27384,7 +27317,7 @@
             },
             {
               "name": "reused",
-              "doc": "Claim that the promoted member is itself a full-domain Binary selector.",
+              "doc": "Claim that the promoted member is itself a Binary selector.",
               "signatures": [
                 {
                   "parameters": [],
