@@ -137,12 +137,10 @@ inequality residuals $l-x\leq 0$ and $x-u\leq 0$ used by regular constraint
 feasibility. Integer, SemiInteger, and Binary bound normalization use this same
 membership rule instead of constructing tolerance-expanded endpoints.
 
-Checked SOS1 Big-M promotion derives the actual representable domain accepted
-by those residuals without first computing `lower - atol` or `upper + atol`.
-Canonical unit-scale links can therefore use the tight values $M=U$ and
-$M=-L$, while undersized links remain rejected. See the
-[Instance user guide](../user_guide/instance.md) and
-[special-constraint guide](../user_guide/special_constraints.md) for details.
+See the [Instance user guide](../user_guide/instance.md) for bound evaluation.
+SOS1 promotion instead validates mathematical equivalence independently of
+evaluation tolerance; see the
+[special-constraint guide](../user_guide/special_constraints.md).
 
 ### 🛠 Adopt the published v2.7 MIPLIB distribution ([#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 

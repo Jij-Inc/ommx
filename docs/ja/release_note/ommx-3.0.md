@@ -133,11 +133,9 @@ v3への書き直しで、{class}`~ommx.DecisionVariable`からprotobufの整数
 Integer、SemiInteger、Binaryのbound正規化も、toleranceで拡張したendpointを
 構成せず、このmembership規則を使います。
 
-検証付きSOS1 Big-M promotionは、`lower - atol`や`upper + atol`を先に計算せず、
-これらのresidualが実際に受理する表現可能domainを導出します。そのためcanonicalな
-unit-scale linkではtightな $M=U$ と $M=-L$ を利用でき、小さすぎるlinkは引き続き
-拒否されます。詳細は [Instance user guide](../user_guide/instance.md) と
-[special constraint guide](../user_guide/special_constraints.md) を参照してください。
+boundの評価は [Instance user guide](../user_guide/instance.md) を参照してください。
+SOS1 promotionは評価時の許容誤差とは独立に数学的同値性を検証します。
+詳細は [special constraint guide](../user_guide/special_constraints.md) を参照してください。
 
 ### 🛠 公開済みの v2.7 MIPLIB 配布を採用 ([#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 

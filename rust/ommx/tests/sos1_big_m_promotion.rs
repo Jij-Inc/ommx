@@ -67,8 +67,7 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
     )]);
     assert_eq!(request[&cardinality_id].len(), 2);
 
-    let plan: Sos1BigMPromotionPlan<'_> =
-        instance.plan_promote_sos1_big_m(&request, Default::default());
+    let plan: Sos1BigMPromotionPlan<'_> = instance.plan_promote_sos1_big_m(&request);
     assert!(plan.is_fully_valid());
     assert_eq!(plan.rejections().count(), 0);
     let outcomes: Sos1BigMPromotion = plan.apply();
@@ -157,7 +156,7 @@ fn public_api_promotes_independent_requests_with_a_shared_member() {
     invalid_request.insert(ConstraintID::from(0), BTreeMap::new());
     invalid_request.insert(ConstraintID::from(u64::MAX), BTreeMap::new());
     let error = instance
-        .promote_sos1_big_m_if_fully_valid(&invalid_request, Default::default())
+        .promote_sos1_big_m_if_fully_valid(&invalid_request)
         .unwrap_err();
     let rejected = error
         .downcast_ref::<Sos1BigMPromotionBatchRejected>()
@@ -170,7 +169,7 @@ fn public_api_promotes_independent_requests_with_a_shared_member() {
     assert_eq!(instance, before);
 
     let promotions: Sos1BigMPromotion = instance
-        .promote_sos1_big_m_if_fully_valid(&request, Default::default())
+        .promote_sos1_big_m_if_fully_valid(&request)
         .unwrap();
 
     assert_eq!(

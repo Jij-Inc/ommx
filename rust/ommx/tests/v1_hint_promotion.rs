@@ -187,8 +187,7 @@ fn public_loader_promotes_valid_hints_from_real_v1_bytes() {
     let bytes = raw_instance_with_hints(vec![one_hot_hint.clone()], vec![sos1_hint.clone()])
         .encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(!report.has_rejections());
     assert_eq!(report.one_hot_outcomes().len(), 1);
@@ -232,8 +231,7 @@ fn invalid_hints_do_not_block_independent_valid_promotions() {
     )
     .encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(report.has_rejections());
     assert_eq!(report.one_hot_outcomes().len(), 2);
@@ -286,7 +284,7 @@ fn promotion_loader_without_hints_matches_the_ordinary_loader() {
     let bytes = raw.encode_to_vec();
 
     let expected = Instance::from_v1_bytes(&bytes).unwrap();
-    let (actual, report) = Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (actual, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert_eq!(actual, expected);
     assert!(report.one_hot_outcomes().is_empty());
@@ -297,8 +295,7 @@ fn promotion_loader_without_hints_matches_the_ordinary_loader() {
 #[test]
 fn promotion_loader_preserves_parse_error_as_the_outer_error() {
     let ordinary_decode_error = Instance::from_v1_bytes(&[0x80]).unwrap_err();
-    let decode_error =
-        Instance::from_v1_bytes_with_promotion(&[0x80], ATol::default()).unwrap_err();
+    let decode_error = Instance::from_v1_bytes_with_promotion(&[0x80]).unwrap_err();
     assert_eq!(
         format!("{decode_error:#}"),
         format!("{ordinary_decode_error:#}")
@@ -328,8 +325,7 @@ fn promotion_loader_preserves_parse_error_as_the_outer_error() {
     invalid_base.constraint_hints = Some(hints);
     let invalid_bytes = invalid_base.encode_to_vec();
     let ordinary_semantic_error = Instance::from_v1_bytes(&invalid_bytes).unwrap_err();
-    let semantic_error =
-        Instance::from_v1_bytes_with_promotion(&invalid_bytes, ATol::default()).unwrap_err();
+    let semantic_error = Instance::from_v1_bytes_with_promotion(&invalid_bytes).unwrap_err();
     assert_eq!(
         format!("{semantic_error:#}"),
         format!("{ordinary_semantic_error:#}")
@@ -383,7 +379,7 @@ fn individual_hint_requests_remain_independently_applicable() {
         sos1_request.keys().copied().collect::<Vec<_>>(),
         vec![ConstraintID::from(SOS1_SOURCE_ID)]
     );
-    let outcomes = sos1_only.promote_sos1_big_m(&sos1_request, ATol::default());
+    let outcomes = sos1_only.promote_sos1_big_m(&sos1_request);
     assert_eq!(outcomes.len(), 1);
     let _ = outcomes
         .into_iter()
@@ -404,8 +400,7 @@ fn repeated_valid_one_hot_hints_share_one_promotion_and_ignore_advisory_members(
     let bytes =
         raw_instance_with_hints(vec![first.clone(), second.clone()], vec![]).encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(!report.has_rejections());
     assert_eq!(report.one_hot_outcomes().len(), 2);
@@ -448,8 +443,7 @@ fn maximum_regular_source_id_allocates_from_the_empty_one_hot_namespace() {
     let hint = one_hot_hint(source_id.into_inner(), vec![0, 1]);
     let bytes = raw_instance_from(source, vec![hint], vec![]).encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(!report.has_rejections());
     assert_eq!(
@@ -468,8 +462,7 @@ fn repeated_invalid_one_hot_hints_retain_owned_errors_for_each_occurrence() {
     let second = one_hot_hint(999, vec![0, 1]);
     let bytes = raw_instance_with_hints(vec![first, second], vec![]).encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
     let (one_hot_outcomes, sos1_outcomes) = report.into_parts();
     assert!(sos1_outcomes.is_empty());
 
@@ -501,8 +494,7 @@ fn equality_row_overlap_rejects_sos1_claim_without_poisoning_one_hot() {
     let bytes = raw_instance_with_hints(vec![valid_one_hot_hint()], vec![sos1_claiming_equality])
         .encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(report.one_hot_outcomes()[0].is_promoted());
     assert!(!report.sos1_outcomes()[0].is_promoted());
@@ -522,8 +514,7 @@ fn inequality_row_overlap_rejects_one_hot_claim_without_poisoning_sos1() {
     let bytes = raw_instance_with_hints(vec![one_hot_claiming_inequality], vec![valid_sos1_hint()])
         .encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(!report.one_hot_outcomes()[0].is_promoted());
     assert!(report.sos1_outcomes()[0].is_promoted());
@@ -547,8 +538,7 @@ fn one_hot_and_sos1_promotions_may_share_an_ordinary_member() {
     )
     .encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(!report.has_rejections());
     assert!(report.one_hot_outcomes()[0].is_promoted());
@@ -581,8 +571,7 @@ fn one_hot_source_usage_rejects_an_overlapping_sos1_fresh_selector() {
     )
     .encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(report.one_hot_outcomes()[0].is_promoted());
     assert!(!report.sos1_outcomes()[0].is_promoted());
@@ -611,8 +600,7 @@ fn disjoint_one_hot_and_fresh_selector_sos1_effects_apply_together() {
     )
     .encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(!report.has_rejections());
     assert!(report.one_hot_outcomes()[0].is_promoted());
@@ -651,8 +639,7 @@ fn sos1_outcomes_remain_aligned_across_conversion_rejections() {
     )
     .encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     let outcomes = report.sos1_outcomes();
     assert_eq!(outcomes.len(), 3);
@@ -693,8 +680,7 @@ fn equivalent_sos1_hints_share_one_promotion_without_losing_wire_order() {
     )
     .encode_to_vec();
 
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(!report.has_rejections());
     let target = report.sos1_outcomes()[0].sos1_constraint_id().unwrap();
@@ -750,8 +736,7 @@ fn different_claims_for_one_cardinality_are_rejected_regardless_of_order() {
         all_hints.push(sos1_hint(independent_id.into_inner(), vec![11, 12]));
         let bytes =
             raw_instance_from(source, vec![one_hot_hint(50, vec![])], all_hints).encode_to_vec();
-        let (instance, report) =
-            Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+        let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
         for (index, (outcome, hint)) in report.sos1_outcomes().iter().zip(&hints).enumerate() {
             assert_eq!(outcome.index(), index);
@@ -787,8 +772,7 @@ fn equivalent_fresh_claims_ignore_member_and_link_wire_order() {
         vec![first.clone(), second.clone()],
     )
     .encode_to_vec();
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert!(!report.has_rejections());
     let target = report.sos1_outcomes()[0].sos1_constraint_id().unwrap();
@@ -814,8 +798,7 @@ fn a_conversion_failure_does_not_poison_the_same_cardinality_id() {
         vec![sos1_hint(SOS1_SOURCE_ID, vec![]), valid_sos1_hint()],
     )
     .encode_to_vec();
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert_eq!(report.sos1_outcomes().len(), 2);
     assert!(!report.sos1_outcomes()[0].is_promoted());
@@ -829,13 +812,22 @@ fn a_conversion_failure_does_not_poison_the_same_cardinality_id() {
 #[test]
 fn duplicate_sos1_rejections_share_the_original_error_chain() {
     let hint = valid_sos1_hint();
-    let bytes = raw_instance_with_hints(vec![], vec![hint.clone(), hint]).encode_to_vec();
-    let (instance, report) =
-        Instance::from_v1_bytes_with_promotion(&bytes, ATol::new(f64::INFINITY).unwrap()).unwrap();
+    let mut raw = raw_instance_with_hints(vec![], vec![hint.clone(), hint]);
+    raw.constraints
+        .iter_mut()
+        .find(|row| row.id == SOS1_SOURCE_ID)
+        .unwrap()
+        .equality = ommx::v1::Equality::EqualToZero as i32;
+    let bytes = raw.encode_to_vec();
+    let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
     assert_eq!(report.sos1_outcomes().len(), 2);
     for outcome in report.sos1_outcomes() {
-        assert!(outcome.error().unwrap().to_string().contains("finite ATol"));
+        assert!(outcome
+            .error()
+            .unwrap()
+            .to_string()
+            .contains("does not match the canonical row exactly"));
     }
     assert!(std::ptr::eq(
         report.sos1_outcomes()[0].error().unwrap(),
@@ -851,7 +843,7 @@ proptest! {
         source in Instance::arbitrary_with(ommx::InstanceParameters::v1_compatible()),
     ) {
         let bytes = source.to_v1_bytes().unwrap();
-        let (actual, report) = Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+        let (actual, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
         prop_assert_eq!(&actual, &source);
         prop_assert_eq!(actual, Instance::from_v1_bytes(&bytes).unwrap());
         prop_assert!(report.one_hot_outcomes().is_empty());
@@ -872,7 +864,7 @@ proptest! {
         }).collect::<Vec<_>>();
         let bytes = raw_instance_from(source.clone(), one_hot_hints.clone(), sos1_hints.clone()).encode_to_vec();
         prop_assert_eq!(Instance::from_v1_bytes(&bytes).unwrap(), source);
-        let (actual, report) = Instance::from_v1_bytes_with_promotion(&bytes, ATol::default()).unwrap();
+        let (actual, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
         prop_assert_eq!(report.one_hot_outcomes().len(), one_hot_hints.len());
         prop_assert_eq!(report.sos1_outcomes().len(), sos1_hints.len());
         for (index, (outcome, hint)) in report.one_hot_outcomes().iter().zip(&one_hot_hints).enumerate() {

@@ -825,7 +825,7 @@ mod tests {
             ),
         ]);
         ommx::Instance::default()
-            .promote_sos1_big_m_if_fully_valid(&request, ommx::ATol::default())
+            .promote_sos1_big_m_if_fully_valid(&request)
             .unwrap_err()
             .downcast()
             .expect("strict SOS1 batch rejection remains downcastable")
