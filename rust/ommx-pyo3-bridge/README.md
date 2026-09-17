@@ -118,17 +118,22 @@ fn compile(py: Python<'_>) -> PyResult<PyInstance> {
     if let Some(target) = resolve_target::<ProtobufV2>(py)? {
         let mut instance: Instance = compile_regular();
         // Promote x + y = 1 to a first-class one-hot constraint, requiring v2.
-        let source = ConstraintID::from(23);
-        let promoted = instance.promote_one_hot(&[source].into_iter().collect());
-        promoted[&source]
-            .as_ref()
+        let request = [ConstraintID::from(23)].into_iter().collect();
+        instance.plan_promote_one_hot(&request)
+            .apply_if_fully_valid()
             .expect("the example is exactly one-hot");
-        return target.transfer(py, instance);
+        return target.transfer(py, ommx::v2::Instance::from(instance));
     }
     if let Some(target) = resolve_target::<ProtobufV1>(py)? {
-        // Keep x + y = 1 as a regular constraint in the same Rust domain model.
-        let instance: Instance = compile_regular();
-        return target.transfer(py, instance);
+        // Validate the same equality, then describe it with an advisory hint.
+        let mut instance: Instance = compile_regular();
+        let request = [ConstraintID::from(23)].into_iter().collect();
+        let hints = instance.plan_promote_one_hot(&request)
+            .into_v1_hints()
+            .expect("the example is exactly one-hot");
+        let message = instance.into_v1_with_hints(hints)
+            .expect("the regular formulation supports v1");
+        return target.transfer(py, message);
     }
     Err(BridgeError::no_supported_protocol(
         py,
@@ -157,13 +162,14 @@ fn compile_regular() -> Instance {
 # }
 ```
 
-Both paths construct `ommx::Instance`. `Target<ProtobufV1>::transfer` calls
-its checked `to_v1_bytes()` serializer; `Target<ProtobufV2>::transfer` calls
-`to_v2_bytes()`. The promoted instance contains a first-class one-hot constraint
-that v1 cannot represent: sending it over ProtobufV1 would fail during export.
-The V1 path keeps the regular equality so it can be serialized without losing
-the model's meaning. The compiler chooses this representation before transfer;
-the bridge does not lower special constraints or retry after an export error.
+Both paths construct the same regular formulation and validate a promotion
+plan. The V2 path applies the plan and creates a `v2::Instance` containing a
+first-class one-hot constraint. The V1 path exports the plan as advisory hints
+and creates a checked `v1::Instance` containing the original equality.
+`into_v1_with_hints` validates those hints against the instance being sent.
+The bridge encodes the chosen message without changing the mathematical model.
+The same workflow applies to SOS1 Big-M promotion plans. Transfer does not
+lower constraints, apply promotion, or retry after an export error.
 
 The stub is `def compile() -> ommx.Instance`. Protocols belong to target
 selection and transfer; the return type is simply `PyInstance` on both paths.
@@ -268,6 +274,10 @@ For callers that already hold complete raw `ommx::v1` roots, ProtobufV1 also
 accepts those messages without parsing them into the Rust v3 domain model.
 This preserves advisory `ConstraintHints` until they reach the receiver. A v3
 receiver may ignore those hints, as allowed by the schema.
+
+ProtobufV2 also accepts a raw `ommx::v2::Instance`. Both raw instance paths
+encode the supplied message without parsing it into a Rust domain model;
+the selected Python receiver owns validation of incoming wire data.
 
 Components use binding-private receivers on `ommx._ommx_rust`:
 

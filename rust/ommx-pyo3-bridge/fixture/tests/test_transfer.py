@@ -288,9 +288,9 @@ def test_completed_output_returns_the_received_python_object(monkeypatch):
     assert len(received) == 1
 
 
-def test_compilation_uses_selected_target_with_rust_domain_instances(monkeypatch):
+def test_compilation_uses_promotion_plans_and_explicit_wire_messages(monkeypatch):
     value = fixture.compile_for_target()
-    assert set(value.one_hot_constraints) == {23}
+    assert set(value.one_hot_constraints) == {0}
     assert value.constraints == {}
 
     advertise(monkeypatch, [1])

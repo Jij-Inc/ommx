@@ -111,10 +111,23 @@ fn regular_instance() -> ommx::Instance {
 #[pyfunction]
 fn compile_for_target(py: Python<'_>) -> PyResult<PyInstance> {
     if let Some(target) = resolve_target::<ProtobufV2>(py)? {
-        return target.transfer(py, special_instance());
+        let mut instance = regular_instance();
+        instance
+            .plan_promote_one_hot(&[23.into()].into_iter().collect())
+            .apply_if_fully_valid()
+            .unwrap();
+        return target.transfer(py, ommx::v2::Instance::from(instance));
     }
     if let Some(target) = resolve_target::<ProtobufV1>(py)? {
-        return target.transfer(py, regular_instance());
+        let mut instance = regular_instance();
+        let hints = instance
+            .plan_promote_one_hot(&[23.into()].into_iter().collect())
+            .into_v1_hints()
+            .unwrap();
+        let message = instance.into_v1_with_hints(hints).unwrap();
+        // Check the wire data before the receiver can ignore advisory hints.
+        assert_eq!(message.constraint_hints, hinted_instance().constraint_hints);
+        return target.transfer(py, message);
     }
     Err(BridgeError::no_supported_protocol(
         py,
