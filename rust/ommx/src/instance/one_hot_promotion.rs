@@ -43,6 +43,48 @@ pub type OneHotPromotionRequest = BTreeSet<ConstraintID>;
 /// rejection reason.
 pub type OneHotPromotion = BTreeMap<ConstraintID, crate::Result<OneHotConstraintID>>;
 
+/// Rejections from strict OneHot application or V1 hint export.
+///
+/// Every rejected source ID and its error is retained. No changes were applied
+/// to the instance: callers can repair or remove the rejected requests and retry.
+/// Constructed only by the instance-bound plan, with a nonempty rejection map
+/// whose keys are a subset of the original request.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct OneHotPromotionBatchRejected {
+    request_count: usize,
+    rejections: BTreeMap<ConstraintID, crate::Error>,
+}
+
+impl OneHotPromotionBatchRejected {
+    /// Number of requested source rows, including successful candidates.
+    pub fn request_count(&self) -> usize {
+        self.request_count
+    }
+
+    /// Rejected source IDs and their original errors, in ID order.
+    pub fn rejections(&self) -> impl Iterator<Item = (ConstraintID, &crate::Error)> + '_ {
+        self.rejections.iter().map(|(&id, error)| (id, error))
+    }
+}
+
+impl std::fmt::Display for OneHotPromotionBatchRejected {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "OneHot promotion rejected {} of {} requests",
+            self.rejections.len(),
+            self.request_count
+        )?;
+        for (id, error) in &self.rejections {
+            write!(formatter, "\nsource constraint {id}: {error:#}")?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for OneHotPromotionBatchRejected {}
+
 /// Convert one legacy v1 one-hot hint into an untrusted request.
 ///
 /// This conversion is independent of any [`Instance`] and uses only the
@@ -64,7 +106,20 @@ struct PlannedOneHot {
     context: ConstraintContext,
 }
 
-/// Aggregate proof object for applying compatible OneHot promotions.
+/// Checked OneHot promotion plan bound to its source [`Instance`].
+///
+/// Construct with [`Instance::plan_promote_one_hot`]. Inspect rejections, then
+/// apply the plan or export V1 hints while retaining the original formulation.
+/// Dropping the plan changes nothing. Its exclusive borrow prevents the source
+/// from changing before either consuming operation.
+///
+/// ```compile_fail,E0499
+/// use ommx::{Function, Instance, OneHotPromotionRequest};
+/// let mut instance = Instance::default();
+/// let plan = instance.plan_promote_one_hot(&OneHotPromotionRequest::new());
+/// instance.set_objective(Function::Zero).unwrap();
+/// let _ = plan.apply();
+/// ```
 ///
 /// # Invariants
 ///
@@ -78,16 +133,16 @@ struct PlannedOneHot {
 ///   members are registered Binary variables; and
 /// - every successful source context was captured before mutation.
 ///
-/// The plan is private and Apply consumes it. It cannot be applied to another
+/// Apply consumes the plan. It cannot be applied to another
 /// instance or become stale between checking and mutation, so every aggregate
 /// storage effect is infallible under these invariants.
 #[derive(Debug)]
-struct OneHotPromotionBatchPlan<'a> {
+pub struct OneHotPromotionPlan<'a> {
     instance: &'a mut Instance,
     plans: BTreeMap<ConstraintID, crate::Result<PlannedOneHot>>,
 }
 
-impl<'a> OneHotPromotionBatchPlan<'a> {
+impl<'a> OneHotPromotionPlan<'a> {
     fn new(instance: &'a mut Instance, request: &OneHotPromotionRequest) -> Self {
         let checked: BTreeMap<_, _> = request
             .iter()
@@ -153,7 +208,77 @@ impl<'a> OneHotPromotionBatchPlan<'a> {
         Self { instance, plans }
     }
 
-    fn apply(self) -> OneHotPromotion {
+    /// Whether every requested source is valid. Empty plans are fully valid.
+    pub fn is_fully_valid(&self) -> bool {
+        self.plans.values().all(Result::is_ok)
+    }
+
+    /// Rejected source IDs and their errors, in ID order.
+    pub fn rejections(&self) -> impl Iterator<Item = (ConstraintID, &crate::Error)> + '_ {
+        self.plans
+            .iter()
+            .filter_map(|(&id, entry)| entry.as_ref().err().map(|error| (id, error)))
+    }
+
+    fn require_fully_valid(self) -> crate::Result<Self> {
+        if self.is_fully_valid() {
+            return Ok(self);
+        }
+        Err(OneHotPromotionBatchRejected {
+            request_count: self.plans.len(),
+            rejections: self
+                .plans
+                .into_iter()
+                .filter_map(|(id, result)| result.err().map(|error| (id, error)))
+                .collect(),
+        }
+        .into())
+    }
+
+    /// Apply every request, or reject the whole batch without mutation.
+    ///
+    /// Rejections are returned as [`OneHotPromotionBatchRejected`].
+    pub fn apply_if_fully_valid(self) -> crate::Result<OneHotPromotion> {
+        Ok(self.require_fully_valid()?.apply())
+    }
+
+    /// Consume this plan to describe its unchanged regular equalities in V1.
+    ///
+    /// Releases the source borrow without moving rows, allocating IDs, or
+    /// applying promotion. Every entry must be valid; otherwise returns
+    /// [`OneHotPromotionBatchRejected`]. Empty plans return empty hints.
+    /// The resulting mutable protobuf data must be checked again when attached
+    /// with [`Instance::into_v1_with_hints`].
+    pub fn into_v1_hints(self) -> crate::Result<crate::v1::ConstraintHints> {
+        let plan = self.require_fully_valid()?;
+        let one_hot_constraints = plan
+            .plans
+            .into_iter()
+            .map(|(id, planned)| {
+                let planned = planned.expect("the full plan was validated");
+                crate::v1::OneHot {
+                    constraint_id: id.into_inner(),
+                    decision_variables: planned
+                        .one_hot_constraint
+                        .variables
+                        .into_iter()
+                        .map(|id| id.into_inner())
+                        .collect(),
+                }
+            })
+            .collect();
+        Ok(crate::v1::ConstraintHints {
+            one_hot_constraints,
+            ..Default::default()
+        })
+    }
+
+    /// Apply independent successful entries and retain every rejection.
+    ///
+    /// Every storage effect was checked during planning. A panic during Apply
+    /// indicates an SDK invariant violation, rather than rejected caller input.
+    #[must_use = "each requested source has a success or rejection result"]
+    pub fn apply(self) -> OneHotPromotion {
         let Self { instance, plans } = self;
 
         let removal_reasons = plans
@@ -177,7 +302,7 @@ impl<'a> OneHotPromotionBatchPlan<'a> {
         instance
             .constraint_collection
             .move_active_rows_to_removed_with_reasons(removal_reasons)
-            .expect("source rows and bound Instance were validated by OneHotPromotionBatchPlan");
+            .expect("source rows and bound Instance were validated by OneHotPromotionPlan");
 
         plans
             .into_iter()
@@ -191,7 +316,7 @@ impl<'a> OneHotPromotionBatchPlan<'a> {
                             planned.context,
                         )
                         .expect(
-                            "target IDs, member IDs, and bound Instance were validated by OneHotPromotionBatchPlan",
+                            "target IDs, member IDs, and bound Instance were validated by OneHotPromotionPlan",
                         );
                     planned.one_hot_constraint_id
                 });
@@ -202,6 +327,19 @@ impl<'a> OneHotPromotionBatchPlan<'a> {
 }
 
 impl Instance {
+    /// Check OneHot source rows without applying promotion.
+    ///
+    /// All checks and planned IDs refer to this exact, exclusively borrowed
+    /// instance. Choose [`OneHotPromotionPlan::apply_if_fully_valid`] for strict
+    /// promotion, [`OneHotPromotionPlan::apply`] for best effort, or
+    /// [`OneHotPromotionPlan::into_v1_hints`] to preserve the ordinary rows.
+    pub fn plan_promote_one_hot(
+        &mut self,
+        request: &OneHotPromotionRequest,
+    ) -> OneHotPromotionPlan<'_> {
+        OneHotPromotionPlan::new(self, request)
+    }
+
     /// Promote compatible exact regular equalities to one-hot constraints as a
     /// single batch.
     ///
@@ -228,11 +366,11 @@ impl Instance {
     /// On each successful entry the source moves to `removed_constraints`, its
     /// context is copied to the new active one-hot constraint, and the removal
     /// reason records the allocated target ID. Planning is atomic: rejected
-    /// requests leave their rows unchanged. The private plan exclusively
+    /// requests leave their rows unchanged. The plan exclusively
     /// borrows this instance until its infallible Apply consumes the plan.
     #[must_use = "each requested source has a success or rejection result"]
     pub fn promote_one_hot(&mut self, request: &OneHotPromotionRequest) -> OneHotPromotion {
-        OneHotPromotionBatchPlan::new(self, request).apply()
+        self.plan_promote_one_hot(request).apply()
     }
 
     fn build_one_hot_promotion_candidate(

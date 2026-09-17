@@ -87,7 +87,8 @@ pub type Sos1BigMPromotion = BTreeMap<ConstraintID, crate::Result<Sos1Constraint
 /// Signal that a fully-valid SOS1 Big-M promotion batch could not be formed.
 ///
 /// This signal is produced by
-/// [`Sos1BigMPromotionPlan::apply_if_fully_valid`] before the bound
+/// [`Sos1BigMPromotionPlan::apply_if_fully_valid`] or
+/// [`Sos1BigMPromotionPlan::into_v1_hints`] before the bound
 /// [`Instance`] is mutated. It owns every planning rejection together with the
 /// cardinality constraint ID of the corresponding formulation. Callers can inspect
 /// those IDs, repair or remove the rejected claims, and retry against
@@ -440,6 +441,10 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
     /// caller input takes the pre-application error path below.
     #[must_use = "a rejected batch leaves the instance unchanged"]
     pub fn apply_if_fully_valid(self) -> crate::Result<Sos1BigMPromotion> {
+        Ok(self.require_fully_valid()?.apply())
+    }
+
+    fn require_fully_valid(self) -> crate::Result<Self> {
         if !self.is_fully_valid() {
             let Self {
                 instance: _,
@@ -458,7 +463,52 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
             .into());
         }
 
-        Ok(self.apply())
+        Ok(self)
+    }
+
+    /// Consume this plan to describe the unchanged regular formulation in V1.
+    ///
+    /// No promotion is applied: rows, selectors, dependencies, metadata, and
+    /// IDs remain unchanged, and the exclusive instance borrow is released.
+    /// All entries must be valid. Rejections retain the same
+    /// [`Sos1BigMPromotionBatchRejected`] signal as strict application.
+    ///
+    /// The flat V1 hint must also identify every selector unambiguously.
+    /// Normalize exact zero-bound members before constructing the formulation;
+    /// multiple unlinked zero-bound members cannot be represented by this hint.
+    /// An empty plan returns empty hints. The resulting mutable protobuf data
+    /// must be checked again when attached with [`Instance::into_v1_with_hints`].
+    pub fn into_v1_hints(self) -> crate::Result<crate::v1::ConstraintHints> {
+        let Self { instance, entries } = self.require_fully_valid()?;
+        let sos1_constraints = entries
+            .into_iter()
+            .map(|(cardinality, planned)| {
+                let candidate = planned.expect("the full plan was validated").candidate;
+                let hint = crate::v1::Sos1 {
+                    binary_constraint_id: cardinality.into_inner(),
+                    big_m_constraint_ids: candidate
+                        .relaxed_constraint_ids
+                        .into_iter()
+                        .filter(|id| *id != cardinality)
+                        .map(|id| id.into_inner())
+                        .collect(),
+                    decision_variables: candidate
+                        .sos1_constraint
+                        .variables
+                        .into_iter()
+                        .map(|id| id.into_inner())
+                        .collect(),
+                };
+                // V1 omits selector-role mappings. Ensure the wire form retains
+                // enough information to reconstruct the checked formulation.
+                instance.sos1_big_m_promotion_request_from_v1_hint(&hint)?;
+                Ok(hint)
+            })
+            .collect::<crate::Result<_>>()?;
+        Ok(crate::v1::ConstraintHints {
+            sos1_constraints,
+            ..Default::default()
+        })
     }
 
     /// Applies every successful entry to the unchanged bound instance.
