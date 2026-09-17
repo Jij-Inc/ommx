@@ -85,9 +85,9 @@ impl Instance {
     }
 }
 
-// This module is private to Instance. Keep inference read-only so owner
-// operations can validate all updates before committing their effects.
-pub fn infer_bounds_simultaneously_once(
+// Collect updates without mutation. The public operation in this module
+// applies them immediately after successful inference.
+fn infer_bounds_simultaneously_once(
     instance: &Instance,
     rows: &BTreeSet<ConstraintID>,
     max_terms: usize,
