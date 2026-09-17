@@ -111,6 +111,43 @@ def test_nonfinite_candidates_do_not_discard_a_finite_candidate_in_the_same_row(
     assert instance.get_decision_variable_by_id(1).bound == Bound(1, float("inf"))
 
 
+def test_cancellation_uses_algebraic_bound_without_point_boundary_search() -> None:
+    x = DecisionVariable.continuous(0)
+    y = DecisionVariable.continuous(1, lower=1e16, upper=1e16)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=0,
+        decision_variables=[x, y],
+        constraints={0: x - y + 1e16 <= 0},
+    )
+    assert instance.tighten_bounds_simultaneously_once(atol=0.125) == {
+        0: Bound(float("-inf"), 0)
+    }
+
+
+@pytest.mark.parametrize(
+    ("coefficient", "constant", "expected"),
+    [
+        (2, -0.5, Bound(0, 0)),
+        (-2, 0.5, Bound(1, 1)),
+        (2, -1.875, Bound(0, 1)),
+        (-2, 0.125, Bound(0, 1)),
+    ],
+)
+def test_binary_rounding_with_row_tolerance(
+    coefficient: float, constant: float, expected: Bound
+) -> None:
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=0,
+        decision_variables=[x],
+        constraints={0: coefficient * x + constant <= 0},
+    )
+    instance.tighten_bounds_simultaneously_once(atol=0.125)
+    assert instance.get_decision_variable_by_id(0).bound == expected
+
+
 @pytest.mark.parametrize(
     ("constraint_ids", "expected"),
     [

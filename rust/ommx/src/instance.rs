@@ -544,15 +544,16 @@ impl Instance {
         self.decision_variables.fixed_value(id)
     }
 
-    /// Return bounds enclosing one variable's declared domain.
+    /// Return one variable's algebraic domain bounds for bound tightening.
     ///
     /// The instance owns the complete domain information: a fixed value takes
     /// precedence over the row's kind and bound. Otherwise, continuous bounds
-    /// use residual membership under `atol`, discrete kinds use their canonical
+    /// expand to `[lower - atol, upper + atol]`, discrete kinds use their canonical
     /// endpoints, and semi kinds include the zero alternative. Unbounded sides
     /// remain infinite; they are not replaced by finite evaluation endpoints.
     ///
-    /// This does not infer ranges from constraints or dependency expressions.
+    /// This does not invert floating-point bound membership or infer ranges
+    /// from constraints or dependency expressions.
     /// Returns `None` for an unknown ID. Callers must supply finite `atol < 1`.
     fn decision_variable_domain_bounds(
         &self,
@@ -567,23 +568,10 @@ impl Instance {
         let (mut lower, mut upper) = match variable.kind() {
             crate::Kind::Continuous | crate::Kind::SemiContinuous => {
                 let bound = variable.bound();
-                if !bound.lower().is_finite() && !bound.upper().is_finite() {
-                    (bound.lower(), bound.upper())
-                } else {
-                    let (lower, upper) = bound.finite_feasible_extrema(atol);
-                    (
-                        if bound.lower().is_finite() {
-                            lower
-                        } else {
-                            bound.lower()
-                        },
-                        if bound.upper().is_finite() {
-                            upper
-                        } else {
-                            bound.upper()
-                        },
-                    )
-                }
+                (
+                    bound.lower() - atol.into_inner(),
+                    bound.upper() + atol.into_inner(),
+                )
             }
             crate::Kind::Integer | crate::Kind::SemiInteger | crate::Kind::Binary => {
                 (variable.bound().lower(), variable.bound().upper())

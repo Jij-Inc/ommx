@@ -185,9 +185,20 @@ terms of fixed, semi and dependent variables do count. A limit of zero processes
 only constant rows, including detection of their contradictions. Skipped rows
 remain in the instance.
 
-Both sides of equalities are processed, respecting the supplied `atol` on continuous
-domains and row residuals. Use the same tolerance for later evaluation. Unbounded
-domains remain infinite. Each upper/lower candidate is derived after excluding
+Both sides of equalities are processed. Tolerance is accounted for algebraically:
+continuous domains expand to `[lower - atol, upper + atol]`, and row residuals
+may be at most `atol`. For `a*x + r <= 0` with `a > 0`, the limit is
+`(atol - min(r)) / a`. Subtract `atol` to store a continuous upper bound, or round
+down for an integer/binary upper bound. Negative coefficients give the corresponding
+lower bound. For example, `2*x <= 6` with `atol=0.125` yields a limit of `3.0625`
+and a stored continuous upper bound of `2.9375` (or an integer upper bound of `3`).
+
+Residual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate arithmetic
+uses ordinary floating-point operations. The algorithm does not search the boundary
+accepted by point evaluation. Rounding, cancellation and evaluation order can
+therefore change feasibility near numerical boundaries even with the same `atol`.
+
+Unbounded domains remain infinite. Each upper/lower candidate is derived after excluding
 its own variable's term. A non-finite residual or boundary calculation skips only
 that candidate; other candidates in the same row are still processed.
 Special constraints are not used.

@@ -20,7 +20,9 @@ changed = instance.tighten_bounds_simultaneously_once_using_constraints({100, 10
 
 Rows exceeding `max_terms` variable terms (default: 32, excluding constants)
 are skipped. Every processed row reads the bounds at entry, and updates are applied together once.
-Call again to propagate the new bounds through other rows. See
+Call again to propagate the new bounds through other rows. Tolerance is accounted
+for algebraically in domains and row residuals; exact preservation of floating-point
+feasibility near numerical boundaries is not guaranteed. See
 {ref}`Bound tightening <simultaneous-bound-tightening>` for supported domains,
 tolerance semantics, and atomicity.
 

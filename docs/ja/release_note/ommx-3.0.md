@@ -20,7 +20,9 @@ changed = instance.tighten_bounds_simultaneously_once_using_constraints({100, 10
 
 変数項が`max_terms`（既定値: 32、定数項を除く）を超えるrowはスキップします。
 処理するすべてのrowが呼び出し開始時のboundを読み、更新をまとめて1回適用します。
-新しいboundを他のrowへ伝播させるには再度呼び出します。対応するdomain、許容誤差、
+新しいboundを他のrowへ伝播させるには再度呼び出します。許容誤差はdomainとresidualに
+代数的に反映しますが、数値的な境界付近で浮動小数点評価のfeasibilityが完全に保たれる
+保証はありません。対応するdomain、許容誤差、
 atomicityについては{ref}`Bound tightening <simultaneous-bound-tightening>`を参照してください。
 
 ### ⚠ 制約の違反量 API の統一 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))

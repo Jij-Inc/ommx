@@ -216,6 +216,11 @@ mod tests {
             (Kind::Integer, Bound::new(2.0, 3.0).unwrap(), (2.0, 3.0)),
             (Kind::Binary, Bound::of_binary(), (0.0, 1.0)),
             (
+                Kind::Continuous,
+                Bound::new(-f64::MAX, f64::MAX).unwrap(),
+                (-f64::MAX, f64::MAX),
+            ),
+            (
                 Kind::SemiContinuous,
                 Bound::new(2.0, 3.0).unwrap(),
                 (0.0, 3.125),

@@ -191,9 +191,19 @@ impl Instance {
     /// Every row reads the bounds at entry; all updates are collected and applied
     /// together. Newly tightened bounds are not reused during this call. Call
     /// again to propagate changes through further rows.
-    /// Both sides of equalities are used. Constraint residuals
-    /// and continuous bounds use the supplied ``atol``; changes within that
-    /// tolerance are ignored. Use the same tolerance for subsequent evaluation.
+    /// Both sides of equalities are used. Tolerance is accounted for algebraically:
+    /// continuous domains expand to ``[lower - atol, upper + atol]``, and row
+    /// residuals may be at most ``atol``. For ``a*x + r <= 0`` with ``a > 0``,
+    /// the limit is ``(atol - min(r)) / a``. Subtract ``atol`` to store a continuous
+    /// upper bound, or round down for an integer/binary upper bound. Negative
+    /// coefficients give the corresponding lower bound. Changes within ``atol``
+    /// are ignored.
+    ///
+    /// Residual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate
+    /// arithmetic uses ordinary floating-point operations. No point-evaluation
+    /// boundary is searched. Rounding, cancellation and evaluation order can
+    /// change feasibility near numerical boundaries, even when subsequent
+    /// evaluation uses the same ``atol``.
     ///
     /// Only the selected active regular constraints are used. Unbounded domains
     /// remain infinite. An upper/lower candidate with a non-finite residual or
