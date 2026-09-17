@@ -280,35 +280,25 @@ impl Instance {
     /// may share SOS1 members. An empty request returns an empty report.
     /// Planning and application do not clone the instance.
     ///
-    /// ``atol`` parameterizes the local projected-feasibility check and must
-    /// also be used for subsequent state reconstruction and evaluation.
-    /// Continuous bounds and link rows use the same inequality-residual rule,
-    /// so canonical unit-scale links may use tight Big-M values `U` and `-L`.
-    /// If omitted, {func}`~ommx.get_default_atol` supplies the default.
-    /// Positive-infinite tolerances and finite ``atol >= 1`` reject every
-    /// formulation in a non-empty batch under the selected mode.
-    /// Non-positive or NaN tolerances, and unknown mode strings, raise
-    /// {class}`ValueError` before planning, even for an empty batch.
-    #[pyo3(signature = (request, *, mode=Sos1BigMPromotionMode::BestEffort, atol=None))]
+    /// Promotion preserves the objective and mathematical feasible region on
+    /// original members after projecting out fresh selectors. Positive link
+    /// scaling is allowed; Big-M must cover the stored member bounds exactly.
+    /// Planning uses no evaluation tolerance and does not promise identical
+    /// violations or feasibility classification at finite tolerance.
+    /// Unknown mode strings raise {class}`ValueError` before planning.
+    #[pyo3(signature = (request, *, mode=Sos1BigMPromotionMode::BestEffort))]
     pub fn promote_sos1_big_m(
         &mut self,
         py: Python<'_>,
         request: &Sos1BigMPromotionRequest,
         mode: Sos1BigMPromotionMode,
-        atol: Option<f64>,
     ) -> OmmxPyResult<Sos1BigMPromotion> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
-            None => ommx::ATol::default(),
-        };
         let report = match mode {
-            Sos1BigMPromotionMode::BestEffort => {
-                self.inner.promote_sos1_big_m(&request.inner, atol)
-            }
+            Sos1BigMPromotionMode::BestEffort => self.inner.promote_sos1_big_m(&request.inner),
             Sos1BigMPromotionMode::Strict => self
                 .inner
-                .promote_sos1_big_m_if_fully_valid(&request.inner, atol)?,
+                .promote_sos1_big_m_if_fully_valid(&request.inner)?,
         };
         Ok(report.into())
     }

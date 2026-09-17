@@ -180,10 +180,11 @@ $y_i = 0$のときlink制約は$x_i = 0$を強制し、cardinality制約は
 同じ実行可能集合を表します。domainが$[0, 1]$のbinary memberはそれ自身を
 selectorとして再利用でき、memberのdomainから自明な側のlinkは省略できます。
 
-promotionでは、memberのboundを通常の不等式constraintと同じresidualで解釈します。
-したがって、canonicalなunit-scale upper link `x - U*y <= 0` ではtightな`M = U`を
-利用できます。検証時には`U + atol`を先に構成せず、実際にbound-feasibleな表現可能domainを
-導出します。
+promotionでは、保存されたmemberのboundに対して数学的な同値性を検証します。
+link制約の正のスケーリングを許容し、tightなBig-M値`U`と`-L`を利用できます。
+Big-Mが不足する場合は、評価時の許容誤差より小さい不足でも拒否します。
+検証には`atol`を指定しません。制約ごとのviolationや、有限の許容誤差に対する
+実行可能性判定の一致は保証しません。
 
 {meth}`~ommx.Instance.promote_sos1_big_m`はbatch全体を表す
 {class}`~ommx.Sos1BigMPromotionRequest`を受け取り、

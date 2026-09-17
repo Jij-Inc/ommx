@@ -8,6 +8,15 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### SOS1 promotion checks mathematical equivalence ([#1223](https://github.com/Jij-Inc/ommx/pull/1223))
+
+{meth}`~ommx.Instance.promote_sos1_big_m` no longer takes `atol`.
+Positive scaling of link constraints is accepted, while Big-M values must cover
+the stored member bounds exactly. Promotion preserves the objective and
+mathematical feasible region on original variables; equal violations or
+identical finite-tolerance feasibility are not guaranteed. See the
+[special-constraint guide](../user_guide/special_constraints.md).
+
 ### 🛠 QPLIB coefficients and published solution states ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
 
 {meth}`~ommx.Instance.load_qplib` now applies QPLIB's factor of `1/2` to
@@ -137,12 +146,10 @@ inequality residuals $l-x\leq 0$ and $x-u\leq 0$ used by regular constraint
 feasibility. Integer, SemiInteger, and Binary bound normalization use this same
 membership rule instead of constructing tolerance-expanded endpoints.
 
-Checked SOS1 Big-M promotion derives the actual representable domain accepted
-by those residuals without first computing `lower - atol` or `upper + atol`.
-Canonical unit-scale links can therefore use the tight values $M=U$ and
-$M=-L$, while undersized links remain rejected. See the
-[Instance user guide](../user_guide/instance.md) and
-[special-constraint guide](../user_guide/special_constraints.md) for details.
+See the [Instance user guide](../user_guide/instance.md) for bound evaluation.
+SOS1 promotion instead validates mathematical equivalence independently of
+evaluation tolerance; see the
+[special-constraint guide](../user_guide/special_constraints.md).
 
 ### 🛠 Adopt the published v2.7 MIPLIB distribution ([#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 

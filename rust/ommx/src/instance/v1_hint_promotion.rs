@@ -7,7 +7,7 @@
 //! receive the original hint and its error in a structured report.
 
 use super::{Instance, OneHotPromotionRequest, Sos1BigMPromotionRequest};
-use crate::{message_io, v1, ATol, ConstraintID, OneHotConstraintID, Parse, Sos1ConstraintID};
+use crate::{message_io, v1, ConstraintID, OneHotConstraintID, Parse, Sos1ConstraintID};
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
     sync::Arc,
@@ -233,7 +233,6 @@ impl Instance {
     fn promote_v1_constraint_hints(
         &mut self,
         hints: v1::ConstraintHints,
-        atol: ATol,
     ) -> V1ConstraintHintPromotionReport {
         let one_hot_request = hints
             .one_hot_constraints
@@ -292,7 +291,7 @@ impl Instance {
             .map(|(id, result)| (id, result.map_err(Arc::new)))
             .collect::<BTreeMap<_, _>>();
         let mut sos1_promotions = self
-            .promote_sos1_big_m(&sos1_request, atol)
+            .promote_sos1_big_m(&sos1_request)
             .into_iter()
             .map(|(id, result)| (id, result.map_err(Arc::new)))
             .collect::<BTreeMap<_, _>>();
@@ -380,10 +379,9 @@ impl Instance {
     /// the exact state it mutates; this loader does not duplicate its Plan or
     /// weaken its infallible Apply contract.
     ///
-    /// The supplied `atol` is used only to verify SOS1 Big-M formulations.
-    /// OneHot recognition is exact and, although it preserves the exact
-    /// feasible set over binary assignments, does not promise identical
-    /// approximate-feasibility classification at a nonzero tolerance.
+    /// Both families are validated for mathematical equivalence on original
+    /// variables. Neither promises identical constraint violations or
+    /// approximate-feasibility classification at a finite evaluation tolerance.
     ///
     /// # Errors
     ///
@@ -392,12 +390,11 @@ impl Instance {
     /// are returned in the [`V1ConstraintHintPromotionReport`].
     pub fn from_v1_bytes_with_promotion(
         bytes: &[u8],
-        atol: ATol,
     ) -> crate::Result<(Self, V1ConstraintHintPromotionReport)> {
         let mut raw = message_io::decode::<v1::Instance>(bytes, "ommx.v1.Instance")?;
         let hints = raw.constraint_hints.take().unwrap_or_default();
         let mut instance = Parse::parse(raw, &())?;
-        let report = instance.promote_v1_constraint_hints(hints, atol);
+        let report = instance.promote_v1_constraint_hints(hints);
         Ok((instance, report))
     }
 }

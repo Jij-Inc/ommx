@@ -185,10 +185,11 @@ feasible member assignments after fresh selectors are projected out. A
 full-domain binary member can be reused as its own selector, and a link whose
 side is already implied by the member's domain can be omitted.
 
-Promotion interprets each member bound through the same inequality residuals
-used by regular constraints. Consequently, a canonical unit-scale upper link
-`x - U*y <= 0` may use the tight value `M = U`; validation derives the actual
-representable bound-feasible domain without first constructing `U + atol`.
+Promotion checks mathematical equivalence using the stored member bounds.
+Positive scaling of link rows is allowed, and tight Big-M values `U` and `-L`
+are sufficient. Even a shortfall smaller than an evaluation tolerance is
+rejected. Planning takes no `atol`: equal per-row violations and identical
+feasibility classification at a finite evaluation tolerance are not guaranteed.
 
 {meth}`~ommx.Instance.promote_sos1_big_m` takes one
 {class}`~ommx.Sos1BigMPromotionRequest` for the entire batch and returns one
