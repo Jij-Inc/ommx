@@ -33,6 +33,7 @@ __all__ = [
     "AutosavePolicy",
     "BinaryPowerPreparation",
     "Bound",
+    "BridgeError",
     "Constraint",
     "DecisionVariable",
     "DecisionVariableRole",
@@ -1354,6 +1355,13 @@ class Bound:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Bound: ...
     def __deepcopy__(self, _memo: typing.Any) -> Bound: ...
+
+class BridgeError(builtins.RuntimeError):
+    r"""
+    An OMMX bridge protocol, registration, or transfer failure after loading the SDK.
+    """
+
+    ...
 
 @typing.final
 class Constraint:
@@ -5190,7 +5198,6 @@ class Instance:
         request: Sos1BigMPromotionRequest,
         *,
         mode: typing.Literal["best_effort", "strict"] = "best_effort",
-        atol: typing.Optional[builtins.float] = None,
     ) -> Sos1BigMPromotion:
         r"""
         Validate and promote a batch of claimed SOS1 Big-M formulations.
@@ -5214,15 +5221,12 @@ class Instance:
         may share SOS1 members. An empty request returns an empty report.
         Planning and application do not clone the instance.
 
-        ``atol`` parameterizes the local projected-feasibility check and must
-        also be used for subsequent state reconstruction and evaluation.
-        Continuous bounds and link rows use the same inequality-residual rule,
-        so canonical unit-scale links may use tight Big-M values `U` and `-L`.
-        If omitted, {func}`~ommx.get_default_atol` supplies the default.
-        Positive-infinite tolerances and finite ``atol >= 1`` reject every
-        formulation in a non-empty batch under the selected mode.
-        Non-positive or NaN tolerances, and unknown mode strings, raise
-        {class}`ValueError` before planning, even for an empty batch.
+        Promotion preserves the objective and mathematical feasible region on
+        original members after projecting out fresh selectors. Positive link
+        scaling is allowed; Big-M must cover the stored member bounds exactly.
+        Planning uses no evaluation tolerance and does not promise identical
+        violations or feasibility classification at finite tolerance.
+        Unknown mode strings raise {class}`ValueError` before planning.
         """
 
 @typing.final
@@ -9117,6 +9121,34 @@ class State:
     @entries.setter
     def entries(self, value: typing.Mapping[builtins.int, builtins.float]) -> None: ...
     def __new__(cls, entries: ToState) -> State: ...
+    @staticmethod
+    def load_qplib_solution(
+        path: builtins.str, *, num_variables: builtins.int
+    ) -> State:
+        r"""
+        Load a published QPLIB `.sol` file into a {class}`~ommx.State`.
+
+        Pass the variable count of the original QPLIB instance as
+        `num_variables`. Omitted variables receive zero. The standard QPLIB
+        solution names `xN`, `bN`, and `iN` map to OMMX ID `N - 2`; `objvar`
+        is ignored because the objective is computed by
+        {meth}`~ommx.Instance.evaluate`. Custom names and other solvers' `.sol`
+        formats are not supported. Names are case insensitive.
+
+        Malformed input, duplicate IDs, nonfinite values, and out-of-range IDs
+        raise `ValueError` with a line number. File read failures raise
+        `RuntimeError`. Loading does not check bounds or feasibility.
+
+        >>> import tempfile
+        >>> from pathlib import Path
+        >>> from ommx import State
+        >>> with tempfile.TemporaryDirectory() as directory:
+        ...     path = Path(directory) / "example.sol"
+        ...     _ = path.write_text("objvar 12\nx2 0.5\nb4 1\n")
+        ...     state = State.load_qplib_solution(str(path), num_variables=3)
+        >>> state.entries
+        {0: 0.5, 1: 0.0, 2: 1.0}
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> State: ...
     def to_v1_bytes(self) -> bytes: ...

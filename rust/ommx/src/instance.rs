@@ -34,11 +34,15 @@ mod sos1_promotion;
 mod stats;
 mod substitute;
 mod unary_encode;
+mod v1_hint_export;
+mod v1_hint_promotion;
 
 pub use analysis::{DecisionVariableRole, DecisionVariableUsage, DecisionVariableUsageEntry};
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
-pub use one_hot_promotion::{OneHotPromotion, OneHotPromotionRequest};
+pub use one_hot_promotion::{
+    OneHotPromotion, OneHotPromotionBatchRejected, OneHotPromotionPlan, OneHotPromotionRequest,
+};
 pub use parametric_builder::*;
 pub use preparation::{
     BinaryPowerPreparation, FixedPenaltyPreparation, IntegerEncodingPreparation,
@@ -50,6 +54,9 @@ pub use sos1_promotion::{
     Sos1BigMPromotionRequest, Sos1BigMSelectorClaim,
 };
 pub use stats::*;
+pub use v1_hint_promotion::{
+    V1ConstraintHintPromotionReport, V1OneHotHintPromotionOutcome, V1Sos1HintPromotionOutcome,
+};
 
 use crate::{
     constraint::{ConstraintContextStore, RemovedReason},

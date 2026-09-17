@@ -3355,6 +3355,21 @@
         },
         {
           "kind": "Class",
+          "name": "BridgeError",
+          "doc": "An OMMX bridge protocol, registration, or transfer failure after loading the SDK.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
           "name": "Constraint",
           "doc": "Constraint wrapper for Python.\n\nCarries the inner Rust `Constraint<Created>` plus a snapshot of its\nauxiliary context. When this wrapper is read from an [`Instance`], the\nsnapshot is filled from the instance's `ConstraintContextStore`. When the\nwrapper is handed back to an instance (e.g. via `from_components`), the\nsnapshot is drained into that instance's context store. Mutations on a\nwrapper retrieved from an instance therefore do not propagate back; the\ncaller must re-add the constraint to apply changes.",
           "bases": [],
@@ -11554,7 +11569,7 @@
             },
             {
               "name": "promote_sos1_big_m",
-              "doc": "Validate and promote a batch of claimed SOS1 Big-M formulations.\n\nThe batch request is keyed by regular cardinality constraint ID.\nThe Rust {class}`Instance` checks every formulation against the same\nunchanged instance and reconciles conflicts before applying the plan.\nBoth modes return one {class}`~ommx.Sos1BigMPromotion` batch report:\n\n- ``mode=\"best_effort\"`` (default) applies independent valid formulations.\n  The report's ``promoted`` map associates each successful cardinality\n  ID with its allocated SOS1 ID; ``rejections`` maps rejected\n  cardinality IDs to diagnostic strings.\n- ``mode=\"strict\"`` requires every formulation to be valid. Any\n  rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`\n  before mutation. The exception's ``request_count`` is the batch\n  size and ``rejections`` contains all rejected cardinality IDs and\n  their diagnostics. A successful strict report has no rejections.\n\nOverlapping formulation rows are rejected; independent formulations\nmay share SOS1 members. An empty request returns an empty report.\nPlanning and application do not clone the instance.\n\n``atol`` parameterizes the local projected-feasibility check and must\nalso be used for subsequent state reconstruction and evaluation.\nContinuous bounds and link rows use the same inequality-residual rule,\nso canonical unit-scale links may use tight Big-M values `U` and `-L`.\nIf omitted, {func}`~ommx.get_default_atol` supplies the default.\nPositive-infinite tolerances and finite ``atol >= 1`` reject every\nformulation in a non-empty batch under the selected mode.\nNon-positive or NaN tolerances, and unknown mode strings, raise\n{class}`ValueError` before planning, even for an empty batch.",
+              "doc": "Validate and promote a batch of claimed SOS1 Big-M formulations.\n\nThe batch request is keyed by regular cardinality constraint ID.\nThe Rust {class}`Instance` checks every formulation against the same\nunchanged instance and reconciles conflicts before applying the plan.\nBoth modes return one {class}`~ommx.Sos1BigMPromotion` batch report:\n\n- ``mode=\"best_effort\"`` (default) applies independent valid formulations.\n  The report's ``promoted`` map associates each successful cardinality\n  ID with its allocated SOS1 ID; ``rejections`` maps rejected\n  cardinality IDs to diagnostic strings.\n- ``mode=\"strict\"`` requires every formulation to be valid. Any\n  rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`\n  before mutation. The exception's ``request_count`` is the batch\n  size and ``rejections`` contains all rejected cardinality IDs and\n  their diagnostics. A successful strict report has no rejections.\n\nOverlapping formulation rows are rejected; independent formulations\nmay share SOS1 members. An empty request returns an empty report.\nPlanning and application do not clone the instance.\n\nPromotion preserves the objective and mathematical feasible region on\noriginal members after projecting out fresh selectors. Positive link\nscaling is allowed; Big-M must cover the stored member bounds exactly.\nPlanning uses no evaluation tolerance and does not promise identical\nviolations or feasibility classification at finite tolerance.\nUnknown mode strings raise {class}`ValueError` before planning.",
               "signatures": [
                 {
                   "parameters": [
@@ -11588,24 +11603,6 @@
                       "default": {
                         "kind": "Simple",
                         "value": "'best_effort'"
-                      }
-                    },
-                    {
-                      "name": "atol",
-                      "type_": {
-                        "display": "Optional[float]",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "float",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "None"
                       }
                     }
                   ],
@@ -28177,6 +28174,46 @@
               "deprecated": null
             },
             {
+              "name": "load_qplib_solution",
+              "doc": "Load a published QPLIB `.sol` file into a {class}`~ommx.State`.\n\nPass the variable count of the original QPLIB instance as\n`num_variables`. Omitted variables receive zero. The standard QPLIB\nsolution names `xN`, `bN`, and `iN` map to OMMX ID `N - 2`; `objvar`\nis ignored because the objective is computed by\n{meth}`~ommx.Instance.evaluate`. Custom names and other solvers' `.sol`\nformats are not supported. Names are case insensitive.\n\nMalformed input, duplicate IDs, nonfinite values, and out-of-range IDs\nraise `ValueError` with a line number. File read failures raise\n`RuntimeError`. Loading does not check bounds or feasibility.\n\n>>> import tempfile\n>>> from pathlib import Path\n>>> from ommx import State\n>>> with tempfile.TemporaryDirectory() as directory:\n...     path = Path(directory) / \"example.sol\"\n...     _ = path.write_text(\"objvar 12\\nx2 0.5\\nb4 1\\n\")\n...     state = State.load_qplib_solution(str(path), num_variables=3)\n>>> state.entries\n{0: 0.5, 1: 0.0, 2: 1.0}",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "num_variables",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "State",
+                    "link_target": {
+                      "fqn": "ommx.State",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "set",
               "doc": "",
               "signatures": [
@@ -35705,6 +35742,7 @@
     "ommx.AttachedSos1Constraint": "ommx",
     "ommx.BinaryPowerPreparation": "ommx",
     "ommx.Bound": "ommx",
+    "ommx.BridgeError": "ommx",
     "ommx.Constraint": "ommx",
     "ommx.DecisionVariable": "ommx",
     "ommx.DecisionVariableRole": "ommx",
