@@ -8,6 +8,15 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### SOS1 promotion checks mathematical equivalence ([#1223](https://github.com/Jij-Inc/ommx/pull/1223))
+
+{meth}`~ommx.Instance.promote_sos1_big_m` no longer takes `atol`.
+Positive scaling of link constraints is accepted, while Big-M values must cover
+the stored member bounds exactly. Promotion preserves the objective and
+mathematical feasible region on original variables; equal violations or
+identical finite-tolerance feasibility are not guaranteed. See the
+[special-constraint guide](../user_guide/special_constraints.md).
+
 ### 🛠 QPLIB coefficients and published solution states ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
 
 {meth}`~ommx.Instance.load_qplib` now applies QPLIB's factor of `1/2` to

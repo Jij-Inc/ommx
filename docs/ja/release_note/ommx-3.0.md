@@ -8,6 +8,14 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### SOS1昇格を数学的同値性で検証 ([#1223](https://github.com/Jij-Inc/ommx/pull/1223))
+
+{meth}`~ommx.Instance.promote_sos1_big_m`の`atol`引数を削除しました。
+link制約の正のスケーリングを許容し、Big-Mには保存されたmemberのboundを
+厳密に覆う値を要求します。昇格は元変数上の目的関数と数学的な実行可能領域を
+維持しますが、violationや有限許容誤差での実行可能性判定の一致は保証しません。
+詳細は [special constraint guide](../user_guide/special_constraints.md) を参照してください。
+
 ### 🛠 QPLIBの二次係数の修正と公開解の読み込み ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
 
 {meth}`~ommx.Instance.load_qplib`で、目的関数と制約の対角項・交差項に
