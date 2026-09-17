@@ -167,20 +167,45 @@ of constraint IDs:
 changed_bounds = instance.tighten_bounds_simultaneously_once()  # variable ID -> updated Bound
 # Use only the regular constraints with IDs 100 and 101:
 changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+# Override the per-row variable-term limit (default: 32).
+changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
 ```
 
 Both methods make one simultaneous pass: every constraint reads the bounds at
 entry, and the updates are applied together. New bounds are not reused during
-the call; call it again to propagate updates through other constraints.
+the call; call it again to propagate updates through other constraints. Candidates
+are combined before comparing changes with `atol`, so their processing order does
+not determine which candidate is retained.
 
 {meth}`~ommx.Instance.tighten_bounds_simultaneously_once` uses every active regular
 constraint. {meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`
 uses only the supplied IDs; unknown or removed IDs fail without applying changes,
-and an empty set applies no updates. Both methods skip non-affine rows.
+and an empty set applies no updates. Both methods use compact polynomial functions
+of degree at most one. Non-affine rows and composed expressions are skipped,
+even when an expression is mathematically affine.
+They also skip rows with more than `max_terms` variable terms (default: 32),
+before evaluating any bound candidates. The constant term does not count;
+terms of fixed, semi and dependent variables do count. A limit of zero processes
+only constant rows, including detection of their contradictions. Skipped rows
+remain in the instance.
 
-Both sides of equalities are processed, respecting the supplied `atol` on continuous
-domains and row residuals. Use the same tolerance for later evaluation. Rows with
-overflowing extremal evaluations are skipped. Special constraints are not used.
+Both sides of equalities are processed. Tolerance is accounted for algebraically:
+continuous domains expand to `[lower - atol, upper + atol]`, and row residuals
+may be at most `atol`. For `a*x + r <= 0` with `a > 0`, the limit is
+`(atol - min(r)) / a`. Subtract `atol` to store a continuous upper bound, or round
+down for an integer/binary upper bound. Negative coefficients give the corresponding
+lower bound. For example, `2*x <= 6` with `atol=0.125` yields a limit of `3.0625`
+and a stored continuous upper bound of `2.9375` (or an integer upper bound of `3`).
+
+Residual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate arithmetic
+uses ordinary floating-point operations. The algorithm does not search the boundary
+accepted by point evaluation. Rounding, cancellation and evaluation order can
+therefore change feasibility near numerical boundaries even with the same `atol`.
+
+Unbounded domains remain infinite. Each upper/lower candidate is derived after excluding
+its own variable's term. A non-finite residual or boundary calculation skips only
+that candidate; other candidates in the same row are still processed.
+Special constraints are not used.
 Semi-variable domains include zero when tightening other variables, but semi,
 fixed and dependent variables are not changed. Changes within `atol` are ignored.
 The operation is atomic and is not a complete infeasibility detector.

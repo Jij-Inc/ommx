@@ -82,10 +82,7 @@ fn convert_dvars(mps: &Mps) -> ConvertedDecisionVariables {
     } = mps;
     let mut dvars = BTreeMap::new();
     let mut var_names: Vec<(VariableID, String)> = Vec::new();
-    // Will be used to keep track of dvar ids throughout the conversion. might
-    // not be strictly necessary if we make it so parser.rs and this file
-    // guarantee a strict and consistent ordering, but it's less error-prone
-    // this way
+    // Resolve column names to the assigned or recovered IDs throughout conversion.
     let mut name_id_map = HashMap::with_capacity(u.len());
 
     // We want to be able to recover IDs if the var name is in the form
@@ -97,13 +94,10 @@ fn convert_dvars(mps: &Mps) -> ConvertedDecisionVariables {
     // performance. For simplicity, we only apply ID recovery when ALL variables
     // match the naming pattern.
     if vars.iter().any(|name| !name.starts_with(VAR_PREFIX)) {
-        // general case -- assign ids by order
+        // General case: vars is an IndexSet, so assign IDs in first-seen order.
         for (i, var_name) in vars.iter().enumerate() {
             let kind = get_dvar_kind(var_name, integer, binary);
             let bound = get_dvar_bound(var_name, l, u);
-            // our ID ends up being dependent on the order of vars hashset. This is
-            // unstable across executions -- we might want to consider an indexset
-            // in the future
             let id = VariableID::from(i as u64);
             name_id_map.insert(var_name.clone(), id);
             let dvar = DecisionVariable::new(kind, bound, crate::ATol::default())

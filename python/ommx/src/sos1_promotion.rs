@@ -279,22 +279,55 @@ impl Instance {
     /// Overlapping formulation rows are rejected; independent formulations
     /// may share SOS1 members. An empty request returns an empty report.
     /// Planning and application do not clone the instance.
-    /// If member bounds prevent validation, the planner automatically tightens
-    /// them using that formulation's claimed link rows and validates again.
-    /// Only successful promotions apply these bounds. A rejected strict batch
-    /// leaves bounds, constraints, and selector dependencies unchanged.
     ///
-    /// ``atol`` parameterizes the local projected-feasibility check and must
-    /// also be used for subsequent state reconstruction and evaluation.
-    /// Continuous bounds and link rows use the same inequality-residual rule,
-    /// so canonical unit-scale links may use tight Big-M values `U` and `-L`.
-    /// If omitted, {func}`~ommx.get_default_atol` supplies the default.
-    /// Positive-infinite tolerances and finite ``atol >= 1`` reject every
-    /// formulation in a non-empty batch under the selected mode.
-    /// Non-positive or NaN tolerances, and unknown mode strings, raise
-    /// {class}`ValueError` before planning, even for an empty batch.
-    #[pyo3(signature = (request, *, mode=Sos1BigMPromotionMode::BestEffort, atol=None))]
+    /// Promotion preserves the objective and mathematical feasible region on
+    /// original members after projecting out fresh selectors. Positive link
+    /// scaling is allowed; Big-M must cover the stored member bounds exactly.
+    /// Planning uses no evaluation tolerance and does not promise identical
+    /// violations or feasibility classification at finite tolerance.
+    /// Unknown mode strings raise {class}`ValueError` before planning.
+    #[pyo3(signature = (request, *, mode=Sos1BigMPromotionMode::BestEffort))]
     pub fn promote_sos1_big_m(
+        &mut self,
+        py: Python<'_>,
+        request: &Sos1BigMPromotionRequest,
+        mode: Sos1BigMPromotionMode,
+    ) -> OmmxPyResult<Sos1BigMPromotion> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let report = match mode {
+            Sos1BigMPromotionMode::BestEffort => self.inner.promote_sos1_big_m(&request.inner),
+            Sos1BigMPromotionMode::Strict => self
+                .inner
+                .promote_sos1_big_m_if_fully_valid(&request.inner)?,
+        };
+        Ok(report.into())
+    }
+
+    /// Tighten claimed link rows, then validate and apply SOS1 promotions.
+    ///
+    /// Applies one simultaneous bound-tightening pass to the request's upper
+    /// and lower link IDs with a two-variable-term limit. Cardinality rows and
+    /// unrelated constraints are not selected automatically. All eligible
+    /// variables in those rows, including selectors, may be tightened, even
+    /// when their claimed SOS1 roles are subsequently rejected.
+    ///
+    /// A tightening failure leaves the instance unchanged. Once tightening
+    /// succeeds, its changes remain even if promotion is rejected. In
+    /// ``mode="strict"``, {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
+    /// prevents all promotions but retains the tightened bounds. The default
+    /// ``mode="best_effort"`` applies independent valid promotions and returns
+    /// a report containing every success or rejection.
+    ///
+    /// ``atol`` is used only for tightening and defaults to
+    /// {func}`~ommx.get_default_atol`. Its algebraic tolerance and numerical
+    /// limitations are those of
+    /// {meth}`tighten_bounds_simultaneously_once_using_constraints`.
+    /// Promotion checks the resulting stored bounds without a tolerance;
+    /// successful tightening does not guarantee successful promotion or
+    /// strengthen tightening's guarantees about the original model.
+    /// Unknown mode strings are rejected before any mutation.
+    #[pyo3(signature = (request, *, mode=Sos1BigMPromotionMode::BestEffort, atol=None))]
+    pub fn tighten_bounds_and_promote_sos1_big_m(
         &mut self,
         py: Python<'_>,
         request: &Sos1BigMPromotionRequest,
@@ -302,17 +335,13 @@ impl Instance {
         atol: Option<f64>,
     ) -> OmmxPyResult<Sos1BigMPromotion> {
         let _guard = crate::TRACING.attach_parent_context(py);
-        let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
-            None => ommx::ATol::default(),
-        };
+        let atol = atol.map(ommx::ATol::new).transpose()?.unwrap_or_default();
+        let plan = self
+            .inner
+            .tighten_bounds_and_plan_promote_sos1_big_m(&request.inner, atol)?;
         let report = match mode {
-            Sos1BigMPromotionMode::BestEffort => {
-                self.inner.promote_sos1_big_m(&request.inner, atol)
-            }
-            Sos1BigMPromotionMode::Strict => self
-                .inner
-                .promote_sos1_big_m_if_fully_valid(&request.inner, atol)?,
+            Sos1BigMPromotionMode::BestEffort => plan.apply(),
+            Sos1BigMPromotionMode::Strict => plan.apply_if_fully_valid()?,
         };
         Ok(report.into())
     }

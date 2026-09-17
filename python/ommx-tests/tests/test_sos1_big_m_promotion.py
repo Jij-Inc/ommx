@@ -5,7 +5,6 @@ from typing import Literal
 import pytest
 
 from ommx import (
-    Bound,
     DecisionVariable,
     Instance,
     Sense,
@@ -16,38 +15,6 @@ from ommx import (
 )
 
 Mode = Literal["best_effort", "strict"]
-
-
-@pytest.mark.parametrize("mode", ["best_effort", "strict"])
-def test_promotion_automatically_tightens_big_m_member_bounds(mode: Mode) -> None:
-    member = DecisionVariable.continuous(1, lower=-100, upper=100)
-    selector = DecisionVariable.binary(10)
-    instance = Instance.from_components(
-        sense=Sense.Minimize,
-        objective=0,
-        decision_variables=[member, selector],
-        constraints={
-            100: member - 3 * selector <= 0,
-            101: -member - 2 * selector <= 0,
-            102: selector - 1 <= 0,
-        },
-    )
-    claims = {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101)}}
-    before = instance.to_v2_bytes()
-    with pytest.raises(Sos1BigMPromotionBatchRejectedError):
-        instance.promote_sos1_big_m(
-            Sos1BigMPromotionRequest({**claims, 999: {}}), mode="strict", atol=0.125
-        )
-    assert instance.to_v2_bytes() == before
-
-    report = instance.promote_sos1_big_m(
-        Sos1BigMPromotionRequest(claims), mode=mode, atol=0.125
-    )
-    assert report.promoted == {102: 0}
-    assert report.rejections == {}
-    assert instance.get_decision_variable_by_id(1).bound == Bound(-2, 3)
-    assert instance.constraints == {}
-    assert set(instance.removed_constraints) == {100, 101, 102}
 
 
 def mixed_formulation() -> tuple[Instance, Sos1BigMPromotionRequest]:
@@ -73,6 +40,78 @@ def mixed_formulation() -> tuple[Instance, Sos1BigMPromotionRequest]:
         },
     )
     return instance, request
+
+
+def wide_formulation() -> tuple[Instance, Sos1BigMPromotionRequest]:
+    member = DecisionVariable.continuous(1, lower=-100, upper=100)
+    selector = DecisionVariable.binary(10)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=member,
+        decision_variables=[member, selector],
+        constraints={
+            100: member - 3 * selector <= 0,
+            101: -member - 2 * selector <= 0,
+            102: selector - 1 <= 0,
+        },
+    )
+    return instance, Sos1BigMPromotionRequest(
+        {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101)}}
+    )
+
+
+@pytest.mark.parametrize("mode", ["best_effort", "strict"])
+def test_tightening_precedes_promotion(mode: Mode) -> None:
+    instance, request = wide_formulation()
+    before = instance.to_v2_bytes()
+    assert instance.promote_sos1_big_m(request).promoted == {}
+    assert instance.to_v2_bytes() == before
+
+    report = instance.tighten_bounds_and_promote_sos1_big_m(request, mode=mode)
+    assert report.promoted == {102: 0}
+    assert report.rejections == {}
+    assert instance.get_decision_variable_by_id(1).bound.lower == -2
+    assert instance.get_decision_variable_by_id(1).bound.upper == 3
+    assert instance.constraints == {}
+
+
+@pytest.mark.parametrize("mode", ["best_effort", "strict"])
+def test_tightening_remains_when_promotion_is_rejected(mode: Mode) -> None:
+    instance, valid = wide_formulation()
+    request = Sos1BigMPromotionRequest({999: valid.selector_claims[102]})
+    if mode == "strict":
+        with pytest.raises(Sos1BigMPromotionBatchRejectedError) as exc_info:
+            instance.tighten_bounds_and_promote_sos1_big_m(
+                request, mode=mode, atol=0.125
+            )
+        assert set(exc_info.value.rejections) == {999}
+    else:
+        report = instance.tighten_bounds_and_promote_sos1_big_m(request, atol=0.125)
+        assert report.promoted == {}
+        assert set(report.rejections) == {999}
+    assert instance.get_decision_variable_by_id(1).bound.lower == -2
+    assert instance.get_decision_variable_by_id(1).bound.upper == 3
+    assert set(instance.constraints) == {100, 101, 102}
+    assert instance.sos1_constraints == {}
+
+
+@pytest.mark.parametrize("failure", ["missing_link", "tolerance", "mode"])
+def test_tightening_preparation_errors_leave_instance_unchanged(failure: str) -> None:
+    instance, request = wide_formulation()
+    before = instance.to_v2_bytes()
+    if failure == "missing_link":
+        request = Sos1BigMPromotionRequest(
+            {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=999)}}
+        )
+        with pytest.raises(RuntimeError, match="not active"):
+            instance.tighten_bounds_and_promote_sos1_big_m(request)
+    elif failure == "tolerance":
+        with pytest.raises(RuntimeError, match="finite ATol smaller than one"):
+            instance.tighten_bounds_and_promote_sos1_big_m(request, atol=1)
+    else:
+        with pytest.raises(ValueError, match="Unknown SOS1 promotion mode"):
+            instance.tighten_bounds_and_promote_sos1_big_m(request, mode="typo")  # type: ignore[arg-type]
+    assert instance.to_v2_bytes() == before
 
 
 def assert_report_keys(
@@ -128,7 +167,7 @@ def test_promote_sos1_big_m_accepts_tight_continuous_links() -> None:
         },
     )
 
-    report = instance.promote_sos1_big_m(request, atol=1e-6)
+    report = instance.promote_sos1_big_m(request)
 
     assert_report_keys(report, request)
     assert report.promoted == {102: 0}
@@ -270,7 +309,7 @@ def test_promote_sos1_big_m_accepts_an_empty_batch(mode: Mode) -> None:
     before = instance.to_v2_bytes()
     request = Sos1BigMPromotionRequest({})
 
-    report = instance.promote_sos1_big_m(request, mode=mode, atol=float("inf"))
+    report = instance.promote_sos1_big_m(request, mode=mode)
 
     assert_report_keys(report, request)
     assert report.request_count == 0
@@ -280,37 +319,42 @@ def test_promote_sos1_big_m_accepts_an_empty_batch(mode: Mode) -> None:
 
 
 @pytest.mark.parametrize("mode", ["best_effort", "strict"])
-@pytest.mark.parametrize("atol", [1.0, float("inf")])
-def test_promote_sos1_big_m_rejects_unsupported_atol(mode: Mode, atol: float) -> None:
-    instance, request = mixed_formulation()
+@pytest.mark.parametrize("scale", [0.125, 4.0])
+@pytest.mark.parametrize("shortfall", [0.0, 1e-12])
+def test_promote_sos1_big_m_checks_mathematical_coverage(
+    mode: Mode, scale: float, shortfall: float
+) -> None:
+    member = DecisionVariable.continuous(1, lower=0, upper=3)
+    selector = DecisionVariable.binary(10)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=member,
+        decision_variables=[member, selector],
+        constraints={
+            100: scale * member - (scale * (3 - shortfall)) * selector <= 0,
+            102: selector - 1 <= 0,
+        },
+    )
+    request = Sos1BigMPromotionRequest(
+        {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100)}}
+    )
     before = instance.to_v2_bytes()
+
+    if shortfall == 0:
+        report = instance.promote_sos1_big_m(request, mode=mode)
+        assert report.promoted == {102: 0}
+        assert report.rejections == {}
+        return
 
     if mode == "strict":
         with pytest.raises(Sos1BigMPromotionBatchRejectedError) as exc_info:
-            instance.promote_sos1_big_m(request, mode=mode, atol=atol)
+            instance.promote_sos1_big_m(request, mode=mode)
         assert set(exc_info.value.rejections) == {102}
     else:
-        report = instance.promote_sos1_big_m(request, mode=mode, atol=atol)
+        report = instance.promote_sos1_big_m(request, mode=mode)
         assert_report_keys(report, request)
         assert report.promoted == {}
         assert set(report.rejections) == {102}
-
-    assert instance.to_v2_bytes() == before
-
-
-@pytest.mark.parametrize("mode", ["best_effort", "strict"])
-@pytest.mark.parametrize("atol", [0.0, -1.0, float("nan")])
-@pytest.mark.parametrize("empty", [False, True])
-def test_promote_sos1_big_m_raises_for_malformed_atol(
-    mode: Mode, atol: float, empty: bool
-) -> None:
-    instance, request = mixed_formulation()
-    before = instance.to_v2_bytes()
-
-    with pytest.raises(ValueError):
-        instance.promote_sos1_big_m(
-            Sos1BigMPromotionRequest({}) if empty else request, mode=mode, atol=atol
-        )
 
     assert instance.to_v2_bytes() == before
 

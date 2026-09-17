@@ -8,13 +8,19 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
-### Automatic bound tightening for SOS1 promotion ([#1221](https://github.com/Jij-Inc/ommx/pull/1221))
+### Bound tightening before SOS1 promotion ([#1221](https://github.com/Jij-Inc/ommx/pull/1221))
 
-{meth}`~ommx.Instance.promote_sos1_big_m` now tries tightening member bounds
-from the claimed link rows when the initial validation fails, then validates
-the complete formulation again. Only successful promotions apply the derived
-bounds; a rejected strict batch leaves the instance unchanged. See
-{ref}`SOS1 Big-M formulations <sos1-big-m-formulation>` for details.
+{meth}`~ommx.Instance.tighten_bounds_and_promote_sos1_big_m` tightens the request's
+link rows before validating and applying promotion:
+
+```python
+report = instance.tighten_bounds_and_promote_sos1_big_m(request, mode="strict")
+```
+
+Tightening failures leave the Instance unchanged. Successful tightening remains
+applied even if promotion is rejected, including in strict mode. See
+{ref}`SOS1 Big-M formulations <sos1-big-m-formulation>` for the two phases and
+the Rust Plan-to-Hint path.
 
 ### Simultaneous bound tightening ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
 
@@ -26,10 +32,72 @@ changed = instance.tighten_bounds_simultaneously_once()
 changed = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
 ```
 
-Every row reads the bounds at entry, and updates are applied together once.
-Call again to propagate the new bounds through other rows. See
+Rows exceeding `max_terms` variable terms (default: 32, excluding constants)
+are skipped. Every processed row reads the bounds at entry, and updates are applied together once.
+Call again to propagate the new bounds through other rows. Tolerance is accounted
+for algebraically in domains and row residuals; exact preservation of floating-point
+feasibility near numerical boundaries is not guaranteed. See
 {ref}`Bound tightening <simultaneous-bound-tightening>` for supported domains,
 tolerance semantics, and atomicity.
+
+### SOS1 promotion checks mathematical equivalence ([#1223](https://github.com/Jij-Inc/ommx/pull/1223))
+
+{meth}`~ommx.Instance.promote_sos1_big_m` no longer takes `atol`.
+Positive scaling of link constraints is accepted, while Big-M values must cover
+the stored member bounds exactly. Promotion preserves the objective and
+mathematical feasible region on original variables; equal violations or
+identical finite-tolerance feasibility are not guaranteed. See the
+[special-constraint guide](../user_guide/special_constraints.md).
+
+### 🛠 QPLIB coefficients and published solution states ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+
+{meth}`~ommx.Instance.load_qplib` now applies QPLIB's factor of `1/2` to
+diagonal and cross terms in objectives and constraints. Previously, these
+coefficients were doubled, which could change the objective value and make a
+published feasible solution appear infeasible. Existing serialized instances
+must be imported again from their original `.qplib` files to receive the fix.
+
+`ommx.dataset.qplib` now reads the corrected
+`ghcr.io/jij-inc/ommx/v2.8/qplib:{tag}` distribution published for OMMX 2.8.0.
+The v3 SDK reads these Artifacts even when the old distribution is cached.
+See the [QPLIB tutorial](../tutorial/download_qplib_instance.md) for distribution
+versioning and the publication record.
+
+{meth}`~ommx.State.load_qplib_solution` and `ommx.qplib.load_solution` now
+read QPLIB's published `.sol` files into a {class}`~ommx.State`:
+
+```python
+state = State.load_qplib_solution(
+    "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
+)
+solution = instance.evaluate(state, atol=1e-8)
+```
+
+Omitted variables receive zero, and `objvar` is excluded from the state.
+See the [QPLIB tutorial](../tutorial/download_qplib_instance.md) for a complete
+example and the supported variable naming convention.
+
+### 🛠 Preserve implicit binary bounds when loading MPS ([#1202](https://github.com/Jij-Inc/ommx/pull/1202))
+
+`Instance.load_mps()` and `ommx.mps.load_file()` now give columns inside
+`INTORG`/`INTEND` with no `BOUNDS` entry the implicit binary domain `[0, 1]`,
+following the Gurobi/HiGHS MPS convention. Previously, these columns became
+general integers with an infinite upper bound. This affected 17 variables in
+`neos-2626858-aoos`, changing its binary-variable count from 209 to 192.
+
+Explicit bound records remain effective, including `LO`/`LI 0` for nonnegative
+integers with no upper limit. Previously generated Artifacts, including those
+loaded through `ommx.dataset`, require separate regeneration from the source MPS;
+updating the SDK does not repair stored instances.
+
+### Shared bridge exception ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
+
+The Python SDK defines {class}`~ommx.BridgeError` for protocol incompatibility,
+receiver registration failures, and transfer errors. Independently built Rust
+extensions using the bridge raise this same SDK-owned class, so callers can
+handle their failures with `except ommx.BridgeError`. Transfer failures retain
+the original Python exception in `__cause__`. A missing SDK or required bridge
+API raises `ImportError`.
 
 ### ⚠ Unified constraint violation metrics ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
 
@@ -110,12 +178,20 @@ inequality residuals $l-x\leq 0$ and $x-u\leq 0$ used by regular constraint
 feasibility. Integer, SemiInteger, and Binary bound normalization use this same
 membership rule instead of constructing tolerance-expanded endpoints.
 
-Checked SOS1 Big-M promotion derives the actual representable domain accepted
-by those residuals without first computing `lower - atol` or `upper + atol`.
-Canonical unit-scale links can therefore use the tight values $M=U$ and
-$M=-L$, with link sufficiency checked under the same tolerance. See the
-[Instance user guide](../user_guide/instance.md) and
-[special-constraint guide](../user_guide/special_constraints.md) for details.
+See the [Instance user guide](../user_guide/instance.md) for bound evaluation.
+SOS1 promotion instead validates mathematical equivalence independently of
+evaluation tolerance; see the
+[special-constraint guide](../user_guide/special_constraints.md).
+
+### 🛠 Adopt the published v2.7 MIPLIB distribution ([#1205](https://github.com/Jij-Inc/ommx/pull/1205))
+
+`ommx.dataset.miplib2017` now reads
+`ghcr.io/jij-inc/ommx/v2.7/miplib2017:{instance-name}`, the distribution
+generated with corrected MPS integer bounds in OMMX 2.7.0. The v3 SDK reuses
+these published Artifacts, even when the old unversioned distribution is cached,
+and does not fall back to the old models. See the
+[MIPLIB tutorial](../tutorial/download_miplib_instance.md) for distribution
+versioning and the publication record.
 
 ## 3.0.0 Beta 5
 

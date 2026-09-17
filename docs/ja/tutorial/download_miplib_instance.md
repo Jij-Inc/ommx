@@ -16,7 +16,21 @@ kernelspec:
 OMMXリポジトリでは、MIPLIB 2017の混合整数計画問題ベンチマークインスタンスをOMMX Artifact形式のデータとして提供しています。
 
 ```{note}
-より詳細な説明：MIPLIB 2017のインスタンスに対応するOMMX ArtifactはOMMXリポジトリのGitHub コンテナーレジストリ ([link](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017))で管理されています。
+`dataset.miplib2017` は、公開済みの
+`ghcr.io/jij-inc/ommx/v2.7/miplib2017:{instance-name}` 配布を使用します
+（[パッケージ](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fv2.7%2Fmiplib2017)）。
+この Artifact は MPS の整数変数の境界を修正した OMMX 2.7.0 で生成されており、
+v3 SDK でも読み込めます。配布バージョンは採用したデータセットを表し、
+インストール済み SDK のバージョンとは独立しています。
+
+配布フォーマットや数学的モデルを変更する場合は、SDK の minor または major
+リリースと新しい `/v{major}.{minor}/` 名前空間が必要です。patch リリースでは
+採用済みの配布を維持し、公開済みのパス・タグは上書きしません。
+再現性のため旧バージョンなしリポジトリも維持しますが、ローダーはそこへ
+フォールバックしません。旧 Artifact がキャッシュされている場合も同様です。
+
+[v2.7 の配布記録](https://github.com/Jij-Inc/ommx/blob/1ec99bbe3c36696e5fce3cac2cd87616e457af49/rust/dataset/distributions/v2.7/README.md)
+に、元アーカイブ、公開済みインスタンス、非対応の入力、モデルのダイジェストを記載しています。
 
 GitHub コンテナーレジストリについては[こちら](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry)を参照してください。
 ```

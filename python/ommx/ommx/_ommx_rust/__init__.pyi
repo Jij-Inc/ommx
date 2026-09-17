@@ -33,6 +33,7 @@ __all__ = [
     "AutosavePolicy",
     "BinaryPowerPreparation",
     "Bound",
+    "BridgeError",
     "Constraint",
     "DecisionVariable",
     "DecisionVariableRole",
@@ -1354,6 +1355,13 @@ class Bound:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Bound: ...
     def __deepcopy__(self, _memo: typing.Any) -> Bound: ...
+
+class BridgeError(builtins.RuntimeError):
+    r"""
+    An OMMX bridge protocol, registration, or transfer failure after loading the SDK.
+    """
+
+    ...
 
 @typing.final
 class Constraint:
@@ -3242,22 +3250,28 @@ class Instance:
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
     def tighten_bounds_simultaneously_once(
-        self, *, atol: typing.Optional[builtins.float] = None
+        self,
+        *,
+        max_terms: builtins.int = 32,
+        atol: typing.Optional[builtins.float] = None,
     ) -> builtins.dict[builtins.int, Bound]:
         r"""
         Apply one simultaneous bound-tightening pass using all active regular constraints.
 
         Calls {meth}`tighten_bounds_simultaneously_once_using_constraints` with
-        every active regular constraint ID. Non-affine rows are skipped. All
+        every active regular constraint ID and the same ``max_terms`` limit.
+        Non-affine rows and rows exceeding ``max_terms`` variable terms are skipped. All
         rows read the bounds at entry, and updates are applied together once.
         Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
         The same tolerance, supported-domain and atomicity rules apply as for
         the explicitly selected form.
+        ``max_terms`` defaults to 32 and excludes the constant term.
         """
     def tighten_bounds_simultaneously_once_using_constraints(
         self,
         constraint_ids: builtins.set[builtins.int],
         *,
+        max_terms: builtins.int = 32,
         atol: typing.Optional[builtins.float] = None,
     ) -> builtins.dict[builtins.int, Bound]:
         r"""
@@ -3267,17 +3281,40 @@ class Instance:
         and removed IDs are errors; an empty set applies no updates. Selected
         non-affine rows are skipped. All eligible variables in the selected
         rows may have their bounds tightened.
+        Only compact polynomial functions of degree at most one are used;
+        composed expressions are skipped even when mathematically affine.
+
+        ``max_terms`` limits each affine row to this many variable terms
+        (default: 32). The constant term does not count. Rows exceeding the
+        limit are skipped before domain lookup or candidate evaluation. Terms
+        of fixed, semi and dependent variables still count. With a zero limit,
+        only constant rows are processed, including contradiction detection.
 
         Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
         Every row reads the bounds at entry; all updates are collected and applied
         together. Newly tightened bounds are not reused during this call. Call
         again to propagate changes through further rows.
-        Both sides of equalities are used. Constraint residuals
-        and continuous bounds use the supplied ``atol``; changes within that
-        tolerance are ignored. Use the same tolerance for subsequent evaluation.
+        Candidate extrema are combined before comparing changes with ``atol``.
+        When continuous stored endpoints cross but their tolerated domains overlap,
+        use the interval between the endpoints, intersected with the entry bounds.
+        Both sides of equalities are used. Tolerance is accounted for algebraically:
+        continuous domains expand to ``[lower - atol, upper + atol]``, and row
+        residuals may be at most ``atol``. For ``a*x + r <= 0`` with ``a > 0``,
+        the limit is ``(atol - min(r)) / a``. Subtract ``atol`` to store a continuous
+        upper bound, or round down for an integer/binary upper bound. Negative
+        coefficients give the corresponding lower bound. Changes within ``atol``
+        are ignored.
 
-        Only the selected active regular constraints are used. Rows whose
-        extremal evaluations overflow are skipped. Semi-variable domains include
+        Residual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate
+        arithmetic uses ordinary floating-point operations. No point-evaluation
+        boundary is searched. Rounding, cancellation and evaluation order can
+        change feasibility near numerical boundaries, even when subsequent
+        evaluation uses the same ``atol``.
+
+        Only the selected active regular constraints are used. Unbounded domains
+        remain infinite. An upper/lower candidate with a non-finite residual or
+        boundary calculation is skipped; other candidates in the same row are
+        still processed. Semi-variable domains include
         zero when deriving other bounds, but semi, fixed and dependent variables
         are not changed. This is not a complete infeasibility detector.
 
@@ -5166,7 +5203,6 @@ class Instance:
         request: Sos1BigMPromotionRequest,
         *,
         mode: typing.Literal["best_effort", "strict"] = "best_effort",
-        atol: typing.Optional[builtins.float] = None,
     ) -> Sos1BigMPromotion:
         r"""
         Validate and promote a batch of claimed SOS1 Big-M formulations.
@@ -5189,20 +5225,45 @@ class Instance:
         Overlapping formulation rows are rejected; independent formulations
         may share SOS1 members. An empty request returns an empty report.
         Planning and application do not clone the instance.
-        If member bounds prevent validation, the planner automatically tightens
-        them using that formulation's claimed link rows and validates again.
-        Only successful promotions apply these bounds. A rejected strict batch
-        leaves bounds, constraints, and selector dependencies unchanged.
 
-        ``atol`` parameterizes the local projected-feasibility check and must
-        also be used for subsequent state reconstruction and evaluation.
-        Continuous bounds and link rows use the same inequality-residual rule,
-        so canonical unit-scale links may use tight Big-M values `U` and `-L`.
-        If omitted, {func}`~ommx.get_default_atol` supplies the default.
-        Positive-infinite tolerances and finite ``atol >= 1`` reject every
-        formulation in a non-empty batch under the selected mode.
-        Non-positive or NaN tolerances, and unknown mode strings, raise
-        {class}`ValueError` before planning, even for an empty batch.
+        Promotion preserves the objective and mathematical feasible region on
+        original members after projecting out fresh selectors. Positive link
+        scaling is allowed; Big-M must cover the stored member bounds exactly.
+        Planning uses no evaluation tolerance and does not promise identical
+        violations or feasibility classification at finite tolerance.
+        Unknown mode strings raise {class}`ValueError` before planning.
+        """
+    def tighten_bounds_and_promote_sos1_big_m(
+        self,
+        request: Sos1BigMPromotionRequest,
+        *,
+        mode: typing.Literal["best_effort", "strict"] = "best_effort",
+        atol: typing.Optional[builtins.float] = None,
+    ) -> Sos1BigMPromotion:
+        r"""
+        Tighten claimed link rows, then validate and apply SOS1 promotions.
+
+        Applies one simultaneous bound-tightening pass to the request's upper
+        and lower link IDs with a two-variable-term limit. Cardinality rows and
+        unrelated constraints are not selected automatically. All eligible
+        variables in those rows, including selectors, may be tightened, even
+        when their claimed SOS1 roles are subsequently rejected.
+
+        A tightening failure leaves the instance unchanged. Once tightening
+        succeeds, its changes remain even if promotion is rejected. In
+        ``mode="strict"``, {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
+        prevents all promotions but retains the tightened bounds. The default
+        ``mode="best_effort"`` applies independent valid promotions and returns
+        a report containing every success or rejection.
+
+        ``atol`` is used only for tightening and defaults to
+        {func}`~ommx.get_default_atol`. Its algebraic tolerance and numerical
+        limitations are those of
+        {meth}`tighten_bounds_simultaneously_once_using_constraints`.
+        Promotion checks the resulting stored bounds without a tolerance;
+        successful tightening does not guarantee successful promotion or
+        strengthen tightening's guarantees about the original model.
+        Unknown mode strings are rejected before any mutation.
         """
 
 @typing.final
@@ -9097,6 +9158,34 @@ class State:
     @entries.setter
     def entries(self, value: typing.Mapping[builtins.int, builtins.float]) -> None: ...
     def __new__(cls, entries: ToState) -> State: ...
+    @staticmethod
+    def load_qplib_solution(
+        path: builtins.str, *, num_variables: builtins.int
+    ) -> State:
+        r"""
+        Load a published QPLIB `.sol` file into a {class}`~ommx.State`.
+
+        Pass the variable count of the original QPLIB instance as
+        `num_variables`. Omitted variables receive zero. The standard QPLIB
+        solution names `xN`, `bN`, and `iN` map to OMMX ID `N - 2`; `objvar`
+        is ignored because the objective is computed by
+        {meth}`~ommx.Instance.evaluate`. Custom names and other solvers' `.sol`
+        formats are not supported. Names are case insensitive.
+
+        Malformed input, duplicate IDs, nonfinite values, and out-of-range IDs
+        raise `ValueError` with a line number. File read failures raise
+        `RuntimeError`. Loading does not check bounds or feasibility.
+
+        >>> import tempfile
+        >>> from pathlib import Path
+        >>> from ommx import State
+        >>> with tempfile.TemporaryDirectory() as directory:
+        ...     path = Path(directory) / "example.sol"
+        ...     _ = path.write_text("objvar 12\nx2 0.5\nb4 1\n")
+        ...     state = State.load_qplib_solution(str(path), num_variables=3)
+        >>> state.entries
+        {0: 0.5, 1: 0.0, 2: 1.0}
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> State: ...
     def to_v1_bytes(self) -> bytes: ...
