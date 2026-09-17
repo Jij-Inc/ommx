@@ -60,6 +60,13 @@ root!(
     protocol::V1_INSTANCE,
     protocol::V2_INSTANCE
 );
+
+impl Export<ProtobufV2, PyInstance> for ommx::v2::Instance {
+    fn export(self) -> ommx::Result<Vec<u8>> {
+        Ok(self.encode_to_vec())
+    }
+}
+
 root!(
     PyParametricInstance,
     ParametricInstance,
@@ -383,6 +390,14 @@ mod tests {
             let payload = export::<PyInstance>(instance);
             let actual = ommx::Instance::from_v2_bytes(&payload).unwrap();
             prop_assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn raw_v2_instance_payload_preserves_message(instance in any::<ommx::Instance>()) {
+            let raw = ommx::v2::Instance::from(instance.clone());
+            let payload = export::<PyInstance>(raw.clone());
+            prop_assert_eq!(ommx::v2::Instance::decode(payload.as_slice()).unwrap(), raw);
+            prop_assert_eq!(ommx::Instance::from_v2_bytes(&payload).unwrap(), instance);
         }
     }
 
