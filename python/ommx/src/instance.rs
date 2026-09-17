@@ -144,6 +144,101 @@ pub struct Instance {
 
 impl_instance_annotations!(Instance);
 
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl Instance {
+    /// Apply one simultaneous bound-tightening pass using all active regular constraints.
+    ///
+    /// Calls {meth}`tighten_bounds_simultaneously_once_using_constraints` with
+    /// every active regular constraint ID and the same ``max_terms`` limit.
+    /// Non-affine rows and rows exceeding ``max_terms`` variable terms are skipped. All
+    /// rows read the bounds at entry, and updates are applied together once.
+    /// Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
+    /// The same tolerance, supported-domain and atomicity rules apply as for
+    /// the explicitly selected form.
+    /// ``max_terms`` defaults to 32 and excludes the constant term.
+    #[pyo3(signature = (*, max_terms=32, atol=None))]
+    pub fn tighten_bounds_simultaneously_once(
+        &mut self,
+        py: Python<'_>,
+        max_terms: usize,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<BTreeMap<u64, crate::VariableBound>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let atol = atol.map(ommx::ATol::new).transpose()?.unwrap_or_default();
+        Ok(self
+            .inner
+            .tighten_bounds_simultaneously_once(max_terms, atol)?
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), crate::VariableBound(bound)))
+            .collect())
+    }
+
+    /// Apply one simultaneous bound-tightening pass using selected regular constraints.
+    ///
+    /// ``constraint_ids`` is a set of active regular constraint IDs. Unknown
+    /// and removed IDs are errors; an empty set applies no updates. Selected
+    /// non-affine rows are skipped. All eligible variables in the selected
+    /// rows may have their bounds tightened.
+    /// Only compact polynomial functions of degree at most one are used;
+    /// composed expressions are skipped even when mathematically affine.
+    ///
+    /// ``max_terms`` limits each affine row to this many variable terms
+    /// (default: 32). The constant term does not count. Rows exceeding the
+    /// limit are skipped before domain lookup or candidate evaluation. Terms
+    /// of fixed, semi and dependent variables still count. With a zero limit,
+    /// only constant rows are processed, including contradiction detection.
+    ///
+    /// Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
+    /// Every row reads the bounds at entry; all updates are collected and applied
+    /// together. Newly tightened bounds are not reused during this call. Call
+    /// again to propagate changes through further rows.
+    /// Candidate extrema are combined before comparing changes with ``atol``.
+    /// When continuous stored endpoints cross but their tolerated domains overlap,
+    /// use the interval between the endpoints, intersected with the entry bounds.
+    /// Both sides of equalities are used. Tolerance is accounted for algebraically:
+    /// continuous domains expand to ``[lower - atol, upper + atol]``, and row
+    /// residuals may be at most ``atol``. For ``a*x + r <= 0`` with ``a > 0``,
+    /// the limit is ``(atol - min(r)) / a``. Subtract ``atol`` to store a continuous
+    /// upper bound, or round down for an integer/binary upper bound. Negative
+    /// coefficients give the corresponding lower bound. Changes within ``atol``
+    /// are ignored.
+    ///
+    /// Residual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate
+    /// arithmetic uses ordinary floating-point operations. No point-evaluation
+    /// boundary is searched. Rounding, cancellation and evaluation order can
+    /// change feasibility near numerical boundaries, even when subsequent
+    /// evaluation uses the same ``atol``.
+    ///
+    /// Only the selected active regular constraints are used. Unbounded domains
+    /// remain infinite. An upper/lower candidate with a non-finite residual or
+    /// boundary calculation is skipped; other candidates in the same row are
+    /// still processed. Semi-variable domains include
+    /// zero when deriving other bounds, but semi, fixed and dependent variables
+    /// are not changed. This is not a complete infeasibility detector.
+    ///
+    /// Requires finite ``atol < 1``. On failure the instance is unchanged.
+    /// If omitted, {func}`~ommx.get_default_atol` supplies the tolerance.
+    #[pyo3(signature = (constraint_ids, *, max_terms=32, atol=None))]
+    pub fn tighten_bounds_simultaneously_once_using_constraints(
+        &mut self,
+        py: Python<'_>,
+        constraint_ids: BTreeSet<u64>,
+        max_terms: usize,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<BTreeMap<u64, crate::VariableBound>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let atol = atol.map(ommx::ATol::new).transpose()?.unwrap_or_default();
+        let ids = constraint_ids.into_iter().map(ConstraintID::from).collect();
+        Ok(self
+            .inner
+            .tighten_bounds_simultaneously_once_using_constraints(&ids, max_terms, atol)?
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), crate::VariableBound(bound)))
+            .collect())
+    }
+}
+
 impl Instance {
     fn empty_with_sense(sense: Sense) -> OmmxPyResult<Self> {
         Self::from_components(

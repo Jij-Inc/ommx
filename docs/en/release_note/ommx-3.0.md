@@ -8,6 +8,24 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### Simultaneous bound tightening ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
+
+Tighten variable bounds using all active regular constraints or a selected set
+of constraint IDs. Both methods return the updated bounds by variable ID:
+
+```python
+changed = instance.tighten_bounds_simultaneously_once()
+changed = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+```
+
+Rows exceeding `max_terms` variable terms (default: 32, excluding constants)
+are skipped. Every processed row reads the bounds at entry, and updates are applied together once.
+Call again to propagate the new bounds through other rows. Tolerance is accounted
+for algebraically in domains and row residuals; exact preservation of floating-point
+feasibility near numerical boundaries is not guaranteed. See
+{ref}`Bound tightening <simultaneous-bound-tightening>` for supported domains,
+tolerance semantics, and atomicity.
+
 ### SOS1 promotion checks mathematical equivalence ([#1223](https://github.com/Jij-Inc/ommx/pull/1223))
 
 {meth}`~ommx.Instance.promote_sos1_big_m` no longer takes `atol`.

@@ -136,6 +136,52 @@ for cid, c in instance.constraints.items():
     print(f"id={cid}: {c}")
 ```
 
+(simultaneous-bound-tightening)=
+## Bound tightening
+
+すべての有効な通常制約を使う方法と、制約IDの集合を指定する方法で、変数のboundを締められます。
+
+```python
+changed_bounds = instance.tighten_bounds_simultaneously_once()  # 変数ID -> 更新後のBound
+# 通常制約のID 100と101だけを使う:
+changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+# rowごとの変数項数の上限を変更する（既定値: 32）。
+changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
+```
+
+どちらのメソッドも、すべての対象制約が呼び出し開始時のboundを使い、導出した更新を
+まとめて1回適用します。同じ呼び出しの途中では新しいboundを再利用しません。
+更新を他の制約へ伝播させるには再度呼び出します。候補をすべて集約してから`atol`で
+更新差分を判定するため、候補の処理順序によって採用されるboundは変わりません。
+
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once`はすべての有効な通常制約を使います。
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`は指定したIDの
+制約だけを使います。不明・削除済みのIDは何も変更せずにエラーとし、空集合は更新しません。
+どちらも次数が1以下のcompact polynomial形式の関数を使います。非線形のrowや
+合成式（Expression）はスキップします。合成式は数学的にaffineな場合も対象外です。
+また、変数項が`max_terms`（既定値: 32）を超えるrowは、bound候補を評価する前に
+スキップします。定数項は数えませんが、固定変数・semi変数・従属変数の項は数えます。
+上限を0にすると定数だけのrowを処理し、その矛盾は引き続き検出します。
+スキップしたrowもInstance内には残ります。
+
+等式は両方向を処理します。許容誤差は代数的に反映し、連続変数のdomainを
+`[lower - atol, upper + atol]`に広げ、制約のresidualを`atol`まで許容します。
+`a*x + r <= 0`で`a > 0`なら、上限は`(atol - min(r)) / a`です。
+連続変数はそこから`atol`を引いて保存用の上界にし、整数・バイナリ変数は切り下げます。
+係数が負の場合は対応する下界を導出します。例えば`2*x <= 6`、`atol=0.125`では
+上限は`3.0625`となり、保存する上界は連続変数なら`2.9375`、整数変数なら`3`です。
+
+residualの区間は{meth}`~ommx.Function.evaluate_bound`で評価し、候補の計算には通常の
+浮動小数点演算を使います。点評価が許容する境界の探索は行いません。そのため、丸め、
+桁落ち、評価順序により、同じ`atol`でも数値的な境界付近のfeasibilityは変わり得ます。
+
+非有界なdomainの端点は無限のまま扱います。
+各上界・下界候補は対象変数の項を除いて導出します。残りのresidualや境界の計算が非有限に
+なった候補だけを破棄し、同じrowの他の候補は引き続き処理します。
+特殊制約は使いません。semi変数のdomainは他の変数を締める際に0を含めて扱いますが、
+semi変数、固定変数、従属変数自身のboundは変更しません。`atol`以内の変更は無視します。
+処理はatomicであり、実行不可能性を網羅的に検出するものではありません。
+
 ## 記号的な代入
 
 `Instance.substitute` は目的関数と有効な制約条件に現れる決定変数を、指定した関数式で置き換えます。これは整数変数を新しいバイナリ変数で表現する binary encoding のような変換で使われます。

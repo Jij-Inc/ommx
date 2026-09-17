@@ -8,6 +8,23 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
 
+### Bound tighteningの一括適用 ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
+
+すべての有効な通常制約、または指定した制約IDの集合を使って、変数のboundを締められます。
+どちらのメソッドも、変数IDから更新後のboundへのMapを返します。
+
+```python
+changed = instance.tighten_bounds_simultaneously_once()
+changed = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+```
+
+変数項が`max_terms`（既定値: 32、定数項を除く）を超えるrowはスキップします。
+処理するすべてのrowが呼び出し開始時のboundを読み、更新をまとめて1回適用します。
+新しいboundを他のrowへ伝播させるには再度呼び出します。許容誤差はdomainとresidualに
+代数的に反映しますが、数値的な境界付近で浮動小数点評価のfeasibilityが完全に保たれる
+保証はありません。対応するdomain、許容誤差、
+atomicityについては{ref}`Bound tightening <simultaneous-bound-tightening>`を参照してください。
+
 ### SOS1昇格を数学的同値性で検証 ([#1223](https://github.com/Jij-Inc/ommx/pull/1223))
 
 {meth}`~ommx.Instance.promote_sos1_big_m`の`atol`引数を削除しました。

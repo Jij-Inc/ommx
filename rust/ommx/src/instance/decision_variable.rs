@@ -204,6 +204,86 @@ mod tests {
     use std::collections::BTreeMap;
 
     #[test]
+    fn domain_bounds_respect_kind_bound_and_zero_alternatives() {
+        let atol = ATol::new(0.125).unwrap();
+        let mut instance = Instance::default();
+        for (kind, bound, expected) in [
+            (
+                Kind::Continuous,
+                Bound::new(2.0, 3.0).unwrap(),
+                (1.875, 3.125),
+            ),
+            (Kind::Integer, Bound::new(2.0, 3.0).unwrap(), (2.0, 3.0)),
+            (Kind::Binary, Bound::of_binary(), (0.0, 1.0)),
+            (
+                Kind::Continuous,
+                Bound::new(-f64::MAX, f64::MAX).unwrap(),
+                (-f64::MAX, f64::MAX),
+            ),
+            (
+                Kind::SemiContinuous,
+                Bound::new(2.0, 3.0).unwrap(),
+                (0.0, 3.125),
+            ),
+            (
+                Kind::SemiInteger,
+                Bound::new(-3.0, -2.0).unwrap(),
+                (-3.0, 0.0),
+            ),
+            (
+                Kind::Continuous,
+                Bound::unbounded(),
+                (f64::NEG_INFINITY, f64::INFINITY),
+            ),
+            (
+                Kind::Integer,
+                Bound::unbounded(),
+                (f64::NEG_INFINITY, f64::INFINITY),
+            ),
+            (
+                Kind::Continuous,
+                Bound::new(2.0, f64::INFINITY).unwrap(),
+                (1.875, f64::INFINITY),
+            ),
+            (
+                Kind::Continuous,
+                Bound::new(f64::NEG_INFINITY, -2.0).unwrap(),
+                (f64::NEG_INFINITY, -1.875),
+            ),
+        ] {
+            let id = instance
+                .new_decision_variable(kind, bound, Default::default(), None, atol)
+                .unwrap();
+            assert_eq!(
+                instance.decision_variable_domain_bounds(id, atol),
+                Some(expected)
+            );
+            assert_eq!(instance.decision_variables()[&id].bound(), bound);
+        }
+        assert_eq!(
+            instance.decision_variable_domain_bounds(999.into(), atol),
+            None
+        );
+    }
+
+    #[test]
+    fn domain_bounds_use_instance_fixed_value_without_tolerance_or_semi_zero() {
+        let atol = ATol::new(0.125).unwrap();
+        let mut instance = Instance::default();
+        let bound = Bound::new(2.0, 3.0).unwrap();
+        for kind in [Kind::Continuous, Kind::SemiContinuous] {
+            let id = instance
+                .new_decision_variable(kind, bound, Default::default(), Some(2.5), atol)
+                .unwrap();
+            assert_eq!(
+                instance.decision_variable_domain_bounds(id, atol),
+                Some((2.5, 2.5))
+            );
+            assert_eq!(instance.decision_variables()[&id].bound(), bound);
+        }
+    }
+
+    #[test]
     fn test_next_variable_id() {
         // Empty instance should return 0
         let decision_variables = BTreeMap::new();

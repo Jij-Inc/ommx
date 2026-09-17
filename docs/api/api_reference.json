@@ -12032,6 +12032,137 @@
               "deprecated": null
             },
             {
+              "name": "tighten_bounds_simultaneously_once",
+              "doc": "Apply one simultaneous bound-tightening pass using all active regular constraints.\n\nCalls {meth}`tighten_bounds_simultaneously_once_using_constraints` with\nevery active regular constraint ID and the same ``max_terms`` limit.\nNon-affine rows and rows exceeding ``max_terms`` variable terms are skipped. All\nrows read the bounds at entry, and updates are applied together once.\nReturns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.\nThe same tolerance, supported-domain and atomicity rules apply as for\nthe explicitly selected form.\n``max_terms`` defaults to 32 and excludes the constant term.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "max_terms",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "32"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[int, Bound]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "Bound",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "tighten_bounds_simultaneously_once_using_constraints",
+              "doc": "Apply one simultaneous bound-tightening pass using selected regular constraints.\n\n``constraint_ids`` is a set of active regular constraint IDs. Unknown\nand removed IDs are errors; an empty set applies no updates. Selected\nnon-affine rows are skipped. All eligible variables in the selected\nrows may have their bounds tightened.\nOnly compact polynomial functions of degree at most one are used;\ncomposed expressions are skipped even when mathematically affine.\n\n``max_terms`` limits each affine row to this many variable terms\n(default: 32). The constant term does not count. Rows exceeding the\nlimit are skipped before domain lookup or candidate evaluation. Terms\nof fixed, semi and dependent variables still count. With a zero limit,\nonly constant rows are processed, including contradiction detection.\n\nReturns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.\nEvery row reads the bounds at entry; all updates are collected and applied\ntogether. Newly tightened bounds are not reused during this call. Call\nagain to propagate changes through further rows.\nCandidate extrema are combined before comparing changes with ``atol``.\nWhen continuous stored endpoints cross but their tolerated domains overlap,\nuse the interval between the endpoints, intersected with the entry bounds.\nBoth sides of equalities are used. Tolerance is accounted for algebraically:\ncontinuous domains expand to ``[lower - atol, upper + atol]``, and row\nresiduals may be at most ``atol``. For ``a*x + r <= 0`` with ``a > 0``,\nthe limit is ``(atol - min(r)) / a``. Subtract ``atol`` to store a continuous\nupper bound, or round down for an integer/binary upper bound. Negative\ncoefficients give the corresponding lower bound. Changes within ``atol``\nare ignored.\n\nResidual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate\narithmetic uses ordinary floating-point operations. No point-evaluation\nboundary is searched. Rounding, cancellation and evaluation order can\nchange feasibility near numerical boundaries, even when subsequent\nevaluation uses the same ``atol``.\n\nOnly the selected active regular constraints are used. Unbounded domains\nremain infinite. An upper/lower candidate with a non-finite residual or\nboundary calculation is skipped; other candidates in the same row are\nstill processed. Semi-variable domains include\nzero when deriving other bounds, but semi, fixed and dependent variables\nare not changed. This is not a complete infeasibility detector.\n\nRequires finite ``atol < 1``. On failure the instance is unchanged.\nIf omitted, {func}`~ommx.get_default_atol` supplies the tolerance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint_ids",
+                      "type_": {
+                        "display": "set[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "max_terms",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "32"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[int, Bound]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "Bound",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "to_hubo",
               "doc": "Convert the instance to a HUBO format.\n\n# Postconditions\n\nThe driver is equivalent to HUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.\n\n>>> import copy\n>>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> explicit = copy.copy(instance)\n>>> policy = PreparationPolicy.for_hubo(uniform_penalty_weight=2.0)\n>>> _ = explicit.prepare(InstanceClass.hubo(), policy)\n>>> expected = explicit.as_hubo_format()\n>>> actual = instance.to_hubo(uniform_penalty_weight=2.0)\n>>> assert actual == expected\n>>> assert InstanceClass.hubo().contains(instance)\n>>> assert instance.sense == Sense.Minimize\n>>> assert instance.objective.evaluate({0: 0}) == 2.0\n>>> solution = instance.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)\n\n# Errors\n\nMutually exclusive penalty options raise ``ValueError`` before mutating the instance.\n\n>>> unchanged = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> before = unchanged.to_v2_bytes()\n>>> try:\n...     unchanged.to_hubo(uniform_penalty_weight=1.0, penalty_weights={7: 2.0})\n... except ValueError:\n...     pass\n... else:\n...     raise AssertionError(\"mutually exclusive penalty options were accepted\")\n>>> assert unchanged.to_v2_bytes() == before",
               "signatures": [

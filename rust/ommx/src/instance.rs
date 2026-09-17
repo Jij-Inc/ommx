@@ -1,6 +1,7 @@
 mod analysis;
 mod approx;
 pub(crate) mod arbitrary;
+mod bound_tightening;
 mod builder;
 mod clip_bounds;
 mod convert;
@@ -548,6 +549,49 @@ impl Instance {
     /// Return the fixed value for one decision variable, if it is fixed.
     pub fn fixed_decision_variable_value(&self, id: VariableID) -> Option<f64> {
         self.decision_variables.fixed_value(id)
+    }
+
+    /// Return one variable's algebraic domain bounds for bound tightening.
+    ///
+    /// The instance owns the complete domain information: a fixed value takes
+    /// precedence over the row's kind and bound. Otherwise, continuous bounds
+    /// expand to `[lower - atol, upper + atol]`, discrete kinds use their canonical
+    /// endpoints, and semi kinds include the zero alternative. Unbounded sides
+    /// remain infinite; they are not replaced by finite evaluation endpoints.
+    ///
+    /// This does not invert floating-point bound membership or infer ranges
+    /// from constraints or dependency expressions.
+    /// Returns `None` for an unknown ID. Callers must supply finite `atol < 1`.
+    fn decision_variable_domain_bounds(
+        &self,
+        id: VariableID,
+        atol: crate::ATol,
+    ) -> Option<(f64, f64)> {
+        debug_assert!(atol.into_inner().is_finite() && atol.into_inner() < 1.0);
+        let variable = self.decision_variables().get(&id)?;
+        if let Some(value) = self.fixed_decision_variable_value(id) {
+            return Some((value, value));
+        }
+        let (mut lower, mut upper) = match variable.kind() {
+            crate::Kind::Continuous | crate::Kind::SemiContinuous => {
+                let bound = variable.bound();
+                (
+                    bound.lower() - atol.into_inner(),
+                    bound.upper() + atol.into_inner(),
+                )
+            }
+            crate::Kind::Integer | crate::Kind::SemiInteger | crate::Kind::Binary => {
+                (variable.bound().lower(), variable.bound().upper())
+            }
+        };
+        if matches!(
+            variable.kind(),
+            crate::Kind::SemiContinuous | crate::Kind::SemiInteger
+        ) {
+            lower = lower.min(0.0);
+            upper = upper.max(0.0);
+        }
+        Some((lower, upper))
     }
 
     /// Access named-function rows plus their modeling labels.
