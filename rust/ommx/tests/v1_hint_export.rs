@@ -324,7 +324,204 @@ fn dropping_one_hot_plan_preserves_source_and_native_v1_export_still_fails() {
     assert!(instance.into_v1_with_hints(Default::default()).is_err());
 }
 
+#[derive(Clone, Debug)]
+struct Sos1MemberCase {
+    kind: Kind,
+    bound: Bound,
+    scales: [f64; 2],
+    padding: f64,
+    objective: f64,
+    value: f64,
+    selector_first: bool,
+}
+
+// Generate full binary members and finite integer/continuous domains with
+// upper-only, lower-only, or both links. Dyadic coefficients and member values
+// stay away from tolerance boundaries; this checks mathematical equivalence,
+// not equality of violation metrics or finite-ATol classifications.
+fn sos1_member_case() -> impl Strategy<Value = Sos1MemberCase> {
+    (
+        0_u8..6,
+        any::<bool>(),
+        1_i32..9,
+        1_i32..9,
+        prop::array::uniform2(-2_i32..3),
+        0_i32..5,
+        -4_i32..5,
+        0_usize..4,
+        any::<bool>(),
+    )
+        .prop_map(
+            |(shape, integer, a, b, scales, padding, objective, sample, selector_first)| {
+                let (lower, upper) = match shape {
+                    0 => (0, 1),
+                    1 => (0, b),
+                    2 => (-a, 0),
+                    3 => (-a, b),
+                    4 => (a, a + b),
+                    _ => (-a - b, -a),
+                };
+                let kind = if shape == 0 {
+                    Kind::Binary
+                } else if integer {
+                    Kind::Integer
+                } else {
+                    Kind::Continuous
+                };
+                let lower = f64::from(lower);
+                let upper = f64::from(upper);
+                let midpoint = (lower + upper) / 2.0;
+                let midpoint = if kind == Kind::Continuous {
+                    midpoint
+                } else {
+                    midpoint.floor()
+                };
+                Sos1MemberCase {
+                    kind,
+                    bound: Bound::new(lower, upper).unwrap(),
+                    scales: scales.map(|power| 2.0_f64.powi(power)),
+                    padding: f64::from(padding),
+                    objective: f64::from(objective),
+                    value: [lower, upper, 0.0_f64.clamp(lower, upper), midpoint][sample],
+                    selector_first,
+                }
+            },
+        )
+}
+
+// Slots sample sparse IDs; the two variable and two link IDs per slot are
+// disjoint by construction. Cardinality IDs occupy a separate range. Models
+// contain one formulation, an objective on members, and no unrelated metadata.
+fn generated_sos1(
+    members: BTreeMap<u64, Sos1MemberCase>,
+    cardinality_id: u64,
+) -> (Instance, Sos1BigMPromotionRequest, v1::State, Vec<u64>) {
+    let mut variables = BTreeMap::new();
+    let mut rows = BTreeMap::new();
+    let mut claims = BTreeMap::new();
+    let mut cardinality = Linear::from(coeff!(-1.0));
+    let mut objective = Linear::default();
+    let mut state = v1::State::default();
+    let mut fresh_selectors = Vec::new();
+    for (slot, case) in members {
+        let member = 2 * slot + u64::from(case.selector_first);
+        let selector = 2 * slot + u64::from(!case.selector_first);
+        variables.insert(
+            member.into(),
+            DecisionVariable::new(case.kind, case.bound, ATol::default()).unwrap(),
+        );
+        if case.objective != 0.0 {
+            objective = (objective + term(member, case.objective)).unwrap();
+        }
+        state.entries.insert(member, case.value);
+        if case.kind == Kind::Binary {
+            cardinality = (cardinality + term(member, 1.0)).unwrap();
+            claims.insert(member.into(), Sos1BigMSelectorClaim::Reused);
+            continue;
+        }
+        variables.insert(selector.into(), DecisionVariable::binary());
+        fresh_selectors.push(selector);
+        cardinality = (cardinality + term(selector, 1.0)).unwrap();
+        let mut links = [None, None];
+        for (side, (endpoint, sign)) in [(case.bound.lower(), -1.0), (case.bound.upper(), 1.0)]
+            .into_iter()
+            .enumerate()
+        {
+            if sign * endpoint <= 0.0 {
+                continue;
+            }
+            let id = ConstraintID::from(2 * slot + side as u64);
+            let scale = case.scales[side];
+            let link = (term(member, sign * scale)
+                + term(selector, -scale * (sign * endpoint + case.padding)))
+            .unwrap();
+            rows.insert(id, Constraint::less_than_or_equal_to_zero(link.into()));
+            links[side] = Some(id);
+        }
+        claims.insert(
+            member.into(),
+            Sos1BigMSelectorClaim::Fresh {
+                selector: selector.into(),
+                lower_link: links[0],
+                upper_link: links[1],
+            },
+        );
+    }
+    rows.insert(
+        cardinality_id.into(),
+        Constraint::less_than_or_equal_to_zero(cardinality.into()),
+    );
+    let source = Instance::new(Sense::Minimize, objective.into(), variables, rows).unwrap();
+    (
+        source,
+        BTreeMap::from([(cardinality_id.into(), claims)]),
+        state,
+        fresh_selectors,
+    )
+}
+
 proptest! {
+    #[test]
+    fn sos1_plan_hints_round_trip_generated_formulations(
+        mut members in prop::collection::btree_map(1_u64..10000, sos1_member_case(), 1..6),
+        zero_members in 0_usize..4,
+        zero_integer in any::<bool>(),
+        cardinality_id in 20000_u64..40000,
+        reverse_hints in any::<bool>(),
+    ) {
+        // Zero members have no links. One is reconstructible by elimination;
+        // two or more leave a valid plan with an intentionally ambiguous V1 map.
+        for index in 0..zero_members {
+            members.insert(10000 + index as u64, Sos1MemberCase {
+                kind: if zero_integer { Kind::Integer } else { Kind::Continuous },
+                bound: Bound::new(0.0, 0.0).unwrap(),
+                scales: [1.0, 1.0], padding: 0.0, objective: 1.0,
+                value: 0.0, selector_first: index % 2 == 0,
+            });
+        }
+        let (mut source, request, state, selectors) = generated_sos1(members, cardinality_id);
+        let original = source.clone();
+        let plan = source.plan_promote_sos1_big_m(&request);
+        prop_assert!(plan.is_fully_valid(), "{:?}", plan.rejections().collect::<Vec<_>>());
+        let exported = plan.into_v1_hints();
+        prop_assert_eq!(&source, &original);
+        if zero_members > 1 {
+            prop_assert!(exported.unwrap_err().to_string().contains("ambiguous"));
+        } else {
+            let mut hints = exported.unwrap();
+            prop_assert_eq!(hints.sos1_constraints.len(), 1);
+            if reverse_hints {
+                hints.sos1_constraints[0].decision_variables.reverse();
+                hints.sos1_constraints[0].big_m_constraint_ids.reverse();
+            }
+            prop_assert_eq!(source.sos1_big_m_promotion_request_from_v1_hint(&hints.sos1_constraints[0]).unwrap(), request.clone());
+            let bytes = source.into_v1_with_hints(hints).unwrap().encode_to_vec();
+            prop_assert_eq!(Instance::from_v1_bytes(&bytes).unwrap(), original.clone());
+            let (imported, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
+            prop_assert_eq!(report.sos1_outcomes().len(), 1);
+            prop_assert!(report.sos1_outcomes()[0].is_promoted());
+            let mut direct = original.clone();
+            direct.plan_promote_sos1_big_m(&request).apply_if_fully_valid().unwrap();
+            prop_assert_eq!(&imported, &direct);
+
+            // Exhaust the auxiliary binary assignments for this generated
+            // member state, independently of the reconstructed selector map.
+            let projected = (0..1_usize << selectors.len()).any(|mask| {
+                let mut extended = state.clone();
+                for (index, &selector) in selectors.iter().enumerate() {
+                    extended.entries.insert(selector, ((mask >> index) & 1) as f64);
+                }
+                original.evaluate(&extended, ATol::default()).unwrap().feasible_relaxed()
+            });
+            let expected_objective = original.objective().evaluate(&state, ATol::default()).unwrap();
+            for promoted in [&direct, &imported] {
+                let result = promoted.evaluate(&state, ATol::default()).unwrap();
+                prop_assert_eq!(result.feasible_relaxed(), projected);
+                prop_assert_eq!(*result.objective(), expected_objective);
+            }
+        }
+    }
+
     #[test]
     fn one_hot_plan_hints_round_trip_arbitrary_source_ids_and_members(
         members in prop::collection::btree_set(0_u64..32, 1..12),
