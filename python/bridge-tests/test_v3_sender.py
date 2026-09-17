@@ -1,4 +1,4 @@
-"""Run with the independent Rust SDK v3 bridge fixture wheel installed."""
+"""Required wheel integration suite for the independent Rust SDK v3 sender."""
 
 import ommx
 import ommx_pyo3_bridge_fixture as sender

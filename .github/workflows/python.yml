@@ -85,6 +85,42 @@ jobs:
           name: wheels
           path: wheels
 
+  bridge-v1:
+    name: Rust v3 sender to Python 2.9
+    runs-on: ubuntu-latest
+    needs: build-wheel
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: "3.12"
+      - name: Checkout independent Rust SDK v3 sender
+        uses: actions/checkout@v6
+        with:
+          # Merged #1225 provides the regular-formulation / promotion-plan fixture.
+          ref: ee9c8d5cd9f8c9a1e97fd9298fc5c8515d50192e
+          path: .bridge-sender
+      - name: Create isolated receiver environment
+        run: uv venv --python 3.12 .venv-bridge
+      - name: Build sender wheel
+        run: >
+            uvx --from 'maturin>=1.12.2,<2' maturin build
+            --locked --out bridge-wheels
+            --interpreter .venv-bridge/bin/python
+            -m .bridge-sender/rust/ommx-pyo3-bridge/fixture/Cargo.toml
+      - name: Download receiver wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: wheels
+          path: wheels
+      - name: Install independent sender and receiver wheels
+        run: uv pip install --python .venv-bridge/bin/python wheels/*.whl bridge-wheels/*.whl pytest pyright
+      - name: Type check bridge integration
+        run: uv run --no-project --python .venv-bridge/bin/python pyright --pythonpath .venv-bridge/bin/python python/bridge-tests
+      - name: Test bridge integration
+        run: uv run --no-project --python .venv-bridge/bin/python pytest -v python/bridge-tests
+
   # Test a single wheel with multiple python versions
   test:
     runs-on: ubuntu-latest
