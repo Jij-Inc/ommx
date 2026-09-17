@@ -180,6 +180,8 @@ impl Instance {
     /// and removed IDs are errors; an empty set applies no updates. Selected
     /// non-affine rows are skipped. All eligible variables in the selected
     /// rows may have their bounds tightened.
+    /// Only compact polynomial functions of degree at most one are used;
+    /// composed expressions are skipped even when mathematically affine.
     ///
     /// ``max_terms`` limits each affine row to this many variable terms
     /// (default: 32). The constant term does not count. Rows exceeding the
@@ -191,6 +193,9 @@ impl Instance {
     /// Every row reads the bounds at entry; all updates are collected and applied
     /// together. Newly tightened bounds are not reused during this call. Call
     /// again to propagate changes through further rows.
+    /// Candidate extrema are combined before comparing changes with ``atol``.
+    /// When continuous stored endpoints cross but their tolerated domains overlap,
+    /// use the interval between the endpoints, intersected with the entry bounds.
     /// Both sides of equalities are used. Tolerance is accounted for algebraically:
     /// continuous domains expand to ``[lower - atol, upper + atol]``, and row
     /// residuals may be at most ``atol``. For ``a*x + r <= 0`` with ``a > 0``,

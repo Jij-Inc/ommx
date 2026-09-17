@@ -173,12 +173,16 @@ changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
 
 Both methods make one simultaneous pass: every constraint reads the bounds at
 entry, and the updates are applied together. New bounds are not reused during
-the call; call it again to propagate updates through other constraints.
+the call; call it again to propagate updates through other constraints. Candidates
+are combined before comparing changes with `atol`, so their processing order does
+not determine which candidate is retained.
 
 {meth}`~ommx.Instance.tighten_bounds_simultaneously_once` uses every active regular
 constraint. {meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`
 uses only the supplied IDs; unknown or removed IDs fail without applying changes,
-and an empty set applies no updates. Both methods skip non-affine rows.
+and an empty set applies no updates. Both methods use compact polynomial functions
+of degree at most one. Non-affine rows and composed expressions are skipped,
+even when an expression is mathematically affine.
 They also skip rows with more than `max_terms` variable terms (default: 32),
 before evaluating any bound candidates. The constant term does not count;
 terms of fixed, semi and dependent variables do count. A limit of zero processes

@@ -33,6 +33,8 @@ impl Instance {
     /// removed IDs are errors; an empty set applies no updates. Non-affine
     /// selected rows are skipped, as in [`Self::tighten_bounds_simultaneously_once`].
     /// All eligible variables in the selected rows may have their bounds tightened.
+    /// Only compact polynomial functions convertible with [`Function::as_linear`]
+    /// are used; composed expressions are skipped even when mathematically affine.
     ///
     /// `max_terms` limits the number of variable terms in each affine row;
     /// the constant term does not count. Rows exceeding the limit are skipped
@@ -47,6 +49,9 @@ impl Instance {
     /// are not reused during this call. Call again to propagate the resulting
     /// bounds through further rows.
     /// Returns the new bounds of the variables actually changed.
+    /// Candidate extrema are combined before comparing changes with `atol`.
+    /// When continuous stored endpoints cross but their tolerated domains overlap,
+    /// use the interval between the endpoints, intersected with the entry bounds.
     ///
     /// Tolerance is accounted for algebraically: continuous domains are expanded
     /// to `[lower - atol, upper + atol]`, and row residuals may be at most `atol`.
@@ -200,37 +205,47 @@ fn infer_bounds_simultaneously_once(
                 if !endpoint.is_finite() {
                     continue;
                 }
-                let updated = updates.entry(*id).or_insert_with(|| original.clone());
-                let current = updated.bound();
-                let bound = if sign > 0.0 {
-                    let mut upper = endpoint.min(current.upper());
-                    // Continuous residual bounds may overlap only within
-                    // tolerance. Keep a conservative point interval in that
-                    // case rather than falsely diagnosing infeasibility.
-                    if original.kind() == Kind::Continuous {
-                        upper = upper.max(current.lower());
-                    }
-                    Bound::new(current.lower(), upper)
+                // Merge every candidate before applying the change tolerance.
+                // Filtering relative to an earlier candidate would make the
+                // result depend on constraint IDs. Keep possibly crossed
+                // endpoints until every row has contributed.
+                let (lower, upper) = updates
+                    .entry(*id)
+                    .or_insert((original.bound().lower(), original.bound().upper()));
+                if sign > 0.0 {
+                    *upper = upper.min(endpoint);
                 } else {
-                    let mut lower = (-endpoint).max(current.lower());
-                    if original.kind() == Kind::Continuous {
-                        lower = lower.min(current.upper());
-                    }
-                    Bound::new(lower, current.upper())
-                }.map_err(|error| {
-                    crate::error!({ ?row_id, ?id, %error }, "Bound tightening found incompatible bounds for variable {id:?} from constraint {row_id:?}: {error}")
-                })?;
-                updated.clip_bound(*id, bound, atol)?;
+                    *lower = lower.max(-endpoint);
+                }
             }
         }
     }
-    Ok(updates
-        .into_iter()
-        .filter_map(|(id, variable)| {
-            (variable.bound() != instance.decision_variables()[&id].bound())
-                .then_some((id, variable.bound()))
-        })
-        .collect())
+    let mut bounds = Bounds::new();
+    for (id, (lower, upper)) in updates {
+        let original = &instance.decision_variables()[&id];
+        let bound = if lower > upper
+            && original.kind() == Kind::Continuous
+            && lower - atol.into_inner() <= upper + atol.into_inner()
+        {
+            // The tolerated domains overlap despite crossed stored endpoints.
+            // Their hull conservatively contains that overlap without choosing
+            // one candidate by row order. Intersect with the entry bounds so
+            // the stored interval never widens.
+            Bound::new(
+                upper.max(original.bound().lower()),
+                lower.min(original.bound().upper()),
+            )
+        } else {
+            Bound::new(lower, upper)
+        }.map_err(|error| {
+            crate::error!({ ?id, lower, upper, %error }, "Bound tightening found incompatible bounds for variable {id:?}: {error}")
+        })?;
+        let mut updated = original.clone();
+        if updated.clip_bound(id, bound, atol)? {
+            bounds.insert(id, updated.bound());
+        }
+    }
+    Ok(bounds)
 }
 
 // Non-finite interval arithmetic prevents only this inference. Other errors
@@ -325,6 +340,137 @@ mod tests {
             .unwrap()
             .is_empty());
         assert_eq!(selected, before_empty);
+    }
+
+    #[test]
+    fn compact_affine_representations_are_used_but_composed_expressions_are_skipped() {
+        let linear = (linear!(0) - coeff!(2.0)).unwrap();
+        for function in [
+            Function::Linear(linear.clone()),
+            Function::Quadratic(linear.clone().into()),
+            Function::Polynomial(linear.clone().into()),
+        ] {
+            let mut problem = instance(
+                vec![continuous(-10.0, 10.0)],
+                vec![Constraint::less_than_or_equal_to_zero(function)],
+            );
+            assert_eq!(
+                problem
+                    .tighten_bounds_simultaneously_once(32, ATol::new(0.125).unwrap())
+                    .unwrap(),
+                BTreeMap::from([(0.into(), Bound::new(-10.0, 2.0).unwrap())]),
+            );
+        }
+        // min(f, f) is mathematically affine but remains a composed expression.
+        let composed = Function::Linear(linear.clone()).min(Function::Linear(linear));
+        assert!(matches!(composed, Function::Expression(_)));
+        let mut problem = instance(
+            vec![continuous(-10.0, 10.0)],
+            vec![Constraint::less_than_or_equal_to_zero(composed)],
+        );
+        let original = problem.clone();
+        assert!(problem
+            .tighten_bounds_simultaneously_once(32, ATol::new(0.125).unwrap())
+            .unwrap()
+            .is_empty());
+        assert_eq!(problem, original);
+    }
+
+    #[test]
+    fn candidate_aggregation_is_independent_of_constraint_ids() {
+        let atol = ATol::new(0.125).unwrap();
+        for (terms, expected) in [
+            (
+                [(1.0, -5.0), (1.0, -4.9375)],
+                Bound::new(-10.0, 4.9375).unwrap(),
+            ),
+            (
+                [(-1.0, -5.0), (-1.0, -4.9375)],
+                Bound::new(-4.9375, 10.0).unwrap(),
+            ),
+            ([(1.0, 0.0), (-1.0, 0.125)], Bound::new(0.0, 0.125).unwrap()),
+            // The tolerated domains meet at exactly one point (gap = 2*atol).
+            ([(1.0, 0.0), (-1.0, 0.25)], Bound::new(0.0, 0.25).unwrap()),
+        ] {
+            let rows: Vec<_> = terms
+                .into_iter()
+                .map(|(a, c)| {
+                    let mut row = (crate::Coefficient::try_from(a).unwrap() * linear!(0)).unwrap();
+                    if let Ok(c) = crate::Coefficient::try_from(c) {
+                        row.add_term(LinearMonomial::Constant, c).unwrap();
+                    }
+                    Constraint::less_than_or_equal_to_zero(row.into())
+                })
+                .collect();
+            for reverse in [false, true] {
+                let mut rows = rows.clone();
+                if reverse {
+                    rows.reverse();
+                }
+                let mut problem = instance(vec![continuous(-10.0, 10.0)], rows);
+                let updates = problem
+                    .tighten_bounds_simultaneously_once(32, atol)
+                    .unwrap();
+                assert_eq!(updates, BTreeMap::from([(0.into(), expected)]));
+                assert_eq!(problem.decision_variables()[&0.into()].bound(), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn jointly_incompatible_candidates_are_atomic_in_any_order() {
+        let atol = ATol::new(0.125).unwrap();
+        for kind in [Kind::Continuous, Kind::Integer] {
+            for reverse in [false, true] {
+                let mut rows = vec![
+                    Constraint::less_than_or_equal_to_zero(
+                        (linear!(0) - coeff!(2.0)).unwrap().into(),
+                    ),
+                    Constraint::less_than_or_equal_to_zero(
+                        (-linear!(0) + coeff!(4.0)).unwrap().into(),
+                    ),
+                ];
+                if reverse {
+                    rows.reverse();
+                }
+                let mut problem = instance(
+                    vec![
+                        DecisionVariable::new(kind, Bound::new(-10.0, 10.0).unwrap(), atol)
+                            .unwrap(),
+                    ],
+                    rows,
+                );
+                let original = problem.clone();
+                let error = problem
+                    .tighten_bounds_simultaneously_once(32, atol)
+                    .unwrap_err();
+                assert!(error.to_string().contains("incompatible bounds"));
+                assert_eq!(problem, original);
+            }
+        }
+    }
+
+    #[test]
+    fn crossing_continuous_candidates_stay_within_entry_bounds() {
+        let atol = ATol::new(0.125).unwrap();
+        for sign in [-1.0, 1.0] {
+            let variable = if sign > 0.0 {
+                continuous(0.0, 10.0)
+            } else {
+                continuous(-10.0, 0.0)
+            };
+            let row = ((crate::Coefficient::try_from(sign).unwrap() * linear!(0)).unwrap()
+                + coeff!(0.125))
+            .unwrap();
+            let mut problem = instance(
+                vec![variable],
+                vec![Constraint::less_than_or_equal_to_zero(row.into())],
+            );
+            let updates = problem
+                .tighten_bounds_simultaneously_once(32, atol)
+                .unwrap();
+            assert_eq!(updates, BTreeMap::from([(0.into(), Bound::zero())]));
+        }
     }
 
     #[test]

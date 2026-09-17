@@ -151,12 +151,14 @@ changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
 
 どちらのメソッドも、すべての対象制約が呼び出し開始時のboundを使い、導出した更新を
 まとめて1回適用します。同じ呼び出しの途中では新しいboundを再利用しません。
-更新を他の制約へ伝播させるには再度呼び出します。
+更新を他の制約へ伝播させるには再度呼び出します。候補をすべて集約してから`atol`で
+更新差分を判定するため、候補の処理順序によって採用されるboundは変わりません。
 
 {meth}`~ommx.Instance.tighten_bounds_simultaneously_once`はすべての有効な通常制約を使います。
 {meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`は指定したIDの
 制約だけを使います。不明・削除済みのIDは何も変更せずにエラーとし、空集合は更新しません。
-どちらも非線形のrowは処理しません。
+どちらも次数が1以下のcompact polynomial形式の関数を使います。非線形のrowや
+合成式（Expression）はスキップします。合成式は数学的にaffineな場合も対象外です。
 また、変数項が`max_terms`（既定値: 32）を超えるrowは、bound候補を評価する前に
 スキップします。定数項は数えませんが、固定変数・semi変数・従属変数の項は数えます。
 上限を0にすると定数だけのrowを処理し、その矛盾は引き続き検出します。

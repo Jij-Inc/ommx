@@ -21,6 +21,40 @@ def test_tighten_bounds_simultaneously_once_returns_changed_domains() -> None:
     assert set(instance.constraints) == {0, 1}
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize(
+    ("terms", "expected"),
+    [
+        ([(1, -5), (1, -4.9375)], Bound(-10, 4.9375)),
+        ([(-1, -5), (-1, -4.9375)], Bound(-4.9375, 10)),
+        ([(1, 0), (-1, 0.125)], Bound(0, 0.125)),
+        ([(1, 0), (-1, 0.25)], Bound(0, 0.25)),
+        ([(1, -2), (-1, 4)], None),
+    ],
+)
+def test_candidate_aggregation_is_independent_of_constraint_ids(
+    reverse: bool, terms: list[tuple[float, float]], expected: Bound | None
+) -> None:
+    x = DecisionVariable.continuous(0, lower=-10, upper=10)
+    rows = [a * x + c <= 0 for a, c in terms]
+    if reverse:
+        rows.reverse()
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=0,
+        decision_variables=[x],
+        constraints=dict(enumerate(rows)),
+    )
+    if expected is None:
+        before = instance.to_v2_bytes()
+        with pytest.raises(RuntimeError, match="incompatible bounds"):
+            instance.tighten_bounds_simultaneously_once(atol=0.125)
+        assert instance.to_v2_bytes() == before
+    else:
+        assert instance.tighten_bounds_simultaneously_once(atol=0.125) == {0: expected}
+        assert instance.get_decision_variable_by_id(0).bound == expected
+
+
 @pytest.mark.parametrize("selected", [False, True])
 @pytest.mark.parametrize("num_terms", [32, 33])
 def test_default_term_limit_and_explicit_override(
