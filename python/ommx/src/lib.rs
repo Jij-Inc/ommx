@@ -18,6 +18,7 @@ mod named_function;
 mod parameters;
 mod parametric_instance;
 mod polynomial;
+mod pyo3_bridge;
 mod quadratic;
 mod random;
 mod sample_set;
@@ -139,6 +140,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;
     m.add_function(wrap_pyfunction!(get_default_atol, m)?)?;
 
+    pyo3_bridge::register(m)?;
     Ok(())
 }
 

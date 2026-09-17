@@ -12,6 +12,7 @@ dependencies = [
  "fnv",
  "ocipkg",
  "ommx",
+ "ommx-pyo3-bridge",
  "pyo3",
  "pyo3-log",
  "pyo3-stub-gen",
@@ -1608,6 +1609,14 @@ dependencies = [
  "thiserror",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "ommx-pyo3-bridge"
+version = "3.0.0-beta.6"
+source = "git+https://github.com/Jij-Inc/ommx?rev=303c3f9c54c6cc9d90d1b702b9eae8f23ab738f3#303c3f9c54c6cc9d90d1b702b9eae8f23ab738f3"
+dependencies = [
+ "pyo3",
 ]
 
 [[package]]
