@@ -465,8 +465,8 @@ mod tests {
         - clause 0 (`MPS`):
           - variable kind SemiContinuous for IDs {VariableID(1)} is not allowed; allowed kinds are {Continuous, Integer, Binary}
           - variable kind SemiInteger for IDs {VariableID(2)} is not allowed; allowed kinds are {Continuous, Integer, Binary}
-          - objective function is not polynomial
-          - regular EqualToZero constraint functions for IDs {ConstraintID(1)} are not polynomial
+          - objective function is not stored in the expanded polynomial form required by this clause
+          - regular EqualToZero constraint functions for IDs {ConstraintID(1)} are not stored in the expanded polynomial form required by this clause
           - regular LessThanOrEqualToZero constraint degrees {ConstraintID(2): Degree(3)} exceed degree <= 2
           - indicator constraints {IndicatorConstraintID(1)} are not allowed
           - one-hot constraints {OneHotConstraintID(1)} are not allowed
