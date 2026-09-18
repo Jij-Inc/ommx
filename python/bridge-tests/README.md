@@ -4,7 +4,8 @@
 such as JijModeling. It belongs to the root Cargo and uv workspaces and shares
 their committed lockfiles. Its Rust SDK and bridge dependencies are explicitly the
 published `=3.0.0-beta.6` crates from crates.io. Its Python dependency is
-`ommx==2.9.0`.
+`ommx>=2.9.0,<3.0.0`. The integration test requires the installed SDK version to
+match the current SDK manifest, including after patch-version updates.
 
 The fixture sets `tool.uv.package = false`, so ordinary workspace syncs do not
 build or install it. The wheel test explicitly adds the built fixture wheel,
@@ -29,7 +30,8 @@ native and Big-M constraint violations or finite-ATol feasibility to agree.
 The existing Python-version test matrix uses the same SDK wheel and runs in
 parallel with `bridge`; the producer suite is not repeated in that matrix.
 
-The producer sends only ProtobufV1. This branch tests only Python SDK 2.9.0.
+The producer sends only ProtobufV1. This branch tests only the maintained
+Python SDK 2.x, starting with 2.9.0.
 No source checkout of Rust SDK v3 or CI-time Cargo manifest rewriting is needed.
 The seven receiver factories continue to have their own SDK unit tests in
 `python/ommx-tests/tests/test_bridge_receiver.py`.

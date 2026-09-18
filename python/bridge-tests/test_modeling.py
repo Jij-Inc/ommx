@@ -2,6 +2,8 @@
 
 from importlib.metadata import version
 from itertools import product
+from pathlib import Path
+import tomllib
 
 import bridge_test_modeling as modeling
 import ommx
@@ -10,7 +12,9 @@ from ommx import v1
 
 
 def test_receiver_distribution():
-    assert version("ommx") == "2.9.0"
+    sdk_manifest = Path(__file__).parents[1] / "ommx" / "pyproject.toml"
+    expected_version = tomllib.loads(sdk_manifest.read_text())["project"]["version"]
+    assert version("ommx") == expected_version
     assert ommx.Instance is v1.Instance
 
 
