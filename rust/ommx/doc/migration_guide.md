@@ -66,6 +66,15 @@ the collection unchanged. These operations apply no tolerance and do not check
 variable kinds or fixed values; application to an instance performs those checks.
 The serialized map representation is unchanged.
 
+Use [`DecisionVariable::clip_bound_exact`](crate::DecisionVariable::clip_bound_exact)
+or [`Instance::clip_bounds_exact`](crate::Instance::clip_bounds_exact) when the
+supplied f64 endpoints are the intended boundaries. These methods apply even
+sub-tolerance continuous changes and round discrete intervals inward without
+error compensation. `clip_bound` and `clip_bounds` keep their existing
+tolerance-aware behavior. Exact table/instance clipping also requires every
+specified fixed value to satisfy the resulting bound and kind exactly, even
+when the bound does not change.
+
 ```rust
 use ommx::{Bound, Bounds, VariableID};
 use std::collections::BTreeMap;

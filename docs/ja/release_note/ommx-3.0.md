@@ -12,7 +12,8 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 {meth}`~ommx.Instance.promote_sos1_big_m`は、指定されたBig-M linkだけを使って
 boundの更新を準備します。成功した定式化のboundを昇格と一緒に適用し、strictで
-拒否された場合はInstance全体を変更しません。縮小されたbinary selectorのdomainも、
+拒否された場合はInstance全体を変更しません。微小なbound更新も反映し、
+デフォルトの許容誤差は参照しません。縮小されたbinary selectorのdomainも、
 memberの取りうる各値の非零indicatorを表現できれば受け入れます。
 詳細は{ref}`SOS1昇格ガイド <sos1-big-m-formulation>`を参照してください。
 

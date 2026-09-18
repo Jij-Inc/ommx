@@ -11,6 +11,17 @@ impl Instance {
     pub fn clip_bounds(&mut self, bounds: &Bounds, atol: ATol) -> crate::Result<()> {
         self.decision_variables.clip_bounds(bounds, atol)
     }
+
+    /// Apply additional bounds atomically without tolerance.
+    ///
+    /// Uses [`crate::DecisionVariable::clip_bound_exact`], retaining every
+    /// representable continuous change and rounding discrete bounds inward.
+    /// All supplied IDs must exist. Their fixed values are checked exactly
+    /// against the resulting bound and kind, even for unchanged bounds.
+    /// If any check fails, the instance remains unchanged.
+    pub fn clip_bounds_exact(&mut self, bounds: &Bounds) -> crate::Result<()> {
+        self.decision_variables.clip_bounds_exact(bounds)
+    }
 }
 
 #[cfg(test)]
@@ -29,6 +40,63 @@ mod tests {
             ATol::default(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn exact_batch_clipping_is_atomic_for_every_failure_and_keeps_tiny_updates() {
+        let bound = Bound::new(0.0, 3.0).unwrap();
+        let variables = (0_u64..3)
+            .map(|id| {
+                (
+                    id.into(),
+                    DecisionVariable::new(
+                        if id == 2 {
+                            crate::Kind::Integer
+                        } else {
+                            crate::Kind::Continuous
+                        },
+                        bound,
+                        ATol::default(),
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect();
+        let mut instance = Instance {
+            decision_variables: DecisionVariableTable::with_fixed_values(
+                variables,
+                Default::default(),
+                [(1.into(), 3.0)].into(),
+                ATol::default(),
+            )
+            .unwrap(),
+            ..Default::default()
+        };
+        let original = instance.clone();
+        let tiny = Bound::new(0.0, 3.0_f64.next_down()).unwrap();
+        for (id, invalid) in [
+            (1_u64, tiny),                        // excludes the fixed value
+            (2, Bound::new(1.25, 1.75).unwrap()), // no integer remains
+            (2, Bound::new(4.0, 5.0).unwrap()),   // empty intersection
+            (99, bound),                          // unknown ID
+        ] {
+            assert!(instance
+                .clip_bounds_exact(&Bounds::from([(0.into(), tiny), (id.into(), invalid)]))
+                .is_err());
+            assert_eq!(instance, original);
+        }
+        instance
+            .clip_bounds_exact(&Bounds::from([(0.into(), tiny), (2.into(), tiny)]))
+            .unwrap();
+        assert_eq!(instance.decision_variables()[&0.into()].bound(), tiny);
+        assert_eq!(
+            instance.decision_variables()[&2.into()].bound(),
+            Bound::new(0.0, 2.0).unwrap()
+        );
+        assert_eq!(instance.fixed_decision_variable_value(1.into()), Some(3.0));
+        let before_empty = instance.clone();
+        instance.clip_bounds_exact(&Bounds::new()).unwrap();
+        assert_eq!(instance, before_empty);
     }
 
     #[test]

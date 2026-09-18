@@ -289,8 +289,9 @@ impl Instance {
     /// scaling is allowed; Big-M must cover the prepared member bounds exactly.
     /// Bounds are derived directly from exact link-coefficient ratios without
     /// tolerance expansion. Integer limits are rounded inward; conversion to
-    /// floating-point bounds rounds outward. Clipping ignores updates within
-    /// the default absolute tolerance. Coverage validation is exact.
+    /// floating-point bounds rounds outward. Exact clipping retains even
+    /// sub-tolerance updates and does not read the default tolerance.
+    /// Coverage validation is exact.
     /// Promotion does not promise identical
     /// violations or feasibility classification at finite tolerance.
     /// Unknown mode strings raise {class}`ValueError` before planning.

@@ -195,9 +195,9 @@ Promotion checks mathematical equivalence using the prepared member bounds.
 Positive scaling of link rows is allowed, and tight Big-M values `U` and `-L`
 are sufficient. Bounds are derived directly from the exact link-coefficient
 ratios, without tolerance expansion. Integer limits are rounded inward, and
-conversion to floating-point bounds rounds outward. Clipping ignores updates
-within the default absolute tolerance. Any remaining Big-M shortfall is
-rejected, including updates ignored within that tolerance. Equal per-row
+conversion to floating-point bounds rounds outward. Exact clipping retains
+even sub-tolerance updates; planning and application do not read the default
+tolerance. Any remaining Big-M shortfall is rejected. Equal per-row
 violations and identical feasibility classification at a finite evaluation
 tolerance are not guaranteed. A narrowed fresh selector is accepted only when
 its domain permits the canonical indicator for every possible member value.

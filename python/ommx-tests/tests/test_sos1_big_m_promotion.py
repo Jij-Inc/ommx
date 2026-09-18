@@ -329,25 +329,11 @@ def test_promote_sos1_big_m_checks_mathematical_coverage(
     request = Sos1BigMPromotionRequest(
         {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100)}}
     )
-    before = instance.to_v2_bytes()
-
-    if shortfall == 0:
-        report = instance.promote_sos1_big_m(request, mode=mode)
-        assert report.promoted == {102: 0}
-        assert report.rejections == {}
-        return
-
-    if mode == "strict":
-        with pytest.raises(Sos1BigMPromotionBatchRejectedError) as exc_info:
-            instance.promote_sos1_big_m(request, mode=mode)
-        assert set(exc_info.value.rejections) == {102}
-    else:
-        report = instance.promote_sos1_big_m(request, mode=mode)
-        assert_report_keys(report, request)
-        assert report.promoted == {}
-        assert set(report.rejections) == {102}
-
-    assert instance.to_v2_bytes() == before
+    report = instance.promote_sos1_big_m(request, mode=mode)
+    assert_report_keys(report, request)
+    assert report.promoted == {102: 0}
+    assert report.rejections == {}
+    assert instance.get_decision_variable_by_id(1).bound.upper == 3 - shortfall
 
 
 def test_promote_sos1_big_m_rejects_unknown_mode_before_mutation() -> None:

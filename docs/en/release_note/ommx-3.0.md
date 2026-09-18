@@ -13,6 +13,7 @@ Changes merged after the most recent release will be appended here as they land,
 {meth}`~ommx.Instance.promote_sos1_big_m` now prepares tighter variable bounds
 using only the claimed Big-M links. Successful entries apply those bounds
 together with promotion; strict rejection leaves the entire Instance unchanged.
+Bound updates include sub-tolerance changes and do not consult the default tolerance.
 Narrowed binary selectors are accepted when they can represent every canonical
 nonzero indicator of their member. See the
 {ref}`SOS1 promotion guide <sos1-big-m-formulation>`.

@@ -31,8 +31,8 @@
 
 use super::Instance;
 use crate::{
-    ATol, Bound, Bounds, Constraint, ConstraintContext, ConstraintID, Equality, Evaluate, Function,
-    Kind, Linear, LinearMonomial, RemovedReason, Sos1Constraint, Sos1ConstraintID, VariableID,
+    Bound, Bounds, Constraint, ConstraintContext, ConstraintID, Equality, Evaluate, Function, Kind,
+    Linear, LinearMonomial, RemovedReason, Sos1Constraint, Sos1ConstraintID, VariableID,
     VariableIDSet,
 };
 use num::ToPrimitive;
@@ -250,7 +250,6 @@ pub struct Sos1BigMPromotionPlan<'a> {
     instance: &'a mut Instance,
     entries: BTreeMap<ConstraintID, crate::Result<PlannedSos1BigMPromotion>>,
     tightened_bounds: Bounds,
-    atol: ATol,
 }
 
 fn find_sos1_big_m_promotion_conflicts(
@@ -342,13 +341,12 @@ fn canonical_sos1_big_m_cardinality(
 
 impl<'a> Sos1BigMPromotionPlan<'a> {
     fn new(instance: &'a mut Instance, request: &Sos1BigMPromotionRequest) -> Self {
-        let atol = ATol::default();
         let mut candidates = request
             .iter()
             .map(|(&cardinality, claims)| {
                 (
                     cardinality,
-                    instance.build_sos1_big_m_promotion_candidate(cardinality, claims, atol),
+                    instance.build_sos1_big_m_promotion_candidate(cardinality, claims),
                 )
             })
             .collect::<BTreeMap<_, _>>();
@@ -388,7 +386,6 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
                 instance,
                 entries,
                 tightened_bounds: Bounds::new(),
-                atol,
             };
         }
 
@@ -434,7 +431,6 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
             instance,
             entries,
             tightened_bounds,
-            atol,
         }
     }
 
@@ -520,7 +516,6 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
             instance,
             entries,
             tightened_bounds,
-            atol,
         } = self.require_fully_valid()?;
         let sos1_constraints = entries
             .into_iter()
@@ -549,7 +544,7 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
             .collect::<crate::Result<_>>()?;
         // All fallible hint-shape checks finish before any bound is committed.
         instance
-            .clip_bounds(&tightened_bounds, atol)
+            .clip_bounds_exact(&tightened_bounds)
             .expect("bound updates were validated against the exclusively borrowed instance");
         Ok(crate::v1::ConstraintHints {
             sos1_constraints,
@@ -577,10 +572,9 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
             instance,
             entries,
             tightened_bounds,
-            atol,
         } = self;
         instance
-            .clip_bounds(&tightened_bounds, atol)
+            .clip_bounds_exact(&tightened_bounds)
             .expect("bound updates were validated against the exclusively borrowed instance");
         if entries.values().any(Result::is_ok) {
             let removal_reasons = entries
@@ -933,10 +927,10 @@ impl Instance {
     /// and the original binary selector domains. Coefficient ratios are computed
     /// as exact rational numbers, rounded down for integer members, and converted
     /// to outward-rounded floating-point bounds. No cardinality row or unrelated
-    /// constraint is used. Bound clipping ignores changes within [`ATol::default`],
-    /// captured when the plan is created; the link inference itself uses no tolerance.
+    /// constraint is used. Exact bound clipping retains even sub-tolerance updates;
+    /// neither inference nor application reads the default tolerance.
     /// Big-M must cover the resulting stored member bounds exactly; any remaining
-    /// shortfall, including an update ignored within ATol, is rejected. Coverage compares
+    /// shortfall is rejected. Coverage compares
     /// the original f64 coefficients as exact rational numbers, avoiding
     /// division-rounding artifacts. The normalized Big-M and endpoint
     /// residuals must also remain finite.
@@ -1019,7 +1013,6 @@ impl Instance {
     fn prepare_sos1_link_bounds(
         &self,
         claims: &BTreeMap<VariableID, Sos1BigMSelectorClaim>,
-        atol: ATol,
     ) -> crate::Result<Bounds> {
         let mut link_bounds = Bounds::new();
         let mut selectors = VariableIDSet::new();
@@ -1093,7 +1086,7 @@ impl Instance {
         for (id, bound) in link_bounds {
             let original = &self.decision_variables()[&id];
             let mut updated = original.clone();
-            updated.clip_bound(id, bound, atol)?;
+            updated.clip_bound_exact(id, bound)?;
             if updated.bound() != original.bound() {
                 prepared.insert(id, updated.bound());
             }
@@ -1105,13 +1098,12 @@ impl Instance {
         &self,
         cardinality_constraint: ConstraintID,
         selector_claims: &BTreeMap<VariableID, Sos1BigMSelectorClaim>,
-        atol: ATol,
     ) -> crate::Result<Sos1BigMPromotionCandidate> {
         if selector_claims.is_empty() {
             crate::bail!("SOS1 Big-M promotion request must contain at least one member");
         }
 
-        let tightened_bounds = self.prepare_sos1_link_bounds(selector_claims, atol)?;
+        let tightened_bounds = self.prepare_sos1_link_bounds(selector_claims)?;
         let members = selector_claims.keys().copied().collect::<VariableIDSet>();
         let mut fresh_selectors = BTreeMap::new();
         let mut fresh_selector_ids = VariableIDSet::new();
@@ -2212,7 +2204,6 @@ mod tests {
                 .build_sos1_big_m_promotion_candidate(
                     cardinality_row_id(),
                     &request[&cardinality_row_id()],
-                    ATol::default(),
                 )
                 .unwrap()
         };
@@ -2444,7 +2435,13 @@ mod tests {
             .constraint_collection
             .replace_active_row(upper_row_id(), upper_link(1.0, 2.0 - atol.into_inner()))
             .unwrap();
-        assert_atomic_rejection(too_small, &request, "does not cover the member domain");
+        too_small
+            .promote_sos1_big_m_if_fully_valid(&request)
+            .unwrap();
+        assert_eq!(
+            too_small.decision_variables()[&member_integer_id()].bound(),
+            Bound::new(-2.0, 2.0 - atol.into_inner()).unwrap()
+        );
     }
 
     #[test]
@@ -2557,7 +2554,7 @@ mod tests {
     }
 
     #[test]
-    fn sub_tolerance_shortfalls_use_mathematical_integer_rounding() {
+    fn sub_tolerance_updates_are_applied_exactly_for_continuous_and_integer_members() {
         for kind in [Kind::Integer, Kind::Continuous] {
             for upper in [true, false] {
                 let member =
@@ -2574,22 +2571,27 @@ mod tests {
                     .constraint_collection
                     .replace_active_row(id, link)
                     .unwrap();
-                if kind == Kind::Continuous {
-                    // Clipping ignores this sub-ATol change; coverage must
-                    // still reject the unchanged continuous endpoint.
-                    assert_atomic_rejection(instance, &request, "does not cover the member domain");
-                } else {
-                    // The exact link excludes the integer endpoint even if
-                    // point evaluation would accept it within ATol.
-                    instance
-                        .promote_sos1_big_m_if_fully_valid(&request)
-                        .unwrap();
-                    let expected = if upper {
-                        Bound::new(-2.0, 2.0)
+                let expected = match (kind, upper) {
+                    (Kind::Continuous, true) => Bound::new(-2.0, 3.0_f64.next_down()),
+                    (Kind::Continuous, false) => Bound::new(-2.0_f64.next_down(), 3.0),
+                    (Kind::Integer, true) => Bound::new(-2.0, 2.0),
+                    (Kind::Integer, false) => Bound::new(-1.0, 3.0),
+                    _ => unreachable!(),
+                }
+                .unwrap();
+                for export_hints in [false, true] {
+                    let mut instance = instance.clone();
+                    if export_hints {
+                        instance
+                            .plan_promote_sos1_big_m(&request)
+                            .apply_bound_tightening_and_convert_to_v1_hints()
+                            .unwrap();
+                        assert_eq!(instance.constraints().len(), 3);
                     } else {
-                        Bound::new(-1.0, 3.0)
+                        instance
+                            .promote_sos1_big_m_if_fully_valid(&request)
+                            .unwrap();
                     }
-                    .unwrap();
                     assert_eq!(
                         instance.decision_variables()[&member_integer_id()].bound(),
                         expected
