@@ -59,7 +59,7 @@ jobs:
         run: task python:ommx:pyright
 
   build-wheel:
-    name: Build SDK Wheel
+    name: Build Wheel
     runs-on: ubuntu-latest
     env:
       python-version: 3.12
