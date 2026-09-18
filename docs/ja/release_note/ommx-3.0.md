@@ -11,8 +11,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 ## 3.0.0 Beta 6
 
 Python パッケージのバージョンは `3.0.0b6` です。
-ここでは [beta.5 以降の変更](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b5...acb0a088e79ef94762ad616c900d63ab504a6142)を説明します。
-
+ここでは [beta.5 以降の変更](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b5...python-3.0.0b6)を説明します。
 このリリースでは、MPS・QPLIB から読み込むモデルを修正し、すべての特殊制約に
 違反量を導入しました。各制約の実行可能性判定は `violation <= atol` に統一しました。
 また、線形制約を使って変数の上下限を絞り込むメソッドを追加しました。

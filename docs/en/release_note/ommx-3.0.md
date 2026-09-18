@@ -11,8 +11,7 @@ Changes for the next release will be added here.
 ## 3.0.0 Beta 6
 
 Python package version: `3.0.0b6`.
-These notes cover [changes since beta.5](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b5...acb0a088e79ef94762ad616c900d63ab504a6142).
-
+These notes cover [changes since beta.5](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b5...python-3.0.0b6).
 This release corrects imported MPS and QPLIB models, introduces violation values
 for all special constraints, and unifies each constraint's feasibility check as
 `violation <= atol`. It also adds methods to tighten variable bounds using
