@@ -5,6 +5,7 @@ from typing import Literal
 import pytest
 
 from ommx import (
+    Bound,
     DecisionVariable,
     Instance,
     Sense,
@@ -17,9 +18,11 @@ from ommx import (
 Mode = Literal["best_effort", "strict"]
 
 
-def mixed_formulation() -> tuple[Instance, Sos1BigMPromotionRequest]:
+def mixed_formulation(
+    *, lower: float = -2, upper: float = 3
+) -> tuple[Instance, Sos1BigMPromotionRequest]:
     binary_member = DecisionVariable.binary(0)
-    integer_member = DecisionVariable.integer(1, lower=-2, upper=3)
+    integer_member = DecisionVariable.integer(1, lower=lower, upper=upper)
     selector = DecisionVariable.binary(10)
     instance = Instance.from_components(
         sense=Sense.Minimize,
@@ -40,6 +43,66 @@ def mixed_formulation() -> tuple[Instance, Sos1BigMPromotionRequest]:
         },
     )
     return instance, request
+
+
+@pytest.mark.parametrize("mode", ["best_effort", "strict"])
+def test_promotion_commits_link_tightening_with_promotion(mode: Mode) -> None:
+    instance, request = mixed_formulation(lower=-100, upper=100)
+    report = instance.promote_sos1_big_m(request, mode=mode)
+    assert report.rejections == {}
+    assert instance.get_decision_variable_by_id(1).bound == Bound(-2, 3)
+
+
+def test_strict_rejection_leaves_pending_tightening_unapplied() -> None:
+    instance, valid = mixed_formulation(lower=-100, upper=100)
+    before = instance.to_v2_bytes()
+    request = Sos1BigMPromotionRequest({**valid.selector_claims, 999: {}})
+    with pytest.raises(Sos1BigMPromotionBatchRejectedError):
+        instance.promote_sos1_big_m(request, mode="strict")
+    assert instance.to_v2_bytes() == before
+    report = instance.promote_sos1_big_m(request)
+    assert set(report.promoted) == {102}
+    assert set(report.rejections) == {999}
+    assert instance.get_decision_variable_by_id(1).bound == Bound(-2, 3)
+
+
+def test_link_tightening_can_force_a_fresh_selector_to_one() -> None:
+    instance, request = mixed_formulation(lower=1, upper=100)
+    report = instance.promote_sos1_big_m(request, mode="strict")
+    assert report.rejections == {}
+    assert instance.get_decision_variable_by_id(1).bound == Bound(1, 3)
+    assert instance.get_decision_variable_by_id(10).bound == Bound(1, 1)
+
+
+@pytest.mark.parametrize("scale", [0.125, 1.0, 4.0])
+def test_scaled_links_tighten_continuous_bounds_mathematically(scale: float) -> None:
+    member = DecisionVariable.continuous(1, lower=-100, upper=100)
+    selector = DecisionVariable.binary(10)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=member,
+        decision_variables=[member, selector],
+        constraints={
+            100: scale * member - (3 * scale) * selector <= 0,
+            101: -scale * member - (2 * scale) * selector <= 0,
+            102: selector - 1 <= 0,
+        },
+    )
+    request = Sos1BigMPromotionRequest(
+        {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101)}}
+    )
+    report = instance.promote_sos1_big_m(request, mode="strict")
+    assert report.rejections == {}
+    assert instance.get_decision_variable_by_id(1).bound == Bound(-2, 3)
+
+
+def test_infeasible_links_reject_without_mutation() -> None:
+    instance, request = mixed_formulation(lower=4, upper=100)
+    before = instance.to_v2_bytes()
+    report = instance.promote_sos1_big_m(request)
+    assert not report.promoted
+    assert "infeasible" in report.rejections[102]
+    assert instance.to_v2_bytes() == before
 
 
 def assert_report_keys(
@@ -266,25 +329,11 @@ def test_promote_sos1_big_m_checks_mathematical_coverage(
     request = Sos1BigMPromotionRequest(
         {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100)}}
     )
-    before = instance.to_v2_bytes()
-
-    if shortfall == 0:
-        report = instance.promote_sos1_big_m(request, mode=mode)
-        assert report.promoted == {102: 0}
-        assert report.rejections == {}
-        return
-
-    if mode == "strict":
-        with pytest.raises(Sos1BigMPromotionBatchRejectedError) as exc_info:
-            instance.promote_sos1_big_m(request, mode=mode)
-        assert set(exc_info.value.rejections) == {102}
-    else:
-        report = instance.promote_sos1_big_m(request, mode=mode)
-        assert_report_keys(report, request)
-        assert report.promoted == {}
-        assert set(report.rejections) == {102}
-
-    assert instance.to_v2_bytes() == before
+    report = instance.promote_sos1_big_m(request, mode=mode)
+    assert_report_keys(report, request)
+    assert report.promoted == {102: 0}
+    assert report.rejections == {}
+    assert instance.get_decision_variable_by_id(1).bound.upper == 3 - shortfall
 
 
 def test_promote_sos1_big_m_rejects_unknown_mode_before_mutation() -> None:

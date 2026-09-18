@@ -182,14 +182,25 @@ domains, every SOS1-feasible member assignment can set the selector of its
 non-zero member to one and every other selector to zero, or set all selectors
 to zero when all members are zero. The two formulations therefore have the same
 feasible member assignments after fresh selectors are projected out. A
-full-domain binary member can be reused as its own selector, and a link whose
+binary member can be reused as its own selector, and a link whose
 side is already implied by the member's domain can be omitted.
 
-Promotion checks mathematical equivalence using the stored member bounds.
+Promotion first prepares tighter bounds using only the claimed Big-M links.
+For example, `x <= 3z` with binary `z` can reduce a stored upper bound of `100`
+to `3`. All rows read the original domains; cardinality rows and unrelated
+constraints do not participate. Only successful promotions commit their bounds.
+Strict rejection leaves the entire Instance unchanged, including its bounds.
+
+Promotion checks mathematical equivalence using the prepared member bounds.
 Positive scaling of link rows is allowed, and tight Big-M values `U` and `-L`
-are sufficient. Even a shortfall smaller than an evaluation tolerance is
-rejected. Planning takes no `atol`: equal per-row violations and identical
-feasibility classification at a finite evaluation tolerance are not guaranteed.
+are sufficient. Bounds are derived directly from the exact link-coefficient
+ratios, without tolerance expansion. Integer limits are rounded inward, and
+conversion to floating-point bounds rounds outward. Exact clipping retains
+even sub-tolerance updates; planning and application do not read the default
+tolerance. Any remaining Big-M shortfall is rejected. Equal per-row
+violations and identical feasibility classification at a finite evaluation
+tolerance are not guaranteed. A narrowed fresh selector is accepted only when
+its domain permits the canonical indicator for every possible member value.
 
 {meth}`~ommx.Instance.promote_sos1_big_m` takes one
 {class}`~ommx.Sos1BigMPromotionRequest` for the entire batch and returns one

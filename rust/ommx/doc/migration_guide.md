@@ -47,6 +47,47 @@ is queried through narrow per-collection accessors on `Instance` /
 Decision variables and named functions additionally follow the table-owned ID
 rule: the row data no longer stores its own ID.
 
+## Bounds collections
+
+[`Bounds`](crate::Bounds) is now a dedicated collection rather than a type alias
+for `BTreeMap<VariableID, Bound>`. Construct it with `Bounds::new()`,
+`Bounds::from([(id, bound), ...])`, or by collecting `(VariableID, Bound)` pairs.
+Convert existing maps with `Bounds::from(map)` and convert back with
+`BTreeMap::from(bounds)`. Pass `&Bounds` to operations such as
+[`Instance::clip_bounds`](crate::Instance::clip_bounds) and
+[`Function::evaluate_bound`](crate::Function::evaluate_bound).
+
+[`Bounds::intersection`](crate::Bounds::intersection) returns combined
+restrictions without changing either input.
+[`Bounds::intersect_with`](crate::Bounds::intersect_with) updates a collection
+atomically. Both intersect matching IDs and retain entries present on only one
+side. An empty intersection returns `None`; the mutating operation then leaves
+the collection unchanged. These operations apply no tolerance and do not check
+variable kinds or fixed values; application to an instance performs those checks.
+The serialized map representation is unchanged.
+
+Use [`DecisionVariable::clip_bound_exact`](crate::DecisionVariable::clip_bound_exact)
+or [`Instance::clip_bounds_exact`](crate::Instance::clip_bounds_exact) when the
+supplied f64 endpoints are the intended boundaries. These methods apply even
+sub-tolerance continuous changes and round discrete intervals inward without
+error compensation. `clip_bound` and `clip_bounds` keep their existing
+tolerance-aware behavior. Exact table/instance clipping also requires every
+specified fixed value to satisfy the resulting bound and kind exactly, even
+when the bound does not change.
+
+```rust
+use ommx::{Bound, Bounds, VariableID};
+use std::collections::BTreeMap;
+
+let id = VariableID::from(1);
+let map = BTreeMap::from([(id, Bound::new(0.0, 10.0)?)]);
+let mut bounds = Bounds::from(map);
+bounds.intersect_with(&Bounds::from([(id, Bound::new(2.0, 8.0)?)]))
+    .expect("the intervals overlap");
+assert_eq!(bounds[&id], Bound::new(2.0, 8.0)?);
+# Ok::<(), ommx::Error>(())
+```
+
 ## Constraint violation metrics
 
 `Solution::total_violation_l1()` is renamed to

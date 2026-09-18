@@ -8,6 +8,16 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
 
+### SOS1 promotion prepares link-bound tightening ([#1221](https://github.com/Jij-Inc/ommx/pull/1221))
+
+{meth}`~ommx.Instance.promote_sos1_big_m` now prepares tighter variable bounds
+using only the claimed Big-M links. Successful entries apply those bounds
+together with promotion; strict rejection leaves the entire Instance unchanged.
+Bound updates include sub-tolerance changes and do not consult the default tolerance.
+Narrowed binary selectors are accepted when they can represent every canonical
+nonzero indicator of their member. See the
+{ref}`SOS1 promotion guide <sos1-big-m-formulation>`.
+
 ### Simultaneous bound tightening ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
 
 Tighten variable bounds using all active regular constraints or a selected set

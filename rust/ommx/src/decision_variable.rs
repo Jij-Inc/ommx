@@ -184,6 +184,28 @@ impl Kind {
             }
         }
     }
+
+    // Normalize the supplied f64 endpoints without tolerance.
+    // Semi-integer domains retain their implicit zero when no integer remains
+    // in the stored interval, just as in consistent_bound.
+    fn consistent_bound_exact(&self, bound: Bound) -> Option<Bound> {
+        let integer_bound = |bound: Bound| {
+            let lower = bound.lower().ceil();
+            Bound::new(
+                if lower == 0.0 { 0.0 } else { lower },
+                bound.upper().floor(),
+            )
+            .ok()
+        };
+        match self {
+            Kind::Continuous | Kind::SemiContinuous => Some(bound),
+            Kind::Integer => integer_bound(bound),
+            Kind::Binary => integer_bound(bound.intersection(&Bound::of_binary())?),
+            Kind::SemiInteger => {
+                Some(integer_bound(bound).unwrap_or_else(|| Bound::new(0.0, 0.0).unwrap()))
+            }
+        }
+    }
 }
 
 fn ensure_finite_value(id: VariableID, value: f64) -> Result<(), DecisionVariableError> {
@@ -206,7 +228,8 @@ fn ensure_finite_value(id: VariableID, value: f64) -> Result<(), DecisionVariabl
 /// Invariants
 /// ----------
 /// - `bound` is normalized for `kind` at construction or bound mutation time.
-///   - i.e. `bound` is invariant under `|bound| kind.consistent_bound(bound, atol).unwrap()` for the caller-provided `atol`.
+///   Tolerance-aware operations use the supplied `atol`; exact clipping rounds
+///   inward without tolerance.
 /// - A [`DecisionVariable`] row therefore never stores an unnormalized
 ///   integer, binary, or semi-integer bound when built through the safe API.
 ///
@@ -350,6 +373,53 @@ impl DecisionVariable {
             self.set_bound(intersected, atol)?;
             Ok(true)
         }
+    }
+
+    /// Intersect the stored bound with `bound` without tolerance.
+    ///
+    /// The supplied f64 endpoints are treated as exact boundaries. Continuous
+    /// bounds retain even the smallest representable change. Integer bounds
+    /// use `ceil(lower)` and `floor(upper)`; binary bounds retain only 0 and 1
+    /// inside the intersection. Semi-integer bounds fall back to `[0, 0]` when
+    /// no integer remains in their intersected stored interval.
+    ///
+    /// Returns whether the normalized stored bound changed. An empty interval
+    /// intersection or an interval incompatible with the kind leaves the
+    /// variable unchanged and returns an error. This method does not compensate
+    /// for rounding errors introduced when computing the supplied endpoints.
+    pub fn clip_bound_exact(
+        &mut self,
+        id: VariableID,
+        bound: Bound,
+    ) -> Result<bool, DecisionVariableError> {
+        let intersected = self.bound.intersection(&bound).ok_or(
+            DecisionVariableError::EmptyBoundIntersection {
+                id,
+                existing_bound: self.bound,
+                new_bound: bound,
+            },
+        )?;
+        let normalized = self.kind.consistent_bound_exact(intersected).ok_or(
+            DecisionVariableError::BoundInconsistentToKind {
+                kind: self.kind,
+                bound: intersected,
+            },
+        )?;
+        let changed = self.bound != normalized;
+        self.bound = normalized;
+        Ok(changed)
+    }
+
+    // Used by the child table module when exact clipping checks fixed values.
+    fn check_value_consistency_exact(&self, id: VariableID, value: f64) -> crate::Result<()> {
+        ensure_finite_value(id, value)?;
+        let integral = !matches!(self.kind, Kind::Integer | Kind::Binary | Kind::SemiInteger)
+            || value == value.round();
+        if value < self.bound.lower() || value > self.bound.upper() || !integral {
+            crate::bail!({ ?id, kind = ?self.kind, bound = ?self.bound, value },
+                "Fixed value {value} for variable {id:?} is inconsistent with its exact bound or kind");
+        }
+        Ok(())
     }
 }
 
@@ -541,6 +611,96 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
 mod tests {
     use super::*;
     use crate::v1;
+
+    #[test]
+    fn exact_clipping_retains_sub_tolerance_continuous_updates() {
+        let mut exact = DecisionVariable::continuous()
+            .with_bound(Bound::new(0.0, 3.0).unwrap(), ATol::default())
+            .unwrap();
+        let mut tolerant = exact.clone();
+        let candidate = Bound::new(f64::from_bits(1), 3.0_f64.next_down()).unwrap();
+        assert!(!tolerant
+            .clip_bound(0.into(), candidate, ATol::new(1e-6).unwrap())
+            .unwrap());
+        assert!(exact.clip_bound_exact(0.into(), candidate).unwrap());
+        assert_eq!(exact.bound(), candidate);
+        assert!(!exact.clip_bound_exact(0.into(), candidate).unwrap());
+    }
+
+    #[test]
+    fn exact_clipping_rounds_discrete_bounds_inward() {
+        for (kind, candidate, expected) in [
+            (
+                Kind::Integer,
+                Bound::new(-3.0_f64.next_down(), 3.0_f64.next_down()).unwrap(),
+                Bound::new(-2.0, 2.0).unwrap(),
+            ),
+            (
+                Kind::Binary,
+                Bound::new(0.0, 1.0_f64.next_down()).unwrap(),
+                Bound::new(0.0, 0.0).unwrap(),
+            ),
+            (
+                Kind::Binary,
+                Bound::new(f64::from_bits(1), 1.0).unwrap(),
+                Bound::new(1.0, 1.0).unwrap(),
+            ),
+            (
+                Kind::SemiInteger,
+                Bound::new(1.25, 1.75).unwrap(),
+                Bound::new(0.0, 0.0).unwrap(),
+            ),
+        ] {
+            let mut variable =
+                DecisionVariable::new(kind, Bound::unbounded(), ATol::default()).unwrap();
+            assert!(variable.clip_bound_exact(0.into(), candidate).unwrap());
+            assert_eq!(variable.bound(), expected);
+            assert!(!variable
+                .clip_bound_exact(0.into(), Bound::unbounded())
+                .unwrap());
+        }
+        for kind in [
+            Kind::Integer,
+            Kind::Continuous,
+            Kind::SemiInteger,
+            Kind::SemiContinuous,
+        ] {
+            let mut variable =
+                DecisionVariable::new(kind, Bound::unbounded(), ATol::default()).unwrap();
+            assert!(!variable
+                .clip_bound_exact(0.into(), Bound::unbounded())
+                .unwrap());
+        }
+    }
+
+    #[test]
+    fn exact_clipping_errors_are_atomic_and_normalized_noops_are_reported() {
+        for (kind, candidate) in [
+            (Kind::Continuous, Bound::new(4.0, 5.0).unwrap()),
+            (Kind::Integer, Bound::new(1.25, 1.75).unwrap()),
+            (Kind::Binary, Bound::new(0.25, 0.75).unwrap()),
+        ] {
+            let mut variable =
+                DecisionVariable::new(kind, Bound::new(0.0, 3.0).unwrap(), ATol::default())
+                    .unwrap();
+            let before = variable.clone();
+            assert!(variable.clip_bound_exact(0.into(), candidate).is_err());
+            assert_eq!(variable, before);
+        }
+        let mut variable = DecisionVariable::new(
+            Kind::Integer,
+            Bound::new(0.0, 3.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        variable
+            .clip_bound_exact(0.into(), Bound::new(0.1, 2.9).unwrap())
+            .unwrap();
+        assert!(!variable
+            .clip_bound_exact(0.into(), Bound::new(0.1, 2.9).unwrap())
+            .unwrap());
+        assert_eq!(variable.bound(), Bound::new(1.0, 2.0).unwrap());
+    }
 
     #[test]
     fn test_clip_bound_normal_intersection() {

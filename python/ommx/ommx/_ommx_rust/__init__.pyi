@@ -5210,6 +5210,10 @@ class Instance:
         The batch request is keyed by regular cardinality constraint ID.
         The Rust {class}`Instance` checks every formulation against the same
         unchanged instance and reconciles conflicts before applying the plan.
+        Bounds are inferred using only each formulation's claimed Big-M links.
+        Successful entries apply their prepared bounds together with promotion;
+        rejected entries contribute no bound changes, and strict rejection
+        leaves the entire instance unchanged.
         Both modes return one {class}`~ommx.Sos1BigMPromotion` batch report:
 
         - ``mode="best_effort"`` (default) applies independent valid formulations.
@@ -5228,8 +5232,13 @@ class Instance:
 
         Promotion preserves the objective and mathematical feasible region on
         original members after projecting out fresh selectors. Positive link
-        scaling is allowed; Big-M must cover the stored member bounds exactly.
-        Planning uses no evaluation tolerance and does not promise identical
+        scaling is allowed; Big-M must cover the prepared member bounds exactly.
+        Bounds are derived directly from exact link-coefficient ratios without
+        tolerance expansion. Integer limits are rounded inward; conversion to
+        floating-point bounds rounds outward. Exact clipping retains even
+        sub-tolerance updates and does not read the default tolerance.
+        Coverage validation is exact.
+        Promotion does not promise identical
         violations or feasibility classification at finite tolerance.
         Unknown mode strings raise {class}`ValueError` before planning.
         """
@@ -9020,7 +9029,7 @@ class Sos1BigMSelectorClaim:
     @staticmethod
     def reused() -> Sos1BigMSelectorClaim:
         r"""
-        Claim that the promoted member is itself a full-domain Binary selector.
+        Claim that the promoted member is itself a Binary selector.
         """
     @staticmethod
     def fresh(

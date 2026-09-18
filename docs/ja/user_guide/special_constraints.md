@@ -177,14 +177,24 @@ $y_i = 0$のときlink制約は$x_i = 0$を強制し、cardinality制約は
 値の割り当てに対しても、非零のmemberがあればそのselectorだけを1、
 その他を0にできます。すべてのmemberが0なら、すべてのselectorを0にできます。
 したがって、fresh selectorを除いてmemberだけを見ると、両方のformulationは
-同じ実行可能集合を表します。domainが$[0, 1]$のbinary memberはそれ自身を
+同じ実行可能集合を表します。binary memberはそれ自身を
 selectorとして再利用でき、memberのdomainから自明な側のlinkは省略できます。
 
-promotionでは、保存されたmemberのboundに対して数学的な同値性を検証します。
+promotionでは、最初に指定されたBig-M linkだけを使ってboundの更新を準備します。
+例えばbinaryの`z`に対する`x <= 3z`から、`x`の上限を`100`から`3`へ縮められます。
+各rowは呼び出し開始時のdomainを参照し、cardinality制約や無関係な制約は使いません。
+成功したpromotionのboundだけを適用し、strictで拒否された場合はboundも含めて
+Instance全体を変更しません。
+
+promotionでは、準備したmemberのboundに対して数学的な同値性を検証します。
 link制約の正のスケーリングを許容し、tightなBig-M値`U`と`-L`を利用できます。
-Big-Mが不足する場合は、評価時の許容誤差より小さい不足でも拒否します。
-検証には`atol`を指定しません。制約ごとのviolationや、有限の許容誤差に対する
-実行可能性判定の一致は保証しません。
+boundはlink係数の正確な比から直接求め、許容誤差による拡大は行いません。
+整数の限界値は内側へ丸め、浮動小数点のboundへ変換するときは外側へ丸めます。
+boundのclipは許容誤差なしで行い、微小な更新も反映します。
+Planの作成・適用はデフォルトの許容誤差を参照せず、Big-Mがまだ不足する場合は拒否します。
+制約ごとのviolationや、有限の許容誤差に対する実行可能性判定の一致は保証しません。
+縮小されたfresh selectorのdomainは、memberの取りうる各値の非零indicatorを
+表現できる場合に受け入れます。
 
 {meth}`~ommx.Instance.promote_sos1_big_m`はbatch全体を表す
 {class}`~ommx.Sos1BigMPromotionRequest`を受け取り、
