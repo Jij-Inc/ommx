@@ -11,6 +11,3 @@ dependencies = ["ommx==2.9.0"]
 [tool.maturin]
 module-name = "bridge_test_modeling"
 features = ["pyo3/extension-module"]
-
-[tool.uv]
-managed = false

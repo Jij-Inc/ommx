@@ -88,20 +88,22 @@ jobs:
       - name: Build sender wheel
         run: >
             uvx --from 'maturin>=1.12.2,<2' maturin build
-            --locked --out bridge-wheels
+            --locked --out wheels
             --interpreter .venv/bin/python
             -m python/bridge-tests/modeling/Cargo.toml
-      - name: Install independent sender and receiver wheels
-        run: uv pip install --python .venv/bin/python wheels/*.whl bridge-wheels/*.whl pytest pyright
+      - name: Use built wheels in the Python workspace
+        run: uv run ci-scripts/setup-python-test-project.py ${{ env.python-version }} --bridge-wheel wheels/bridge_test_modeling-*.whl
+      - name: Install dependencies
+        run: task python:sync
       - name: Type check bridge integration
-        run: uv run --no-project --python .venv/bin/python pyright --pythonpath .venv/bin/python python/bridge-tests
+        run: uv run pyright python/bridge-tests
       - name: Test bridge integration
-        run: uv run --no-project --python .venv/bin/python pytest -v python/bridge-tests
+        run: uv run pytest -v python/bridge-tests
       - name: Upload SDK wheel
         uses: actions/upload-artifact@v7
         with:
           name: wheels
-          path: wheels
+          path: wheels/ommx-*.whl
 
   # Test a single wheel with multiple python versions
   test:

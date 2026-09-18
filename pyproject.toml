@@ -2,7 +2,7 @@
 ommx = { workspace = true }
 
 [tool.uv.workspace]
-members = ["python/ommx*"]
+members = ["python/ommx*", "python/bridge-tests/modeling"]
 
 [dependency-groups]
 dev = [
