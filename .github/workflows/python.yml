@@ -59,7 +59,7 @@ jobs:
         run: task python:ommx:pyright
 
   build-wheel:
-    name: Build and Test Wheels
+    name: Build SDK Wheel
     runs-on: ubuntu-latest
     env:
       python-version: 3.12
@@ -80,6 +80,31 @@ jobs:
             --locked
             --out wheels
             -m python/ommx/Cargo.toml
+      - name: Upload SDK wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheels
+          path: wheels/ommx-*.whl
+
+  bridge:
+    name: Test Rust v3 bridge
+    runs-on: ubuntu-latest
+    needs: build-wheel
+    env:
+      python-version: 3.12
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: ${{ env.python-version }}
+      - name: Initialise uv
+        run: uv venv -p ${{ env.python-version }}
+      - name: Download SDK wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: wheels
+          path: wheels
       - name: Check generated sender stub
         run: |
           PYO3_PYTHON="$PWD/.venv/bin/python" cargo run --locked -p bridge-test-modeling --bin stub_gen
@@ -99,11 +124,6 @@ jobs:
         run: uv run pyright python/bridge-tests
       - name: Test bridge integration
         run: uv run pytest -v python/bridge-tests
-      - name: Upload SDK wheel
-        uses: actions/upload-artifact@v7
-        with:
-          name: wheels
-          path: wheels/ommx-*.whl
 
   # Test a single wheel with multiple python versions
   test:

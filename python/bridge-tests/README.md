@@ -17,17 +17,17 @@ promotion plans. Exact zero-bound SOS1 members stay in the original variable
 set but are excluded before constructing selectors and link rows. With fewer
 than two remaining members, the SOS1 formulation needs no rows or hints.
 
-The Python workflow's `build-wheel` job builds this producer and Python SDK 2.9
-once each as separate wheels, selects them with the existing Python test setup
-script, and runs `uv sync` in the shared Python 3.12 `.venv`. It runs the
-integration suite once and checks
-the generated producer stub, concrete Python return types, IDs, labels, hints,
-objective values, and projected feasibility over small enumerated domains.
+The Python workflow's `build-wheel` job builds and uploads the Python SDK 2.9
+wheel once. The `bridge` job downloads that wheel, builds the producer once,
+selects both wheels with the existing Python test setup script, and runs
+`uv sync` in its shared Python 3.12 `.venv`. It runs the integration suite once
+and checks the generated producer stub, concrete Python return types, IDs,
+labels, hints, objective values, and projected feasibility over small enumerated domains.
 An absolute-value objective also exercises error propagation when the v2
 parser rejects a function supported by Rust v3. These checks do not require
 native and Big-M constraint violations or finite-ATol feasibility to agree.
-The SDK wheel is then uploaded for the existing Python-version test matrix;
-the producer suite is not repeated in that matrix.
+The existing Python-version test matrix uses the same SDK wheel and runs in
+parallel with `bridge`; the producer suite is not repeated in that matrix.
 
 The producer sends only ProtobufV1. This branch tests only Python SDK 2.9.0.
 No source checkout of Rust SDK v3 or CI-time Cargo manifest rewriting is needed.
@@ -48,5 +48,5 @@ uv run pyright python/bridge-tests
 uv run pytest -v python/bridge-tests
 ```
 
-The tests live outside normal SDK and benchmark discovery. The wheel-building
-job requires the producer package; a missing or broken installation fails the job.
+The tests live outside normal SDK and benchmark discovery. The `bridge` job
+requires the producer package; a missing or broken installation fails the job.
