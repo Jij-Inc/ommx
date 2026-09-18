@@ -13,10 +13,10 @@ Changes for the next release will be added here.
 Python package version: `3.0.0b6`.
 These notes cover [changes since beta.5](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b5...acb0a088e79ef94762ad616c900d63ab504a6142).
 
-This release corrects imported MPS and QPLIB models, makes constraint violation
-reports consistent across constraint types, and adds methods to tighten variable
-bounds using linear constraints. Some APIs introduced in earlier v3 prereleases
-have changed.
+This release corrects imported MPS and QPLIB models, introduces violation values
+for all special constraints, and unifies each constraint's feasibility check as
+`violation <= atol`. It also adds methods to tighten variable bounds using
+linear constraints. Some APIs introduced in earlier v3 prereleases have changed.
 
 Before upgrading, check the workflows you use:
 
@@ -70,13 +70,24 @@ as `Kind.Binary` or `Kind.Integer`. Existing convenience constructors such as
 `DecisionVariable.binary()` and aliases such as `DecisionVariable.BINARY`
 remain available. See the [migration guide](../migration/python_sdk_v2_to_v3.md).
 
-### ⚠ Updated constraint violation and feasibility queries ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+### ⚠ Violation values for all special constraints and unified feasibility ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
 
-Use {meth}`~ommx.Solution.total_violation` to obtain the sum of constraint
-violations. It replaces `total_violation_l1()`; `total_violation_l2()` has been
-removed. The total includes regular, Indicator, OneHot, SOS1, and removed
-constraints. Each contributes one nonnegative value, with zero meaning no
-violation.
+All special constraints — Indicator, OneHot, and SOS1 — now have a nonnegative
+violation value, so you can inspect how much each constraint is violated.
+For every constraint type, including regular constraints, feasibility is now
+determined by the same rule: **`violation <= atol`**. This rule applies to each
+constraint individually.
+
+Indicator constraints use the inner constraint's violation when enabled and
+zero when disabled. OneHot (exactly one member is `1` and the rest are `0`) and
+SOS1 (at most one member is nonzero) measure the smallest total absolute change
+to member values needed to satisfy the constraint. Tolerance applies to that
+total, so a group of small deviations can now be infeasible even if each was
+previously accepted.
+
+To migrate your code, use {meth}`~ommx.Solution.total_violation` in place of
+`total_violation_l1()`; `total_violation_l2()` has been removed. The total sums
+violations of regular, Indicator, OneHot, SOS1, and removed constraints.
 
 ```python
 solution.total_violation()
@@ -90,10 +101,6 @@ method. Pass `solution.feasibility_atol` or `sample_set.feasibility_atol` to use
 the tolerance from the original evaluation. Solution and SampleSet feasibility
 properties remain available.
 
-OneHot (exactly one member is `1`) and SOS1 (at most one member is nonzero)
-now measure violation by the smallest total absolute change to member values
-needed to satisfy the constraint. Tolerance applies to that total, so a group
-of small deviations can now be infeasible even if each was previously accepted.
 SampleSet feasibility and best-feasible selection also check variable bounds
 and kinds, matching the extracted Solution. These variable checks do not add to
 `total_violation()`: a zero total alone does not prove that a solution is feasible.
