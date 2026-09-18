@@ -105,7 +105,9 @@ if args.bridge_wheel:
     if not args.bridge_wheel.is_file():
         ap.error(f"Bridge wheel does not exist: {args.bridge_wheel}")
     sources["bridge-test-modeling"] = {"path": str(args.bridge_wheel)}
-    pyproject["dependency-groups"]["dev"].append("bridge-test-modeling")
+    pyproject["dependency-groups"]["dev"].append(
+        f"bridge-test-modeling; python_version == '{version}'"
+    )
 
 workspace = uv["workspace"]
 if not isinstance(workspace, dict):

@@ -221,7 +221,7 @@ css = [
 
 [[package]]
 name = "bridge-test-modeling"
-source = { editable = "python/bridge-tests/modeling" }
+source = { virtual = "python/bridge-tests/modeling" }
 dependencies = [
     { name = "ommx" },
 ]
