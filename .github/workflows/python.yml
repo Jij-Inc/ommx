@@ -95,25 +95,19 @@ jobs:
         uses: ./.github/actions/setup-test-environment
         with:
           python-version: "3.12"
-      - name: Checkout independent Rust SDK v3 sender
-        uses: actions/checkout@v6
-        with:
-          # rust-3.0.0-beta.6 provides the regular-formulation / promotion-plan fixture.
-          ref: 32e90cfa53d3c589316d8acb71a368a402c94bf1
-          path: .bridge-sender
-      - name: Use published Rust SDK and bridge crates in the sender
-        working-directory: .bridge-sender
-        run: |
-          cargo add --manifest-path rust/ommx-pyo3-bridge/fixture/Cargo.toml 'ommx@=3.0.0-beta.6' --no-default-features
-          cargo add --manifest-path rust/ommx-pyo3-bridge/fixture/Cargo.toml 'ommx-pyo3-bridge@=3.0.0-beta.6'
       - name: Create isolated receiver environment
         run: uv venv --python 3.12 .venv-bridge
+      - name: Check generated sender stub
+        run: |
+          PYO3_PYTHON="$PWD/.venv-bridge/bin/python" cargo run --locked --manifest-path python/bridge-tests/modeling/Cargo.toml --bin stub_gen
+          uvx --from 'ruff==0.9.10' ruff format python/bridge-tests/modeling/bridge_test_modeling.pyi
+          git diff --exit-code -- python/bridge-tests/modeling/bridge_test_modeling.pyi
       - name: Build sender wheel
         run: >
             uvx --from 'maturin>=1.12.2,<2' maturin build
             --locked --out bridge-wheels
             --interpreter .venv-bridge/bin/python
-            -m .bridge-sender/rust/ommx-pyo3-bridge/fixture/Cargo.toml
+            -m python/bridge-tests/modeling/Cargo.toml
       - name: Download receiver wheel
         uses: actions/download-artifact@v8
         with:
