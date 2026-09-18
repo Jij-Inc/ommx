@@ -1,6 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["rust/ommx", "rust/protogen", "rust/dataset", "python/ommx"]
+members = [
+    "rust/ommx",
+    "rust/protogen",
+    "rust/dataset",
+    "python/ommx",
+    "python/bridge-tests/modeling",
+]
 
 [workspace.package]
 version = "2.8.1"

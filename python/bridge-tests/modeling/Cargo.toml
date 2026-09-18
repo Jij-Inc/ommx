@@ -1,0 +1,23 @@
+[package]
+name = "bridge-test-modeling"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+name = "bridge_test_modeling"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "stub_gen"
+path = "src/stub_gen.rs"
+doc = false
+
+[dependencies]
+anyhow = "1"
+ommx = { version = "=3.0.0-beta.6", default-features = false }
+ommx-pyo3-bridge = "=3.0.0-beta.6"
+pyo3 = "=0.27.2"
+pyo3-stub-gen = "=0.23.0"

@@ -16,6 +16,8 @@
 # 2. If --use_local_ommx is NOT specified:
 #   - Update the `ommx` source in the root `pyproject.toml` to point to the wheel
 #   - Remove `ommx` from the `workspace.members` in the root `pyproject.toml`.
+# 3. Remove the bridge fixture from the workspace. When --bridge-wheel is given,
+#    use that wheel as a development dependency for the one bridge integration run.
 # 4. Filters out package not supported by the python version and warns about it.
 # 4. Write the updated `pyproject.toml` back to the file.
 # 5. Tweaks python:test-ci Taskfile so that the CI doesn't run for the unsupported package.
@@ -36,6 +38,7 @@ FREE_THREAD_PACKAGES = {"ommx", "ommx-tests"}
 ap = ArgumentParser()
 ap.add_argument("version", type=str, help="Python version")
 ap.add_argument("--use_local_ommx", action="store_true")
+ap.add_argument("--bridge-wheel", type=Path, help="Built model producer wheel to test")
 args = ap.parse_args()
 
 use_local_ommx: bool = args.use_local_ommx
@@ -98,6 +101,14 @@ if not use_local_ommx:
     print(f"Found wheel: {whl}")
     sources["ommx"] = {"path": str(whl)}
 
+if args.bridge_wheel:
+    if not args.bridge_wheel.is_file():
+        ap.error(f"Bridge wheel does not exist: {args.bridge_wheel}")
+    sources["bridge-test-modeling"] = {"path": str(args.bridge_wheel)}
+    pyproject["dependency-groups"]["dev"].append(
+        f"bridge-test-modeling; python_version == '{version}'"
+    )
+
 workspace = uv["workspace"]
 if not isinstance(workspace, dict):
     raise KeyError("Expected tool.uv.workspace table in pyproject.toml")
@@ -112,6 +123,7 @@ member_candidates = [
     for pat in old_members
     for targ in glob.glob(pat)
     if use_local_ommx or targ != "python/ommx"
+    if targ != "python/bridge-tests/modeling"
 ]
 
 new_members = []

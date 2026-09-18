@@ -1,0 +1,17 @@
+[build-system]
+requires = ["maturin>=1.12.2,<2"]
+build-backend = "maturin"
+
+[project]
+name = "bridge-test-modeling"
+dynamic = ["version"]
+requires-python = ">=3.10"
+dependencies = ["ommx>=2.9.0,<3.0.0"]
+
+[tool.maturin]
+module-name = "bridge_test_modeling"
+features = ["pyo3/extension-module"]
+
+[tool.uv]
+# CI installs the explicitly built wheel; regular workspace syncs need no fixture.
+package = false
