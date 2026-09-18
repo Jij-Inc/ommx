@@ -52,10 +52,10 @@ mod tests {
         };
 
         // Apply new bounds to variables 1 and 2
-        let new_bounds = btreemap! {
-            VariableID::from(1) => Bound::new(2.0, 8.0).unwrap(),
-            VariableID::from(2) => Bound::new(5.0, 15.0).unwrap(),
-        };
+        let new_bounds = Bounds::from([
+            (VariableID::from(1), Bound::new(2.0, 8.0).unwrap()),
+            (VariableID::from(2), Bound::new(5.0, 15.0).unwrap()),
+        ]);
 
         instance.clip_bounds(&new_bounds, ATol::default()).unwrap();
 
@@ -86,9 +86,7 @@ mod tests {
         };
 
         // Try to clip bounds for non-existent variable
-        let new_bounds = btreemap! {
-            VariableID::from(999) => Bound::new(0.0, 1.0).unwrap(),
-        };
+        let new_bounds = Bounds::from([(VariableID::from(999), Bound::new(0.0, 1.0).unwrap())]);
 
         let result = instance.clip_bounds(&new_bounds, ATol::default());
         assert!(result.is_err());
@@ -120,11 +118,11 @@ mod tests {
             .collect();
 
         // Apply changes where the second one will cause an empty intersection error
-        let new_bounds = btreemap! {
-            VariableID::from(1) => Bound::new(2.0, 8.0).unwrap(),
-            VariableID::from(2) => Bound::new(15.0, 20.0).unwrap(), // No intersection with [0, 10]
-            VariableID::from(3) => Bound::new(3.0, 7.0).unwrap(),
-        };
+        let new_bounds = Bounds::from([
+            (VariableID::from(1), Bound::new(2.0, 8.0).unwrap()),
+            (VariableID::from(2), Bound::new(15.0, 20.0).unwrap()), // No intersection with [0, 10]
+            (VariableID::from(3), Bound::new(3.0, 7.0).unwrap()),
+        ]);
 
         let result = instance.clip_bounds(&new_bounds, ATol::default());
         assert!(result.is_err());
@@ -160,9 +158,7 @@ mod tests {
         };
 
         let result = instance.clip_bounds(
-            &btreemap! {
-                id => Bound::new(0.0, 4.0).unwrap(),
-            },
+            &Bounds::from([(id, Bound::new(0.0, 4.0).unwrap())]),
             ATol::default(),
         );
 
@@ -188,7 +184,7 @@ mod tests {
         };
 
         // Apply empty bounds map (should succeed and change nothing)
-        let new_bounds = btreemap! {};
+        let new_bounds = Bounds::new();
         instance.clip_bounds(&new_bounds, ATol::default()).unwrap();
 
         // Assert that the bound remains unchanged

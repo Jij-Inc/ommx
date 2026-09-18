@@ -358,7 +358,7 @@ mod tests {
                 problem
                     .tighten_bounds_simultaneously_once(32, ATol::new(0.125).unwrap())
                     .unwrap(),
-                BTreeMap::from([(0.into(), Bound::new(-10.0, 2.0).unwrap())]),
+                Bounds::from([(0.into(), Bound::new(-10.0, 2.0).unwrap())]),
             );
         }
         // min(f, f) is mathematically affine but remains a composed expression.
@@ -411,7 +411,7 @@ mod tests {
                 let updates = problem
                     .tighten_bounds_simultaneously_once(32, atol)
                     .unwrap();
-                assert_eq!(updates, BTreeMap::from([(0.into(), expected)]));
+                assert_eq!(updates, Bounds::from([(0.into(), expected)]));
                 assert_eq!(problem.decision_variables()[&0.into()].bound(), expected);
             }
         }
@@ -469,7 +469,7 @@ mod tests {
             let updates = problem
                 .tighten_bounds_simultaneously_once(32, atol)
                 .unwrap();
-            assert_eq!(updates, BTreeMap::from([(0.into(), Bound::zero())]));
+            assert_eq!(updates, Bounds::from([(0.into(), Bound::zero())]));
         }
     }
 
@@ -603,7 +603,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             bounds,
-            BTreeMap::from([(0.into(), Bound::new(-2.0, 3.0).unwrap())])
+            Bounds::from([(0.into(), Bound::new(-2.0, 3.0).unwrap())])
         );
         assert!(problem
             .tighten_bounds_simultaneously_once(32, atol)
@@ -814,7 +814,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             bounds,
-            BTreeMap::from([(0.into(), Bound::new(f64::NEG_INFINITY, 5.125).unwrap(),)])
+            Bounds::from([(0.into(), Bound::new(f64::NEG_INFINITY, 5.125).unwrap(),)])
         );
         assert_eq!(
             problem.decision_variables()[&1.into()].bound(),
@@ -839,7 +839,7 @@ mod tests {
                 // even though the endpoint needed for this direction is zero.
                 let error = function
                     .evaluate_bound(
-                        &BTreeMap::from([(0.into(), Bound::zero()), (1.into(), y_bound)]),
+                        &Bounds::from([(0.into(), Bound::zero()), (1.into(), y_bound)]),
                         atol,
                     )
                     .unwrap_err();
@@ -863,7 +863,7 @@ mod tests {
                 } else {
                     Bound::new(0.0, f64::INFINITY).unwrap()
                 };
-                assert_eq!(bounds, BTreeMap::from([(0.into(), expected)]));
+                assert_eq!(bounds, Bounds::from([(0.into(), expected)]));
                 for x in [-0.125, 0.0, 0.125] {
                     let state = crate::v1::State::from_iter([(0, x), (1, 0.0)]);
                     assert!(original.evaluate(&state, atol).unwrap().feasible());
@@ -910,7 +910,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             bounds,
-            BTreeMap::from([(1.into(), Bound::new(f64::NEG_INFINITY, 3.0).unwrap(),)])
+            Bounds::from([(1.into(), Bound::new(f64::NEG_INFINITY, 3.0).unwrap(),)])
         );
         assert_eq!(
             overflowing_division.decision_variables()[&0.into()].bound(),
@@ -1045,7 +1045,7 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 updates,
-                BTreeMap::from([(0.into(), Bound::new(-10.0, 0.0).unwrap())])
+                Bounds::from([(0.into(), Bound::new(-10.0, 0.0).unwrap())])
             );
             assert_eq!(problem.decision_variables()[&1.into()].bound(), semi_bound);
         }

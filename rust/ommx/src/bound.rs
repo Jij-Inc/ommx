@@ -1,13 +1,16 @@
 use crate::{
     macros::{impl_add_inverse, impl_mul_inverse},
     parse::{Parse, ParseError},
-    v1, ATol, VariableID,
+    v1, ATol,
 };
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
-use std::{collections::BTreeMap, ops::*};
+use std::ops::*;
 use thiserror::Error;
+
+mod bounds;
+pub use bounds::Bounds;
 
 #[non_exhaustive]
 #[derive(Debug, Error)]
@@ -40,12 +43,6 @@ impl From<BoundError> for ParseError {
         ParseError::new(e)
     }
 }
-
-/// Bound for each decision variable
-///
-/// This uses `BTreeMap` to keep the order of decision variables by their IDs
-/// for intuitive debugging.
-pub type Bounds = BTreeMap<VariableID, Bound>;
 
 /// Bound of a decision variable
 ///

@@ -396,24 +396,13 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
         // candidate retains the original domain point nearest zero, so shared
         // members have a nonempty intersection. Fresh selectors are disjoint
         // after row-conflict reconciliation and cannot be another member.
+        // Candidate bounds have already been clipped to their variable kinds;
+        // a nonempty intersection preserves that consistency as well.
         let mut tightened_bounds = Bounds::new();
         for candidate in candidates.values().filter_map(|entry| entry.as_ref().ok()) {
-            for (&id, &bound) in &candidate.tightened_bounds {
-                tightened_bounds
-                    .entry(id)
-                    .and_modify(|previous: &mut Bound| {
-                        *previous = previous
-                            .intersection(&bound)
-                            .expect("validated SOS1 bound intersections are nonempty");
-                    })
-                    .or_insert(bound);
-            }
-        }
-        for (&id, &bound) in &tightened_bounds {
-            instance.decision_variables()[&id]
-                .clone()
-                .clip_bound(id, bound, atol)
-                .expect("combined SOS1 bounds preserve each variable domain");
+            tightened_bounds
+                .intersect_with(&candidate.tightened_bounds)
+                .expect("validated SOS1 bound intersections are nonempty");
         }
 
         let first_id = (survivor_count > 0)
@@ -3834,6 +3823,65 @@ mod tests {
             instance.decision_variables()[&member_integer_id()].bound(),
             Bound::new(-1.0, 2.0).unwrap()
         );
+    }
+
+    #[test]
+    fn shared_nonzero_member_domains_preserve_the_point_nearest_zero() {
+        for kind in [Kind::Continuous, Kind::Integer] {
+            for (original, expected) in [
+                (
+                    Bound::new(1.0, 100.0).unwrap(),
+                    Bound::new(1.0, 2.0).unwrap(),
+                ),
+                (
+                    Bound::new(-100.0, -1.0).unwrap(),
+                    Bound::new(-1.0, -1.0).unwrap(),
+                ),
+            ] {
+                let (source, request) = shared_member_batch_instance();
+                let mut variables = source.decision_variables().clone();
+                variables.insert(
+                    member_integer_id(),
+                    DecisionVariable::new(kind, original, ATol::default()).unwrap(),
+                );
+                let mut instance = Instance::new(
+                    Sense::Minimize,
+                    Function::Zero,
+                    variables,
+                    source.constraints().clone(),
+                )
+                .unwrap();
+                instance
+                    .constraint_collection
+                    .replace_active_row(upper_row_id(), upper_link(1.0, 2.0))
+                    .unwrap();
+                instance
+                    .constraint_collection
+                    .replace_active_row(
+                        201.into(),
+                        two_term_link_for(member_integer_id(), 11.into(), -1.0, -1.0),
+                    )
+                    .unwrap();
+                let before = instance.clone();
+                let plan = instance.plan_promote_sos1_big_m(&request);
+                assert!(
+                    plan.is_fully_valid(),
+                    "{:?}",
+                    plan.rejections().collect::<Vec<_>>()
+                );
+                assert_eq!(plan.tightened_bounds[&member_integer_id()], expected);
+                drop(plan);
+                assert_eq!(instance, before);
+                let report = instance
+                    .promote_sos1_big_m_if_fully_valid(&request)
+                    .unwrap();
+                assert!(report.values().all(Result::is_ok));
+                assert_eq!(
+                    instance.decision_variables()[&member_integer_id()].bound(),
+                    expected
+                );
+            }
+        }
     }
 
     fn test_removed_reason() -> RemovedReason {
