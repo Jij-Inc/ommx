@@ -287,8 +287,10 @@ impl Instance {
     /// Promotion preserves the objective and mathematical feasible region on
     /// original members after projecting out fresh selectors. Positive link
     /// scaling is allowed; Big-M must cover the prepared member bounds exactly.
-    /// Bound inference uses the default absolute tolerance and preserves the
-    /// mathematical projection of the links. Coverage validation is exact.
+    /// Bounds are derived directly from exact link-coefficient ratios without
+    /// tolerance expansion. Integer limits are rounded inward; conversion to
+    /// floating-point bounds rounds outward. Clipping ignores updates within
+    /// the default absolute tolerance. Coverage validation is exact.
     /// Promotion does not promise identical
     /// violations or feasibility classification at finite tolerance.
     /// Unknown mode strings raise {class}`ValueError` before planning.

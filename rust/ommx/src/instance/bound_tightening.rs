@@ -90,9 +90,9 @@ impl Instance {
     }
 }
 
-// Read-only preparation shared by Instance's immediate tightening operation
-// and its SOS1 promotion plan. This module is private to the Instance owner.
-pub fn infer_bounds_simultaneously_once(
+// Collect updates without mutation. The public operation in this module
+// applies them immediately after successful inference.
+fn infer_bounds_simultaneously_once(
     instance: &Instance,
     rows: &BTreeSet<ConstraintID>,
     max_terms: usize,

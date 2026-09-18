@@ -940,10 +940,12 @@ impl Instance {
     /// claimed formulation is outside this conservative checker.
     ///
     /// Positive scaling of a link does not change its mathematical meaning.
-    /// Bounds are first inferred simultaneously using only each request's claimed
-    /// link rows (at most two terms per row), with [`ATol::default`]. Pending
-    /// updates are widened as necessary to preserve the mathematical projection
-    /// of those links. No cardinality row or unrelated constraint is used.
+    /// Bounds are derived directly from each request's validated link coefficients
+    /// and the original binary selector domains. Coefficient ratios are computed
+    /// as exact rational numbers, rounded down for integer members, and converted
+    /// to outward-rounded floating-point bounds. No cardinality row or unrelated
+    /// constraint is used. Bound clipping ignores changes within [`ATol::default`],
+    /// captured when the plan is created; the link inference itself uses no tolerance.
     /// Big-M must cover the resulting stored member bounds exactly; any remaining
     /// shortfall, including an update ignored within ATol, is rejected. Coverage compares
     /// the original f64 coefficients as exact rational numbers, avoiding
@@ -954,8 +956,8 @@ impl Instance {
     /// original members after existentially quantifying fresh selectors. It
     /// does not promise identical constraint violations or feasibility at a
     /// finite [`crate::ATol`]. Evaluation and dependent-selector reconstruction
-    /// still use the caller's evaluation tolerance. Coverage validation is exact;
-    /// bound inference uses the default tolerance captured at planning time.
+    /// still use the caller's evaluation tolerance. Link-bound inference and
+    /// coverage validation use the mathematical domains without expanding them.
     /// Unrelated removed history is preserved rather than reinterpreted.
     ///
     /// Planning does not mutate the instance. The returned plan holds its
@@ -1022,17 +1024,15 @@ impl Instance {
         self.plan_promote_sos1_big_m(request).apply_if_fully_valid()
     }
 
-    /// Prepare only claimed links, without changing the source instance.
-    /// The algebraic ATol policy of general tightening can cut inside the
-    /// mathematical projection for scaled rows. Preserve that projection here:
-    /// promotion promises mathematical equivalence, not residual equivalence.
+    /// Derive the mathematical domain projection of the claimed links without
+    /// changing the source instance. This SOS1-specific inference shares the
+    /// validated link shape and exact coefficient semantics with promotion.
     fn prepare_sos1_link_bounds(
         &self,
         claims: &BTreeMap<VariableID, Sos1BigMSelectorClaim>,
         atol: ATol,
     ) -> crate::Result<Bounds> {
-        let mut rows = BTreeSet::new();
-        let mut envelopes = Bounds::new();
+        let mut link_bounds = Bounds::new();
         let mut selectors = VariableIDSet::new();
         for (&member, &claim) in claims {
             let Sos1BigMSelectorClaim::Fresh {
@@ -1064,7 +1064,6 @@ impl Instance {
             ] {
                 let Some(id) = id else { continue };
                 let (a, b) = self.sos1_link_coefficients(id, member, selector, side)?;
-                rows.insert(id);
                 let rational =
                     |value| num::BigRational::from_float(value).expect("finite link data");
                 let mut endpoint =
@@ -1086,39 +1085,24 @@ impl Instance {
                     Sos1LinkSide::Lower => lower = lower.max(-outward),
                 }
             }
-            let envelope = Bound::new(lower, upper).map_err(|error|
+            let bound = Bound::new(lower, upper).map_err(|error|
                 crate::error!({ ?member, %error }, "SOS1 links are infeasible over member {member:?}'s domain: {error}"))?;
-            envelopes.insert(member, envelope);
-            // Every nonempty member projection permits selector=1 if its
-            // original domain does. Zero also permits selector=0. Retaining
-            // these values prevents tolerance arithmetic from deleting a
-            // mathematically feasible selector assignment.
+            link_bounds.insert(member, bound);
+            // A member that cannot be zero requires selector=1. Otherwise
+            // either selector value is possible, subject to its original domain.
             let selector_lower = if lower <= 0.0 && upper >= 0.0 {
                 selector_variable.bound().lower()
             } else {
                 1.0
             };
-            envelopes.insert(
+            link_bounds.insert(
                 selector,
                 Bound::new(selector_lower, selector_variable.bound().upper())?,
             );
         }
-        let inferred =
-            super::bound_tightening::infer_bounds_simultaneously_once(self, &rows, 2, atol)?;
         let mut prepared = Bounds::new();
-        for (id, inferred) in inferred {
+        for (id, bound) in link_bounds {
             let original = &self.decision_variables()[&id];
-            let envelope = envelopes[&id];
-            let bound = Bound::new(
-                inferred
-                    .lower()
-                    .min(envelope.lower())
-                    .max(original.bound().lower()),
-                inferred
-                    .upper()
-                    .max(envelope.upper())
-                    .min(original.bound().upper()),
-            )?;
             let mut updated = original.clone();
             updated.clip_bound(id, bound, atol)?;
             if updated.bound() != original.bound() {
@@ -2584,7 +2568,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_even_sub_tolerance_big_m_shortfalls() {
+    fn sub_tolerance_shortfalls_use_mathematical_integer_rounding() {
         for kind in [Kind::Integer, Kind::Continuous] {
             for upper in [true, false] {
                 let member =
@@ -2601,7 +2585,27 @@ mod tests {
                     .constraint_collection
                     .replace_active_row(id, link)
                     .unwrap();
-                assert_atomic_rejection(instance, &request, "does not cover the member domain");
+                if kind == Kind::Continuous {
+                    // Clipping ignores this sub-ATol change; coverage must
+                    // still reject the unchanged continuous endpoint.
+                    assert_atomic_rejection(instance, &request, "does not cover the member domain");
+                } else {
+                    // The exact link excludes the integer endpoint even if
+                    // point evaluation would accept it within ATol.
+                    instance
+                        .promote_sos1_big_m_if_fully_valid(&request)
+                        .unwrap();
+                    let expected = if upper {
+                        Bound::new(-2.0, 2.0)
+                    } else {
+                        Bound::new(-1.0, 3.0)
+                    }
+                    .unwrap();
+                    assert_eq!(
+                        instance.decision_variables()[&member_integer_id()].bound(),
+                        expected
+                    );
+                }
             }
         }
     }
@@ -3694,52 +3698,54 @@ mod tests {
 
     #[test]
     fn scaled_links_preserve_mathematical_projection_and_narrowed_selectors() {
-        for (lower, upper, expected, selector_lower) in [
-            (-100.0, 100.0, Bound::new(-2.0, 3.0).unwrap(), 0.0),
-            (1.0, 100.0, Bound::new(1.0, 3.0).unwrap(), 1.0),
-        ] {
-            let member = DecisionVariable::new(
-                Kind::Continuous,
-                Bound::new(lower, upper).unwrap(),
-                ATol::default(),
-            )
-            .unwrap();
-            let (mut instance, request) =
-                fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
-            instance
-                .constraint_collection
-                .replace_active_row(upper_row_id(), upper_link(4.0, 3.0))
+        for scale in [0.25, 1.0, 4.0] {
+            for (lower, upper, expected, selector_lower) in [
+                (-100.0, 100.0, Bound::new(-2.0, 3.0).unwrap(), 0.0),
+                (1.0, 100.0, Bound::new(1.0, 3.0).unwrap(), 1.0),
+            ] {
+                let member = DecisionVariable::new(
+                    Kind::Continuous,
+                    Bound::new(lower, upper).unwrap(),
+                    ATol::default(),
+                )
                 .unwrap();
-            instance
-                .constraint_collection
-                .replace_active_row(lower_row_id(), lower_link(4.0, 2.0))
-                .unwrap();
-            let source = instance.clone();
-            instance
-                .promote_sos1_big_m_if_fully_valid(&request)
-                .unwrap();
-            assert_eq!(
-                instance.decision_variables()[&member_integer_id()].bound(),
-                expected
-            );
-            assert_eq!(
-                instance.decision_variables()[&selector_id()].bound(),
-                Bound::new(selector_lower, 1.0).unwrap()
-            );
-            for value in [-2.0, 0.0, 1.0, 3.0, 4.0] {
-                let original_feasible = [0.0, 1.0].into_iter().any(|selector| {
-                    source
-                        .evaluate(
-                            &crate::v1::State::from_iter([(1, value), (10, selector)]),
-                            ATol::default(),
-                        )
-                        .unwrap()
-                        .feasible()
-                });
-                let promoted = instance
-                    .evaluate(&crate::v1::State::from_iter([(1, value)]), ATol::default())
+                let (mut instance, request) =
+                    fresh_instance(member, Some(upper_row_id()), Some(lower_row_id()));
+                instance
+                    .constraint_collection
+                    .replace_active_row(upper_row_id(), upper_link(scale, 3.0))
                     .unwrap();
-                assert_eq!(promoted.feasible(), original_feasible);
+                instance
+                    .constraint_collection
+                    .replace_active_row(lower_row_id(), lower_link(scale, 2.0))
+                    .unwrap();
+                let source = instance.clone();
+                instance
+                    .promote_sos1_big_m_if_fully_valid(&request)
+                    .unwrap();
+                assert_eq!(
+                    instance.decision_variables()[&member_integer_id()].bound(),
+                    expected
+                );
+                assert_eq!(
+                    instance.decision_variables()[&selector_id()].bound(),
+                    Bound::new(selector_lower, 1.0).unwrap()
+                );
+                for value in [-2.0, 0.0, 1.0, 3.0, 4.0] {
+                    let original_feasible = [0.0, 1.0].into_iter().any(|selector| {
+                        source
+                            .evaluate(
+                                &crate::v1::State::from_iter([(1, value), (10, selector)]),
+                                ATol::default(),
+                            )
+                            .unwrap()
+                            .feasible()
+                    });
+                    let promoted = instance
+                        .evaluate(&crate::v1::State::from_iter([(1, value)]), ATol::default())
+                        .unwrap();
+                    assert_eq!(promoted.feasible(), original_feasible);
+                }
             }
         }
     }

@@ -193,8 +193,10 @@ Strict rejection leaves the entire Instance unchanged, including its bounds.
 
 Promotion checks mathematical equivalence using the prepared member bounds.
 Positive scaling of link rows is allowed, and tight Big-M values `U` and `-L`
-are sufficient. Inference uses the default absolute tolerance while preserving
-the mathematical projection of the links. Any remaining Big-M shortfall is
+are sufficient. Bounds are derived directly from the exact link-coefficient
+ratios, without tolerance expansion. Integer limits are rounded inward, and
+conversion to floating-point bounds rounds outward. Clipping ignores updates
+within the default absolute tolerance. Any remaining Big-M shortfall is
 rejected, including updates ignored within that tolerance. Equal per-row
 violations and identical feasibility classification at a finite evaluation
 tolerance are not guaranteed. A narrowed fresh selector is accepted only when

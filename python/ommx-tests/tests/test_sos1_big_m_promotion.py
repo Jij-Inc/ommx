@@ -74,6 +74,28 @@ def test_link_tightening_can_force_a_fresh_selector_to_one() -> None:
     assert instance.get_decision_variable_by_id(10).bound == Bound(1, 1)
 
 
+@pytest.mark.parametrize("scale", [0.125, 1.0, 4.0])
+def test_scaled_links_tighten_continuous_bounds_mathematically(scale: float) -> None:
+    member = DecisionVariable.continuous(1, lower=-100, upper=100)
+    selector = DecisionVariable.binary(10)
+    instance = Instance.from_components(
+        sense=Sense.Minimize,
+        objective=member,
+        decision_variables=[member, selector],
+        constraints={
+            100: scale * member - (3 * scale) * selector <= 0,
+            101: -scale * member - (2 * scale) * selector <= 0,
+            102: selector - 1 <= 0,
+        },
+    )
+    request = Sos1BigMPromotionRequest(
+        {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101)}}
+    )
+    report = instance.promote_sos1_big_m(request, mode="strict")
+    assert report.rejections == {}
+    assert instance.get_decision_variable_by_id(1).bound == Bound(-2, 3)
+
+
 def test_infeasible_links_reject_without_mutation() -> None:
     instance, request = mixed_formulation(lower=4, upper=100)
     before = instance.to_v2_bytes()
