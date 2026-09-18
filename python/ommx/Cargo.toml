@@ -29,7 +29,7 @@ path = "../../rust/ommx"
 default-features = false
 
 [dependencies]
-ommx-pyo3-bridge = { git = "https://github.com/Jij-Inc/ommx", rev = "303c3f9c54c6cc9d90d1b702b9eae8f23ab738f3", default-features = false }
+ommx-pyo3-bridge = { version = "=3.0.0-beta.6", default-features = false }
 anyhow.workspace = true
 approx.workspace = true
 derive_more.workspace = true

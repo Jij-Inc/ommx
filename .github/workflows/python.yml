@@ -98,8 +98,8 @@ jobs:
       - name: Checkout independent Rust SDK v3 sender
         uses: actions/checkout@v6
         with:
-          # Merged #1225 provides the regular-formulation / promotion-plan fixture.
-          ref: ee9c8d5cd9f8c9a1e97fd9298fc5c8515d50192e
+          # rust-3.0.0-beta.6 provides the regular-formulation / promotion-plan fixture.
+          ref: 32e90cfa53d3c589316d8acb71a368a402c94bf1
           path: .bridge-sender
       - name: Create isolated receiver environment
         run: uv venv --python 3.12 .venv-bridge

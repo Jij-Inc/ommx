@@ -1614,7 +1614,8 @@ dependencies = [
 [[package]]
 name = "ommx-pyo3-bridge"
 version = "3.0.0-beta.6"
-source = "git+https://github.com/Jij-Inc/ommx?rev=303c3f9c54c6cc9d90d1b702b9eae8f23ab738f3#303c3f9c54c6cc9d90d1b702b9eae8f23ab738f3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcde2b3bd7d5fed42e877e89e8c694c9ad200c0f9b908096e0c11c849d81811f"
 dependencies = [
  "pyo3",
 ]
