@@ -6,188 +6,210 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-Changes merged after the most recent release will be appended here as they land, and promoted to a new version section when the next release is cut.
+Changes for the next release will be added here.
 
-### SOS1 promotion prepares link-bound tightening ([#1221](https://github.com/Jij-Inc/ommx/pull/1221))
+## 3.0.0 Beta 6
 
-{meth}`~ommx.Instance.promote_sos1_big_m` now prepares tighter variable bounds
-using only the claimed Big-M links. Successful entries apply those bounds
-together with promotion; strict rejection leaves the entire Instance unchanged.
-Bound updates include sub-tolerance changes and do not consult the default tolerance.
-Narrowed binary selectors are accepted when they can represent every canonical
-nonzero indicator of their member. See the
-{ref}`SOS1 promotion guide <sos1-big-m-formulation>`.
+Python package version: `3.0.0b6`.
+These notes cover [changes since beta.5](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b5...python-3.0.0b6).
+This release corrects imported MPS and QPLIB models, introduces violation values
+for all special constraints, and unifies each constraint's feasibility check as
+`violation <= atol`. It also adds methods to tighten variable bounds using
+linear constraints. Some APIs introduced in earlier v3 prereleases have changed.
 
-### Simultaneous bound tightening ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
+Before upgrading, check the workflows you use:
 
-Tighten variable bounds using all active regular constraints or a selected set
-of constraint IDs. Both methods return the updated bounds by variable ID:
+| If you use… | Action for beta.6 |
+| --- | --- |
+| Saved models imported from MPS or QPLIB | Reimport affected models from their source files. For the built-in MIPLIB and QPLIB datasets, load them again to obtain the corrected distribution. Updating the SDK does not modify saved Artifacts. |
+| Constraint violation or feasibility queries | Replace `total_violation_l1()` with `total_violation()` and update individual-constraint feasibility calls as described below. `total_violation_l2()` has been removed. |
+| `promote_sos1_big_m()` | Construct a batch request and remove the `atol` argument. Choose whether to apply valid conversions individually or require the entire batch to succeed. |
+| Raw integer values for variable kinds | Use enum members such as `Kind.Binary`. Constructors such as `DecisionVariable.binary()` remain available. |
+
+### 🛠 Correct quadratic coefficients when importing QPLIB ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+
+QPLIB models now produce the intended quadratic objective and constraints.
+Previously, quadratic contributions were doubled because the importer omitted
+the format's factor of `1/2`. This could change objective values and cause a
+published feasible solution to be reported as infeasible.
+
+If you used {meth}`~ommx.Instance.load_qplib` to create a saved model, reimport
+it from the original `.qplib` file. `ommx.dataset.qplib` now loads the corrected
+distribution published with OMMX 2.8.0, even if the older distribution is cached.
+See the [QPLIB tutorial](../tutorial/download_qplib_instance.md).
+
+### 🛠 Preserve binary variables when importing MPS and MIPLIB ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
+
+Some MPS files mark variables as integers without explicitly listing their
+bounds. {meth}`~ommx.Instance.load_mps` and `ommx.mps.load_file()` now interpret
+these variables as binary (`0` or `1`), following the Gurobi/HiGHS convention.
+Previously, they were treated as general integers with no upper bound, which
+could change the problem being solved. Explicit bounds in the file still take
+precedence.
+
+Reimport affected saved models from the original MPS file.
+`ommx.dataset.miplib2017` now loads the corrected MIPLIB distribution published
+with OMMX 2.7.0, even if the older distribution is cached. See the
+[MIPLIB tutorial](../tutorial/download_miplib_instance.md).
+
+### 🛠 Consistent tolerance for variable bounds and constraints ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
+
+Checking whether a value is within its variable bounds now uses the same
+absolute-tolerance rule as checking an inequality constraint. This also applies
+when determining the allowed integer or binary values within a bound.
+Results close to a bound may differ from earlier prereleases. See
+[bound evaluation](../user_guide/instance.md) for the exact rules.
+
+### 🛠 Use enums consistently for variable kinds ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
+
+{class}`~ommx.DecisionVariable` now accepts and returns {class}`~ommx.Kind`
+values consistently, restoring the behavior of v2. If your v3 prerelease code
+passes a raw integer as the variable kind, replace it with an enum member such
+as `Kind.Binary` or `Kind.Integer`. Existing convenience constructors such as
+`DecisionVariable.binary()` and aliases such as `DecisionVariable.BINARY`
+remain available. See the [migration guide](../migration/python_sdk_v2_to_v3.md).
+
+### ⚠ Violation values for all special constraints and unified feasibility ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+All special constraints — Indicator, OneHot, and SOS1 — now have a nonnegative
+violation value, so you can inspect how much each constraint is violated.
+For every constraint type, including regular constraints, feasibility is now
+determined by the same rule: **`violation <= atol`**. This rule applies to each
+constraint individually.
+
+Indicator constraints use the inner constraint's violation when enabled and
+zero when disabled. OneHot (exactly one member is `1` and the rest are `0`) and
+SOS1 (at most one member is nonzero) measure the smallest total absolute change
+to member values needed to satisfy the constraint. Tolerance applies to that
+total, so a group of small deviations can now be infeasible even if each was
+previously accepted.
+
+To migrate your code, use {meth}`~ommx.Solution.total_violation` in place of
+`total_violation_l1()`; `total_violation_l2()` has been removed. The total sums
+violations of regular, Indicator, OneHot, SOS1, and removed constraints.
 
 ```python
-changed = instance.tighten_bounds_simultaneously_once()
-changed = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")  # existing OneHot constraint ID
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
 ```
 
-Rows exceeding `max_terms` variable terms (default: 32, excluding constants)
-are skipped. Every processed row reads the bounds at entry, and updates are applied together once.
-Call again to propagate the new bounds through other rows. Tolerance is accounted
-for algebraically in domains and row residuals; exact preservation of floating-point
-feasibility near numerical boundaries is not guaranteed. See
-{ref}`Bound tightening <simultaneous-bound-tightening>` for supported domains,
-tolerance semantics, and atomicity.
+For individual constraints, replace `EvaluatedConstraint.feasible` with
+`is_feasible(atol=...)` and call `SampledConstraint.feasible(atol=...)` as a
+method. Pass `solution.feasibility_atol` or `sample_set.feasibility_atol` to use
+the tolerance from the original evaluation. Solution and SampleSet feasibility
+properties remain available.
 
-### SOS1 promotion checks mathematical equivalence ([#1223](https://github.com/Jij-Inc/ommx/pull/1223))
+SampleSet feasibility and best-feasible selection also check variable bounds
+and kinds, matching the extracted Solution. These variable checks do not add to
+`total_violation()`: a zero total alone does not prove that a solution is feasible.
 
-{meth}`~ommx.Instance.promote_sos1_big_m` no longer takes `atol`.
-Positive scaling of link constraints is accepted, while Big-M values must cover
-the stored member bounds exactly. Promotion preserves the objective and
-mathematical feasible region on original variables; equal violations or
-identical finite-tolerance feasibility are not guaranteed. See the
-[special-constraint guide](../user_guide/special_constraints.md).
+When saving results with a custom tolerance or special constraints, use v2
+serialization. Legacy v1 export recomputes feasibility at the SDK default
+tolerance for the regular constraints and variable values it retains.
+See the {ref}`migration guide <constraint-violation-migration>` for details.
 
-### 🛠 QPLIB coefficients and published solution states ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+### ⚠ Convert Big-M formulations to SOS1 constraints in batches ([#1197](https://github.com/Jij-Inc/ommx/pull/1197), [#1223](https://github.com/Jij-Inc/ommx/pull/1223), [#1221](https://github.com/Jij-Inc/ommx/pull/1221))
 
-{meth}`~ommx.Instance.load_qplib` now applies QPLIB's factor of `1/2` to
-diagonal and cross terms in objectives and constraints. Previously, these
-coefficients were doubled, which could change the objective value and make a
-published feasible solution appear infeasible. Existing serialized instances
-must be imported again from their original `.qplib` files to receive the fix.
+If your model expresses “at most one variable is nonzero” using binary
+selectors and Big-M inequalities, {meth}`~ommx.Instance.promote_sos1_big_m`
+can replace that formulation with an explicit SOS1 constraint after checking
+that it describes the same mathematical problem.
 
-`ommx.dataset.qplib` now reads the corrected
-`ghcr.io/jij-inc/ommx/v2.8/qplib:{tag}` distribution published for OMMX 2.8.0.
-The v3 SDK reads these Artifacts even when the old distribution is cached.
-See the [QPLIB tutorial](../tutorial/download_qplib_instance.md) for distribution
-versioning and the publication record.
-
-{meth}`~ommx.State.load_qplib_solution` and `ommx.qplib.load_solution` now
-read QPLIB's published `.sol` files into a {class}`~ommx.State`:
+The request now groups multiple formulations, keyed by the ID of each
+constraint limiting the sum of selectors. For an existing formulation
+`x[2] + x[3] <= 1` with binary members and regular constraint ID `202`:
 
 ```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest({
+    202: {
+        2: Sos1BigMSelectorClaim.reused(),
+        3: Sos1BigMSelectorClaim.reused(),
+    },
+})
+report = instance.promote_sos1_big_m(request)
+print(report.promoted)    # source constraint ID -> new SOS1 constraint ID
+print(report.rejections)  # source constraint ID -> reason for rejection
+```
+
+The default `mode="best_effort"` applies independent valid formulations and
+reports rejected ones. Use `mode="strict"` to require every formulation to
+succeed; a rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
+and leaves the entire instance unchanged.
+
+Remove the former `atol` argument. Conversion now checks mathematical
+equivalence independently of evaluation tolerance. It also derives tighter
+variable bounds from the supplied Big-M inequalities and applies them together
+with each successful conversion. For example, `0 <= y <= 10` and `y <= 3*z`
+with binary `z` allow the upper bound of `y` to become `3`.
+The objective and feasible assignments of the original variables are preserved,
+but violation values and decisions near a numerical tolerance boundary can differ.
+See the {ref}`SOS1 conversion guide <sos1-big-m-formulation>` for requests with
+separate selector variables and full migration examples.
+
+### Tighten variable bounds using linear constraints ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
+
+You can now narrow variable bounds using information already present in your
+constraints. For example, for integer variables, `x + y <= 7` and `y >= 2`
+imply `x <= 5`:
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.integer(0, lower=0, upper=10)
+y = DecisionVariable.integer(1, lower=2, upper=10)
+instance = Instance.from_components(
+    decision_variables=[x, y], objective=x,
+    constraints={100: x + y <= 7}, sense=Sense.Minimize,
+)
+changed = instance.tighten_bounds_simultaneously_once()
+assert changed[0].upper == 5
+```
+
+The method updates the instance and returns a dictionary of changed variable
+IDs and their new bounds. To use selected constraints, call
+`instance.tighten_bounds_simultaneously_once_using_constraints({100})`.
+Each call makes one pass using the bounds at entry; call again to propagate
+new bounds through other constraints.
+
+Only supported linear constraints are used. Nonlinear constraints, composed
+expressions, special constraints, and linear constraints with more than
+`max_terms` variable terms (default: 32) are skipped. Numerical rounding can
+affect feasibility near tolerance boundaries. See
+{ref}`Bound tightening <simultaneous-bound-tightening>` for supported variable
+types and tolerance behavior.
+
+### Read published QPLIB solutions ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+
+Load a published `.sol` file and evaluate it against the matching problem to
+check its objective value and feasibility:
+
+```python
+from ommx import Instance, State
+
+instance = Instance.load_qplib("QPLIB_0018.qplib")
 state = State.load_qplib_solution(
     "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
 )
 solution = instance.evaluate(state, atol=1e-8)
 ```
 
-Omitted variables receive zero, and `objvar` is excluded from the state.
-See the [QPLIB tutorial](../tutorial/download_qplib_instance.md) for a complete
-example and the supported variable naming convention.
+Variables omitted from the solution file receive zero. The reported `objvar`
+is not treated as a variable; evaluation computes the objective from the model.
+`ommx.qplib.load_solution` is also available. See the
+[QPLIB tutorial](../tutorial/download_qplib_instance.md) for supported files.
 
-### 🛠 Preserve implicit binary bounds when loading MPS ([#1202](https://github.com/Jij-Inc/ommx/pull/1202))
+### A shared exception for Rust extension transfers ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
-`Instance.load_mps()` and `ommx.mps.load_file()` now give columns inside
-`INTORG`/`INTEND` with no `BOUNDS` entry the implicit binary domain `[0, 1]`,
-following the Gurobi/HiGHS MPS convention. Previously, these columns became
-general integers with an infinite upper bound. This affected 17 variables in
-`neos-2626858-aoos`, changing its binary-variable count from 209 to 192.
+If an external Rust extension cannot transfer an OMMX object to the Python SDK,
+you can catch {class}`~ommx.BridgeError`. It covers incompatible transfer
+protocols and registration or transfer failures, including failures from
+independently built extensions. Transfer failures preserve the original Python
+exception in `__cause__`. A missing SDK or required bridge API raises
+`ImportError`.
 
-Explicit bound records remain effective, including `LO`/`LI 0` for nonnegative
-integers with no upper limit. Previously generated Artifacts, including those
-loaded through `ommx.dataset`, require separate regeneration from the source MPS;
-updating the SDK does not repair stored instances.
-
-### Shared bridge exception ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
-
-The Python SDK defines {class}`~ommx.BridgeError` for protocol incompatibility,
-receiver registration failures, and transfer errors. Independently built Rust
-extensions using the bridge raise this same SDK-owned class, so callers can
-handle their failures with `except ommx.BridgeError`. Transfer failures retain
-the original Python exception in `__cause__`. A missing SDK or required bridge
-API raises `ImportError`.
-
-### ⚠ Unified constraint violation metrics ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
-
-Rename `Solution.total_violation_l1()` to {meth}`~ommx.Solution.total_violation`
-and remove `total_violation_l2()`. The total sums one nonnegative violation per
-constraint, including Indicator, OneHot, SOS1, and removed constraints.
-
-```python
-solution.total_violation()
-solution.constraint_violation(30, kind="one_hot")
-solution.constraints_df(kind="sos1")[["feasible", "violation"]]
-```
-
-Replace `EvaluatedConstraint.feasible` with `is_feasible(atol=...)`, and
-`SampledConstraint.feasible` with the explicit `feasible(atol=...)` method.
-Solution/SampleSet retain their feasibility properties and expose the associated
-`feasibility_atol`. Queries do not repeat evaluation or change stored decisions.
-
-SampleSet feasibility and best-feasible selection now include variable bounds
-and kinds, matching the extracted Solution. These checks do not contribute to
-`total_violation`.
-
-Legacy v1 export recomputes feasibility at the SDK default tolerance for retained
-regular constraints and variable values, matching v1 import. Use v2 to preserve
-custom tolerance and native special constraints.
-
-All Solution constraint DataFrames now expose `feasible` and `violation`.
-All constraint feasibility is derived from `violation <= atol`; OneHot and SOS1
-now apply tolerance to the total change instead of each member separately.
-OneHot and SOS1 use minimum absolute changes to their member values, without
-requiring agreement with Big-M lowering. See the
-{ref}`migration guide <constraint-violation-migration>`
-for definitions and migration details.
-
-### ⚠ Batch SOS1 Big-M promotion with selectable application mode ([#1197](https://github.com/Jij-Inc/ommx/pull/1197))
-
-{class}`~ommx.Sos1BigMPromotionRequest` now represents an entire batch:
-cardinality constraint IDs map to member-to-selector claims.
-{meth}`~ommx.Instance.promote_sos1_big_m` returns one
-{class}`~ommx.Sos1BigMPromotion` report in both modes:
-
-```python
-report = instance.promote_sos1_big_m(request, mode="best_effort")  # default
-# Or, on the original instance, require every formulation to succeed:
-report = instance.promote_sos1_big_m(request, mode="strict")
-```
-
-Best effort applies valid independent formulations. The report's `promoted`
-maps cardinality IDs to allocated SOS1 IDs; `rejections` maps rejected
-cardinality IDs to diagnostic strings. Strict mode raises
-{class}`~ommx.Sos1BigMPromotionBatchRejectedError` before mutation if any
-formulation is rejected, preserving all rejected IDs and diagnostics.
-
-This replaces the prerelease single-formulation request and result API.
-See {ref}`SOS1 Big-M formulations <sos1-big-m-formulation>` for construction,
-report inspection, and the atomicity contract.
-
-Attaching diagnostic attributes to `Sos1BigMPromotionBatchRejectedError`,
-`LogEncodingError`, and `PreparationTargetNotReachedError` now preserves any
-exception raised by a Python attribute hook instead of causing a Rust panic.
-
-### 🛠 Restore typed enum model discriminators ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
-
-The v3 rewrite accidentally exposed protobuf integer discriminators through
-{class}`~ommx.DecisionVariable`. Its constructor and `kind` properties now use
-{class}`~ommx.Kind` consistently, restoring the stable-v2 behavior. Existing
-`DecisionVariable.*`, `Constraint.*`, and `Instance.*` names remain
-non-deprecated typed aliases.
-
-Only v3 prerelease code passing raw integers directly must switch to typed enum
-members. Enum/integer equality and hash compatibility is retained. See the
-[migration guide](../migration/python_sdk_v2_to_v3.md) for details.
-
-### 🛠 Unified bound and constraint tolerance semantics ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
-
-{meth}`~ommx.Bound.contains` now interprets $x \in [l,u]$ through the same
-inequality residuals $l-x\leq 0$ and $x-u\leq 0$ used by regular constraint
-feasibility. Integer, SemiInteger, and Binary bound normalization use this same
-membership rule instead of constructing tolerance-expanded endpoints.
-
-See the [Instance user guide](../user_guide/instance.md) for bound evaluation.
-SOS1 promotion instead validates mathematical equivalence independently of
-evaluation tolerance; see the
-[special-constraint guide](../user_guide/special_constraints.md).
-
-### 🛠 Adopt the published v2.7 MIPLIB distribution ([#1205](https://github.com/Jij-Inc/ommx/pull/1205))
-
-`ommx.dataset.miplib2017` now reads
-`ghcr.io/jij-inc/ommx/v2.7/miplib2017:{instance-name}`, the distribution
-generated with corrected MPS integer bounds in OMMX 2.7.0. The v3 SDK reuses
-these published Artifacts, even when the old unversioned distribution is cached,
-and does not fall back to the old models. See the
-[MIPLIB tutorial](../tutorial/download_miplib_instance.md) for distribution
-versioning and the publication record.
 
 ## 3.0.0 Beta 5
 
