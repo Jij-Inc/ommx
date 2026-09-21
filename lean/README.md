@@ -36,7 +36,9 @@ The current model focuses on exact-rational affine optimization. It provides:
 - an `Instance.Transform` contract with explicit target, encode/decode,
   directional preservation, round-trip, and composition laws; and
 - partial Indicator and SOS1 Big-M lowering that validates a `Plan` before
-  constructing an `Instance.Transform`.
+  constructing an `Instance.Transform`; and
+- conservative SOS1 Big-M promotion that validates an untrusted `Witness`
+  before establishing transformation correctness.
 
 Detailed modules and implemented features are listed below. SDK serialization
 and lifecycle, floating-point behavior, Rust mutation correctness, and
@@ -61,11 +63,18 @@ completeness of recognition or presolve algorithms remain outside this model.
 | `OMMXProof.Instance.Transform.IndicatorBigM.Target` | Generated linear rows, target Instance construction, and feasibility equivalence |
 | `OMMXProof.Instance.Transform.IndicatorBigM.Basic` | Partial lowering with identity state maps and transformation correctness |
 | `OMMXProof.Instance.Transform.IndicatorBigM` | Entrypoint for the complete Indicator Big-M lowering |
-| `OMMXProof.Instance.Transform.SOS1BigM.Formulation` | Mixed reused/fresh selector formulation and its exact relation to SOS1 semantics |
-| `OMMXProof.Instance.Transform.SOS1BigM.Plan` | SOS1 selection, reused/fresh member partitioning, and finite-bound validation |
-| `OMMXProof.Instance.Transform.SOS1BigM.Target` | Big-M links, selector cardinality, target Instance construction, and feasibility equivalence |
-| `OMMXProof.Instance.Transform.SOS1BigM.Basic` | Partial lowering, canonical encoding, source projection, and transformation correctness |
-| `OMMXProof.Instance.Transform.SOS1BigM` | Entrypoint for the complete SOS1 Big-M lowering |
+| `OMMXProof.Instance.Transform.SOS1BigM.SelectorFormulation` | Shared selector semantics and layout, canonical Big-M rows, and their exact relation to SOS1 |
+| `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Plan` | SOS1 selection, reused/fresh member partitioning, and finite-bound validation |
+| `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Target` | Canonical-row instantiation, target Instance construction, and feasibility equivalence |
+| `OMMXProof.Instance.Transform.SOS1BigM.Lowering.Basic` | Partial lowering, canonical encoding, source projection, and transformation correctness |
+| `OMMXProof.Instance.Transform.SOS1BigM.Lowering` | Entrypoint for complete SOS1 Big-M lowering |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Witness` | Untrusted retained/fresh suffix layout and link bounds supplied to the promotion checker |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Target` | Retained-prefix projection, promoted target construction, and target feasibility characterization |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Validation` | Direct witnessed-row and member-domain containment validation, plus derived structural source equalities |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Semantics` | Feasibility, canonical-selector, and objective characterizations for validated promotion |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion.Basic` | Total witnessed promotion plus correctness theorems under validated sufficient conditions |
+| `OMMXProof.Instance.Transform.SOS1BigM.Promotion` | Entrypoint for complete SOS1 Big-M promotion |
+| `OMMXProof.Instance.Transform.SOS1BigM` | Umbrella for both directions of the SOS1 Big-M formulation |
 | `OMMXProof.Instance.Transform` | Entrypoint for common transformation semantics and all concrete Instance transformations |
 
 ## Checks
@@ -100,18 +109,19 @@ includes Lean's standard `propext`, `Classical.choice`, and `Quot.sound` axioms.
 - [x] Reduction/relaxation composition and encode/decode round-trip laws
 - [x] Partial Indicator Big-M lowering with validated affine body bounds and identity state maps
 - [x] Partial SOS1 Big-M lowering with mixed reused/fresh selector layouts
+- [x] Conservative SOS1 Big-M promotion from a standard selector/link suffix
 - [x] Executable accept/reject fixtures and counterexamples
 
 ## Planned directions
 
-The packaged `Instance.Transform` examples currently focus on lowering
-Indicator and SOS1 constraints into regular linear constraints. The common
-transformation contract is not restricted to lowering or to presolve
-reductions. The intended next directions are:
+The packaged `Instance.Transform` examples include lowering Indicator and SOS1
+constraints into regular linear constraints and promoting one standard SOS1
+Big-M layout back to a first-class SOS1 constraint. The common transformation
+contract is not restricted to lowering or to presolve reductions. The intended
+next directions are:
 
-- promotion from regular linear formulations to higher-level constraint
-  families, including validation of whether earlier lowering data still
-  supports inverse lowering after presolve;
+- promotion from alternative regular or nonlinear formulations to higher-level
+  constraint families beyond the currently recognized SOS1 Big-M layout;
 - presolve transformations for MILP problems represented by `Instance`;
 - more general presolve transformations beyond the current affine MILP
   fragment;
@@ -121,6 +131,6 @@ reductions. The intended next directions are:
 - a canonical SDK-to-Lean bridge in which SDK-produced `Witness` values are
   checked against this formal contract.
 
-The future SDK-produced `Witness` is distinct from the current in-Lean `Plan`,
-which selects and validates one lowering operation. The versioned `Witness`
-contract, bridge, and SDK-side producer are intentionally unimplemented here.
+The current in-Lean promotion `Witness` is untrusted layout data checked against
+the source Instance. A future versioned SDK contract, bridge, and SDK-side
+producer for such witnesses are intentionally unimplemented here.
