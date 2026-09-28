@@ -30,5 +30,5 @@ dev = [
 
 [tool.pytest.ini_options]
 markers = [
-  "benchmark_diagnostic: manual scaling or profiling diagnostic",
+  "benchmark_guardrail: persistent regression guardrail run by CodSpeed CI",
 ]

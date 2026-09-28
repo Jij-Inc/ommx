@@ -1,4 +1,4 @@
-"""Manual scaling diagnostic for HiGHS model construction, without solving.
+"""Persistent scaling guardrails for HiGHS model construction, without solving.
 
 Origin: an interrupted conversion of a 255,565-term maintenance objective.
 Purpose: detect quadratic copying when accumulating a long linear expression.
@@ -7,9 +7,9 @@ Independent variable: N active binary variables and N nonzero coefficients in
 one objective or one constraint. All other dimensions remain fixed.
 Cost model: O(N) variable creation plus O(N) expression construction; doubling
 N should approximately double runtime, rather than quadruple it.
-Lifecycle/run policy: retain as an opt-in adapter diagnostic outside the core
-CodSpeed suite. Run `task python:ommx-highs-adapter:bench` when changing model
-construction, and compare all three sizes; ordinary pytest runs each once.
+Lifecycle/run policy: run all six cases in CodSpeed CI to catch regressions in
+model construction. The normal adapter test task excludes these benchmarks.
+Run `task python:ommx-highs-adapter:bench` to measure them locally.
 Runtime budget: six construction cases, with no optimization or external data.
 """
 
@@ -38,7 +38,7 @@ def conversion_instance(request, num_terms):
     )
 
 
-@pytest.mark.benchmark_diagnostic
+@pytest.mark.benchmark_guardrail
 @pytest.mark.benchmark
 def test_model_construction(benchmark, conversion_instance):
     benchmark(OMMXHighsAdapter, conversion_instance)
