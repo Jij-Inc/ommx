@@ -46,10 +46,8 @@ class Sos1Plan:
             # link residuals, rather than applying an arbitrary epsilon to x:
             # row scaling matters to OMMX feasibility. Do not modify members.
             zero_state = {claim.member: value, selector: 0.0}
-            can_be_zero = (
-                claim.lower <= 0
-                and abs(value) < atol
-                and all(_satisfied(row, zero_state, atol) for row in claim.links)
+            can_be_zero = claim.lower <= 0 and all(
+                _satisfied(row, zero_state, atol) for row in claim.links
             )
             entries[selector] = 0.0 if can_be_zero else 1.0
 

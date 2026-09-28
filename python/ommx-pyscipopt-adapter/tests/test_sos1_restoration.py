@@ -232,6 +232,45 @@ def test_near_zero_restoration_uses_original_link_residuals():
         scaled._sos1_plans[0].restore({0: tiny, 1: 4.0})
 
 
+@pytest.mark.parametrize("mode", ["auto", "forced", "disabled"])
+def test_scaled_links_restore_feasible_solver_solution(mode: Mode):
+    value = 2 * get_default_atol()
+    x = DecisionVariable.continuous(0, lower=value, upper=value)
+    y = DecisionVariable.continuous(1, lower=0, upper=4)
+    p, q = [DecisionVariable.binary(i) for i in (2, 3)]
+    instance = Instance.from_components(
+        decision_variables=[x, y, p, q],
+        objective=y,
+        constraints=[
+            (0.125 * x <= 0.5 * p).set_id(10),
+            (0.125 * y <= 0.5 * q).set_id(11),
+            (p + q <= 1).set_id(12),
+        ],
+        sense=Instance.MAXIMIZE,
+        constraint_hints=ConstraintHints(
+            sos1_constraints=[
+                Sos1(
+                    variables=[0, 1],
+                    binary_constraint_id=12,
+                    big_m_constraint_ids=[10, 11],
+                )
+            ]
+        ),
+    )
+    expected = {0: value, 1: 4, 2: 0, 3: 1}
+    # The member exceeds ATol, but its original link residual at p=0 does not.
+    assert instance.evaluate(expected).feasible
+    adapter = OMMXPySCIPOptAdapter(instance, use_sos1=mode)
+    adapter.model.setRealParam("numerics/feastol", 10 * get_default_atol())
+    adapter.model.setIntParam("presolving/maxrounds", 0)
+    adapter.model.optimize()
+    assert adapter.model.getStatus() == "optimal"
+    assert adapter.decode_to_state(adapter.model).entries == expected
+    solution = adapter.decode(adapter.model)
+    assert solution.feasible
+    assert solution.objective == 4
+
+
 def test_no_hints_preserves_mode_contract():
     instance = formulation(case="no_hints")
     assert OMMXPySCIPOptAdapter.solve(instance).feasible
