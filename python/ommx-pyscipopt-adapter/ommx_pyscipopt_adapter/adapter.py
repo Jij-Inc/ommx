@@ -22,6 +22,7 @@ from ommx.v1 import (
 )
 
 from .exception import OMMXPySCIPOptAdapterError
+from ._sos1 import plan_sos1
 
 
 HintMode = Literal["disabled", "auto", "forced"]
@@ -41,12 +42,28 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         :param ommx_instance: The ommx.v1.Instance to solve.
         :param use_sos1: Strategy for handling SOS1 constraints.Options:
             - "disabled": Do not use SOS1 constraints.
-            - "auto": Use SOS1 constraints if hints are provided, otherwise solve without them.(default)
-            - "forced": Require SOS1 constraints and raise an error if no SOS1 constraint hints are found.
+            - "auto": Replace validated SOS1 formulations; retain ordinary rows for unsupported hints (default).
+            - "forced": Require SOS1 hints and raise an error if any hint cannot be safely replaced.
         :param initial_state: Optional initial solution state.
         """
         self.instance = ommx_instance
         self.use_sos1 = use_sos1
+        self._sos1_plans = plan_sos1(ommx_instance, use_sos1)
+        self._sos1_selectors = {
+            id for plan in self._sos1_plans for id in plan.selectors
+        }
+        self._solver_variables = [
+            var
+            for var in self.instance.used_decision_variables
+            if var.id not in self._sos1_selectors
+        ]
+        self._solver_bounds = {
+            var.id: (var.bound.lower, var.bound.upper) for var in self._solver_variables
+        }
+        for plan in self._sos1_plans:
+            for id, (lower, upper) in plan.bounds.items():
+                old_lower, old_upper = self._solver_bounds[id]
+                self._solver_bounds[id] = (max(lower, old_lower), min(upper, old_upper))
         self.model = pyscipopt.Model()
         self.model.hideOutput()
 
@@ -72,8 +89,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         :param ommx_instance: The ommx.v1.Instance to solve.
         :param use_sos1: Strategy for handling SOS1 constraints.Options:
             - "disabled": Do not use SOS1 constraints.
-            - "auto": Use SOS1 constraints if hints are provided, otherwise solve without them.(default)
-            - "forced": Require SOS1 constraints and raise an error if no SOS1 constraint hints are found.
+            - "auto": Replace validated SOS1 formulations; retain ordinary rows for unsupported hints (default).
+            - "forced": Require SOS1 hints and raise an error if any hint cannot be safely replaced.
         :param initial_state: Optional initial solution state.
 
         Examples
@@ -274,29 +291,26 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             # NOTE recreating the map instead of using `self.varname_map`, as
             # this is probably more robust.
             varname_map = {var.name: var for var in data.getVars()}
-            return State(
-                entries={
-                    var.id: sol[varname_map[str(var.id)]]
-                    for var in self.instance.used_decision_variables
-                }
-            )
+            entries = {
+                var.id: sol[varname_map[str(var.id)]] for var in self._solver_variables
+            }
         except Exception:
             raise OMMXPySCIPOptAdapterError(
                 f"There is no feasible solution. [status: {data.getStatus()}]"
             )
+        for plan in self._sos1_plans:
+            plan.restore(entries)
+        return State(entries=entries)
 
     def _set_decision_variables(self):
-        for var in self.instance.used_decision_variables:
+        for var in self._solver_variables:
+            lower, upper = self._solver_bounds[var.id]
             if var.kind == DecisionVariable.BINARY:
-                self.model.addVar(name=str(var.id), vtype="B")
+                self.model.addVar(name=str(var.id), vtype="B", lb=lower, ub=upper)
             elif var.kind == DecisionVariable.INTEGER:
-                self.model.addVar(
-                    name=str(var.id), vtype="I", lb=var.bound.lower, ub=var.bound.upper
-                )
+                self.model.addVar(name=str(var.id), vtype="I", lb=lower, ub=upper)
             elif var.kind == DecisionVariable.CONTINUOUS:
-                self.model.addVar(
-                    name=str(var.id), vtype="C", lb=var.bound.lower, ub=var.bound.upper
-                )
+                self.model.addVar(name=str(var.id), vtype="C", lb=lower, ub=upper)
             else:
                 raise OMMXPySCIPOptAdapterError(
                     f"Unsupported decision variable kind: "
@@ -365,27 +379,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_constraints(self):
-        ommx_hints = self.instance.constraint_hints
-        excluded = set()
-
-        # Handle SOS1 constraints from constraint hints
-        if self.use_sos1 != "disabled":
-            if self.use_sos1 == "forced" and len(ommx_hints.sos1_constraints) == 0:
-                raise OMMXPySCIPOptAdapterError(
-                    "No SOS1 constraints were found, but `use_sos1` is set to `forced`."
-                )
-
-            for sos1 in ommx_hints.sos1_constraints:
-                bid = sos1.binary_constraint_id
-                excluded.add(bid)
-                big_m_ids = sos1.big_m_constraint_ids
-                if len(big_m_ids) == 0:
-                    name = f"sos1_{bid}"
-                else:
-                    name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
-                    excluded.update(big_m_ids)
-                vars = [self.varname_map[str(v)] for v in sos1.variables]
-                self.model.addConsSOS1(vars, name=name)
+        excluded = {row.id for plan in self._sos1_plans for row in plan.rows}
+        for plan in self._sos1_plans:
+            vars = [self.varname_map[str(id)] for id in plan.members]
+            self.model.addConsSOS1(vars, name=plan.name)
 
         for constraint in self.instance.constraints:
             if constraint.id in excluded:
