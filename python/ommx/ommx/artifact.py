@@ -615,7 +615,10 @@ class ArtifactBuilder:
 
         >>> print(artifact.image_name)
         ttl.sh/...-...-...-...-...:1h
-        >>> artifact.push()
+
+        The push example is skipped because it depends on the availability of ttl.sh.
+
+        >>> artifact.push()  # doctest: +SKIP
 
         """
         return ArtifactBuilder(ArtifactArchiveBuilder.temp())
