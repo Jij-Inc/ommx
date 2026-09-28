@@ -6,7 +6,15 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-次のリリースに向けた変更をここに追記します。
+### 🛠 HiGHS のモデル構築を高速化 ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
+
+HiGHS Adapter で項数の多い線形目的関数や制約を変換する際、加算のたびに
+蓄積済みの式全体をコピーしないようにしました。
+`OMMXHighsAdapter(instance)` はモデル構築のみを行い、制約追加前に求解を
+実行しなくなります。変換から求解・解の復元まで行う場合は
+`OMMXHighsAdapter.solve(instance)` を、構築済みモデルを求解する場合は
+`adapter.solver_input.run()` を使ってください。
+定数目的関数についても、定数値と最小化・最大化の方向を HiGHS モデルに保持します。
 
 ## 3.0.0 Beta 6
 
