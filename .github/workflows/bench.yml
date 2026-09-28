@@ -81,7 +81,8 @@ jobs:
         run: |
           uv sync --locked --only-group build --only-group benchmark --no-install-workspace
           uv run --no-sync maturin build --release --out wheels -m python/ommx/Cargo.toml
-          uv pip install wheels/*.whl python/ommx-highs-adapter
+          # Resolve adapter dependencies against the built wheel, not editable workspace sources.
+          uv pip install --no-sources wheels/*.whl python/ommx-highs-adapter
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v5.2.1
