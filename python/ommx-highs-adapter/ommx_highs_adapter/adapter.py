@@ -623,6 +623,10 @@ class OMMXHighsAdapter(SolverAdapter):
         """
         Initialize the adapter with an OMMX instance.
 
+        Build the HiGHS model without running the solver. Call
+        ``adapter.solver_input.run()`` to solve it, or use :meth:`solve`
+        for the complete workflow.
+
         Parameters
         ----------
         ommx_instance : Instance
@@ -992,16 +996,19 @@ class OMMXHighsAdapter(SolverAdapter):
         )
 
     def _linear_expr_conversion(self, ommx_func: Function):
-        # NOTE we explicityly don't convert to `highspy.highs.highs_linear_expression`
-        # before returning as the callers want to check whether the returned
-        # value is a constant float.
         degree = ommx_func.degree()
         if degree is None or degree >= 2:
             raise OMMXHighsAdapterError(
                 "HiGHS Adapter currently only supports linear problems"
             )
+        if degree == 0:
+            # Keep constants as floats for the feasibility checks in _set_constraints.
+            return ommx_func.constant_term
+
+        # Python's sum copies the growing HiGHS expression on every addition.
+        # qsum appends terms in place, keeping construction linear in term count.
         return (
-            sum(
+            self.model.qsum(
                 coeff * self.highs_vars[id]
                 for (id, coeff) in ommx_func.linear_terms.items()
             )
@@ -1009,15 +1016,20 @@ class OMMXHighsAdapter(SolverAdapter):
         )
 
     def _set_objective(self):
-        obj = self._linear_expr_conversion(self.instance.objective)
-        if isinstance(obj, float):
-            return
+        obj = highs_linear_expression(
+            self._linear_expr_conversion(self.instance.objective)
+        )
         if self.instance.sense == Sense.Maximize:
-            self.model.maximize(highs_linear_expression(obj))
+            sense = highspy.ObjSense.kMaximize
         elif self.instance.sense == Sense.Minimize:
-            self.model.minimize(highs_linear_expression(obj))
+            sense = highspy.ObjSense.kMinimize
         else:
             raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.sense}")
+        # Columns start with zero costs. Set the objective without solving;
+        # unlike setObjective, these APIs are also available in HiGHS 1.9.
+        self.model.changeColsCost(len(obj.idxs), obj.idxs, obj.vals)
+        self.model.changeObjectiveOffset(obj.constant or 0.0)
+        self.model.changeObjectiveSense(sense)
 
     def _set_constraints(self):
         for cid, constr in self.instance.constraints.items():

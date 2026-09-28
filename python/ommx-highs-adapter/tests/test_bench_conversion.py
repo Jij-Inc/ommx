@@ -1,0 +1,46 @@
+"""Manual scaling diagnostic for HiGHS model construction, without solving.
+
+Origin: an interrupted conversion of a 255,565-term maintenance objective.
+Purpose: detect quadratic copying when accumulating a long linear expression.
+Boundary: OMMXHighsAdapter construction; OMMX fixture creation is excluded.
+Independent variable: N active binary variables and N nonzero coefficients in
+one objective or one constraint. All other dimensions remain fixed.
+Cost model: O(N) variable creation plus O(N) expression construction; doubling
+N should approximately double runtime, rather than quadruple it.
+Lifecycle/run policy: retain as an opt-in adapter diagnostic outside the core
+CodSpeed suite. Run `task python:ommx-highs-adapter:bench` when changing model
+construction, and compare all three sizes; ordinary pytest runs each once.
+Runtime budget: six construction cases, with no optimization or external data.
+"""
+
+import pytest
+from ommx import DecisionVariable, Instance, Linear, Sense
+
+from ommx_highs_adapter import OMMXHighsAdapter
+
+
+@pytest.fixture(params=[10_000, 20_000, 40_000])
+def num_terms(request):
+    return request.param
+
+
+@pytest.fixture(params=["objective", "constraint"])
+def conversion_instance(request, num_terms):
+    variables = [DecisionVariable.binary(3 * i + 7) for i in range(num_terms)]
+    expression = Linear(
+        terms={var.id: float(1 + i % 7) for i, var in enumerate(variables)}, constant=3
+    )
+    return Instance.from_components(
+        decision_variables=variables,
+        objective=expression if request.param == "objective" else 0,
+        constraints={0: expression <= num_terms}
+        if request.param == "constraint"
+        else {},
+        sense=Sense.Minimize,
+    )
+
+
+@pytest.mark.benchmark_diagnostic
+@pytest.mark.benchmark
+def test_model_construction(benchmark, conversion_instance):
+    benchmark(OMMXHighsAdapter, conversion_instance)
