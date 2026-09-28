@@ -25,6 +25,11 @@ tasks:
     cmds:
       - uv run pyright
 
+  bench:
+    desc: Run the manual HiGHS model construction scaling diagnostic
+    cmds:
+      - uv run pytest tests/test_bench_conversion.py --codspeed
+
   markdown-code-runner:
     desc: Run markdown code runner
     cmds:

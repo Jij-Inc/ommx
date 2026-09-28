@@ -1,9 +1,77 @@
+import highspy
 import pytest
+from highspy.highs import highs_var
 
-from ommx.v1 import Instance, DecisionVariable, Solution
+from ommx.v1 import Constraint, Instance, DecisionVariable, Solution
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 from ommx_highs_adapter import OMMXHighsAdapter
+
+
+@pytest.mark.parametrize("sense", [Instance.MINIMIZE, Instance.MAXIMIZE])
+@pytest.mark.parametrize("objective_kind", ["linear", "constant", "zero"])
+def test_constructor_preserves_model_without_solving(
+    monkeypatch, sense, objective_kind
+):
+    # Noncontiguous IDs must map to HiGHS columns, including constraint-only variables.
+    x = DecisionVariable.continuous(11, lower=0, upper=5)
+    y = DecisionVariable.integer(29, lower=0, upper=2)
+    objective = {"linear": 2 * x - 3 * y + 7, "constant": 7, "zero": 0}[objective_kind]
+    instance = Instance.from_components(
+        decision_variables=[x, y],
+        objective=objective,
+        constraints=[
+            (x + y == 3).set_id(10),
+            (x - 2 * y <= 0).set_id(20),
+            Constraint(id=30, function=0, equality=Constraint.EQUAL_TO_ZERO),
+            Constraint(
+                id=40, function=-2, equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+            ),
+        ],
+        sense=sense,
+    )
+    before = instance.to_bytes()
+
+    def unexpected_run(*args, **kwargs):
+        pytest.fail("Constructing an adapter must not run HiGHS")
+
+    with monkeypatch.context() as context:
+        context.setattr(highspy.Highs, "run", unexpected_run)
+        context.setattr(highspy.Highs, "solve", unexpected_run)
+        adapter = OMMXHighsAdapter(instance)
+
+    model = adapter.solver_input
+    assert instance.to_bytes() == before
+    assert model.getModelStatus() == highspy.HighsModelStatus.kNotset
+    assert model.getRunTime() == 0
+    assert model.getNumCol() == 2
+    assert model.getNumRow() == 2  # Satisfied constant constraints are omitted.
+    expected_sense = (
+        highspy.ObjSense.kMinimize
+        if sense == Instance.MINIMIZE
+        else highspy.ObjSense.kMaximize
+    )
+    assert model.getObjectiveSense() == (highspy.HighsStatus.kOk, expected_sense)
+    offset = 0 if objective_kind == "zero" else 7
+    assert model.getObjectiveOffset() == (highspy.HighsStatus.kOk, offset)
+    lp = model.getLp()
+    highs_x = adapter.highs_vars[x.id]
+    highs_y = adapter.highs_vars[y.id]
+    assert isinstance(highs_x, highs_var)
+    assert isinstance(highs_y, highs_var)
+    assert lp.col_cost_[highs_x.index] == (2 if objective_kind == "linear" else 0)
+    assert lp.col_cost_[highs_y.index] == (-3 if objective_kind == "linear" else 0)
+
+    assert model.run() == highspy.HighsStatus.kOk
+    solution = adapter.decode(model)
+    expected = (
+        (3 if sense == Instance.MINIMIZE else 8)
+        if objective_kind == "linear"
+        else offset
+    )
+    assert solution.feasible
+    assert solution.objective == pytest.approx(expected)
+    assert model.getObjectiveValue() == pytest.approx(expected)
 
 
 def test_integration_lp():

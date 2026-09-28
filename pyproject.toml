@@ -27,3 +27,8 @@ dev = [
   "syrupy>=4.7.2",
   "tomlkit>=0.13.2",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+  "benchmark_diagnostic: manual scaling or profiling diagnostic",
+]
