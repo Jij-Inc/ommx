@@ -81,15 +81,15 @@ jobs:
         run: |
           uv sync --locked --only-group build --only-group benchmark --no-install-workspace
           uv run --no-sync maturin build --release --out wheels -m python/ommx/Cargo.toml
-          uv pip install wheels/*.whl
+          uv pip install wheels/*.whl python/ommx-highs-adapter
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v5.2.1
         with:
           run: |
             if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.suite }}" = "full" ]; then
-              uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py --codspeed
+              uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py python/ommx-highs-adapter/tests/test_bench_*.py --codspeed
             else
-              uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py --codspeed -m benchmark_guardrail
+              uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py python/ommx-highs-adapter/tests/test_bench_*.py --codspeed -m benchmark_guardrail
             fi
           mode: simulation
