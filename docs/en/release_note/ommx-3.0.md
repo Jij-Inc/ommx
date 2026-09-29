@@ -6,7 +6,15 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-Changes for the next release will be added here.
+### 🛠 Faster HiGHS model construction ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
+
+The HiGHS adapter now assembles long linear objectives and constraints without
+repeatedly copying the growing expression. Constructing
+`OMMXHighsAdapter(instance)` only builds the model; it no longer runs the solver
+before adding constraints. Use `OMMXHighsAdapter.solve(instance)` for the complete
+workflow, or call `adapter.solver_input.run()` to solve a constructed model.
+Constant objectives also retain their value and minimization/maximization sense
+in the HiGHS model.
 
 ## 3.0.0 Beta 6
 

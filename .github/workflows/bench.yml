@@ -62,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10.1.0
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           # CodSpeed looks working with `sys.monitoring`, which has been introduced in 3.12,
           # but updates in 3.13 seems to be required for generating trace information.
@@ -81,15 +81,16 @@ jobs:
         run: |
           uv sync --locked --only-group build --only-group benchmark --no-install-workspace
           uv run --no-sync maturin build --release --out wheels -m python/ommx/Cargo.toml
-          uv pip install wheels/*.whl
+          # Resolve adapter dependencies against the built wheel, not editable workspace sources.
+          uv pip install --no-sources wheels/*.whl python/ommx-highs-adapter
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v5.2.1
         with:
           run: |
             if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.suite }}" = "full" ]; then
-              uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py --codspeed
+              uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py python/ommx-highs-adapter/tests/test_bench_*.py --codspeed
             else
-              uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py --codspeed -m benchmark_guardrail
+              uv run --no-sync pytest python/ommx-tests/tests/test_bench_*.py python/ommx-highs-adapter/tests/test_bench_*.py --codspeed -m benchmark_guardrail
             fi
           mode: simulation
