@@ -51,12 +51,12 @@ jobs:
       # FIXME: `codspeed` command used in `CodSpeedHQ/action` cannot work with `uv run`
       - name: Build wheel
         run: |
-          pip install python/ommx
+          pip install python/ommx python/ommx-highs-adapter
           pip install pytest-codspeed
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v4
         with:
-          run: pytest python/ommx-tests/ --codspeed
+          run: pytest python/ommx-tests/ python/ommx-highs-adapter/tests/test_bench_*.py --codspeed
           token: ${{ secrets.CODSPEED_TOKEN }}
           mode: simulation

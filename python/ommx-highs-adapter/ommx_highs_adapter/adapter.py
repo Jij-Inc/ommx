@@ -1,7 +1,7 @@
 import highspy
 import numpy as np
 
-from highspy.highs import highs_linear_expression
+from highspy.highs import highs_linear_expression, highs_var
 
 from ommx.v1 import Instance, DecisionVariable, Solution, Constraint, State, Function
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
@@ -132,6 +132,10 @@ class OMMXHighsAdapter(SolverAdapter):
         """
         Initialize the adapter with an OMMX instance.
 
+        Build the HiGHS model without running the solver. Call
+        ``adapter.solver_input.run()`` to solve it, or use :meth:`solve`
+        for the complete workflow.
+
         Parameters
         ----------
         ommx_instance : Instance
@@ -148,7 +152,7 @@ class OMMXHighsAdapter(SolverAdapter):
             self.model.setOptionValue("log_to_console", False)
 
         self.var_ids = {}
-        self.highs_vars = []
+        self.highs_vars: dict[int, highs_var] = {}
 
         self._set_decision_variables()
         self._set_objective()
@@ -419,45 +423,77 @@ class OMMXHighsAdapter(SolverAdapter):
         )
 
     def _set_decision_variables(self):
-        num_cols = len(self.instance.used_decision_variables)
-        lower = np.zeros(num_cols)
-        upper = np.zeros(num_cols)
-        types = []
+        variables = self.instance.used_decision_variables
+        num_cols = len(variables)
+        if num_cols == 0:
+            return
+
+        lower = np.empty(num_cols, dtype=np.float64)
+        upper = np.empty(num_cols, dtype=np.float64)
+        types = np.empty(num_cols, dtype=np.uint8)
+        integer = int(highspy.HighsVarType.kInteger)
+        continuous = int(highspy.HighsVarType.kContinuous)
         var_ids = []
 
-        for i, var in enumerate(self.instance.used_decision_variables):
+        for i, var in enumerate(variables):
             var_ids.append(var.id)
             if var.kind == DecisionVariable.BINARY:
                 lower[i] = 0
                 upper[i] = 1
-                types.append(highspy.HighsVarType.kInteger)
+                types[i] = integer
             elif var.kind == DecisionVariable.INTEGER:
                 lower[i] = var.bound.lower
                 upper[i] = var.bound.upper
-                types.append(highspy.HighsVarType.kInteger)
+                types[i] = integer
             elif var.kind == DecisionVariable.CONTINUOUS:
                 lower[i] = var.bound.lower
                 upper[i] = var.bound.upper
-                types.append(highspy.HighsVarType.kContinuous)
+                types[i] = continuous
             else:
                 raise OMMXHighsAdapterError(
                     f"Unsupported decision variable kind: "
                     f"id: {var.id}, kind: {var.kind}"
                 )
-        self.highs_vars = self.model.addVariables(
-            var_ids, lb=lower.tolist(), ub=upper.tolist(), type=types
+        # Pass typed arrays directly, avoiding addVariables' per-item validation
+        # and conversions between NumPy arrays and Python lists.
+        empty_indices = np.empty(0, dtype=np.int32)
+        status = self.model.addCols(
+            num_cols,
+            np.zeros(num_cols, dtype=np.float64),
+            lower,
+            upper,
+            0,
+            empty_indices,
+            empty_indices,
+            np.empty(0, dtype=np.float64),
         )
+        if status != highspy.HighsStatus.kOk:
+            raise OMMXHighsAdapterError(f"Failed to add decision variables: {status}")
+        status = self.model.changeColsIntegrality(
+            num_cols, np.arange(num_cols, dtype=np.int32), types
+        )
+        if status != highspy.HighsStatus.kOk:
+            raise OMMXHighsAdapterError(
+                f"Failed to set decision variable integrality: {status}"
+            )
+        self.highs_vars = {
+            var_id: highs_var(i, self.model) for i, var_id in enumerate(var_ids)
+        }
 
     def _linear_expr_conversion(self, ommx_func: Function):
-        # NOTE we explicityly don't convert to `highspy.highs.highs_linear_expression`
-        # before returning as the callers want to check whether the returned
-        # value is a constant float.
-        if ommx_func.degree() >= 2:
+        degree = ommx_func.degree()
+        if degree >= 2:
             raise OMMXHighsAdapterError(
                 "HiGHS Adapter currently only supports linear problems"
             )
+        if degree == 0:
+            # Keep constants as floats for the feasibility checks in _set_constraints.
+            return ommx_func.constant_term
+
+        # Python's sum copies the growing HiGHS expression on every addition.
+        # qsum appends terms in place, keeping construction linear in term count.
         return (
-            sum(
+            self.model.qsum(
                 coeff * self.highs_vars[id]
                 for (id, coeff) in ommx_func.linear_terms.items()
             )
@@ -465,15 +501,24 @@ class OMMXHighsAdapter(SolverAdapter):
         )
 
     def _set_objective(self):
-        obj = self._linear_expr_conversion(self.instance.objective)
-        if isinstance(obj, float):
-            return
+        obj = highs_linear_expression(
+            self._linear_expr_conversion(self.instance.objective)
+        )
         if self.instance.sense == Instance.MAXIMIZE:
-            self.model.maximize(highs_linear_expression(obj))
+            sense = highspy.ObjSense.kMaximize
         elif self.instance.sense == Instance.MINIMIZE:
-            self.model.minimize(highs_linear_expression(obj))
+            sense = highspy.ObjSense.kMinimize
         else:
             raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.sense}")
+        # Columns start with zero costs. Set the objective without solving;
+        # unlike setObjective, these APIs are also available in HiGHS 1.9.
+        self.model.changeColsCost(
+            len(obj.idxs),
+            np.asarray(obj.idxs, dtype=np.int32),
+            np.asarray(obj.vals, dtype=np.float64),
+        )
+        self.model.changeObjectiveOffset(obj.constant or 0.0)
+        self.model.changeObjectiveSense(sense)
 
     def _set_constraints(self):
         for constr in self.instance.constraints:
