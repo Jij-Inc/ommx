@@ -1,5 +1,29 @@
 # OMMX Python SDK 2.9.x
 
+## Unreleased
+
+### Instanceのスナップショット読み取りAPI ([#1244](https://github.com/Jij-Inc/ommx/pull/1244))
+
+次の2.xリリースに、v3開発版と共通で使える2つのメソッドを追加します。
+
+- `Instance.fixed_decision_variables() -> dict[int, float]` は、明示的に保持された
+  代入値を変数IDと対応付けて返します。上下界が一致するだけの変数は含みません。
+- `Instance.regular_constraint_ids() -> set[int]` は、有効な通常制約のIDを返します。
+  除去済み制約は含みません。OneHot/SOS1 hintは元の通常制約を除去しないため、
+  そのIDは含まれます。
+
+```python
+fixed = instance.fixed_decision_variables()
+constraints = {
+    cid: instance.get_constraint_by_id(cid)
+    for cid in instance.regular_constraint_ids()
+}
+```
+
+どちらも独立したスナップショットを返し、該当する要素がなければ空の辞書・集合を返します。
+読み取りや返却値の変更によってInstanceが変わることはありません。
+これらは公開済みのSDK 2.9.0には含まれない追加APIです。
+
 ## バグ修正
 
 ### HiGHS のモデル構築を高速化 ([#1239](https://github.com/Jij-Inc/ommx/pull/1239))
