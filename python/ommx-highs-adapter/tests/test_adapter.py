@@ -5,7 +5,72 @@ from highspy.highs import highs_var
 from ommx.v1 import Constraint, Instance, DecisionVariable, Solution
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
-from ommx_highs_adapter import OMMXHighsAdapter
+from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError
+
+
+def test_variable_domains_and_column_mapping():
+    binary = DecisionVariable.binary(100)
+    integer = DecisionVariable.integer(7, lower=-3, upper=4)
+    continuous = DecisionVariable.continuous(42, lower=-2.5, upper=6.5)
+    unused = DecisionVariable.continuous(321)
+    instance = Instance.from_components(
+        decision_variables=[continuous, unused, binary, integer],
+        objective=3 * binary + 5 * integer + 7 * continuous,
+        constraints=[],
+        sense=Instance.MINIMIZE,
+    )
+    adapter = OMMXHighsAdapter(instance)
+    model = adapter.solver_input
+    lp = model.getLp()
+    assert set(adapter.highs_vars) == {100, 7, 42}
+    assert lp.num_col_ == 3
+    for var_id, lower, upper, kind, cost in [
+        (100, 0, 1, highspy.HighsVarType.kInteger, 3),
+        (7, -3, 4, highspy.HighsVarType.kInteger, 5),
+        (42, -2.5, 6.5, highspy.HighsVarType.kContinuous, 7),
+    ]:
+        column = adapter.highs_vars[var_id].index
+        assert lp.col_lower_[column] == lower
+        assert lp.col_upper_[column] == upper
+        assert lp.integrality_[column] == kind
+        assert lp.col_cost_[column] == cost
+
+    assert model.run() == highspy.HighsStatus.kOk
+    state = adapter.decode_to_state(model)
+    assert state.entries == pytest.approx({100: 0, 7: -3, 42: -2.5})
+
+
+@pytest.mark.parametrize("has_unused_variable", [False, True])
+def test_constructor_without_active_variables(has_unused_variable):
+    instance = Instance.from_components(
+        decision_variables=[DecisionVariable.binary(11)] if has_unused_variable else [],
+        objective=7,
+        constraints=[],
+        sense=Instance.MINIMIZE,
+    )
+    adapter = OMMXHighsAdapter(instance)
+    model = adapter.solver_input
+    assert model.getNumCol() == 0
+    assert model.getNumRow() == 0
+    assert model.getObjectiveOffset() == (highspy.HighsStatus.kOk, 7)
+    assert model.getModelStatus() == highspy.HighsModelStatus.kNotset
+
+
+@pytest.mark.parametrize(
+    ("method", "message"),
+    [
+        ("addCols", "Failed to add decision variables"),
+        ("changeColsIntegrality", "Failed to set decision variable integrality"),
+    ],
+)
+def test_variable_registration_error(monkeypatch, method, message):
+    x = DecisionVariable.binary(11)
+    instance = Instance.from_components(
+        decision_variables=[x], objective=x, constraints=[], sense=Instance.MINIMIZE
+    )
+    monkeypatch.setattr(highspy.Highs, method, lambda *args: highspy.HighsStatus.kError)
+    with pytest.raises(OMMXHighsAdapterError, match=message):
+        OMMXHighsAdapter(instance)
 
 
 @pytest.mark.parametrize("sense", [Instance.MINIMIZE, Instance.MAXIMIZE])
