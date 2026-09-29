@@ -2,7 +2,7 @@
 
 ## バグ修正
 
-### HiGHS のモデル構築を高速化 ([#1239](https://github.com/Jij-Inc/ommx/pull/1239))
+### HiGHS のモデル構築を高速化 (2.9.0, [#1239](https://github.com/Jij-Inc/ommx/pull/1239))
 
 HiGHS Adapter で項数の多い線形目的関数や制約を変換する際、加算のたびに
 蓄積済みの式全体をコピーしないようにしました。
@@ -14,7 +14,7 @@ HiGHS Adapter で項数の多い線形目的関数や制約を変換する際、
 
 ## 新機能
 
-### Rust SDK v3からV1 Bridgeでモデルを受信 ([#1226](https://github.com/Jij-Inc/ommx/pull/1226))
+### Rust SDK v3からV1 Bridgeでモデルを受信 (2.9.0, [#1226](https://github.com/Jij-Inc/ommx/pull/1226))
 
 Rust側でProtobufV1を選択し、既存のPython SDK 2.xのクラスへモデルを
 転送できるようになりました。通常制約による定式化と、従来のソルバー
@@ -29,3 +29,13 @@ Bridgeのプロトコル・データ検証の失敗は`ommx.BridgeError`で通�
 
 このSDKが受信できるのはProtobufV1です。送信側が転送前に数学的な表現を選び、
 Bridge自体は制約のloweringや昇格を行いません。
+
+## 改善
+
+### ソルバーアダプターの Python バージョン上限を撤廃 (2.9.1, [#1246](https://github.com/Jij-Inc/ommx/pull/1246))
+
+HiGHS、PySCIPOpt、OpenJij の各アダプターの Python 要件を
+`requires-python = ">=3.10"` に変更し、従来の `<3.14` という上限を撤廃しました。
+アダプター自身のパッケージメタデータによって Python 3.14 へのインストールが
+制限されなくなります。インストールには引き続き、使用する Python バージョンと
+プラットフォームに対応したソルバーおよび依存パッケージが必要です。

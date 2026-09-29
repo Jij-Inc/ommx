@@ -2,7 +2,7 @@
 
 ## Bug Fixes
 
-### Faster HiGHS model construction ([#1239](https://github.com/Jij-Inc/ommx/pull/1239))
+### Faster HiGHS model construction (2.9.0, [#1239](https://github.com/Jij-Inc/ommx/pull/1239))
 
 The HiGHS adapter now assembles long linear objectives and constraints without
 repeatedly copying the growing expression. Constructing
@@ -14,7 +14,7 @@ in the HiGHS model.
 
 ## New Features
 
-### Receive Rust SDK v3 models over the V1 bridge ([#1226](https://github.com/Jij-Inc/ommx/pull/1226))
+### Receive Rust SDK v3 models over the V1 bridge (2.9.0, [#1226](https://github.com/Jij-Inc/ommx/pull/1226))
 
 Rust producers can negotiate ProtobufV1 and transfer models into the existing
 Python SDK 2.x classes, including regular constraint formulations and
@@ -29,3 +29,12 @@ The seven bridge types are now also available at the top level:
 
 This SDK advertises ProtobufV1 only. A producer chooses its mathematical
 representation before transfer; the bridge does not lower or promote constraints.
+
+## Improvements
+
+### Remove Python upper bounds from solver adapters (2.9.1, [#1246](https://github.com/Jij-Inc/ommx/pull/1246))
+
+The HiGHS, PySCIPOpt, and OpenJij adapters now declare `requires-python = ">=3.10"`
+without the previous `<3.14` upper bound. Their package metadata no longer blocks
+installation on Python 3.14. Installation still requires compatible solver and
+dependency packages for the selected Python version and platform.
