@@ -7,18 +7,18 @@ from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 def test_sos1_constraint_functionality():
     """Test that SOS1 constraints work with valid constraint references."""
     # Create decision variables
-    x = [DecisionVariable.continuous(i, lower=0, upper=1) for i in range(1, 4)]
+    x = [DecisionVariable.continuous(i, lower=0, upper=1) for i in range(1, 3)]
+    x.append(DecisionVariable.binary(3))
+    selectors = [DecisionVariable.binary(i) for i in (4, 5)]
 
-    # Simple objective to minimize
-    objective = sum(x)
+    # A nonzero optimum exercises selector reconstruction.
+    objective = x[0] + 2 * x[1] + x[2]
 
-    # Create a constraint that the SOS1 will reference
-    # This constraint ensures the problem has a meaningful solution space
-    dummy_constraint = (sum(x) <= 2).set_id(1)  # type: ignore
+    cardinality = (sum(selectors) + x[2] <= 1).set_id(1)
 
     # Create additional constraints for the SOS1 big-M
-    bigm1 = (x[0] <= 1).set_id(2)  # type: ignore
-    bigm2 = (x[1] <= 1).set_id(3)  # type: ignore
+    bigm1 = (x[0] <= selectors[0]).set_id(2)
+    bigm2 = (x[1] <= selectors[1]).set_id(3)
 
     # Create SOS1 hint with valid constraint references
     sos1_hint = Sos1(
@@ -27,10 +27,10 @@ def test_sos1_constraint_functionality():
     constraint_hints = ConstraintHints(sos1_constraints=[sos1_hint])
 
     instance = Instance.from_components(
-        decision_variables=x,
+        decision_variables=x + selectors,
         objective=objective,
-        constraints=[dummy_constraint, bigm1, bigm2],
-        sense=Instance.MINIMIZE,
+        constraints=[cardinality, bigm1, bigm2],
+        sense=Instance.MAXIMIZE,
         constraint_hints=constraint_hints,
     )
 
@@ -49,8 +49,11 @@ def test_sos1_constraint_functionality():
     assert "2" not in constraint_names, "Referenced Big-M constraint should be excluded"
     assert "3" not in constraint_names, "Referenced Big-M constraint should be excluded"
 
-    # Solve and get a solution (may be infeasible due to constraint exclusion, which is expected)
+    # Check the returned solution against the original formulation as well.
     model.optimize()
+    solution = adapter.decode(model)
+    assert solution.feasible
+    assert solution.objective == 2
 
     # The important part is that SOS1 constraint was correctly added
     assert len(sos1_names) == 1, "Exactly one SOS1 constraint should be created"
@@ -59,23 +62,24 @@ def test_sos1_constraint_functionality():
 def test_sos1_constraint_naming():
     """Test that SOS1 constraints get proper names."""
     # Create decision variables
-    x = [DecisionVariable.binary(i) for i in range(1, 3)]
+    x = [DecisionVariable.continuous(i, lower=0, upper=1) for i in range(1, 3)]
+    selectors = [DecisionVariable.binary(i) for i in (3, 4)]
 
     objective = sum(x)
 
     # Create constraints for SOS1 to reference
-    constraint1 = (sum(x) == 1).set_id(10)  # type: ignore
-    bigm1 = (x[0] <= 1).set_id(20)  # type: ignore
-    bigm2 = (x[1] <= 1).set_id(30)  # type: ignore
+    constraint1 = (selectors[0] + selectors[1] <= 1).set_id(10)
+    bigm1 = (x[0] <= selectors[0]).set_id(20)
+    bigm2 = (x[1] <= selectors[1]).set_id(30)
 
-    # Test SOS1 with both binary and big-M constraints
+    # Test SOS1 with cardinality and Big-M constraints.
     sos1_hint = Sos1(
         binary_constraint_id=10, big_m_constraint_ids=[20, 30], variables=[1, 2]
     )
     constraint_hints = ConstraintHints(sos1_constraints=[sos1_hint])
 
     instance = Instance.from_components(
-        decision_variables=x,
+        decision_variables=x + selectors,
         objective=objective,
         constraints=[constraint1, bigm1, bigm2],
         sense=Instance.MINIMIZE,
