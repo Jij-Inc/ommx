@@ -16,14 +16,19 @@ tasks:
       - task: lint
 
   pytest:
-    desc: Run pytest tests
+    desc: Run pytest tests (unit only, excluding benchmark tests)
     cmds:
-      - uv run pytest -vv --doctest-modules
+      - uv run pytest -vv --doctest-modules --ignore-glob=tests/test_bench_*.py
 
   pyright:
     desc: Run pyright type checking
     cmds:
       - uv run pyright
+
+  bench:
+    desc: Run HiGHS model construction regression benchmarks with CodSpeed
+    cmds:
+      - uv run pytest tests/test_bench_conversion.py --codspeed
 
   markdown-code-runner:
     desc: Run markdown code runner
