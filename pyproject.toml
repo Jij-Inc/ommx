@@ -27,3 +27,8 @@ dev = [
   "syrupy>=4.7.2",
   "tomlkit>=0.13.2",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+  "benchmark_guardrail: persistent regression guardrail run by CodSpeed CI",
+]

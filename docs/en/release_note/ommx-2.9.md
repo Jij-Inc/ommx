@@ -1,5 +1,17 @@
 # OMMX Python SDK 2.9.x
 
+## Bug Fixes
+
+### Faster HiGHS model construction ([#1239](https://github.com/Jij-Inc/ommx/pull/1239))
+
+The HiGHS adapter now assembles long linear objectives and constraints without
+repeatedly copying the growing expression. Constructing
+`OMMXHighsAdapter(instance)` only builds the model; it no longer runs the solver
+before adding constraints. Use `OMMXHighsAdapter.solve(instance)` for the complete
+workflow, or call `adapter.solver_input.run()` to solve a constructed model.
+Constant objectives also retain their value and minimization/maximization sense
+in the HiGHS model.
+
 ## New Features
 
 ### Receive Rust SDK v3 models over the V1 bridge ([#1226](https://github.com/Jij-Inc/ommx/pull/1226))
