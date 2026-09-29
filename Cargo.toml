@@ -46,7 +46,8 @@ katexit = "0.1.5"
 maplit = "1.0.2"
 num = "0.4.3"
 oci-client = { version = "0.18.0", default-features = false, features = ["rustls-tls"] }
-oci-spec = "0.9.0"
+# Match oci-client's oci-spec version so ImageRef can borrow its Reference.
+oci-spec = "0.10.0"
 ordered-float = { version = "5.1.0", features = ["serde"] }
 petgraph = "0.8.3"
 proc-macro2 = "1.0.95"
