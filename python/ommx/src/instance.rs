@@ -890,6 +890,24 @@ impl Instance {
             .collect()
     }
 
+    /// Return a set of all active regular constraint IDs.
+    ///
+    /// Removed constraints and native special constraints (OneHot, SOS1,
+    /// Indicator) are excluded. Use {meth}`~ommx.Instance.get_constraint_by_id`
+    /// to read each constraint without depending on the ``constraints``
+    /// collection's representation.
+    ///
+    /// This is a snapshot: reading or modifying the returned set does not
+    /// change this instance. Later additions, removals, or promotions of
+    /// constraints are reflected by calling this method again.
+    pub fn regular_constraint_ids(&self) -> BTreeSet<u64> {
+        self.inner
+            .constraints()
+            .keys()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
     /// Add a regular constraint to this instance.
     ///
     /// Picks an unused {class}`~ommx.ConstraintID`, drains the wrapper's
@@ -2647,6 +2665,15 @@ impl Instance {
     }
 
     /// Return fixed decision variables as ``{id: fixed_value}``.
+    ///
+    /// Values are read from the fixed values stored by this instance, for
+    /// example after {meth}`~ommx.Instance.partial_evaluate`. A variable whose
+    /// lower and upper bounds merely coincide is not included.
+    ///
+    /// Returns an empty dict when no fixed values are stored. Reading or
+    /// modifying the returned dict does not change this instance. Fixed values
+    /// belong to the instance and are not carried by detached
+    /// {class}`~ommx.DecisionVariable` objects.
     pub fn fixed_decision_variables(&self) -> BTreeMap<u64, f64> {
         self.inner
             .fixed_decision_variables()

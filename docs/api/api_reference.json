@@ -9983,7 +9983,7 @@
             },
             {
               "name": "fixed_decision_variables",
-              "doc": "Return fixed decision variables as ``{id: fixed_value}``.",
+              "doc": "Return fixed decision variables as ``{id: fixed_value}``.\n\nValues are read from the fixed values stored by this instance, for\nexample after {meth}`~ommx.Instance.partial_evaluate`. A variable whose\nlower and upper bounds merely coincide is not included.\n\nReturns an empty dict when no fixed values are stored. Reading or\nmodifying the returned dict does not change this instance. Fixed values\nbelong to the instance and are not carried by detached\n{class}`~ommx.DecisionVariable` objects.",
               "signatures": [
                 {
                   "parameters": [],
@@ -11730,6 +11730,28 @@
                     "display": "bool",
                     "link_target": null,
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "regular_constraint_ids",
+              "doc": "Return a set of all active regular constraint IDs.\n\nRemoved constraints and native special constraints (OneHot, SOS1,\nIndicator) are excluded. Use {meth}`~ommx.Instance.get_constraint_by_id`\nto read each constraint without depending on the ``constraints``\ncollection's representation.\n\nThis is a snapshot: reading or modifying the returned set does not\nchange this instance. Later additions, removals, or promotions of\nconstraints are reflected by calling this method again.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "set[int]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
                   }
                 }
               ],
