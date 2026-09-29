@@ -7,6 +7,7 @@ import pytest
 from ommx import (
     Bound,
     DecisionVariable,
+    Function,
     Instance,
     Sense,
     Sos1BigMPromotion,
@@ -43,6 +44,23 @@ def mixed_formulation(
         },
     )
     return instance, request
+
+
+def test_regular_constraint_ids_excludes_promoted_sos1_rows() -> None:
+    instance, request = mixed_formulation()
+    unrelated = instance.add_constraint(instance.get_decision_variable_by_id(1) <= 3)
+    unrelated_id = unrelated.constraint_id
+    assert instance.regular_constraint_ids() == {100, 101, 102, unrelated_id}
+
+    report = instance.promote_sos1_big_m(request, mode="strict")
+
+    assert set(report.promoted) == {102}
+    before = instance.to_v2_bytes()
+    assert instance.regular_constraint_ids() == {unrelated_id}
+    assert instance.get_constraint_by_id(unrelated_id).function.almost_equal(
+        Function(instance.get_decision_variable_by_id(1) - 3)
+    )
+    assert instance.to_v2_bytes() == before
 
 
 @pytest.mark.parametrize("mode", ["best_effort", "strict"])

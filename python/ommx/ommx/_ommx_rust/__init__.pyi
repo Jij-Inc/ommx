@@ -3585,6 +3585,19 @@ class Instance:
 
         Raises {class}`KeyError` if no variable with `variable_id` exists.
         """
+    def regular_constraint_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Return a set of all active regular constraint IDs.
+
+        Removed constraints and native special constraints (OneHot, SOS1,
+        Indicator) are excluded. Use {meth}`~ommx.Instance.get_constraint_by_id`
+        to read each constraint without depending on the ``constraints``
+        collection's representation.
+
+        This is a snapshot: reading or modifying the returned set does not
+        change this instance. Later additions, removals, or promotions of
+        constraints are reflected by calling this method again.
+        """
     def add_constraint(
         self,
         constraint: Constraint,
@@ -4795,6 +4808,15 @@ class Instance:
     def fixed_decision_variables(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
         Return fixed decision variables as ``{id: fixed_value}``.
+
+        Values are read from the fixed values stored by this instance, for
+        example after {meth}`~ommx.Instance.partial_evaluate`. A variable whose
+        lower and upper bounds merely coincide is not included.
+
+        Returns an empty dict when no fixed values are stored. Reading or
+        modifying the returned dict does not change this instance. Fixed values
+        belong to the instance and are not carried by detached
+        {class}`~ommx.DecisionVariable` objects.
         """
     def dependent_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
