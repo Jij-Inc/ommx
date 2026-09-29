@@ -6,6 +6,24 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 有効な通常制約を読み取るスナップショットAPI ([#1243](https://github.com/Jij-Inc/ommx/pull/1243))
+
+`Instance.regular_constraint_ids() -> set[int]` で、現在有効な通常制約のIDを
+取得できます。除去済み制約とネイティブの OneHot・SOS1・Indicator 制約は含みません。
+各制約は `get_constraint_by_id()` で読み取れます。
+
+```python
+constraints = {
+    cid: instance.get_constraint_by_id(cid)
+    for cid in instance.regular_constraint_ids()
+}
+fixed = instance.fixed_decision_variables()
+```
+
+返される集合と、既存の固定値辞書はいずれも独立したスナップショットです。
+変更してもInstanceには反映されません。固定値はInstanceに保持された代入値を参照し、
+上下界の一致から推測したり、detachedな決定変数から取得したりはしません。
+
 ### 🛠 HiGHS のモデル構築を高速化 ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
 
 HiGHS Adapter で項数の多い線形目的関数や制約を変換する際、加算のたびに

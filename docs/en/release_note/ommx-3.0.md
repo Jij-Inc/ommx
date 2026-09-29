@@ -6,6 +6,24 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Snapshot reads for active regular constraints ([#1243](https://github.com/Jij-Inc/ommx/pull/1243))
+
+`Instance.regular_constraint_ids() -> set[int]` lists the currently active
+regular constraints. Removed constraints and native OneHot, SOS1, and Indicator
+constraints are excluded. Read each constraint through `get_constraint_by_id()`:
+
+```python
+constraints = {
+    cid: instance.get_constraint_by_id(cid)
+    for cid in instance.regular_constraint_ids()
+}
+fixed = instance.fixed_decision_variables()
+```
+
+The returned set and the existing fixed-value dict are independent snapshots;
+changing them does not change the instance. Fixed values come from the instance's
+stored assignments, not from coincident bounds or detached decision variables.
+
 ### 🛠 Faster HiGHS model construction ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
 
 The HiGHS adapter now assembles long linear objectives and constraints without
