@@ -1,5 +1,30 @@
 # OMMX Python SDK 2.9.x
 
+## Unreleased
+
+### Instance snapshot read APIs ([#1244](https://github.com/Jij-Inc/ommx/pull/1244))
+
+The next 2.x release adds two methods also available in the v3 development line:
+
+- `Instance.fixed_decision_variables() -> dict[int, float]` returns explicitly
+  stored substituted values by variable ID. Coincident bounds alone do not add
+  a variable to the result.
+- `Instance.regular_constraint_ids() -> set[int]` returns active regular
+  constraint IDs, excluding removed constraints. OneHot/SOS1 hints leave their
+  source constraints active, so those IDs remain included.
+
+```python
+fixed = instance.fixed_decision_variables()
+constraints = {
+    cid: instance.get_constraint_by_id(cid)
+    for cid in instance.regular_constraint_ids()
+}
+```
+
+Both methods return independent snapshots, including empty containers when
+there are no matching entries. Reading or modifying the results does not
+change the instance. These additions are not part of the released SDK 2.9.0.
+
 ## Bug Fixes
 
 ### Faster HiGHS model construction (2.9.0, [#1239](https://github.com/Jij-Inc/ommx/pull/1239))
