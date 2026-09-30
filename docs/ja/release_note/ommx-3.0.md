@@ -6,15 +6,36 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### 🛠 HiGHS のモデル構築を高速化 ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
+## 3.0.0 Beta 7
 
-HiGHS Adapter で項数の多い線形目的関数や制約を変換する際、加算のたびに
-蓄積済みの式全体をコピーしないようにしました。
-`OMMXHighsAdapter(instance)` はモデル構築のみを行い、制約追加前に求解を
-実行しなくなります。変換から求解・解の復元まで行う場合は
-`OMMXHighsAdapter.solve(instance)` を、構築済みモデルを求解する場合は
-`adapter.solver_input.run()` を使ってください。
-定数目的関数についても、定数値と最小化・最大化の方向を HiGHS モデルに保持します。
+Python パッケージのバージョンは `3.0.0b7` です。
+ここでは [beta.6 以降の変更](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b6...python-3.0.0b7)を説明します。
+このリリースでは、HiGHS のモデル構築を修正し、HiGHS・PySCIPOpt・OpenJij の
+Adapter パッケージから Python バージョンの上限制限を取り除きました。
+
+### 🛠 HiGHS のモデル構築時に求解を実行しないよう修正 ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
+
+`OMMXHighsAdapter(instance)` はモデル構築のみを行うようになりました。
+従来は、定数でない目的関数を設定するときに、制約を追加する前のモデルで求解を
+実行していました。定数目的関数についても、定数値と最小化・最大化の方向を
+HiGHS モデルに保持するようにしました。
+
+モデル構築から求解・解の復元まで行う場合は `OMMXHighsAdapter.solve(instance)` を、
+構築済みモデルを求解する場合は `adapter.solver_input.run()` を使ってください。
+詳細は [Adapter チュートリアル](../tutorial/solve_with_ommx_adapter.md)を参照してください。
+
+項数の多い線形目的関数や制約を構築する際には、加算のたびに蓄積済みの式全体を
+コピーせず、項を追加するようにしました。
+
+### Adapter パッケージの Python バージョン上限制限を撤廃 ([#1245](https://github.com/Jij-Inc/ommx/pull/1245))
+
+HiGHS・PySCIPOpt・OpenJij の Adapter パッケージから、Python の要件 `<3.14` を
+取り除きました。Python-MIP を含む 4 つの Adapter パッケージすべてで、
+`requires-python = ">=3.10"` を指定しています。
+
+これにより、Adapter 自体のメタデータによって Python 3.14 へのインストールが
+拒否されなくなります。インストールには引き続き、利用する Python バージョンと
+プラットフォームに対応した OMMX・ソルバー・その他の依存パッケージが必要です。
 
 ## 3.0.0 Beta 6
 

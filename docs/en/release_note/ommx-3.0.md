@@ -6,15 +6,36 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### 🛠 Faster HiGHS model construction ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
+## 3.0.0 Beta 7
 
-The HiGHS adapter now assembles long linear objectives and constraints without
-repeatedly copying the growing expression. Constructing
-`OMMXHighsAdapter(instance)` only builds the model; it no longer runs the solver
-before adding constraints. Use `OMMXHighsAdapter.solve(instance)` for the complete
-workflow, or call `adapter.solver_input.run()` to solve a constructed model.
-Constant objectives also retain their value and minimization/maximization sense
-in the HiGHS model.
+Python package version: `3.0.0b7`.
+These notes cover [changes since beta.6](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b6...python-3.0.0b7).
+This release corrects HiGHS model construction and removes the Python version
+upper bounds from the HiGHS, PySCIPOpt, and OpenJij adapter packages.
+
+### 🛠 Build HiGHS models without running the solver ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
+
+Constructing `OMMXHighsAdapter(instance)` now only builds the model. Previously,
+setting a nonconstant objective ran the solver before constraints had been added.
+Constant objectives now also retain their value and minimization/maximization
+sense in the HiGHS model.
+
+Use `OMMXHighsAdapter.solve(instance)` for model construction, solving, and
+solution recovery, or call `adapter.solver_input.run()` to solve a constructed
+model. See the [adapter tutorial](../tutorial/solve_with_ommx_adapter.md).
+
+When assembling long linear objectives and constraints, the adapter now adds
+terms without repeatedly copying the accumulated expression.
+
+### Remove Python version upper bounds from adapter packages ([#1245](https://github.com/Jij-Inc/ommx/pull/1245))
+
+The HiGHS, PySCIPOpt, and OpenJij adapter packages no longer declare a `<3.14`
+Python requirement. All four adapter packages, including Python-MIP, now declare
+`requires-python = ">=3.10"`.
+
+Python 3.14 installations are therefore no longer blocked by those adapters'
+own metadata. Installation still requires compatible versions of OMMX, the
+solver, and other dependencies for your Python version and platform.
 
 ## 3.0.0 Beta 6
 
