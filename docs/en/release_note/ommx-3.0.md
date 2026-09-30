@@ -8,10 +8,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## 3.0.0 Beta 7
 
-Python package version: `3.0.0b7`.
-These notes cover [changes since beta.6](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b6...python-3.0.0b7).
-This release corrects HiGHS model construction and removes the Python version
-upper bounds from the HiGHS, PySCIPOpt, and OpenJij adapter packages.
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b7)
 
 ### 🛠 Build HiGHS models without running the solver ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
 
@@ -27,7 +24,7 @@ model. See the [adapter tutorial](../tutorial/solve_with_ommx_adapter.md).
 When assembling long linear objectives and constraints, the adapter now adds
 terms without repeatedly copying the accumulated expression.
 
-### Remove Python version upper bounds from adapter packages ([#1245](https://github.com/Jij-Inc/ommx/pull/1245))
+### 🆕 Remove Python version upper bounds from adapter packages ([#1245](https://github.com/Jij-Inc/ommx/pull/1245))
 
 The HiGHS, PySCIPOpt, and OpenJij adapter packages no longer declare a `<3.14`
 Python requirement. All four adapter packages, including Python-MIP, now declare
@@ -39,21 +36,7 @@ solver, and other dependencies for your Python version and platform.
 
 ## 3.0.0 Beta 6
 
-Python package version: `3.0.0b6`.
-These notes cover [changes since beta.5](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b5...python-3.0.0b6).
-This release corrects imported MPS and QPLIB models, introduces violation values
-for all special constraints, and unifies each constraint's feasibility check as
-`violation <= atol`. It also adds methods to tighten variable bounds using
-linear constraints. Some APIs introduced in earlier v3 prereleases have changed.
-
-Before upgrading, check the workflows you use:
-
-| If you use… | Action for beta.6 |
-| --- | --- |
-| Saved models imported from MPS or QPLIB | Reimport affected models from their source files. For the built-in MIPLIB and QPLIB datasets, load them again to obtain the corrected distribution. Updating the SDK does not modify saved Artifacts. |
-| Constraint violation or feasibility queries | Replace `total_violation_l1()` with `total_violation()` and update individual-constraint feasibility calls as described below. `total_violation_l2()` has been removed. |
-| `promote_sos1_big_m()` | Construct a batch request and remove the `atol` argument. Choose whether to apply valid conversions individually or require the entire batch to succeed. |
-| Raw integer values for variable kinds | Use enum members such as `Kind.Binary`. Constructors such as `DecisionVariable.binary()` remain available. |
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b6-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b6)
 
 ### 🛠 Correct quadratic coefficients when importing QPLIB ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
 
@@ -178,7 +161,7 @@ but violation values and decisions near a numerical tolerance boundary can diffe
 See the {ref}`SOS1 conversion guide <sos1-big-m-formulation>` for requests with
 separate selector variables and full migration examples.
 
-### Tighten variable bounds using linear constraints ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
+### 🆕 Tighten variable bounds using linear constraints ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
 
 You can now narrow variable bounds using information already present in your
 constraints. For example, for integer variables, `x + y <= 7` and `y >= 2`
@@ -210,7 +193,7 @@ affect feasibility near tolerance boundaries. See
 {ref}`Bound tightening <simultaneous-bound-tightening>` for supported variable
 types and tolerance behavior.
 
-### Read published QPLIB solutions ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+### 🆕 Read published QPLIB solutions ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
 
 Load a published `.sol` file and evaluate it against the matching problem to
 check its objective value and feasibility:
@@ -230,7 +213,7 @@ is not treated as a variable; evaluation computes the objective from the model.
 `ommx.qplib.load_solution` is also available. See the
 [QPLIB tutorial](../tutorial/download_qplib_instance.md) for supported files.
 
-### A shared exception for Rust extension transfers ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
+### 🆕 A shared exception for Rust extension transfers ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
 If an external Rust extension cannot transfer an OMMX object to the Python SDK,
 you can catch {class}`~ommx.BridgeError`. It covers incompatible transfer
@@ -238,7 +221,6 @@ protocols and registration or transfer failures, including failures from
 independently built extensions. Transfer failures preserve the original Python
 exception in `__cause__`. A missing SDK or required bridge API raises
 `ImportError`.
-
 
 ## 3.0.0 Beta 5
 

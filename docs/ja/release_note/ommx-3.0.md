@@ -8,10 +8,7 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## 3.0.0 Beta 7
 
-Python パッケージのバージョンは `3.0.0b7` です。
-ここでは [beta.6 以降の変更](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b6...python-3.0.0b7)を説明します。
-このリリースでは、HiGHS のモデル構築を修正し、HiGHS・PySCIPOpt・OpenJij の
-Adapter パッケージから Python バージョンの上限制限を取り除きました。
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b7)
 
 ### 🛠 HiGHS のモデル構築時に求解を実行しないよう修正 ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
 
@@ -27,7 +24,7 @@ HiGHS モデルに保持するようにしました。
 項数の多い線形目的関数や制約を構築する際には、加算のたびに蓄積済みの式全体を
 コピーせず、項を追加するようにしました。
 
-### Adapter パッケージの Python バージョン上限制限を撤廃 ([#1245](https://github.com/Jij-Inc/ommx/pull/1245))
+### 🆕 Adapter パッケージの Python バージョン上限制限を撤廃 ([#1245](https://github.com/Jij-Inc/ommx/pull/1245))
 
 HiGHS・PySCIPOpt・OpenJij の Adapter パッケージから、Python の要件 `<3.14` を
 取り除きました。Python-MIP を含む 4 つの Adapter パッケージすべてで、
@@ -39,21 +36,7 @@ HiGHS・PySCIPOpt・OpenJij の Adapter パッケージから、Python の要件
 
 ## 3.0.0 Beta 6
 
-Python パッケージのバージョンは `3.0.0b6` です。
-ここでは [beta.5 以降の変更](https://github.com/Jij-Inc/ommx/compare/python-3.0.0b5...python-3.0.0b6)を説明します。
-このリリースでは、MPS・QPLIB から読み込むモデルを修正し、すべての特殊制約に
-違反量を導入しました。各制約の実行可能性判定は `violation <= atol` に統一しました。
-また、線形制約を使って変数の上下限を絞り込むメソッドを追加しました。
-これまでの v3 プレリリースで導入された一部の API に変更があります。
-
-更新前に、利用している機能に応じて次の点を確認してください。
-
-| 利用している機能 | beta.6 で必要な対応 |
-| --- | --- |
-| MPS・QPLIB から読み込んで保存したモデル | 影響を受けるモデルは元ファイルから読み込み直してください。組み込みの MIPLIB・QPLIB データセットは、再度ロードすると修正済みの配布を取得できます。SDK の更新だけでは保存済み Artifact は変わりません。 |
-| 制約違反量・実行可能性の確認 | `total_violation_l1()` を `total_violation()` に置き換え、個別制約の実行可能性の確認も下記に従って更新してください。`total_violation_l2()` は削除されました。 |
-| `promote_sos1_big_m()` | バッチ形式のリクエストに変更し、`atol` 引数を取り除いてください。変換できる定式化だけを適用するか、すべての変換が成功することを要求するかを選べます。 |
-| 変数の種類を表す整数値の直接指定 | `Kind.Binary` などの列挙型を使ってください。`DecisionVariable.binary()` などのコンストラクタも引き続き利用できます。 |
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b6-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b6)
 
 ### 🛠 QPLIB 読み込み時の二次係数を修正 ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
 
@@ -172,7 +155,7 @@ print(report.rejections)  # 元の制約 ID -> 変換できなかった理由
 選択用の変数を別に持つ場合の指定方法と移行例は、
 {ref}`SOS1 変換ガイド <sos1-big-m-formulation>` を参照してください。
 
-### 線形制約を使って変数の上下限を絞り込む ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
+### 🆕 線形制約を使って変数の上下限を絞り込む ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
 
 制約に含まれる情報から、変数の上下限を狭められるようになりました。
 たとえば、整数変数について `x + y <= 7` と `y >= 2` から `x <= 5` を導けます。
@@ -202,7 +185,7 @@ assert changed[0].upper == 5
 対応する変数の種類と許容誤差の扱いは
 {ref}`変数の上下限の絞り込み <simultaneous-bound-tightening>` を参照してください。
 
-### QPLIB の公開解を読み込む ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+### 🆕 QPLIB の公開解を読み込む ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
 
 公開されている `.sol` ファイルを読み込み、対応する問題で評価することで、
 目的関数値と実行可能性を確認できるようになりました。
@@ -222,7 +205,7 @@ solution = instance.evaluate(state, atol=1e-8)
 `ommx.qplib.load_solution` も利用できます。
 対応するファイルは [QPLIB チュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
 
-### Rust 拡張からのデータ受け渡しに共通の例外を導入 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
+### 🆕 Rust 拡張からのデータ受け渡しに共通の例外を導入 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
 外部の Rust 拡張から Python SDK に OMMX オブジェクトを渡せない場合に、
 {class}`~ommx.BridgeError` を捕捉できるようになりました。
@@ -230,7 +213,6 @@ solution = instance.evaluate(state, atol=1e-8)
 独立にビルドされた拡張からも同じ例外クラスが送出されます。
 転送中の失敗では、元の Python 例外を `__cause__` から確認できます。
 SDK または必要な bridge API が見つからない場合は `ImportError` になります。
-
 
 ## 3.0.0 Beta 5
 
