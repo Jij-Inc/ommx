@@ -13,13 +13,14 @@ use proptest::prelude::*;
 use std::borrow::Cow;
 
 /// Internal substitution plan shared by the Function and polynomial owners.
-/// Every right-hand side is resolved against the other requested assignments,
-/// so applying this read-only table never requires another pass over an input.
-pub(crate) struct ResolvedAssignments<'a> {
+/// No right-hand side references a variable assigned by this table. Applying
+/// the table again therefore leaves the substituted expression unchanged:
+/// `S(S(f)) = S(f)`.
+pub(crate) struct IdempotentAssignments<'a> {
     functions: Cow<'a, FnvHashMap<VariableID, Function>>,
 }
 
-impl ResolvedAssignments<'_> {
+impl IdempotentAssignments<'_> {
     pub(crate) fn get(&self, id: &VariableID) -> Option<&Function> {
         self.functions.get(id)
     }
@@ -99,20 +100,21 @@ impl AcyclicAssignments {
         self.assignments.iter()
     }
 
-    /// Function and polynomial substitution share this dependency resolution.
-    /// Independent assignments (including integer encodings) are borrowed.
-    /// Dependent rules are resolved once, only when reachable from the input;
-    /// arithmetic in an unused rule must not make a substitution fail.
-    pub(crate) fn resolve_for(
+    /// Flatten assignment chains reachable from the input into an idempotent table.
+    ///
+    /// Already-idempotent assignments (including integer encodings) are borrowed.
+    /// Other rules are composed in dependency-first order, only when reachable
+    /// from the input; arithmetic in an unused rule must not make a substitution fail.
+    pub(crate) fn flatten_for(
         &self,
         required_ids: &VariableIDSet,
-    ) -> Result<ResolvedAssignments<'_>, SubstitutionError> {
+    ) -> Result<IdempotentAssignments<'_>, SubstitutionError> {
         if self
             .dependency
             .all_edges()
             .all(|(_, required, _)| !self.assignments.contains_key(&required))
         {
-            return Ok(ResolvedAssignments {
+            return Ok(IdempotentAssignments {
                 functions: Cow::Borrowed(&self.assignments),
             });
         }
@@ -136,14 +138,14 @@ impl AcyclicAssignments {
         let mut functions = FnvHashMap::default();
         for (id, function) in self.evaluation_order_iter() {
             if needed.contains(&id) {
-                let resolved = ResolvedAssignments {
+                let flattened = IdempotentAssignments {
                     functions: Cow::Borrowed(&functions),
                 };
-                let function = function.clone().substitute_resolved(&resolved)?;
+                let function = function.clone().substitute_idempotent(&flattened)?;
                 functions.insert(id, function);
             }
         }
-        Ok(ResolvedAssignments {
+        Ok(IdempotentAssignments {
             functions: Cow::Owned(functions),
         })
     }

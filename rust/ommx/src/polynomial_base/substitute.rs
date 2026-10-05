@@ -2,16 +2,16 @@ use crate::{
     check_self_assignment, substitute::Substitute, Coefficient, Function, Linear, LinearMonomial,
     Monomial, MonomialDyn, Polynomial, PolynomialBase, QuadraticMonomial, VariableID,
 };
-use crate::{substitute::ResolvedAssignments, Evaluate};
+use crate::{substitute::IdempotentAssignments, Evaluate};
 
 fn substitute_monomial(
     ids: impl Iterator<Item = VariableID>,
-    resolved: &ResolvedAssignments<'_>,
+    flattened: &IdempotentAssignments<'_>,
 ) -> Result<Function, crate::SubstitutionError> {
     let mut term = Function::one();
     let mut unchanged = Vec::new();
     for id in ids {
-        if let Some(function) = resolved.get(&id) {
+        if let Some(function) = flattened.get(&id) {
             term.try_mul_assign_in_place(function)?;
         } else {
             unchanged.push(id);
@@ -32,15 +32,15 @@ where
     M: Monomial,
     PolynomialBase<M>: Into<Function>,
 {
-    /// Function owns dependency resolution; each compact polynomial then visits
-    /// its terms once and looks up only the variables present in each monomial.
-    pub(crate) fn substitute_resolved(
+    /// Apply the substitution owner's idempotent table by visiting each term
+    /// once and looking up only the variables present in each monomial.
+    pub(crate) fn substitute_idempotent(
         self,
-        resolved: &ResolvedAssignments<'_>,
+        flattened: &IdempotentAssignments<'_>,
     ) -> Result<Function, crate::SubstitutionError> {
         let mut output = Function::Zero;
         for (monomial, coefficient) in self.terms {
-            let mut term = substitute_monomial(monomial.ids(), resolved)?;
+            let mut term = substitute_monomial(monomial.ids(), flattened)?;
             term.try_scale_assign_in_place(coefficient)?;
             output.try_add_assign_in_place(term)?;
         }
@@ -62,8 +62,8 @@ where
         if acyclic.is_empty() {
             return Ok(self.into());
         }
-        let resolved = acyclic.resolve_for(&self.required_ids())?;
-        self.substitute_resolved(&resolved)
+        let flattened = acyclic.flatten_for(&self.required_ids())?;
+        self.substitute_idempotent(&flattened)
     }
 
     fn substitute_one(
@@ -89,8 +89,8 @@ impl Substitute for LinearMonomial {
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        let resolved = acyclic.resolve_for(&self.ids().collect())?;
-        substitute_monomial(self.ids(), &resolved)
+        let flattened = acyclic.flatten_for(&self.ids().collect())?;
+        substitute_monomial(self.ids(), &flattened)
     }
 
     fn substitute_one(
@@ -119,8 +119,8 @@ impl Substitute for QuadraticMonomial {
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        let resolved = acyclic.resolve_for(&self.ids().collect())?;
-        substitute_monomial(self.ids(), &resolved)
+        let flattened = acyclic.flatten_for(&self.ids().collect())?;
+        substitute_monomial(self.ids(), &flattened)
     }
 
     fn substitute_one(
@@ -151,8 +151,8 @@ impl Substitute for MonomialDyn {
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        let resolved = acyclic.resolve_for(&self.ids().collect())?;
-        substitute_monomial(self.ids(), &resolved)
+        let flattened = acyclic.flatten_for(&self.ids().collect())?;
+        substitute_monomial(self.ids(), &flattened)
     }
 
     fn substitute_one(
