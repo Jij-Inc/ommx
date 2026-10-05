@@ -90,6 +90,12 @@ impl Instance {
     /// instance is committed only after substitution succeeds, so a rejected
     /// request leaves the instance unchanged. Removed constraints retain their
     /// existing restoration semantics.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LogEncodingError::UnknownVariable`] for an unknown ID,
+    /// [`LogEncodingError::NonFiniteBound`] for a non-finite bound, and
+    /// [`LogEncodingError::NoFeasibleInteger`] for a bound with no integer value.
     pub fn log_encode_all(
         &mut self,
         ids: impl IntoIterator<Item = VariableID>,

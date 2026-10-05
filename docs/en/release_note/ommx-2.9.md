@@ -2,6 +2,18 @@
 
 ## Bug Fixes
 
+### Batch integer encoding before penalty construction (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
+
+`Instance.log_encode()` processes all selected integers in one batch, validating
+every bound before changing the instance. Acyclic substitution resolves assignment
+dependencies and traverses each polynomial's terms once.
+
+`to_qubo()` and `to_hubo()` now encode integers after slack conversion and before
+constructing squared penalties. Constraints removed by the penalty phase store
+encoded expressions; their values and feasibility are still evaluated using the
+reconstructed decision variables. To select a different order, call the
+individual conversion methods explicitly.
+
 ### Faster HiGHS model construction (2.9.0, [#1239](https://github.com/Jij-Inc/ommx/pull/1239))
 
 The HiGHS adapter now assembles long linear objectives and constraints without
