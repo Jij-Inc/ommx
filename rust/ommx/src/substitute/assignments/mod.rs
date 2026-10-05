@@ -16,6 +16,13 @@ use std::borrow::Cow;
 /// No right-hand side references a variable assigned by this table. Applying
 /// the table again therefore leaves the substituted expression unchanged:
 /// `S(S(f)) = S(f)`.
+///
+/// Flattening and batched application can reorder expansion and coefficient
+/// arithmetic. Extreme scales or cancellation can therefore change evaluated
+/// values or whether substitution/evaluation returns an error. OMMX does not
+/// guarantee identical numerical results or error behavior for different
+/// symbolic rewrite orders. We accept these edge-case differences to avoid
+/// repeated expression scans and prioritize performance for ordinary models.
 pub(crate) struct IdempotentAssignments<'a> {
     functions: Cow<'a, FnvHashMap<VariableID, Function>>,
 }
