@@ -10,6 +10,20 @@ use fnv::FnvHashMap;
 use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
 use proptest::prelude::*;
+use std::borrow::Cow;
+
+/// Internal substitution plan shared by the Function and polynomial owners.
+/// Every right-hand side is resolved against the other requested assignments,
+/// so applying this read-only table never requires another pass over an input.
+pub(crate) struct ResolvedAssignments<'a> {
+    functions: Cow<'a, FnvHashMap<VariableID, Function>>,
+}
+
+impl ResolvedAssignments<'_> {
+    pub(crate) fn get(&self, id: &VariableID) -> Option<&Function> {
+        self.functions.get(id)
+    }
+}
 
 fn build_dependency_graph<'a>(
     assignments: impl IntoIterator<Item = (VariableID, &'a Function)>,
@@ -83,6 +97,55 @@ impl AcyclicAssignments {
 
     pub fn iter(&self) -> impl Iterator<Item = (&VariableID, &Function)> {
         self.assignments.iter()
+    }
+
+    /// Function and polynomial substitution share this dependency resolution.
+    /// Independent assignments (including integer encodings) are borrowed.
+    /// Dependent rules are resolved once, only when reachable from the input;
+    /// arithmetic in an unused rule must not make a substitution fail.
+    pub(crate) fn resolve_for(
+        &self,
+        required_ids: &VariableIDSet,
+    ) -> Result<ResolvedAssignments<'_>, SubstitutionError> {
+        if self
+            .dependency
+            .all_edges()
+            .all(|(_, required, _)| !self.assignments.contains_key(&required))
+        {
+            return Ok(ResolvedAssignments {
+                functions: Cow::Borrowed(&self.assignments),
+            });
+        }
+
+        let mut needed = fnv::FnvHashSet::default();
+        let mut pending = required_ids
+            .iter()
+            .copied()
+            .filter(|id| self.assignments.contains_key(id))
+            .collect::<Vec<_>>();
+        while let Some(id) = pending.pop() {
+            if needed.insert(id) {
+                pending.extend(
+                    self.dependency
+                        .neighbors(id)
+                        .filter(|id| self.assignments.contains_key(id)),
+                );
+            }
+        }
+
+        let mut functions = FnvHashMap::default();
+        for (id, function) in self.evaluation_order_iter() {
+            if needed.contains(&id) {
+                let resolved = ResolvedAssignments {
+                    functions: Cow::Borrowed(&functions),
+                };
+                let function = function.clone().substitute_resolved(&resolved)?;
+                functions.insert(id, function);
+            }
+        }
+        Ok(ResolvedAssignments {
+            functions: Cow::Owned(functions),
+        })
     }
 
     /// Apply an acyclic substitution atomically without cloning unaffected assignments.

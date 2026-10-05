@@ -120,7 +120,7 @@ pub enum FixedPenaltyPreparation {
 ///
 /// [`Instance::prepare`] applies each selected phase at most once in this
 /// canonical order: special constraints, active objective, Integer slack,
-/// fixed penalty, Integer encoding, then Binary-power reduction. It checks
+/// Integer encoding, fixed penalty, then Binary-power reduction. It checks
 /// whole-class membership before and after each selected phase and stops as
 /// soon as the target class contains the instance.
 ///
@@ -473,11 +473,11 @@ impl Instance {
             return Ok(());
         }
 
-        if apply_preparation_step(self, input_class, policy.fixed_penalty.as_ref())? {
+        if apply_preparation_step(self, input_class, policy.integer_encoding.as_ref())? {
             return Ok(());
         }
 
-        if apply_preparation_step(self, input_class, policy.integer_encoding.as_ref())? {
+        if apply_preparation_step(self, input_class, policy.fixed_penalty.as_ref())? {
             return Ok(());
         }
 
@@ -628,14 +628,71 @@ mod tests {
         assert_eq!(output.sense(), Sense::Minimize);
         assert_eq!(output.function(), &objective);
         assert!(!output.preserves_optimality());
-        assert_eq!(
-            instance.removed_constraints()[&constraint_id].0.function(),
-            &constraint_function
-        );
+        // Encoding now precedes penalty removal. The removed row contains the
+        // encoded function, whose value must still be the original constraint.
+        let removed = instance.removed_constraints()[&constraint_id].0.function();
+        for low in [0.0, 1.0] {
+            for high in [0.0, 1.0] {
+                let state = crate::v1::State::from_iter([(2, low), (3, high)]);
+                let decoded = low + 2.0 * high;
+                let source_state = crate::v1::State::from_iter([(1, decoded)]);
+                assert_eq!(
+                    removed.evaluate(&state, ATol::default()).unwrap(),
+                    constraint_function
+                        .evaluate(&source_state, ATol::default())
+                        .unwrap()
+                );
+                assert_eq!(
+                    instance
+                        .objective()
+                        .evaluate(&state, ATol::default())
+                        .unwrap(),
+                    decoded + (decoded - 1.0).powi(2)
+                );
+                assert_eq!(
+                    *instance
+                        .evaluate(&state, ATol::default())
+                        .unwrap()
+                        .objective(),
+                    decoded
+                );
+            }
+        }
         assert_eq!(
             instance.decision_variable_role(variable),
             Some(DecisionVariableRole::Dependent)
         );
+    }
+
+    #[test]
+    fn encoding_failure_precedes_penalty_removal() {
+        let variable = VariableID::from(1);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            BTreeMap::from([(
+                variable,
+                DecisionVariable::new(
+                    Kind::Integer,
+                    Bound::new(0.0, f64::INFINITY).unwrap(),
+                    ATol::default(),
+                )
+                .unwrap(),
+            )]),
+            BTreeMap::from([(
+                ConstraintID::from(7),
+                Constraint::equal_to_zero(
+                    (Function::from(linear!(variable)) + coeff!(-1.0)).unwrap(),
+                ),
+            )]),
+        )
+        .unwrap();
+        let before = instance.clone();
+        let error = instance
+            .prepare(&InstanceClass::qubo(), &PreparationPolicy::for_qubo())
+            .unwrap_err();
+        assert!(error.is::<crate::LogEncodingUnavailable>());
+        assert_eq!(instance, before);
     }
 
     #[test]
