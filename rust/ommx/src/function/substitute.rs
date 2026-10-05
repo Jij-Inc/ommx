@@ -1,18 +1,18 @@
 use super::*;
-use crate::{substitute::ResolvedAssignments, Evaluate, Substitute, VariableID, VariableIDSet};
+use crate::{substitute::IdempotentAssignments, Evaluate, Substitute, VariableID, VariableIDSet};
 
 impl Function {
-    /// The substitution owner resolves dependencies once before passing this
-    /// read-only plan across Function and compact-polynomial boundaries.
-    pub(crate) fn substitute_resolved(
+    /// Apply the substitution owner's idempotent table across Function and
+    /// compact-polynomial boundaries without revisiting substituted expressions.
+    pub(crate) fn substitute_idempotent(
         self,
-        resolved: &ResolvedAssignments<'_>,
+        flattened: &IdempotentAssignments<'_>,
     ) -> Result<Self, crate::SubstitutionError> {
         match self {
             Function::Zero | Function::Constant(_) => Ok(self),
-            Function::Linear(value) => value.substitute_resolved(resolved),
-            Function::Quadratic(value) => value.substitute_resolved(resolved),
-            Function::Polynomial(value) => value.substitute_resolved(resolved),
+            Function::Linear(value) => value.substitute_idempotent(flattened),
+            Function::Quadratic(value) => value.substitute_idempotent(flattened),
+            Function::Polynomial(value) => value.substitute_idempotent(flattened),
         }
     }
 }
@@ -33,8 +33,8 @@ impl Substitute for Function {
         if required_ids.is_disjoint(&substituted_variables) {
             return Ok(self);
         }
-        let resolved = acyclic.resolve_for(&required_ids)?;
-        self.substitute_resolved(&resolved)
+        let flattened = acyclic.flatten_for(&required_ids)?;
+        self.substitute_idempotent(&flattened)
     }
 
     fn substitute_one(
