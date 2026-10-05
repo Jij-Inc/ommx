@@ -1,5 +1,21 @@
 use super::*;
-use crate::{substitute_acyclic_via_one, Evaluate, Substitute, VariableID, VariableIDSet};
+use crate::{substitute::ResolvedAssignments, Evaluate, Substitute, VariableID, VariableIDSet};
+
+impl Function {
+    /// The substitution owner resolves dependencies once before passing this
+    /// read-only plan across Function and compact-polynomial boundaries.
+    pub(crate) fn substitute_resolved(
+        self,
+        resolved: &ResolvedAssignments<'_>,
+    ) -> Result<Self, crate::SubstitutionError> {
+        match self {
+            Function::Zero | Function::Constant(_) => Ok(self),
+            Function::Linear(value) => value.substitute_resolved(resolved),
+            Function::Quadratic(value) => value.substitute_resolved(resolved),
+            Function::Polynomial(value) => value.substitute_resolved(resolved),
+        }
+    }
+}
 
 impl Substitute for Function {
     type Output = Self;
@@ -17,7 +33,8 @@ impl Substitute for Function {
         if required_ids.is_disjoint(&substituted_variables) {
             return Ok(self);
         }
-        substitute_acyclic_via_one(self, acyclic)
+        let resolved = acyclic.resolve_for(&required_ids)?;
+        self.substitute_resolved(&resolved)
     }
 
     fn substitute_one(

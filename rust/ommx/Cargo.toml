@@ -89,3 +89,7 @@ harness = false
 [[bench]]
 name = "mul"
 harness = false
+
+[[bench]]
+name = "substitute"
+harness = false

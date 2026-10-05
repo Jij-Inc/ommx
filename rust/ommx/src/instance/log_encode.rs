@@ -1,5 +1,6 @@
 use super::Instance;
-use crate::{substitute_one, Bound, Coefficient, Linear, VariableID};
+use crate::{AcyclicAssignments, Bound, Coefficient, Linear, Substitute, VariableID};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
@@ -79,24 +80,59 @@ fn log_encoding_coefficients(bound: Bound) -> Result<(Vec<Coefficient>, f64), Lo
 impl Instance {
     /// Encode an integer decision variable into binary decision variables.
     pub fn log_encode(&mut self, id: VariableID) -> Result<Linear, LogEncodingError> {
-        let v = self
-            .decision_variables
-            .get(&id)
-            .ok_or(LogEncodingError::UnknownVariable(id))?;
-        let (coefficients, offset) = log_encoding_coefficients(v.bound())?;
-        // Safe unwrap: offset is always finite from log_encoding_coefficients
-        let mut linear = Linear::try_from(offset).unwrap();
-        for (i, coefficient) in coefficients.iter().enumerate() {
-            // Create binary variables for each coefficient
-            let binary = self.new_binary();
-            binary.metadata.name = Some("ommx.log_encode".to_string());
-            binary.metadata.subscripts = vec![id.into_inner() as i64, i as i64];
-            linear.add_term(binary.id().into(), *coefficient);
+        Ok(self.log_encode_all([id])?.remove(&id).unwrap())
+    }
+
+    /// Encode integer variables together, rewriting each active function once.
+    ///
+    /// IDs are deduplicated and encoded in ascending order. Every requested
+    /// bound is validated before allocating auxiliary variables. The staged
+    /// instance is committed only after substitution succeeds, so a rejected
+    /// request leaves the instance unchanged. Removed constraints retain their
+    /// existing restoration semantics.
+    pub fn log_encode_all(
+        &mut self,
+        ids: impl IntoIterator<Item = VariableID>,
+    ) -> Result<BTreeMap<VariableID, Linear>, LogEncodingError> {
+        let ids = ids.into_iter().collect::<BTreeSet<_>>();
+        if ids.is_empty() {
+            return Ok(BTreeMap::new());
         }
-        let f = linear.clone().into();
-        // Safe unwrap: there is no recursive assignment and self-assignment
-        substitute_one(self, id, &f).unwrap();
-        Ok(linear)
+        let specifications = ids
+            .into_iter()
+            .map(|id| {
+                let variable = self
+                    .decision_variables
+                    .get(&id)
+                    .ok_or(LogEncodingError::UnknownVariable(id))?;
+                let (coefficients, offset) = log_encoding_coefficients(variable.bound())?;
+                Ok((id, coefficients, offset))
+            })
+            .collect::<Result<Vec<_>, LogEncodingError>>()?;
+
+        let mut staged = self.clone();
+        let mut encodings = BTreeMap::new();
+        for (id, coefficients, offset) in specifications {
+            // Validated offsets are finite and may be zero.
+            let mut linear = Linear::try_from(offset).unwrap();
+            for (index, coefficient) in coefficients.into_iter().enumerate() {
+                let binary = staged.new_binary();
+                binary.metadata.name = Some("ommx.log_encode".to_string());
+                binary.metadata.subscripts = vec![id.into_inner() as i64, index as i64];
+                linear.add_term(binary.id().into(), coefficient);
+            }
+            encodings.insert(id, linear);
+        }
+        // The right-hand sides reference only fresh, owned binary variables.
+        let assignments = AcyclicAssignments::new(
+            encodings
+                .iter()
+                .map(|(&id, linear)| (id, linear.clone().into())),
+        )
+        .unwrap();
+        let staged = staged.substitute_acyclic(&assignments).unwrap();
+        *self = staged;
+        Ok(encodings)
     }
 }
 
@@ -104,6 +140,77 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{coeff, Bound, DecisionVariable, Instance, Kind};
+
+    fn multi_integer_instance() -> Instance {
+        let mut instance = Instance::default();
+        for (id, lower, upper) in [(0, -2.0, 3.0), (1, 1.0, 4.0), (2, 2.0, 2.0)] {
+            let id = VariableID::from(id);
+            instance.decision_variables.insert(
+                id,
+                DecisionVariable::new(
+                    id,
+                    Kind::Integer,
+                    Bound::new(lower, upper).unwrap(),
+                    None,
+                    crate::ATol::default(),
+                )
+                .unwrap(),
+            );
+        }
+        instance.objective = crate::Function::from(crate::quadratic!(0, 1))
+            + crate::Function::from(crate::linear!(2));
+        instance
+    }
+
+    #[test]
+    fn log_encode_all_matches_sequential_encoding_and_deduplicates_ids() {
+        let mut batch = multi_integer_instance();
+        let mut sequential = batch.clone();
+        let expected = (0..3)
+            .map(|id| {
+                let id = VariableID::from(id);
+                (id, sequential.log_encode(id).unwrap())
+            })
+            .collect::<BTreeMap<_, _>>();
+        let actual = batch
+            .log_encode_all([2, 0, 1, 0].map(VariableID::from))
+            .unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(batch, sequential);
+        assert_eq!(batch.decision_variable_dependency.len(), 3);
+        assert_eq!(actual[&VariableID::from(2)], Linear::try_from(2.0).unwrap());
+    }
+
+    #[test]
+    fn log_encode_all_validates_every_id_before_mutation() {
+        let mut instance = multi_integer_instance();
+        let before = instance.clone();
+        assert!(matches!(
+            instance.log_encode_all([0, 99].map(VariableID::from)),
+            Err(LogEncodingError::UnknownVariable(_)),
+        ));
+        assert_eq!(instance, before);
+        let id = VariableID::from(3);
+        instance.decision_variables.insert(
+            id,
+            DecisionVariable::new(
+                id,
+                Kind::Integer,
+                Bound::new(0.0, f64::INFINITY).unwrap(),
+                None,
+                crate::ATol::default(),
+            )
+            .unwrap(),
+        );
+        let before = instance.clone();
+        assert!(matches!(
+            instance.log_encode_all([0, 3].map(VariableID::from)),
+            Err(LogEncodingError::NonFiniteBound(_)),
+        ));
+        assert_eq!(instance, before);
+        assert!(instance.log_encode_all([]).unwrap().is_empty());
+        assert_eq!(instance, before);
+    }
 
     #[test]
     fn test_log_encode_instance() {

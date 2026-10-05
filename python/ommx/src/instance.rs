@@ -308,9 +308,8 @@ impl Instance {
     }
 
     pub fn log_encode(&mut self, integer_variable_ids: BTreeSet<u64>) -> Result<()> {
-        for id in integer_variable_ids.iter() {
-            self.0.log_encode((*id).into())?;
-        }
+        self.0
+            .log_encode_all(integer_variable_ids.into_iter().map(Into::into))?;
         Ok(())
     }
 

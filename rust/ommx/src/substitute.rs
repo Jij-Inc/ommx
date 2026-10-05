@@ -1,6 +1,8 @@
 use crate::{Evaluate, Function, VariableID};
 
 mod assignments;
+// Function and polynomial owners share the substitution owner's read-only plan.
+pub(crate) use assignments::ResolvedAssignments;
 mod error;
 mod macros;
 
