@@ -1,18 +1,9 @@
-// Purpose: persistent scaling guardrail for batched substitution.
-// Regression: scanning and rebuilding the full polynomial for each assignment
-// makes a K-variable rewrite cost O(M*K) instead of O(M*degree + K).
-// Origin: https://github.com/Jij-Inc/ommx/pull/1253
-// Measured boundary: Rust Function::substitute_acyclic; fixture cloning and
-// assignment construction are excluded from timing.
-// Independent variable: K = 1, 16, 256 independent variable renamings.
-// Fixed shape: M = 4096 quadratic terms on 256 variables, one-to-one renamings,
-// so input/output term count and degree stay fixed even as K increases.
-// Expected evidence: a same-run cross-size table with exponent near zero,
-// rather than the old exponent near one. Small variations reflect RHS lookup.
-// Input rationale: enough terms to expose repeated scans without term expansion.
-// Lifecycle/run policy: retain in the Rust suite; use the existing benchmark
-// workflow policy and manual native timings during performance investigations.
-// Runtime budget: three small cases, under 10 ms per optimized invocation.
+//! Detect repeated full-polynomial scans as the number of assignments grows.
+//!
+//! Apply 1, 16, or 256 one-to-one variable renamings to a fixed 4096-term
+//! quadratic. Renaming preserves the output size, so additional work reflects
+//! the cost of handling more assignments rather than polynomial expansion.
+
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use ommx::{linear, AcyclicAssignments, Coefficient, Function, Quadratic, Substitute, VariableID};
 
@@ -42,6 +33,7 @@ fn substitute(c: &mut Criterion) {
             BenchmarkId::from_parameter(count),
             &assignments,
             |b, assignments| {
+                // Keep cloning outside the timed operation.
                 b.iter_batched(
                     || function.clone(),
                     |function| function.substitute_acyclic(assignments).unwrap(),
