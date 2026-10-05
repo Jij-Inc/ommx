@@ -6,6 +6,17 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### 🛠 Batch integer encoding before penalty construction ([#1253](https://github.com/Jij-Inc/ommx/pull/1253))
+
+`Instance.prepare()` now applies integer encoding after slack conversion and
+before fixed penalties. `to_qubo()` and `to_hubo()` use this order, so constraints
+are rewritten before their squares expand the objective. Acyclic substitution
+resolves assignment dependencies and visits each polynomial's terms once.
+
+Constraints removed by the penalty phase now store their encoded expressions.
+Their evaluated values and the original output objective are preserved through
+decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
+
 ## 3.0.0 Beta 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b7)

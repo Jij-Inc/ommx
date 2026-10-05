@@ -6,6 +6,17 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 🛠 penalty構築前の整数エンコードと一括置換 ([#1253](https://github.com/Jij-Inc/ommx/pull/1253))
+
+`Instance.prepare()` は、slack変換の後、固定penaltyの前に整数エンコードを
+実行します。`to_qubo()` と `to_hubo()` もこの順序を使うため、制約を二乗して
+目的関数の項が増える前に書き換えます。非循環の置換は、置換同士の依存関係を
+先に解決し、各多項式の項を一度走査してまとめて処理します。
+
+penaltyによって除去される制約には、エンコード後の式が保存されます。
+制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
+詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
+
 ## 3.0.0 Beta 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b7)

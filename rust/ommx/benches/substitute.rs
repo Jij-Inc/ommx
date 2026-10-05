@@ -1,7 +1,7 @@
 // Purpose: persistent scaling guardrail for batched substitution.
 // Regression: scanning and rebuilding the full polynomial for each assignment
 // makes a K-variable rewrite cost O(M*K) instead of O(M*degree + K).
-// Origin: https://jij-inc.slack.com/archives/C06RQKST42F/p1790952746772619
+// Origin: https://github.com/Jij-Inc/ommx/pull/1253
 // Measured boundary: Rust Function::substitute_acyclic; fixture cloning and
 // assignment construction are excluded from timing.
 // Independent variable: K = 1, 16, 256 independent variable renamings.
