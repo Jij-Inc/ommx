@@ -10,6 +10,28 @@ use fnv::FnvHashMap;
 use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
 use proptest::prelude::*;
+use std::borrow::Cow;
+
+/// Internal substitution plan shared by the Function and polynomial owners.
+/// No right-hand side references a variable assigned by this table. Applying
+/// the table again therefore leaves the substituted expression unchanged:
+/// `S(S(f)) = S(f)`.
+///
+/// Flattening and batched application can reorder expansion and coefficient
+/// arithmetic. Extreme scales or cancellation can therefore change evaluated
+/// values or whether substitution/evaluation returns an error. OMMX does not
+/// guarantee identical numerical results or error behavior for different
+/// symbolic rewrite orders. We accept these edge-case differences to avoid
+/// repeated expression scans and prioritize performance for ordinary models.
+pub(crate) struct IdempotentAssignments<'a> {
+    functions: Cow<'a, FnvHashMap<VariableID, Function>>,
+}
+
+impl IdempotentAssignments<'_> {
+    pub(crate) fn get(&self, id: &VariableID) -> Option<&Function> {
+        self.functions.get(id)
+    }
+}
 
 fn build_dependency_graph<'a>(
     assignments: impl IntoIterator<Item = (VariableID, &'a Function)>,
@@ -83,6 +105,56 @@ impl AcyclicAssignments {
 
     pub fn iter(&self) -> impl Iterator<Item = (&VariableID, &Function)> {
         self.assignments.iter()
+    }
+
+    /// Flatten assignment chains reachable from the input into an idempotent table.
+    ///
+    /// Already-idempotent assignments (including integer encodings) are borrowed.
+    /// Other rules are composed in dependency-first order, only when reachable
+    /// from the input; arithmetic in an unused rule must not make a substitution fail.
+    pub(crate) fn flatten_for(
+        &self,
+        required_ids: &VariableIDSet,
+    ) -> Result<IdempotentAssignments<'_>, SubstitutionError> {
+        if self
+            .dependency
+            .all_edges()
+            .all(|(_, required, _)| !self.assignments.contains_key(&required))
+        {
+            return Ok(IdempotentAssignments {
+                functions: Cow::Borrowed(&self.assignments),
+            });
+        }
+
+        let mut needed = fnv::FnvHashSet::default();
+        let mut pending = required_ids
+            .iter()
+            .copied()
+            .filter(|id| self.assignments.contains_key(id))
+            .collect::<Vec<_>>();
+        while let Some(id) = pending.pop() {
+            if needed.insert(id) {
+                pending.extend(
+                    self.dependency
+                        .neighbors(id)
+                        .filter(|id| self.assignments.contains_key(id)),
+                );
+            }
+        }
+
+        let mut functions = FnvHashMap::default();
+        for (id, function) in self.evaluation_order_iter() {
+            if needed.contains(&id) {
+                let flattened = IdempotentAssignments {
+                    functions: Cow::Borrowed(&functions),
+                };
+                let function = function.clone().substitute_idempotent(&flattened)?;
+                functions.insert(id, function);
+            }
+        }
+        Ok(IdempotentAssignments {
+            functions: Cow::Owned(functions),
+        })
     }
 
     /// Apply an acyclic substitution atomically without cloning unaffected assignments.

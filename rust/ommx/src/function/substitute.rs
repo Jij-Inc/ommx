@@ -3,7 +3,36 @@ use super::operation::{
     Instruction,
 };
 use super::*;
-use crate::{substitute_acyclic_via_one, Evaluate, Substitute, VariableID, VariableIDSet};
+use crate::{substitute::IdempotentAssignments, Evaluate, Substitute, VariableID, VariableIDSet};
+
+impl Function {
+    /// Apply the substitution owner's idempotent table across Function and
+    /// compact-polynomial boundaries without revisiting substituted expressions.
+    pub(crate) fn substitute_idempotent(
+        self,
+        flattened: &IdempotentAssignments<'_>,
+    ) -> Result<Self, crate::SubstitutionError> {
+        match self {
+            Function::Zero | Function::Constant(_) => Ok(self),
+            Function::Linear(value) => value.substitute_idempotent(flattened),
+            Function::Quadratic(value) => value.substitute_idempotent(flattened),
+            Function::Polynomial(value) => value.substitute_idempotent(flattened),
+            Function::Expression(expression) => {
+                let mut output = Vec::with_capacity(instructions(&expression).len());
+                for instruction in into_expression_instructions(expression) {
+                    match instruction {
+                        Instruction::Push(atom) => output.extend(into_instructions(
+                            atom.into_function().substitute_idempotent(flattened)?,
+                        )),
+                        operation => output.push(operation),
+                    }
+                }
+                Ok(from_instructions_exact(output)
+                    .expect("replacing pushes with valid programs preserves expression validity"))
+            }
+        }
+    }
+}
 
 impl Substitute for Function {
     type Output = Self;
@@ -21,7 +50,8 @@ impl Substitute for Function {
         if required_ids.is_disjoint(&substituted_variables) {
             return Ok(self);
         }
-        substitute_acyclic_via_one(self, acyclic)
+        let flattened = acyclic.flatten_for(&required_ids)?;
+        self.substitute_idempotent(&flattened)
     }
 
     fn substitute_one(
@@ -66,6 +96,57 @@ impl Substitute for Function {
 mod tests {
     use super::*;
     use crate::{linear, ATol, Evaluate};
+
+    #[test]
+    fn unused_dependency_arithmetic_is_not_evaluated() {
+        let assignments = crate::AcyclicAssignments::new([
+            (0.into(), Function::from(linear!(10))),
+            (
+                1.into(),
+                Function::from((crate::coeff!(f64::MAX) * linear!(2)).unwrap()),
+            ),
+            (
+                2.into(),
+                Function::from((crate::coeff!(2.0) * linear!(3)).unwrap()),
+            ),
+        ])
+        .unwrap();
+        let result = Function::from(linear!(0))
+            .substitute_acyclic(&assignments)
+            .unwrap();
+        assert_eq!(result, Function::from(linear!(10)));
+
+        let mut function = Function::from(linear!(1));
+        let before = function.clone();
+        let error = crate::substitute_acyclic(&mut function, &assignments).unwrap_err();
+        assert!(matches!(error, crate::SubstitutionError::Coefficient(_)));
+        assert_eq!(function, before);
+    }
+
+    #[test]
+    fn batch_substitution_preserves_expression_operators_and_dependencies() {
+        let function = (Function::from(linear!(0)).signum() / Function::from(linear!(1)))
+            .unwrap()
+            .powi(2);
+        let assignments = crate::AcyclicAssignments::new([
+            (0.into(), Function::from(linear!(2))),
+            (1.into(), Function::from(linear!(3))),
+            (2.into(), Function::try_from(1e-8).unwrap()),
+            (3.into(), Function::try_from(2.0).unwrap()),
+        ])
+        .unwrap();
+        let batch = function.clone().substitute_acyclic(&assignments).unwrap();
+        let sequential: Function =
+            crate::substitute_acyclic_via_one(function, &assignments).unwrap();
+        assert!(matches!(batch, Function::Expression(_)));
+        for atol in [ATol::new(1e-6).unwrap(), ATol::new(1e-9).unwrap()] {
+            let state = crate::v1::State::default();
+            assert_eq!(
+                batch.evaluate(&state, atol).unwrap(),
+                sequential.evaluate(&state, atol).unwrap()
+            );
+        }
+    }
 
     #[test]
     fn deep_expression_substitution_is_iterative() {
