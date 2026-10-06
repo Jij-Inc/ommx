@@ -135,3 +135,7 @@ harness = false
 [[bench]]
 name = "log_encode"
 harness = false
+
+[[bench]]
+name = "substitute"
+harness = false

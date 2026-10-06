@@ -1,8 +1,52 @@
 use crate::{
-    check_self_assignment, substitute::Substitute, substitute_acyclic_via_one, Coefficient,
-    Function, Linear, LinearMonomial, Monomial, MonomialDyn, Polynomial, PolynomialBase,
-    QuadraticMonomial, VariableID,
+    check_self_assignment, substitute::Substitute, Coefficient, Function, Linear, LinearMonomial,
+    Monomial, MonomialDyn, Polynomial, PolynomialBase, QuadraticMonomial, VariableID,
 };
+use crate::{substitute::IdempotentAssignments, Evaluate};
+
+fn substitute_monomial(
+    ids: impl Iterator<Item = VariableID>,
+    flattened: &IdempotentAssignments<'_>,
+) -> Result<Function, crate::SubstitutionError> {
+    let mut term = Function::one();
+    let mut unchanged = Vec::new();
+    for id in ids {
+        if let Some(function) = flattened.get(&id) {
+            term.try_mul_assign_in_place(function)?;
+        } else {
+            unchanged.push(id);
+        }
+    }
+    let unchanged = match unchanged.as_slice() {
+        [] => return Ok(term),
+        [id] => Function::from(crate::linear!(*id)),
+        [left, right] => Function::from(crate::quadratic!(*left, *right)),
+        _ => Function::from(Polynomial::from(MonomialDyn::from(unchanged))),
+    };
+    term.try_mul_assign_in_place(&unchanged)?;
+    Ok(term)
+}
+
+impl<M> PolynomialBase<M>
+where
+    M: Monomial,
+    PolynomialBase<M>: Into<Function>,
+{
+    /// Apply the substitution owner's idempotent table by visiting each term
+    /// once and looking up only the variables present in each monomial.
+    pub(crate) fn substitute_idempotent(
+        self,
+        flattened: &IdempotentAssignments<'_>,
+    ) -> Result<Function, crate::SubstitutionError> {
+        let mut output = Function::Zero;
+        for (monomial, coefficient) in self.terms {
+            let mut term = substitute_monomial(monomial.ids(), flattened)?;
+            term.try_scale_assign_in_place(coefficient)?;
+            output.try_add_assign_in_place(term)?;
+        }
+        Ok(output.normalize())
+    }
+}
 
 impl<M> Substitute for PolynomialBase<M>
 where
@@ -15,11 +59,11 @@ where
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        let mut out: Function = self.into();
-        for (id, l) in acyclic.substitution_order_iter() {
-            out = out.substitute_one(id, l)?;
+        if acyclic.is_empty() {
+            return Ok(self.into());
         }
-        Ok(out)
+        let flattened = acyclic.flatten_for(&self.required_ids())?;
+        self.substitute_idempotent(&flattened)
     }
 
     fn substitute_one(
@@ -45,7 +89,8 @@ impl Substitute for LinearMonomial {
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        substitute_acyclic_via_one(self, acyclic)
+        let flattened = acyclic.flatten_for(&self.ids().collect())?;
+        substitute_monomial(self.ids(), &flattened)
     }
 
     fn substitute_one(
@@ -74,7 +119,8 @@ impl Substitute for QuadraticMonomial {
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        substitute_acyclic_via_one(self, acyclic)
+        let flattened = acyclic.flatten_for(&self.ids().collect())?;
+        substitute_monomial(self.ids(), &flattened)
     }
 
     fn substitute_one(
@@ -105,7 +151,8 @@ impl Substitute for MonomialDyn {
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        substitute_acyclic_via_one(self, acyclic)
+        let flattened = acyclic.flatten_for(&self.ids().collect())?;
+        substitute_monomial(self.ids(), &flattened)
     }
 
     fn substitute_one(
@@ -134,11 +181,71 @@ impl Substitute for MonomialDyn {
 mod tests {
     use super::*;
     use crate::{
-        assign, coeff, linear, AcyclicAssignments, Evaluate, QuadraticMonomial, VariableID,
+        assign, coeff, linear, ATol, AcyclicAssignments, Evaluate, QuadraticMonomial, VariableID,
         VariableIDSet,
     };
     use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
+
+    #[test]
+    fn batch_substitution_resolves_chained_and_repeated_variables() {
+        let function = Function::from((crate::quadratic!(0, 0) + crate::quadratic!(0, 1)).unwrap());
+        let assignments = AcyclicAssignments::new([
+            (
+                0.into(),
+                Function::from((linear!(1) + coeff!(1.0)).unwrap()),
+            ),
+            (
+                1.into(),
+                Function::from((coeff!(2.0) * linear!(2)).unwrap()),
+            ),
+            (
+                2.into(),
+                Function::from((linear!(3) + coeff!(-1.0)).unwrap()),
+            ),
+        ])
+        .unwrap();
+        let sequential: Function =
+            crate::substitute_acyclic_via_one(function.clone(), &assignments).unwrap();
+        let batch = function.substitute_acyclic(&assignments).unwrap();
+        assert_abs_diff_eq!(batch, sequential);
+        assert_eq!(batch.required_ids(), [VariableID::from(3)].into());
+        assert_eq!(
+            batch
+                .evaluate(&crate::v1::State::from_iter([(3, 3.0)]), ATol::default())
+                .unwrap(),
+            45.0,
+        );
+    }
+
+    proptest! {
+        #[test]
+        fn batch_substitution_preserves_polynomial_evaluation(
+            terms in prop::collection::vec((prop::collection::vec(0_u64..8, 0..5), -4_i32..5), 1..32),
+            values in prop::collection::vec(0_u32..7, 24)
+        ) {
+            let mut polynomial = Polynomial::default();
+            for (ids, value) in terms {
+                if value != 0 {
+                    polynomial.add_term(MonomialDyn::from(ids.into_iter().map(VariableID::from).collect::<Vec<_>>()), Coefficient::try_from(value as f64).unwrap()).unwrap();
+                }
+            }
+            let assignments = AcyclicAssignments::new((0_u64..8).map(|id| {
+                let function = ((linear!(id + 8) + (coeff!(2.0) * linear!(id + 16)).unwrap()).unwrap() + coeff!(1.0)).unwrap();
+                (id.into(), Function::from(function))
+            })).unwrap();
+            let mut state = crate::v1::State::from_iter((8_u64..24).map(|id| (id, values[id as usize] as f64)));
+            for id in 0_u64..8 {
+                state.entries.insert(id, values[id as usize + 8] as f64 + 2.0 * values[id as usize + 16] as f64 + 1.0);
+            }
+            let expected = polynomial.evaluate(&state, ATol::default()).unwrap();
+            let function = Function::from(polynomial);
+            let sequential: Function = crate::substitute_acyclic_via_one(function.clone(), &assignments).unwrap();
+            let batch = function.substitute_acyclic(&assignments).unwrap();
+            prop_assert_eq!(batch.evaluate(&state, ATol::default()).unwrap(), expected);
+            prop_assert_eq!(batch.evaluate(&state, ATol::default()).unwrap(), sequential.evaluate(&state, ATol::default()).unwrap());
+        }
+    }
 
     #[test]
     fn substitute_linear_to_linear() {

@@ -5168,8 +5168,8 @@ class Instance:
            {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
            followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
            when exact conversion is unavailable and ``slack_upper_bound`` is set
-        4. ``fixed_penalty``
-        5. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+        4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+        5. ``fixed_penalty``
         6. ``binary_power_reduction``:
            {meth}`~ommx.Instance.reduce_binary_power`
 
