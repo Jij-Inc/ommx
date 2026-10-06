@@ -110,7 +110,30 @@ impl Instance {
             .collect()
     }
 
-    /// List of all decision variables in the instance sorted by their IDs.
+    /// Return explicitly stored substituted values as a new dict keyed by ID.
+    /// Variables with coincident bounds alone are not included.
+    pub fn fixed_decision_variables(&self) -> BTreeMap<u64, f64> {
+        self.0
+            .decision_variables()
+            .iter()
+            .filter_map(|(id, var)| {
+                var.substituted_value()
+                    .map(|value| (id.into_inner(), value))
+            })
+            .collect()
+    }
+
+    /// Return a new set of active regular constraint IDs, excluding removed constraints.
+    /// Constraint hints leave their source constraints active and included.
+    pub fn regular_constraint_ids(&self) -> BTreeSet<u64> {
+        self.0
+            .constraints()
+            .keys()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    /// List of all active regular constraints in the instance sorted by their IDs.
     #[getter]
     pub fn constraints(&self) -> Vec<Constraint> {
         self.0

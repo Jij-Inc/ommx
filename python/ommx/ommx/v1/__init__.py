@@ -420,6 +420,18 @@ class Instance(UserAnnotationBase):
         """
         return [DecisionVariable(dv) for dv in self.raw.decision_variables]
 
+    def fixed_decision_variables(self) -> dict[int, float]:
+        """Return fixed decision variables as ``{id: fixed_value}``.
+
+        Values are the explicitly stored ``substituted_value`` entries, for
+        example after :meth:`partial_evaluate`. A variable whose lower and
+        upper bounds merely coincide is not included.
+
+        Returns an empty dict when no fixed values are stored. Reading or
+        modifying the returned dict does not change this instance.
+        """
+        return self.raw.fixed_decision_variables()
+
     @property
     def decision_variable_names(self) -> set[str]:
         """
@@ -453,6 +465,22 @@ class Instance(UserAnnotationBase):
         Get constraints as a list of :class:`Constraint` instances sorted by their IDs.
         """
         return [Constraint.from_raw(c) for c in self.raw.constraints]
+
+    def regular_constraint_ids(self) -> set[int]:
+        """Return a set of all active regular constraint IDs.
+
+        Removed constraints are excluded. OneHot and SOS1 hints do not remove
+        their source constraints, so those IDs remain included. Hints do not
+        create native special constraints in this SDK series.
+
+        Use :meth:`get_constraint_by_id` to read each constraint without
+        depending on the ``constraints`` collection's representation.
+
+        This is a snapshot: reading or modifying the returned set does not
+        change this instance. Call this method again after changing which
+        constraints are active.
+        """
+        return self.raw.regular_constraint_ids()
 
     @property
     def removed_constraints(self) -> list[RemovedConstraint]:
