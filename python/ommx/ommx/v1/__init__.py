@@ -876,7 +876,8 @@ class Instance(UserAnnotationBase):
         8    Binary    0.0    1.0  ommx.log_encode     [2, 1]
 
         * The yielded :attr:`objective` only has these binary variables.
-        * The :attr:`removed_constraints` keep the original variables until restored.
+        * Constraints moved to :attr:`removed_constraints` by the penalty method
+          already contain the log-encoded binary variables.
 
         >>> instance.objective
         Function(-x3*x3 - 2*x3*x4 - 4*x3*x5 - 4*x3*x6 - 2*x3*x7 - 4*x3*x8 - x4*x4 - 4*x4*x5 - 4*x4*x6 - 2*x4*x7 - 4*x4*x8 - 4*x5*x5 - 8*x5*x6 - 4*x5*x7 - 8*x5*x8 - 4*x6*x6 - 4*x6*x7 - 8*x6*x8 - x7*x7 - 4*x7*x8 - 4*x8*x8 + 7*x3 + 7*x4 + 13*x5 + 13*x6 + 6*x7 + 12*x8 - 9)
