@@ -15,7 +15,7 @@ fn substitute(c: &mut Criterion) {
     let quadratic = Quadratic::from_coo(rows, columns, vec![Coefficient::one(); 4096]).unwrap();
     assert_eq!(quadratic.num_terms(), 4096);
     let function = Function::from(quadratic);
-    let mut group = c.benchmark_group("substitute-independent-fixed-terms");
+    let mut group = c.benchmark_group("substitute-variable-renaming");
     for count in [1_u64, 16, 256] {
         let assignments = AcyclicAssignments::new(
             (0..count).map(|id| (id.into(), Function::from(linear!(512 + id)))),
@@ -30,7 +30,7 @@ fn substitute(c: &mut Criterion) {
             Some(4096),
         );
         group.bench_with_input(
-            BenchmarkId::from_parameter(count),
+            BenchmarkId::from_parameter(format!("assignments={count}")),
             &assignments,
             |b, assignments| {
                 // Keep cloning outside the timed operation.
