@@ -4,14 +4,14 @@ version = 4
 
 [[package]]
 name = "_ommx_rust"
-version = "2.8.1"
+version = "2.9.0"
 dependencies = [
  "anyhow",
  "approx",
  "derive_more",
  "fnv",
  "ocipkg",
- "ommx 2.8.1",
+ "ommx 2.9.0",
  "ommx-pyo3-bridge",
  "pyo3",
  "pyo3-log",
@@ -221,7 +221,7 @@ dependencies = [
 
 [[package]]
 name = "bridge-test-modeling"
-version = "0.1.0"
+version = "2.9.0"
 dependencies = [
  "anyhow",
  "ommx 3.0.0-beta.6",
@@ -690,14 +690,14 @@ dependencies = [
 
 [[package]]
 name = "dataset"
-version = "2.8.1"
+version = "2.9.0"
 dependencies = [
  "anyhow",
  "clap",
  "csv",
  "env_logger",
  "log",
- "ommx 2.8.1",
+ "ommx 2.9.0",
  "serde",
  "zip",
 ]
@@ -1777,7 +1777,7 @@ dependencies = [
 
 [[package]]
 name = "ommx"
-version = "2.8.1"
+version = "2.9.0"
 dependencies = [
  "anyhow",
  "approx",
@@ -2202,7 +2202,7 @@ dependencies = [
 
 [[package]]
 name = "protogen"
-version = "2.8.1"
+version = "2.9.0"
 dependencies = [
  "anyhow",
  "colored 3.1.1",
