@@ -803,13 +803,13 @@ class Instance(UserAnnotationBase):
             * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
             * If failed, :py:meth:`add_integer_slack_to_inequality`
 
-        4. Convert to QUBO with (uniform) penalty method
+        4. Log-encode integer variables by :py:meth:`log_encode`.
+        5. Convert to QUBO with (uniform) penalty method
 
             * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
             * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
             * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
 
-        5. Log-encode integer variables by :py:meth:`log_encode`.
         6. Finally convert to QUBO format by :py:meth:`as_qubo_format`.
 
         Please see the document of each method for details.
@@ -876,12 +876,13 @@ class Instance(UserAnnotationBase):
         8    Binary    0.0    1.0  ommx.log_encode     [2, 1]
 
         * The yielded :attr:`objective` only has these binary variables.
-        * The :attr:`removed_constraints` keep the original variables until restored.
+        * Constraints moved to :attr:`removed_constraints` by the penalty method
+          already contain the log-encoded binary variables.
 
         >>> instance.objective
         Function(-x3*x3 - 2*x3*x4 - 4*x3*x5 - 4*x3*x6 - 2*x3*x7 - 4*x3*x8 - x4*x4 - 4*x4*x5 - 4*x4*x6 - 2*x4*x7 - 4*x4*x8 - 4*x5*x5 - 8*x5*x6 - 4*x5*x7 - 8*x5*x8 - 4*x6*x6 - 4*x6*x7 - 8*x6*x8 - x7*x7 - 4*x7*x8 - 4*x8*x8 + 7*x3 + 7*x4 + 13*x5 + 13*x6 + 6*x7 + 12*x8 - 9)
         >>> instance.get_removed_constraint_by_id(0)
-        RemovedConstraint(x0 + 2*x1 + x2 - 3 == 0, reason=uniform_penalty_method)
+        RemovedConstraint(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3 == 0, reason=uniform_penalty_method)
 
         Solvers will return solutions which only contain log-encoded binary variables like:
 
@@ -916,7 +917,7 @@ class Instance(UserAnnotationBase):
         >>> solution.constraints_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
            equality  value   used_ids subscripts          removed_reason
         id
-        0        =0    0.0  {0, 1, 2}         []  uniform_penalty_method
+        0        =0    0.0  {3, 4, 5, 6, 7, 8}         []  uniform_penalty_method
 
         """
         is_converted_to_minimize = self.as_minimization_problem()
@@ -947,6 +948,9 @@ class Instance(UserAnnotationBase):
                     ineq_id, inequality_integer_slack_max_range
                 )
 
+        # Encode while the constraints are still small, before squaring them.
+        self.log_encode()
+
         # Penalty method
         if self.constraints:
             if uniform_penalty_weight is not None and penalty_weights:
@@ -968,7 +972,6 @@ class Instance(UserAnnotationBase):
                 unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
             self.raw = unconstrained.raw
 
-        self.log_encode()
         qubo = self.as_qubo_format()
 
         if is_converted_to_minimize:
@@ -995,13 +998,13 @@ class Instance(UserAnnotationBase):
             * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
             * If failed, :py:meth:`add_integer_slack_to_inequality`
 
-        4. Convert to HUBO with (uniform) penalty method
+        4. Log-encode integer variables by :py:meth:`log_encode`.
+        5. Convert to HUBO with (uniform) penalty method
 
             * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
             * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
             * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
 
-        5. Log-encode integer variables by :py:meth:`log_encode`.
         6. Finally convert to HUBO format by :py:meth:`as_hubo_format`.
 
         Please see the documentation for `to_qubo` for more information, or the
@@ -1044,6 +1047,9 @@ class Instance(UserAnnotationBase):
                     ineq_id, inequality_integer_slack_max_range
                 )
 
+        # Encode while the constraints are still small, before squaring them.
+        self.log_encode()
+
         # Penalty method
         if self.constraints:
             if uniform_penalty_weight is not None and penalty_weights:
@@ -1065,7 +1071,6 @@ class Instance(UserAnnotationBase):
                 unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
             self.raw = unconstrained.raw
 
-        self.log_encode()
         qubo = self.as_hubo_format()
 
         if is_converted_to_minimize:
