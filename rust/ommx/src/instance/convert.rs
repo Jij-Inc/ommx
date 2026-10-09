@@ -46,6 +46,7 @@ impl From<Instance> for ParametricInstance {
             decision_variable_dependency,
             constraint_hints,
             description,
+            annotations,
             named_functions,
             ..
         }: Instance,
@@ -60,6 +61,7 @@ impl From<Instance> for ParametricInstance {
             decision_variable_dependency,
             constraint_hints,
             description,
+            annotations,
             named_functions,
         }
     }
@@ -138,6 +140,7 @@ impl ParametricInstance {
             constraint_hints: self.constraint_hints,
             parameters: Some(parameters),
             description: self.description,
+            annotations: self.annotations,
         })
     }
 }

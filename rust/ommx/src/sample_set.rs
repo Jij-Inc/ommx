@@ -119,6 +119,11 @@ pub struct SampleSet {
     feasible: BTreeMap<SampleID, bool>,
     #[getset(get = "pub")]
     feasible_relaxed: BTreeMap<SampleID, bool>,
+    /// Provenance for the sampling process that produced this sample set.
+    pub metadata: Option<crate::v1::ProcessMetadata>,
+    /// Extension annotations persisted in protobuf. OMMX metadata belongs in `metadata`.
+    /// Keys must not start with `org.ommx.v1.`; protobuf parsers reject reserved keys.
+    pub annotations: std::collections::HashMap<String, String>,
 }
 
 impl SampleSet {
@@ -219,7 +224,7 @@ impl SampleSet {
         let sense = *self.sense();
 
         // SAFETY: SampleSet invariants guarantee Solution invariants
-        Ok(unsafe {
+        let mut solution = unsafe {
             Solution::builder()
                 .objective(objective)
                 .evaluated_constraints(evaluated_constraints)
@@ -228,7 +233,10 @@ impl SampleSet {
                 .sense(sense)
                 .build_unchecked()
                 .expect("SampleSet invariants guarantee Solution invariants")
-        })
+        };
+        solution.metadata = self.metadata.clone();
+        solution.annotations = self.annotations.clone();
+        Ok(solution)
     }
 
     pub fn best_feasible_id(&self) -> Result<SampleID, SampleSetError> {
@@ -453,6 +461,8 @@ impl SampleSetBuilder {
             sense,
             feasible,
             feasible_relaxed,
+            metadata: None,
+            annotations: Default::default(),
         })
     }
 
@@ -504,6 +514,8 @@ impl SampleSetBuilder {
             sense,
             feasible,
             feasible_relaxed,
+            metadata: None,
+            annotations: Default::default(),
         })
     }
 

@@ -83,6 +83,7 @@ impl Parse for v1::Instance {
     fn parse(self, _context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Instance";
         crate::parse::check_format_version(self.format_version, message)?;
+        crate::parse::validate_extension_annotations(&self.annotations, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
         let decision_variables =
@@ -169,6 +170,7 @@ impl Parse for v1::Instance {
             decision_variable_dependency,
             parameters: self.parameters,
             description: self.description,
+            annotations: self.annotations,
             constraint_hints,
             named_functions,
         })
@@ -213,6 +215,7 @@ impl From<Instance> for v1::Instance {
             named_functions,
             removed_constraints,
             decision_variable_dependency,
+            annotations: value.annotations,
             parameters: value.parameters,
             description: value.description,
             constraint_hints: Some(value.constraint_hints.into()),
@@ -227,6 +230,7 @@ impl Parse for v1::ParametricInstance {
     fn parse(self, _context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.ParametricInstance";
         crate::parse::check_format_version(self.format_version, message)?;
+        crate::parse::validate_extension_annotations(&self.annotations, message)?;
         let sense = self.sense().parse_as(&(), message, "sense")?;
 
         let decision_variables =
@@ -338,6 +342,7 @@ impl Parse for v1::ParametricInstance {
             decision_variable_dependency,
             constraint_hints,
             description: self.description,
+            annotations: self.annotations,
         })
     }
 }
@@ -354,11 +359,13 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             decision_variable_dependency,
             constraint_hints,
             description,
+            annotations,
             named_functions,
         }: ParametricInstance,
     ) -> Self {
         Self {
             description,
+            annotations,
             sense: v1::instance::Sense::from(sense) as i32,
             objective: Some(objective.into()),
             decision_variables: decision_variables

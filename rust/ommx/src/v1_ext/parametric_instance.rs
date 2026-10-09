@@ -9,6 +9,7 @@ impl From<Instance> for ParametricInstance {
     fn from(
         Instance {
             description,
+            annotations,
             objective,
             constraints,
             decision_variables,
@@ -23,6 +24,7 @@ impl From<Instance> for ParametricInstance {
     ) -> Self {
         Self {
             description,
+            annotations,
             objective,
             constraints,
             decision_variables,
@@ -80,6 +82,7 @@ impl ParametricInstance {
 
         Ok(Instance {
             description: self.description,
+            annotations: self.annotations,
             objective: self.objective,
             constraints: self.constraints,
             decision_variables: self.decision_variables,

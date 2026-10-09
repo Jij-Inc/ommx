@@ -492,6 +492,12 @@ pub struct Instance {
     pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
     #[prost(message, repeated, tag = "10")]
     pub named_functions: ::prost::alloc::vec::Vec<NamedFunction>,
+    /// User-defined or third-party extension annotations.
+    /// OMMX-reserved metadata must use explicit fields such as `description`.
+    /// Keys must not start with `org.ommx.v1.`.
+    #[prost(map = "string, string", tag = "11")]
+    pub annotations:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     /// Format version of this message for forward compatibility checks.
     ///
     /// - 0 means the format as of OMMX Python SDK 2.5.1 and earlier.
@@ -516,6 +522,15 @@ pub mod instance {
         /// The application or library name that created this message.
         #[prost(string, optional, tag = "4")]
         pub created_by: ::core::option::Option<::prost::alloc::string::String>,
+        /// When this instance was created, encoded as an RFC3339 string.
+        #[prost(string, optional, tag = "5")]
+        pub created: ::core::option::Option<::prost::alloc::string::String>,
+        /// SPDX license identifier for this instance or dataset.
+        #[prost(string, optional, tag = "6")]
+        pub license: ::core::option::Option<::prost::alloc::string::String>,
+        /// Name of the dataset this instance belongs to.
+        #[prost(string, optional, tag = "7")]
+        pub dataset: ::core::option::Option<::prost::alloc::string::String>,
     }
     /// The sense of this instance
     #[non_exhaustive]
@@ -610,6 +625,12 @@ pub struct ParametricInstance {
     pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
     #[prost(message, repeated, tag = "10")]
     pub named_functions: ::prost::alloc::vec::Vec<NamedFunction>,
+    /// User-defined or third-party extension annotations.
+    /// OMMX-reserved metadata must use explicit fields such as `description`.
+    /// Keys must not start with `org.ommx.v1.`.
+    #[prost(map = "string, string", tag = "11")]
+    pub annotations:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     /// Format version of this message for forward compatibility checks.
     /// See `Instance.format_version` for semantics.
     #[prost(uint32, tag = "100")]
@@ -624,6 +645,25 @@ pub struct State {
     /// The value of the solution for each variable ID.
     #[prost(map = "uint64, double", tag = "1")]
     pub entries: ::std::collections::HashMap<u64, f64>,
+}
+/// Metadata for an optimization or sampling process.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ProcessMetadata {
+    #[prost(string, optional, tag = "1")]
+    pub instance: ::core::option::Option<::prost::alloc::string::String>,
+    /// Solver or sampler information encoded as JSON.
+    #[prost(string, optional, tag = "2")]
+    pub solver: ::core::option::Option<::prost::alloc::string::String>,
+    /// Solver or sampler parameters encoded as JSON.
+    #[prost(string, optional, tag = "3")]
+    pub parameters: ::core::option::Option<::prost::alloc::string::String>,
+    /// Start and end times encoded as RFC3339 strings.
+    #[prost(string, optional, tag = "4")]
+    pub start: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "5")]
+    pub end: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Solution with evaluated objective and constraints
 #[non_exhaustive]
@@ -667,6 +707,13 @@ pub struct Solution {
     /// Whether the problem is a minimization or maximization problem.
     #[prost(enumeration = "instance::Sense", tag = "10")]
     pub sense: i32,
+    #[prost(message, optional, boxed, tag = "12")]
+    pub metadata: ::core::option::Option<::prost::alloc::boxed::Box<ProcessMetadata>>,
+    /// User-defined or third-party extension annotations.
+    /// OMMX-reserved metadata must use `metadata`; keys must not start with `org.ommx.v1.`.
+    #[prost(map = "string, string", tag = "13")]
+    pub annotations:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     /// Format version of this message for forward compatibility checks.
     /// See `Instance.format_version` for semantics.
     #[prost(uint32, tag = "100")]
@@ -949,6 +996,13 @@ pub struct SampleSet {
     /// Minimize or Maximize
     #[prost(enumeration = "instance::Sense", tag = "5")]
     pub sense: i32,
+    #[prost(message, optional, boxed, tag = "9")]
+    pub metadata: ::core::option::Option<::prost::alloc::boxed::Box<ProcessMetadata>>,
+    /// User-defined or third-party extension annotations.
+    /// OMMX-reserved metadata must use `metadata`; keys must not start with `org.ommx.v1.`.
+    #[prost(map = "string, string", tag = "10")]
+    pub annotations:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
     /// Format version of this message for forward compatibility checks.
     /// See `Instance.format_version` for semantics.
     #[prost(uint32, tag = "100")]

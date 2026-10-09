@@ -9,6 +9,8 @@ import copy
 
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
+from .solution_pb2 import Solution as _Solution
+from .sample_set_pb2 import SampleSet as _SampleSet
 from .constraint_pb2 import (
     Constraint as _Constraint,
     RemovedConstraint as _RemovedConstraint,
@@ -20,6 +22,8 @@ from .parametric_instance_pb2 import (
 )
 from .annotation import (
     UserAnnotationBase,
+    _annotations_from_proto,
+    _annotations_to_proto,
     str_annotation_property,
     str_list_annotation_property,
     datetime_annotation_property,
@@ -116,8 +120,8 @@ class Instance(UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.Instance`` protobuf message.
 
-    Note that this class also contains annotations like :py:attr:`title` which are not contained in protobuf message but stored in OMMX artifact.
-    These annotations are loaded from annotations while reading from OMMX artifact.
+    Annotations such as :py:attr:`title` are persisted in protobuf payloads
+    and projected into OMMX artifact layer annotations.
 
     Examples
     =========
@@ -159,7 +163,7 @@ class Instance(UserAnnotationBase):
     # Annotations
     annotations: dict[str, str] = field(default_factory=dict)
     """
-    Arbitrary annotations stored in OMMX artifact. Use :py:attr:`title` or other specific attributes if possible.
+    Annotations persisted in protobuf payloads and OMMX artifact layers. Use :py:attr:`title` or other specific attributes if possible.
     """
     annotation_namespace = "org.ommx.v1.instance"
     title = str_annotation_property("title")
@@ -176,6 +180,13 @@ class Instance(UserAnnotationBase):
     "Number of constraints in this instance, stored as ``org.ommx.v1.instance.constraints`` annotation in OMMX artifact."
     created = datetime_annotation_property("created")
     "The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact."
+
+    def __post_init__(self) -> None:
+        message = _Instance.FromString(self.raw.to_bytes())
+        for key, value in _annotations_from_proto(
+            message, self.annotation_namespace
+        ).items():
+            self.annotations.setdefault(key, value)
 
     @property
     def _annotations(self) -> dict[str, str]:
@@ -371,7 +382,10 @@ class Instance(UserAnnotationBase):
         return Instance(rust_instance)
 
     def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
+        """Serialize the model and annotations as an OMMX v1 protobuf payload."""
+        message = _Instance.FromString(self.raw.to_bytes())
+        _annotations_to_proto(message, self.annotations, self.annotation_namespace)
+        return message.SerializeToString()
 
     @property
     def description(self) -> "Instance.Description | None":
@@ -689,7 +703,7 @@ class Instance(UserAnnotationBase):
         # Note: partial_evaluate modifies the instance in place and returns bytes
         temp_instance = copy.deepcopy(self.raw)
         temp_instance.partial_evaluate(State(state).to_bytes(), atol=atol)
-        return Instance(temp_instance)
+        return self._with_annotations(Instance(temp_instance))
 
     def used_decision_variable_ids(self) -> set[int]:
         """
@@ -1273,7 +1287,9 @@ class Instance(UserAnnotationBase):
         Function(x0*x0 + 2*x0*x1 + 2*x1*x1 + 2*x1*x2 + x2*x2 - x0 - 3*x1 - x2 + 2)
 
         """
-        return ParametricInstance.from_bytes(self.raw.penalty_method().to_bytes())
+        return self._with_annotations(
+            ParametricInstance.from_bytes(self.raw.penalty_method().to_bytes())
+        )
 
     def uniform_penalty_method(self) -> ParametricInstance:
         r"""
@@ -1353,16 +1369,16 @@ class Instance(UserAnnotationBase):
         Function(x0*x0 + 2*x0*x1 + 2*x0*x2 + x1*x1 + 2*x1*x2 + x2*x2 - 5*x0 - 5*x1 - 5*x2 + 9)
 
         """
-        return ParametricInstance.from_bytes(
-            self.raw.uniform_penalty_method().to_bytes()
+        return self._with_annotations(
+            ParametricInstance.from_bytes(self.raw.uniform_penalty_method().to_bytes())
         )
 
     def as_parametric_instance(self) -> ParametricInstance:
         """
         Convert the instance to a :class:`ParametricInstance`.
         """
-        return ParametricInstance.from_bytes(
-            self.raw.as_parametric_instance().to_bytes()
+        return self._with_annotations(
+            ParametricInstance.from_bytes(self.raw.as_parametric_instance().to_bytes())
         )
 
     def evaluate_samples(
@@ -1974,6 +1990,7 @@ class Instance(UserAnnotationBase):
         ...     sense=Instance.MAXIMIZE,
         ... )
         >>> print(instance.logical_memory_profile())  # doctest: +NORMALIZE_WHITESPACE
+        Instance.annotations;HashMap[stack] 48
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.constraints;BTreeMap[stack] 24
@@ -1989,7 +2006,7 @@ class Instance(UserAnnotationBase):
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 96
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 72
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 48
-        Instance.description;Option[stack] 96
+        Instance.description;Option[stack] 168
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.parameters;Option[stack] 48
         Instance.removed_constraints;BTreeMap[stack] 24
@@ -2065,6 +2082,13 @@ class ParametricInstance(UserAnnotationBase):
     created = datetime_annotation_property("created")
     "The creation date of the instance, stored as ``org.ommx.v1.parametric-instance.created`` annotation in RFC3339 format in OMMX artifact."
 
+    def __post_init__(self) -> None:
+        message = _ParametricInstance.FromString(self.raw.SerializeToString())
+        for key, value in _annotations_from_proto(
+            message, self.annotation_namespace
+        ).items():
+            self.annotations.setdefault(key, value)
+
     @property
     def _annotations(self) -> dict[str, str]:
         return self.annotations
@@ -2132,7 +2156,10 @@ class ParametricInstance(UserAnnotationBase):
         return ParametricInstance(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        """Serialize the model and annotations as an OMMX v1 protobuf payload."""
+        message = _ParametricInstance.FromString(self.raw.SerializeToString())
+        _annotations_to_proto(message, self.annotations, self.annotation_namespace)
+        return message.SerializeToString()
 
     @property
     def decision_variables(self) -> list[DecisionVariable]:
@@ -2258,7 +2285,7 @@ class ParametricInstance(UserAnnotationBase):
         pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
         ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
         instance = pi.with_parameters(ps)
-        return Instance(instance)
+        return self._with_annotations(Instance(instance))
 
     def substitute(
         self,
@@ -2433,7 +2460,7 @@ class Solution(UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.Solution`` protobuf message.
 
-    This also contains annotations not contained in protobuf message, and will be stored in OMMX artifact.
+    Annotations are persisted in protobuf payloads and OMMX artifact layers.
     """
 
     raw: _ommx_rust.Solution
@@ -2459,7 +2486,14 @@ class Solution(UserAnnotationBase):
     end = datetime_annotation_property("end")
     """When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact."""
     annotations: dict[str, str] = field(default_factory=dict)
-    """Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible."""
+    """Annotations persisted in protobuf payloads and OMMX artifact layers. Use :py:attr:`parameters` or other specific attributes if possible."""
+
+    def __post_init__(self) -> None:
+        message = _Solution.FromString(self.raw.to_bytes())
+        for key, value in _annotations_from_proto(
+            message, self.annotation_namespace
+        ).items():
+            self.annotations.setdefault(key, value)
 
     @property
     def _annotations(self) -> dict[str, str]:
@@ -2471,7 +2505,10 @@ class Solution(UserAnnotationBase):
         return Solution(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
+        """Serialize the model and annotations as an OMMX v1 protobuf payload."""
+        message = _Solution.FromString(self.raw.to_bytes())
+        _annotations_to_proto(message, self.annotations, self.annotation_namespace)
+        return message.SerializeToString()
 
     @property
     def state(self) -> State:
@@ -4724,7 +4761,14 @@ class SampleSet(UserAnnotationBase):
     end = datetime_annotation_property("end")
     """When the optimization ended, stored as ``org.ommx.v1.sample-set.end`` annotation in RFC3339 format in OMMX artifact."""
     annotations: dict[str, str] = field(default_factory=dict)
-    """Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible."""
+    """Annotations persisted in protobuf payloads and OMMX artifact layers. Use :py:attr:`parameters` or other specific attributes if possible."""
+
+    def __post_init__(self) -> None:
+        message = _SampleSet.FromString(self.raw.to_bytes())
+        for key, value in _annotations_from_proto(
+            message, self.annotation_namespace
+        ).items():
+            self.annotations.setdefault(key, value)
 
     @property
     def _annotations(self) -> dict[str, str]:
@@ -4736,7 +4780,10 @@ class SampleSet(UserAnnotationBase):
         return SampleSet(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
+        """Serialize the model and annotations as an OMMX v1 protobuf payload."""
+        message = _SampleSet.FromString(self.raw.to_bytes())
+        _annotations_to_proto(message, self.annotations, self.annotation_namespace)
+        return message.SerializeToString()
 
     @property
     def summary(self) -> DataFrame:
@@ -4965,7 +5012,7 @@ class SampleSet(UserAnnotationBase):
         Get a sample for a given ID as a solution format
         """
         solution = self.raw.get(sample_id)
-        return Solution(solution)
+        return self._with_annotations(Solution(solution))
 
     def get_sample_by_id(self, sample_id: int) -> Solution:
         """
@@ -5082,7 +5129,7 @@ class SampleSet(UserAnnotationBase):
             If no feasible solution exists.
         """
         solution = self.raw.best_feasible
-        return Solution(solution)
+        return self._with_annotations(Solution(solution))
 
     @property
     def best_feasible_relaxed(self) -> Solution:
@@ -5095,7 +5142,7 @@ class SampleSet(UserAnnotationBase):
             If no feasible solution exists.
         """
         solution = self.raw.best_feasible_relaxed
-        return Solution(solution)
+        return self._with_annotations(Solution(solution))
 
     @property
     def best_feasible_unrelaxed(self) -> Solution:
@@ -5108,7 +5155,7 @@ class SampleSet(UserAnnotationBase):
             If no feasible solution exists.
         """
         solution = self.raw.best_feasible_unrelaxed
-        return Solution(solution)
+        return self._with_annotations(Solution(solution))
 
     @property
     def sense(self) -> _ommx_rust.Sense:

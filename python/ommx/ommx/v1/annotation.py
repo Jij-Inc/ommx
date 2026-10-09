@@ -3,12 +3,110 @@ from datetime import datetime
 from dateutil import parser
 from abc import ABC, abstractmethod
 import json
+from typing import Literal, TypeVar
+
+from .instance_pb2 import Instance as _Instance
+from .parametric_instance_pb2 import ParametricInstance as _ParametricInstance
+from .solution_pb2 import Solution as _Solution
+from .sample_set_pb2 import SampleSet as _SampleSet
+
+
+_AnnotatedMessage = _Instance | _ParametricInstance | _Solution | _SampleSet
+_DESCRIPTION_FIELDS: dict[str, Literal["name", "license", "dataset", "created"]] = {
+    "title": "name",
+    "license": "license",
+    "dataset": "dataset",
+    "created": "created",
+}
+_PROCESS_FIELDS = ("instance", "solver", "parameters", "start", "end")
+_AnnotatedRoot = TypeVar("_AnnotatedRoot", bound="UserAnnotationBase")
+
+
+def _annotations_from_proto(
+    message: _AnnotatedMessage, namespace: str
+) -> dict[str, str]:
+    annotations = dict(message.annotations)
+    for key in annotations:
+        if key.startswith("org.ommx.v1."):
+            raise ValueError(f"Annotation key {key!r} is reserved for OMMX metadata.")
+    if isinstance(message, (_Instance, _ParametricInstance)):
+        for key, field_name in _DESCRIPTION_FIELDS.items():
+            if message.description.HasField(field_name):
+                annotations[f"{namespace}.{key}"] = getattr(
+                    message.description, field_name
+                )
+        if message.description.authors:
+            annotations[f"{namespace}.authors"] = ",".join(message.description.authors)
+    else:
+        for field_name in _PROCESS_FIELDS:
+            if message.metadata.HasField(field_name):
+                annotations[f"{namespace}.{field_name}"] = getattr(
+                    message.metadata, field_name
+                )
+    return annotations
+
+
+def _annotations_to_proto(
+    message: _AnnotatedMessage, annotations: dict[str, str], namespace: str
+) -> None:
+    """Project the v2 dictionary into the same wire fields as SDK v3."""
+    if isinstance(message, (_Instance, _ParametricInstance)):
+        description = message.description
+        for key, field_name in _DESCRIPTION_FIELDS.items():
+            value = annotations.get(f"{namespace}.{key}")
+            description.ClearField(field_name)
+            if value is not None:
+                setattr(description, field_name, value)
+        del description.authors[:]
+        authors = annotations.get(f"{namespace}.authors")
+        if authors:
+            description.authors.extend(authors.split(","))
+        if not description.ListFields():
+            message.ClearField("description")
+        reserved_keys = {*_DESCRIPTION_FIELDS, "authors", "variables", "constraints"}
+    else:
+        message.ClearField("metadata")
+        for field_name in _PROCESS_FIELDS:
+            value = annotations.get(f"{namespace}.{field_name}")
+            if value is not None:
+                setattr(message.metadata, field_name, value)
+        reserved_keys = set(_PROCESS_FIELDS)
+
+    allowed_reserved_keys = {f"{namespace}.{name}" for name in reserved_keys}
+    extensions = {}
+    for key, value in annotations.items():
+        if key.startswith("org.ommx.v1."):
+            if key not in allowed_reserved_keys:
+                raise ValueError(
+                    f"Annotation key {key!r} is reserved for OMMX metadata. "
+                    "Use a user or third-party namespace for custom annotations."
+                )
+        else:
+            extensions[key] = value
+    message.annotations.clear()
+    message.annotations.update(extensions)
 
 
 class UserAnnotationBase(ABC):
+    annotation_namespace: str
+
     @property
     @abstractmethod
     def _annotations(self) -> dict[str, str]: ...
+
+    def _with_annotations(self, target: _AnnotatedRoot) -> _AnnotatedRoot:
+        """Copy metadata when an operation returns another model or output view."""
+        prefix = f"{self.annotation_namespace}."
+        target._annotations.clear()
+        target._annotations.update(
+            {
+                f"{target.annotation_namespace}.{key[len(prefix) :]}"
+                if key.startswith(prefix)
+                else key: value
+                for key, value in self._annotations.items()
+            }
+        )
+        return target
 
     def add_user_annotation(
         self, key: str, value: str, *, annotation_namespace: str = "org.ommx.user."

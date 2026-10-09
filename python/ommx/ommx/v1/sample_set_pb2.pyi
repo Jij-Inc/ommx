@@ -560,6 +560,24 @@ class SampleSet(google.protobuf.message.Message):
             self, field_name: typing.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
 
+    @typing.final
+    class AnnotationsEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
+        def __init__(
+            self,
+            *,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
     OBJECTIVES_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
@@ -568,6 +586,8 @@ class SampleSet(google.protobuf.message.Message):
     FEASIBLE_UNRELAXED_FIELD_NUMBER: builtins.int
     FEASIBLE_RELAXED_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
+    METADATA_FIELD_NUMBER: builtins.int
+    ANNOTATIONS_FIELD_NUMBER: builtins.int
     FORMAT_VERSION_FIELD_NUMBER: builtins.int
     sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
     """Minimize or Maximize"""
@@ -626,6 +646,16 @@ class SampleSet(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
         """Feasibility for remaining (non-removed) constraints of each sample."""
 
+    @property
+    def metadata(self) -> ommx.v1.solution_pb2.ProcessMetadata: ...
+    @property
+    def annotations(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """User-defined or third-party extension annotations.
+        OMMX-reserved metadata must use `metadata`; keys must not start with `org.ommx.v1.`.
+        """
+
     def __init__(
         self,
         *,
@@ -641,14 +671,21 @@ class SampleSet(google.protobuf.message.Message):
         feasible_relaxed: collections.abc.Mapping[builtins.int, builtins.bool]
         | None = ...,
         sense: ommx.v1.instance_pb2.Instance.Sense.ValueType = ...,
+        metadata: ommx.v1.solution_pb2.ProcessMetadata | None = ...,
+        annotations: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
         format_version: builtins.int = ...,
     ) -> None: ...
     def HasField(
-        self, field_name: typing.Literal["objectives", b"objectives"]
+        self,
+        field_name: typing.Literal[
+            "metadata", b"metadata", "objectives", b"objectives"
+        ],
     ) -> builtins.bool: ...
     def ClearField(
         self,
         field_name: typing.Literal[
+            "annotations",
+            b"annotations",
             "constraints",
             b"constraints",
             "decision_variables",
@@ -661,6 +698,8 @@ class SampleSet(google.protobuf.message.Message):
             b"feasible_unrelaxed",
             "format_version",
             b"format_version",
+            "metadata",
+            b"metadata",
             "named_functions",
             b"named_functions",
             "objectives",
