@@ -61,6 +61,26 @@ def test_annotation_bytes_round_trip(factory, root_type, message_type, kind):
     assert root_type.from_bytes(replaced.to_bytes()).annotations == {}
 
 
+@pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS)
+def test_non_reserved_annotations_preserve_arbitrary_strings(
+    factory, root_type, message_type, kind
+):
+    annotations = {
+        "": "",
+        "plain key": "not JSON, nor a date\n\0",
+        "日本語\n\0": "任意の値 🦀\n\0",
+        "org.ommx.v1": "No trailing dot",
+        "org.ommx.v10.custom": "Different prefix",
+    }
+    root = factory()
+    root.annotations.update(annotations)
+    data = root.to_bytes()
+    assert dict(message_type.FromString(data).annotations) == annotations
+    assert root_type.from_bytes(data).annotations == annotations
+    raw = getattr(_ommx_rust, root_type.__name__).from_bytes(data)
+    assert root_type.from_bytes(raw.to_bytes()).annotations == annotations
+
+
 @pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS[:2])
 def test_instance_metadata_uses_description(factory, root_type, message_type, kind):
     root = factory()

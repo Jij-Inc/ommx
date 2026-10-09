@@ -150,7 +150,7 @@ pub(crate) fn validate_extension_annotations(
 ) -> Result<(), ParseError> {
     if let Some(key) = annotations
         .keys()
-        .find(|key| key.starts_with("org.ommx.v1."))
+        .find(|key| crate::annotations::is_reserved_annotation_key(key))
     {
         return Err(RawParseError::ReservedAnnotationKey { key: key.clone() }
             .context(message, "annotations"));

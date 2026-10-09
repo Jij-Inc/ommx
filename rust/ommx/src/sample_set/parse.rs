@@ -153,7 +153,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             feasible,
             sense,
             metadata: sample_set.metadata.map(Box::new),
-            annotations: sample_set.annotations,
+            annotations: crate::annotations::protobuf_extension_annotations(sample_set.annotations),
             ..Default::default()
         }
     }

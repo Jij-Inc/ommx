@@ -215,7 +215,7 @@ impl From<Instance> for v1::Instance {
             named_functions,
             removed_constraints,
             decision_variable_dependency,
-            annotations: value.annotations,
+            annotations: crate::annotations::protobuf_extension_annotations(value.annotations),
             parameters: value.parameters,
             description: value.description,
             constraint_hints: Some(value.constraint_hints.into()),
@@ -365,7 +365,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
     ) -> Self {
         Self {
             description,
-            annotations,
+            annotations: crate::annotations::protobuf_extension_annotations(annotations),
             sense: v1::instance::Sense::from(sense) as i32,
             objective: Some(objective.into()),
             decision_variables: decision_variables

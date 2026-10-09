@@ -122,7 +122,8 @@ pub struct SampleSet {
     /// Provenance for the sampling process that produced this sample set.
     pub metadata: Option<crate::v1::ProcessMetadata>,
     /// Extension annotations persisted in protobuf. OMMX metadata belongs in `metadata`.
-    /// Keys must not start with `org.ommx.v1.`; protobuf parsers and serializers reject reserved keys.
+    /// Non-reserved keys and values are arbitrary strings. Reserved `org.ommx.v1.*`
+    /// keys are omitted during protobuf export and rejected on import.
     pub annotations: std::collections::HashMap<String, String>,
 }
 

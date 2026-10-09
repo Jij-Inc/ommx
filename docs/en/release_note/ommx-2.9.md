@@ -30,15 +30,16 @@ annotations, with protobuf metadata taking precedence when both sources contain
 the same key. An explicitly present optional string also takes precedence when
 its value is empty. Variable and constraint counts remain Artifact descriptor annotations.
 
-Custom annotations must use a user or third-party namespace; the
-`org.ommx.v1.*` namespace is reserved for OMMX metadata. Serialization rejects
-unknown keys in that namespace. The added protobuf fields use the same field
+Non-reserved annotation keys and values accept arbitrary strings. The
+`org.ommx.v1.*` namespace is reserved for OMMX metadata; Python serialization
+rejects unknown keys in that namespace. The added protobuf fields use the same field
 numbers as SDK v3 and keep `format_version = 0`. Older SDKs can still read the
 mathematical model, but may discard the added metadata when decoding and re-encoding it.
 
-The Rust domain types expose `try_to_bytes()` to return an error for reserved
-extension annotation keys. Their existing `to_bytes()` methods retain the
-`Vec<u8>` return type and panic on those invalid keys.
+Rust protobuf conversion omits reserved keys from the extension annotation map,
+including when callers have directly mutated the public map. `to_bytes()` retains
+its `Vec<u8>` return type and does not panic on those keys. Reading protobuf
+extension maps containing reserved keys still returns an error.
 
 The `ommx.v1` protobuf definitions are shared with SDK v3, including the
 `Function.Expression` schema. SDK 2.x continues to reject this unsupported

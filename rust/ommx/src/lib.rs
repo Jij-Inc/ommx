@@ -264,6 +264,7 @@ pub mod qplib;
 pub mod random;
 
 // Internal modules
+mod annotations;
 mod atol;
 mod bound;
 mod coefficient;

@@ -168,7 +168,7 @@ impl From<Solution> for crate::v1::Solution {
             sense,
             format_version: 0,
             metadata: solution.metadata.map(Box::new),
-            annotations: solution.annotations,
+            annotations: crate::annotations::protobuf_extension_annotations(solution.annotations),
         }
     }
 }

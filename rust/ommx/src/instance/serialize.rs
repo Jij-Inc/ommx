@@ -1,23 +1,15 @@
 use super::*;
-use crate::{v1, Message, Parse, ParseError};
+use crate::{v1, Message, Parse};
 use anyhow::Result;
 
 impl Instance {
     /// Serialize this instance as an OMMX v1 protobuf payload.
     ///
-    /// # Panics
-    /// Panics if an extension annotation uses the reserved `org.ommx.v1.` namespace.
-    /// Use [`Self::try_to_bytes`] to handle validation errors.
+    /// Reserved `org.ommx.v1.*` keys in the extension map are omitted.
+    /// Other keys and their string values are preserved without modification.
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.try_to_bytes()
-            .expect("Cannot serialize invalid OMMX extension annotations")
-    }
-
-    /// Serialize this instance after validating extension annotation keys.
-    pub fn try_to_bytes(&self) -> Result<Vec<u8>, ParseError> {
-        crate::parse::validate_extension_annotations(&self.annotations, "ommx.v1.Instance")?;
         let v1_instance = v1::Instance::from(self.clone());
-        Ok(v1_instance.encode_to_vec())
+        v1_instance.encode_to_vec()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
@@ -29,22 +21,11 @@ impl Instance {
 impl ParametricInstance {
     /// Serialize this parametric instance as an OMMX v1 protobuf payload.
     ///
-    /// # Panics
-    /// Panics if an extension annotation uses the reserved `org.ommx.v1.` namespace.
-    /// Use [`Self::try_to_bytes`] to handle validation errors.
+    /// Reserved `org.ommx.v1.*` keys in the extension map are omitted.
+    /// Other keys and their string values are preserved without modification.
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.try_to_bytes()
-            .expect("Cannot serialize invalid OMMX extension annotations")
-    }
-
-    /// Serialize this parametric instance after validating extension annotation keys.
-    pub fn try_to_bytes(&self) -> Result<Vec<u8>, ParseError> {
-        crate::parse::validate_extension_annotations(
-            &self.annotations,
-            "ommx.v1.ParametricInstance",
-        )?;
         let v1_instance = v1::ParametricInstance::from(self.clone());
-        Ok(v1_instance.encode_to_vec())
+        v1_instance.encode_to_vec()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
@@ -162,54 +143,74 @@ mod annotation_tests {
     }
 
     #[test]
-    fn reserved_annotations_are_rejected_before_serializing_all_roots() {
+    fn serialization_filters_reserved_keys_and_preserves_arbitrary_strings_on_all_roots() {
+        let extensions = std::collections::HashMap::from([
+            ("".into(), "".into()),
+            ("plain key".into(), "not JSON, nor a date\n\0".into()),
+            ("日本語\n\0".into(), "任意の値 🦀\n\0".into()),
+            ("org.ommx.v1".into(), "No trailing dot".into()),
+            ("org.ommx.v10.custom".into(), "Different prefix".into()),
+        ]);
         macro_rules! check_root {
-            ($root:expr, $ty:ty, $message:literal) => {{
+            ($root:expr, $ty:ty, $wire_ty:ty) => {{
                 let mut root = $root;
-                let key = "org.ommx.v1.custom";
-                root.annotations.insert(key.into(), "invalid".into());
+                root.annotations = extensions.clone();
+                for key in [
+                    "org.ommx.v1.",
+                    "org.ommx.v1.custom",
+                    "org.ommx.v1.instance.title",
+                    "org.ommx.v1.solution.solver",
+                ] {
+                    root.annotations.insert(key.into(), "ignored".into());
+                }
+                let original = root.annotations.clone();
 
-                let error = root.try_to_bytes().unwrap_err();
-                assert!(matches!(
-                    error.error,
-                    crate::RawParseError::ReservedAnnotationKey { key: reserved } if reserved == key
-                ));
-                assert_eq!(error.context[0].message, $message);
-                assert_eq!(error.context[0].field, "annotations");
-                assert!(std::panic::catch_unwind(|| root.to_bytes()).is_err());
-                assert_eq!(root.annotations[key], "invalid");
+                let message = <$wire_ty>::from(root.clone());
+                assert_eq!(message.annotations, extensions);
+                let bytes = root.to_bytes();
+                let decoded = <$wire_ty>::decode(bytes.as_slice()).unwrap();
+                assert_eq!(decoded.annotations, extensions);
+                let restored = <$ty>::from_bytes(&bytes).unwrap();
+                assert_eq!(restored.annotations, extensions);
+                assert_eq!(root.annotations, original);
 
-                // A rejected write does not prevent recovery and a valid round-trip.
-                root.annotations.remove(key);
-                root.annotations.insert("com.example.owner".into(), "Alice".into());
-                let restored = <$ty>::from_bytes(&root.try_to_bytes().unwrap()).unwrap();
-                assert_eq!(restored.annotations, root.annotations);
+                // Typed OMMX metadata remains authoritative over reserved map entries.
+                let reencoded = <$wire_ty>::decode(restored.to_bytes().as_slice()).unwrap();
+                assert_eq!(reencoded, message);
             }};
         }
 
-        check_root!(Instance::default(), Instance, "ommx.v1.Instance");
+        let instance = Instance {
+            description: Some(v1::instance::Description {
+                name: Some("Typed title".into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        check_root!(instance.clone(), Instance, v1::Instance);
         check_root!(
-            ParametricInstance::from(Instance::default()),
+            ParametricInstance::from(instance),
             ParametricInstance,
-            "ommx.v1.ParametricInstance"
+            v1::ParametricInstance
         );
-        check_root!(
-            Instance::default()
-                .evaluate(&v1::State::default(), ATol::default())
-                .unwrap(),
-            Solution,
-            "ommx.v1.Solution"
-        );
-        check_root!(
-            SampleSet::builder()
-                .decision_variables(Default::default())
-                .constraints(Default::default())
-                .objectives(crate::Sampled::from(0.0))
-                .sense(crate::Sense::Minimize)
-                .build()
-                .unwrap(),
-            SampleSet,
-            "ommx.v1.SampleSet"
-        );
+        let metadata = Some(v1::ProcessMetadata {
+            solver: Some("Typed solver".into()),
+            ..Default::default()
+        });
+        let mut solution = Instance::default()
+            .evaluate(&v1::State::default(), ATol::default())
+            .unwrap();
+        solution.metadata = metadata.clone();
+        check_root!(solution, Solution, v1::Solution);
+
+        let mut sample_set = SampleSet::builder()
+            .decision_variables(Default::default())
+            .constraints(Default::default())
+            .objectives(crate::Sampled::from(0.0))
+            .sense(crate::Sense::Minimize)
+            .build()
+            .unwrap();
+        sample_set.metadata = metadata;
+        check_root!(sample_set, SampleSet, v1::SampleSet);
     }
 }
