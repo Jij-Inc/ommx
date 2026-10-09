@@ -5,9 +5,11 @@
 //! operations continue to use the SDK APIs that preserve their invariants.
 //!
 //! `ommx skill path` prints the absolute parent directory of bundled coding-agent
-//! skills; `ommx skill path --name ommx` prints the OMMX skill directory itself.
-//! The embedded instructions are materialized in a content-addressed OS cache,
-//! or under `OMMX_SKILL_CACHE_DIR` when set. No source checkout, network access,
+//! skills; `ommx skill path ommx` prints the OMMX skill directory itself.
+//! `ommx plugin path` prints the plugin root, and `ommx plugin marketplace path`
+//! prints its local marketplace root. The embedded bundle is materialized in a
+//! content-addressed OS cache, or under `OMMX_PLUGIN_CACHE_DIR` when set.
+//! No source checkout, network access,
 //! or Artifact Local Registry is needed.
 //!
 //! # Compatibility
@@ -21,7 +23,7 @@
 //! the schema level.
 
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use colored::{ColoredString, Colorize};
 use oci_spec::image::{Digest, ImageManifest};
 use ommx::artifact::{
@@ -40,7 +42,7 @@ use std::{
     time::Duration,
 };
 
-mod skill;
+mod agent_plugin;
 
 mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -51,6 +53,12 @@ mod built_info {
 enum Command {
     /// Show the version
     Version,
+
+    /// Discover the bundled agent plugin
+    Plugin {
+        #[command(subcommand)]
+        command: PluginCommand,
+    },
 
     /// Discover bundled coding-agent skills
     Skill {
@@ -220,13 +228,44 @@ enum Command {
 }
 
 #[derive(Subcommand)]
+enum PluginCommand {
+    /// Print the absolute directory path of the bundled OMMX plugin
+    Path {
+        /// Select one plugin instead of the default
+        #[clap(value_enum)]
+        name: Option<PluginName>,
+    },
+    /// Discover the plugin marketplace that lists the bundled plugin
+    Marketplace {
+        #[command(subcommand)]
+        command: MarketplaceCommand,
+    },
+}
+
+#[derive(Clone, ValueEnum)]
+enum PluginName {
+    Ommx,
+}
+
+#[derive(Subcommand)]
+enum MarketplaceCommand {
+    /// Print the absolute directory path of the bundled plugin marketplace
+    Path,
+}
+
+#[derive(Subcommand)]
 enum SkillCommand {
     /// Print the absolute skills directory path for linking or copying into a project
     Path {
         /// Print one skill directory instead of the skills parent directory
-        #[clap(long, value_parser = ["ommx"])]
-        name: Option<String>,
+        #[clap(value_enum)]
+        name: Option<SkillName>,
     },
+}
+
+#[derive(Clone, ValueEnum)]
+enum SkillName {
+    Ommx,
 }
 
 #[derive(Subcommand)]
@@ -480,10 +519,20 @@ where
 
 fn execute(command: Command) -> Result<()> {
     match &command {
+        Command::Plugin { command } => {
+            let root = agent_plugin::path()?;
+            let path = match command {
+                PluginCommand::Path { .. } => root.join("plugins/ommx"),
+                PluginCommand::Marketplace {
+                    command: MarketplaceCommand::Path,
+                } => root,
+            };
+            writeln!(io::stdout(), "{}", path.display())?;
+        }
         Command::Skill {
             command: SkillCommand::Path { name },
         } => {
-            let root = skill::path()?;
+            let root = agent_plugin::path()?.join("plugins/ommx/skills");
             let path = if name.is_some() {
                 root.join("ommx")
             } else {
@@ -1123,10 +1172,7 @@ mod tests {
     fn skill_path_parses_parent_and_named_paths() {
         for (args, expected) in [
             (vec!["ommx", "skill", "path"], None),
-            (
-                vec!["ommx", "skill", "path", "--name", "ommx"],
-                Some("ommx"),
-            ),
+            (vec!["ommx", "skill", "path", "ommx"], Some("ommx")),
         ] {
             let Command::Skill {
                 command: SkillCommand::Path { name },
@@ -1134,10 +1180,42 @@ mod tests {
             else {
                 panic!("expected skill path command");
             };
-            assert_eq!(name.as_deref(), expected);
+            assert_eq!(name.map(|SkillName::Ommx| "ommx"), expected);
         }
         assert!(Command::try_parse_from(["ommx", "skill"]).is_err());
-        assert!(Command::try_parse_from(["ommx", "skill", "path", "--name", "../other"]).is_err());
+        assert!(Command::try_parse_from(["ommx", "skill", "path", "../other"]).is_err());
+        assert!(Command::try_parse_from(["ommx", "skill", "path", "--name", "ommx"]).is_err());
+    }
+
+    #[test]
+    fn plugin_paths_follow_jijmodeling_command_syntax() {
+        for args in [
+            vec!["ommx", "plugin", "path"],
+            vec!["ommx", "plugin", "path", "ommx"],
+        ] {
+            assert!(matches!(
+                Command::try_parse_from(args).unwrap(),
+                Command::Plugin {
+                    command: PluginCommand::Path { .. }
+                }
+            ));
+        }
+        assert!(matches!(
+            Command::try_parse_from(["ommx", "plugin", "marketplace", "path"]).unwrap(),
+            Command::Plugin {
+                command: PluginCommand::Marketplace {
+                    command: MarketplaceCommand::Path
+                }
+            }
+        ));
+        for args in [
+            vec!["ommx", "plugin"],
+            vec!["ommx", "plugin", "marketplace"],
+            vec!["ommx", "plugin", "path", "other"],
+            vec!["ommx", "plugin", "path", "--name", "ommx"],
+        ] {
+            assert!(Command::try_parse_from(args).is_err());
+        }
     }
 
     const DIGEST: &str = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

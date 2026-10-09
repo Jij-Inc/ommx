@@ -5,8 +5,8 @@ description: Build, solve, transform, and exchange optimization instances with t
 
 # OMMX
 
-Use the OMMX installed in the user's project. This skill is bundled with that
-SDK; after changing SDK versions, obtain the skill path again and update any
+Use the OMMX installed in the user's project. This skill is bundled with its
+CLI; after changing SDK versions, obtain the skill path again and update any
 project link or copy. The examples below use the v3 Python API.
 
 ## Build and solve an instance

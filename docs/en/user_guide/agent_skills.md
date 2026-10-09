@@ -1,60 +1,123 @@
 # Use OMMX with Coding Agents
 
-OMMX bundles a skill for coding agents that work with its Python SDK, solver
-adapters, Artifacts, and Experiments. Obtain it from the OMMX installed in your
-project so the instructions follow the SDK you use.
+OMMX bundles an agent plugin and skill for its Python SDK, solver adapters,
+Artifacts, and Experiments. Obtain it from the OMMX installed in your project,
+using the same command structure as
+[JijModeling](https://jij-inc-jijmodeling-tutorials-en.readthedocs-hosted.com/en/latest/advanced/agent_plugin_installation.html).
 
-From your project root, link the skill into the project's skill directory:
+For an agent that discovers `.agents/skills`, link the skill from your project root:
 
 ```bash
 mkdir -p .agents/skills
-ln -s "$(uv run ommx skill path --name ommx)" .agents/skills/ommx
+ln -s "$(uv run ommx skill path)/ommx" .agents/skills/ommx
 ```
 
-Start a new session in an agent that discovers `.agents/skills` and confirm that
-it lists `ommx` with this project's `SKILL.md` as the source. Add
-`.agents/skills/ommx` to your project's `.gitignore` when the link is specific to
-your environment. These shell examples use a POSIX shell.
+Start a new session and confirm that `ommx` is listed with this project's
+`SKILL.md` as its source. These shell examples use a POSIX shell.
 
-## Find or copy the skill
+## Find the plugin, marketplace, or skill
 
 ```bash
+uv run ommx plugin path
+uv run ommx plugin marketplace path
 uv run ommx skill path
-uv run ommx skill path --name ommx
 ```
 
-Both commands print one absolute directory path to stdout. The first returns a
-skills parent directory containing `ommx/SKILL.md`; `--name ommx` returns the
-`ommx` directory itself. Only the bundled name `ommx` is accepted.
+Each command prints one absolute directory path to stdout:
 
-To copy the skill instead of creating a symbolic link:
+| Command | Directory contents |
+| --- | --- |
+| `plugin path` | `plugin.json`, `.claude-plugin/plugin.json`, and `skills/` |
+| `plugin marketplace path` | `.claude-plugin/marketplace.json` and `plugins/ommx/` |
+| `skill path` | `ommx/SKILL.md` |
+
+Like JijModeling, plugin and skill names are optional positional arguments:
+
+```bash
+uv run ommx plugin path ommx
+uv run ommx skill path ommx
+```
+
+`plugin path ommx` returns the same plugin as `plugin path`. `skill path ommx`
+returns the individual skill directory instead of its parent. The bundled name
+is `ommx`.
+
+The standalone Rust executable supports the same commands. The Python module
+entry point also works: `uv run python -m ommx.cli plugin path`.
+
+## Install the plugin for a project
+
+The bundle contains an [Agent Plugins 1.0](https://agent-plugins.org/specification)
+manifest and Claude Code metadata. Install it through Claude Code's local
+marketplace with project scope:
+
+```bash
+claude plugin marketplace add --scope project "$(uv run ommx plugin marketplace path)"
+claude plugin install --scope project ommx@ommx
+```
+
+For one Claude Code session, pass the plugin directory at startup instead:
+
+```bash
+claude --plugin-dir "$(uv run ommx plugin path)"
+```
+
+Cursor CLI can also load the plugin for one session:
+
+```bash
+agent --plugin-dir "$(uv run ommx plugin path)"
+```
+
+Confirm in a new session that the agent discovers the OMMX skill from the
+configured plugin. In Claude Code, its name is `/ommx:ommx`. See the
+[Claude Code marketplace documentation](https://code.claude.com/docs/en/plugin-marketplaces)
+for the marketplace format and installation behavior.
+
+## Install the individual skill
+
+Use the `.agents/skills/ommx` link shown above, or copy the complete skill directory:
 
 ```bash
 mkdir -p .agents/skills
-cp -R "$(uv run ommx skill path --name ommx)" .agents/skills/ommx
+cp -R "$(uv run ommx skill path ommx)" .agents/skills/ommx
 ```
 
-Run this with no existing `.agents/skills/ommx` directory. A copy shared in Git
-should be updated alongside the project's OMMX dependency. External skill
-managers that expect a parent directory can consume `ommx skill path`, as in
-the [JijModeling installation workflow](https://jij-inc-jijmodeling-tutorials-en.readthedocs-hosted.com/en/latest/advanced/agent_plugin_installation.html).
+Run this with no existing `.agents/skills/ommx` directory. Skill managers that
+expect the parent directory can use `skill path`, for example:
 
-The same commands are available from the standalone Rust executable as
-`ommx skill path` and `ommx skill path --name ommx`. The Python module entry
-point also works: `uv run python -m ommx.cli skill path`.
+```bash
+gh skill install "$(uv run ommx skill path)" ommx --from-local --scope project
+```
 
-## Cache and updates
+Choose the agent when prompted. Confirm the skill's project scope and source
+path in a new session. Add `.agents/skills/ommx` to `.gitignore` for
+an environment-specific link or copy. If a team shares a copy in Git, update it
+alongside the project's OMMX dependency. Claude Code project settings can also
+contain absolute local marketplace paths; keep those local paths out of shared
+configuration.
 
-The skill is embedded in the CLI, including the Python wheel. `skill path`
-materializes it under the OS's OMMX cache directory, using a subdirectory keyed
-by the skill's contents. It needs no network access or source checkout and does
-not open the Artifact Local Registry. Set `OMMX_SKILL_CACHE_DIR` to choose a
-different writable cache directory. Treat the cached files as generated data;
-the next invocation restores a missing or altered `SKILL.md`.
+## Versions, cache, and updates
 
-After upgrading OMMX, run `skill path` again. If the returned path changed,
-recreate your project's symbolic link; for a copy, replace the complete skill
-directory. Then start a new agent session and confirm the skill's source path.
-Deleting the cache also removes the target of any links; run the command again
-to recreate it. Separate SDK installations with different skill contents use
-different cache paths.
+The plugin's manifests share the Rust CLI version shown by `ommx --version`,
+including when launched through Python. OMMX maintains Rust and Python SDK
+versions independently.
+
+OMMX embeds the whole bundle in the Rust executable and Python wheel. Path
+commands materialize it in the OS's OMMX cache under a key derived from all
+bundled files, including manifest versions. No source checkout, network access,
+or Artifact Local Registry is needed. Set `OMMX_PLUGIN_CACHE_DIR` to choose a
+writable cache location. Cached files are generated data; subsequent calls
+restore missing or altered entries.
+
+After upgrading OMMX, obtain the paths again. Recreate symbolic links if their
+targets changed, or replace the complete copied skill directory. For a local
+Claude Code marketplace, register the new path before updating the plugin:
+
+```bash
+claude plugin marketplace add --scope project "$(uv run ommx plugin marketplace path)"
+claude plugin update --scope project ommx@ommx
+```
+
+For `--plugin-dir`, launch a new session with the new path. Confirm that the
+agent reads the updated skill. If the cache is deleted, run the path command
+again to recreate the bundle before using links or marketplace registrations.

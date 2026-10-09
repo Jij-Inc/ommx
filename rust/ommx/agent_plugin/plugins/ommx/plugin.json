@@ -1,0 +1,13 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "author": {
+    "name": "Jij Inc.",
+    "url": "https://www.jijzept.com"
+  },
+  "description": "Build, solve, transform, and exchange optimization instances with OMMX, solver adapters, Artifacts, and Experiments.",
+  "homepage": "https://jij-inc.github.io/ommx/",
+  "repository": "https://github.com/Jij-Inc/ommx",
+  "keywords": ["ommx", "optimization", "mathematical-modeling"],
+  "license": "MIT OR Apache-2.0",
+  "name": "ommx"
+}
