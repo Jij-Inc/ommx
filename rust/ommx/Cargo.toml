@@ -15,6 +15,9 @@ repository = "https://github.com/Jij-Inc/ommx"
 keywords = ["optimization", "ommx"]
 categories = ["data-structures", "mathematics", "science"]
 
+[package.metadata.docs.rs]
+features = ["cli"]
+
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/rust-{ version }/{ name }-{ target }{ archive-suffix }"
 bin-dir = "{ bin }{ binary-ext }"
