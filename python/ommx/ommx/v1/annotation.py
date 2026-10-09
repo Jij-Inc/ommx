@@ -12,8 +12,12 @@ from .sample_set_pb2 import SampleSet as _SampleSet
 
 
 _AnnotatedMessage = _Instance | _ParametricInstance | _Solution | _SampleSet
-_DESCRIPTION_FIELDS: dict[str, Literal["name", "license", "dataset", "created"]] = {
+_DESCRIPTION_FIELDS: dict[
+    str, Literal["name", "description", "created_by", "license", "dataset", "created"]
+] = {
     "title": "name",
+    "description": "description",
+    "created_by": "created_by",
     "license": "license",
     "dataset": "dataset",
     "created": "created",

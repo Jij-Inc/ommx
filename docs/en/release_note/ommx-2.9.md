@@ -6,8 +6,9 @@
 
 `Instance`, `ParametricInstance`, `Solution`, and `SampleSet` now retain user
 annotations and typed metadata through `to_bytes()` / `from_bytes()`. Instance
-titles, licenses, datasets, authors, and creation times are stored in protobuf
-Description fields; solution and sampling provenance is stored in ProcessMetadata.
+titles, descriptions, creator names, licenses, datasets, authors, and creation
+times are stored in protobuf Description fields; solution and sampling provenance
+is stored in ProcessMetadata.
 The existing mutable `annotations` dictionaries and annotation helpers remain available.
 
 ```python
@@ -24,7 +25,8 @@ assert restored.get_user_annotation("source") == "python"
 Model conversions, partial evaluation, parameter materialization, and sample
 projection also retain annotations. Artifact readers merge legacy descriptor-only
 annotations, with protobuf metadata taking precedence when both sources contain
-the same key. Variable and constraint counts remain Artifact descriptor annotations.
+the same key. An explicitly present optional string also takes precedence when
+its value is empty. Variable and constraint counts remain Artifact descriptor annotations.
 
 Custom annotations must use a user or third-party namespace; the
 `org.ommx.v1.*` namespace is reserved for OMMX metadata. Serialization rejects

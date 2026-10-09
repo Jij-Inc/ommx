@@ -139,6 +139,51 @@ def test_artifact_annotations_merge_with_payload_precedence(
     assert root_type.from_bytes(restored.to_bytes()).annotations == restored.annotations
 
 
+@pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS[:2])
+@pytest.mark.parametrize("field", ["description", "created_by"])
+@pytest.mark.parametrize("payload_value", ["protobuf metadata", ""])
+def test_description_metadata_has_payload_precedence(
+    factory, root_type, message_type, kind, field, payload_value
+):
+    message = message_type.FromString(factory().to_bytes())
+    setattr(message.description, field, payload_value)
+    key = f"org.ommx.v1.{kind}.{field}"
+    builder = ArtifactBuilder.temp()
+    descriptor = builder.add_layer(
+        f"application/org.ommx.v1.{kind}",
+        message.SerializeToString(),
+        {key: "descriptor metadata"},
+    )
+    artifact = builder.build()
+    restored = getattr(artifact, "get_" + kind.replace("-", "_"))(descriptor)
+    assert restored.annotations[key] == payload_value
+    serialized = message_type.FromString(restored.to_bytes())
+    assert serialized.description.HasField(field)
+    assert getattr(serialized.description, field) == payload_value
+
+
+@pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS[:2])
+@pytest.mark.parametrize("field", ["description", "created_by"])
+def test_missing_description_metadata_uses_descriptor_fallback(
+    factory, root_type, message_type, kind, field
+):
+    message = message_type.FromString(factory().to_bytes())
+    message.description.ClearField(field)
+    key = f"org.ommx.v1.{kind}.{field}"
+    builder = ArtifactBuilder.temp()
+    descriptor = builder.add_layer(
+        f"application/org.ommx.v1.{kind}",
+        message.SerializeToString(),
+        {key: "descriptor metadata"},
+    )
+    artifact = builder.build()
+    restored = getattr(artifact, "get_" + kind.replace("-", "_"))(descriptor)
+    assert restored.annotations[key] == "descriptor metadata"
+    serialized = message_type.FromString(restored.to_bytes())
+    assert serialized.description.HasField(field)
+    assert getattr(serialized.description, field) == "descriptor metadata"
+
+
 @pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS)
 def test_legacy_descriptor_only_annotations(factory, root_type, message_type, kind):
     root = factory()

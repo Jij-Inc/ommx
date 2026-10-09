@@ -6,7 +6,7 @@
 
 `Instance`、`ParametricInstance`、`Solution`、`SampleSet` のユーザーアノテーションと
 メタデータが、`to_bytes()` / `from_bytes()` の往復で保持されるようになりました。
-Instanceのタイトル、ライセンス、データセット、著者、作成日時はprotobufのDescriptionに、
+Instanceのタイトル、説明、作成ツール名、ライセンス、データセット、著者、作成日時はprotobufのDescriptionに、
 求解・サンプリングの来歴はProcessMetadataに保存されます。
 既存の変更可能な `annotations` 辞書とアノテーション用メソッドは引き続き使えます。
 
@@ -24,6 +24,7 @@ assert restored.get_user_annotation("source") == "python"
 モデル変換、部分評価、パラメータの具体化、サンプルからSolutionへの取り出しでも
 アノテーションを保持します。Artifactの読み込みでは、旧形式のdescriptorにのみ保存された
 アノテーションを補完し、同じキーが両方にある場合はprotobuf側の値を優先します。
+optionalな文字列フィールドに明示的な空文字がある場合も、protobuf側の値を優先します。
 変数数と制約数は引き続きArtifactのdescriptorアノテーションとして扱います。
 
 独自のアノテーションにはユーザー用または第三者の名前空間を使ってください。
