@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "ommx",
-      "description": "Build, solve, transform, and exchange optimization instances with OMMX.",
+      "description": "Agent plugin bundle distributed by the OMMX CLI.",
       "source": "./plugins/ommx",
       "strict": true
     }

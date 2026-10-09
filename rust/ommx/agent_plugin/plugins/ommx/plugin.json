@@ -4,7 +4,7 @@
     "name": "Jij Inc.",
     "url": "https://www.jijzept.com"
   },
-  "description": "Build, solve, transform, and exchange optimization instances with OMMX, solver adapters, Artifacts, and Experiments.",
+  "description": "Agent plugin bundle distributed by the OMMX CLI.",
   "homepage": "https://jij-inc.github.io/ommx/",
   "repository": "https://github.com/Jij-Inc/ommx",
   "keywords": ["ommx", "optimization", "mathematical-modeling"],

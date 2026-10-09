@@ -1,9 +1,12 @@
-# Use OMMX with Coding Agents
+# Distribute Agent Plugins and Skills with OMMX
 
-OMMX bundles an agent plugin and skill for its Python SDK, solver adapters,
-Artifacts, and Experiments. Obtain it from the OMMX installed in your project,
-using the same command structure as
+The OMMX CLI distributes an agent plugin bundle and exposes its paths from the
+OMMX installed in your project, using the same command structure as
 [JijModeling](https://jij-inc-jijmodeling-tutorials-en.readthedocs-hosted.com/en/latest/advanced/agent_plugin_installation.html).
+
+The current `ommx/SKILL.md` is a distribution placeholder. OMMX usage guidance
+will be provided separately. The following examples verify installation and
+discovery of the bundle.
 
 For an agent that discovers `.agents/skills`, link the skill from your project root:
 

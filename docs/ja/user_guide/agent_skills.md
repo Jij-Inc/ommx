@@ -1,9 +1,12 @@
-# コーディングエージェントで OMMX を使う
+# OMMX でエージェントプラグインとスキルを配布する
 
-OMMX は、Python SDK、ソルバー Adapter、Artifact、Experiment を扱うエージェント
-プラグインとスキルを同梱しています。プロジェクトにインストールした OMMX から、
+OMMX CLI はエージェントプラグインの bundle を配布します。
+プロジェクトにインストールした OMMX から、
 [JijModeling](https://jij-inc-jijmodeling-tutorials-ja.readthedocs-hosted.com/ja/latest/advanced/agent_plugin_installation.html)
 と同じコマンド構成で取得できます。
+
+現在の `ommx/SKILL.md` は配布確認用のプレースホルダーです。OMMX の利用方法を
+説明する本文は別途追加します。以下の例では、bundle の導入と検出を確認します。
 
 `.agents/skills` を検出するエージェントでは、プロジェクトのルートでリンクを作成します。
 

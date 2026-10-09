@@ -147,17 +147,6 @@ def test_console_plugin_cache_error_is_stderr_and_exit_one(cli, args):
     assert not registry.exists()
 
 
-def test_bundled_skill_example_solves_with_the_installed_sdk():
-    source = (
-        Path(__file__).resolve().parents[3]
-        / "rust/ommx/agent_plugin/plugins/ommx/skills/ommx/SKILL.md"
-    )
-    examples = re.findall(r"```python\n(.*?)```", source.read_text(), re.DOTALL)
-    assert examples
-    for example in examples:
-        exec(compile(example, str(source), "exec"), {})
-
-
 def test_console_argument_error_is_stderr_and_exit_two(cli):
     run, registry = cli
     result = run("inspect")
