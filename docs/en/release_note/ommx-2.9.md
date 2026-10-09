@@ -32,6 +32,10 @@ unknown keys in that namespace. The added protobuf fields use the same field
 numbers as SDK v3 and keep `format_version = 0`. Older SDKs can still read the
 mathematical model, but may discard the added metadata when decoding and re-encoding it.
 
+The `ommx.v1` protobuf definitions are shared with SDK v3, including the
+`Function.Expression` schema. SDK 2.x continues to reject this unsupported
+function representation when loading a model.
+
 ### Batch integer encoding before penalty construction (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
 
 `Instance.log_encode()` processes all selected integers in one batch, validating

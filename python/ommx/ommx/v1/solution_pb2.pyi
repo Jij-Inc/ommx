@@ -116,7 +116,7 @@ global___State = State
 
 @typing.final
 class ProcessMetadata(google.protobuf.message.Message):
-    """Metadata for an optimization or sampling process."""
+    """Metadata for an optimization or sampling process that produced a Solution or SampleSet."""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -126,13 +126,15 @@ class ProcessMetadata(google.protobuf.message.Message):
     START_FIELD_NUMBER: builtins.int
     END_FIELD_NUMBER: builtins.int
     instance: builtins.str
+    """Digest of the corresponding Instance, when this output is stored with one."""
     solver: builtins.str
     """Solver or sampler information encoded as JSON."""
     parameters: builtins.str
     """Solver or sampler parameters encoded as JSON."""
     start: builtins.str
-    """Start and end times encoded as RFC3339 strings."""
+    """Solver or sampler start time encoded as an RFC3339 string."""
     end: builtins.str
+    """Solver or sampler end time encoded as an RFC3339 string."""
     def __init__(
         self,
         *,
@@ -302,13 +304,18 @@ class Solution(google.protobuf.message.Message):
         ommx.v1.named_function_pb2.EvaluatedNamedFunction
     ]: ...
     @property
-    def metadata(self) -> global___ProcessMetadata: ...
+    def metadata(self) -> global___ProcessMetadata:
+        """OMMX-defined provenance metadata for this Solution."""
+
     @property
     def annotations(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
         """User-defined or third-party extension annotations.
-        OMMX-reserved metadata must use `metadata`; keys must not start with `org.ommx.v1.`.
+
+        OMMX-reserved metadata must use explicit fields such as `metadata`.
+        Keys in this map must be valid reverse-domain names and must not start with
+        `org.ommx.v1.`.
         """
 
     def __init__(

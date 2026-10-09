@@ -32,6 +32,9 @@ assert restored.get_user_annotation("source") == "python"
 `format_version = 0` を維持します。旧SDKでも数理モデルは読み込めますが、デコードして
 再エンコードすると追加のメタデータが消失する場合があります。
 
+`ommx.v1` のprotobuf定義は、`Function.Expression` の定義を含めてSDK v3と共通です。
+SDK 2.xではこの関数表現は引き続き未対応であり、モデルの読み込み時に拒否します。
+
 ### penalty構築前の整数エンコードと一括置換 (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
 
 `Instance.log_encode()` は、指定された整数変数をまとめてエンコードします。

@@ -35,6 +35,9 @@ impl Parse for v1::Function {
                 message,
                 "polynomial",
             )?)),
+            Expression(_) => {
+                Err(RawParseError::UnsupportedV1Function.context(message, "expression"))
+            }
         }
     }
 }
@@ -67,6 +70,27 @@ mod tests {
     use super::*;
     use crate::PolynomialParameters;
     use proptest::prelude::*;
+
+    #[test]
+    fn test_expression_bytes_are_rejected() {
+        use crate::Message;
+
+        let proto = v1::Function {
+            function: Some(v1::function::Function::Expression(
+                v1::function::Expression {
+                    instructions: vec![v1::function::expression::Instruction {
+                        instruction: Some(
+                            v1::function::expression::instruction::Instruction::Constant(2.0),
+                        ),
+                    }],
+                },
+            )),
+        };
+        let decoded = v1::Function::decode(proto.encode_to_vec().as_slice()).unwrap();
+        let error = Function::try_from(decoded).unwrap_err();
+        assert!(matches!(error.error, RawParseError::UnsupportedV1Function));
+        assert!(error.to_string().contains("ommx.v1.Function[expression]"));
+    }
 
     proptest! {
         #[test]

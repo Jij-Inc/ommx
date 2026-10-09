@@ -283,7 +283,7 @@ class Instance(google.protobuf.message.Message):
 
     - 0 means the format as of OMMX Python SDK 2.5.1 and earlier.
     - This is only bumped by semantic-breaking format changes (major-only; no minor/patch).
-    - Each SDK declares an accepted maximum; reading data with a higher version fails with an "upgrade the SDK" error.
+    - Each SDK declares a current version; it writes that value and accepts any `<= current`. Data with a higher version fails with an "upgrade the SDK" error.
     - Non-semantic-breaking additions keep protobuf's standard forward compatibility (unknown fields ignored) and do not bump this.
     """
     @property
@@ -345,8 +345,10 @@ class Instance(google.protobuf.message.Message):
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
         """User-defined or third-party extension annotations.
+
         OMMX-reserved metadata must use explicit fields such as `description`.
-        Keys must not start with `org.ommx.v1.`.
+        Keys in this map must be valid reverse-domain names and must not start with
+        `org.ommx.v1.`.
         """
 
     def __init__(

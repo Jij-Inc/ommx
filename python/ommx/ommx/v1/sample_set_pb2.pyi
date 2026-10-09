@@ -647,13 +647,18 @@ class SampleSet(google.protobuf.message.Message):
         """Feasibility for remaining (non-removed) constraints of each sample."""
 
     @property
-    def metadata(self) -> ommx.v1.solution_pb2.ProcessMetadata: ...
+    def metadata(self) -> ommx.v1.solution_pb2.ProcessMetadata:
+        """OMMX-defined provenance metadata for this SampleSet."""
+
     @property
     def annotations(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
         """User-defined or third-party extension annotations.
-        OMMX-reserved metadata must use `metadata`; keys must not start with `org.ommx.v1.`.
+
+        OMMX-reserved metadata must use explicit fields such as `metadata`.
+        Keys in this map must be valid reverse-domain names and must not start with
+        `org.ommx.v1.`.
         """
 
     def __init__(

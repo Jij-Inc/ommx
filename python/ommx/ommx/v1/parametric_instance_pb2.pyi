@@ -252,8 +252,10 @@ class ParametricInstance(google.protobuf.message.Message):
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
         """User-defined or third-party extension annotations.
+
         OMMX-reserved metadata must use explicit fields such as `description`.
-        Keys must not start with `org.ommx.v1.`.
+        Keys in this map must be valid reverse-domain names and must not start with
+        `org.ommx.v1.`.
         """
 
     def __init__(
