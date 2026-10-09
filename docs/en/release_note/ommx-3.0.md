@@ -17,6 +17,14 @@ Constraints removed by the penalty phase now store their encoded expressions.
 Their evaluated values and the original output objective are preserved through
 decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
 
+### 🆕 Discover the bundled coding-agent skill ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
+
+`uv run ommx skill path` now prints the parent directory of the bundled OMMX
+skill. Use `--name ommx` to obtain the individual skill directory for a project
+link or copy. The instructions are embedded in the CLI and materialized in a
+cache keyed by their contents. See [Use OMMX with Coding Agents](../user_guide/agent_skills.md)
+for installation and updates.
+
 ### 🆕 Run the OMMX CLI from the Python SDK ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
 
 Installing the Python SDK now provides the `ommx` command. In a uv project

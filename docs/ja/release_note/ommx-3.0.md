@@ -17,6 +17,14 @@ penaltyによって除去される制約には、エンコード後の式が保�
 制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
 詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
 
+### 🆕 同梱のコーディングエージェント向けスキルを取得 ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
+
+`uv run ommx skill path` で、同梱 OMMX スキルの親ディレクトリを取得できます。
+プロジェクトへのリンクやコピーには、`--name ommx` で個別のスキルディレクトリを
+取得してください。説明は CLI に埋め込まれており、内容ごとのキャッシュに展開されます。
+導入・更新手順は [コーディングエージェントで OMMX を使う](../user_guide/agent_skills.md)
+を参照してください。
+
 ### 🆕 Python SDK から OMMX CLI を実行 ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
 
 Python SDK をインストールすると `ommx` コマンドも使えるようになります。
