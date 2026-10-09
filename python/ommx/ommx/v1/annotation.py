@@ -51,7 +51,11 @@ def _annotations_from_proto(
 
 
 def _annotations_to_proto(
-    message: _AnnotatedMessage, annotations: dict[str, str], namespace: str
+    message: _AnnotatedMessage,
+    annotations: dict[str, str],
+    namespace: str,
+    *,
+    annotation_lists: dict[str, list[str]] | None = None,
 ) -> None:
     """Project the v2 dictionary into the same wire fields as SDK v3."""
     if isinstance(message, (_Instance, _ParametricInstance)):
@@ -61,10 +65,18 @@ def _annotations_to_proto(
             description.ClearField(field_name)
             if value is not None:
                 setattr(description, field_name, value)
-        del description.authors[:]
         authors = annotations.get(f"{namespace}.authors")
-        if authors:
-            description.authors.extend(authors.split(","))
+        author_entries = (annotation_lists or {}).get("authors")
+        # The legacy flat string cannot distinguish an author's comma from a
+        # separator. Honor an explicit list edit, otherwise preserve the protobuf
+        # list when its projection is unchanged.
+        if author_entries is not None and authors == ",".join(author_entries):
+            del description.authors[:]
+            description.authors.extend(author_entries)
+        elif authors != ",".join(description.authors):
+            del description.authors[:]
+            if authors:
+                description.authors.extend(authors.split(","))
         if not description.ListFields():
             message.ClearField("description")
         reserved_keys = {*_DESCRIPTION_FIELDS, "authors", "variables", "constraints"}
@@ -93,6 +105,7 @@ def _annotations_to_proto(
 
 class UserAnnotationBase(ABC):
     annotation_namespace: str
+    _annotation_lists: dict[str, list[str]] | None = None
 
     @property
     @abstractmethod
@@ -109,6 +122,11 @@ class UserAnnotationBase(ABC):
                 else key: value
                 for key, value in self._annotations.items()
             }
+        )
+        target._annotation_lists = (
+            {key: list(value) for key, value in self._annotation_lists.items()}
+            if self._annotation_lists is not None
+            else None
         )
         return target
 
@@ -169,6 +187,10 @@ def str_list_annotation_property(name: str):
 
     def setter(self, value: list[str]):
         self._annotations[f"{self.annotation_namespace}.{name}"] = ",".join(value)
+        self._annotation_lists = {
+            **(self._annotation_lists or {}),
+            name: list(value),
+        }
 
     return property(getter, setter)
 

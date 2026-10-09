@@ -36,7 +36,9 @@ mathematical model, but may discard the added metadata when decoding and re-enco
 
 The `ommx.v1` protobuf definitions are shared with SDK v3, including the
 `Function.Expression` schema. SDK 2.x continues to reject this unsupported
-function representation when loading a model.
+function representation when converting it into Rust-backed functions or models,
+including through the V1 bridge. `ParametricInstance.from_bytes()` retains its
+existing deferred validation behavior.
 
 ### Batch integer encoding before penalty construction (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
 

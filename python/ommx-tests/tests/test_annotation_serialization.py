@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Literal
 
 import pytest
 
@@ -234,6 +235,90 @@ def test_description_is_retained_and_can_be_overridden_by_annotations():
     assert restored.description.name == "Updated"
     assert restored.description.description == "Model details"
     assert restored.description.created_by == "test"
+
+
+@pytest.mark.parametrize(
+    "description_type", [Instance.Description, InstanceMessage.Description]
+)
+@pytest.mark.parametrize("empty", [False, True])
+def test_description_constructor_preserves_new_fields(description_type, empty):
+    values: dict[Literal["created", "license", "dataset"], str] = {
+        "created": "" if empty else "2026-10-09T00:00:00Z",
+        "license": "" if empty else "MIT",
+        "dataset": "" if empty else "unit-test",
+    }
+    root = Instance.from_components(
+        objective=0,
+        decision_variables=[],
+        constraints=[],
+        sense=Instance.MINIMIZE,
+        description=description_type(name="Model", **values),
+    )
+    assert root.description is not None
+    for field, value in values.items():
+        assert getattr(root.description, field) == value
+    for data in (root.raw.to_bytes(), root.to_bytes()):
+        description = InstanceMessage.FromString(data).description
+        for field, value in values.items():
+            assert description.HasField(field)
+            assert getattr(description, field) == value
+
+
+@pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS[:2])
+@pytest.mark.parametrize(
+    "authors", [["Doe, Jane", "Bob"], [""], ["", "Doe, Jane", ""], ["Alice", "Bob"]]
+)
+def test_protobuf_author_entries_survive_round_trip(
+    factory, root_type, message_type, kind, authors
+):
+    message = message_type.FromString(factory().to_bytes())
+    message.description.authors.extend(authors)
+    root = root_type.from_bytes(message.SerializeToString())
+    restored = message_type.FromString(root.to_bytes())
+    assert list(restored.description.authors) == authors
+
+
+@pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS[:2])
+def test_legacy_author_annotation_can_be_changed_or_deleted(
+    factory, root_type, message_type, kind
+):
+    message = message_type.FromString(factory().to_bytes())
+    message.description.authors.append("Doe, Jane")
+    root = root_type.from_bytes(message.SerializeToString())
+    root.authors = ["Carol", "Dan"]
+    assert list(message_type.FromString(root.to_bytes()).description.authors) == [
+        "Carol",
+        "Dan",
+    ]
+    del root.annotations[f"org.ommx.v1.{kind}.authors"]
+    assert list(message_type.FromString(root.to_bytes()).description.authors) == []
+
+
+@pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS[:2])
+@pytest.mark.parametrize("authors", [[], [""], ["Doe, Jane", "Bob"]])
+def test_explicit_author_list_overrides_ambiguous_protobuf_entries(
+    factory, root_type, message_type, kind, authors
+):
+    message = message_type.FromString(factory().to_bytes())
+    message.description.authors.append("")
+    root = root_type.from_bytes(message.SerializeToString())
+    root.authors = authors
+    assert root.annotations[f"org.ommx.v1.{kind}.authors"] == ",".join(authors)
+    assert list(message_type.FromString(root.to_bytes()).description.authors) == authors
+    materialized = (
+        root.as_parametric_instance().with_parameters({})
+        if isinstance(root, Instance)
+        else root.with_parameters({})
+    )
+    assert (
+        list(InstanceMessage.FromString(materialized.to_bytes()).description.authors)
+        == authors
+    )
+    root.annotations[f"org.ommx.v1.{kind}.authors"] = "Carol,Dan"
+    assert list(message_type.FromString(root.to_bytes()).description.authors) == [
+        "Carol",
+        "Dan",
+    ]
 
 
 def test_model_operations_preserve_annotations():

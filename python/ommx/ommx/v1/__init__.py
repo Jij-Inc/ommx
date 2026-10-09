@@ -267,6 +267,15 @@ class Instance(UserAnnotationBase):
                     created_by=description.created_by
                     if description.HasField("created_by")
                     else None,
+                    created=description.created
+                    if description.HasField("created")
+                    else None,
+                    license=description.license
+                    if description.HasField("license")
+                    else None,
+                    dataset=description.dataset
+                    if description.HasField("dataset")
+                    else None,
                 )
 
         # Convert named functions if provided
@@ -384,7 +393,12 @@ class Instance(UserAnnotationBase):
     def to_bytes(self) -> bytes:
         """Serialize the model and annotations as an OMMX v1 protobuf payload."""
         message = _Instance.FromString(self.raw.to_bytes())
-        _annotations_to_proto(message, self.annotations, self.annotation_namespace)
+        _annotations_to_proto(
+            message,
+            self.annotations,
+            self.annotation_namespace,
+            annotation_lists=self._annotation_lists,
+        )
         return message.SerializeToString()
 
     @property
@@ -2158,7 +2172,12 @@ class ParametricInstance(UserAnnotationBase):
     def to_bytes(self) -> bytes:
         """Serialize the model and annotations as an OMMX v1 protobuf payload."""
         message = _ParametricInstance.FromString(self.raw.SerializeToString())
-        _annotations_to_proto(message, self.annotations, self.annotation_namespace)
+        _annotations_to_proto(
+            message,
+            self.annotations,
+            self.annotation_namespace,
+            annotation_lists=self._annotation_lists,
+        )
         return message.SerializeToString()
 
     @property

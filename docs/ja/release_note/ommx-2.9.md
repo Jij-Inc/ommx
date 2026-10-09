@@ -34,7 +34,8 @@ optionalな文字列フィールドに明示的な空文字がある場合も、
 再エンコードすると追加のメタデータが消失する場合があります。
 
 `ommx.v1` のprotobuf定義は、`Function.Expression` の定義を含めてSDK v3と共通です。
-SDK 2.xではこの関数表現は引き続き未対応であり、モデルの読み込み時に拒否します。
+SDK 2.xではこの関数表現は引き続き未対応であり、V1 Bridgeを含めてRust側の関数・モデルへ
+変換する時点で拒否します。`ParametricInstance.from_bytes()` は従来どおり検証を遅延します。
 
 ### penalty構築前の整数エンコードと一括置換 (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
 
