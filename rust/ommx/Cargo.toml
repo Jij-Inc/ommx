@@ -38,15 +38,15 @@ remote-artifact = [
     "built",
 ]
 built = ["dep:built"]
-cli = ["dep:tracing-subscriber"]
+cli = ["remote-artifact", "dep:clap", "dep:colored", "dep:tracing-subscriber"]
 
 [dependencies]
 anyhow.workspace = true
 approx.workspace = true
 base64.workspace = true
 chrono.workspace = true
-clap.workspace = true
-colored.workspace = true
+clap = { workspace = true, optional = true }
+colored = { workspace = true, optional = true }
 csv.workspace = true
 derive_more.workspace = true
 directories.workspace = true

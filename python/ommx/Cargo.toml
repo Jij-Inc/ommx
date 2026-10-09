@@ -26,7 +26,8 @@ name = "stub_gen"
 doc = false
 
 [features]
-default = ["remote-artifact", "tracing-bridge"]
+default = ["cli", "remote-artifact", "tracing-bridge"]
+cli = ["ommx/cli"]
 remote-artifact = ["ommx/remote-artifact"]
 # Bridge Rust `tracing` spans to Python OpenTelemetry via `pyo3-tracing-opentelemetry`.
 # Disabled on pyodide/wasm32-unknown-emscripten builds because the opentelemetry

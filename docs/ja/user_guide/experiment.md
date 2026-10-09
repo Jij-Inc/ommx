@@ -378,6 +378,11 @@ OMMX は SQLite に orphan table を作りません。orphan は GC report の�
 
 ## Cleanup workflow
 
+Python SDK をインストールすると `ommx` コマンドも使えるようになります。
+`ommx` に依存する uv プロジェクトでは `uv run ommx --help` を実行するか、
+以下のコマンドに `uv run` を付けてください。Python の入口も standalone
+実行ファイルと同じ Rust CLI を使い、`OMMX_LOCAL_REGISTRY_ROOT` に従います。
+
 cleanup command はまず report mode で実行してください。
 
 ```bash
