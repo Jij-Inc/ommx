@@ -30,6 +30,7 @@ def cli(tmp_path):
             env={
                 **os.environ,
                 "OMMX_LOCAL_REGISTRY_ROOT": str(registry),
+                "OMMX_SKILL_CACHE_DIR": str(tmp_path / "skill-cache-例"),
                 "NO_COLOR": "1",
             },
         )
@@ -37,7 +38,15 @@ def cli(tmp_path):
     return run, registry
 
 
-@pytest.mark.parametrize("args", [("--help",), ("inspect", "--help")])
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("--help",),
+        ("inspect", "--help"),
+        ("skill", "--help"),
+        ("skill", "path", "--help"),
+    ],
+)
 def test_console_help_does_not_open_registry(cli, args):
     run, registry = cli
     result = run(*args)
@@ -45,6 +54,55 @@ def test_console_help_does_not_open_registry(cli, args):
     assert "Usage:" in result.stdout
     assert result.stderr == ""
     assert not registry.exists()
+    assert not (registry.parent / "skill-cache-例").exists()
+
+
+def test_console_skill_paths_use_the_complete_bundled_skill(cli):
+    run, registry = cli
+    parent = run("skill", "path")
+    assert parent.returncode == 0, parent.stderr
+    assert parent.stderr == ""
+    assert len(parent.stdout.splitlines()) == 1
+    root = Path(parent.stdout.strip())
+    assert root.is_absolute()
+    assert root.is_relative_to(registry.parent.resolve() / "skill-cache-例")
+    named = run("skill", "path", "--name", "ommx")
+    assert named.returncode == 0, named.stderr
+    assert named.stderr == ""
+    assert Path(named.stdout.strip()) == root / "ommx"
+    source = Path(__file__).resolve().parents[3] / "rust/ommx/skills/ommx/SKILL.md"
+    assert (root / "ommx/SKILL.md").read_bytes() == source.read_bytes()
+    assert run("skill", "path").stdout == parent.stdout
+    assert not registry.exists()
+
+
+def test_console_skill_invalid_name_does_not_create_cache(cli):
+    run, registry = cli
+    result = run("skill", "path", "--name", "../other")
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "invalid value" in result.stderr
+    assert not (registry.parent / "skill-cache-例").exists()
+    assert not registry.exists()
+
+
+def test_console_skill_cache_error_is_stderr_and_exit_one(cli):
+    run, registry = cli
+    (registry.parent / "skill-cache-例").write_text("not a directory")
+    result = run("skill", "path")
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "Failed to create the OMMX skill cache" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not registry.exists()
+
+
+def test_bundled_skill_example_solves_with_the_installed_sdk():
+    source = Path(__file__).resolve().parents[3] / "rust/ommx/skills/ommx/SKILL.md"
+    examples = re.findall(r"```python\n(.*?)```", source.read_text(), re.DOTALL)
+    assert examples
+    for example in examples:
+        exec(compile(example, str(source), "exec"), {})
 
 
 def test_console_argument_error_is_stderr_and_exit_two(cli):
@@ -70,6 +128,7 @@ def test_console_execution_error_is_stderr_and_exit_one(cli, tmp_path):
     [
         (("version",), "stdout"),
         (("--help",), "stdout"),
+        (("skill", "path"), "stdout"),
         (("inspect",), "stderr"),
         (("import", "missing.ommx"), "stderr"),
         (("load", "missing.ommx"), "stderr"),
@@ -96,6 +155,7 @@ def test_main_returns_one_when_terminal_write_fails(args, stream, tmp_path):
             env={
                 **os.environ,
                 "OMMX_LOCAL_REGISTRY_ROOT": str(tmp_path / "registry"),
+                "OMMX_SKILL_CACHE_DIR": str(tmp_path / "skill-cache"),
                 "NO_COLOR": "1",
             },
         )

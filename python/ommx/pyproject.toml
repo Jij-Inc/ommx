@@ -82,4 +82,5 @@ cache-keys = [
   # Python SDK should be rebuilt when Rust SDK is updated.
   { file = "../../Cargo.lock" },
   { file = "../../rust/ommx/src/**/*.rs" },
+  { file = "../../rust/ommx/skills/**/*.md" },
 ]
