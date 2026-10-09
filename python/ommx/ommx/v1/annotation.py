@@ -180,6 +180,9 @@ def str_annotation_property(name: str):
 def str_list_annotation_property(name: str):
     def getter(self):
         value = self._annotations.get(f"{self.annotation_namespace}.{name}")
+        entries = (self._annotation_lists or {}).get(name)
+        if entries is not None and value == ",".join(entries):
+            return list(entries)
         if value:
             return value.split(",")
         else:

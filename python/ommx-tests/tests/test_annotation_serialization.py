@@ -266,7 +266,8 @@ def test_description_constructor_preserves_new_fields(description_type, empty):
 
 @pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS[:2])
 @pytest.mark.parametrize(
-    "authors", [["Doe, Jane", "Bob"], [""], ["", "Doe, Jane", ""], ["Alice", "Bob"]]
+    "authors",
+    [[], ["Doe, Jane", "Bob"], [""], ["", "Doe, Jane", ""], ["Alice", "Bob"]],
 )
 def test_protobuf_author_entries_survive_round_trip(
     factory, root_type, message_type, kind, authors
@@ -274,8 +275,29 @@ def test_protobuf_author_entries_survive_round_trip(
     message = message_type.FromString(factory().to_bytes())
     message.description.authors.extend(authors)
     root = root_type.from_bytes(message.SerializeToString())
+    assert root.authors == authors
+    root.authors.append("Only edit the returned list")
+    assert root.authors == authors
     restored = message_type.FromString(root.to_bytes())
     assert list(restored.description.authors) == authors
+    assert root_type.from_bytes(root.to_bytes()).authors == authors
+
+
+@pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS[:2])
+def test_author_getter_follows_annotation_dictionary_edits(
+    factory, root_type, message_type, kind
+):
+    message = message_type.FromString(factory().to_bytes())
+    message.description.authors.extend(["Doe, Jane", "Bob"])
+    root = root_type.from_bytes(message.SerializeToString())
+    key = f"org.ommx.v1.{kind}.authors"
+    root.annotations[key] = "Carol,Dan"
+    assert root.authors == ["Carol", "Dan"]
+    root.annotations = {key: "Eve"}
+    assert root.authors == ["Eve"]
+    del root.annotations[key]
+    assert root.authors == []
+    assert list(message_type.FromString(root.to_bytes()).description.authors) == []
 
 
 @pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS[:2])
@@ -303,6 +325,7 @@ def test_explicit_author_list_overrides_ambiguous_protobuf_entries(
     message.description.authors.append("")
     root = root_type.from_bytes(message.SerializeToString())
     root.authors = authors
+    assert root.authors == authors
     assert root.annotations[f"org.ommx.v1.{kind}.authors"] == ",".join(authors)
     assert list(message_type.FromString(root.to_bytes()).description.authors) == authors
     materialized = (
@@ -310,11 +333,13 @@ def test_explicit_author_list_overrides_ambiguous_protobuf_entries(
         if isinstance(root, Instance)
         else root.with_parameters({})
     )
+    assert materialized.authors == authors
     assert (
         list(InstanceMessage.FromString(materialized.to_bytes()).description.authors)
         == authors
     )
     root.annotations[f"org.ommx.v1.{kind}.authors"] = "Carol,Dan"
+    assert root.authors == ["Carol", "Dan"]
     assert list(message_type.FromString(root.to_bytes()).description.authors) == [
         "Carol",
         "Dan",

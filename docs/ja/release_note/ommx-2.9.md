@@ -9,6 +9,8 @@
 Instanceのタイトル、説明、作成ツール名、ライセンス、データセット、著者、作成日時はprotobufのDescriptionに、
 求解・サンプリングの来歴はProcessMetadataに保存されます。
 既存の変更可能な `annotations` 辞書とアノテーション用メソッドは引き続き使えます。
+`authors` プロパティは、カンマを含む名前や空の名前を含めてprotobufの各要素を保持し、
+アノテーション辞書への編集も反映します。
 
 ```python
 from ommx import Instance
@@ -32,6 +34,10 @@ optionalな文字列フィールドに明示的な空文字がある場合も、
 シリアライズ時に拒否されます。追加したprotobufフィールドはSDK v3と同じフィールド番号を使い、
 `format_version = 0` を維持します。旧SDKでも数理モデルは読み込めますが、デコードして
 再エンコードすると追加のメタデータが消失する場合があります。
+
+Rustのモデル型には、拡張アノテーションの予約キーを検出するとエラーを返す
+`try_to_bytes()` を追加しました。既存の `to_bytes()` は戻り値の `Vec<u8>` を維持し、
+そのような不正なキーがある場合はpanicします。
 
 `ommx.v1` のprotobuf定義は、`Function.Expression` の定義を含めてSDK v3と共通です。
 SDK 2.xではこの関数表現は引き続き未対応であり、V1 Bridgeを含めてRust側の関数・モデルへ

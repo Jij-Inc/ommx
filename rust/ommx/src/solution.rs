@@ -129,7 +129,7 @@ pub struct Solution {
     /// Provenance for the optimization process that produced this solution.
     pub metadata: Option<crate::v1::ProcessMetadata>,
     /// Extension annotations persisted in protobuf. OMMX metadata belongs in `metadata`.
-    /// Keys must not start with `org.ommx.v1.`; protobuf parsers reject reserved keys.
+    /// Keys must not start with `org.ommx.v1.`; protobuf parsers and serializers reject reserved keys.
     pub annotations: std::collections::HashMap<String, String>,
 }
 

@@ -95,7 +95,7 @@ pub struct Instance {
     pub parameters: Option<v1::Parameters>,
     pub description: Option<v1::instance::Description>,
     /// Extension annotations persisted in protobuf. OMMX metadata belongs in `description`.
-    /// Keys must not start with `org.ommx.v1.`; protobuf parsers reject reserved keys.
+    /// Keys must not start with `org.ommx.v1.`; protobuf parsers and serializers reject reserved keys.
     pub annotations: std::collections::HashMap<String, String>,
 }
 
@@ -159,6 +159,6 @@ pub struct ParametricInstance {
     // These fields are public since arbitrary values can be set without validation.
     pub description: Option<v1::instance::Description>,
     /// Extension annotations persisted in protobuf. OMMX metadata belongs in `description`.
-    /// Keys must not start with `org.ommx.v1.`; protobuf parsers reject reserved keys.
+    /// Keys must not start with `org.ommx.v1.`; protobuf parsers and serializers reject reserved keys.
     pub annotations: std::collections::HashMap<String, String>,
 }

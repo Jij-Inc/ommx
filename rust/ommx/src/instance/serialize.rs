@@ -1,11 +1,23 @@
 use super::*;
-use crate::{v1, Message, Parse};
+use crate::{v1, Message, Parse, ParseError};
 use anyhow::Result;
 
 impl Instance {
+    /// Serialize this instance as an OMMX v1 protobuf payload.
+    ///
+    /// # Panics
+    /// Panics if an extension annotation uses the reserved `org.ommx.v1.` namespace.
+    /// Use [`Self::try_to_bytes`] to handle validation errors.
     pub fn to_bytes(&self) -> Vec<u8> {
+        self.try_to_bytes()
+            .expect("Cannot serialize invalid OMMX extension annotations")
+    }
+
+    /// Serialize this instance after validating extension annotation keys.
+    pub fn try_to_bytes(&self) -> Result<Vec<u8>, ParseError> {
+        crate::parse::validate_extension_annotations(&self.annotations, "ommx.v1.Instance")?;
         let v1_instance = v1::Instance::from(self.clone());
-        v1_instance.encode_to_vec()
+        Ok(v1_instance.encode_to_vec())
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
@@ -15,9 +27,24 @@ impl Instance {
 }
 
 impl ParametricInstance {
+    /// Serialize this parametric instance as an OMMX v1 protobuf payload.
+    ///
+    /// # Panics
+    /// Panics if an extension annotation uses the reserved `org.ommx.v1.` namespace.
+    /// Use [`Self::try_to_bytes`] to handle validation errors.
     pub fn to_bytes(&self) -> Vec<u8> {
+        self.try_to_bytes()
+            .expect("Cannot serialize invalid OMMX extension annotations")
+    }
+
+    /// Serialize this parametric instance after validating extension annotation keys.
+    pub fn try_to_bytes(&self) -> Result<Vec<u8>, ParseError> {
+        crate::parse::validate_extension_annotations(
+            &self.annotations,
+            "ommx.v1.ParametricInstance",
+        )?;
         let v1_instance = v1::ParametricInstance::from(self.clone());
-        v1_instance.encode_to_vec()
+        Ok(v1_instance.encode_to_vec())
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
@@ -132,5 +159,57 @@ mod annotation_tests {
             .unwrap_err()
             .to_string()
             .contains("reserved"));
+    }
+
+    #[test]
+    fn reserved_annotations_are_rejected_before_serializing_all_roots() {
+        macro_rules! check_root {
+            ($root:expr, $ty:ty, $message:literal) => {{
+                let mut root = $root;
+                let key = "org.ommx.v1.custom";
+                root.annotations.insert(key.into(), "invalid".into());
+
+                let error = root.try_to_bytes().unwrap_err();
+                assert!(matches!(
+                    error.error,
+                    crate::RawParseError::ReservedAnnotationKey { key: reserved } if reserved == key
+                ));
+                assert_eq!(error.context[0].message, $message);
+                assert_eq!(error.context[0].field, "annotations");
+                assert!(std::panic::catch_unwind(|| root.to_bytes()).is_err());
+                assert_eq!(root.annotations[key], "invalid");
+
+                // A rejected write does not prevent recovery and a valid round-trip.
+                root.annotations.remove(key);
+                root.annotations.insert("com.example.owner".into(), "Alice".into());
+                let restored = <$ty>::from_bytes(&root.try_to_bytes().unwrap()).unwrap();
+                assert_eq!(restored.annotations, root.annotations);
+            }};
+        }
+
+        check_root!(Instance::default(), Instance, "ommx.v1.Instance");
+        check_root!(
+            ParametricInstance::from(Instance::default()),
+            ParametricInstance,
+            "ommx.v1.ParametricInstance"
+        );
+        check_root!(
+            Instance::default()
+                .evaluate(&v1::State::default(), ATol::default())
+                .unwrap(),
+            Solution,
+            "ommx.v1.Solution"
+        );
+        check_root!(
+            SampleSet::builder()
+                .decision_variables(Default::default())
+                .constraints(Default::default())
+                .objectives(crate::Sampled::from(0.0))
+                .sense(crate::Sense::Minimize)
+                .build()
+                .unwrap(),
+            SampleSet,
+            "ommx.v1.SampleSet"
+        );
     }
 }

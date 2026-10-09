@@ -183,6 +183,7 @@ class Instance(UserAnnotationBase):
 
     def __post_init__(self) -> None:
         message = _Instance.FromString(self.raw.to_bytes())
+        self._annotation_lists = {"authors": list(message.description.authors)}
         for key, value in _annotations_from_proto(
             message, self.annotation_namespace
         ).items():
@@ -2098,6 +2099,7 @@ class ParametricInstance(UserAnnotationBase):
 
     def __post_init__(self) -> None:
         message = _ParametricInstance.FromString(self.raw.SerializeToString())
+        self._annotation_lists = {"authors": list(message.description.authors)}
         for key, value in _annotations_from_proto(
             message, self.annotation_namespace
         ).items():

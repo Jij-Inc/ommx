@@ -10,6 +10,8 @@ titles, descriptions, creator names, licenses, datasets, authors, and creation
 times are stored in protobuf Description fields; solution and sampling provenance
 is stored in ProcessMetadata.
 The existing mutable `annotations` dictionaries and annotation helpers remain available.
+The `authors` property preserves individual protobuf entries, including names
+containing commas and empty names, while reflecting edits to the annotation dictionary.
 
 ```python
 from ommx import Instance
@@ -33,6 +35,10 @@ Custom annotations must use a user or third-party namespace; the
 unknown keys in that namespace. The added protobuf fields use the same field
 numbers as SDK v3 and keep `format_version = 0`. Older SDKs can still read the
 mathematical model, but may discard the added metadata when decoding and re-encoding it.
+
+The Rust domain types expose `try_to_bytes()` to return an error for reserved
+extension annotation keys. Their existing `to_bytes()` methods retain the
+`Vec<u8>` return type and panic on those invalid keys.
 
 The `ommx.v1` protobuf definitions are shared with SDK v3, including the
 `Function.Expression` schema. SDK 2.x continues to reject this unsupported
