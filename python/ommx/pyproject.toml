@@ -44,6 +44,9 @@ dependencies = [
   "typing-extensions >= 4.12.2, < 5.0.0",
 ]
 
+[project.scripts]
+ommx = "ommx.cli:_console_main"
+
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"

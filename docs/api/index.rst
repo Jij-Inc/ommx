@@ -18,6 +18,7 @@ Utilities
    :maxdepth: 1
 
    ../autoapi/ommx/adapter/index
+   ../autoapi/ommx/cli/index
    ../autoapi/ommx/dataset/index
    ../autoapi/ommx/display/index
    ../autoapi/ommx/testing/index

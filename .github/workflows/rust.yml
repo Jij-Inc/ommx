@@ -46,6 +46,7 @@ jobs:
         with:
           # Add ommx-pyo3-bridge after its first crates.io publication.
           package: ommx
+          features: cli
 
   test:
     runs-on: ubuntu-latest

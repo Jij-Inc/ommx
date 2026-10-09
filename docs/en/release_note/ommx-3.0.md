@@ -17,6 +17,21 @@ Constraints removed by the penalty phase now store their encoded expressions.
 Their evaluated values and the original output objective are preserved through
 decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
 
+### 🆕 Run the OMMX CLI from the Python SDK ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
+
+Installing the Python SDK now provides the `ommx` command. In a uv project
+that depends on `ommx`, run:
+
+```bash
+uv run ommx --help
+uv run ommx list
+```
+
+The console script shares argument parsing, command execution, and terminal
+output with the Rust executable, including `OMMX_LOCAL_REGISTRY_ROOT` support.
+`inspect` now prints JSON object keys in a stable order. See the
+{ref}`Local Registry cleanup workflow <experiment-cleanup-workflow>`.
+
 ## 3.0.0 Beta 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b7)
