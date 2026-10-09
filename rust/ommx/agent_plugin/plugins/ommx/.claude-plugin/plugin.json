@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "author": {
-    "name": "Jij Inc.",
-    "url": "https://www.jijzept.com"
+    "name": "JIJ Inc.",
+    "url": "https://www.j-ij.com/"
   },
   "description": "Agent plugin bundle distributed by the OMMX CLI.",
   "homepage": "https://jij-inc.github.io/ommx/",
