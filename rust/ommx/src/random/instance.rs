@@ -238,6 +238,8 @@ impl Arbitrary for Description {
                 description,
                 authors,
                 created_by,
+                // Preserve the legacy generator space; annotation round-trip tests sample the new fields.
+                ..Default::default()
             })
             .boxed()
     }

@@ -2,6 +2,51 @@
 
 ## Bug Fixes
 
+### Preserve annotations in protobuf payloads ([#1262](https://github.com/Jij-Inc/ommx/pull/1262))
+
+`Instance`, `ParametricInstance`, `Solution`, and `SampleSet` now retain user
+annotations and typed metadata through `to_bytes()` / `from_bytes()`. Instance
+titles, descriptions, creator names, licenses, datasets, authors, and creation
+times are stored in protobuf Description fields; solution and sampling provenance
+is stored in ProcessMetadata.
+The existing mutable `annotations` dictionaries and annotation helpers remain available.
+The `authors` property preserves individual protobuf entries, including names
+containing commas and empty names, while reflecting edits to the annotation dictionary.
+
+```python
+from ommx import Instance
+
+instance = Instance.empty()
+instance.title = "My model"
+instance.add_user_annotation("source", "python")
+restored = Instance.from_bytes(instance.to_bytes())
+assert restored.title == "My model"
+assert restored.get_user_annotation("source") == "python"
+```
+
+Model conversions, partial evaluation, parameter materialization, and sample
+projection also retain annotations. Artifact readers merge legacy descriptor-only
+annotations, with protobuf metadata taking precedence when both sources contain
+the same key. An explicitly present optional string also takes precedence when
+its value is empty. Variable and constraint counts remain Artifact descriptor annotations.
+
+Non-reserved annotation keys and values accept arbitrary strings. The
+`org.ommx.v1.*` namespace is reserved for OMMX metadata; Python serialization
+rejects unknown keys in that namespace. The added protobuf fields use the same field
+numbers as SDK v3 and keep `format_version = 0`. Older SDKs can still read the
+mathematical model, but may discard the added metadata when decoding and re-encoding it.
+
+Rust protobuf conversion omits reserved keys from the extension annotation map,
+including when callers have directly mutated the public map. `to_bytes()` retains
+its `Vec<u8>` return type and does not panic on those keys. Reading protobuf
+extension maps containing reserved keys still returns an error.
+
+The `ommx.v1` protobuf definitions are shared with SDK v3, including the
+`Function.Expression` schema. SDK 2.x continues to reject this unsupported
+function representation when converting it into Rust-backed functions or models,
+including through the V1 bridge. `ParametricInstance.from_bytes()` retains its
+existing deferred validation behavior.
+
 ### Batch integer encoding before penalty construction (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
 
 `Instance.log_encode()` processes all selected integers in one batch, validating

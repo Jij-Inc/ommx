@@ -75,6 +75,10 @@ pub enum RawParseError {
     )]
     UnsupportedV1Function,
 
+    /// OMMX metadata must be represented by its dedicated protobuf fields.
+    #[error("Annotation key `{key}` is reserved for OMMX metadata; use description or metadata fields instead.")]
+    ReservedAnnotationKey { key: String },
+
     /// The message's `format_version` exceeds what this SDK supports.
     /// The data was produced by a newer SDK whose format is not backward compatible with this one.
     #[error(
@@ -137,6 +141,21 @@ impl RawParseError {
             error: self,
         }
     }
+}
+
+// Shared protobuf boundary for the four annotated root objects.
+pub(crate) fn validate_extension_annotations(
+    annotations: &std::collections::HashMap<String, String>,
+    message: &'static str,
+) -> Result<(), ParseError> {
+    if let Some(key) = annotations
+        .keys()
+        .find(|key| crate::annotations::is_reserved_annotation_key(key))
+    {
+        return Err(RawParseError::ReservedAnnotationKey { key: key.clone() }
+            .context(message, "annotations"));
+    }
+    Ok(())
 }
 
 /// Validate that a message's `format_version` does not exceed what this SDK accepts.

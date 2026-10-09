@@ -126,6 +126,12 @@ pub struct Solution {
     pub relaxation: crate::v1::Relaxation,
     #[getset(get = "pub")]
     sense: Option<Sense>,
+    /// Provenance for the optimization process that produced this solution.
+    pub metadata: Option<crate::v1::ProcessMetadata>,
+    /// Extension annotations persisted in protobuf. OMMX metadata belongs in `metadata`.
+    /// Non-reserved keys and values are arbitrary strings. Reserved `org.ommx.v1.*`
+    /// keys are omitted during protobuf export and rejected on import.
+    pub annotations: std::collections::HashMap<String, String>,
 }
 
 impl Solution {
@@ -686,6 +692,8 @@ impl SolutionBuilder {
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
+            metadata: None,
+            annotations: Default::default(),
         })
     }
 
@@ -731,6 +739,8 @@ impl SolutionBuilder {
             optimality: self.optimality,
             relaxation: self.relaxation,
             sense: Some(sense),
+            metadata: None,
+            annotations: Default::default(),
         })
     }
 }

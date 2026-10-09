@@ -94,6 +94,10 @@ pub struct Instance {
     // These fields are public since arbitrary values can be set without validation.
     pub parameters: Option<v1::Parameters>,
     pub description: Option<v1::instance::Description>,
+    /// Extension annotations persisted in protobuf. OMMX metadata belongs in `description`.
+    /// Non-reserved keys and values are arbitrary strings. Reserved `org.ommx.v1.*`
+    /// keys are omitted during protobuf export and rejected on import.
+    pub annotations: std::collections::HashMap<String, String>,
 }
 
 /// Optimization problem instance with parameters
@@ -155,4 +159,8 @@ pub struct ParametricInstance {
     // Optional fields for additional metadata.
     // These fields are public since arbitrary values can be set without validation.
     pub description: Option<v1::instance::Description>,
+    /// Extension annotations persisted in protobuf. OMMX metadata belongs in `description`.
+    /// Non-reserved keys and values are arbitrary strings. Reserved `org.ommx.v1.*`
+    /// keys are omitted during protobuf export and rejected on import.
+    pub annotations: std::collections::HashMap<String, String>,
 }

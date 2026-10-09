@@ -17,8 +17,9 @@ DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
 class ConstraintHints(google.protobuf.message.Message):
-    """A constraint hint is an additional inforomation to be used by solver to gain performance.
-    They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+    """Constraint hints are advisory information derived from one or more regular constraints
+    and may be used by a solver to improve performance. Readers may ignore them. They do not
+    replace the referenced constraints or certify mathematical equivalence to a special constraint.
     """
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor

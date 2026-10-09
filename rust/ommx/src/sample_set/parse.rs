@@ -9,6 +9,7 @@ impl Parse for crate::v1::SampleSet {
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.SampleSet";
         crate::parse::check_format_version(self.format_version, message)?;
+        crate::parse::validate_extension_annotations(&self.annotations, message)?;
 
         // Parse decision variables into BTreeMap
         let mut decision_variables = BTreeMap::new();
@@ -55,7 +56,7 @@ impl Parse for crate::v1::SampleSet {
         })?;
 
         // Create SampleSet with validation
-        let sample_set = SampleSet::builder()
+        let mut sample_set = SampleSet::builder()
             .decision_variables(decision_variables)
             .objectives(objectives)
             .constraints(constraints)
@@ -99,6 +100,8 @@ impl Parse for crate::v1::SampleSet {
             }
         }
 
+        sample_set.metadata = self.metadata.map(|metadata| *metadata);
+        sample_set.annotations = self.annotations;
         Ok(sample_set)
     }
 }
@@ -149,6 +152,8 @@ impl From<SampleSet> for crate::v1::SampleSet {
             feasible_relaxed,
             feasible,
             sense,
+            metadata: sample_set.metadata.map(Box::new),
+            annotations: crate::annotations::protobuf_extension_annotations(sample_set.annotations),
             ..Default::default()
         }
     }

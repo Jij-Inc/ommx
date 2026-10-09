@@ -2,6 +2,48 @@
 
 ## バグ修正
 
+### protobufシリアライズ時のアノテーション消失を修正 ([#1262](https://github.com/Jij-Inc/ommx/pull/1262))
+
+`Instance`、`ParametricInstance`、`Solution`、`SampleSet` のユーザーアノテーションと
+メタデータが、`to_bytes()` / `from_bytes()` の往復で保持されるようになりました。
+Instanceのタイトル、説明、作成ツール名、ライセンス、データセット、著者、作成日時はprotobufのDescriptionに、
+求解・サンプリングの来歴はProcessMetadataに保存されます。
+既存の変更可能な `annotations` 辞書とアノテーション用メソッドは引き続き使えます。
+`authors` プロパティは、カンマを含む名前や空の名前を含めてprotobufの各要素を保持し、
+アノテーション辞書への編集も反映します。
+
+```python
+from ommx import Instance
+
+instance = Instance.empty()
+instance.title = "My model"
+instance.add_user_annotation("source", "python")
+restored = Instance.from_bytes(instance.to_bytes())
+assert restored.title == "My model"
+assert restored.get_user_annotation("source") == "python"
+```
+
+モデル変換、部分評価、パラメータの具体化、サンプルからSolutionへの取り出しでも
+アノテーションを保持します。Artifactの読み込みでは、旧形式のdescriptorにのみ保存された
+アノテーションを補完し、同じキーが両方にある場合はprotobuf側の値を優先します。
+optionalな文字列フィールドに明示的な空文字がある場合も、protobuf側の値を優先します。
+変数数と制約数は引き続きArtifactのdescriptorアノテーションとして扱います。
+
+予約されていないアノテーションのキーと値には、任意の文字列を保存できます。
+`org.ommx.v1.*` はOMMXのメタデータ用に予約されており、この名前空間の未知のキーは
+Python側のシリアライズ時に拒否されます。追加したprotobufフィールドはSDK v3と同じフィールド番号を使い、
+`format_version = 0` を維持します。旧SDKでも数理モデルは読み込めますが、デコードして
+再エンコードすると追加のメタデータが消失する場合があります。
+
+Rust側のprotobuf変換は、拡張アノテーションのmapから予約キーを除外します。
+公開mapへ直接書き込んだ場合も、`to_bytes()` は戻り値の `Vec<u8>` を維持し、
+予約キーによるpanicは発生しません。外部protobufの拡張mapに予約キーがある場合は、
+読み込み時に引き続きエラーを返します。
+
+`ommx.v1` のprotobuf定義は、`Function.Expression` の定義を含めてSDK v3と共通です。
+SDK 2.xではこの関数表現は引き続き未対応であり、V1 Bridgeを含めてRust側の関数・モデルへ
+変換する時点で拒否します。`ParametricInstance.from_bytes()` は従来どおり検証を遅延します。
+
 ### penalty構築前の整数エンコードと一括置換 (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
 
 `Instance.log_encode()` は、指定された整数変数をまとめてエンコードします。

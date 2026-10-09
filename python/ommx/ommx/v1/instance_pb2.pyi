@@ -105,10 +105,19 @@ class Instance(google.protobuf.message.Message):
         DESCRIPTION_FIELD_NUMBER: builtins.int
         AUTHORS_FIELD_NUMBER: builtins.int
         CREATED_BY_FIELD_NUMBER: builtins.int
+        CREATED_FIELD_NUMBER: builtins.int
+        LICENSE_FIELD_NUMBER: builtins.int
+        DATASET_FIELD_NUMBER: builtins.int
         name: builtins.str
         description: builtins.str
         created_by: builtins.str
         """The application or library name that created this message."""
+        created: builtins.str
+        """When this instance was created, encoded as an RFC3339 string."""
+        license: builtins.str
+        """SPDX license identifier for this instance or dataset."""
+        dataset: builtins.str
+        """Name of the dataset this instance belongs to."""
         @property
         def authors(
             self,
@@ -122,20 +131,35 @@ class Instance(google.protobuf.message.Message):
             description: builtins.str | None = ...,
             authors: collections.abc.Iterable[builtins.str] | None = ...,
             created_by: builtins.str | None = ...,
+            created: builtins.str | None = ...,
+            license: builtins.str | None = ...,
+            dataset: builtins.str | None = ...,
         ) -> None: ...
         def HasField(
             self,
             field_name: typing.Literal[
+                "_created",
+                b"_created",
                 "_created_by",
                 b"_created_by",
+                "_dataset",
+                b"_dataset",
                 "_description",
                 b"_description",
+                "_license",
+                b"_license",
                 "_name",
                 b"_name",
+                "created",
+                b"created",
                 "created_by",
                 b"created_by",
+                "dataset",
+                b"dataset",
                 "description",
                 b"description",
+                "license",
+                b"license",
                 "name",
                 b"name",
             ],
@@ -143,30 +167,54 @@ class Instance(google.protobuf.message.Message):
         def ClearField(
             self,
             field_name: typing.Literal[
+                "_created",
+                b"_created",
                 "_created_by",
                 b"_created_by",
+                "_dataset",
+                b"_dataset",
                 "_description",
                 b"_description",
+                "_license",
+                b"_license",
                 "_name",
                 b"_name",
                 "authors",
                 b"authors",
+                "created",
+                b"created",
                 "created_by",
                 b"created_by",
+                "dataset",
+                b"dataset",
                 "description",
                 b"description",
+                "license",
+                b"license",
                 "name",
                 b"name",
             ],
         ) -> None: ...
         @typing.overload
         def WhichOneof(
+            self, oneof_group: typing.Literal["_created", b"_created"]
+        ) -> typing.Literal["created"] | None: ...
+        @typing.overload
+        def WhichOneof(
             self, oneof_group: typing.Literal["_created_by", b"_created_by"]
         ) -> typing.Literal["created_by"] | None: ...
         @typing.overload
         def WhichOneof(
+            self, oneof_group: typing.Literal["_dataset", b"_dataset"]
+        ) -> typing.Literal["dataset"] | None: ...
+        @typing.overload
+        def WhichOneof(
             self, oneof_group: typing.Literal["_description", b"_description"]
         ) -> typing.Literal["description"] | None: ...
+        @typing.overload
+        def WhichOneof(
+            self, oneof_group: typing.Literal["_license", b"_license"]
+        ) -> typing.Literal["license"] | None: ...
         @typing.overload
         def WhichOneof(
             self, oneof_group: typing.Literal["_name", b"_name"]
@@ -194,6 +242,24 @@ class Instance(google.protobuf.message.Message):
             self, field_name: typing.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
 
+    @typing.final
+    class AnnotationsEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
+        def __init__(
+            self,
+            *,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
     DESCRIPTION_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     OBJECTIVE_FIELD_NUMBER: builtins.int
@@ -204,6 +270,7 @@ class Instance(google.protobuf.message.Message):
     REMOVED_CONSTRAINTS_FIELD_NUMBER: builtins.int
     DECISION_VARIABLE_DEPENDENCY_FIELD_NUMBER: builtins.int
     NAMED_FUNCTIONS_FIELD_NUMBER: builtins.int
+    ANNOTATIONS_FIELD_NUMBER: builtins.int
     FORMAT_VERSION_FIELD_NUMBER: builtins.int
     sense: global___Instance.Sense.ValueType
     """The sense of this problem, i.e. minimize the objective or maximize it.
@@ -216,7 +283,7 @@ class Instance(google.protobuf.message.Message):
 
     - 0 means the format as of OMMX Python SDK 2.5.1 and earlier.
     - This is only bumped by semantic-breaking format changes (major-only; no minor/patch).
-    - Each SDK declares an accepted maximum; reading data with a higher version fails with an "upgrade the SDK" error.
+    - Each SDK declares a current version; it writes that value and accepts any `<= current`. Data with a higher version fails with an "upgrade the SDK" error.
     - Non-semantic-breaking additions keep protobuf's standard forward compatibility (unknown fields ignored) and do not bump this.
     """
     @property
@@ -273,6 +340,17 @@ class Instance(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
         ommx.v1.named_function_pb2.NamedFunction
     ]: ...
+    @property
+    def annotations(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """User-defined or third-party extension annotations.
+
+        OMMX-reserved metadata must use explicit fields such as `description`.
+        Keys in this map must be valid reverse-domain names and must not start with
+        `org.ommx.v1.`.
+        """
+
     def __init__(
         self,
         *,
@@ -299,6 +377,7 @@ class Instance(google.protobuf.message.Message):
             ommx.v1.named_function_pb2.NamedFunction
         ]
         | None = ...,
+        annotations: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
         format_version: builtins.int = ...,
     ) -> None: ...
     def HasField(
@@ -321,6 +400,8 @@ class Instance(google.protobuf.message.Message):
         field_name: typing.Literal[
             "_parameters",
             b"_parameters",
+            "annotations",
+            b"annotations",
             "constraint_hints",
             b"constraint_hints",
             "constraints",

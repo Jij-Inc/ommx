@@ -115,10 +115,131 @@ class State(google.protobuf.message.Message):
 global___State = State
 
 @typing.final
+class ProcessMetadata(google.protobuf.message.Message):
+    """Metadata for an optimization or sampling process that produced a Solution or SampleSet."""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    INSTANCE_FIELD_NUMBER: builtins.int
+    SOLVER_FIELD_NUMBER: builtins.int
+    PARAMETERS_FIELD_NUMBER: builtins.int
+    START_FIELD_NUMBER: builtins.int
+    END_FIELD_NUMBER: builtins.int
+    instance: builtins.str
+    """Digest of the corresponding Instance, when this output is stored with one."""
+    solver: builtins.str
+    """Solver or sampler information encoded as JSON."""
+    parameters: builtins.str
+    """Solver or sampler parameters encoded as JSON."""
+    start: builtins.str
+    """Solver or sampler start time encoded as an RFC3339 string."""
+    end: builtins.str
+    """Solver or sampler end time encoded as an RFC3339 string."""
+    def __init__(
+        self,
+        *,
+        instance: builtins.str | None = ...,
+        solver: builtins.str | None = ...,
+        parameters: builtins.str | None = ...,
+        start: builtins.str | None = ...,
+        end: builtins.str | None = ...,
+    ) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_end",
+            b"_end",
+            "_instance",
+            b"_instance",
+            "_parameters",
+            b"_parameters",
+            "_solver",
+            b"_solver",
+            "_start",
+            b"_start",
+            "end",
+            b"end",
+            "instance",
+            b"instance",
+            "parameters",
+            b"parameters",
+            "solver",
+            b"solver",
+            "start",
+            b"start",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_end",
+            b"_end",
+            "_instance",
+            b"_instance",
+            "_parameters",
+            b"_parameters",
+            "_solver",
+            b"_solver",
+            "_start",
+            b"_start",
+            "end",
+            b"end",
+            "instance",
+            b"instance",
+            "parameters",
+            b"parameters",
+            "solver",
+            b"solver",
+            "start",
+            b"start",
+        ],
+    ) -> None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_end", b"_end"]
+    ) -> typing.Literal["end"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_instance", b"_instance"]
+    ) -> typing.Literal["instance"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_parameters", b"_parameters"]
+    ) -> typing.Literal["parameters"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_solver", b"_solver"]
+    ) -> typing.Literal["solver"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_start", b"_start"]
+    ) -> typing.Literal["start"] | None: ...
+
+global___ProcessMetadata = ProcessMetadata
+
+@typing.final
 class Solution(google.protobuf.message.Message):
     """Solution with evaluated objective and constraints"""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    @typing.final
+    class AnnotationsEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
+        def __init__(
+            self,
+            *,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
 
     STATE_FIELD_NUMBER: builtins.int
     OBJECTIVE_FIELD_NUMBER: builtins.int
@@ -131,6 +252,8 @@ class Solution(google.protobuf.message.Message):
     OPTIMALITY_FIELD_NUMBER: builtins.int
     RELAXATION_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
+    METADATA_FIELD_NUMBER: builtins.int
+    ANNOTATIONS_FIELD_NUMBER: builtins.int
     FORMAT_VERSION_FIELD_NUMBER: builtins.int
     objective: builtins.float
     feasible: builtins.bool
@@ -180,6 +303,21 @@ class Solution(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
         ommx.v1.named_function_pb2.EvaluatedNamedFunction
     ]: ...
+    @property
+    def metadata(self) -> global___ProcessMetadata:
+        """OMMX-defined provenance metadata for this Solution."""
+
+    @property
+    def annotations(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """User-defined or third-party extension annotations.
+
+        OMMX-reserved metadata must use explicit fields such as `metadata`.
+        Keys in this map must be valid reverse-domain names and must not start with
+        `org.ommx.v1.`.
+        """
+
     def __init__(
         self,
         *,
@@ -203,6 +341,8 @@ class Solution(google.protobuf.message.Message):
         optimality: global___Optimality.ValueType = ...,
         relaxation: global___Relaxation.ValueType = ...,
         sense: ommx.v1.instance_pb2.Instance.Sense.ValueType = ...,
+        metadata: global___ProcessMetadata | None = ...,
+        annotations: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
         format_version: builtins.int = ...,
     ) -> None: ...
     def HasField(
@@ -212,6 +352,8 @@ class Solution(google.protobuf.message.Message):
             b"_feasible_relaxed",
             "feasible_relaxed",
             b"feasible_relaxed",
+            "metadata",
+            b"metadata",
             "state",
             b"state",
         ],
@@ -221,6 +363,8 @@ class Solution(google.protobuf.message.Message):
         field_name: typing.Literal[
             "_feasible_relaxed",
             b"_feasible_relaxed",
+            "annotations",
+            b"annotations",
             "decision_variables",
             b"decision_variables",
             "evaluated_constraints",
@@ -235,6 +379,8 @@ class Solution(google.protobuf.message.Message):
             b"feasible_unrelaxed",
             "format_version",
             b"format_version",
+            "metadata",
+            b"metadata",
             "objective",
             b"objective",
             "optimality",

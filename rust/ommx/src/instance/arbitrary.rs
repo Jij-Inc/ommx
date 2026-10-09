@@ -240,6 +240,7 @@ impl Arbitrary for Instance {
                                     removed_constraints: Default::default(),
                                     decision_variable_dependency: Default::default(),
                                     description: None,
+                                    annotations: Default::default(),
                                 }
                             },
                         )

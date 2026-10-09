@@ -19,7 +19,7 @@ from ommx.v1 import quadratic_pb2 as ommx_dot_v1_dot_quadratic__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x16ommx/v1/function.proto\x12\x07ommx.v1\x1a\x14ommx/v1/linear.proto\x1a\x18ommx/v1/polynomial.proto\x1a\x17ommx/v1/quadratic.proto"\xca\x01\n\x08\x46unction\x12\x1c\n\x08\x63onstant\x18\x01 \x01(\x01H\x00R\x08\x63onstant\x12)\n\x06linear\x18\x02 \x01(\x0b\x32\x0f.ommx.v1.LinearH\x00R\x06linear\x12\x32\n\tquadratic\x18\x03 \x01(\x0b\x32\x12.ommx.v1.QuadraticH\x00R\tquadratic\x12\x35\n\npolynomial\x18\x04 \x01(\x0b\x32\x13.ommx.v1.PolynomialH\x00R\npolynomialB\n\n\x08\x66unctionb\x06proto3'
+    b'\n\x16ommx/v1/function.proto\x12\x07ommx.v1\x1a\x14ommx/v1/linear.proto\x1a\x18ommx/v1/polynomial.proto\x1a\x17ommx/v1/quadratic.proto"\x80\x0c\n\x08\x46unction\x12\x1c\n\x08\x63onstant\x18\x01 \x01(\x01H\x00R\x08\x63onstant\x12)\n\x06linear\x18\x02 \x01(\x0b\x32\x0f.ommx.v1.LinearH\x00R\x06linear\x12\x32\n\tquadratic\x18\x03 \x01(\x0b\x32\x12.ommx.v1.QuadraticH\x00R\tquadratic\x12\x35\n\npolynomial\x18\x04 \x01(\x0b\x32\x13.ommx.v1.PolynomialH\x00R\npolynomial\x12>\n\nexpression\x18\x05 \x01(\x0b\x32\x1c.ommx.v1.Function.ExpressionH\x00R\nexpression\x1a\xf3\t\n\nExpression\x12L\n\x0cinstructions\x18\x01 \x03(\x0b\x32(.ommx.v1.Function.Expression.InstructionR\x0cinstructions\x1a\x96\t\n\x0bInstruction\x12\x1c\n\x08\x63onstant\x18\x01 \x01(\x01H\x00R\x08\x63onstant\x12)\n\x06linear\x18\x02 \x01(\x0b\x32\x0f.ommx.v1.LinearH\x00R\x06linear\x12\x32\n\tquadratic\x18\x03 \x01(\x0b\x32\x12.ommx.v1.QuadraticH\x00R\tquadratic\x12\x35\n\npolynomial\x18\x04 \x01(\x0b\x32\x13.ommx.v1.PolynomialH\x00R\npolynomial\x12O\n\x05unary\x18\x05 \x01(\x0b\x32\x37.ommx.v1.Function.Expression.Instruction.UnaryOperationH\x00R\x05unary\x12\x61\n\x0b\x61ssociative\x18\x06 \x01(\x0b\x32=.ommx.v1.Function.Expression.Instruction.AssociativeOperationH\x00R\x0b\x61ssociative\x12R\n\x06\x62inary\x18\x07 \x01(\x0b\x32\x38.ommx.v1.Function.Expression.Instruction.BinaryOperationH\x00R\x06\x62inary\x1a\xa5\x02\n\x0eUnaryOperation\x12\\\n\x08operator\x18\x01 \x01(\x0e\x32@.ommx.v1.Function.Expression.Instruction.UnaryOperation.OperatorR\x08operator\x12.\n\x10integer_exponent\x18\x02 \x01(\x11H\x00R\x0fintegerExponent\x88\x01\x01"p\n\x08Operator\x12\x18\n\x14OPERATOR_UNSPECIFIED\x10\x00\x12\x10\n\x0cOPERATOR_NEG\x10\x01\x12\x10\n\x0cOPERATOR_ABS\x10\x02\x12\x13\n\x0fOPERATOR_SIGNUM\x10\x03\x12\x11\n\rOPERATOR_POWI\x10\x04\x42\x13\n\x11_integer_exponent\x1a\xe8\x01\n\x14\x41ssociativeOperation\x12\x62\n\x08operator\x18\x01 \x01(\x0e\x32\x46.ommx.v1.Function.Expression.Instruction.AssociativeOperation.OperatorR\x08operator"l\n\x08Operator\x12\x18\n\x14OPERATOR_UNSPECIFIED\x10\x00\x12\x10\n\x0cOPERATOR_ADD\x10\x01\x12\x10\n\x0cOPERATOR_MUL\x10\x02\x12\x10\n\x0cOPERATOR_MIN\x10\x03\x12\x10\n\x0cOPERATOR_MAX\x10\x04\x1a\xa8\x01\n\x0f\x42inaryOperation\x12]\n\x08operator\x18\x01 \x01(\x0e\x32\x41.ommx.v1.Function.Expression.Instruction.BinaryOperation.OperatorR\x08operator"6\n\x08Operator\x12\x18\n\x14OPERATOR_UNSPECIFIED\x10\x00\x12\x10\n\x0cOPERATOR_DIV\x10\x01\x42\r\n\x0binstructionB\n\n\x08\x66unctionb\x06proto3'
 )
 
 _globals = globals()
@@ -28,5 +28,39 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "ommx.v1.function_pb2", _glo
 if not _descriptor._USE_C_DESCRIPTORS:
     DESCRIPTOR._loaded_options = None
     _globals["_FUNCTION"]._serialized_start = 109
-    _globals["_FUNCTION"]._serialized_end = 311
+    _globals["_FUNCTION"]._serialized_end = 1645
+    _globals["_FUNCTION_EXPRESSION"]._serialized_start = 366
+    _globals["_FUNCTION_EXPRESSION"]._serialized_end = 1633
+    _globals["_FUNCTION_EXPRESSION_INSTRUCTION"]._serialized_start = 459
+    _globals["_FUNCTION_EXPRESSION_INSTRUCTION"]._serialized_end = 1633
+    _globals["_FUNCTION_EXPRESSION_INSTRUCTION_UNARYOPERATION"]._serialized_start = 919
+    _globals["_FUNCTION_EXPRESSION_INSTRUCTION_UNARYOPERATION"]._serialized_end = 1212
+    _globals[
+        "_FUNCTION_EXPRESSION_INSTRUCTION_UNARYOPERATION_OPERATOR"
+    ]._serialized_start = 1079
+    _globals[
+        "_FUNCTION_EXPRESSION_INSTRUCTION_UNARYOPERATION_OPERATOR"
+    ]._serialized_end = 1191
+    _globals[
+        "_FUNCTION_EXPRESSION_INSTRUCTION_ASSOCIATIVEOPERATION"
+    ]._serialized_start = 1215
+    _globals[
+        "_FUNCTION_EXPRESSION_INSTRUCTION_ASSOCIATIVEOPERATION"
+    ]._serialized_end = 1447
+    _globals[
+        "_FUNCTION_EXPRESSION_INSTRUCTION_ASSOCIATIVEOPERATION_OPERATOR"
+    ]._serialized_start = 1339
+    _globals[
+        "_FUNCTION_EXPRESSION_INSTRUCTION_ASSOCIATIVEOPERATION_OPERATOR"
+    ]._serialized_end = 1447
+    _globals[
+        "_FUNCTION_EXPRESSION_INSTRUCTION_BINARYOPERATION"
+    ]._serialized_start = 1450
+    _globals["_FUNCTION_EXPRESSION_INSTRUCTION_BINARYOPERATION"]._serialized_end = 1618
+    _globals[
+        "_FUNCTION_EXPRESSION_INSTRUCTION_BINARYOPERATION_OPERATOR"
+    ]._serialized_start = 1564
+    _globals[
+        "_FUNCTION_EXPRESSION_INSTRUCTION_BINARYOPERATION_OPERATOR"
+    ]._serialized_end = 1618
 # @@protoc_insertion_point(module_scope)

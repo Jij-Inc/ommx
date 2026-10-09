@@ -1,5 +1,6 @@
 use crate::{
     macros::*,
+    parse::RawParseError,
     v1::{
         function::{self, Function as FunctionEnum},
         Function, Linear, Polynomial, Quadratic, SampledValues, Samples, State,
@@ -107,6 +108,7 @@ impl<'a> IntoIterator for &'a Function {
             ),
             Some(FunctionEnum::Quadratic(quad)) => Box::new(quad.into_iter()),
             Some(FunctionEnum::Polynomial(poly)) => Box::new(poly.into_iter()),
+            Some(FunctionEnum::Expression(_)) => panic!("{}", RawParseError::UnsupportedV1Function),
             None => Box::new(std::iter::empty()),
         }
     }
@@ -119,6 +121,7 @@ impl Function {
             Some(FunctionEnum::Linear(linear)) => linear.degree(),
             Some(FunctionEnum::Quadratic(quad)) => quad.degree(),
             Some(FunctionEnum::Polynomial(poly)) => poly.degree(),
+            Some(FunctionEnum::Expression(_)) => panic!("{}", RawParseError::UnsupportedV1Function),
             None => 0,
         }
     }
@@ -129,6 +132,7 @@ impl Function {
             FunctionEnum::Linear(linear) => Some(linear),
             FunctionEnum::Quadratic(quadratic) => quadratic.as_linear(),
             FunctionEnum::Polynomial(poly) => poly.as_linear(),
+            FunctionEnum::Expression(_) => None,
         }
     }
 
@@ -138,6 +142,7 @@ impl Function {
             FunctionEnum::Linear(linear) => linear.as_constant(),
             FunctionEnum::Quadratic(quadratic) => quadratic.as_constant(),
             FunctionEnum::Polynomial(poly) => poly.as_constant(),
+            FunctionEnum::Expression(_) => None,
         }
     }
 
@@ -148,6 +153,7 @@ impl Function {
             Some(FunctionEnum::Linear(linear)) => linear.constant,
             Some(FunctionEnum::Quadratic(quad)) => quad.get_constant(),
             Some(FunctionEnum::Polynomial(poly)) => poly.get_constant(),
+            Some(FunctionEnum::Expression(_)) => panic!("{}", RawParseError::UnsupportedV1Function),
             None => 0.0,
         }
     }
@@ -157,6 +163,13 @@ impl Function {
     /// For example, `x = f(y, z, ...)` into `g(x, y, z, ...)` yielding `g(f(y, z), y, z, ...)`.
     ///
     pub fn substitute(&self, replacements: &HashMap<u64, Self>) -> Result<Self> {
+        if matches!(self.function, Some(FunctionEnum::Expression(_)))
+            || replacements.values().any(|replacement| {
+                matches!(replacement.function, Some(FunctionEnum::Expression(_)))
+            })
+        {
+            return Err(RawParseError::UnsupportedV1Function.into());
+        }
         if replacements.is_empty() {
             return Ok(self.clone());
         }
@@ -202,6 +215,9 @@ impl Function {
     ///
     /// This returns `1` for zero function. See also <https://en.wikipedia.org/wiki/Primitive_part_and_content>.
     pub fn content_factor(&self) -> Result<f64> {
+        if matches!(self.function, Some(FunctionEnum::Expression(_))) {
+            return Err(RawParseError::UnsupportedV1Function.into());
+        }
         let mut numer_gcd = 0;
         let mut denom_lcm: i64 = 1;
         for (_, coefficient) in self {
@@ -262,6 +278,9 @@ impl Add for Function {
             (FunctionEnum::Polynomial(lhs), FunctionEnum::Polynomial(rhs)) => {
                 Function::from(lhs + rhs)
             }
+            (FunctionEnum::Expression(_), _) | (_, FunctionEnum::Expression(_)) => {
+                panic!("{}", RawParseError::UnsupportedV1Function)
+            }
         }
     }
 }
@@ -316,6 +335,9 @@ impl Mul for Function {
             }
             (FunctionEnum::Polynomial(lhs), FunctionEnum::Polynomial(rhs)) => {
                 Function::from(lhs * rhs)
+            }
+            (FunctionEnum::Expression(_), _) | (_, FunctionEnum::Expression(_)) => {
+                panic!("{}", RawParseError::UnsupportedV1Function)
             }
         }
     }
@@ -396,6 +418,9 @@ impl AbsDiffEq for Function {
                 let lhs = Polynomial::from(lhs.clone());
                 lhs.abs_diff_eq(rhs, epsilon)
             }
+            (FunctionEnum::Expression(_), _) | (_, FunctionEnum::Expression(_)) => {
+                panic!("{}", RawParseError::UnsupportedV1Function)
+            }
         }
     }
 }
@@ -407,6 +432,9 @@ impl fmt::Display for Function {
             Some(FunctionEnum::Linear(linear)) => write!(f, "{linear}"),
             Some(FunctionEnum::Quadratic(quadratic)) => write!(f, "{quadratic}"),
             Some(FunctionEnum::Polynomial(poly)) => write!(f, "{poly}"),
+            Some(FunctionEnum::Expression(_)) => {
+                write!(f, "{}", RawParseError::UnsupportedV1Function)
+            }
             None => write!(f, "0"),
         }
     }
@@ -422,6 +450,9 @@ impl Evaluate for Function {
             Some(FunctionEnum::Linear(linear)) => linear.evaluate(solution, atol)?,
             Some(FunctionEnum::Quadratic(quadratic)) => quadratic.evaluate(solution, atol)?,
             Some(FunctionEnum::Polynomial(poly)) => poly.evaluate(solution, atol)?,
+            Some(FunctionEnum::Expression(_)) => {
+                return Err(RawParseError::UnsupportedV1Function.into())
+            }
             None => 0.0,
         };
         Ok(out)
@@ -432,6 +463,9 @@ impl Evaluate for Function {
             Some(FunctionEnum::Linear(linear)) => linear.partial_evaluate(state, atol)?,
             Some(FunctionEnum::Quadratic(quadratic)) => quadratic.partial_evaluate(state, atol)?,
             Some(FunctionEnum::Polynomial(poly)) => poly.partial_evaluate(state, atol)?,
+            Some(FunctionEnum::Expression(_)) => {
+                return Err(RawParseError::UnsupportedV1Function.into())
+            }
             _ => {}
         };
         Ok(())
@@ -442,6 +476,9 @@ impl Evaluate for Function {
         samples: &Samples,
         atol: crate::ATol,
     ) -> Result<Self::SampledOutput> {
+        if matches!(self.function, Some(FunctionEnum::Expression(_))) {
+            return Err(RawParseError::UnsupportedV1Function.into());
+        }
         let out = samples.map(|s| {
             let value = self.evaluate(s, atol)?;
             Ok(value)
@@ -454,6 +491,7 @@ impl Evaluate for Function {
             Some(FunctionEnum::Linear(linear)) => linear.required_ids(),
             Some(FunctionEnum::Quadratic(quadratic)) => quadratic.required_ids(),
             Some(FunctionEnum::Polynomial(poly)) => poly.required_ids(),
+            Some(FunctionEnum::Expression(_)) => panic!("{}", RawParseError::UnsupportedV1Function),
             _ => VariableIDSet::default(),
         }
     }
@@ -466,6 +504,39 @@ mod tests {
     use maplit::*;
 
     test_algebraic!(Function);
+
+    fn expression() -> Function {
+        FunctionEnum::Expression(function::Expression {
+            instructions: vec![function::expression::Instruction {
+                instruction: Some(function::expression::instruction::Instruction::Constant(
+                    2.0,
+                )),
+            }],
+        })
+        .into()
+    }
+
+    #[test]
+    fn expression_evaluation_is_rejected_without_mutation() {
+        let original = expression();
+        let mut function = original.clone();
+        assert!(function
+            .evaluate(&State::default(), crate::ATol::default())
+            .is_err());
+        assert!(function
+            .partial_evaluate(&State::default(), crate::ATol::default())
+            .is_err());
+        assert_eq!(function, original);
+        assert!(function
+            .evaluate_samples(&Samples::default(), crate::ATol::default())
+            .is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "Unsupported ommx.v1.Function")]
+    fn expression_terms_are_not_treated_as_zero() {
+        expression().into_iter().count();
+    }
 
     #[test]
     fn evaluate_bound_missing() {

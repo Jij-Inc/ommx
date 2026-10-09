@@ -283,6 +283,7 @@ impl InstanceBuilder {
             constraint_hints,
             parameters: self.parameters,
             description: self.description,
+            annotations: Default::default(),
         })
     }
 }
