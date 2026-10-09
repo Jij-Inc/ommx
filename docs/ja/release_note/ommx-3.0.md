@@ -17,6 +17,21 @@ penaltyによって除去される制約には、エンコード後の式が保�
 制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
 詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
 
+### 🆕 Python SDK から OMMX CLI を実行 ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
+
+Python SDK をインストールすると `ommx` コマンドも使えるようになります。
+`ommx` に依存する uv プロジェクトでは、次のように実行できます。
+
+```bash
+uv run ommx --help
+uv run ommx list
+```
+
+console script は Rust 実行ファイルと引数解析・コマンド実行・表示を共有し、
+`OMMX_LOCAL_REGISTRY_ROOT` にも従います。`inspect` が表示する JSON のキー順も
+一定になりました。詳しくは {ref}`Local Registry の cleanup workflow <experiment-cleanup-workflow>`
+を参照してください。
+
 ## 3.0.0 Beta 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b7)

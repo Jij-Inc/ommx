@@ -385,6 +385,7 @@ Local Registry cleanup is based on reachability from SQLite refs.
 
 OMMX does not store an orphan table in SQLite. Orphans are computed during each GC report by walking refs and manifests, then comparing that reachable set with the CAS files in the Local Registry.
 
+(experiment-cleanup-workflow)=
 ## Cleanup Workflow
 
 Installing the Python SDK also provides the `ommx` command. In a uv project
