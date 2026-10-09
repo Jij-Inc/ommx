@@ -2,6 +2,36 @@
 
 ## バグ修正
 
+### protobufシリアライズ時のアノテーション消失を修正 ([#1262](https://github.com/Jij-Inc/ommx/pull/1262))
+
+`Instance`、`ParametricInstance`、`Solution`、`SampleSet` のユーザーアノテーションと
+メタデータが、`to_bytes()` / `from_bytes()` の往復で保持されるようになりました。
+Instanceのタイトル、ライセンス、データセット、著者、作成日時はprotobufのDescriptionに、
+求解・サンプリングの来歴はProcessMetadataに保存されます。
+既存の変更可能な `annotations` 辞書とアノテーション用メソッドは引き続き使えます。
+
+```python
+from ommx import Instance
+
+instance = Instance.empty()
+instance.title = "My model"
+instance.add_user_annotation("source", "python")
+restored = Instance.from_bytes(instance.to_bytes())
+assert restored.title == "My model"
+assert restored.get_user_annotation("source") == "python"
+```
+
+モデル変換、部分評価、パラメータの具体化、サンプルからSolutionへの取り出しでも
+アノテーションを保持します。Artifactの読み込みでは、旧形式のdescriptorにのみ保存された
+アノテーションを補完し、同じキーが両方にある場合はprotobuf側の値を優先します。
+変数数と制約数は引き続きArtifactのdescriptorアノテーションとして扱います。
+
+独自のアノテーションにはユーザー用または第三者の名前空間を使ってください。
+`org.ommx.v1.*` はOMMXのメタデータ用に予約されており、この名前空間の未知のキーは
+シリアライズ時に拒否されます。追加したprotobufフィールドはSDK v3と同じフィールド番号を使い、
+`format_version = 0` を維持します。旧SDKでも数理モデルは読み込めますが、デコードして
+再エンコードすると追加のメタデータが消失する場合があります。
+
 ### penalty構築前の整数エンコードと一括置換 (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
 
 `Instance.log_encode()` は、指定された整数変数をまとめてエンコードします。

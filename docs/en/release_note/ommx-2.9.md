@@ -2,6 +2,36 @@
 
 ## Bug Fixes
 
+### Preserve annotations in protobuf payloads ([#1262](https://github.com/Jij-Inc/ommx/pull/1262))
+
+`Instance`, `ParametricInstance`, `Solution`, and `SampleSet` now retain user
+annotations and typed metadata through `to_bytes()` / `from_bytes()`. Instance
+titles, licenses, datasets, authors, and creation times are stored in protobuf
+Description fields; solution and sampling provenance is stored in ProcessMetadata.
+The existing mutable `annotations` dictionaries and annotation helpers remain available.
+
+```python
+from ommx import Instance
+
+instance = Instance.empty()
+instance.title = "My model"
+instance.add_user_annotation("source", "python")
+restored = Instance.from_bytes(instance.to_bytes())
+assert restored.title == "My model"
+assert restored.get_user_annotation("source") == "python"
+```
+
+Model conversions, partial evaluation, parameter materialization, and sample
+projection also retain annotations. Artifact readers merge legacy descriptor-only
+annotations, with protobuf metadata taking precedence when both sources contain
+the same key. Variable and constraint counts remain Artifact descriptor annotations.
+
+Custom annotations must use a user or third-party namespace; the
+`org.ommx.v1.*` namespace is reserved for OMMX metadata. Serialization rejects
+unknown keys in that namespace. The added protobuf fields use the same field
+numbers as SDK v3 and keep `format_version = 0`. Older SDKs can still read the
+mathematical model, but may discard the added metadata when decoding and re-encoding it.
+
 ### Batch integer encoding before penalty construction (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
 
 `Instance.log_encode()` processes all selected integers in one batch, validating
