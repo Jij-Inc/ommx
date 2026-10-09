@@ -30,6 +30,7 @@ def cli(tmp_path):
             env={
                 **os.environ,
                 "OMMX_LOCAL_REGISTRY_ROOT": str(registry),
+                "OMMX_PLUGIN_CACHE_DIR": str(tmp_path / "plugin-cache-例"),
                 "NO_COLOR": "1",
             },
         )
@@ -37,13 +38,112 @@ def cli(tmp_path):
     return run, registry
 
 
-@pytest.mark.parametrize("args", [("--help",), ("inspect", "--help")])
+@pytest.mark.parametrize(
+    "args",
+    [
+        ("--help",),
+        ("inspect", "--help"),
+        ("skill", "--help"),
+        ("skill", "path", "--help"),
+        ("plugin", "--help"),
+        ("plugin", "path", "--help"),
+        ("plugin", "marketplace", "--help"),
+        ("plugin", "marketplace", "path", "--help"),
+    ],
+)
 def test_console_help_does_not_open_registry(cli, args):
     run, registry = cli
     result = run(*args)
     assert result.returncode == 0
     assert "Usage:" in result.stdout
     assert result.stderr == ""
+    assert not registry.exists()
+    assert not (registry.parent / "plugin-cache-例").exists()
+
+
+def test_console_skill_paths_use_the_complete_bundled_skill(cli):
+    run, registry = cli
+    parent = run("skill", "path")
+    assert parent.returncode == 0, parent.stderr
+    assert parent.stderr == ""
+    assert len(parent.stdout.splitlines()) == 1
+    root = Path(parent.stdout.strip())
+    assert root.is_absolute()
+    assert root.is_relative_to(registry.parent.resolve() / "plugin-cache-例")
+    named = run("skill", "path", "ommx")
+    assert named.returncode == 0, named.stderr
+    assert named.stderr == ""
+    assert Path(named.stdout.strip()) == root / "ommx"
+    source = (
+        Path(__file__).resolve().parents[3]
+        / "rust/ommx/agent_plugin/plugins/ommx/skills/ommx/SKILL.md"
+    )
+    assert (root / "ommx/SKILL.md").read_bytes() == source.read_bytes()
+    assert run("skill", "path").stdout == parent.stdout
+    assert not registry.exists()
+
+
+def test_console_plugin_paths_resolve_the_same_versioned_bundle(cli):
+    run, registry = cli
+
+    def path(*args):
+        result = run(*args)
+        assert result.returncode == 0, result.stderr
+        assert result.stderr == ""
+        assert len(result.stdout.splitlines()) == 1
+        resolved = Path(result.stdout.strip())
+        assert resolved.is_absolute()
+        return resolved
+
+    marketplace = path("plugin", "marketplace", "path")
+    plugin = path("plugin", "path")
+    assert path("plugin", "path", "ommx") == plugin
+    assert plugin == marketplace / "plugins/ommx"
+    assert path("skill", "path") == plugin / "skills"
+    assert path("skill", "path", "ommx") == plugin / "skills/ommx"
+    catalog = json.loads((marketplace / ".claude-plugin/marketplace.json").read_text())
+    [entry] = catalog["plugins"]
+    assert catalog["name"] == entry["name"] == "ommx"
+    assert (marketplace / entry["source"]).resolve() == plugin
+    standard = json.loads((plugin / "plugin.json").read_text())
+    claude = json.loads((plugin / ".claude-plugin/plugin.json").read_text())
+    version = run("--version").stdout.split()[-1]
+    assert standard["name"] == claude["name"] == entry["name"]
+    assert standard["version"] == claude["version"] == version
+    assert (
+        standard.pop("$schema")
+        == "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+    )
+    assert (
+        claude.pop("$schema")
+        == "https://json.schemastore.org/claude-code-plugin-manifest.json"
+    )
+    assert standard == claude
+    assert not registry.exists()
+
+
+@pytest.mark.parametrize("command", ["skill", "plugin"])
+def test_console_invalid_bundled_name_does_not_create_cache(cli, command):
+    run, registry = cli
+    result = run(command, "path", "../other")
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "invalid value" in result.stderr
+    assert not (registry.parent / "plugin-cache-例").exists()
+    assert not registry.exists()
+
+
+@pytest.mark.parametrize(
+    "args", [("skill", "path"), ("plugin", "path"), ("plugin", "marketplace", "path")]
+)
+def test_console_plugin_cache_error_is_stderr_and_exit_one(cli, args):
+    run, registry = cli
+    (registry.parent / "plugin-cache-例").write_text("not a directory")
+    result = run(*args)
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "Failed to create the OMMX plugin cache" in result.stderr
+    assert "Traceback" not in result.stderr
     assert not registry.exists()
 
 
@@ -70,6 +170,9 @@ def test_console_execution_error_is_stderr_and_exit_one(cli, tmp_path):
     [
         (("version",), "stdout"),
         (("--help",), "stdout"),
+        (("skill", "path"), "stdout"),
+        (("plugin", "path"), "stdout"),
+        (("plugin", "marketplace", "path"), "stdout"),
         (("inspect",), "stderr"),
         (("import", "missing.ommx"), "stderr"),
         (("load", "missing.ommx"), "stderr"),
@@ -96,6 +199,7 @@ def test_main_returns_one_when_terminal_write_fails(args, stream, tmp_path):
             env={
                 **os.environ,
                 "OMMX_LOCAL_REGISTRY_ROOT": str(tmp_path / "registry"),
+                "OMMX_PLUGIN_CACHE_DIR": str(tmp_path / "plugin-cache"),
                 "NO_COLOR": "1",
             },
         )

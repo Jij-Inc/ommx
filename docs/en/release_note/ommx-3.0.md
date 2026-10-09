@@ -17,6 +17,18 @@ Constraints removed by the penalty phase now store their encoded expressions.
 Their evaluated values and the original output objective are preserved through
 decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
 
+### 🆕 Discover the bundled coding-agent plugin and skill ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
+
+`uv run ommx plugin path` and `uv run ommx plugin marketplace path` expose the
+bundled plugin and its local Claude Code marketplace. `uv run ommx skill path`
+prints the skills parent; `uv run ommx skill path ommx` prints the individual
+skill directory. Commands and bundle layout follow JijModeling. The CLI embeds
+the bundle with Agent Plugins and Claude Code manifests, and materializes it in
+a cache keyed by its contents and CLI version. The current `SKILL.md` is a
+distribution placeholder; OMMX usage guidance will be provided separately.
+See [Distribute Agent Plugins and Skills with OMMX](../user_guide/agent_skills.md)
+for installation and updates.
+
 ### 🆕 Run the OMMX CLI from the Python SDK ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
 
 Installing the Python SDK now provides the `ommx` command. In a uv project

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "author": {
+    "name": "JIJ Inc.",
+    "url": "https://www.j-ij.com/"
+  },
+  "description": "Agent plugin bundle distributed by the OMMX CLI.",
+  "homepage": "https://jij-inc.github.io/ommx/",
+  "repository": "https://github.com/Jij-Inc/ommx",
+  "keywords": ["ommx", "optimization", "mathematical-modeling"],
+  "license": "MIT OR Apache-2.0",
+  "name": "ommx"
+}

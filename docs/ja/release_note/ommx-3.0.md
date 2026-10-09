@@ -17,6 +17,18 @@ penaltyによって除去される制約には、エンコード後の式が保�
 制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
 詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
 
+### 🆕 同梱のエージェントプラグインとスキルを取得 ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
+
+`uv run ommx plugin path` と `uv run ommx plugin marketplace path` で、同梱プラグイン
+と Claude Code のローカルマーケットプレイスを取得できます。`uv run ommx skill path`
+はスキルの親ディレクトリ、`uv run ommx skill path ommx` は個別のスキルディレクトリを
+返します。コマンドと bundle の構成は JijModeling に合わせています。Agent Plugins と
+Claude Code の manifest を含む bundle は CLI に埋め込まれ、内容と CLI バージョンに
+対応するキャッシュに展開されます。現在の `SKILL.md` は配布確認用の
+プレースホルダーで、OMMX の利用方法を説明する本文は別途追加します。
+導入・更新手順は [OMMX でエージェントプラグインとスキルを配布する](../user_guide/agent_skills.md)
+を参照してください。
+
 ### 🆕 Python SDK から OMMX CLI を実行 ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
 
 Python SDK をインストールすると `ommx` コマンドも使えるようになります。

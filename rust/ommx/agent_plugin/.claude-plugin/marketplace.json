@@ -1,0 +1,15 @@
+{
+  "name": "ommx",
+  "owner": {"name": "JIJ Inc."},
+  "metadata": {
+    "description": "Agent plugins bundled with the installed OMMX CLI."
+  },
+  "plugins": [
+    {
+      "name": "ommx",
+      "description": "Agent plugin bundle distributed by the OMMX CLI.",
+      "source": "./plugins/ommx",
+      "strict": true
+    }
+  ]
+}
