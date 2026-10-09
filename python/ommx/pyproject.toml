@@ -45,7 +45,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ommx = "ommx.cli:main"
+ommx = "ommx.cli:_console_main"
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"

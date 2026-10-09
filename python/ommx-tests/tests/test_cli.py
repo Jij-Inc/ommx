@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import subprocess
 import sys
 
@@ -64,6 +65,49 @@ def test_console_execution_error_is_stderr_and_exit_one(cli, tmp_path):
     assert "Traceback" not in result.stderr
 
 
+@pytest.mark.parametrize(
+    ("args", "stream"),
+    [
+        (("version",), "stdout"),
+        (("--help",), "stdout"),
+        (("inspect",), "stderr"),
+        (("import", "missing.ommx"), "stderr"),
+        (("load", "missing.ommx"), "stderr"),
+    ],
+)
+def test_main_returns_one_when_terminal_write_fails(args, stream, tmp_path):
+    read_fd, write_fd = os.pipe()
+    os.close(read_fd)
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from ommx.cli import main; import sys; "
+                "sys.argv[0] = 'ommx'; "
+                "code = main(); assert code == 1, code",
+                *args,
+            ],
+            stdout=write_fd if stream == "stdout" else subprocess.PIPE,
+            stderr=write_fd if stream == "stderr" else subprocess.PIPE,
+            text=True,
+            check=False,
+            timeout=30,
+            env={
+                **os.environ,
+                "OMMX_LOCAL_REGISTRY_ROOT": str(tmp_path / "registry"),
+                "NO_COLOR": "1",
+            },
+        )
+    finally:
+        os.close(write_fd)
+    # The caller reaches its assertion and exits normally after the CLI returns.
+    assert result.returncode == 0, result.stdout or result.stderr
+    output = result.stdout or result.stderr or ""
+    assert "Traceback" not in output
+    assert "panicked" not in output
+
+
 def test_console_archive_registry_round_trip(cli, tmp_path):
     run, registry = cli
     archive = Path(__file__).resolve().parents[3] / "data/random_lp_instance.ommx"
@@ -97,10 +141,31 @@ def test_console_archive_registry_round_trip(cli, tmp_path):
     assert run("list").stdout.splitlines() == [image_name]
 
 
+def test_console_sigint_terminates_without_a_python_traceback():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import signal; import ommx.cli as cli; "
+            "cli.main = lambda: signal.raise_signal(signal.SIGINT); "
+            "cli._console_main(); print('continued after SIGINT')",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert "Traceback" not in result.stderr
+    assert "KeyboardInterrupt" not in result.stderr
+
+
 def test_main_returns_without_exiting_or_replacing_sdk_tracing(
     monkeypatch, tmp_path, capfd
 ):
     # Initialize the SDK's tracing bridge before the CLI is called.
+    sigint_handler = signal.getsignal(signal.SIGINT)
     registry = tmp_path / "caller-registry"
     gc(root=registry)
     for _ in range(2):
@@ -112,3 +177,4 @@ def test_main_returns_without_exiting_or_replacing_sdk_tracing(
     assert main() == 2
     assert "required arguments" in capfd.readouterr().err
     assert list_artifacts(root=registry) == []
+    assert signal.getsignal(signal.SIGINT) == sigint_handler

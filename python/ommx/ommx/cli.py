@@ -1,5 +1,6 @@
 """Console entry point for the shared Rust CLI."""
 
+import signal
 import sys
 
 
@@ -9,5 +10,12 @@ def main() -> int:
     return _run_cli(sys.argv)
 
 
+def _console_main() -> int:
+    # Rust execution can block without returning to Python's signal checks.
+    # A console invocation should terminate immediately on Ctrl+C.
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    return main()
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_console_main())

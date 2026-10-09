@@ -3,6 +3,16 @@
 //! Enable the `cli` feature to use [`run`]. Argument parsing, command dispatch,
 //! and terminal output are owned by this module; Artifact and Local Registry
 //! operations continue to use the SDK APIs that preserve their invariants.
+//!
+//! # Compatibility
+//!
+//! The `cli` feature and [`run`] are part of the Rust SDK's stable API. Argument
+//! parsing types and command handlers are private implementation details.
+//!
+//! Existing command syntax and documented behavior are preserved within a major
+//! version. Help text, human-readable diagnostics, colors, and JSON whitespace or
+//! object key order may change. Machine-readable JSON output is compatible at
+//! the schema level.
 
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
@@ -19,6 +29,7 @@ use ommx::artifact::{
 };
 use std::{
     ffi::OsString,
+    io::{self, Write},
     path::{Path, PathBuf},
     time::Duration,
 };
@@ -401,7 +412,7 @@ fn bail_not_found_locally(name: &ImageRef) -> Result<()> {
 ///
 /// Prints command output and help to stdout, and errors to stderr. Returns
 /// `0` on success (including help/version), `2` for invalid arguments, or `1`
-/// when command execution or writing a parser diagnostic fails.
+/// when command execution or writing terminal output fails.
 ///
 /// This function does not exit the process or replace its global tracing
 /// subscriber. A scoped terminal subscriber is used for this invocation.
@@ -419,7 +430,7 @@ where
         Err(error) => {
             let exit_code = if error.use_stderr() { 2 } else { 0 };
             if let Err(error) = error.print() {
-                eprintln!("Error: {error}");
+                let _ = writeln!(io::stderr(), "Error: {error}");
                 return 1;
             }
             return exit_code;
@@ -437,7 +448,7 @@ where
     tracing::subscriber::with_default(subscriber, || match execute(command) {
         Ok(()) => 0,
         Err(error) => {
-            eprintln!("Error: {error:?}");
+            let _ = writeln!(io::stderr(), "Error: {error:?}");
             1
         }
     })
@@ -446,10 +457,10 @@ where
 fn execute(command: Command) -> Result<()> {
     match &command {
         Command::Version => {
-            print_status("Version".blue().bold(), built_info::PKG_VERSION);
-            print_status("Target".blue().bold(), built_info::TARGET);
+            print_status("Version".blue().bold(), built_info::PKG_VERSION)?;
+            print_status("Target".blue().bold(), built_info::TARGET)?;
             if let Some(hash) = built_info::GIT_COMMIT_HASH {
-                print_status("Git Commit".blue().bold(), hash);
+                print_status("Git Commit".blue().bold(), hash)?;
             }
         }
         Command::Inspect { image_name_or_path } => {
@@ -458,7 +469,7 @@ fn execute(command: Command) -> Result<()> {
             // stable across processes and SDK dependency feature combinations.
             let mut manifest = serde_json::to_value(manifest)?;
             manifest.sort_all_objects();
-            println!("{}", serde_json::to_string_pretty(&manifest)?);
+            writeln!(io::stdout(), "{}", serde_json::to_string_pretty(&manifest)?)?;
         }
 
         Command::Push { image_name_or_path } => handle_push(image_name_or_path)?,
@@ -479,7 +490,7 @@ fn execute(command: Command) -> Result<()> {
 
         Command::List => {
             for image_name in ommx::artifact::get_images()? {
-                println!("{image_name}");
+                writeln!(io::stdout(), "{image_name}")?;
             }
         }
 
@@ -518,21 +529,28 @@ fn execute(command: Command) -> Result<()> {
         )?,
 
         Command::Load { path } => {
-            eprintln!("warning: `ommx load` is deprecated; use `ommx import` instead");
+            writeln!(
+                io::stderr(),
+                "warning: `ommx load` is deprecated; use `ommx import` instead"
+            )?;
             handle_import(path)?;
         }
 
         Command::Save { image_name, output } => {
-            eprintln!("warning: `ommx save` is deprecated; use `ommx export` instead");
+            writeln!(
+                io::stderr(),
+                "warning: `ommx save` is deprecated; use `ommx export` instead"
+            )?;
             handle_export(image_name, output)?;
         }
 
         Command::Artifact { command } => match command {
             ArtifactCommand::Import { root, replace } => {
-                eprintln!(
+                writeln!(
+                    io::stderr(),
                     "warning: `ommx artifact import` is deprecated; \
                      use `ommx import-legacy` instead"
-                );
+                )?;
                 handle_import_legacy(root.as_ref(), *replace)?;
             }
             ArtifactCommand::PruneAnonymous {
@@ -543,10 +561,11 @@ fn execute(command: Command) -> Result<()> {
                 older_than,
                 show_digests,
             } => {
-                eprintln!(
+                writeln!(
+                    io::stderr(),
                     "warning: `ommx artifact prune-anonymous` is deprecated; \
                      use `ommx prune-anonymous` instead"
-                );
+                )?;
                 handle_prune_anonymous(
                     root.as_ref(),
                     *dry_run,
@@ -563,7 +582,10 @@ fn execute(command: Command) -> Result<()> {
                 grace_period,
                 show_digests,
             } => {
-                eprintln!("warning: `ommx artifact gc` is deprecated; use `ommx gc` instead");
+                writeln!(
+                    io::stderr(),
+                    "warning: `ommx artifact gc` is deprecated; use `ommx gc` instead"
+                )?;
                 handle_gc(
                     root.as_ref(),
                     *dry_run,
@@ -668,11 +690,11 @@ fn handle_size(image_names: &[String]) -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
 
     for (image_name, size) in sizes {
-        print_status("Image".blue().bold(), image_name);
+        print_status("Image".blue().bold(), image_name)?;
         print_status(
             "Size".green().bold(),
             format_args!("{} ({size} bytes)", format_bytes(size)),
-        );
+        )?;
     }
     Ok(())
 }
@@ -702,12 +724,12 @@ fn handle_rm(image_name: &str, root: Option<&PathBuf>) -> Result<()> {
     let image_name = ImageRef::parse(image_name)?;
     let registry = open_registry(root)?;
     let Some(removed) = registry.remove_image_ref(&image_name)? else {
-        print_status("Not Found".yellow().bold(), image_name);
+        print_status("Not Found".yellow().bold(), image_name)?;
         return Ok(());
     };
-    print_status("Removed".red().bold(), &image_name);
-    print_rollback(&image_name.to_string(), &removed.manifest_digest, root);
-    print_status("Storage".blue().bold(), rm_storage_message());
+    print_status("Removed".red().bold(), &image_name)?;
+    print_rollback(&image_name.to_string(), &removed.manifest_digest, root)?;
+    print_status("Storage".blue().bold(), rm_storage_message())?;
     Ok(())
 }
 
@@ -719,8 +741,8 @@ fn handle_restore_ref(
     let image_name = ImageRef::parse(image_name)?;
     let registry = open_registry(root)?;
     match registry.restore_image_ref(&image_name, manifest_digest)? {
-        RefUpdate::Inserted => print_status("Restored".green().bold(), image_name),
-        RefUpdate::Unchanged => print_status("Unchanged".blue().bold(), image_name),
+        RefUpdate::Inserted => print_status("Restored".green().bold(), image_name)?,
+        RefUpdate::Unchanged => print_status("Unchanged".blue().bold(), image_name)?,
         RefUpdate::Conflicted {
             existing_manifest_digest,
             incoming_manifest_digest,
@@ -757,19 +779,19 @@ fn handle_import_legacy(root: Option<&PathBuf>, replace: bool) -> Result<()> {
             report.imported_dirs,
             registry.root().display()
         ),
-    );
+    )?;
     print_status(
         "Scanned".blue().bold(),
         format_args!("{} legacy OCI dir(s)", report.scanned_dirs),
-    );
+    )?;
     print_status(
         "Verified".blue().bold(),
         format_args!("{} existing ref(s)", report.verified_dirs),
-    );
+    )?;
     print_status(
         "Replaced".yellow().bold(),
         format_args!("{} existing ref(s)", report.replaced_refs),
-    );
+    )?;
     if report.conflicted_dirs > 0 {
         print_status(
             "Skipped".yellow().bold(),
@@ -777,7 +799,7 @@ fn handle_import_legacy(root: Option<&PathBuf>, replace: bool) -> Result<()> {
                 "{} conflicting ref(s); rerun with --replace to overwrite them",
                 report.conflicted_dirs
             ),
-        );
+        )?;
     }
     Ok(())
 }
@@ -800,33 +822,33 @@ fn handle_prune_anonymous(
     };
     let to_remove = registry.list_anonymous_refs(&options)?;
     if to_remove.is_empty() {
-        print_status("Clean".green().bold(), "no matching anonymous refs found");
+        print_status("Clean".green().bold(), "no matching anonymous refs found")?;
     } else if delete {
         let removed = registry.prune_anonymous_refs(&options)?;
         print_status(
             "Removed".red().bold(),
             format_args!("{} anonymous ref(s)", removed.len()),
-        );
+        )?;
         for r in &removed {
-            print_anonymous_ref(&r.name, &r.reference, &r.manifest_digest, show_digests);
+            print_anonymous_ref(&r.name, &r.reference, &r.manifest_digest, show_digests)?;
             print_rollback(
                 &format!("{}:{}", r.name, r.reference),
                 &r.manifest_digest,
                 root,
-            );
+            )?;
         }
     } else {
         print_status(
             "Candidates".yellow().bold(),
             format_args!("{} anonymous ref(s)", to_remove.len()),
-        );
+        )?;
         for r in &to_remove {
-            print_anonymous_ref(&r.name, &r.reference, &r.manifest_digest, show_digests);
+            print_anonymous_ref(&r.name, &r.reference, &r.manifest_digest, show_digests)?;
         }
         print_status(
             "Dry Run".yellow().bold(),
             "registry unchanged; pass --delete to apply",
-        );
+        )?;
     }
     Ok(())
 }
@@ -848,20 +870,24 @@ fn handle_gc(
     };
     if delete {
         let result = registry.gc(&options)?;
-        print_gc_delete_report(&registry, &result, show_digests);
+        print_gc_delete_report(&registry, &result, show_digests)?;
     } else {
         let report = registry.gc_report(&options)?;
-        print_gc_report(&registry, &report, show_digests);
+        print_gc_report(&registry, &report, show_digests)?;
         print_status(
             "Dry Run".yellow().bold(),
             "registry unchanged; pass --delete to apply",
-        );
+        )?;
     }
     Ok(())
 }
 
-fn print_gc_delete_report(registry: &LocalRegistry, result: &GcDeleteReport, show_digests: bool) {
-    print_gc_report(registry, &result.report, show_digests);
+fn print_gc_delete_report(
+    registry: &LocalRegistry,
+    result: &GcDeleteReport,
+    show_digests: bool,
+) -> Result<()> {
+    print_gc_report(registry, &result.report, show_digests)?;
     print_status(
         "Deleted".red().bold(),
         format_args!(
@@ -869,9 +895,9 @@ fn print_gc_delete_report(registry: &LocalRegistry, result: &GcDeleteReport, sho
             result.deleted_blobs.len(),
             format_bytes(result.deleted_size())
         ),
-    );
+    )?;
     if show_digests {
-        print_blob_list(&result.deleted_blobs);
+        print_blob_list(&result.deleted_blobs)?;
     }
     if !result.skipped_blobs.is_empty() {
         print_status(
@@ -880,19 +906,20 @@ fn print_gc_delete_report(registry: &LocalRegistry, result: &GcDeleteReport, sho
                 "{} blob(s) changed before deletion",
                 result.skipped_blobs.len()
             ),
-        );
+        )?;
         if show_digests {
-            print_blob_list(&result.skipped_blobs);
+            print_blob_list(&result.skipped_blobs)?;
         }
     }
+    Ok(())
 }
 
-fn print_gc_report(registry: &LocalRegistry, report: &GcReport, show_digests: bool) {
-    print_status("Registry".blue().bold(), registry.root().display());
+fn print_gc_report(registry: &LocalRegistry, report: &GcReport, show_digests: bool) -> Result<()> {
+    print_status("Registry".blue().bold(), registry.root().display())?;
     print_status(
         "Roots".blue().bold(),
         format_args!("{} ref/protected digest(s)", report.roots.len()),
-    );
+    )?;
     print_status(
         "Reachable".green().bold(),
         format_args!(
@@ -900,7 +927,7 @@ fn print_gc_report(registry: &LocalRegistry, report: &GcReport, show_digests: bo
             report.reachable_blobs.len(),
             format_bytes(report.reachable_size())
         ),
-    );
+    )?;
     print_status(
         "Orphans".yellow().bold(),
         format_args!(
@@ -908,9 +935,9 @@ fn print_gc_report(registry: &LocalRegistry, report: &GcReport, show_digests: bo
             report.orphan_candidates.len(),
             format_bytes(report.orphan_candidate_size())
         ),
-    );
+    )?;
     if show_digests {
-        print_blob_list(&report.orphan_candidates);
+        print_blob_list(&report.orphan_candidates)?;
     }
     print_status(
         "Deferred".yellow().bold(),
@@ -919,22 +946,23 @@ fn print_gc_report(registry: &LocalRegistry, report: &GcReport, show_digests: bo
             report.deferred_blobs.len(),
             format_bytes(report.deferred_size())
         ),
-    );
+    )?;
     if show_digests {
-        print_blob_list(&report.deferred_blobs);
+        print_blob_list(&report.deferred_blobs)?;
     }
     if !report.missing_blobs.is_empty() {
         print_status(
             "Missing".red().bold(),
             format_args!("{} referenced blob(s)", report.missing_blobs.len()),
-        );
+        )?;
         if show_digests {
             for missing in &report.missing_blobs {
-                println!(
+                writeln!(
+                    io::stdout(),
                     "  {}  {:?}",
                     missing.digest.to_string().dimmed(),
                     missing.kind
-                );
+                )?;
             }
         }
     }
@@ -942,22 +970,25 @@ fn print_gc_report(registry: &LocalRegistry, report: &GcReport, show_digests: bo
         print_status(
             "Invalid".red().bold(),
             format_args!("{} manifest blob(s)", report.invalid_manifests.len()),
-        );
+        )?;
         if show_digests {
             for invalid in &report.invalid_manifests {
-                println!(
+                writeln!(
+                    io::stdout(),
                     "  {}  {:?}: {}",
                     invalid.digest.to_string().dimmed(),
                     invalid.kind,
                     invalid.error
-                );
+                )?;
             }
         }
     }
+    Ok(())
 }
 
-fn print_status(label: ColoredString, message: impl std::fmt::Display) {
-    println!("{label:>12} {message}");
+fn print_status(label: ColoredString, message: impl std::fmt::Display) -> Result<()> {
+    writeln!(io::stdout(), "{label:>12} {message}")?;
+    Ok(())
 }
 
 fn print_anonymous_ref(
@@ -965,25 +996,31 @@ fn print_anonymous_ref(
     reference: &str,
     digest: impl std::fmt::Display,
     show_digests: bool,
-) {
+) -> Result<()> {
     if show_digests {
-        println!(
+        writeln!(
+            io::stdout(),
             "  {}:{}  {}  {}",
             name.dimmed(),
             reference,
             "->".dimmed(),
             digest
-        );
+        )?;
     } else {
-        println!("  {}:{}", name.dimmed(), reference);
+        writeln!(io::stdout(), "  {}:{}", name.dimmed(), reference)?;
     }
+    Ok(())
 }
 
-fn print_rollback(image_name: &str, manifest_digest: &Digest, root: Option<&PathBuf>) {
+fn print_rollback(
+    image_name: &str,
+    manifest_digest: &Digest,
+    root: Option<&PathBuf>,
+) -> Result<()> {
     print_status(
         "Rollback".blue().bold(),
         rollback_command(image_name, manifest_digest, root),
-    );
+    )
 }
 
 fn rm_storage_message() -> &'static str {
@@ -1007,14 +1044,16 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
-fn print_blob_list(blobs: &[GcBlob]) {
+fn print_blob_list(blobs: &[GcBlob]) -> Result<()> {
     for blob in blobs {
-        println!(
+        writeln!(
+            io::stdout(),
             "  {}  {}",
             blob.digest.to_string().dimmed(),
             format_bytes(blob.size)
-        );
+        )?;
     }
+    Ok(())
 }
 
 fn format_bytes(bytes: u64) -> String {
