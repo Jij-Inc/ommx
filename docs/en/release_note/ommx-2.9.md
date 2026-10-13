@@ -12,6 +12,7 @@ is stored in ProcessMetadata.
 The existing mutable `annotations` dictionaries and annotation helpers remain available.
 The `authors` property preserves individual protobuf entries, including names
 containing commas and empty names, while reflecting edits to the annotation dictionary.
+Explicit author-list edits also survive `dataclasses.replace()`.
 
 ```python
 from ommx import Instance
@@ -46,6 +47,8 @@ The `ommx.v1` protobuf definitions are shared with SDK v3, including the
 function representation when converting it into Rust-backed functions or models,
 including through the V1 bridge. `ParametricInstance.from_bytes()` retains its
 existing deferred validation behavior.
+Legacy Rust v1 validation, QUBO/HUBO export, and integer slack conversion return
+an error for unsupported expressions instead of panicking.
 
 ### Batch integer encoding before penalty construction (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
 

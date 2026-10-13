@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from dataclasses import replace
 from typing import Literal
 
 import pytest
@@ -364,6 +365,35 @@ def test_explicit_author_list_overrides_ambiguous_protobuf_entries(
         "Carol",
         "Dan",
     ]
+
+
+@pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS[:2])
+@pytest.mark.parametrize("authors", [[], [""], ["Doe, Jane", "Bob"]])
+@pytest.mark.parametrize("replace_annotations", [False, True])
+def test_dataclass_replace_preserves_explicit_author_entries(
+    factory, root_type, message_type, kind, authors, replace_annotations
+):
+    message = message_type.FromString(factory().to_bytes())
+    message.description.authors.append("")
+    root = root_type.from_bytes(message.SerializeToString())
+    root.authors = authors
+    copied = (
+        replace(root, annotations=dict(root.annotations))
+        if replace_annotations
+        else replace(root)
+    )
+    assert copied.authors == authors
+    assert (
+        list(message_type.FromString(copied.to_bytes()).description.authors) == authors
+    )
+    key = f"org.ommx.v1.{kind}.authors"
+    copied.annotations = {key: "Carol,Dan"}
+    assert copied.authors == ["Carol", "Dan"]
+    assert list(message_type.FromString(copied.to_bytes()).description.authors) == [
+        "Carol",
+        "Dan",
+    ]
+    assert root.authors == authors
 
 
 def test_model_operations_preserve_annotations():

@@ -1,3 +1,4 @@
+use super::function::try_required_ids;
 use crate::{
     v1::{Function, Instance, Parameters, ParametricInstance, State},
     Evaluate, VariableIDSet,
@@ -105,9 +106,9 @@ impl ParametricInstance {
 
     /// Used decision variable and parameter IDs in the objective and constraints.
     pub fn used_ids(&self) -> Result<VariableIDSet> {
-        let mut used_ids = self.objective().required_ids();
+        let mut used_ids = try_required_ids(&self.objective())?;
         for c in &self.constraints {
-            used_ids.extend(c.function().required_ids());
+            used_ids.extend(try_required_ids(&c.function())?);
         }
         Ok(used_ids)
     }

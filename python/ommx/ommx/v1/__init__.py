@@ -165,6 +165,11 @@ class Instance(UserAnnotationBase):
     """
     Annotations persisted in protobuf payloads and OMMX artifact layers. Use :py:attr:`title` or other specific attributes if possible.
     """
+    # Carry exact list entries through dataclasses.replace without changing
+    # the existing positional constructor or including the cache in repr/equality.
+    _annotation_lists: dict[str, list[str]] | None = field(
+        default=None, kw_only=True, repr=False, compare=False
+    )
     annotation_namespace = "org.ommx.v1.instance"
     title = str_annotation_property("title")
     "The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact."
@@ -183,7 +188,11 @@ class Instance(UserAnnotationBase):
 
     def __post_init__(self) -> None:
         message = _Instance.FromString(self.raw.to_bytes())
-        self._annotation_lists = {"authors": list(message.description.authors)}
+        self._annotation_lists = (
+            {key: list(value) for key, value in self._annotation_lists.items()}
+            if self._annotation_lists is not None
+            else {"authors": list(message.description.authors)}
+        )
         for key, value in _annotations_from_proto(
             message, self.annotation_namespace
         ).items():
@@ -2081,6 +2090,9 @@ class ParametricInstance(UserAnnotationBase):
     raw: _ParametricInstance
 
     annotations: dict[str, str] = field(default_factory=dict)
+    _annotation_lists: dict[str, list[str]] | None = field(
+        default=None, kw_only=True, repr=False, compare=False
+    )
     annotation_namespace = "org.ommx.v1.parametric-instance"
     title = str_annotation_property("title")
     "The title of the instance, stored as ``org.ommx.v1.parametric-instance.title`` annotation in OMMX artifact."
@@ -2099,7 +2111,11 @@ class ParametricInstance(UserAnnotationBase):
 
     def __post_init__(self) -> None:
         message = _ParametricInstance.FromString(self.raw.SerializeToString())
-        self._annotation_lists = {"authors": list(message.description.authors)}
+        self._annotation_lists = (
+            {key: list(value) for key, value in self._annotation_lists.items()}
+            if self._annotation_lists is not None
+            else {"authors": list(message.description.authors)}
+        )
         for key, value in _annotations_from_proto(
             message, self.annotation_namespace
         ).items():

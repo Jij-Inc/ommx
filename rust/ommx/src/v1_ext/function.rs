@@ -114,6 +114,14 @@ impl<'a> IntoIterator for &'a Function {
     }
 }
 
+/// Keep fallible legacy operations from entering the infallible expression path.
+pub fn try_required_ids(function: &Function) -> Result<VariableIDSet> {
+    if matches!(function.function, Some(FunctionEnum::Expression(_))) {
+        return Err(RawParseError::UnsupportedV1Function.into());
+    }
+    Ok(function.required_ids())
+}
+
 impl Function {
     pub fn degree(&self) -> u32 {
         match &self.function {
@@ -530,6 +538,95 @@ mod tests {
         assert!(function
             .evaluate_samples(&Samples::default(), crate::ATol::default())
             .is_err());
+    }
+
+    #[test]
+    fn expression_id_queries_are_rejected_by_fallible_v1_apis() {
+        use crate::{v1, Message};
+
+        let instance = v1::Instance {
+            objective: Some(expression()),
+            sense: v1::instance::Sense::Minimize as i32,
+            ..Default::default()
+        };
+        let instance = v1::Instance::decode(instance.encode_to_vec().as_slice()).unwrap();
+        let parametric: v1::ParametricInstance = instance.clone().into();
+        for result in [
+            instance.validate(),
+            instance.validate_decision_variable_ids(),
+            instance.as_qubo_format().map(|_| ()),
+            instance.as_hubo_format().map(|_| ()),
+            parametric.validate(),
+            parametric.validate_ids(),
+            parametric.used_ids().map(|_| ()),
+        ] {
+            assert!(matches!(
+                result.unwrap_err().downcast_ref::<RawParseError>(),
+                Some(RawParseError::UnsupportedV1Function)
+            ));
+        }
+
+        // ID validation also traverses ordinary and removed constraints.
+        for removed in [false, true] {
+            let constraint = v1::Constraint {
+                function: Some(expression()),
+                ..Default::default()
+            };
+            let mut instance = v1::Instance::default();
+            if removed {
+                instance.removed_constraints.push(v1::RemovedConstraint {
+                    constraint: Some(constraint),
+                    ..Default::default()
+                });
+            } else {
+                instance.constraints.push(constraint);
+                let parametric: v1::ParametricInstance = instance.clone().into();
+                assert!(matches!(
+                    parametric
+                        .validate()
+                        .unwrap_err()
+                        .downcast_ref::<RawParseError>(),
+                    Some(RawParseError::UnsupportedV1Function)
+                ));
+            }
+            assert!(matches!(
+                instance
+                    .validate()
+                    .unwrap_err()
+                    .downcast_ref::<RawParseError>(),
+                Some(RawParseError::UnsupportedV1Function)
+            ));
+        }
+    }
+
+    #[test]
+    fn expression_slack_conversion_is_rejected_without_mutation() {
+        use crate::v1;
+
+        let original = v1::Instance {
+            constraints: vec![v1::Constraint {
+                id: 7,
+                equality: v1::Equality::LessThanOrEqualToZero as i32,
+                function: Some(expression()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut instance = original.clone();
+        let error = instance
+            .convert_inequality_to_equality_with_integer_slack(7, 10, crate::ATol::default())
+            .unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<RawParseError>(),
+            Some(RawParseError::UnsupportedV1Function)
+        ));
+        assert_eq!(instance, original);
+        let error = instance.add_integer_slack_to_inequality(7, 10).unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<RawParseError>(),
+            Some(RawParseError::UnsupportedV1Function)
+        ));
+        assert_eq!(instance, original);
     }
 
     #[test]

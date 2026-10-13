@@ -11,6 +11,7 @@ Instanceのタイトル、説明、作成ツール名、ライセンス、デー
 既存の変更可能な `annotations` 辞書とアノテーション用メソッドは引き続き使えます。
 `authors` プロパティは、カンマを含む名前や空の名前を含めてprotobufの各要素を保持し、
 アノテーション辞書への編集も反映します。
+著者リストの明示的な変更は `dataclasses.replace()` による複製でも保持します。
 
 ```python
 from ommx import Instance
@@ -43,6 +44,8 @@ Rust側のprotobuf変換は、拡張アノテーションのmapから予約キ�
 `ommx.v1` のprotobuf定義は、`Function.Expression` の定義を含めてSDK v3と共通です。
 SDK 2.xではこの関数表現は引き続き未対応であり、V1 Bridgeを含めてRust側の関数・モデルへ
 変換する時点で拒否します。`ParametricInstance.from_bytes()` は従来どおり検証を遅延します。
+旧Rust v1の検証、QUBO/HUBO書き出し、整数slack変換も、未対応のExpressionに対して
+panicせずエラーを返します。
 
 ### penalty構築前の整数エンコードと一括置換 (2.9.2, [#1254](https://github.com/Jij-Inc/ommx/pull/1254))
 
