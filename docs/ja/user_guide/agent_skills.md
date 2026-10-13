@@ -46,12 +46,15 @@ uv run ommx skill path ommx
 
 同梱内容には [Agent Plugins 1.0](https://agent-plugins.org/specification) の manifest
 と Claude Code 用メタデータが含まれます。Claude Code のローカルマーケットプレイス
-経由でプロジェクトスコープに導入するには、次のように実行します。
+経由で `local` スコープに導入するには、次のように実行します。
 
 ```bash
-claude plugin marketplace add --scope project "$(uv run ommx plugin marketplace path)"
-claude plugin install --scope project ommx@ommx
+claude plugin marketplace add --scope local "$(uv run ommx plugin marketplace path)"
+claude plugin install --scope local ommx@ommx
 ```
+
+`local` スコープでは、端末固有のマーケットプレイスのパスとプラグインの有効化設定を
+`.claude/settings.local.json` に保存し、このプロジェクトで自分だけが利用します。
 
 Claude Code の 1 セッションだけで使う場合は、起動時にプラグインのパスを指定します。
 
@@ -98,8 +101,7 @@ gh skill install "$(uv run ommx skill path)" ommx --from-local --scope project
 選択を求められたら利用するエージェントを選び、新しいセッションでプロジェクトスコープと
 読み込み元のパスを確認します。環境固有のリンクやコピーには、`.gitignore` に
 `.agents/skills/ommx` を追加してください。チームでコピーを Git 共有する場合は
-OMMX 依存バージョンと合わせて更新します。Claude Code のプロジェクト設定にも
-ローカルマーケットプレイスの絶対パスが入るため、このローカルパスを共有設定に含めないようにします。
+OMMX 依存バージョンと合わせて更新します。
 
 ## バージョン・キャッシュ・更新
 
@@ -117,14 +119,14 @@ OS の OMMX キャッシュ内に展開します。ソースのチェックア�
 
 OMMX を更新したらパスを再取得します。リンク先が変わった場合はシンボリックリンクを
 作り直し、コピーの場合はスキルディレクトリ全体を置き換えてください。Claude Code の
-ローカルマーケットプレイスでは、プロジェクトの登録を解除して新しいパスを登録し、
+ローカルマーケットプレイスでは、`local` スコープの登録を解除して新しいパスを登録し、
 プラグインを再インストールします。Rust CLI のバージョンが変わらない場合も、この手順で
 新しい内容を取り込めます。
 
 ```bash
-claude plugin marketplace remove --scope project ommx
-claude plugin marketplace add --scope project "$(uv run ommx plugin marketplace path)"
-claude plugin install --scope project ommx@ommx
+claude plugin marketplace remove --scope local ommx
+claude plugin marketplace add --scope local "$(uv run ommx plugin marketplace path)"
+claude plugin install --scope local ommx@ommx
 ```
 
 `--plugin-dir` の場合は新しいパスでセッションを起動します。エージェントが更新後の

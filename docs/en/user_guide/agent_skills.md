@@ -45,12 +45,15 @@ is `ommx`.
 
 The bundle contains an [Agent Plugins 1.0](https://agent-plugins.org/specification)
 manifest and Claude Code metadata. Install it through Claude Code's local
-marketplace with project scope:
+marketplace with local scope:
 
 ```bash
-claude plugin marketplace add --scope project "$(uv run ommx plugin marketplace path)"
-claude plugin install --scope project ommx@ommx
+claude plugin marketplace add --scope local "$(uv run ommx plugin marketplace path)"
+claude plugin install --scope local ommx@ommx
 ```
+
+The `local` scope records the machine-specific marketplace path and plugin
+enablement in `.claude/settings.local.json`, for your use in this project.
 
 For one Claude Code session, pass the plugin directory at startup instead:
 
@@ -96,9 +99,7 @@ gh skill install "$(uv run ommx skill path)" ommx --from-local --scope project
 Choose the agent when prompted. Confirm the skill's project scope and source
 path in a new session. Add `.agents/skills/ommx` to `.gitignore` for
 an environment-specific link or copy. If a team shares a copy in Git, update it
-alongside the project's OMMX dependency. Claude Code project settings can also
-contain absolute local marketplace paths; keep those local paths out of shared
-configuration.
+alongside the project's OMMX dependency.
 
 ## Versions, cache, and updates
 
@@ -114,15 +115,15 @@ writable cache location with a UTF-8 path containing no line breaks. Cached file
 are generated data; subsequent calls restore missing files or changed contents.
 
 After upgrading OMMX, obtain the paths again. Recreate symbolic links if their
-targets changed, or replace the complete copied skill directory. For a local
-Claude Code marketplace, remove its project registration, register the new path,
+targets changed, or replace the complete copied skill directory. For the
+Claude Code marketplace, remove its local registration, register the new path,
 and reinstall the plugin. This also refreshes the contents when the Rust CLI
 version is unchanged:
 
 ```bash
-claude plugin marketplace remove --scope project ommx
-claude plugin marketplace add --scope project "$(uv run ommx plugin marketplace path)"
-claude plugin install --scope project ommx@ommx
+claude plugin marketplace remove --scope local ommx
+claude plugin marketplace add --scope local "$(uv run ommx plugin marketplace path)"
+claude plugin install --scope local ommx@ommx
 ```
 
 For `--plugin-dir`, launch a new session with the new path. Confirm that the
