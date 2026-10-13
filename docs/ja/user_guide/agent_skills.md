@@ -1,24 +1,18 @@
-# OMMX でエージェントプラグインとスキルを配布する
+# OMMX のエージェントプラグインとスキルを取得・導入する
 
-OMMX CLI はエージェントプラグインの bundle を配布します。
-プロジェクトにインストールした OMMX から、
+インストールした OMMX に付属するプラグインやスキルを取得し、
+コーディングエージェントに導入します。まず
+[OMMX CLI のインストールと実行](cli.md) に従って、`ommx` コマンドを利用できる
+状態にしてください。以下では Python パッケージに付属する CLI を `uv run` で
+実行します。cargo-binstall で単体の実行ファイルをインストールした場合は、
+`uv run ommx` を `ommx` に置き換えます。パス取得のコマンド構成は
 [JijModeling](https://jij-inc-jijmodeling-tutorials-ja.readthedocs-hosted.com/ja/latest/advanced/agent_plugin_installation.html)
-と同じコマンド構成で取得できます。
+と同じです。
 
-現在の `ommx/SKILL.md` は配布確認用のプレースホルダーです。OMMX の利用方法を
-説明する本文は別途追加します。以下の例では、bundle の導入と検出を確認します。
+現在の `ommx/SKILL.md` はプレースホルダーです。OMMX の利用方法を説明する本文は
+別途追加します。以下のシェル例は POSIX 系シェルを想定しています。
 
-`.agents/skills` を検出するエージェントでは、プロジェクトのルートでリンクを作成します。
-
-```bash
-mkdir -p .agents/skills
-ln -s "$(uv run ommx skill path)/ommx" .agents/skills/ommx
-```
-
-新しいセッションを開始し、`ommx` がスキル一覧に表示され、読み込み元がこのプロジェクトの
-`SKILL.md` であることを確認します。以下のシェル例は POSIX 系シェルを想定しています。
-
-## プラグイン・マーケットプレイス・スキルのパス確認
+## プラグイン・マーケットプレイス・スキルのパスを取得する
 
 ```bash
 uv run ommx plugin path
@@ -44,9 +38,6 @@ uv run ommx skill path ommx
 `plugin path ommx` は `plugin path` と同じプラグインを返します。
 `skill path ommx` は親ディレクトリではなく個別のスキルディレクトリを返します。
 同梱名は `ommx` です。
-
-Rust の単体実行ファイルでも同じコマンドが使えます。Python モジュールとしても
-`uv run python -m ommx.cli plugin path` で実行できます。
 
 ## プロジェクトへのプラグイン導入
 
@@ -78,7 +69,15 @@ Claude Code では `/ommx:ommx` という名前になります。マーケット
 
 ## スキル単体の導入
 
-冒頭の `.agents/skills/ommx` へのリンクを使うか、スキルディレクトリ全体をコピーします。
+`.agents/skills` を検出するエージェントでは、プロジェクトのルートでリンクを作成します。
+
+```bash
+mkdir -p .agents/skills
+ln -s "$(uv run ommx skill path ommx)" .agents/skills/ommx
+```
+
+新しいセッションを開始し、`ommx` がスキル一覧に表示され、読み込み元がこのプロジェクトの
+`SKILL.md` であることを確認します。スキルディレクトリ全体をコピーすることもできます。
 
 ```bash
 mkdir -p .agents/skills

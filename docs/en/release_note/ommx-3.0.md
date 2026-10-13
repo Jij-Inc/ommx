@@ -26,7 +26,7 @@ skill directory. Commands and bundle layout follow JijModeling. The CLI embeds
 the bundle with Agent Plugins and Claude Code manifests, and materializes it in
 a cache keyed by its contents and CLI version. The current `SKILL.md` is a
 distribution placeholder; OMMX usage guidance will be provided separately.
-See [Distribute Agent Plugins and Skills with OMMX](../user_guide/agent_skills.md)
+See [Install OMMX Agent Plugins and Skills](../user_guide/agent_skills.md)
 for installation and updates.
 
 ### 🆕 Run the OMMX CLI from the Python SDK ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
@@ -41,8 +41,10 @@ uv run ommx list
 
 The console script shares argument parsing, command execution, and terminal
 output with the Rust executable, including `OMMX_LOCAL_REGISTRY_ROOT` support.
-`inspect` now prints JSON object keys in a stable order. See the
-{ref}`Local Registry cleanup workflow <experiment-cleanup-workflow>`.
+`inspect` now prints JSON object keys in a stable order. See
+[Install and Run the OMMX CLI](../user_guide/cli.md) for installation options and
+{ref}`Local Registry cleanup workflow <experiment-cleanup-workflow>` for registry
+management.
 
 ## 3.0.0 Beta 7
 

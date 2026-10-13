@@ -1,24 +1,17 @@
-# Distribute Agent Plugins and Skills with OMMX
+# Install OMMX Agent Plugins and Skills
 
-The OMMX CLI distributes an agent plugin bundle and exposes its paths from the
-OMMX installed in your project, using the same command structure as
+Obtain the agent plugin or skill bundled with your installed OMMX, then install
+it in your coding agent. First follow
+[Install and Run the OMMX CLI](cli.md) to set up the `ommx` command.
+The commands below use the Python package's CLI through `uv run`; if you installed
+the standalone executable with cargo-binstall, use `ommx` in place of `uv run ommx`.
+The path commands follow
 [JijModeling](https://jij-inc-jijmodeling-tutorials-en.readthedocs-hosted.com/en/latest/advanced/agent_plugin_installation.html).
 
-The current `ommx/SKILL.md` is a distribution placeholder. OMMX usage guidance
-will be provided separately. The following examples verify installation and
-discovery of the bundle.
+The current `ommx/SKILL.md` is a placeholder; OMMX usage guidance will be
+provided separately. These shell examples use a POSIX shell.
 
-For an agent that discovers `.agents/skills`, link the skill from your project root:
-
-```bash
-mkdir -p .agents/skills
-ln -s "$(uv run ommx skill path)/ommx" .agents/skills/ommx
-```
-
-Start a new session and confirm that `ommx` is listed with this project's
-`SKILL.md` as its source. These shell examples use a POSIX shell.
-
-## Find the plugin, marketplace, or skill
+## Obtain the plugin, marketplace, or skill path
 
 ```bash
 uv run ommx plugin path
@@ -44,9 +37,6 @@ uv run ommx skill path ommx
 `plugin path ommx` returns the same plugin as `plugin path`. `skill path ommx`
 returns the individual skill directory instead of its parent. The bundled name
 is `ommx`.
-
-The standalone Rust executable supports the same commands. The Python module
-entry point also works: `uv run python -m ommx.cli plugin path`.
 
 ## Install the plugin for a project
 
@@ -78,7 +68,15 @@ for the marketplace format and installation behavior.
 
 ## Install the individual skill
 
-Use the `.agents/skills/ommx` link shown above, or copy the complete skill directory:
+For an agent that discovers `.agents/skills`, link the skill from your project root:
+
+```bash
+mkdir -p .agents/skills
+ln -s "$(uv run ommx skill path ommx)" .agents/skills/ommx
+```
+
+Start a new session and confirm that `ommx` is listed with this project's
+`SKILL.md` as its source. You can also copy the complete skill directory:
 
 ```bash
 mkdir -p .agents/skills
