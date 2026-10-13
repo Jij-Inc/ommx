@@ -50,13 +50,6 @@ project already depends on a compatible `ommx`, no separate CLI installation is
 needed. The command syntax is the same for the same CLI version. Available
 commands depend on the installed version.
 
-```{note}
-The Python console command is currently listed under
-[Unreleased](../release_note/ommx-3.0.md). The installation example above requires
-a published version containing this feature. Python SDK `3.0.0b7` and earlier
-do not provide this entry point.
-```
-
 ## Check the version and available commands
 
 ```bash
