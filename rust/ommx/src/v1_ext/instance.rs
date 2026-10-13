@@ -1,3 +1,4 @@
+use super::function::try_required_ids;
 use crate::{
     v1::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
@@ -86,7 +87,15 @@ impl Instance {
 
     /// Validate that all decision variable IDs used in the instance are defined.
     pub fn validate_decision_variable_ids(&self) -> Result<()> {
-        let used_ids = self.required_ids();
+        let mut used_ids = try_required_ids(&self.objective())?;
+        for constraint in &self.constraints {
+            used_ids.extend(try_required_ids(&constraint.function())?);
+        }
+        for removed in &self.removed_constraints {
+            if let Some(constraint) = &removed.constraint {
+                used_ids.extend(try_required_ids(&constraint.function())?);
+            }
+        }
         let mut defined_ids = VariableIDSet::default();
         for dv in &self.decision_variables {
             if !defined_ids.insert(dv.id.into()) {
@@ -193,11 +202,7 @@ impl Instance {
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
-        if !self
-            .objective()
-            .required_ids()
-            .is_subset(&self.binary_ids())
-        {
+        if !try_required_ids(&self.objective())?.is_subset(&self.binary_ids()) {
             bail!("The objective function uses non-binary decision variables.");
         }
         let mut constant = 0.0;
@@ -235,11 +240,7 @@ impl Instance {
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
-        if !self
-            .objective()
-            .required_ids()
-            .is_subset(&self.binary_ids())
-        {
+        if !try_required_ids(&self.objective())?.is_subset(&self.binary_ids()) {
             bail!("The objective function uses non-binary decision variables.");
         }
         let mut constant = 0.0;
@@ -424,7 +425,7 @@ impl Instance {
             .with_context(|| format!("Constraint ID {constraint_id} does not have a function"))?;
 
         // If the constraint contains continuous decision variables, integer slack variable cannot be introduced
-        for id in function.required_ids() {
+        for id in try_required_ids(function)? {
             let kind = kinds
                 .get(&id)
                 .with_context(|| format!("Decision variable ID {id:?} not found"))?;
@@ -527,7 +528,7 @@ impl Instance {
             .as_ref()
             .with_context(|| format!("Constraint ID {constraint_id} does not have a function"))?;
 
-        for id in f.required_ids() {
+        for id in try_required_ids(f)? {
             let kind = kinds
                 .get(&id)
                 .with_context(|| format!("Decision variable ID {id:?} not found"))?;

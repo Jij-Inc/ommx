@@ -322,6 +322,7 @@ impl ParametricInstanceBuilder {
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,
             description: self.description,
+            annotations: Default::default(),
         })
     }
 }

@@ -35,6 +35,9 @@ fn main() -> Result<()> {
     let mut cfg = Config::new();
     cfg.type_attribute(".", "#[non_exhaustive]");
     cfg.field_attribute("SampleSet.feasible_unrelaxed", "#[deprecated]");
+    // Box new provenance fields without changing the existing Result::Solution variant API.
+    cfg.boxed(".ommx.v1.Solution.metadata");
+    cfg.boxed(".ommx.v1.SampleSet.metadata");
     cfg.out_dir(&out).compile_protos(&protos, &[proto_root])?;
 
     std::process::Command::new("rustfmt")

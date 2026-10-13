@@ -5,12 +5,21 @@ isort:skip_file
 """
 
 import builtins
+import collections.abc
 import google.protobuf.descriptor
+import google.protobuf.internal.containers
+import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
 import ommx.v1.linear_pb2
 import ommx.v1.polynomial_pb2
 import ommx.v1.quadratic_pb2
+import sys
 import typing
+
+if sys.version_info >= (3, 10):
+    import typing as typing_extensions
+else:
+    import typing_extensions
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
@@ -20,10 +29,335 @@ class Function(google.protobuf.message.Message):
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing.final
+    class Expression(google.protobuf.message.Message):
+        """A non-recursive expression encoded as reverse Polish notation (RPN).
+
+        Instructions are evaluated in order using a value stack. Atom instructions
+        push one value, unary operations replace the top value, and associative and
+        binary operations pop `rhs` followed by `lhs` and push `lhs op rhs`.
+        A valid expression never underflows its stack and finishes with exactly one
+        value. Canonical expression programs contain at least one operation;
+        decoders normalize a single atom to a compact Function variant below.
+        """
+
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        @typing.final
+        class Instruction(google.protobuf.message.Message):
+            DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+            @typing.final
+            class UnaryOperation(google.protobuf.message.Message):
+                """An operation applied to the top stack value."""
+
+                DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+                class _Operator:
+                    ValueType = typing.NewType("ValueType", builtins.int)
+                    V: typing_extensions.TypeAlias = ValueType
+
+                class _OperatorEnumTypeWrapper(
+                    google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
+                        Function.Expression.Instruction.UnaryOperation._Operator.ValueType
+                    ],
+                    builtins.type,
+                ):
+                    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+                    OPERATOR_UNSPECIFIED: Function.Expression.Instruction.UnaryOperation._Operator.ValueType  # 0
+                    OPERATOR_NEG: Function.Expression.Instruction.UnaryOperation._Operator.ValueType  # 1
+                    """Negation: `-operand`."""
+                    OPERATOR_ABS: Function.Expression.Instruction.UnaryOperation._Operator.ValueType  # 2
+                    """Absolute value: `|operand|`."""
+                    OPERATOR_SIGNUM: Function.Expression.Instruction.UnaryOperation._Operator.ValueType  # 3
+                    """Sign of the operand: -1 for negative values, 0 for zero, and 1 for positive values."""
+                    OPERATOR_POWI: Function.Expression.Instruction.UnaryOperation._Operator.ValueType  # 4
+                    """Integer exponentiation: `operand^integer_exponent`."""
+
+                class Operator(_Operator, metaclass=_OperatorEnumTypeWrapper): ...
+                OPERATOR_UNSPECIFIED: (
+                    Function.Expression.Instruction.UnaryOperation.Operator.ValueType
+                )  # 0
+                OPERATOR_NEG: (
+                    Function.Expression.Instruction.UnaryOperation.Operator.ValueType
+                )  # 1
+                """Negation: `-operand`."""
+                OPERATOR_ABS: (
+                    Function.Expression.Instruction.UnaryOperation.Operator.ValueType
+                )  # 2
+                """Absolute value: `|operand|`."""
+                OPERATOR_SIGNUM: (
+                    Function.Expression.Instruction.UnaryOperation.Operator.ValueType
+                )  # 3
+                """Sign of the operand: -1 for negative values, 0 for zero, and 1 for positive values."""
+                OPERATOR_POWI: (
+                    Function.Expression.Instruction.UnaryOperation.Operator.ValueType
+                )  # 4
+                """Integer exponentiation: `operand^integer_exponent`."""
+
+                OPERATOR_FIELD_NUMBER: builtins.int
+                INTEGER_EXPONENT_FIELD_NUMBER: builtins.int
+                operator: global___Function.Expression.Instruction.UnaryOperation.Operator.ValueType
+                integer_exponent: builtins.int
+                """Exact signed integer exponent. Present if and only if operator is OPERATOR_POWI."""
+                def __init__(
+                    self,
+                    *,
+                    operator: global___Function.Expression.Instruction.UnaryOperation.Operator.ValueType = ...,
+                    integer_exponent: builtins.int | None = ...,
+                ) -> None: ...
+                def HasField(
+                    self,
+                    field_name: typing.Literal[
+                        "_integer_exponent",
+                        b"_integer_exponent",
+                        "integer_exponent",
+                        b"integer_exponent",
+                    ],
+                ) -> builtins.bool: ...
+                def ClearField(
+                    self,
+                    field_name: typing.Literal[
+                        "_integer_exponent",
+                        b"_integer_exponent",
+                        "integer_exponent",
+                        b"integer_exponent",
+                        "operator",
+                        b"operator",
+                    ],
+                ) -> None: ...
+                def WhichOneof(
+                    self,
+                    oneof_group: typing.Literal[
+                        "_integer_exponent", b"_integer_exponent"
+                    ],
+                ) -> typing.Literal["integer_exponent"] | None: ...
+
+            @typing.final
+            class AssociativeOperation(google.protobuf.message.Message):
+                """A two-operand operation whose mathematical operation is associative.
+                The wire representation nevertheless preserves every binary application
+                so evaluation order and grouping remain explicit.
+                """
+
+                DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+                class _Operator:
+                    ValueType = typing.NewType("ValueType", builtins.int)
+                    V: typing_extensions.TypeAlias = ValueType
+
+                class _OperatorEnumTypeWrapper(
+                    google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
+                        Function.Expression.Instruction.AssociativeOperation._Operator.ValueType
+                    ],
+                    builtins.type,
+                ):
+                    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+                    OPERATOR_UNSPECIFIED: Function.Expression.Instruction.AssociativeOperation._Operator.ValueType  # 0
+                    OPERATOR_ADD: Function.Expression.Instruction.AssociativeOperation._Operator.ValueType  # 1
+                    """Addition: `lhs + rhs`."""
+                    OPERATOR_MUL: Function.Expression.Instruction.AssociativeOperation._Operator.ValueType  # 2
+                    """Multiplication: `lhs * rhs`."""
+                    OPERATOR_MIN: Function.Expression.Instruction.AssociativeOperation._Operator.ValueType  # 3
+                    """Minimum: `min(lhs, rhs)`."""
+                    OPERATOR_MAX: Function.Expression.Instruction.AssociativeOperation._Operator.ValueType  # 4
+                    """Maximum: `max(lhs, rhs)`."""
+
+                class Operator(_Operator, metaclass=_OperatorEnumTypeWrapper): ...
+                OPERATOR_UNSPECIFIED: Function.Expression.Instruction.AssociativeOperation.Operator.ValueType  # 0
+                OPERATOR_ADD: Function.Expression.Instruction.AssociativeOperation.Operator.ValueType  # 1
+                """Addition: `lhs + rhs`."""
+                OPERATOR_MUL: Function.Expression.Instruction.AssociativeOperation.Operator.ValueType  # 2
+                """Multiplication: `lhs * rhs`."""
+                OPERATOR_MIN: Function.Expression.Instruction.AssociativeOperation.Operator.ValueType  # 3
+                """Minimum: `min(lhs, rhs)`."""
+                OPERATOR_MAX: Function.Expression.Instruction.AssociativeOperation.Operator.ValueType  # 4
+                """Maximum: `max(lhs, rhs)`."""
+
+                OPERATOR_FIELD_NUMBER: builtins.int
+                operator: global___Function.Expression.Instruction.AssociativeOperation.Operator.ValueType
+                def __init__(
+                    self,
+                    *,
+                    operator: global___Function.Expression.Instruction.AssociativeOperation.Operator.ValueType = ...,
+                ) -> None: ...
+                def ClearField(
+                    self, field_name: typing.Literal["operator", b"operator"]
+                ) -> None: ...
+
+            @typing.final
+            class BinaryOperation(google.protobuf.message.Message):
+                """A two-operand operation for which grouping is significant."""
+
+                DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+                class _Operator:
+                    ValueType = typing.NewType("ValueType", builtins.int)
+                    V: typing_extensions.TypeAlias = ValueType
+
+                class _OperatorEnumTypeWrapper(
+                    google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
+                        Function.Expression.Instruction.BinaryOperation._Operator.ValueType
+                    ],
+                    builtins.type,
+                ):
+                    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+                    OPERATOR_UNSPECIFIED: Function.Expression.Instruction.BinaryOperation._Operator.ValueType  # 0
+                    OPERATOR_DIV: Function.Expression.Instruction.BinaryOperation._Operator.ValueType  # 1
+                    """Division: `lhs / rhs`. Evaluation is undefined when rhs is zero."""
+
+                class Operator(_Operator, metaclass=_OperatorEnumTypeWrapper): ...
+                OPERATOR_UNSPECIFIED: (
+                    Function.Expression.Instruction.BinaryOperation.Operator.ValueType
+                )  # 0
+                OPERATOR_DIV: (
+                    Function.Expression.Instruction.BinaryOperation.Operator.ValueType
+                )  # 1
+                """Division: `lhs / rhs`. Evaluation is undefined when rhs is zero."""
+
+                OPERATOR_FIELD_NUMBER: builtins.int
+                operator: global___Function.Expression.Instruction.BinaryOperation.Operator.ValueType
+                def __init__(
+                    self,
+                    *,
+                    operator: global___Function.Expression.Instruction.BinaryOperation.Operator.ValueType = ...,
+                ) -> None: ...
+                def ClearField(
+                    self, field_name: typing.Literal["operator", b"operator"]
+                ) -> None: ...
+
+            CONSTANT_FIELD_NUMBER: builtins.int
+            LINEAR_FIELD_NUMBER: builtins.int
+            QUADRATIC_FIELD_NUMBER: builtins.int
+            POLYNOMIAL_FIELD_NUMBER: builtins.int
+            UNARY_FIELD_NUMBER: builtins.int
+            ASSOCIATIVE_FIELD_NUMBER: builtins.int
+            BINARY_FIELD_NUMBER: builtins.int
+            constant: builtins.float
+            """Push a constant function. Zero is encoded as the constant 0."""
+            @property
+            def linear(self) -> ommx.v1.linear_pb2.Linear:
+                """Push a compact linear function."""
+
+            @property
+            def quadratic(self) -> ommx.v1.quadratic_pb2.Quadratic:
+                """Push a compact quadratic function."""
+
+            @property
+            def polynomial(self) -> ommx.v1.polynomial_pb2.Polynomial:
+                """Push a compact polynomial function."""
+
+            @property
+            def unary(self) -> global___Function.Expression.Instruction.UnaryOperation:
+                """Apply a unary operation to the top stack value."""
+
+            @property
+            def associative(
+                self,
+            ) -> global___Function.Expression.Instruction.AssociativeOperation:
+                """Apply an associative operation to the top two stack values."""
+
+            @property
+            def binary(
+                self,
+            ) -> global___Function.Expression.Instruction.BinaryOperation:
+                """Apply a non-associative binary operation to the top two stack values."""
+
+            def __init__(
+                self,
+                *,
+                constant: builtins.float = ...,
+                linear: ommx.v1.linear_pb2.Linear | None = ...,
+                quadratic: ommx.v1.quadratic_pb2.Quadratic | None = ...,
+                polynomial: ommx.v1.polynomial_pb2.Polynomial | None = ...,
+                unary: global___Function.Expression.Instruction.UnaryOperation
+                | None = ...,
+                associative: global___Function.Expression.Instruction.AssociativeOperation
+                | None = ...,
+                binary: global___Function.Expression.Instruction.BinaryOperation
+                | None = ...,
+            ) -> None: ...
+            def HasField(
+                self,
+                field_name: typing.Literal[
+                    "associative",
+                    b"associative",
+                    "binary",
+                    b"binary",
+                    "constant",
+                    b"constant",
+                    "instruction",
+                    b"instruction",
+                    "linear",
+                    b"linear",
+                    "polynomial",
+                    b"polynomial",
+                    "quadratic",
+                    b"quadratic",
+                    "unary",
+                    b"unary",
+                ],
+            ) -> builtins.bool: ...
+            def ClearField(
+                self,
+                field_name: typing.Literal[
+                    "associative",
+                    b"associative",
+                    "binary",
+                    b"binary",
+                    "constant",
+                    b"constant",
+                    "instruction",
+                    b"instruction",
+                    "linear",
+                    b"linear",
+                    "polynomial",
+                    b"polynomial",
+                    "quadratic",
+                    b"quadratic",
+                    "unary",
+                    b"unary",
+                ],
+            ) -> None: ...
+            def WhichOneof(
+                self, oneof_group: typing.Literal["instruction", b"instruction"]
+            ) -> (
+                typing.Literal[
+                    "constant",
+                    "linear",
+                    "quadratic",
+                    "polynomial",
+                    "unary",
+                    "associative",
+                    "binary",
+                ]
+                | None
+            ): ...
+
+        INSTRUCTIONS_FIELD_NUMBER: builtins.int
+        @property
+        def instructions(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+            global___Function.Expression.Instruction
+        ]: ...
+        def __init__(
+            self,
+            *,
+            instructions: collections.abc.Iterable[
+                global___Function.Expression.Instruction
+            ]
+            | None = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["instructions", b"instructions"]
+        ) -> None: ...
+
     CONSTANT_FIELD_NUMBER: builtins.int
     LINEAR_FIELD_NUMBER: builtins.int
     QUADRATIC_FIELD_NUMBER: builtins.int
     POLYNOMIAL_FIELD_NUMBER: builtins.int
+    EXPRESSION_FIELD_NUMBER: builtins.int
     constant: builtins.float
     """Constant function like `f(x_1, x_2) = 2`"""
     @property
@@ -38,6 +372,10 @@ class Function(google.protobuf.message.Message):
     def polynomial(self) -> ommx.v1.polynomial_pb2.Polynomial:
         """Polynomial like `f(x_1, x_2) = 4 x_1^2 + 5 x_2^3 + 6 x_1 x_2^2 + 7 x_2^2 + 8 x_1 x_2 + 9 x_1 + 10 x_2 + 11`"""
 
+    @property
+    def expression(self) -> global___Function.Expression:
+        """A non-polynomial expression encoded as reverse Polish notation."""
+
     def __init__(
         self,
         *,
@@ -45,12 +383,15 @@ class Function(google.protobuf.message.Message):
         linear: ommx.v1.linear_pb2.Linear | None = ...,
         quadratic: ommx.v1.quadratic_pb2.Quadratic | None = ...,
         polynomial: ommx.v1.polynomial_pb2.Polynomial | None = ...,
+        expression: global___Function.Expression | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
             "constant",
             b"constant",
+            "expression",
+            b"expression",
             "function",
             b"function",
             "linear",
@@ -66,6 +407,8 @@ class Function(google.protobuf.message.Message):
         field_name: typing.Literal[
             "constant",
             b"constant",
+            "expression",
+            b"expression",
             "function",
             b"function",
             "linear",
@@ -78,6 +421,9 @@ class Function(google.protobuf.message.Message):
     ) -> None: ...
     def WhichOneof(
         self, oneof_group: typing.Literal["function", b"function"]
-    ) -> typing.Literal["constant", "linear", "quadratic", "polynomial"] | None: ...
+    ) -> (
+        typing.Literal["constant", "linear", "quadratic", "polynomial", "expression"]
+        | None
+    ): ...
 
 global___Function = Function

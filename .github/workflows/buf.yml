@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - dev-2.x
   pull_request:
   workflow_dispatch:
 
@@ -11,6 +12,22 @@ permissions:
   contents: read
 
 jobs:
+  v1-sync:
+    name: ommx.v1 files match main
+    if: github.base_ref == 'dev-2.x' || github.ref == 'refs/heads/dev-2.x'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+      - name: Fetch main
+        run: git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+      - name: Compare ommx.v1 files with main
+        run: |
+          if ! git diff --exit-code origin/main HEAD -- proto/ommx/v1/; then
+            echo "::error::proto/ommx/v1/ must match main exactly. Sync the proto files from main and regenerate bindings."
+            exit 1
+          fi
+
   lint:
     runs-on: ubuntu-latest
     steps:

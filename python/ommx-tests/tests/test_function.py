@@ -13,10 +13,23 @@ from ommx.v1 import (
     Polynomial,
     Quadratic,
 )
+from ommx.v1.function_pb2 import Function as FunctionMessage
 
 
 def assert_eq(lhs, rhs):
     assert lhs.almost_equal(rhs), f"{lhs} != {rhs}"
+
+
+def test_v3_expression_is_rejected():
+    message = FunctionMessage()
+    message.expression.instructions.add(constant=2.0)
+
+    # Synchronizing the wire schema must not make SDK 2.x silently accept
+    # an expression as a zero function or simplify it into a supported variant.
+    with pytest.raises(RuntimeError, match="Unsupported ommx.v1.Function"):
+        Function(message)
+    with pytest.raises(RuntimeError, match="Unsupported ommx.v1.Function"):
+        Function.from_bytes(message.SerializeToString())
 
 
 def test_decision_variable():

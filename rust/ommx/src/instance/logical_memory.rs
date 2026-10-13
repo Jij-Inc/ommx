@@ -23,6 +23,9 @@ crate::impl_logical_memory_profile! {
         description,
         authors,
         created_by,
+        created,
+        license,
+        dataset,
     }
 }
 
@@ -37,6 +40,7 @@ crate::impl_logical_memory_profile! {
         constraint_hints,
         parameters,
         description,
+        annotations,
     }
 }
 
@@ -53,13 +57,14 @@ mod tests {
         let folded = logical_memory_to_folded(&instance);
         // Empty instance has zero objective
         insta::assert_snapshot!(folded, @r###"
+        Instance.annotations;HashMap[stack] 48
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.constraints;BTreeMap[stack] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[stack] 24
-        Instance.description;Option[stack] 96
+        Instance.description;Option[stack] 168
         Instance.objective;Zero 40
         Instance.parameters;Option[stack] 48
         Instance.removed_constraints;BTreeMap[stack] 24
@@ -88,6 +93,7 @@ mod tests {
 
         let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
+        Instance.annotations;HashMap[stack] 48
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.constraints;BTreeMap[stack] 24
@@ -103,7 +109,7 @@ mod tests {
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 64
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 48
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
-        Instance.description;Option[stack] 96
+        Instance.description;Option[stack] 168
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.parameters;Option[stack] 48
         Instance.removed_constraints;BTreeMap[stack] 24
@@ -145,6 +151,7 @@ mod tests {
 
         let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
+        Instance.annotations;HashMap[stack] 48
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.constraints;BTreeMap[key] 8
@@ -168,7 +175,7 @@ mod tests {
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 64
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 48
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
-        Instance.description;Option[stack] 96
+        Instance.description;Option[stack] 168
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.parameters;Option[stack] 48
         Instance.removed_constraints;BTreeMap[stack] 24
@@ -204,6 +211,7 @@ mod tests {
         let folded = logical_memory_to_folded(&instance);
         // Note: Same path appears multiple times, flamegraph tools will aggregate them
         insta::assert_snapshot!(folded, @r###"
+        Instance.annotations;HashMap[stack] 48
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.constraints;BTreeMap[stack] 24
@@ -219,7 +227,7 @@ mod tests {
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 96
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 72
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 48
-        Instance.description;Option[stack] 96
+        Instance.description;Option[stack] 168
         Instance.objective;Zero 40
         Instance.parameters;Option[stack] 48
         Instance.removed_constraints;BTreeMap[stack] 24
@@ -255,11 +263,13 @@ mod tests {
             description: Some("A test optimization problem".to_string()),
             authors: vec!["Alice".to_string(), "Bob".to_string()],
             created_by: Some("OMMX Test Suite".to_string()),
+            ..Default::default()
         };
         instance.description = Some(description);
 
         let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
+        Instance.annotations;HashMap[stack] 48
         Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
         Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.constraints;BTreeMap[stack] 24
@@ -277,8 +287,11 @@ mod tests {
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 16
         Instance.description;Description.authors 56
         Instance.description;Description.authors;Vec[stack] 24
+        Instance.description;Description.created;Option[stack] 24
         Instance.description;Description.created_by 39
+        Instance.description;Description.dataset;Option[stack] 24
         Instance.description;Description.description 51
+        Instance.description;Description.license;Option[stack] 24
         Instance.description;Description.name 37
         Instance.objective;Zero 40
         Instance.parameters;Parameters.entries 16

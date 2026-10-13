@@ -635,18 +635,24 @@ pub struct InstanceDescription(ommx::v1::instance::Description);
 #[pymethods]
 impl InstanceDescription {
     #[new]
-    #[pyo3(signature = (name = None, description = None, authors = None, created_by = None))]
+    #[pyo3(signature = (name = None, description = None, authors = None, created_by = None, *, created = None, license = None, dataset = None))]
     pub fn new(
         name: Option<String>,
         description: Option<String>,
         authors: Option<Vec<String>>,
         created_by: Option<String>,
+        created: Option<String>,
+        license: Option<String>,
+        dataset: Option<String>,
     ) -> Self {
         let mut desc = ommx::v1::instance::Description::default();
         desc.name = name;
         desc.description = description;
         desc.authors = authors.unwrap_or_default();
         desc.created_by = created_by;
+        desc.created = created;
+        desc.license = license;
+        desc.dataset = dataset;
         Self(desc)
     }
     #[getter]
@@ -667,6 +673,21 @@ impl InstanceDescription {
     #[getter]
     pub fn created_by(&self) -> Option<String> {
         self.0.created_by.clone()
+    }
+
+    #[getter]
+    pub fn created(&self) -> Option<String> {
+        self.0.created.clone()
+    }
+
+    #[getter]
+    pub fn license(&self) -> Option<String> {
+        self.0.license.clone()
+    }
+
+    #[getter]
+    pub fn dataset(&self) -> Option<String> {
+        self.0.dataset.clone()
     }
 
     fn __repr__(&self) -> String {

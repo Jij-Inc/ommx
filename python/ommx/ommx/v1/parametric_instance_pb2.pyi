@@ -152,6 +152,24 @@ class ParametricInstance(google.protobuf.message.Message):
             self, field_name: typing.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
 
+    @typing.final
+    class AnnotationsEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
+        def __init__(
+            self,
+            *,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
     DESCRIPTION_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     PARAMETERS_FIELD_NUMBER: builtins.int
@@ -162,6 +180,7 @@ class ParametricInstance(google.protobuf.message.Message):
     REMOVED_CONSTRAINTS_FIELD_NUMBER: builtins.int
     DECISION_VARIABLE_DEPENDENCY_FIELD_NUMBER: builtins.int
     NAMED_FUNCTIONS_FIELD_NUMBER: builtins.int
+    ANNOTATIONS_FIELD_NUMBER: builtins.int
     FORMAT_VERSION_FIELD_NUMBER: builtins.int
     sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
     """The sense of this problem, i.e. minimize the objective or maximize it."""
@@ -228,6 +247,17 @@ class ParametricInstance(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
         ommx.v1.named_function_pb2.NamedFunction
     ]: ...
+    @property
+    def annotations(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """User-defined or third-party extension annotations.
+
+        OMMX-reserved metadata must use explicit fields such as `description`.
+        Keys in this map must be valid reverse-domain names and must not start with
+        `org.ommx.v1.`.
+        """
+
     def __init__(
         self,
         *,
@@ -254,6 +284,7 @@ class ParametricInstance(google.protobuf.message.Message):
             ommx.v1.named_function_pb2.NamedFunction
         ]
         | None = ...,
+        annotations: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
         format_version: builtins.int = ...,
     ) -> None: ...
     def HasField(
@@ -270,6 +301,8 @@ class ParametricInstance(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing.Literal[
+            "annotations",
+            b"annotations",
             "constraint_hints",
             b"constraint_hints",
             "constraints",

@@ -8,6 +8,7 @@ impl Parse for crate::v1::Solution {
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Solution";
         crate::parse::check_format_version(self.format_version, message)?;
+        crate::parse::validate_extension_annotations(&self.annotations, message)?;
 
         let provided_feasible = self.get_feasible();
         let provided_feasible_relaxed = self.get_feasible_relaxed();
@@ -89,6 +90,8 @@ impl Parse for crate::v1::Solution {
             optimality,
             relaxation,
             sense,
+            metadata: self.metadata.map(|metadata| *metadata),
+            annotations: self.annotations,
         };
 
         // Validate feasibility consistency
@@ -164,6 +167,8 @@ impl From<Solution> for crate::v1::Solution {
             feasible_unrelaxed,
             sense,
             format_version: 0,
+            metadata: solution.metadata.map(Box::new),
+            annotations: crate::annotations::protobuf_extension_annotations(solution.annotations),
         }
     }
 }

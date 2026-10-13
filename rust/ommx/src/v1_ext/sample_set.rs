@@ -299,7 +299,40 @@ impl SampleSet {
                 format!("SampleSet lacks unrelaxed feasibility for sample with ID={sample_id}")
             })?,
             evaluated_constraints,
+            metadata: self.metadata.clone(),
+            annotations: self.annotations.clone(),
             ..Default::default()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{v1::ProcessMetadata, Message};
+
+    #[test]
+    fn sample_projection_preserves_provenance_and_annotations() {
+        let sample_set = SampleSet {
+            objectives: Some(SampledValues::constants(std::iter::once(0), 1.0)),
+            feasible: HashMap::from([(0, true)]),
+            feasible_relaxed: HashMap::from([(0, true)]),
+            sense: Sense::Minimize as i32,
+            metadata: Some(Box::new(ProcessMetadata {
+                instance: Some("sha256:instance".to_string()),
+                ..Default::default()
+            })),
+            annotations: HashMap::from([("com.example.owner".to_string(), "Alice".to_string())]),
+            ..Default::default()
+        };
+        for solution in [
+            sample_set.get(0).unwrap(),
+            sample_set.best_feasible().unwrap(),
+            sample_set.best_feasible_unrelaxed().unwrap(),
+        ] {
+            let restored = Solution::decode(solution.encode_to_vec().as_slice()).unwrap();
+            assert_eq!(restored.metadata, sample_set.metadata);
+            assert_eq!(restored.annotations, sample_set.annotations);
+        }
     }
 }

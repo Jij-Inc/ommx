@@ -106,10 +106,11 @@ def test_malformed_payload_is_bridge_error_with_cause(kind):
     assert error.value.__cause__ is not None
 
 
-def test_unknown_function_variant_is_rejected():
-    # An unrecognized length-delimited Function oneof arm.
+@pytest.mark.parametrize("payload", [b"\x2a\x00", b"\x32\x00"])
+def test_unsupported_function_variant_is_rejected(payload):
+    # The known-but-unsupported Expression arm (5) and an unknown arm (6).
     with pytest.raises(ommx.BridgeError):
-        receive("function", b"\x2a\x00")
+        receive("function", payload)
 
 
 @pytest.mark.parametrize(
@@ -119,10 +120,11 @@ def test_unknown_function_variant_is_rejected():
 @pytest.mark.parametrize(
     "location", ["objective", "constraint", "removed", "dependency", "named"]
 )
-def test_nested_unknown_functions_are_rejected(kind, raw_type, location):
+@pytest.mark.parametrize("payload", [b"\x2a\x00", b"\x32\x00"])
+def test_nested_unsupported_functions_are_rejected(kind, raw_type, location, payload):
     raw = raw_type(sense=RawInstance.SENSE_MINIMIZE, objective=RawFunction(constant=0))
     raw.decision_variables.add().CopyFrom(ommx.DecisionVariable.binary(7).to_protobuf())
-    unsupported = RawFunction.FromString(b"\x2a\x00")
+    unsupported = RawFunction.FromString(payload)
     if location == "objective":
         raw.objective.CopyFrom(unsupported)
     elif location == "constraint":
