@@ -1,16 +1,19 @@
 # OMMX のエージェントプラグインとスキルを取得・導入する
 
+<!-- 同梱 OMMX スキルの本文を実装したら、この注記を削除する。 -->
+```{note}
+現在同梱されている OMMX スキルはモックで、OMMX の利用方法を説明する本文は
+含まれていません。
+```
+
 インストールした OMMX に付属するプラグインやスキルを取得し、
 コーディングエージェントに導入します。まず
 [OMMX CLI のインストールと実行](cli.md) に従って、`ommx` コマンドを利用できる
 状態にしてください。以下では Python パッケージに付属する CLI を `uv run` で
 実行します。cargo-binstall で単体の実行ファイルをインストールした場合は、
-`uv run ommx` を `ommx` に置き換えます。パス取得のコマンド構成は
-[JijModeling](https://jij-inc-jijmodeling-tutorials-ja.readthedocs-hosted.com/ja/latest/advanced/agent_plugin_installation.html)
-と同じです。
+`uv run ommx` を `ommx` に置き換えます。
 
-現在の `ommx/SKILL.md` はプレースホルダーです。OMMX の利用方法を説明する本文は
-別途追加します。以下のシェル例は POSIX 系シェルを想定しています。
+以下のシェル例は POSIX 系シェルを想定しています。
 
 ## プラグイン・マーケットプレイス・スキルのパスを取得する
 
@@ -28,7 +31,7 @@ uv run ommx skill path
 | `plugin marketplace path` | `.claude-plugin/marketplace.json`、`plugins/ommx/` |
 | `skill path` | `ommx/SKILL.md` |
 
-JijModeling と同様に、プラグイン名・スキル名は省略可能な位置引数です。
+プラグイン名・スキル名は省略可能な位置引数です。
 
 ```bash
 uv run ommx plugin path ommx

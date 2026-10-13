@@ -1,15 +1,18 @@
 # Install OMMX Agent Plugins and Skills
 
+<!-- Remove this note when the bundled OMMX skill's usage guidance is implemented. -->
+```{note}
+The bundled OMMX skill is currently a mock and does not contain OMMX usage
+instructions.
+```
+
 Obtain the agent plugin or skill bundled with your installed OMMX, then install
 it in your coding agent. First follow
 [Install and Run the OMMX CLI](cli.md) to set up the `ommx` command.
 The commands below use the Python package's CLI through `uv run`; if you installed
 the standalone executable with cargo-binstall, use `ommx` in place of `uv run ommx`.
-The path commands follow
-[JijModeling](https://jij-inc-jijmodeling-tutorials-en.readthedocs-hosted.com/en/latest/advanced/agent_plugin_installation.html).
 
-The current `ommx/SKILL.md` is a placeholder; OMMX usage guidance will be
-provided separately. These shell examples use a POSIX shell.
+These shell examples use a POSIX shell.
 
 ## Obtain the plugin, marketplace, or skill path
 
@@ -27,7 +30,7 @@ Each command prints one absolute directory path to stdout:
 | `plugin marketplace path` | `.claude-plugin/marketplace.json` and `plugins/ommx/` |
 | `skill path` | `ommx/SKILL.md` |
 
-Like JijModeling, plugin and skill names are optional positional arguments:
+Plugin and skill names are optional positional arguments:
 
 ```bash
 uv run ommx plugin path ommx
