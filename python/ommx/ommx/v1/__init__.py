@@ -22,7 +22,6 @@ from .parametric_instance_pb2 import (
 )
 from .annotation import (
     UserAnnotationBase,
-    _annotations_from_proto,
     _annotations_to_proto,
     str_annotation_property,
     str_list_annotation_property,
@@ -170,6 +169,9 @@ class Instance(UserAnnotationBase):
     _annotation_lists: dict[str, list[str]] | None = field(
         default=None, kw_only=True, repr=False, compare=False
     )
+    _annotations_initialized: bool = field(
+        default=False, kw_only=True, repr=False, compare=False
+    )
     annotation_namespace = "org.ommx.v1.instance"
     title = str_annotation_property("title")
     "The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact."
@@ -187,16 +189,9 @@ class Instance(UserAnnotationBase):
     "The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact."
 
     def __post_init__(self) -> None:
-        message = _Instance.FromString(self.raw.to_bytes())
-        self._annotation_lists = (
-            {key: list(value) for key, value in self._annotation_lists.items()}
-            if self._annotation_lists is not None
-            else {"authors": list(message.description.authors)}
+        self._initialize_annotations_from_proto(
+            _Instance.FromString(self.raw.to_bytes())
         )
-        for key, value in _annotations_from_proto(
-            message, self.annotation_namespace
-        ).items():
-            self.annotations.setdefault(key, value)
 
     @property
     def _annotations(self) -> dict[str, str]:
@@ -2093,6 +2088,9 @@ class ParametricInstance(UserAnnotationBase):
     _annotation_lists: dict[str, list[str]] | None = field(
         default=None, kw_only=True, repr=False, compare=False
     )
+    _annotations_initialized: bool = field(
+        default=False, kw_only=True, repr=False, compare=False
+    )
     annotation_namespace = "org.ommx.v1.parametric-instance"
     title = str_annotation_property("title")
     "The title of the instance, stored as ``org.ommx.v1.parametric-instance.title`` annotation in OMMX artifact."
@@ -2110,16 +2108,9 @@ class ParametricInstance(UserAnnotationBase):
     "The creation date of the instance, stored as ``org.ommx.v1.parametric-instance.created`` annotation in RFC3339 format in OMMX artifact."
 
     def __post_init__(self) -> None:
-        message = _ParametricInstance.FromString(self.raw.SerializeToString())
-        self._annotation_lists = (
-            {key: list(value) for key, value in self._annotation_lists.items()}
-            if self._annotation_lists is not None
-            else {"authors": list(message.description.authors)}
+        self._initialize_annotations_from_proto(
+            _ParametricInstance.FromString(self.raw.SerializeToString())
         )
-        for key, value in _annotations_from_proto(
-            message, self.annotation_namespace
-        ).items():
-            self.annotations.setdefault(key, value)
 
     @property
     def _annotations(self) -> dict[str, str]:
@@ -2524,13 +2515,14 @@ class Solution(UserAnnotationBase):
     """When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact."""
     annotations: dict[str, str] = field(default_factory=dict)
     """Annotations persisted in protobuf payloads and OMMX artifact layers. Use :py:attr:`parameters` or other specific attributes if possible."""
+    _annotations_initialized: bool = field(
+        default=False, kw_only=True, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
-        message = _Solution.FromString(self.raw.to_bytes())
-        for key, value in _annotations_from_proto(
-            message, self.annotation_namespace
-        ).items():
-            self.annotations.setdefault(key, value)
+        self._initialize_annotations_from_proto(
+            _Solution.FromString(self.raw.to_bytes())
+        )
 
     @property
     def _annotations(self) -> dict[str, str]:
@@ -4799,13 +4791,14 @@ class SampleSet(UserAnnotationBase):
     """When the optimization ended, stored as ``org.ommx.v1.sample-set.end`` annotation in RFC3339 format in OMMX artifact."""
     annotations: dict[str, str] = field(default_factory=dict)
     """Annotations persisted in protobuf payloads and OMMX artifact layers. Use :py:attr:`parameters` or other specific attributes if possible."""
+    _annotations_initialized: bool = field(
+        default=False, kw_only=True, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
-        message = _SampleSet.FromString(self.raw.to_bytes())
-        for key, value in _annotations_from_proto(
-            message, self.annotation_namespace
-        ).items():
-            self.annotations.setdefault(key, value)
+        self._initialize_annotations_from_proto(
+            _SampleSet.FromString(self.raw.to_bytes())
+        )
 
     @property
     def _annotations(self) -> dict[str, str]:

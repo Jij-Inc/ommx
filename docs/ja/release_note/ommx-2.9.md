@@ -12,6 +12,8 @@ Instanceのタイトル、説明、作成ツール名、ライセンス、デー
 `authors` プロパティは、カンマを含む名前や空の名前を含めてprotobufの各要素を保持し、
 アノテーション辞書への編集も反映します。
 著者リストの明示的な変更は `dataclasses.replace()` による複製でも保持します。
+dataclassの複製では、アノテーション辞書の編集と削除を保持し、
+rawモデルのメタデータを復活させたり原本を書き換えたりしません。
 
 ```python
 from ommx import Instance

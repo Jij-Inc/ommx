@@ -106,10 +106,28 @@ def _annotations_to_proto(
 class UserAnnotationBase(ABC):
     annotation_namespace: str
     _annotation_lists: dict[str, list[str]] | None = None
+    _annotations_initialized: bool = False
 
     @property
     @abstractmethod
     def _annotations(self) -> dict[str, str]: ...
+
+    def _initialize_annotations_from_proto(self, message: _AnnotatedMessage) -> None:
+        if self._annotation_lists is not None:
+            self._annotation_lists = {
+                key: list(value) for key, value in self._annotation_lists.items()
+            }
+        if self._annotations_initialized:
+            # A reconstructed dataclass carries the edited dictionary, which may
+            # intentionally omit fields that are still present in its raw model.
+            return
+        if isinstance(message, (_Instance, _ParametricInstance)):
+            self._annotation_lists = {"authors": list(message.description.authors)}
+        for key, value in _annotations_from_proto(
+            message, self.annotation_namespace
+        ).items():
+            self._annotations.setdefault(key, value)
+        self._annotations_initialized = True
 
     def _with_annotations(self, target: _AnnotatedRoot) -> _AnnotatedRoot:
         """Copy metadata when an operation returns another model or output view."""

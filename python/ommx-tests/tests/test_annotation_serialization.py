@@ -396,6 +396,61 @@ def test_dataclass_replace_preserves_explicit_author_entries(
     assert root.authors == authors
 
 
+@pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS)
+@pytest.mark.parametrize("clear_all", [False, True])
+@pytest.mark.parametrize("replace_annotations", [False, True])
+def test_dataclass_replace_preserves_deleted_annotations(
+    factory, root_type, message_type, kind, clear_all, replace_annotations
+):
+    root = factory()
+    root.annotations["com.example.owner"] = "old"
+    root.annotations["com.example.keep"] = "old"
+    metadata_field = (
+        "title" if kind in ("instance", "parametric-instance") else "instance"
+    )
+    setattr(root, metadata_field, "old metadata")
+    if kind in ("instance", "parametric-instance"):
+        root.authors = ["Doe, Jane", "Bob"]
+    root = root_type.from_bytes(root.to_bytes())
+    if clear_all:
+        root.annotations.clear()
+    else:
+        del root.annotations["com.example.owner"]
+        del root.annotations[f"org.ommx.v1.{kind}.{metadata_field}"]
+        root.annotations.pop(f"org.ommx.v1.{kind}.authors", None)
+        root.annotations["com.example.keep"] = "edited"
+    expected = dict(root.annotations)
+    copied = (
+        replace(root, annotations=dict(root.annotations))
+        if replace_annotations
+        else replace(root)
+    )
+    assert root.annotations == expected
+    assert copied.annotations == expected
+    assert root_type.from_bytes(copied.to_bytes()).annotations == expected
+    if kind in ("instance", "parametric-instance"):
+        assert root.authors == []
+        assert copied.authors == []
+        assert (
+            list(message_type.FromString(copied.to_bytes()).description.authors) == []
+        )
+
+
+@pytest.mark.parametrize("factory,root_type,message_type,kind", ROOTS)
+def test_dataclass_replace_uses_explicit_annotation_dictionary(
+    factory, root_type, message_type, kind
+):
+    root = factory()
+    root.annotations["com.example.owner"] = "old"
+    root = root_type.from_bytes(root.to_bytes())
+    annotations = {"com.example.new": "replacement"}
+    copied = replace(root, annotations=annotations)
+    assert copied.annotations is annotations
+    assert annotations == {"com.example.new": "replacement"}
+    assert root.annotations == {"com.example.owner": "old"}
+    assert root_type.from_bytes(copied.to_bytes()).annotations == annotations
+
+
 def test_model_operations_preserve_annotations():
     root = make_instance()
     root.title = "Annotated model"

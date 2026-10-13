@@ -13,6 +13,8 @@ The existing mutable `annotations` dictionaries and annotation helpers remain av
 The `authors` property preserves individual protobuf entries, including names
 containing commas and empty names, while reflecting edits to the annotation dictionary.
 Explicit author-list edits also survive `dataclasses.replace()`.
+Dataclass copies retain annotation dictionary edits and deletions without
+restoring metadata from the underlying model or changing the original object.
 
 ```python
 from ommx import Instance
