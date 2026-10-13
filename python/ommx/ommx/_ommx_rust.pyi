@@ -630,7 +630,7 @@ class Instance:
     @property
     def constraints(self) -> builtins.list[Constraint]:
         r"""
-        List of all decision variables in the instance sorted by their IDs.
+        List of all active regular constraints in the instance sorted by their IDs.
         """
     @property
     def removed_constraints(self) -> builtins.list[RemovedConstraint]:
@@ -662,6 +662,16 @@ class Instance:
         description: typing.Optional[InstanceDescription] = None,
         constraint_hints: typing.Optional[ConstraintHints] = None,
     ) -> Instance: ...
+    def fixed_decision_variables(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Return explicitly stored substituted values as a new dict keyed by ID.
+        Variables with coincident bounds alone are not included.
+        """
+    def regular_constraint_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Return a new set of active regular constraint IDs, excluding removed constraints.
+        Constraint hints leave their source constraints active and included.
+        """
     def to_bytes(self) -> bytes: ...
     def required_ids(self) -> builtins.set[builtins.int]: ...
     def as_qubo_format(self) -> tuple[dict, builtins.float]: ...
