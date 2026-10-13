@@ -110,16 +110,19 @@ OMMX embeds the whole bundle in the Rust executable and Python wheel. Path
 commands materialize it in the OS's OMMX cache under a key derived from all
 bundled files, including manifest versions. No source checkout, network access,
 or Artifact Local Registry is needed. Set `OMMX_PLUGIN_CACHE_DIR` to choose a
-writable cache location. Cached files are generated data; subsequent calls
-restore missing or altered entries.
+writable cache location with a UTF-8 path containing no line breaks. Cached files
+are generated data; subsequent calls restore missing files or changed contents.
 
 After upgrading OMMX, obtain the paths again. Recreate symbolic links if their
 targets changed, or replace the complete copied skill directory. For a local
-Claude Code marketplace, register the new path before updating the plugin:
+Claude Code marketplace, remove its project registration, register the new path,
+and reinstall the plugin. This also refreshes the contents when the Rust CLI
+version is unchanged:
 
 ```bash
+claude plugin marketplace remove --scope project ommx
 claude plugin marketplace add --scope project "$(uv run ommx plugin marketplace path)"
-claude plugin update --scope project ommx@ommx
+claude plugin install --scope project ommx@ommx
 ```
 
 For `--plugin-dir`, launch a new session with the new path. Confirm that the

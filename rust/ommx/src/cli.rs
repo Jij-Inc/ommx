@@ -9,8 +9,7 @@
 //! `ommx plugin path` prints the plugin root, and `ommx plugin marketplace path`
 //! prints its local marketplace root. The embedded bundle is materialized in a
 //! content-addressed OS cache, or under `OMMX_PLUGIN_CACHE_DIR` when set.
-//! No source checkout, network access,
-//! or Artifact Local Registry is needed.
+//! No source checkout, network access, or Artifact Local Registry is needed.
 //!
 //! # Compatibility
 //!

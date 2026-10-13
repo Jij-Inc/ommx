@@ -111,16 +111,20 @@ OMMX は bundle 全体を Rust 実行ファイルと Python wheel に埋め込�
 コマンドは、manifest のバージョンを含む全ファイルの内容から識別したサブディレクトリへ、
 OS の OMMX キャッシュ内に展開します。ソースのチェックアウトやネットワークアクセスは
 不要で、Artifact の Local Registry も開きません。配置先を選ぶ場合は
-`OMMX_PLUGIN_CACHE_DIR` に書き込み可能なディレクトリを指定します。キャッシュ内の
-ファイルは生成物であり、削除・変更されたファイルは次の実行時に復元されます。
+`OMMX_PLUGIN_CACHE_DIR` に、改行を含まない UTF-8 のパスで書き込み可能なディレクトリを
+指定します。キャッシュ内のファイルは生成物であり、ファイルの削除や内容の変更は
+次の実行時に復元されます。
 
 OMMX を更新したらパスを再取得します。リンク先が変わった場合はシンボリックリンクを
 作り直し、コピーの場合はスキルディレクトリ全体を置き換えてください。Claude Code の
-ローカルマーケットプレイスでは、新しいパスを登録してからプラグインを更新します。
+ローカルマーケットプレイスでは、プロジェクトの登録を解除して新しいパスを登録し、
+プラグインを再インストールします。Rust CLI のバージョンが変わらない場合も、この手順で
+新しい内容を取り込めます。
 
 ```bash
+claude plugin marketplace remove --scope project ommx
 claude plugin marketplace add --scope project "$(uv run ommx plugin marketplace path)"
-claude plugin update --scope project ommx@ommx
+claude plugin install --scope project ommx@ommx
 ```
 
 `--plugin-dir` の場合は新しいパスでセッションを起動します。エージェントが更新後の

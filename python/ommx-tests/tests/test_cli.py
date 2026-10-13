@@ -21,16 +21,20 @@ def cli(tmp_path):
         "ommx.exe" if sys.platform == "win32" else "ommx"
     )
 
-    def run(*args):
+    def run(*args, cache_dir=None):
         return subprocess.run(
             [str(executable), *map(str, args)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=False,
+            cwd=tmp_path,
             env={
                 **os.environ,
                 "OMMX_LOCAL_REGISTRY_ROOT": str(registry),
-                "OMMX_PLUGIN_CACHE_DIR": str(tmp_path / "plugin-cache-例"),
+                "OMMX_PLUGIN_CACHE_DIR": str(
+                    cache_dir if cache_dir is not None else tmp_path / "plugin-cache-例"
+                ),
                 "NO_COLOR": "1",
             },
         )
@@ -69,7 +73,9 @@ def test_console_skill_paths_use_the_complete_bundled_skill(cli):
     assert len(parent.stdout.splitlines()) == 1
     root = Path(parent.stdout.strip())
     assert root.is_absolute()
-    assert root.is_relative_to(registry.parent.resolve() / "plugin-cache-例")
+    assert root.resolve().is_relative_to(
+        (registry.parent / "plugin-cache-例").resolve()
+    )
     named = run("skill", "path", "ommx")
     assert named.returncode == 0, named.stderr
     assert named.stderr == ""
@@ -144,6 +150,49 @@ def test_console_plugin_cache_error_is_stderr_and_exit_one(cli, args):
     assert result.stdout == ""
     assert "Failed to create the OMMX plugin cache" in result.stderr
     assert "Traceback" not in result.stderr
+    assert not registry.exists()
+
+
+@pytest.mark.parametrize(
+    "args", [("skill", "path"), ("plugin", "path"), ("plugin", "marketplace", "path")]
+)
+@pytest.mark.parametrize(
+    "cache_name",
+    [
+        "cache\nbreak",
+        "cache\rbreak",
+        "cache\u0085break",
+        "cache\u2028break",
+        "cache\u2029break",
+    ],
+)
+def test_console_cache_path_with_line_breaks_is_not_printed(cli, args, cache_name):
+    run, registry = cli
+    cache = registry.parent / cache_name
+    result = run(*args, cache_dir=cache)
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "must not contain line breaks" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not cache.exists()
+    assert not registry.exists()
+
+
+@pytest.mark.parametrize(
+    "args", [("skill", "path"), ("plugin", "path"), ("plugin", "marketplace", "path")]
+)
+def test_console_relative_cache_path_returns_an_existing_absolute_directory(cli, args):
+    run, registry = cli
+    result = run(*args, cache_dir="relative cache-例")
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
+    assert len(result.stdout.splitlines()) == 1
+    path = Path(result.stdout.strip())
+    assert path.is_absolute()
+    assert path.is_dir()
+    assert path.resolve().is_relative_to(
+        (registry.parent / "relative cache-例").resolve()
+    )
     assert not registry.exists()
 
 

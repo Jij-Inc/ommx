@@ -22,9 +22,9 @@ decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
 `uv run ommx plugin path` and `uv run ommx plugin marketplace path` expose the
 bundled plugin and its local Claude Code marketplace. `uv run ommx skill path`
 prints the skills parent; `uv run ommx skill path ommx` prints the individual
-skill directory. Commands and bundle layout follow JijModeling. The CLI embeds
-the bundle with Agent Plugins and Claude Code manifests, and materializes it in
-a cache keyed by its contents and CLI version. The current `SKILL.md` is a
+skill directory. The CLI embeds the bundle with Agent Plugins and Claude Code
+manifests, and materializes it in a cache keyed by its contents and CLI version.
+The current `SKILL.md` is a
 distribution placeholder; OMMX usage guidance will be provided separately.
 See [Install OMMX Agent Plugins and Skills](../user_guide/agent_skills.md)
 for installation and updates.
