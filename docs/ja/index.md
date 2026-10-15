@@ -104,6 +104,8 @@ tutorial/implement_adapter
 :maxdepth: 1
 :hidden:
 
+user_guide/cli
+user_guide/agent_skills
 user_guide/supported_ommx_adapters
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state

@@ -43,7 +43,16 @@ pub type OneHotPromotionRequest = BTreeSet<ConstraintID>;
 /// rejection reason.
 pub type OneHotPromotion = BTreeMap<ConstraintID, crate::Result<OneHotConstraintID>>;
 
-/// Rejections from strict OneHot application or V1 hint export.
+/// V1 hint export outcomes, keyed by every requested source constraint ID.
+///
+/// Produced by [`OneHotPromotionPlan::into_v1_hints`]. Each value is
+/// either the checked hint for that unchanged regular equality or its original
+/// planning error. An empty request produces an empty map. Successful hints are
+/// mutable protobuf data and must be revalidated by [`Instance::into_v1_with_hints`]
+/// when attached to the final instance.
+pub type OneHotPromotionV1Hints = BTreeMap<ConstraintID, crate::Result<crate::v1::OneHot>>;
+
+/// Rejections from fully-valid OneHot application or V1 hint export.
 ///
 /// Every rejected source ID and its error is retained. No changes were applied
 /// to the instance: callers can repair or remove the rejected requests and retry.
@@ -242,21 +251,62 @@ impl<'a> OneHotPromotionPlan<'a> {
         Ok(self.require_fully_valid()?.apply())
     }
 
-    /// Consume this plan to describe its unchanged regular equalities in V1.
+    /// Export V1 hints only when every requested source is valid.
     ///
     /// Releases the source borrow without moving rows, allocating IDs, or
     /// applying promotion. Every entry must be valid; otherwise returns
     /// [`OneHotPromotionBatchRejected`]. Empty plans return empty hints.
     /// The resulting mutable protobuf data must be checked again when attached
     /// with [`Instance::into_v1_with_hints`].
-    pub fn into_v1_hints(self) -> crate::Result<crate::v1::ConstraintHints> {
+    pub fn into_v1_hints_if_fully_valid(self) -> crate::Result<crate::v1::ConstraintHints> {
         let plan = self.require_fully_valid()?;
         let one_hot_constraints = plan
-            .plans
+            .into_v1_hints()
+            .into_values()
+            .collect::<crate::Result<_>>()?;
+        Ok(crate::v1::ConstraintHints {
+            one_hot_constraints,
+            ..Default::default()
+        })
+    }
+
+    /// Export independent successful sources as V1 hints and retain rejections.
+    ///
+    /// The result has exactly the request's keys. Each value is either a hint
+    /// or the original planning error for that source. This consumes the plan
+    /// and releases the instance borrow without changing rows, variables,
+    /// dependencies, or metadata. An empty batch returns an empty map.
+    /// Unlike SOS1 hints, every successfully planned OneHot is representable in
+    /// V1. Use [`Self::into_v1_hints_if_fully_valid`] to require success for the
+    /// whole batch.
+    /// Revalidate the successful hints with [`Instance::into_v1_with_hints`]
+    /// when attaching them to the final instance.
+    ///
+    /// ```
+    /// use ommx::{ConstraintID, Instance, OneHotPromotionRequest, v1};
+    /// use std::collections::BTreeMap;
+    /// fn collect_hints(instance: &mut Instance, request: &OneHotPromotionRequest)
+    ///     -> (v1::ConstraintHints, BTreeMap<ConstraintID, ommx::Error>)
+    /// {
+    ///     let mut hints = v1::ConstraintHints::default();
+    ///     let mut rejected = BTreeMap::new();
+    ///     for (id, outcome) in instance.plan_promote_one_hot(request)
+    ///         .into_v1_hints()
+    ///     {
+    ///         match outcome {
+    ///             Ok(hint) => hints.one_hot_constraints.push(hint),
+    ///             Err(reason) => { rejected.insert(id, reason); }
+    ///         }
+    ///     }
+    ///     (hints, rejected)
+    /// }
+    /// ```
+    #[must_use = "each requested source has a hint or rejection result"]
+    pub fn into_v1_hints(self) -> OneHotPromotionV1Hints {
+        self.plans
             .into_iter()
             .map(|(id, planned)| {
-                let planned = planned.expect("the full plan was validated");
-                crate::v1::OneHot {
+                let hint = planned.map(|planned| crate::v1::OneHot {
                     constraint_id: id.into_inner(),
                     decision_variables: planned
                         .one_hot_constraint
@@ -264,13 +314,10 @@ impl<'a> OneHotPromotionPlan<'a> {
                         .into_iter()
                         .map(|id| id.into_inner())
                         .collect(),
-                }
+                });
+                (id, hint)
             })
-            .collect();
-        Ok(crate::v1::ConstraintHints {
-            one_hot_constraints,
-            ..Default::default()
-        })
+            .collect()
     }
 
     /// Apply independent successful entries and retain every rejection.
@@ -332,7 +379,9 @@ impl Instance {
     /// All checks and planned IDs refer to this exact, exclusively borrowed
     /// instance. Choose [`OneHotPromotionPlan::apply_if_fully_valid`] for strict
     /// promotion, [`OneHotPromotionPlan::apply`] for best effort, or
-    /// [`OneHotPromotionPlan::into_v1_hints`] to preserve the ordinary rows.
+    /// [`OneHotPromotionPlan::into_v1_hints`] for best-effort V1 hints or
+    /// [`OneHotPromotionPlan::into_v1_hints_if_fully_valid`] for all-or-nothing
+    /// V1 hints. Both exports preserve the ordinary rows.
     pub fn plan_promote_one_hot(
         &mut self,
         request: &OneHotPromotionRequest,

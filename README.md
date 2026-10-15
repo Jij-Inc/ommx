@@ -50,11 +50,30 @@ See [Supported Adapters](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/u
 
 ## CLI
 
-Prebuilt `ommx` CLI archives are attached to Rust SDK releases and can be installed with [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall):
+Prebuilt v3 `ommx` CLI archives are attached to
+[Rust SDK releases](https://github.com/Jij-Inc/ommx/releases?q=rust-3.0) and can be
+installed with [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall).
+For example:
 
 ```bash
-cargo binstall ommx
+cargo binstall ommx@3.0.0-beta.6
+ommx --help
 ```
+
+Use `cargo binstall ommx` to select the latest stable release. For a v3
+prerelease, specify its version explicitly.
+
+The Python SDK also includes the CLI starting with `3.0.0b8`. In a uv project
+with a compatible `ommx` dependency, run:
+
+```bash
+uv run ommx --help
+```
+
+See [Install and Run the OMMX CLI](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/cli.html)
+for installation options and release availability, then
+[Install OMMX Agent Plugins and Skills](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/agent_skills.html)
+to obtain the bundled plugin or skill.
 
 # License
 © 2024 Jij Inc.
