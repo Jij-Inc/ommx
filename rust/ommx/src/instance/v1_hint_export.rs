@@ -46,12 +46,48 @@ impl Instance {
     ///         Constraint::equal_to_zero(Function::from((linear!(1) - coeff!(1.0))?)))]),
     /// )?;
     /// let request = OneHotPromotionRequest::from([ConstraintID::from(7)]);
-    /// let hints = instance.plan_promote_one_hot(&request).into_v1_hints()?;
+    /// let hints = instance.plan_promote_one_hot(&request).into_v1_hints_if_fully_valid()?;
     /// let raw: v1::Instance = instance.into_v1_with_hints(hints)?;
     /// assert_eq!(raw.constraints[0].id, 7);
     /// let bytes = raw.encode_to_vec();
     /// # Ok(())
     /// # }
+    /// ```
+    ///
+    /// For producers such as JijModeling, best-effort exports retain a result
+    /// for every requested ID, including planning and V1-shape rejections.
+    /// The producer owns candidate priority and rounds, choosing at most one
+    /// candidate per cardinality in each batch. Skip cardinalities that have
+    /// already produced hints; rejected IDs remain eligible for another round.
+    /// There is no need to re-plan a batch just to remove its rejections.
+    ///
+    /// ```
+    /// use ommx::{ConstraintID, Instance, Sos1BigMPromotionRequest, v1};
+    /// use std::collections::{BTreeMap, BTreeSet};
+    /// fn export_v1(
+    ///     mut instance: Instance,
+    ///     rounds: impl IntoIterator<Item = Sos1BigMPromotionRequest>,
+    /// ) -> ommx::Result<(v1::Instance, BTreeMap<ConstraintID, ommx::Error>)> {
+    ///     let mut hints = v1::ConstraintHints::default();
+    ///     let mut accepted = BTreeSet::new();
+    ///     let mut rejected = BTreeMap::new();
+    ///     for mut batch in rounds {
+    ///         batch.retain(|id, _| !accepted.contains(id));
+    ///         let outcomes = instance.plan_promote_sos1_big_m(&batch)
+    ///             .apply_bound_tightening_and_convert_to_v1_hints();
+    ///         for (id, outcome) in outcomes {
+    ///             match outcome {
+    ///                 Ok(hint) => {
+    ///                     accepted.insert(id);
+    ///                     rejected.remove(&id);
+    ///                     hints.sos1_constraints.push(hint);
+    ///                 }
+    ///                 Err(reason) => { rejected.insert(id, reason); }
+    ///             }
+    ///         }
+    ///     }
+    ///     Ok((instance.into_v1_with_hints(hints)?, rejected))
+    /// }
     /// ```
     pub fn into_v1_with_hints(
         mut self,
@@ -64,7 +100,7 @@ impl Instance {
             .collect::<OneHotPromotionRequest>();
         let checked_one_hot = self
             .plan_promote_one_hot(&one_hot_request)
-            .into_v1_hints()?
+            .into_v1_hints_if_fully_valid()?
             .one_hot_constraints
             .into_iter()
             .map(|hint| (hint.constraint_id, hint.decision_variables))
@@ -98,7 +134,7 @@ impl Instance {
         }
         let checked_sos1 = self
             .plan_promote_sos1_big_m(&sos1_request)
-            .apply_bound_tightening_and_convert_to_v1_hints()?
+            .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()?
             .sos1_constraints
             .into_iter()
             .map(|hint| (hint.binary_constraint_id, hint))

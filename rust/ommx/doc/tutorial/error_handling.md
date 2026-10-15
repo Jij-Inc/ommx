@@ -45,9 +45,10 @@ returns the typed error directly):
   [`Instance`](crate::Instance).
 - [`OneHotPromotionBatchRejected`](crate::OneHotPromotionBatchRejected) —
   retains rejected source IDs and errors for strict OneHot application or
-  plan-to-hint export. The caller can repair or remove rejected requests and
-  retry against the unchanged instance. SOS1 plan-to-hint export likewise
-  preserves `Sos1BigMPromotionBatchRejected` when a batch contains rejections.
+  fully-valid plan-to-hint export. The caller can repair or remove rejected
+  requests and retry against the unchanged instance. Fully-valid SOS1
+  plan-to-hint export likewise preserves `Sos1BigMPromotionBatchRejected` when
+  a batch contains rejections.
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.
