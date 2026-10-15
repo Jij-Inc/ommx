@@ -376,7 +376,13 @@ Local Registry cleanup は SQLite refs からの到達可能性で判断しま�
 
 OMMX は SQLite に orphan table を作りません。orphan は GC report のたびに refs と manifests を辿って reachable set を作り、それを Local Registry の CAS file と比較して計算します。
 
+(experiment-cleanup-workflow)=
 ## Cleanup workflow
+
+Python SDK をインストールすると `ommx` コマンドも使えるようになります。
+`ommx` に依存する uv プロジェクトでは `uv run ommx --help` を実行するか、
+以下のコマンドに `uv run` を付けてください。Python の入口も standalone
+実行ファイルと同じ Rust CLI を使い、`OMMX_LOCAL_REGISTRY_ROOT` に従います。
 
 cleanup command はまず report mode で実行してください。
 

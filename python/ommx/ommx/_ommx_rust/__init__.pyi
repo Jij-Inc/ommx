@@ -9409,6 +9409,7 @@ class SpecialConstraintKind(enum.Enum):
 
     def __hash__(self) -> builtins.int: ...
 
+def _run_cli(args: typing.Sequence[builtins.str]) -> builtins.int: ...
 def gc(
     *,
     root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,

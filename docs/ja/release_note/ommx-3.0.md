@@ -17,6 +17,34 @@ penaltyによって除去される制約には、エンコード後の式が保�
 制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
 詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
 
+### 🆕 同梱のエージェントプラグインとスキルを取得 ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
+
+`uv run ommx plugin path` と `uv run ommx plugin marketplace path` で、同梱プラグイン
+と Claude Code のローカルマーケットプレイスを取得できます。`uv run ommx skill path`
+はスキルの親ディレクトリ、`uv run ommx skill path ommx` は個別のスキルディレクトリを
+返します。Agent Plugins と Claude Code の manifest を含む bundle は CLI に
+埋め込まれ、内容と CLI バージョンに対応するキャッシュに展開されます。
+現在の `SKILL.md` は配布確認用の
+プレースホルダーで、OMMX の利用方法を説明する本文は別途追加します。
+導入・更新手順は [OMMX のエージェントプラグインとスキルを取得・導入する](../user_guide/agent_skills.md)
+を参照してください。
+
+### 🆕 Python SDK から OMMX CLI を実行 ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
+
+Python SDK をインストールすると `ommx` コマンドも使えるようになります。
+`ommx` に依存する uv プロジェクトでは、次のように実行できます。
+
+```bash
+uv run ommx --help
+uv run ommx list
+```
+
+console script は Rust 実行ファイルと引数解析・コマンド実行・表示を共有し、
+`OMMX_LOCAL_REGISTRY_ROOT` にも従います。`inspect` が表示する JSON のキー順も
+一定になりました。導入手順は [OMMX CLI のインストールと実行](../user_guide/cli.md)、
+Registry の管理は {ref}`Local Registry の cleanup workflow <experiment-cleanup-workflow>`
+を参照してください。
+
 ## 3.0.0 Beta 7
 
 [![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b7)

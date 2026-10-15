@@ -5,6 +5,8 @@ mod annotations;
 mod artifact;
 mod attached;
 mod bound;
+#[cfg(feature = "cli")]
+mod cli;
 mod constraint;
 #[cfg(feature = "remote-artifact")]
 mod dataset;
@@ -150,6 +152,9 @@ pub fn get_default_atol() -> f64 {
 /// See <https://pyo3.rs/main/free-threading#supporting-free-threaded-python-with-pyo3>.
 #[pymodule(gil_used = false)]
 fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+    #[cfg(feature = "cli")]
+    m.add_function(wrap_pyfunction!(cli::_run_cli, m)?)?;
+
     // OMMX Artifact
     error::register_exceptions(py, m)?;
     m.add_class::<PyArchiveDescriptor>()?;
