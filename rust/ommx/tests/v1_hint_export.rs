@@ -86,11 +86,11 @@ fn sos1_request() -> Sos1BigMPromotionRequest {
 fn hints(instance: &mut Instance) -> v1::ConstraintHints {
     let mut hints = instance
         .plan_promote_one_hot(&one_hot_request())
-        .into_v1_hints()
+        .into_v1_hints_if_fully_valid()
         .unwrap();
     hints.sos1_constraints = instance
         .plan_promote_sos1_big_m(&sos1_request())
-        .apply_bound_tightening_and_convert_to_v1_hints()
+        .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
         .unwrap()
         .sos1_constraints;
     hints
@@ -175,7 +175,7 @@ fn rejected_plans_export_no_hints_and_apply_nothing() {
         plan.rejections().map(|(id, _)| id).collect::<Vec<_>>(),
         [999.into()]
     );
-    let error = plan.into_v1_hints().unwrap_err();
+    let error = plan.into_v1_hints_if_fully_valid().unwrap_err();
     let rejected = error
         .downcast_ref::<OneHotPromotionBatchRejected>()
         .unwrap();
@@ -191,7 +191,7 @@ fn rejected_plans_export_no_hints_and_apply_nothing() {
     request.insert(999.into(), BTreeMap::new());
     let error = instance
         .plan_promote_sos1_big_m(&request)
-        .apply_bound_tightening_and_convert_to_v1_hints()
+        .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
         .unwrap_err();
     assert!(error.is::<Sos1BigMPromotionBatchRejected>());
     assert_eq!(instance, original);
@@ -232,7 +232,7 @@ fn hint_conversion_commits_only_bounds_and_retains_the_regular_formulation() {
     assert_eq!(instance, before);
     let hints = instance
         .plan_promote_sos1_big_m(&sos1_request())
-        .apply_bound_tightening_and_convert_to_v1_hints()
+        .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
         .unwrap();
     assert_eq!(instance, source(3.0));
     let raw = instance.into_v1_with_hints(hints).unwrap();
@@ -287,14 +287,14 @@ fn empty_plans_release_the_borrow_without_effects() {
     assert_eq!(
         instance
             .plan_promote_one_hot(&Default::default())
-            .into_v1_hints()
+            .into_v1_hints_if_fully_valid()
             .unwrap(),
         v1::ConstraintHints::default()
     );
     assert_eq!(
         instance
             .plan_promote_sos1_big_m(&Default::default())
-            .apply_bound_tightening_and_convert_to_v1_hints()
+            .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
             .unwrap(),
         v1::ConstraintHints::default()
     );
@@ -390,7 +390,7 @@ fn ambiguous_zero_bound_selectors_are_rejected_without_changing_the_model() {
     let plan = instance.plan_promote_sos1_big_m(&request);
     assert!(plan.is_fully_valid());
     assert!(plan
-        .apply_bound_tightening_and_convert_to_v1_hints()
+        .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
         .unwrap_err()
         .to_string()
         .contains("ambiguous"));
@@ -473,11 +473,11 @@ fn best_effort_all_valid_hints_match_strict_export() {
     let mut strict = instance.clone();
     let expected = strict
         .plan_promote_sos1_big_m(&request)
-        .apply_bound_tightening_and_convert_to_v1_hints()
+        .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
         .unwrap();
     let outcomes: ommx::Sos1BigMPromotionV1Hints = instance
         .plan_promote_sos1_big_m(&request)
-        .apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+        .apply_bound_tightening_and_convert_to_v1_hints();
     assert_eq!(
         outcomes.keys().copied().collect::<Vec<_>>(),
         [20.into(), 120.into()]
@@ -501,11 +501,10 @@ fn best_effort_all_valid_hints_match_strict_export() {
     let request = [10.into(), second_source].into();
     let expected = strict
         .plan_promote_one_hot(&request)
-        .into_v1_hints()
+        .into_v1_hints_if_fully_valid()
         .unwrap();
-    let outcomes: ommx::OneHotPromotionV1Hints = instance
-        .plan_promote_one_hot(&request)
-        .into_v1_hints_best_effort();
+    let outcomes: ommx::OneHotPromotionV1Hints =
+        instance.plan_promote_one_hot(&request).into_v1_hints();
     assert_eq!(
         outcomes.keys().copied().collect::<Vec<_>>(),
         [10.into(), second_source]
@@ -530,7 +529,7 @@ fn best_effort_preserves_planning_rejections_and_every_request_key() {
         .rejections()
         .map(|(id, error)| (id, format!("{error:#}")))
         .collect::<BTreeMap<_, _>>();
-    let outcomes = plan.into_v1_hints_best_effort();
+    let outcomes = plan.into_v1_hints();
     assert_eq!(
         outcomes.keys().copied().collect::<Vec<_>>(),
         [10.into(), 20.into(), 999.into()]
@@ -549,7 +548,7 @@ fn best_effort_preserves_planning_rejections_and_every_request_key() {
         .rejections()
         .map(|(id, error)| (id, format!("{error:#}")))
         .collect::<BTreeMap<_, _>>();
-    let outcomes = plan.apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+    let outcomes = plan.apply_bound_tightening_and_convert_to_v1_hints();
     assert_eq!(
         outcomes.keys().copied().collect::<Vec<_>>(),
         [10.into(), 20.into(), 999.into()]
@@ -570,21 +569,21 @@ fn best_effort_empty_and_all_rejected_batches_apply_nothing() {
     let before = instance.clone();
     assert!(instance
         .plan_promote_one_hot(&Default::default())
-        .into_v1_hints_best_effort()
+        .into_v1_hints()
         .is_empty());
     assert!(instance
         .plan_promote_sos1_big_m(&Default::default())
-        .apply_bound_tightening_and_convert_to_v1_hints_best_effort()
+        .apply_bound_tightening_and_convert_to_v1_hints()
         .is_empty());
     let outcomes = instance
         .plan_promote_one_hot(&[20.into(), 999.into()].into())
-        .into_v1_hints_best_effort();
+        .into_v1_hints();
     assert_eq!(outcomes.len(), 2);
     assert!(outcomes.values().all(Result::is_err));
     let request = BTreeMap::from([(10.into(), BTreeMap::new()), (999.into(), BTreeMap::new())]);
     let outcomes = instance
         .plan_promote_sos1_big_m(&request)
-        .apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+        .apply_bound_tightening_and_convert_to_v1_hints();
     assert_eq!(outcomes.len(), 2);
     assert!(outcomes.values().all(Result::is_err));
     assert_eq!(instance, before);
@@ -594,7 +593,7 @@ fn best_effort_empty_and_all_rejected_batches_apply_nothing() {
     let before = instance.clone();
     let outcomes = instance
         .plan_promote_sos1_big_m(&request)
-        .apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+        .apply_bound_tightening_and_convert_to_v1_hints();
     assert!(outcomes[&20.into()]
         .as_ref()
         .unwrap_err()
@@ -615,7 +614,7 @@ fn v1_rejections_do_not_discard_independent_hints_or_apply_their_bounds() {
         let before = instance.clone();
         let outcomes = instance
             .plan_promote_sos1_big_m(&request)
-            .apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+            .apply_bound_tightening_and_convert_to_v1_hints();
         assert_eq!(outcomes.len(), 3);
         assert!(outcomes[&20.into()]
             .as_ref()
@@ -654,7 +653,7 @@ fn shared_members_intersect_only_successful_hint_bounds() {
     let before = instance.clone();
     let plan = instance.plan_promote_sos1_big_m(&request);
     assert!(plan.is_fully_valid());
-    let outcomes = plan.apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+    let outcomes = plan.apply_bound_tightening_and_convert_to_v1_hints();
     assert!(outcomes[&20.into()].is_err());
     assert!(outcomes[&120.into()].is_ok());
     assert!(outcomes[&220.into()].is_ok());
@@ -683,7 +682,7 @@ fn invalid_overlapping_claim_does_not_poison_valid_hint() {
         plan.rejections().map(|(id, _)| id).collect::<Vec<_>>(),
         [21.into()]
     );
-    let outcomes = plan.apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+    let outcomes = plan.apply_bound_tightening_and_convert_to_v1_hints();
     assert!(outcomes[&20.into()].is_ok());
     assert!(outcomes[&21.into()].is_err());
     assert_ne!(instance, before);
@@ -708,7 +707,7 @@ fn best_effort_preserves_selector_isolation_rejections() {
     let before = instance.clone();
     let outcomes = instance
         .plan_promote_sos1_big_m(&request)
-        .apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+        .apply_bound_tightening_and_convert_to_v1_hints();
     assert!(outcomes[&20.into()]
         .as_ref()
         .unwrap_err()
@@ -762,12 +761,12 @@ fn best_effort_preserves_regular_rows_variables_dependencies_and_metadata() {
     let before = instance.clone();
     let one_hot = instance
         .plan_promote_one_hot(&[10.into(), 999.into()].into())
-        .into_v1_hints_best_effort();
+        .into_v1_hints();
     assert!(one_hot[&10.into()].is_ok());
     assert_eq!(instance, before);
     let outcomes = instance
         .plan_promote_sos1_big_m(&sos1_request())
-        .apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+        .apply_bound_tightening_and_convert_to_v1_hints();
     assert!(outcomes[&20.into()].is_ok());
     let mut expected = before;
     expected
@@ -792,14 +791,14 @@ fn strict_export_remains_atomic_with_valid_and_v1_rejected_candidates() {
     assert!(instance.plan_promote_sos1_big_m(&request).is_fully_valid());
     let error = instance
         .plan_promote_sos1_big_m(&request)
-        .apply_bound_tightening_and_convert_to_v1_hints()
+        .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
         .unwrap_err();
     assert!(error.to_string().contains("ambiguous"));
     assert_eq!(instance, before);
     request.insert(999.into(), BTreeMap::new());
     let error = instance
         .plan_promote_sos1_big_m(&request)
-        .apply_bound_tightening_and_convert_to_v1_hints()
+        .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
         .unwrap_err();
     assert!(error.is::<Sos1BigMPromotionBatchRejected>());
     assert_eq!(instance, before);
@@ -977,10 +976,10 @@ proptest! {
         let original = source.clone();
         let plan = source.plan_promote_sos1_big_m(&request);
         prop_assert!(plan.is_fully_valid(), "{:?}", plan.rejections().collect::<Vec<_>>());
-        let exported = plan.apply_bound_tightening_and_convert_to_v1_hints();
+        let exported = plan.apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid();
         let mut best_effort = original.clone();
         let outcomes = best_effort.plan_promote_sos1_big_m(&request)
-            .apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+            .apply_bound_tightening_and_convert_to_v1_hints();
         prop_assert_eq!(outcomes.keys().copied().collect::<Vec<_>>(), vec![cardinality_id.into()]);
         if zero_members > 1 {
             prop_assert!(exported.unwrap_err().to_string().contains("ambiguous"));
@@ -1052,8 +1051,8 @@ proptest! {
             BTreeMap::from([(source_id.into(), Constraint::equal_to_zero(equality.into()))]),
         ).unwrap();
         let original = source.clone();
-        let hints = source.plan_promote_one_hot(&[source_id.into()].into()).into_v1_hints().unwrap();
-        let outcomes = source.plan_promote_one_hot(&[source_id.into()].into()).into_v1_hints_best_effort();
+        let hints = source.plan_promote_one_hot(&[source_id.into()].into()).into_v1_hints_if_fully_valid().unwrap();
+        let outcomes = source.plan_promote_one_hot(&[source_id.into()].into()).into_v1_hints();
         prop_assert_eq!(outcomes.keys().copied().collect::<Vec<_>>(), vec![source_id.into()]);
         prop_assert_eq!(outcomes.into_values().collect::<ommx::Result<Vec<_>>>().unwrap(), hints.one_hot_constraints.clone());
         prop_assert_eq!(&source, &original);

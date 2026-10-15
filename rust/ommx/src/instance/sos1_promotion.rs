@@ -89,7 +89,7 @@ pub type Sos1BigMPromotion = BTreeMap<ConstraintID, crate::Result<Sos1Constraint
 /// V1 hint export outcomes, keyed by every requested cardinality constraint ID.
 ///
 /// Produced by
-/// [`Sos1BigMPromotionPlan::apply_bound_tightening_and_convert_to_v1_hints_best_effort`].
+/// [`Sos1BigMPromotionPlan::apply_bound_tightening_and_convert_to_v1_hints`].
 /// Each value is either a checked hint or that candidate's planning or V1
 /// representability error. Only successful candidates contribute bound updates.
 /// An empty request produces an empty map. Successful hints are mutable protobuf
@@ -101,7 +101,7 @@ pub type Sos1BigMPromotionV1Hints = BTreeMap<ConstraintID, crate::Result<crate::
 ///
 /// This signal is produced by
 /// [`Sos1BigMPromotionPlan::apply_if_fully_valid`] or
-/// [`Sos1BigMPromotionPlan::apply_bound_tightening_and_convert_to_v1_hints`] before the bound
+/// [`Sos1BigMPromotionPlan::apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid`] before the bound
 /// [`Instance`] is mutated. It owns every planning rejection together with the
 /// cardinality constraint ID of the corresponding formulation. Callers can inspect
 /// those IDs, repair or remove the rejected claims, and retry against
@@ -506,7 +506,7 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
         Ok(self)
     }
 
-    /// Commit prepared bounds and describe the retained regular formulation in V1.
+    /// Export V1 hints and commit bounds only when the whole batch is valid.
     ///
     /// Bounds inferred from the claimed links are applied. Regular rows,
     /// dependencies, metadata, and IDs remain unchanged; no native SOS1 is added.
@@ -520,7 +520,7 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
     /// multiple unlinked zero-bound members cannot be represented by this hint.
     /// An empty plan returns empty hints. The resulting mutable protobuf data
     /// must be checked again when attached with [`Instance::into_v1_with_hints`].
-    pub fn apply_bound_tightening_and_convert_to_v1_hints(
+    pub fn apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid(
         self,
     ) -> crate::Result<crate::v1::ConstraintHints> {
         let (instance, outcomes, tightened_bounds) = self.require_fully_valid()?.prepare_v1_hints();
@@ -551,13 +551,11 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
     /// made dependent. An empty batch returns an empty map without mutation.
     ///
     /// This consumes the plan and releases its exclusive instance borrow. Use
-    /// [`Self::apply_bound_tightening_and_convert_to_v1_hints`] for all-or-nothing
+    /// [`Self::apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid`] for all-or-nothing
     /// export. Revalidate successful hints with [`Instance::into_v1_with_hints`]
     /// when attaching them to the final instance.
     #[must_use = "each requested cardinality has a hint or rejection result"]
-    pub fn apply_bound_tightening_and_convert_to_v1_hints_best_effort(
-        self,
-    ) -> Sos1BigMPromotionV1Hints {
+    pub fn apply_bound_tightening_and_convert_to_v1_hints(self) -> Sos1BigMPromotionV1Hints {
         let (instance, outcomes, tightened_bounds) = self.prepare_v1_hints();
         instance
             .clip_bounds_exact(&tightened_bounds)
@@ -2640,7 +2638,7 @@ mod tests {
                     if export_hints {
                         instance
                             .plan_promote_sos1_big_m(&request)
-                            .apply_bound_tightening_and_convert_to_v1_hints()
+                            .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
                             .unwrap();
                         assert_eq!(instance.constraints().len(), 3);
                     } else {
@@ -3710,7 +3708,7 @@ mod tests {
         assert_eq!(instance, original);
         assert!(instance
             .plan_promote_sos1_big_m(&invalid)
-            .apply_bound_tightening_and_convert_to_v1_hints()
+            .apply_bound_tightening_and_convert_to_v1_hints_if_fully_valid()
             .is_err());
         assert_eq!(instance, original);
         let report = instance.promote_sos1_big_m(&invalid);

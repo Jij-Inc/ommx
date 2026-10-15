@@ -122,7 +122,7 @@ fn compile_for_target(py: Python<'_>) -> PyResult<PyInstance> {
         let mut instance = regular_instance();
         let hints = instance
             .plan_promote_one_hot(&[23.into()].into_iter().collect())
-            .into_v1_hints()
+            .into_v1_hints_if_fully_valid()
             .unwrap();
         let message = instance.into_v1_with_hints(hints).unwrap();
         // Check the wire data before the receiver can ignore advisory hints.

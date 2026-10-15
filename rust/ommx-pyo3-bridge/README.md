@@ -129,7 +129,7 @@ fn compile(py: Python<'_>) -> PyResult<PyInstance> {
         let mut instance: Instance = compile_regular();
         let request = [ConstraintID::from(23)].into_iter().collect();
         let hints = instance.plan_promote_one_hot(&request)
-            .into_v1_hints()
+            .into_v1_hints_if_fully_valid()
             .expect("the example is exactly one-hot");
         let message = instance.into_v1_with_hints(hints)
             .expect("the regular formulation supports v1");
