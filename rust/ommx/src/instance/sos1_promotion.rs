@@ -86,6 +86,17 @@ pub type Sos1BigMPromotionRequest =
 /// owned by the mutated [`Instance`] and can be queried there.
 pub type Sos1BigMPromotion = BTreeMap<ConstraintID, crate::Result<Sos1ConstraintID>>;
 
+/// V1 hint export outcomes, keyed by every requested cardinality constraint ID.
+///
+/// Produced by
+/// [`Sos1BigMPromotionPlan::apply_bound_tightening_and_convert_to_v1_hints_best_effort`].
+/// Each value is either a checked hint or that candidate's planning or V1
+/// representability error. Only successful candidates contribute bound updates.
+/// An empty request produces an empty map. Successful hints are mutable protobuf
+/// data and must be revalidated by [`Instance::into_v1_with_hints`] when attached
+/// to the final instance.
+pub type Sos1BigMPromotionV1Hints = BTreeMap<ConstraintID, crate::Result<crate::v1::Sos1>>;
+
 /// Signal that a fully-valid SOS1 Big-M promotion batch could not be formed.
 ///
 /// This signal is produced by
@@ -512,36 +523,8 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
     pub fn apply_bound_tightening_and_convert_to_v1_hints(
         self,
     ) -> crate::Result<crate::v1::ConstraintHints> {
-        let Self {
-            instance,
-            entries,
-            tightened_bounds,
-        } = self.require_fully_valid()?;
-        let sos1_constraints = entries
-            .into_iter()
-            .map(|(cardinality, planned)| {
-                let candidate = planned.expect("the full plan was validated").candidate;
-                let hint = crate::v1::Sos1 {
-                    binary_constraint_id: cardinality.into_inner(),
-                    big_m_constraint_ids: candidate
-                        .relaxed_constraint_ids
-                        .into_iter()
-                        .filter(|id| *id != cardinality)
-                        .map(|id| id.into_inner())
-                        .collect(),
-                    decision_variables: candidate
-                        .sos1_constraint
-                        .variables
-                        .into_iter()
-                        .map(|id| id.into_inner())
-                        .collect(),
-                };
-                // V1 omits selector-role mappings. Ensure the wire form retains
-                // enough information to reconstruct the checked formulation.
-                instance.sos1_big_m_promotion_request_from_v1_hint(&hint)?;
-                Ok(hint)
-            })
-            .collect::<crate::Result<_>>()?;
+        let (instance, outcomes, tightened_bounds) = self.require_fully_valid()?.prepare_v1_hints();
+        let sos1_constraints = outcomes.into_values().collect::<crate::Result<_>>()?;
         // All fallible hint-shape checks finish before any bound is committed.
         instance
             .clip_bounds_exact(&tightened_bounds)
@@ -550,6 +533,79 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
             sos1_constraints,
             ..Default::default()
         })
+    }
+
+    /// Export independent successful candidates as V1 hints and retain rejections.
+    ///
+    /// The result has exactly the request's cardinality keys. Each value is
+    /// either a hint or its original planning error or V1 representability
+    /// error (for example, ambiguous unlinked zero-bound members). A conversion
+    /// failure does not discard unrelated successful candidates.
+    ///
+    /// Apply only bounds required by successful hints, intersecting updates for
+    /// shared members. Rejected candidates contribute no bound updates. The
+    /// existing batch conflict policy still applies: every participant sharing
+    /// claimed regular rows is rejected during planning; hint export does not
+    /// reconsider those rejections. Regular rows, variable IDs, dependencies,
+    /// and metadata are retained. No native SOS1 is added and no selector is
+    /// made dependent. An empty batch returns an empty map without mutation.
+    ///
+    /// This consumes the plan and releases its exclusive instance borrow. Use
+    /// [`Self::apply_bound_tightening_and_convert_to_v1_hints`] for all-or-nothing
+    /// export. Revalidate successful hints with [`Instance::into_v1_with_hints`]
+    /// when attaching them to the final instance.
+    #[must_use = "each requested cardinality has a hint or rejection result"]
+    pub fn apply_bound_tightening_and_convert_to_v1_hints_best_effort(
+        self,
+    ) -> Sos1BigMPromotionV1Hints {
+        let (instance, outcomes, tightened_bounds) = self.prepare_v1_hints();
+        instance
+            .clip_bounds_exact(&tightened_bounds)
+            .expect("bound updates were validated against the exclusively borrowed instance");
+        outcomes
+    }
+
+    // V1 loses explicit selector roles. Both export policies use the existing
+    // reconstruction check before committing any bounds. Rebuild the bound
+    // intersection from representable candidates so a V1 rejection cannot
+    // leak its updates into another successful hint, including shared members.
+    fn prepare_v1_hints(self) -> (&'a mut Instance, Sos1BigMPromotionV1Hints, Bounds) {
+        let Self {
+            instance, entries, ..
+        } = self;
+        let mut tightened_bounds = Bounds::new();
+        let outcomes = entries
+            .into_iter()
+            .map(|(cardinality, planned)| {
+                let outcome = planned.and_then(|planned| {
+                    let candidate = planned.candidate;
+                    let hint = crate::v1::Sos1 {
+                        binary_constraint_id: cardinality.into_inner(),
+                        big_m_constraint_ids: candidate
+                            .relaxed_constraint_ids
+                            .into_iter()
+                            .filter(|id| *id != cardinality)
+                            .map(|id| id.into_inner())
+                            .collect(),
+                        decision_variables: candidate
+                            .sos1_constraint
+                            .variables
+                            .into_iter()
+                            .map(|id| id.into_inner())
+                            .collect(),
+                    };
+                    // V1 omits selector-role mappings. Ensure the wire form retains
+                    // enough information to reconstruct the checked formulation.
+                    instance.sos1_big_m_promotion_request_from_v1_hint(&hint)?;
+                    tightened_bounds
+                        .intersect_with(&candidate.tightened_bounds)
+                        .expect("a subset of validated SOS1 bound intersections is nonempty");
+                    Ok(hint)
+                });
+                (cardinality, outcome)
+            })
+            .collect();
+        (instance, outcomes, tightened_bounds)
     }
 
     /// Applies every successful entry to the unchanged bound instance.

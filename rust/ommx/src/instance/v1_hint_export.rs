@@ -53,6 +53,42 @@ impl Instance {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// For producers such as JijModeling, best-effort exports retain a result
+    /// for every requested ID, including planning and V1-shape rejections.
+    /// The producer owns candidate priority and rounds, choosing at most one
+    /// candidate per cardinality in each batch. Skip cardinalities that have
+    /// already produced hints; rejected IDs remain eligible for another round.
+    /// There is no need to re-plan a batch just to remove its rejections.
+    ///
+    /// ```
+    /// use ommx::{ConstraintID, Instance, Sos1BigMPromotionRequest, v1};
+    /// use std::collections::{BTreeMap, BTreeSet};
+    /// fn export_v1(
+    ///     mut instance: Instance,
+    ///     rounds: impl IntoIterator<Item = Sos1BigMPromotionRequest>,
+    /// ) -> ommx::Result<(v1::Instance, BTreeMap<ConstraintID, ommx::Error>)> {
+    ///     let mut hints = v1::ConstraintHints::default();
+    ///     let mut accepted = BTreeSet::new();
+    ///     let mut rejected = BTreeMap::new();
+    ///     for mut batch in rounds {
+    ///         batch.retain(|id, _| !accepted.contains(id));
+    ///         let outcomes = instance.plan_promote_sos1_big_m(&batch)
+    ///             .apply_bound_tightening_and_convert_to_v1_hints_best_effort();
+    ///         for (id, outcome) in outcomes {
+    ///             match outcome {
+    ///                 Ok(hint) => {
+    ///                     accepted.insert(id);
+    ///                     rejected.remove(&id);
+    ///                     hints.sos1_constraints.push(hint);
+    ///                 }
+    ///                 Err(reason) => { rejected.insert(id, reason); }
+    ///             }
+    ///         }
+    ///     }
+    ///     Ok((instance.into_v1_with_hints(hints)?, rejected))
+    /// }
+    /// ```
     pub fn into_v1_with_hints(
         mut self,
         additional_hints: v1::ConstraintHints,
