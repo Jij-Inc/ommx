@@ -460,29 +460,28 @@ impl Instance {
     #[cfg_attr(doc, katexit::katexit)]
     /// Convert every active regular constraint to a penalty term with one fixed weight.
     ///
-    /// When at least one active regular constraint is converted, `weight` is a
-    /// penalty magnitude that must be finite and at least `-atol`. With no active
-    /// regular constraints this operation is an identity and does not inspect
-    /// `weight`. A validated value in `[-atol, 0)` is normalized to zero. Each constraint body
-    /// $f_i(x)$ contributes $+w f_i(x)^2$ to a minimization objective and
-    /// $-w f_i(x)^2$ to a maximization objective, where $w$ is the normalized
-    /// nonnegative magnitude. OMMX does not decide whether the weight is large
-    /// enough for an application's penalty rule.
+    /// Use this to build a penalty objective when all active regular constraints
+    /// should share the same weight. Lower or remove active Indicator, OneHot,
+    /// and SOS1 constraints first; this method rejects them without changing
+    /// the instance, even if no regular constraints are active.
+    ///
+    /// `weight` is a penalty magnitude: when a penalty is applied, it must be
+    /// finite and at least `-atol`. A value in `[-atol, 0)` is normalized to zero.
+    /// Each constraint body $f_i(x)$ contributes $+w f_i(x)^2$ to a minimization
+    /// objective and $-w f_i(x)^2$ to a maximization objective, where $w$ is the
+    /// normalized nonnegative magnitude. OMMX does not decide whether the
+    /// weight is large enough for an application's penalty rule.
     ///
     /// No parameter ID or assignment is created, and the instance's recorded
     /// parameter assignments remain exactly unchanged.
     ///
-    /// On success, every regular, indicator, one-hot, and SOS1 constraint is in
-    /// its removed collection; all four active collections are empty. Every
-    /// active regular constraint is moved to the removed collection, and
-    /// existing removed constraints of every family are preserved. Active
-    /// special constraints are not penalty-converted: their presence returns
-    /// an error without modifying the instance.
+    /// On success, all active constraint collections are empty. Each previously
+    /// active regular constraint has moved to its removed collection; existing
+    /// removed constraints of every family are preserved.
     ///
     /// When no constraint of any family is active, this is an exact identity
-    /// operation. Otherwise, fallible function arithmetic and regular-constraint
-    /// lifecycle changes are completed on local values and committed only after
-    /// both succeed.
+    /// operation and `weight` is not validated. Otherwise, any error leaves the
+    /// instance unchanged.
     ///
     /// # Postconditions
     ///
@@ -524,9 +523,9 @@ impl Instance {
     ///
     /// Returns an error if an unsupported active special constraint is present,
     /// if a weight used for at least one active regular constraint is invalid,
-    /// or if constructing or adding the penalty term
-    /// fails. Invalid weights retain [`InvalidPenaltyWeight`] in the error
-    /// chain. Any error leaves the instance unchanged.
+    /// or if constructing or adding the penalty term fails. Invalid weights
+    /// retain [`InvalidPenaltyWeight`] in the error chain. Any error leaves the
+    /// instance unchanged.
     pub fn uniform_penalty_method_with_fixed_weight(
         &mut self,
         weight: f64,
@@ -1411,10 +1410,12 @@ mod tests {
             .unwrap();
         assert_eq!(instance, before);
 
-        instance
-            .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
-            .unwrap();
-        assert_eq!(instance, before);
+        for weight in [2.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            instance
+                .uniform_penalty_method_with_fixed_weight(weight, ATol::default())
+                .unwrap();
+            assert_eq!(instance, before);
+        }
     }
 
     #[test]
@@ -1471,6 +1472,30 @@ mod tests {
                 .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
                 .unwrap_err();
             assert_eq!(uniform, before);
+        }
+    }
+
+    #[test]
+    fn uniform_fixed_penalty_rejects_special_constraints_without_regular_constraints() {
+        for kind in [
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
+            SpecialConstraintKind::Sos1,
+        ] {
+            let mut instance = create_test_instance_with_special_constraints(&[kind]);
+            instance
+                .relax_constraint(ConstraintID::from(1), "test".to_owned(), [])
+                .unwrap();
+            assert!(instance.constraints().is_empty());
+            let before = instance.clone();
+
+            for weight in [2.0, f64::NAN] {
+                let error = instance
+                    .uniform_penalty_method_with_fixed_weight(weight, ATol::default())
+                    .unwrap_err();
+                assert!(!error.is::<InvalidPenaltyWeight>());
+                assert_eq!(instance, before);
+            }
         }
     }
 

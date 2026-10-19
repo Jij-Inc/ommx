@@ -71,8 +71,9 @@ impl Instance {
     /// `reason = "ommx.Instance.convert_indicator_to_constraint"` and a
     /// `constraint_ids` parameter listing the new regular constraint IDs
     /// (comma-separated in insertion order; empty when nothing is emitted).
-    /// Every generated regular constraint records
-    /// [`Provenance::IndicatorConstraint`] naming the original ID.
+    /// To trace a generated solver row back to the original model, read its
+    /// [`Provenance::IndicatorConstraint`] entry in [`Self::constraint_context`];
+    /// it names the original indicator ID.
     pub fn convert_indicator_to_constraint(
         &mut self,
         id: IndicatorConstraintID,

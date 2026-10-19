@@ -773,35 +773,40 @@ impl Instance {
 
     /// Lower selected active special constraint families into regular constraints.
     ///
-    /// For every family in `kinds_to_lower`, call the corresponding bulk
-    /// conversion (`convert_all_indicators_to_constraints`,
-    /// `convert_all_one_hots_to_constraints`, or
-    /// `convert_all_sos1_to_constraints`) when that family is active. Families
-    /// omitted from `kinds_to_lower` remain active. Passing an empty set is a
-    /// no-op. This operation does not establish membership in an
-    /// [`crate::InstanceClass`]; check the resulting instance separately.
-    /// `atol` is passed to the interval bound used while lowering Indicator
-    /// constraints so zero-sensitive Function-body semantics are explicit.
-    /// The algebraic special-constraint conversions assume exact discrete
-    /// variable values; this operation does not canonicalize approximate
-    /// solver output near 0 or 1.
+    /// When writing a solver integration, select the families that the backend
+    /// cannot accept natively in `kinds_to_lower`. Unselected families remain
+    /// active, and passing an empty set leaves the instance unchanged. The
+    /// original constraints are retained in their removed collections, with
+    /// provenance linking generated regular constraints to their sources.
+    ///
+    /// Lowering alone need not make the instance acceptable to the backend:
+    /// generated variables or regular constraints may violate other input
+    /// requirements. Check the resulting [`crate::InstanceClass`] membership,
+    /// or use [`Self::prepare`] to target a class with a policy.
+    ///
+    /// # Conversion rules
+    ///
+    /// See [`Self::convert_all_indicators_to_constraints`],
+    /// [`Self::convert_all_one_hots_to_constraints`], and
+    /// [`Self::convert_all_sos1_to_constraints`] for each family's formulas,
+    /// preconditions, and mutation guarantees. `atol` controls zero-sensitive
+    /// interval bounds for Indicator bodies. Lowering assumes exact discrete
+    /// values; it does not round approximate solver output near 0 or 1.
+    ///
+    /// # Returns
     ///
     /// Returns the set of families that were requested and active, and therefore
     /// actually lowered. Families are processed in the deterministic order
     /// `Indicator`, `OneHot`, `Sos1`, matching [`SpecialConstraintKinds`]'s
     /// iteration order. The set is empty when no selected family was active.
-    /// Each lowering is emitted as an `INFO`-level [`tracing`] event inside the
-    /// `lower_special_constraints` span (target `ommx::instance`) so it surfaces
-    /// through `pyo3-tracing-opentelemetry` on the Python side.
     ///
-    /// Errors if any underlying conversion fails (e.g. SOS1 / indicator with
-    /// non-finite bounds). Indicator validates its complete family before
-    /// mutation. One-hot constraints are converted in ascending original ID
-    /// order without a family-wide rollback guarantee. SOS1 validates its
-    /// mathematical preconditions and total generated-ID capacity before any
-    /// mutation. This method is **not** atomic across types: earlier conversions
-    /// are not rolled back if a later one fails. Callers that need atomicity
-    /// should clone up front.
+    /// # Errors
+    ///
+    /// Returns an error from a selected conversion, for example when Big-M
+    /// lowering requires a finite bound that is unavailable. Completed
+    /// conversions are not rolled back if a later conversion fails, including
+    /// a later one-hot conversion within the same family. To preserve the
+    /// source instance, lower a clone and discard it on error.
     #[tracing::instrument(skip_all)]
     pub fn lower_special_constraints(
         &mut self,

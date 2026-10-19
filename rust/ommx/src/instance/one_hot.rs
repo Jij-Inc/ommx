@@ -24,7 +24,9 @@ impl Instance {
     /// `reason = "ommx.Instance.convert_one_hot_to_constraint"` and a
     /// `constraint_id` parameter pointing to the new regular constraint.
     /// The generated constraint preserves the original one-hot context and
-    /// appends [`Provenance::OneHotConstraint`] naming the original ID.
+    /// appends [`Provenance::OneHotConstraint`] naming the original ID. Read
+    /// [`Self::constraint_context`] to recover its modeling label and trace the
+    /// generated solver row back to the source constraint.
     ///
     /// Returns the [`ConstraintID`] of the newly created regular constraint.
     pub fn convert_one_hot_to_constraint(
@@ -78,9 +80,11 @@ impl Instance {
     /// Returns the IDs of the newly created regular constraints in ascending
     /// order of the original one-hot constraint IDs.
     ///
-    /// Conversions are applied one at a time in that order. This method does not
-    /// provide family-wide rollback if a later conversion fails; conversions
-    /// already completed remain in the instance.
+    /// # Errors
+    ///
+    /// Returns an error from a single-constraint conversion. Conversions already
+    /// completed remain in the instance if a later one fails. To preserve the
+    /// source instance, convert a clone and discard it on error.
     pub fn convert_all_one_hots_to_constraints(&mut self) -> Result<Vec<ConstraintID>> {
         let ids: Vec<_> = self
             .one_hot_constraint_collection
@@ -165,6 +169,37 @@ mod tests {
                 .provenance(new_id),
             &[Provenance::OneHotConstraint(OneHotConstraintID::from(7))],
         );
+    }
+
+    #[test]
+    fn conversion_preserves_modeling_context_and_appends_provenance() {
+        let mut instance = instance_with_one_one_hot();
+        let id = OneHotConstraintID::from(7);
+        let context = crate::ConstraintContext {
+            label: crate::ModelingLabel {
+                name: Some("assignment".to_owned()),
+                subscripts: vec![3],
+                parameters: [("group".to_owned(), "jobs".to_owned())]
+                    .into_iter()
+                    .collect(),
+                description: Some("choose one job".to_owned()),
+            },
+            provenance: vec![Provenance::IndicatorConstraint(
+                crate::IndicatorConstraintID::from(11),
+            )],
+        };
+        instance
+            .set_one_hot_constraint_context(id, context.clone())
+            .unwrap();
+
+        let new_id = instance.convert_one_hot_to_constraint(id).unwrap();
+        assert_eq!(
+            instance.one_hot_constraint_context().collect_for(id),
+            context
+        );
+        let mut expected = context;
+        expected.provenance.push(Provenance::OneHotConstraint(id));
+        assert_eq!(instance.constraint_context().collect_for(new_id), expected);
     }
 
     #[test]

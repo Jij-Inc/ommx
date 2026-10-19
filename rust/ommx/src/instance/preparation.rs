@@ -383,34 +383,73 @@ fn apply_preparation_step<S: PreparationStep>(
 }
 
 impl Instance {
-    /// Prepare this instance for membership in `input_class` using configured
-    /// [`Instance`] owner operations.
+    /// Transform this instance in place to reach the target `input_class`.
     ///
-    /// This is a partial, in-place interpreter. It applies each configured
-    /// phase at most once in the canonical order documented by
-    /// [`PreparationPolicy`], checks whole-class membership before and after
-    /// each selected phase, and returns as soon as `input_class.contains(self)`
-    /// is true. Success therefore guarantees membership in `input_class`. When
-    /// `input_class` is an Adapter's `INPUT_CLASS`, that membership is the
-    /// complete Adapter applicability condition; conversion to a backend
-    /// representation or backend execution may still fail later.
+    /// Use this when a solver or export format requires a particular model
+    /// structure. Choose that structure with an [`InstanceClass`] and select
+    /// the transformations you permit with a [`PreparationPolicy`]. Success
+    /// means `input_class.contains(self)` is true; it does not run a solver or
+    /// guarantee that later backend conversion or execution will succeed.
     ///
-    /// Active regular inequalities are processed in ascending constraint-ID
-    /// order. Integer slack Preparation first attempts to convert them to
-    /// equalities. [`IntegerSlackPreparation::slack_upper_bound`] set to `None`
-    /// requires equality and propagates [`ExactIntegerSlackUnavailable`].
-    /// `Some(value)` selects the inequality-preserving owner operation with
-    /// `value` only for that signal. Every other owner error is propagated
-    /// unchanged.
+    /// # Example
     ///
-    /// Preparation has no global transaction. Each owner operation retains its
-    /// own mutation and failure semantics, and changes committed by earlier
-    /// operations remain when a later operation fails.
+    /// Prepare a copy for QUBO input, keeping the source instance unchanged.
+    /// This example only needs to change the optimization sense.
     ///
-    /// # Postconditions
+    /// ```
+    /// use ommx::{
+    ///     linear, DecisionVariable, Function, Instance, InstanceClass,
+    ///     PreparationPolicy, Sense, VariableID,
+    /// };
+    /// use std::collections::BTreeMap;
     ///
-    /// Selected owner operations establish their own output semantics, and
-    /// successful composition reaches the target class.
+    /// let source = Instance::new(
+    ///     Sense::Maximize,
+    ///     Function::from(linear!(1)),
+    ///     BTreeMap::from([(VariableID::from(1), DecisionVariable::binary())]),
+    ///     BTreeMap::new(),
+    /// )?;
+    /// let target = InstanceClass::qubo();
+    /// let mut prepared = source.clone();
+    /// prepared.prepare(&target, &PreparationPolicy::for_qubo())?;
+    /// assert!(target.contains(&prepared));
+    /// assert_eq!(prepared.sense(), Sense::Minimize);
+    /// assert_eq!(source.sense(), Sense::Maximize);
+    /// # Ok::<(), ommx::Error>(())
+    /// ```
+    ///
+    /// # Policy selection and stopping
+    ///
+    /// Each enabled phase runs at most once, in the order documented by
+    /// [`PreparationPolicy`]. Membership is checked before any transformation
+    /// and after each completed phase. An instance already in the target class
+    /// is unchanged, and reaching the target skips all remaining phases.
+    /// A policy therefore permits transformations; it does not require every
+    /// enabled phase to run or search for a different sequence if one fails.
+    ///
+    /// Choose phase parameters for your application. In particular, reaching a
+    /// structural target does not prove that a fixed penalty weight preserves
+    /// the original problem's optima; see
+    /// [`Self::uniform_penalty_method_with_fixed_weight`]. Integer-slack
+    /// requirements and fallback selection are described by
+    /// [`IntegerSlackPreparation`]. Active regular inequalities are processed
+    /// in ascending constraint-ID order.
+    ///
+    /// # Interpreting solver results
+    ///
+    /// Evaluate the returned state with this prepared instance, using
+    /// [`Evaluate::evaluate`](crate::Evaluate::evaluate) or
+    /// [`Evaluate::evaluate_samples`](crate::Evaluate::evaluate_samples).
+    /// Preparation retains the output objective and reconstruction information
+    /// while allowing the active formulation sent to the solver to change. After penalty
+    /// conversion, check the evaluated solution's feasibility: a solver can
+    /// return a state that violates a constraint now represented by a penalty.
+    /// Use [`Self::map_active_optimality`] to report the backend's optimality
+    /// status only when it remains valid for the output objective.
+    ///
+    /// The following example adds a penalty and changes the active sense,
+    /// while evaluation still reports the original objective, sense, and the
+    /// violated original constraint.
     ///
     /// ```
     /// use ommx::{
@@ -442,6 +481,7 @@ impl Instance {
     /// let solution = instance.evaluate(&state, ATol::default()).unwrap();
     /// assert_eq!(*solution.sense(), Some(Sense::Maximize));
     /// assert_eq!(*solution.objective(), 0.0);
+    /// assert!(!solution.feasible());
     /// assert_eq!(
     ///     instance.map_active_optimality(Optimality::Optimal),
     ///     Optimality::Unspecified,
@@ -450,10 +490,16 @@ impl Instance {
     ///
     /// # Errors
     ///
-    /// Returns an error from a configured owner operation, or
-    /// [`PreparationTargetNotReached`] with the final membership report when
-    /// the configured operations are exhausted without reaching
-    /// `input_class`.
+    /// An enabled transformation can fail with its own error. If every enabled
+    /// phase completes but the target is still not reached, the error contains
+    /// [`PreparationTargetNotReached`]; inspect
+    /// [`PreparationTargetNotReached::report`] to decide which phase parameters
+    /// or target requirements to change.
+    ///
+    /// There is no rollback of the whole call: completed changes can remain on
+    /// either kind of error. If the source must be preserved, prepare a clone
+    /// as above and discard that candidate on error. Each transformation's API
+    /// documents its own mutation guarantees.
     pub fn prepare(
         &mut self,
         input_class: &InstanceClass,

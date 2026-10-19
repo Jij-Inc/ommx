@@ -407,9 +407,11 @@ impl ConstraintType for Constraint {
 ///
 /// It intentionally does not expose mutable row references, arbitrary
 /// active/removed map mutation, or semantic operations such as substitution,
-/// partial evaluation, propagation, slack conversion, or Preparation/lowering.
-/// Those are root [`crate::Instance`] / [`crate::ParametricInstance`] operations
-/// that merely induce the row effects above.
+/// partial evaluation, propagation, slack conversion, preparation, or
+/// special-constraint lowering. When implementing a model transformation, use
+/// the enclosing [`crate::Instance`] / [`crate::ParametricInstance`] operation
+/// to preserve cross-table invariants; the collection handles only the row
+/// effects above.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstraintCollection<T: ConstraintType> {
     active: BTreeMap<T::ID, T::Created>,
