@@ -390,10 +390,8 @@ impl Instance {
     /// phase at most once in the canonical order documented by
     /// [`PreparationPolicy`], checks whole-class membership before and after
     /// each selected phase, and returns as soon as `input_class.contains(self)`
-    /// is true. Success therefore guarantees membership in `input_class`. When
-    /// `input_class` is an Adapter's `INPUT_CLASS`, that membership is the
-    /// complete Adapter applicability condition; conversion to a backend
-    /// representation or backend execution may still fail later.
+    /// is true. Success therefore guarantees only membership in `input_class`;
+    /// adapter-specific applicability remains outside this operation.
     ///
     /// Active regular inequalities are processed in ascending constraint-ID
     /// order. Integer slack Preparation first attempts to convert them to
