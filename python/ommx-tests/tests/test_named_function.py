@@ -3,6 +3,7 @@
 import sys
 
 from ommx import (
+    Sense,
     DecisionVariable,
     Function,
     Instance,
@@ -40,7 +41,7 @@ def _make_instance_with_named_functions():
         decision_variables=x,
         objective=objective,
         constraints={0: Function(sum(x)) <= 2},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
         named_functions=[nf0, nf1],
     )
     return instance, x
@@ -239,7 +240,7 @@ class TestInstanceNamedFunctions:
             decision_variables=x,
             objective=x[0] + x[1],
             constraints={},
-            sense=Instance.MINIMIZE,
+            sense=Sense.Minimize,
         )
         assert instance.named_functions == []
 
@@ -253,7 +254,7 @@ class TestInstanceNamedFunctions:
                 decision_variables=[x],
                 objective=x,
                 constraints={},
-                sense=Instance.MINIMIZE,
+                sense=Sense.Minimize,
                 named_functions=[first, second],
             )
 
@@ -266,7 +267,7 @@ class TestInstanceNamedFunctions:
                 decision_variables=[x],
                 objective=x,
                 constraints={},
-                sense=Instance.MINIMIZE,
+                sense=Sense.Minimize,
                 named_functions=[rogue],
             )
 
@@ -280,7 +281,7 @@ class TestInstanceNamedFunctions:
             parameters=[p],
             objective=x + p,
             constraints={},
-            sense=Instance.MINIMIZE,
+            sense=Sense.Minimize,
             named_functions=[nf],
         )
 
@@ -297,7 +298,7 @@ class TestInstanceNamedFunctions:
                 parameters=[p],
                 objective=x + p,
                 constraints={},
-                sense=Instance.MINIMIZE,
+                sense=Sense.Minimize,
                 named_functions=[rogue],
             )
 

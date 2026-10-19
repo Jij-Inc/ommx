@@ -13,7 +13,7 @@ because the driver consumes mutable instance state.
 import pytest
 import random
 from copy import deepcopy
-from ommx import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance, Sense
 
 
 pytestmark = pytest.mark.benchmark_guardrail
@@ -29,7 +29,7 @@ def small():
         decision_variables=x,
         objective=sum(x),
         constraints={0: x[0] + 2 * x[1] <= 3},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     return instance
 
@@ -45,7 +45,7 @@ def pseudo_boolean_inequality(request):
         decision_variables=x,
         objective=0,
         constraints={0: expr <= threshold},  # type: ignore
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     return instance
 

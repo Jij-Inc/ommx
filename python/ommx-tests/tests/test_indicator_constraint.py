@@ -3,6 +3,7 @@
 import pandas as pd
 import pytest
 from ommx import (
+    Sense,
     Instance,
     DecisionVariable,
     IndicatorConstraint,
@@ -26,7 +27,7 @@ def _instance(ic: IndicatorConstraint, x_lower: float = 0.0, x_upper: float = 5.
         objective=x,
         constraints={},
         indicator_constraints={7: ic},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
 
@@ -122,7 +123,7 @@ def test_infinite_bound_is_rejected_without_mutation():
         objective=x,
         constraints={},
         indicator_constraints={7: ic},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with pytest.raises(RuntimeError, match="non-finite"):
@@ -154,7 +155,7 @@ def test_convert_all_is_atomic_on_error():
         objective=x_bounded,
         constraints={},
         indicator_constraints={1: ic_ok, 2: ic_bad},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with pytest.raises(RuntimeError, match="non-finite"):

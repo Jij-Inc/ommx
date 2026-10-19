@@ -1,6 +1,7 @@
 import pytest
 
 from ommx import (
+    Sense,
     DecisionVariable,
     Instance,
     NamedFunction,
@@ -17,7 +18,7 @@ def test_instance_from_components_rejects_duplicate_decision_variable_ids():
             decision_variables=variables,
             objective=0,
             constraints={},
-            sense=Instance.MINIMIZE,
+            sense=Sense.Minimize,
         )
 
 
@@ -30,7 +31,7 @@ def test_parametric_from_components_rejects_duplicate_decision_variable_ids():
             parameters=[],
             objective=0,
             constraints={},
-            sense=Instance.MINIMIZE,
+            sense=Sense.Minimize,
         )
 
 
@@ -48,7 +49,7 @@ def test_parametric_from_components_rejects_duplicate_named_function_ids():
             parameters=[parameter],
             objective=variable + parameter,
             constraints={},
-            sense=Instance.MINIMIZE,
+            sense=Sense.Minimize,
             named_functions=named_functions,
         )
 
@@ -59,7 +60,7 @@ def test_to_qubo_rejects_missing_penalty_weight():
         decision_variables=x,
         objective=x[0],
         constraints={123: x[0] == 0, 456: x[1] == 1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with pytest.raises(

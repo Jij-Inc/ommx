@@ -56,8 +56,8 @@ result = Adapter.solve_without_preparation(prepared)
 | 1 | `special_constraints` | 選択した active な特殊制約を通常制約へ lowering |
 | 2 | `objective` | active objectiveを指定したsenseへ変換 |
 | 3 | `integer_slack` | active な通常不等式への Integer slack 導入 |
-| 4 | `fixed_penalty` | active な通常制約を固定 weight の penalty として目的関数へ移動 |
-| 5 | `integer_encoding` | 使用中の Integer 変数を Binary 変数で encoding |
+| 4 | `integer_encoding` | 使用中の Integer 変数を Binary 変数で encoding |
+| 5 | `fixed_penalty` | active な通常制約を固定 weight の penalty として目的関数へ移動 |
 | 6 | `binary_power_reduction` | activeなBinary変数の冪を縮約 |
 
 各fieldに設定する型とfactoryの全引数は、{class}`~ommx.SpecialConstraintPreparation`、{class}`~ommx.ObjectivePreparation`、{class}`~ommx.IntegerSlackPreparation`、{class}`~ommx.FixedPenaltyPreparation`、{class}`~ommx.IntegerEncodingPreparation`、{class}`~ommx.BinaryPowerPreparation`のAPI Referenceを参照してください。特殊制約loweringの数式と成立条件も、各変換メソッドのAPI Referenceが所有します。特殊制約そのものの意味は[特殊制約型](./special_constraints.md)を参照してください。

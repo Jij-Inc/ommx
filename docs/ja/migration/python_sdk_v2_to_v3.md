@@ -34,7 +34,7 @@ from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
 
 # v3
-from ommx import Constraint, Equality, Function, Linear, State
+from ommx import Constraint, Equality, Function, Linear, Sense, State
 ```
 
 `.from_protobuf()` / `.to_protobuf()` は、protobuf object と一緒に削除されています。`Instance` / `Solution` / `SampleSet` など全体をシリアライズする場合は、protobuf version を名前に含む bytes API を使います。新しく byte 列を作る場合は `to_v2_bytes()` / `from_v2_bytes(...)` を使い、legacy な v1 payload との互換が必要な場合だけ `to_v1_bytes()` / `from_v1_bytes(...)` を使ってください。
@@ -94,10 +94,10 @@ c = Constraint(
 c.set_id(6)
 
 # v3
-c = Constraint(function=x + y, equality=Constraint.EQUAL_TO_ZERO, name="cap")
+c = Constraint(function=x + y, equality=Equality.EqualToZero, name="cap")
 
 instance = Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=objective,
     decision_variables=decision_variables,
     constraints={5: c},
@@ -148,7 +148,7 @@ Instance.from_components(
 
 # v3
 Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=obj,
     decision_variables=[x0, x1],
     constraints={0: c0, 1: c1},
@@ -253,6 +253,76 @@ solution = OMMXHighsAdapter.solve_without_preparation(instance)
 preparation-free methodだけに公開できます。Adapter inputに
 `output_objective`がある場合、HiGHSとPython-MIPはdual valueを付与しません。
 
+(constraint-violation-migration)=
+### 5.8 制約の違反量 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+`solution.total_violation_l1()` は {meth}`~ommx.Solution.total_violation` に改名し、
+`total_violation_l2()` は削除しました。各制約に定義した非負のスカラー値を足し合わせ、
+removed 制約とすべての特殊制約を含めます。通常の等式・不等式の違反量の定義は変わりません。
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+Indicator は有効時の内部制約の違反量、無効時は 0 です。OneHot は一つを 1、残りを 0 にする
+絶対変更量の最小値、SOS1 は非ゼロを高々一つにする絶対変更量の最小値です。
+Big-M lowering に依存する定義ではありません。
+
+すべての制約を `violation <= atol` のときに feasible と判定します。OneHot と SOS1 では、
+許容誤差を各メンバーに個別に適用する方式から、絶対変更量の合計に適用する方式へ変わります。
+例えば SOS1 の値 `(1, 0.00006, 0.00006)` は違反量が `0.00012` なので、
+`atol=0.0001` では infeasible です。各小成分が個別にゼロの許容誤差内であることでは
+判定しません。
+
+変数の bounds・kind の判定は別です。離散値の丸めは制約評価より前に行われ、違反量には
+その後の値を使います。解の制約充足は各制約がそれぞれの閾値を満たすことで判定し、
+`total_violation <= atol` で判定するわけではありません。
+
+SampleSet の feasibility と最良実行可能解の選択も、保存された許容誤差で変数の
+bounds・kind を確認し、取り出した Solution の判定と一致します。そのため、
+`total_violation()` がゼロでも変数が定義域を外れていれば infeasible になります。
+
+制約単体の判定では、許容誤差を明示的に渡します。`evaluated.feasible` は
+`evaluated.is_feasible(atol=...)` に、`sampled.feasible` は
+`sampled.feasible(atol=...)`（sample ID から bool への map）に置き換えてください。
+Solution/SampleSet の feasibility プロパティは引き続き利用できます。
+`feasibility_atol` プロパティから、取り出した制約にも同じ判定条件を渡せます。
+
+```python
+evaluated = solution.constraints[1]
+evaluated.is_feasible(atol=solution.feasibility_atol)
+evaluated.is_feasible(atol=1e-8)  # 保存済みの同じ違反量に対する別の問い合わせ
+```
+
+問い合わせの許容誤差を変えても、入力の丸めや活性判定はやり直しません。
+許容誤差に依存する判断結果を保持する場合に、その判断条件も保持します。
+通常制約の評価値は許容誤差を保持せず、特殊制約の活性判定には使用した条件を残します。
+許容誤差の役割分離と評価コンテキストの保存形式は
+[Issue #1180](https://github.com/Jij-Inc/ommx/issues/1180) で扱います。
+
+v2 protobuf 形式は `feasible` のフラグ・map と、Solution/SampleSet の
+`feasibility_atol` を引き続き保存します。OMMX SDK がなくても判定結果とその許容誤差を
+読み取れます。protobuf スキーマは変更しません。SDK は読み込み時に、保存された変数値から
+OneHot/SOS1 の違反量を再計算し、保存された許容誤差を使ってフラグの整合性を検証します。
+
+旧 v1 形式には許容誤差とネイティブの特殊制約を保存できません。
+`to_v1_bytes()` は、保存される通常制約と変数値から SDK の既定の許容誤差で
+feasibility を再計算します。`from_v1_bytes()` も同じ条件を使うため、v1 の書き出しと
+読み込みには同じ既定の許容誤差を使用してください。この変換で feasibility が変わる
+場合があります。元の許容誤差と特殊制約を保存するには v2 を使用してください。
+
+部分評価では、active に残る特殊制約から近似ゼロのメンバーを取り除くことで、誤差の合計に
+基づく feasibility が変わりうる場合、その固定を拒否します。
+正確にゼロのメンバーの除去は引き続き可能です。
+この場合は完全な状態を評価するか、特殊制約を lowering してから部分評価してください。
+lowering 後の違反量は、以下のとおり別の尺度になります。
+
+lowering 前後で総和の一致は保証しません。元の removed 制約と
+生成した制約が残っていれば、それぞれを集計します。数式は
+{meth}`~ommx.Solution.total_violation` を参照してください。
+
 ## 6. return type の変更
 
 `Constraint.name` / `Constraint.description` などは、未設定時に空文字列ではなく `None` を返します。
@@ -269,6 +339,33 @@ if name is not None:
 linear.terms()
 quadratic.terms()
 polynomial.terms()
+```
+
+v3 alpha の初期移行では、`DecisionVariable` の constructor と `kind` property が
+protobuf の整数表現を誤って公開していました。現在の v3 API は、detached、attached、
+evaluated、sampled の各 decision variable で top-level の `Kind` enum を一貫して
+受け取り、返します。新しいコードでは `Kind.Binary`、`Kind.Integer` などを使います。
+`DecisionVariable.BINARY` / `INTEGER` / … は、同じ enum 値を返す型付き互換 alias として
+残します。
+
+同じ互換方針を `Constraint.EQUAL_TO_ZERO` / `LESS_THAN_OR_EQUAL_TO_ZERO` と
+`Instance.MINIMIZE` / `MAXIMIZE` にも適用します。これらは型付き alias として残しますが、
+新しいコードでは `Equality.*` と `Sense.*` を使います。
+
+```python
+from ommx import Bound, DecisionVariable, Kind
+
+variable = DecisionVariable(0, Kind.Binary, Bound(0, 1))
+assert variable.kind == Kind.Binary
+assert DecisionVariable.BINARY == Kind.Binary
+```
+
+各 enum は protobuf の整数値との比較・hash の互換性を維持します。通常の SDK
+constructor と property は enum 型を使います。
+
+```python
+assert Kind.Binary == 1
+assert hash(Kind.Binary) == hash(1)
 ```
 
 `SampleSet.sample_ids` は list property ではなく set を返す method になりました。list が必要な場合は `sample_ids_list` を使います。

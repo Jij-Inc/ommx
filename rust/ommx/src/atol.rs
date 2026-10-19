@@ -31,11 +31,13 @@ impl From<FloatIsNan> for AtolError {
 
 /// Absolute tolerance for inclusive approximate comparisons.
 ///
-/// [`Self::approx_eq`] and [`Self::approx_is_zero`] are the canonical scalar
-/// comparison primitives. They include the tolerance boundary and reject
-/// non-finite operands or differences. Construction requires a positive,
-/// non-NaN value; positive infinity is currently accepted, so callers that own
-/// a finite-tolerance invariant must continue to validate it at that boundary.
+/// [`Self::approx_eq`], [`Self::approx_is_zero`], and [`Self::approx_le`] are
+/// the canonical scalar comparison primitives. They include the tolerance
+/// boundary. Approximate equality rejects non-finite operands or differences;
+/// approximate ordering preserves strict IEEE ordering and uses approximate
+/// equality only at the boundary. Construction requires a positive, non-NaN
+/// value; positive infinity is currently accepted, so callers that own a
+/// finite-tolerance invariant must continue to validate it at that boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ATol(NotNan<f64>);
 
@@ -122,6 +124,22 @@ impl ATol {
     #[inline]
     pub fn approx_is_zero(self, value: f64) -> bool {
         self.approx_eq(value, 0.0)
+    }
+
+    /// Compare whether `lhs` is less than or approximately equal to `rhs`.
+    ///
+    /// This is the shared one-sided feasibility predicate for a residual
+    /// constrained by `lhs - rhs <= 0`. It preserves exact strict ordering and
+    /// includes the absolute-tolerance boundary through [`Self::approx_eq`]:
+    /// `lhs < rhs || self.approx_eq(lhs, rhs)`.
+    ///
+    /// Consequently, NaN never satisfies this comparison. Strictly ordered
+    /// infinities retain their IEEE ordering, while equal infinities are not
+    /// approximately equal. APIs that require finite evaluated values continue
+    /// to validate that invariant separately.
+    #[inline]
+    pub fn approx_le(self, lhs: f64, rhs: f64) -> bool {
+        lhs < rhs || self.approx_eq(lhs, rhs)
     }
 
     #[tracing::instrument(skip_all)]
@@ -264,6 +282,10 @@ mod tests {
         assert!(atol.approx_is_zero(0.125));
         assert!(atol.approx_is_zero(-0.125));
         assert!(!atol.approx_is_zero(0.12500000000000003));
+
+        assert!(atol.approx_le(1.125, 1.0));
+        assert!(atol.approx_le(0.5, 1.0));
+        assert!(!atol.approx_le(1.1250000000000002, 1.0));
     }
 
     #[test]
@@ -276,9 +298,15 @@ mod tests {
             assert!(!atol.approx_eq(value, 0.0));
             assert!(!atol.approx_eq(0.0, value));
             assert!(!atol.approx_is_zero(value));
+            assert!(!atol.approx_le(value, value));
             assert!(!infinite_atol.approx_eq(value, value));
             assert!(!infinite_atol.approx_is_zero(value));
         }
+
+        assert!(atol.approx_le(f64::NEG_INFINITY, 0.0));
+        assert!(atol.approx_le(0.0, f64::INFINITY));
+        assert!(!atol.approx_le(f64::INFINITY, 0.0));
+        assert!(!atol.approx_le(0.0, f64::NEG_INFINITY));
 
         // The ATol finite-value invariant is intentionally a separate concern.
         assert!(infinite_atol.approx_eq(1.0, 2.0));

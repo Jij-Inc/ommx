@@ -229,7 +229,14 @@ mod tests {
         let mut instance = Instance::default();
 
         // Add a decision variable that the function will reference (gets ID 0)
-        instance.new_continuous();
+        instance
+            .new_continuous(
+                crate::Bound::default(),
+                crate::DecisionVariableLabel::default(),
+                None,
+                crate::ATol::default(),
+            )
+            .unwrap();
 
         // Add a named function that references variable 0
         let nf_id = instance

@@ -624,6 +624,18 @@ impl Instance {
         self.named_functions
             .partial_evaluate(&normalized_state, atol)?;
 
+        // Structural propagation can retain an approximately zero member to
+        // preserve feasibility under the sum of member errors. An active row cannot
+        // reference a fixed variable, and its current structural form has no
+        // constant-member representation. Reject instead of dropping that term.
+        for id in self.used_decision_variable_ids() {
+            if self.decision_variables.fixed_value(id).is_some() {
+                crate::bail!(
+                    "Cannot partially evaluate fixed member {id:?} without changing constraint feasibility. Evaluate the complete state, or lower special constraints before partial evaluation."
+                );
+            }
+        }
+
         Ok(())
     }
 

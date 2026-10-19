@@ -15,10 +15,12 @@ ommx
    _items/ommx.State
    _items/ommx.Samples
    _items/ommx.Bound
+   _items/ommx.BridgeError
    _items/ommx.ExactIntegerSlackError
    _items/ommx.InfeasibleDetected
    _items/ommx.LogEncodingError
    _items/ommx.PreparationTargetNotReachedError
+   _items/ommx.Sos1BigMPromotionBatchRejectedError
    _items/ommx.Linear
    _items/ommx.Quadratic
    _items/ommx.Polynomial
@@ -52,6 +54,9 @@ ommx
    _items/ommx.Sos1Constraint
    _items/ommx.AttachedSos1Constraint
    _items/ommx.RemovedSos1Constraint
+   _items/ommx.Sos1BigMSelectorClaim
+   _items/ommx.Sos1BigMPromotionRequest
+   _items/ommx.Sos1BigMPromotion
    _items/ommx.RemovedConstraint
    _items/ommx.Provenance
    _items/ommx.ProvenanceKind

@@ -115,6 +115,8 @@ tutorial/download_benchmark_instance
 :maxdepth: 1
 :hidden:
 
+user_guide/cli
+user_guide/agent_skills
 user_guide/supported_ommx_adapters
 user_guide/adapter_input_class
 user_guide/preparation_policy

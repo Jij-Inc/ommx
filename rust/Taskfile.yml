@@ -13,7 +13,7 @@ tasks:
     env:
       RUSTDOCFLAGS: -D warnings
     cmds:
-      - cargo doc --no-deps -p ommx -p ommx-pyo3-bridge
+      - cargo doc --no-deps -p ommx -p ommx-pyo3-bridge --features ommx/cli
 
   test:
     desc: Run tests for Rust SDK

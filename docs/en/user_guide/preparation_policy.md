@@ -55,8 +55,8 @@ Every field of `PreparationPolicy` is optional, and an unspecified phase does no
 | 1 | `special_constraints` | Lower selected active special constraints to regular constraints |
 | 2 | `objective` | Convert the active objective to the requested optimization sense |
 | 3 | `integer_slack` | Introduce integer slack variables for active regular inequalities |
-| 4 | `fixed_penalty` | Move active regular constraints into the objective with a fixed-weight penalty |
-| 5 | `integer_encoding` | Encode used integer variables with binary variables |
+| 4 | `integer_encoding` | Encode used integer variables with binary variables |
+| 5 | `fixed_penalty` | Move active regular constraints into the objective with a fixed-weight penalty |
 | 6 | `binary_power_reduction` | Reduce powers of active Binary decision variables |
 
 See the API Reference for {class}`~ommx.SpecialConstraintPreparation`, {class}`~ommx.ObjectivePreparation`, {class}`~ommx.IntegerSlackPreparation`, {class}`~ommx.FixedPenaltyPreparation`, {class}`~ommx.IntegerEncodingPreparation`, and {class}`~ommx.BinaryPowerPreparation` for the type and complete set of factory arguments accepted by each field. The formulas and validity conditions for lowering special constraints belong to the API Reference for each conversion method. See [Special Constraint Types](./special_constraints.md) for the mathematical meaning of the constraints themselves.

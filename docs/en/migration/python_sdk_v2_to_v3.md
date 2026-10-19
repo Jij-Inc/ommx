@@ -36,7 +36,7 @@ from ommx.v1.solution_pb2 import State
 
 **After (v3)**:
 ```python
-from ommx import Constraint, Equality, Function, Linear, State
+from ommx import Constraint, Equality, Function, Kind, Linear, Sense, State
 ```
 
 The `.from_protobuf()` / `.to_protobuf()` bridge methods on `Constraint`, `RemovedConstraint`, `DecisionVariable`, etc. are removed along with the protobuf objects they produced. Use explicit versioned bytes APIs on whole serialization roots instead. Prefer `to_v2_bytes` / `from_v2_bytes` when producing new serialized bytes; use `to_v1_bytes` / `from_v1_bytes` only when you need to interoperate with legacy v1 payloads.
@@ -112,14 +112,14 @@ s1 = Sos1Constraint(id=11, variables=[0, 1])
 
 **After (v3)**:
 ```python
-c  = Constraint(function=x + y, equality=Constraint.EQUAL_TO_ZERO, name="cap")
+c  = Constraint(function=x + y, equality=Equality.EqualToZero, name="cap")
 xs = [DecisionVariable.binary(i) for i in range(3)]
 oh = OneHotConstraint(variables=xs)
 s1 = Sos1Constraint(variables=xs[:2])
 
 # IDs are assigned by the enclosing Instance:
 instance = Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=...,
     decision_variables=[...],
     constraints={5: c},
@@ -178,7 +178,7 @@ Instance.from_components(
 **After (v3)**:
 ```python
 Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=obj,
     decision_variables=[x0, x1],
     constraints={0: c0, 1: c1},           # dict keyed by constraint ID
@@ -360,6 +360,81 @@ on its preparation-free method.
 HiGHS and Python-MIP no longer attach dual values when the Adapter input has an
 `output_objective`.
 
+(constraint-violation-migration)=
+### 5.8 Constraint violation metrics ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+Rename `solution.total_violation_l1()` to {meth}`~ommx.Solution.total_violation`.
+`total_violation_l2()` is removed. The total is the sum of one nonnegative scalar
+per constraint, including removed constraints and all special constraint kinds.
+Regular equality and inequality violations retain their existing definitions.
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+Indicator constraints contribute the inner violation when active and zero otherwise.
+OneHot uses the minimum sum of absolute changes to make exactly one member 1 and
+the rest 0. SOS1 uses the minimum sum of absolute changes to leave at most one
+nonzero member. These definitions do not depend on Big-M lowering.
+
+Every constraint is feasible exactly when `violation <= atol`. For OneHot and
+SOS1, tolerance applies to the total absolute change, rather than to each member
+independently. For example, SOS1 values `(1, 0.00006, 0.00006)` have violation
+`0.00012` and are infeasible with `atol=0.0001`, although each small member is
+individually within tolerance of zero.
+
+Variable bounds and kinds are checked separately. Discrete-value canonicalization
+happens before constraint evaluation; the metric uses the resulting values.
+Solution feasibility requires each constraint to pass its own threshold, not
+the total violation to be within one shared threshold.
+
+SampleSet feasibility and best-feasible selection also check variable bounds
+and kinds at the saved tolerance, matching the extracted Solution. A sample can
+therefore have zero `total_violation()` and still be infeasible because a
+variable is outside its domain.
+
+Constraint-level queries require an explicit tolerance. Replace
+`evaluated.feasible` with `evaluated.is_feasible(atol=...)` and
+`sampled.feasible` with `sampled.feasible(atol=...)` (a sample-ID-to-bool map).
+Solution/SampleSet keep their existing feasibility properties and expose
+`feasibility_atol` so extracted constraints can use the same threshold:
+
+```python
+evaluated = solution.constraints[1]
+evaluated.is_feasible(atol=solution.feasibility_atol)
+evaluated.is_feasible(atol=1e-8)  # A separate query on the same stored violation
+```
+
+Changing the query tolerance does not repeat input canonicalization or activation
+classification. Tolerances are retained only with tolerance-dependent decisions:
+regular constraint values retain none, while special-constraint activation
+records retain the conditions used to classify them. The separation of tolerance
+roles and the persisted evaluation context is tracked in
+[issue #1180](https://github.com/Jij-Inc/ommx/issues/1180).
+
+The v2 protobuf format retains `feasible` flags/maps and `feasibility_atol` on
+Solution/SampleSet. Consumers can read the result and its tolerance without an
+OMMX SDK. The protobuf schema is unchanged. When loading the data, the SDK
+recomputes OneHot/SOS1 violations from the saved variable values and validates
+the flags using the persisted tolerance.
+
+The legacy v1 format cannot store the tolerance or native special constraints.
+`to_v1_bytes()` recomputes feasibility from the retained regular constraints and
+variable values using the SDK's default tolerance, as `from_v1_bytes()` does.
+Use the same default tolerance when writing and reading v1 data. This conversion
+may change feasibility; use v2 to preserve the original tolerance and special
+constraints.
+
+Partial evaluation rejects a fixing when eliminating an approximately zero
+structural member could change feasibility under the sum of member errors and
+the constraint must remain active. Exact-zero elimination remains supported.
+Evaluate the complete state, or lower special constraints before partial evaluation; lowering
+has its own violation metrics as described below.
+Lowering need not preserve the total: retained originals and generated constraints
+each contribute. See {meth}`~ommx.Solution.total_violation` for the full definitions.
+
 ## 6. Return-type changes
 
 ### 6.1 `Constraint.name` / `Constraint.description` are `Optional[str]` (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770), [#771](https://github.com/Jij-Inc/ommx/pull/771))
@@ -394,21 +469,29 @@ polynomial.terms()
 
 `Linear.linear_terms`, `Quadratic.linear_terms` / `quadratic_terms`, and `Polynomial.constant_term` stay properties.
 
-### 6.3 `DecisionVariable.BINARY`/`INTEGER`/… are `int` sentinels (`3.0.0a1`, [#770](https://github.com/Jij-Inc/ommx/pull/770))
+### 6.3 `DecisionVariable.kind` is a typed `Kind` enum
 
-In v2.5.1 these class constants were `Kind` enum members. In v3 they are the underlying `int` values, and `DecisionVariable.kind` returns `int` (the protobuf wire value).
+The initial v3 alpha migration in `3.0.0a1` ([#770](https://github.com/Jij-Inc/ommx/pull/770)) accidentally exposed the protobuf integer representation through the `DecisionVariable` constructor and `kind` properties. The v3 API now consistently accepts and returns the top-level `Kind` enum for detached, attached, evaluated, and sampled decision variables.
+
+Use `Kind.Binary`, `Kind.Integer`, and the other `Kind` members in new code. The old `DecisionVariable.BINARY`/`INTEGER`/… names remain as typed compatibility aliases with the same enum values.
+
+The same compatibility policy applies to `Constraint.EQUAL_TO_ZERO` / `LESS_THAN_OR_EQUAL_TO_ZERO` and `Instance.MINIMIZE` / `MAXIMIZE`: they remain typed aliases, while new code should use `Equality.*` and `Sense.*`.
 
 ```python
-# v2.5.1
-DecisionVariable.BINARY        # Kind.Binary
-if var.kind == DecisionVariable.INTEGER:  # Kind.Integer == Kind.Integer
-    ...
+from ommx import Bound, DecisionVariable, Kind
 
-# v3
-DecisionVariable.BINARY        # 1 (int)
-if var.kind == DecisionVariable.INTEGER:  # int == int
-    ...
-# If you want the enum, construct it: Kind(var.kind)
+var = DecisionVariable(0, Kind.Binary, Bound(0, 1))
+assert var.kind == Kind.Binary
+
+# Typed compatibility alias.
+assert DecisionVariable.BINARY == Kind.Binary
+```
+
+The enums retain comparison and hash compatibility with their protobuf integer values, so explicit boundary checks continue to work. The regular SDK constructor and properties nevertheless use the enum type.
+
+```python
+assert Kind.Binary == 1
+assert hash(Kind.Binary) == hash(1)
 ```
 
 ### 6.4 `SampleSet.sample_ids` changed from list-property to set-method (`3.0.0a1`, [#775](https://github.com/Jij-Inc/ommx/pull/775))
@@ -768,7 +851,7 @@ dv      = DecisionVariable.from_bytes(dv_blob)
 # After (3.0.0a3) — wrap in the enclosing container and round-trip that.
 # Use v2 bytes for newly serialized payloads.
 instance      = Instance.from_components(
-    sense=Instance.MINIMIZE,
+    sense=Sense.Minimize,
     objective=my_function,
     decision_variables=[decision_variable],
     constraints={},

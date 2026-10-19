@@ -6,7 +6,256 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-直近のリリース以降にマージされた変更を、このセクションに順次追記していきます。次のリリース時に新しいバージョンのセクションへ昇格します。
+### 🛠 penalty構築前の整数エンコードと一括置換 ([#1253](https://github.com/Jij-Inc/ommx/pull/1253))
+
+`Instance.prepare()` は、slack変換の後、固定penaltyの前に整数エンコードを
+実行します。`to_qubo()` と `to_hubo()` もこの順序を使うため、制約を二乗して
+目的関数の項が増える前に書き換えます。非循環の置換は、置換同士の依存関係を
+先に解決し、各多項式の項を一度走査してまとめて処理します。
+
+penaltyによって除去される制約には、エンコード後の式が保存されます。
+制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
+詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
+
+### 🆕 同梱のエージェントプラグインとスキルを取得 ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
+
+`uv run ommx plugin path` と `uv run ommx plugin marketplace path` で、同梱プラグイン
+と Claude Code のローカルマーケットプレイスを取得できます。`uv run ommx skill path`
+はスキルの親ディレクトリ、`uv run ommx skill path ommx` は個別のスキルディレクトリを
+返します。Agent Plugins と Claude Code の manifest を含む bundle は CLI に
+埋め込まれ、内容と CLI バージョンに対応するキャッシュに展開されます。
+現在の `SKILL.md` は配布確認用の
+プレースホルダーで、OMMX の利用方法を説明する本文は別途追加します。
+導入・更新手順は [OMMX のエージェントプラグインとスキルを取得・導入する](../user_guide/agent_skills.md)
+を参照してください。
+
+### 🆕 Python SDK から OMMX CLI を実行 ([#1263](https://github.com/Jij-Inc/ommx/pull/1263))
+
+Python SDK をインストールすると `ommx` コマンドも使えるようになります。
+`ommx` に依存する uv プロジェクトでは、次のように実行できます。
+
+```bash
+uv run ommx --help
+uv run ommx list
+```
+
+console script は Rust 実行ファイルと引数解析・コマンド実行・表示を共有し、
+`OMMX_LOCAL_REGISTRY_ROOT` にも従います。`inspect` が表示する JSON のキー順も
+一定になりました。導入手順は [OMMX CLI のインストールと実行](../user_guide/cli.md)、
+Registry の管理は {ref}`Local Registry の cleanup workflow <experiment-cleanup-workflow>`
+を参照してください。
+
+## 3.0.0 Beta 7
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b7-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b7)
+
+### 🛠 HiGHS のモデル構築時に求解を実行しないよう修正 ([#1237](https://github.com/Jij-Inc/ommx/pull/1237))
+
+`OMMXHighsAdapter(instance)` はモデル構築のみを行うようになりました。
+従来は、定数でない目的関数を設定するときに、制約を追加する前のモデルで求解を
+実行していました。定数目的関数についても、定数値と最小化・最大化の方向を
+HiGHS モデルに保持するようにしました。
+
+モデル構築から求解・解の復元まで行う場合は `OMMXHighsAdapter.solve(instance)` を、
+構築済みモデルを求解する場合は `adapter.solver_input.run()` を使ってください。
+詳細は [Adapter チュートリアル](../tutorial/solve_with_ommx_adapter)を参照してください。
+
+項数の多い線形目的関数や制約を構築する際には、加算のたびに蓄積済みの式全体を
+コピーせず、項を追加するようにしました。
+
+### 🆕 Adapter パッケージの Python バージョン上限制限を撤廃 ([#1245](https://github.com/Jij-Inc/ommx/pull/1245))
+
+HiGHS・PySCIPOpt・OpenJij の Adapter パッケージから、Python の要件 `<3.14` を
+取り除きました。Python-MIP を含む 4 つの Adapter パッケージすべてで、
+`requires-python = ">=3.10"` を指定しています。
+
+これにより、Adapter 自体のメタデータによって Python 3.14 へのインストールが
+拒否されなくなります。インストールには引き続き、利用する Python バージョンと
+プラットフォームに対応した OMMX・ソルバー・その他の依存パッケージが必要です。
+
+## 3.0.0 Beta 6
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b6-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b6)
+
+### 🛠 QPLIB 読み込み時の二次係数を修正 ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+
+QPLIB の二次目的関数と二次制約を、元の問題どおりに読み込めるようにしました。
+従来は形式上必要な係数 `1/2` が適用されず、二次項の寄与が 2 倍になっていました。
+そのため、目的関数値が変わったり、公開されている実行可能解が実行不可能と判定されたりする場合がありました。
+
+{meth}`~ommx.Instance.load_qplib` で作成して保存したモデルは、元の `.qplib`
+ファイルから読み込み直してください。`ommx.dataset.qplib` は OMMX 2.8.0 向けに
+公開した修正済みの配布を読み込むようになりました。旧配布がキャッシュされていても、
+修正済みの配布を使います。詳細は [QPLIB チュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
+
+### 🛠 MPS・MIPLIB 読み込み時にバイナリ変数を保持 ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
+
+MPS ファイルには、変数を整数として指定し、上下限を省略する書き方があります。
+{meth}`~ommx.Instance.load_mps` と `ommx.mps.load_file()` は、Gurobi・HiGHS の
+規約に従い、このような変数をバイナリ変数（`0` または `1`）として読み込むようになりました。
+従来は上限のない一般整数変数として読み込まれ、解く問題が変わる場合がありました。
+ファイルに上下限が明示されている場合は、その指定が優先されます。
+
+影響を受ける保存済みモデルは、元の MPS ファイルから読み込み直してください。
+`ommx.dataset.miplib2017` は OMMX 2.7.0 向けに公開した修正済みの MIPLIB 配布を
+読み込むようになりました。旧配布がキャッシュされていても、修正済みの配布を使います。
+詳細は [MIPLIB チュートリアル](../tutorial/download_miplib_instance.md)を参照してください。
+
+### 🛠 変数の上下限と制約で許容誤差の判定を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
+
+変数の値が上下限の範囲内にあるかどうかを、不等式制約と同じ絶対許容誤差の規則で
+判定するようにしました。範囲内で許される整数値・バイナリ値を求めるときにも同じ規則を使います。
+境界付近の値では、以前のプレリリースと判定が変わる場合があります。
+詳しい規則は [変数の上下限の評価](../user_guide/instance.md)を参照してください。
+
+### 🛠 変数の種類を列挙型に統一 ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
+
+{class}`~ommx.DecisionVariable` が変数の種類を受け取るときも返すときも、
+{class}`~ommx.Kind` を使うように統一し、v2 と同じ動作に戻しました。
+v3 プレリリースのコードで種類を整数値として直接渡している場合は、
+`Kind.Binary` や `Kind.Integer` などに置き換えてください。
+`DecisionVariable.binary()` などのコンストラクタや `DecisionVariable.BINARY` などの
+別名は引き続き利用できます。詳細は [移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+### ⚠ すべての特殊制約に違反量を導入し、実行可能性判定を統一 ([#1213](https://github.com/Jij-Inc/ommx/pull/1213))
+
+すべての特殊制約（Indicator・OneHot・SOS1）に非負の制約違反量（violation）を導入し、
+各制約にどの程度違反しているかを数値で確認できるようになりました。
+通常制約を含むすべての制約の実行可能性判定を **`violation <= atol`** に統一しました。
+この規則は、個々の制約に対して適用します。
+
+Indicator の違反量は、条件が有効なときは内側の制約の違反量、無効なときは 0 です。
+OneHot（ちょうど 1 つの変数が `1`、残りが `0`）と SOS1（非ゼロの変数が高々 1 つ）では、
+制約を満たすために必要な変数値の変更量を絶対値で合計した最小値を使います。
+許容誤差をこの合計に適用するため、個々には小さなずれでも、合計すると実行不可能と
+判定される場合があります。
+
+コードの移行では、`total_violation_l1()` を {meth}`~ommx.Solution.total_violation`
+に置き換えてください。`total_violation_l2()` は削除しました。
+合計には通常制約・Indicator・OneHot・SOS1 に加え、変換などで除去された制約の違反量も含みます。
+
+```python
+solution.total_violation()
+solution.constraint_violation(30, kind="one_hot")  # 既存の OneHot 制約 ID
+solution.constraints_df(kind="sos1")[["feasible", "violation"]]
+```
+
+個別の制約では、`EvaluatedConstraint.feasible` を `is_feasible(atol=...)` に
+置き換え、`SampledConstraint.feasible(atol=...)` はメソッドとして呼び出してください。
+元の評価と同じ許容誤差を使うには、`solution.feasibility_atol` または
+`sample_set.feasibility_atol` を渡します。Solution・SampleSet 全体の実行可能性を
+確認するプロパティは引き続き利用できます。
+
+SampleSet の実行可能性の判定と最良実行可能解の選択でも、
+変数の上下限・種類を確認するようになり、取り出した Solution の判定と一致します。
+変数に対するこれらの確認は `total_violation()` の合計には含まれないため、
+合計が 0 であることだけでは解が実行可能とは限りません。
+
+独自の許容誤差や特殊制約を含む結果を保存するときは、v2 形式を使ってください。
+旧 v1 形式への書き出しでは、保持できる通常制約と変数値について SDK の既定の
+許容誤差で実行可能性を計算し直します。
+詳細は {ref}`移行ガイド <constraint-violation-migration>` を参照してください。
+
+### ⚠ Big-M 定式化から SOS1 制約への変換をバッチ化 ([#1197](https://github.com/Jij-Inc/ommx/pull/1197), [#1223](https://github.com/Jij-Inc/ommx/pull/1223), [#1221](https://github.com/Jij-Inc/ommx/pull/1221))
+
+「非ゼロの変数は高々 1 つ」という条件を、選択用のバイナリ変数と Big-M 不等式で
+表している場合、{meth}`~ommx.Instance.promote_sos1_big_m` で明示的な SOS1 制約に
+変換できます。変換時には、元と同じ数学的な問題を表していることを検証します。
+
+リクエストは、選択用の変数の和を制限する制約の ID をキーとして、複数の定式化を
+まとめる形式になりました。たとえば、バイナリ変数に対する既存の定式化
+`x[2] + x[3] <= 1` が通常制約 ID `202` にある場合は次のように指定します。
+
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest({
+    202: {
+        2: Sos1BigMSelectorClaim.reused(),
+        3: Sos1BigMSelectorClaim.reused(),
+    },
+})
+report = instance.promote_sos1_big_m(request)
+print(report.promoted)    # 元の制約 ID -> 新しい SOS1 制約 ID
+print(report.rejections)  # 元の制約 ID -> 変換できなかった理由
+```
+
+既定の `mode="best_effort"` では、独立に変換できる定式化を適用し、変換できなかった
+ものは理由を返します。すべての変換が成功することを要求するには `mode="strict"` を
+使ってください。1 つでも変換できなければ {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
+が発生し、インスタンス全体を変更せずに終了します。
+
+以前の `atol` 引数は取り除いてください。変換は評価時の許容誤差とは独立に、
+数学的な同値性を検証するようになりました。また、指定された Big-M 不等式から
+変数の上下限を絞り込み、変換が成功したものと一緒に適用します。
+たとえば、`0 <= y <= 10`、`y <= 3*z`、`z` がバイナリ変数なら、`y` の上限を `3` にできます。
+元の変数に対する目的関数と実行可能な値の組み合わせは保持しますが、
+違反量や許容誤差の境界付近での判定は変わる場合があります。
+選択用の変数を別に持つ場合の指定方法と移行例は、
+{ref}`SOS1 変換ガイド <sos1-big-m-formulation>` を参照してください。
+
+### 🆕 線形制約を使って変数の上下限を絞り込む ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
+
+制約に含まれる情報から、変数の上下限を狭められるようになりました。
+たとえば、整数変数について `x + y <= 7` と `y >= 2` から `x <= 5` を導けます。
+
+```python
+from ommx import DecisionVariable, Instance, Sense
+
+x = DecisionVariable.integer(0, lower=0, upper=10)
+y = DecisionVariable.integer(1, lower=2, upper=10)
+instance = Instance.from_components(
+    decision_variables=[x, y], objective=x,
+    constraints={100: x + y <= 7}, sense=Sense.Minimize,
+)
+changed = instance.tighten_bounds_simultaneously_once()
+assert changed[0].upper == 5
+```
+
+このメソッドはインスタンスを更新し、変更された変数の ID と新しい上下限の辞書を返します。
+利用する制約を指定する場合は、
+`instance.tighten_bounds_simultaneously_once_using_constraints({100})` を使います。
+各呼び出しは開始時の上下限を使って 1 回だけ計算します。
+新しい上下限を他の制約へ反映させるには、再度呼び出してください。
+
+対象となるのは対応する線形制約です。非線形制約・合成式・特殊制約や、
+変数項が `max_terms`（既定値: 32）を超える線形制約はスキップします。
+丸め誤差により、許容誤差の境界付近で実行可能性の判定が変わる場合があります。
+対応する変数の種類と許容誤差の扱いは
+{ref}`変数の上下限の絞り込み <simultaneous-bound-tightening>` を参照してください。
+
+### 🆕 QPLIB の公開解を読み込む ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
+
+公開されている `.sol` ファイルを読み込み、対応する問題で評価することで、
+目的関数値と実行可能性を確認できるようになりました。
+
+```python
+from ommx import Instance, State
+
+instance = Instance.load_qplib("QPLIB_0018.qplib")
+state = State.load_qplib_solution(
+    "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
+)
+solution = instance.evaluate(state, atol=1e-8)
+```
+
+解ファイルで省略された変数には 0 を設定します。記載された目的関数値 `objvar` は
+変数として扱わず、モデルの評価によって目的関数値を計算します。
+`ommx.qplib.load_solution` も利用できます。
+対応するファイルは [QPLIB チュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
+
+### 🆕 Rust 拡張からのデータ受け渡しに共通の例外を導入 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
+
+外部の Rust 拡張から Python SDK に OMMX オブジェクトを渡せない場合に、
+{class}`~ommx.BridgeError` を捕捉できるようになりました。
+転送方式の不一致や受け取り処理の登録失敗、転送中の失敗を扱います。
+独立にビルドされた拡張からも同じ例外クラスが送出されます。
+転送中の失敗では、元の Python 例外を `__cause__` から確認できます。
+SDK または必要な bridge API が見つからない場合は `ImportError` になります。
+
+## 3.0.0 Beta 5
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b5-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b5)
 
 ### 🛠 境界を含む `atol` 判定 ([#1181](https://github.com/Jij-Inc/ommx/pull/1181))
 
@@ -21,7 +270,33 @@ Functionのゼロ依存演算、Indicatorのactivation、OneHot / SOS1の分類�
 値を含みます。境界をわずかに超える値は引き続き範囲外です。有限値の検証を所有するAPIは、
 domain errorや整合性errorを返す前にNaNと無限大を引き続き拒否します。
 
-### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+
+{meth}`~ommx.Instance.populate_state`、{meth}`~ommx.Instance.evaluate`、
+{meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
+dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
+canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
+以下のBinary値と、整数との差が`atol`以下のInteger / SemiInteger値は、境界上の値も含めて
+対応する厳密な離散値として格納されます。canonicalizationとは
+別に、kindとboundのfeasibilityを既存の規則で判定します。
+ContinuousとSemiContinuousは丸めません。それ以外の有限値は、返された
+{class}`~ommx.Solution`がfeasibilityを判定できるように保持し、非有限なstate値は
+引き続き拒否します。
+
+呼び出し側がfixedまたはdependent variableの値を渡した場合、その値は引き続き
+整合性assertionとして扱います。検証後のstateには、Instanceが所有するfixed valueを
+変更せずに格納するか、dependencyから導出してtarget kindに従いcanonicalizeした値を
+格納します。dependencyはcanonicalized inputから評価するため、丸め前のsolver vectorを
+もとに明示したdependent assertionが、導出値の`atol`内に入らず拒否される場合があります。
+scalar / sample evaluationは同じ規則を使い、SampleIDの対応関係を保持します。
+
+{meth}`~ommx.Instance.partial_evaluate`も、入力を検証した後、special constraintのpropagation、
+expressionへの代入、定数化したdependencyの評価より前に同じ規則を適用します。そのため、
+書き換え後のInstanceを評価した結果は、元のInstanceを直接評価した場合と同じcanonical
+coordinateを使います。Instanceが既に所有するfixed valueは変更せず、既存のkind / bound
+検証でpartial evaluationの受理範囲外となる値は引き続き拒否します。
+
+### ⚠ 複合 `Function` 演算 ([#1158](https://github.com/Jij-Inc/ommx/pull/1158), [#1178](https://github.com/Jij-Inc/ommx/pull/1178), [#1181](https://github.com/Jij-Inc/ommx/pull/1181), [#1184](https://github.com/Jij-Inc/ommx/pull/1184))
 
 {class}`~ommx.Function` はcompactなpolynomialに加えて、複合式も表現できるように
 なりました。絶対値、符号関数、最小値、最大値、除算、符号付き32 bit整数による
@@ -63,7 +338,9 @@ loweringは離散値が厳密であることを仮定し、0や1に近いsolver�
 $|f(x)| \leq \mathtt{atol}$ で不等式を分類するため、微小な正値が
 scaleによって暗黙に再分類されることはありません。厳密な多項式正規化は有限かつ
 非ゼロの係数をすべて保持し、許容誤差によるcleanupを暗黙には行いません。近似的な
-cleanupを将来提供する場合は、別の明示的なAPIになります。
+cleanupを将来提供する場合は、別の明示的なAPIになります。減算も、右辺を符号反転して
+加算する場合と同じcanonicalizationに従います。そのため `x - (-y)` は可能ならcompact
+polynomialへ戻り、係数overflowは遅延せず直ちに`ValueError`として通知されます。
 
 `Function`が常にpolynomialとは限らなくなったため、複合式に対する
 {meth}`~ommx.Function.degree` と {meth}`~ommx.Function.num_terms` は`None`を返します。
@@ -88,31 +365,79 @@ Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含
 `PolynomialRequirement.any_degree()`が受け付けるのは任意次数のpolynomialであり、
 複合された非polynomialの`Function`は含みません。
 
-### 🛠 evaluation時のsolver stateをcanonicalize ([#1174](https://github.com/Jij-Inc/ommx/pull/1174), [#1181](https://github.com/Jij-Inc/ommx/pull/1181))
+### 🆕 検証付きSOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
 
-{meth}`~ommx.Instance.populate_state`、{meth}`~ommx.Instance.evaluate`、
-{meth}`~ommx.Instance.evaluate_samples`は、fixedでもdependentでもない有限な入力値と、
-dependent targetの導出値を、decision variableのkindと呼び出し側の`atol`に従って
-canonicalizeするようになりました。これらの値について、`0`または`1`との差が`atol`
-以下のBinary値と、整数との差が`atol`以下のInteger / SemiInteger値は、境界上の値も含めて
-対応する厳密な離散値として格納されます。canonicalizationとは
-別に、kindとboundのfeasibilityを既存の規則で判定します。
-ContinuousとSemiContinuousは丸めません。それ以外の有限値は、返された
-{class}`~ommx.Solution`がfeasibilityを判定できるように保持し、非有限なstate値は
-引き続き拒否します。
+{ref}`SOS1制約 <sos1-constraint>`は、memberのうち高々1つだけが
+非零となる制約です。{ref}`Big-M formulation <sos1-big-m-formulation>`は、
+この条件をbinary selector、memberとselectorのlink制約、およびselectorの
+cardinality制約で表します。
 
-呼び出し側がfixedまたはdependent variableの値を渡した場合、その値は引き続き
-整合性assertionとして扱います。検証後のstateには、Instanceが所有するfixed valueを
-変更せずに格納するか、dependencyから導出してtarget kindに従いcanonicalizeした値を
-格納します。dependencyはcanonicalized inputから評価するため、丸め前のsolver vectorを
-もとに明示したdependent assertionが、導出値の`atol`内に入らず拒否される場合があります。
-scalar / sample evaluationは同じ規則を使い、SampleIDの対応関係を保持します。
+{class}`~ommx.Sos1BigMPromotionRequest`は、現在の`Instance`がこの
+formulationを持つことを申請します。これは独立した変形申請であり、loweringの
+rollbackや逆変換ではありません。promotion checkerは、現在の変数、domain、rowが
+申請したformulationのrowをfirst-classなSOS1制約へ置き換えることを正当化する
+十分条件を満たすことを検証します。
 
-{meth}`~ommx.Instance.partial_evaluate`も、入力を検証した後、special constraintのpropagation、
-expressionへの代入、定数化したdependencyの評価より前に同じ規則を適用します。そのため、
-書き換え後のInstanceを評価した結果は、元のInstanceを直接評価した場合と同じcanonical
-coordinateを使います。Instanceが既に所有するfixed valueは変更せず、既存のkind / bound
-検証でpartial evaluationの受理範囲外となる値は引き続き拒否します。
+```python
+from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
+
+request = Sos1BigMPromotionRequest({
+    102: {
+        0: Sos1BigMSelectorClaim.reused(),
+        1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
+    },
+})
+report = instance.promote_sos1_big_m(request, mode="strict")
+sos1_id = report.promoted[102]
+```
+
+この例は、現在のstrict batch APIで1件のrequestを呼び出す形です。申請した
+formulationの検証に失敗すると
+{class}`~ommx.Sos1BigMPromotionBatchRejectedError`となり、`Instance`は
+変更されません。戻り値の{class}`~ommx.Sos1BigMPromotion`はbatch全体のReportで、
+`promoted` Mapから新しいSOS1 IDを取得できます。member、selectorの復元、
+removed rowの情報はInstanceから参照できます。
+
+### 🆕 区間で定義する決定変数の逐次作成 ([#1185](https://github.com/Jij-Inc/ommx/pull/1185))
+
+{class}`~ommx.Instance` が数値IDを自動で割り当てながら、既存の区間で定義する
+すべての決定変数kindを作成できるようになりました。
+{meth}`~ommx.Instance.new_binary` に加えて、
+{meth}`~ommx.Instance.new_integer`、
+{meth}`~ommx.Instance.new_continuous`、
+{meth}`~ommx.Instance.new_semi_integer`、
+{meth}`~ommx.Instance.new_semi_continuous` を利用できます。
+
+```python
+from ommx import Instance
+
+instance = Instance.minimize()
+count = instance.new_integer("count", lower=0, upper=10)
+amount = instance.new_continuous("amount", lower=0)
+batch = instance.new_semi_integer("batch", lower=2, upper=10)
+rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
+```
+
+どのメソッドも式にそのまま利用できる
+{class}`~ommx.AttachedDecisionVariable` を返します。`name` は引き続き省略可能な
+位置引数で、`subscripts`、`parameters`、`description` はキーワード専用です。
+新しい4メソッドでは、`lower` と `upper` もキーワード専用で指定できます。
+さらに `new_integer` と `new_semi_integer` はキーワード専用の `atol` を受け取り、
+省略時には {func}`~ommx.get_default_atol` が返す現在の既定値を使います。この2メソッドでは、
+有限な lower endpoint を `ceil(lower - atol)`、有限な upper endpoint を
+`floor(upper + atol)` へ正規化します。正規化後の区間に整数がない場合、`new_integer` は
+`ValueError` を返し、`new_semi_integer` はゼロの選択肢を `[0, 0]` として保持します。
+逐次modeling workflowの詳細は
+[Instance user guide](../user_guide/instance.md) を参照してください。
+
+各constructorは決定変数の定義全体を検証してから、rowとmodeling labelをまとめて
+{class}`~ommx.Instance` へ追加します。boundまたはtoleranceが不正な場合や、既存の
+決定変数IDの最大値が `2**64 - 1` で、それより大きい自動IDを割り当てられない場合も、
+変数やlabelの一部だけが残ることはありません。
+
+## 3.0.0 Beta 4
+
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b4-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b4)
 
 ### ⚠ `solve()`と`sample()`が入力を自動的にPrepare ([#1166](https://github.com/Jij-Inc/ommx/pull/1166))
 

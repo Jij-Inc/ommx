@@ -425,7 +425,7 @@ mod tests {
             .unwrap()
             .evaluate(&state, atol)
             .unwrap();
-        assert!(!evaluated.is_feasible_with_tolerance(atol));
+        assert!(!evaluated.is_feasible(atol));
     }
 
     #[test]

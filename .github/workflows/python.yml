@@ -94,7 +94,7 @@ jobs:
           path: wheels
       - name: Transform Python Project to run tests
         run: |
-          # The unmodified workspace lock excludes Python 3.14.
+          # Keep the project-rewrite tooling independent of the target Python.
           uv sync --python 3.10 --locked --only-group maintenance --no-install-workspace
           uv run --python 3.10 --no-sync ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
           cat pyproject.toml

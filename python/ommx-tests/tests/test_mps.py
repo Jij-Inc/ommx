@@ -1,16 +1,37 @@
 from pathlib import Path
 
+import pytest
+
 import ommx.mps
-from ommx import Instance, DecisionVariable, Constraint, Function
+from ommx import Instance, DecisionVariable, Function, Kind, Equality, Sense
 
 
 test_dir = Path(__file__).parent
 
 
+@pytest.mark.parametrize("loader", [Instance.load_mps, ommx.mps.load_file])
+def test_neos_2626858_aoos_variable_domains(loader):
+    path = test_dir.parents[2] / "rust/ommx/tests/data/mps/neos-2626858-aoos.mps.gz"
+    instance = loader(str(path))
+    variables = instance.decision_variables
+    assert len(variables) == 524
+    assert len(instance.constraints) == 342
+    assert sum(v.kind == Kind.Binary for v in variables) == 209
+    assert sum(v.kind == Kind.Integer for v in variables) == 315
+
+    targets = {f"C{i:04d}" for i in range(493, 509)} | {"C0524"}
+    affected = [v for v in variables if v.name in targets]
+    assert len(affected) == 17
+    for variable in affected:
+        assert variable.kind == Kind.Binary, variable.name
+        assert variable.bound.lower == 0, variable.name
+        assert variable.bound.upper == 1, variable.name
+
+
 def test_example_mps():
     instance = ommx.mps.load_file(str(test_dir / "objsense_max.mps.gz"))
 
-    assert instance.sense == Instance.MAXIMIZE  # OBJSENSE field is specified
+    assert instance.sense == Sense.Maximize  # OBJSENSE field is specified
     dvars = instance.decision_variables
     dvars.sort(key=lambda x: x.name)
     constraints = sorted(instance.constraints.values(), key=lambda c: c.name or "")
@@ -19,17 +40,17 @@ def test_example_mps():
     assert len(constraints) == 3
     x, y, z = dvars
     assert x.name == "x"
-    assert x.kind == DecisionVariable.CONTINUOUS
+    assert x.kind == Kind.Continuous
     assert x.bound.lower == 0
     assert x.bound.upper == 3
     assert x.subscripts == []
     assert y.name == "y"
-    assert y.kind == DecisionVariable.CONTINUOUS
+    assert y.kind == Kind.Continuous
     assert y.bound.lower == 0
     assert y.bound.upper == 5
     assert y.subscripts == []
     assert z.name == "z"
-    assert z.kind == DecisionVariable.CONTINUOUS
+    assert z.kind == Kind.Continuous
     assert z.bound.lower == 0
     assert z.bound.upper == 10
     assert z.subscripts == []
@@ -37,17 +58,17 @@ def test_example_mps():
     constr1 = constraints[0]
     assert constr1.name == "constr1"
     assert constr1.function.almost_equal(Function(x + y - 4.0))
-    assert constr1.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+    assert constr1.equality == Equality.LessThanOrEqualToZero
     # constr2
     constr2 = constraints[1]
     assert constr2.name == "constr2"
     assert constr2.function.almost_equal(Function(x + 2 * y + z - 7))
-    assert constr2.equality == Constraint.EQUAL_TO_ZERO
+    assert constr2.equality == Equality.EqualToZero
     # constr3
     constr3 = constraints[2]
     assert constr3.name == "constr3"
     assert constr3.function.almost_equal(Function(-z - 2 * x + 10))
-    assert constr3.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+    assert constr3.equality == Equality.LessThanOrEqualToZero
 
 
 def test_output():
@@ -75,7 +96,7 @@ def test_output():
         decision_variables=x,
         objective=objective,
         constraints=constraints,
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     instance.save_mps(test_out_file)

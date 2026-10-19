@@ -33,7 +33,7 @@ $$
 The corresponding `ommx.Instance` is as follows.
 
 ```{code-cell} ipython3
-from ommx import Instance
+from ommx import Instance, Sense
 
 instance = Instance.maximize()
 x = instance.new_binary("x")
@@ -48,10 +48,30 @@ returned by `add_constraint`. Use {meth}`~ommx.Instance.from_components` when
 you already have components with explicit IDs and want to assemble them in one
 operation.
 
-Both `new_binary` and `add_constraint` accept the complete modeling label:
-`name`, `subscripts`, `parameters`, and `description`. The last three fields
-are keyword-only. For `add_constraint`, omitted fields preserve labels already
-stored on the input constraint.
+All `new_*` decision-variable methods and `add_constraint` accept the complete
+modeling label: `name`, `subscripts`, `parameters`, and `description`. The last
+three fields are keyword-only. `new_integer`, `new_continuous`,
+`new_semi_integer`, and `new_semi_continuous` also accept keyword-only `lower`
+and `upper` bounds. `new_integer` and `new_semi_integer` additionally accept a
+keyword-only `atol`; when it is omitted, they use the current default returned
+by {func}`~ommx.get_default_atol`. For `add_constraint`, omitted fields preserve
+labels already stored on the input constraint.
+
+For Integer and SemiInteger variables, OMMX replaces each finite bound side by
+the least or greatest integer value satisfying the requested bound under
+`atol`; an infinite side remains unbounded. Bound membership interprets
+$x \in [l,u]$ as the two residual constraints $l-x\leq 0$ and $x-u\leq 0$,
+using the same tolerance rule as inequality-constraint feasibility. If no
+integer satisfies the bound, `new_integer` raises `ValueError`, while
+`new_semi_integer` uses `[0, 0]` to preserve the semi-integer zero alternative.
+Binary bound normalization checks membership of `0` and `1` with this same
+rule.
+
+Each `new_*` call validates and normalizes its complete variable definition
+before assigning the ID. If a bound or tolerance is invalid, or if the maximum
+existing decision-variable ID is `2**64 - 1` so that no larger automatic ID can
+be assigned, neither the variable nor its modeling label is added to the
+`Instance`.
 
 Each of these components has a corresponding property. The objective function is converted into the form of {class}`~ommx.Function`, as explained in the previous section.
 
@@ -61,10 +81,10 @@ instance.objective
 
 Use {meth}`~ommx.Instance.maximize` for maximization problems and
 {meth}`~ommx.Instance.minimize` for minimization problems. The resulting
-`sense` is `Instance.MAXIMIZE` or `Instance.MINIMIZE`, respectively.
+`sense` is `Sense.Maximize` or `Sense.Minimize`, respectively.
 
 ```{code-cell} ipython3
-instance.sense == Instance.MAXIMIZE
+instance.sense == Sense.Maximize
 ```
 
 ## Decision Variables
@@ -79,6 +99,18 @@ First, `kind`, `lower`, and `upper` are essential information for the mathematic
 
 - `kind` specifies the type of decision variable, which can be Binary, Integer, Continuous, SemiInteger, or SemiContinuous.
 - `lower` and `upper` are the lower and upper bounds of the decision variable. For Binary variables, this range is $[0, 1]$.
+
+Create any of these kinds directly on an `Instance` when you want it to assign
+numeric IDs automatically. The returned attached variables can be used in
+expressions just like the binary variables above.
+
+```{code-cell} ipython3
+typed = Instance.minimize()
+count = typed.new_integer("count", lower=0, upper=10)
+amount = typed.new_continuous("amount", lower=0)
+batch = typed.new_semi_integer("batch", lower=2, upper=10)
+rate = typed.new_semi_continuous("rate", lower=0.5, upper=4)
+```
 
 Additionally, OMMX is designed to handle metadata that may be needed when integrating mathematical optimization into practical data analysis. While this metadata does not affect the mathematical model itself, it is useful for data analysis and visualization.
 
@@ -109,7 +141,7 @@ instance.constraints_df()
 
 In OMMX, constraints are also managed by ID, and this ID is independent of the decision variable ID. The ID is assigned when a constraint is attached to an `Instance`: the key you use in the `constraints` dictionary passed to {meth}`~ommx.Instance.from_components` becomes the constraint ID.
 
-The essential information for constraints is `equality`. `equality` indicates whether the constraint is an equality constraint ({attr}`~ommx.Constraint.EQUAL_TO_ZERO`) or an inequality constraint ({attr}`~ommx.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`). Note that constraints of the type $f(x) \geq 0$ are treated as $-f(x) \leq 0$.
+The essential information for constraints is `equality`. `equality` indicates whether the constraint is an equality constraint ({attr}`~ommx.Equality.EqualToZero`) or an inequality constraint ({attr}`~ommx.Equality.LessThanOrEqualToZero`). Note that constraints of the type $f(x) \geq 0$ are treated as $-f(x) \leq 0$.
 
 Constraints can also store metadata similar to decision variables. You can use `name`, `description`, `subscripts`, and `parameters`. Use `set_name`, `set_description`, `set_subscripts`, and `set_parameters` to replace those metadata fields. Use `add_subscripts`, `add_parameter`, and `add_parameters` when you want to append or merge entries instead.
 
@@ -124,6 +156,59 @@ You can also use the {attr}`~ommx.Instance.constraints` property to directly obt
 for cid, c in instance.constraints.items():
     print(f"id={cid}: {c}")
 ```
+
+(simultaneous-bound-tightening)=
+## Bound tightening
+
+Tighten variable bounds using all active regular constraints or a selected set
+of constraint IDs:
+
+```python
+changed_bounds = instance.tighten_bounds_simultaneously_once()  # variable ID -> updated Bound
+# Use only the regular constraints with IDs 100 and 101:
+changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+# Override the per-row variable-term limit (default: 32).
+changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
+```
+
+Both methods make one simultaneous pass: every constraint reads the bounds at
+entry, and the updates are applied together. New bounds are not reused during
+the call; call it again to propagate updates through other constraints. Candidates
+are combined before comparing changes with `atol`, so their processing order does
+not determine which candidate is retained.
+
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once` uses every active regular
+constraint. {meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`
+uses only the supplied IDs; unknown or removed IDs fail without applying changes,
+and an empty set applies no updates. Both methods use compact polynomial functions
+of degree at most one. Non-affine rows and composed expressions are skipped,
+even when an expression is mathematically affine.
+They also skip rows with more than `max_terms` variable terms (default: 32),
+before evaluating any bound candidates. The constant term does not count;
+terms of fixed, semi and dependent variables do count. A limit of zero processes
+only constant rows, including detection of their contradictions. Skipped rows
+remain in the instance.
+
+Both sides of equalities are processed. Tolerance is accounted for algebraically:
+continuous domains expand to `[lower - atol, upper + atol]`, and row residuals
+may be at most `atol`. For `a*x + r <= 0` with `a > 0`, the limit is
+`(atol - min(r)) / a`. Subtract `atol` to store a continuous upper bound, or round
+down for an integer/binary upper bound. Negative coefficients give the corresponding
+lower bound. For example, `2*x <= 6` with `atol=0.125` yields a limit of `3.0625`
+and a stored continuous upper bound of `2.9375` (or an integer upper bound of `3`).
+
+Residual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate arithmetic
+uses ordinary floating-point operations. The algorithm does not search the boundary
+accepted by point evaluation. Rounding, cancellation and evaluation order can
+therefore change feasibility near numerical boundaries even with the same `atol`.
+
+Unbounded domains remain infinite. Each upper/lower candidate is derived after excluding
+its own variable's term. A non-finite residual or boundary calculation skips only
+that candidate; other candidates in the same row are still processed.
+Special constraints are not used.
+Semi-variable domains include zero when tightening other variables, but semi,
+fixed and dependent variables are not changed. Changes within `atol` are ignored.
+The operation is atomic and is not a complete infeasibility detector.
 
 ## Symbolic substitution
 

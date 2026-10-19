@@ -39,7 +39,7 @@ For example, if one clause describes continuous quadratic programs and another d
 The following Instance has an active OneHot constraint, so it is not in the PySCIPOpt Adapter's `INPUT_CLASS`, which does not accept OneHot constraints directly.
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Instance, OneHotConstraint
+from ommx import DecisionVariable, Instance, OneHotConstraint, Sense
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 xs = [DecisionVariable.binary(i) for i in range(3)]
@@ -48,7 +48,7 @@ instance = Instance.from_components(
     objective=sum(xs),
     constraints={},
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 
 input_class = OMMXPySCIPOptAdapter.INPUT_CLASS

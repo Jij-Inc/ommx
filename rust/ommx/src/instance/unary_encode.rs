@@ -190,8 +190,7 @@ impl Instance {
         let mut linear = Linear::try_from(offset).unwrap();
         let coefficient = Coefficient::try_from(1.0).unwrap();
         for i in 0..num_binary_variables {
-            let binary_id = self.new_decision_variable_with_label(
-                Kind::Binary,
+            let binary_id = self.new_binary(
                 Bound::of_binary(),
                 crate::ModelingLabel {
                     name: Some("ommx.unary_encode".to_string()),
@@ -210,6 +209,7 @@ impl Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::EvaluatedConstraintBehavior;
     use crate::{
         coeff, v1::State, Bound, Constraint, ConstraintID, DecisionVariable, DecisionVariableRole,
         Equality, Evaluate, Function, IndicatorConstraint, IndicatorConstraintID, Instance, Kind,
@@ -439,8 +439,8 @@ mod tests {
                 actual_constraint.stage.evaluated_value,
             )?;
             prop_assert_eq!(
-                expected_constraint.stage.feasible,
-                actual_constraint.stage.feasible
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
         }
 
@@ -459,8 +459,8 @@ mod tests {
                 actual_constraint.stage.evaluated_value,
             )?;
             prop_assert_eq!(
-                expected_constraint.stage.feasible,
-                actual_constraint.stage.feasible
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
                 expected_constraint.stage.indicator_active,
@@ -478,8 +478,8 @@ mod tests {
             }
             let actual_constraint = actual.evaluated_one_hot_constraints().get(id).unwrap();
             prop_assert_eq!(
-                expected_constraint.stage.feasible,
-                actual_constraint.stage.feasible
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
                 expected_constraint.stage.active_variable,
@@ -497,8 +497,8 @@ mod tests {
             }
             let actual_constraint = actual.evaluated_sos1_constraints().get(id).unwrap();
             prop_assert_eq!(
-                expected_constraint.stage.feasible,
-                actual_constraint.stage.feasible
+                expected_constraint.is_feasible(expected.feasibility_atol()),
+                actual_constraint.is_feasible(actual.feasibility_atol())
             );
             prop_assert_eq!(
                 expected_constraint.stage.active_variable,
@@ -973,7 +973,7 @@ mod tests {
             .unwrap_err();
         assert!(err
             .to_string()
-            .contains("No available decision variable ID"));
+            .contains("Insufficient capacity for automatically assigned decision variable IDs"));
         assert!(instance.decision_variable_dependency.get(&id).is_none());
         assert_eq!(aux_variable_count(&instance, "ommx.unary_encode"), 0);
     }

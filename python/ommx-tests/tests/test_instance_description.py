@@ -3,6 +3,7 @@
 import pytest
 
 from ommx import (
+    Sense,
     DecisionVariable,
     Instance,
     OneHotConstraint,
@@ -19,7 +20,7 @@ def test_instance_description_none():
     """Test that instance description is None when not set."""
     x = DecisionVariable.binary(0)
     instance = Instance.from_components(
-        decision_variables=[x], objective=x, constraints={}, sense=Instance.MINIMIZE
+        decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize
     )
 
     assert instance.description is None
@@ -41,7 +42,7 @@ def test_instance_description_with_from_components():
         decision_variables=[x],
         objective=x,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         description=desc,
     )
 
@@ -119,7 +120,7 @@ def test_instance_annotations_do_not_serialize_structural_constraints():
         objective=x[0],
         constraints={},
         one_hot_constraints={10: OneHotConstraint(variables=x)},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     instance.title = "Structural Instance"
@@ -217,7 +218,7 @@ def test_solution_annotations_preserve_structural_constraint_evaluations():
         objective=sum(x),
         constraints={},
         one_hot_constraints={10: OneHotConstraint(variables=x)},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     solution = instance.evaluate({1: 0.0, 2: 1.0, 3: 0.0})
 
@@ -253,7 +254,7 @@ def test_parametric_instance_annotations_round_trip_through_bytes():
         parameters=[p],
         objective=x + p,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.title = "Parametric Proto Title"
     instance.add_user_annotation("source", "bytes")
@@ -275,7 +276,7 @@ def test_parametric_instance_replace_annotations_replaces_existing_metadata():
         parameters=[p],
         objective=x + p,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
     instance.title = "Old Parametric Title"
     instance.add_user_annotation("source", "old")
@@ -327,7 +328,7 @@ def test_sample_set_annotations_preserve_structural_constraint_samples():
         objective=sum(x),
         constraints={},
         one_hot_constraints={10: OneHotConstraint(variables=x)},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     sample_set = instance.evaluate_samples(
         {

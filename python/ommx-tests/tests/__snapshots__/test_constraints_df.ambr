@@ -151,43 +151,43 @@
 # ---
 # name: test_solution_constraints_df_kind[indicator]
   '''
-                           indicator_variable_id equality  value  indicator_active   used_ids  name subscripts description
-  indicator_constraint_id                                                                                                 
-  20                                           0       =0    0.0             False  {0, 1, 2}  <NA>         []        <NA>
+                           indicator_variable_id equality  value  feasible  indicator_active   used_ids  name subscripts description  violation
+  indicator_constraint_id                                                                                                                      
+  20                                           0       =0    0.0      True             False  {0, 1, 2}  <NA>         []        <NA>        0.0
   '''
 # ---
 # name: test_solution_constraints_df_kind[one_hot]
   '''
-                         feasible  active_variable   used_ids  name subscripts description
-  one_hot_constraint_id                                                                   
-  30                         True                1  {0, 1, 2}  <NA>         []        <NA>
+                         feasible  active_variable   used_ids  name subscripts description  violation
+  one_hot_constraint_id                                                                              
+  30                         True                1  {0, 1, 2}  <NA>         []        <NA>        0.0
   '''
 # ---
 # name: test_solution_constraints_df_kind[regular]
   '''
-                        equality  value   used_ids     name subscripts description parameters.region dual_variable
-  regular_constraint_id                                                                                           
-  10                          =0    0.0  {0, 1, 2}  balance     [0, 1]  demand row           us-east          <NA>
+                        equality  value  feasible   used_ids     name subscripts description parameters.region dual_variable  violation
+  regular_constraint_id                                                                                                                
+  10                          =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row           us-east          <NA>        0.0
   '''
 # ---
 # name: test_solution_constraints_df_kind[sos1]
   '''
-                      feasible  active_variable   used_ids  name subscripts description
-  sos1_constraint_id                                                                   
-  40                      True                1  {0, 1, 2}  <NA>         []        <NA>
+                      feasible  active_variable   used_ids  name subscripts description  violation
+  sos1_constraint_id                                                                              
+  40                      True                1  {0, 1, 2}  <NA>         []        <NA>        0.0
   '''
 # ---
 # name: test_solution_constraints_df_removed_reason_include
   '''
-                        equality  value   used_ids     name subscripts description dual_variable removed_reason removed_reason.phase
-  regular_constraint_id                                                                                                             
-  10                          =0    0.0  {0, 1, 2}  balance     [0, 1]  demand row          <NA>   manual_relax              warm-up
+                        equality  value  feasible   used_ids     name subscripts description dual_variable  violation removed_reason removed_reason.phase
+  regular_constraint_id                                                                                                                                  
+  10                          =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row          <NA>        0.0   manual_relax              warm-up
   '''
 # ---
 # name: test_solution_constraints_df_removed_reason_no_removals_keeps_column
   '''
-                        equality  value   used_ids     name subscripts description dual_variable removed_reason
-  regular_constraint_id                                                                                        
-  10                          =0    0.0  {0, 1, 2}  balance     [0, 1]  demand row          <NA>           <NA>
+                        equality  value  feasible   used_ids     name subscripts description dual_variable  violation removed_reason
+  regular_constraint_id                                                                                                             
+  10                          =0    0.0      True  {0, 1, 2}  balance     [0, 1]  demand row          <NA>        0.0           <NA>
   '''
 # ---

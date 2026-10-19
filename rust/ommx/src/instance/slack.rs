@@ -150,8 +150,7 @@ impl Instance {
             .into());
         }
 
-        let slack_id = self.new_decision_variable_with_label(
-            Kind::Integer,
+        let slack_id = self.new_integer(
             slack_bound,
             crate::ModelingLabel {
                 name: Some("ommx.slack".to_string()),
@@ -267,8 +266,7 @@ impl Instance {
             Err(e) => return Err(e).context("Slack coefficient must be finite"),
         };
 
-        let slack_id = self.new_decision_variable_with_label(
-            Kind::Integer,
+        let slack_id = self.new_integer(
             slack_bound,
             crate::ModelingLabel {
                 name: Some("ommx.slack".to_string()),
@@ -413,8 +411,8 @@ mod tests {
                 atol,
             )
             .unwrap();
-        assert!(feasible.is_feasible_with_tolerance(atol));
-        assert!(!infeasible.is_feasible_with_tolerance(atol));
+        assert!(feasible.is_feasible(atol));
+        assert!(!infeasible.is_feasible(atol));
     }
 
     #[test]
@@ -434,8 +432,8 @@ mod tests {
         let infeasible = constraint
             .evaluate(&crate::v1::State::from_iter([(1, 1.0)]), atol)
             .unwrap();
-        assert!(feasible.is_feasible_with_tolerance(atol));
-        assert!(!infeasible.is_feasible_with_tolerance(atol));
+        assert!(feasible.is_feasible(atol));
+        assert!(!infeasible.is_feasible(atol));
     }
 
     #[test]

@@ -63,7 +63,7 @@ def test_error_nonlinear_objective():
         decision_variables=[x],
         objective=2.3 * x * x,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with pytest.raises(AdapterNotApplicableError) as e:
@@ -98,7 +98,7 @@ def test_error_nonlinear_constraint():
         decision_variables=[x],
         objective=0.0,
         constraints={0: 2.3 * x * x == 0},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with pytest.raises(AdapterNotApplicableError) as e:

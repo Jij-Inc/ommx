@@ -27,6 +27,9 @@ OMMXは通常の等式・不等式制約に加えて、Indicator、OneHot、SOS1
 | {class}`~ommx.OneHotConstraint` | Binary変数集合のうち、丁度1つが $1$ | 選択肢から1つを選ぶ |
 | {class}`~ommx.Sos1Constraint` | 変数集合のうち、高々1つが非ゼロ | 複数変数の同時利用を禁止する |
 
+(sos1-constraint)=
+### SOS1とOneHotの違い
+
 OneHotとSOS1は似ていますが、OneHotは「丁度1つ」であり全変数が $0$ の状態を許しません。SOS1は「高々1つ」なので全変数が $0$ でも構いません。また、OneHotの構成変数はBinaryですが、SOS1の構成変数はBinaryに限りません。
 
 ## Instanceに追加する
@@ -90,6 +93,13 @@ Instanceは制約の追加時に、参照された決定変数が存在するこ
 各変換で生成される制約の式、変数の追加・再利用、成立条件、返されるID、失敗時のmutation contractは、上のAPI Referenceが所有します。Adapterの標準workflowでは個別APIを直接組み合わせず、`solve()`または`sample()`に推奨Policyの適用を任せます。Policyをapplication固有に編集するときは、コピーへ{meth}`~ommx.Instance.prepare`を明示的に適用して厳格な実行APIへ渡します。
 
 loweringされた元の制約はremovedなentryとしてInstanceに残ります。active/removedのlifecycle、変換理由、provenance、変換前の制約を含むfeasibilityは[Removed constraintsと実行可能性](./removed_constraints.md)で説明しています。
+
+(sos1-big-m-formulation)=
+## SOS1のBig-M formulationとpromotion
+
+Big-M formulationは、selectorとなるBinary変数と通常制約でSOS1の条件を表現する定式化です。既存の定式化を専用のSOS1制約へ置き換える場合は、{meth}`~ommx.Instance.promote_sos1_big_m`に{class}`~ommx.Sos1BigMPromotionRequest`を渡します。これは現在の制約を検証する変換であり、過去のlowering履歴を戻す操作ではありません。
+
+デフォルトの`mode="best_effort"`は独立した有効な定式化を昇格し、成功・拒否の結果を{class}`~ommx.Sos1BigMPromotion`で返します。`mode="strict"`は全件が有効な場合にだけ適用します。数学的な同値性、bound tightening、selectorの条件、重複申請、例外の正確な契約はAPI Referenceを参照してください。有限の許容誤差でのviolation値や実行可能性判定が変換前後で一致するとは限りません。
 
 ## 評価結果を参照する
 

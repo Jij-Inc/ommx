@@ -1,6 +1,7 @@
 mod analysis;
 mod approx;
 pub(crate) mod arbitrary;
+mod bound_tightening;
 mod builder;
 mod clip_bounds;
 mod convert;
@@ -15,6 +16,7 @@ mod logical_memory;
 mod named_function;
 mod new;
 mod one_hot;
+mod one_hot_promotion;
 mod parametric_builder;
 mod parse;
 mod pass;
@@ -28,20 +30,34 @@ mod setter;
 mod slack;
 pub use slack::ExactIntegerSlackUnavailable;
 mod sos1;
+mod sos1_promotion;
 mod stats;
 mod substitute;
 mod unary_encode;
+mod v1_hint_export;
+mod v1_hint_promotion;
 
-pub use analysis::*;
+pub use analysis::{DecisionVariableRole, DecisionVariableUsage, DecisionVariableUsageEntry};
 pub use arbitrary::{InstanceParameters, InstanceSpace};
 pub use builder::*;
+pub use one_hot_promotion::{
+    OneHotPromotion, OneHotPromotionBatchRejected, OneHotPromotionPlan, OneHotPromotionRequest,
+    OneHotPromotionV1Hints,
+};
 pub use parametric_builder::*;
 pub use preparation::{
     BinaryPowerPreparation, FixedPenaltyPreparation, IntegerEncodingPreparation,
     IntegerSlackPreparation, ObjectivePreparation, PreparationPolicy, PreparationTargetNotReached,
     SpecialConstraintPreparation,
 };
+pub use sos1_promotion::{
+    Sos1BigMPromotion, Sos1BigMPromotionBatchRejected, Sos1BigMPromotionPlan,
+    Sos1BigMPromotionRequest, Sos1BigMPromotionV1Hints, Sos1BigMSelectorClaim,
+};
 pub use stats::*;
+pub use v1_hint_promotion::{
+    V1ConstraintHintPromotionReport, V1OneHotHintPromotionOutcome, V1Sos1HintPromotionOutcome,
+};
 
 use crate::{
     constraint::{ConstraintContextStore, RemovedReason},
@@ -536,6 +552,49 @@ impl Instance {
         self.decision_variables.fixed_value(id)
     }
 
+    /// Return one variable's algebraic domain bounds for bound tightening.
+    ///
+    /// The instance owns the complete domain information: a fixed value takes
+    /// precedence over the row's kind and bound. Otherwise, continuous bounds
+    /// expand to `[lower - atol, upper + atol]`, discrete kinds use their canonical
+    /// endpoints, and semi kinds include the zero alternative. Unbounded sides
+    /// remain infinite; they are not replaced by finite evaluation endpoints.
+    ///
+    /// This does not invert floating-point bound membership or infer ranges
+    /// from constraints or dependency expressions.
+    /// Returns `None` for an unknown ID. Callers must supply finite `atol < 1`.
+    fn decision_variable_domain_bounds(
+        &self,
+        id: VariableID,
+        atol: crate::ATol,
+    ) -> Option<(f64, f64)> {
+        debug_assert!(atol.into_inner().is_finite() && atol.into_inner() < 1.0);
+        let variable = self.decision_variables().get(&id)?;
+        if let Some(value) = self.fixed_decision_variable_value(id) {
+            return Some((value, value));
+        }
+        let (mut lower, mut upper) = match variable.kind() {
+            crate::Kind::Continuous | crate::Kind::SemiContinuous => {
+                let bound = variable.bound();
+                (
+                    bound.lower() - atol.into_inner(),
+                    bound.upper() + atol.into_inner(),
+                )
+            }
+            crate::Kind::Integer | crate::Kind::SemiInteger | crate::Kind::Binary => {
+                (variable.bound().lower(), variable.bound().upper())
+            }
+        };
+        if matches!(
+            variable.kind(),
+            crate::Kind::SemiContinuous | crate::Kind::SemiInteger
+        ) {
+            lower = lower.min(0.0);
+            upper = upper.max(0.0);
+        }
+        Some((lower, upper))
+    }
+
     /// Access named-function rows plus their modeling labels.
     pub fn named_function_table(&self) -> &NamedFunctionTable<NamedFunction> {
         &self.named_functions
@@ -739,10 +798,10 @@ impl Instance {
     /// non-finite bounds). Indicator validates its complete family before
     /// mutation. One-hot constraints are converted in ascending original ID
     /// order without a family-wide rollback guarantee. SOS1 validates its
-    /// mathematical preconditions first, but auxiliary-ID exhaustion may leave
-    /// earlier allocations or conversions in place. This method is **not**
-    /// atomic across types either: earlier conversions are not rolled back if a
-    /// later one fails. Callers that need atomicity should clone up front.
+    /// mathematical preconditions and total generated-ID capacity before any
+    /// mutation. This method is **not** atomic across types: earlier conversions
+    /// are not rolled back if a later one fails. Callers that need atomicity
+    /// should clone up front.
     #[tracing::instrument(skip_all)]
     pub fn lower_special_constraints(
         &mut self,

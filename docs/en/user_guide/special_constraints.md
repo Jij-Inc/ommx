@@ -27,6 +27,9 @@ This page explains the mathematical meaning of each constraint type and how an I
 | {class}`~ommx.OneHotConstraint` | Exactly one variable in a set of Binary variables equals $1$ | Select one of several alternatives |
 | {class}`~ommx.Sos1Constraint` | At most one variable in a set is nonzero | Prevent the simultaneous use of several variables |
 
+(sos1-constraint)=
+### SOS1 and OneHot
+
 OneHot and SOS1 are similar but not interchangeable. OneHot means “exactly one,” so it does not allow every variable to be $0$. SOS1 means “at most one,” so the all-zero assignment is valid. OneHot variables are Binary, while SOS1 variables do not have to be Binary.
 
 ## Adding Them to an Instance
@@ -88,6 +91,13 @@ The following APIs perform individual lowering operations explicitly.
 The API Reference above owns the exact generated formulas, variable creation and reuse, validity conditions, returned IDs, and mutation contract on failure. For the standard recommended workflow, call the Adapter's easy API. When the application customizes Preparation, edit a fresh recommended Policy, prepare the chosen Instance, and call the corresponding `*_without_preparation()` method. Use the individual lowering APIs when the application needs direct control over one transformation.
 
 The source constraint remains in the Instance as a removed entry after lowering. [Removed Constraints and Feasibility](./removed_constraints.md) explains the active/removed lifecycle, removal reasons, provenance, and feasibility with respect to the pre-transformation constraints.
+
+(sos1-big-m-formulation)=
+## SOS1 Big-M Formulations and Promotion
+
+A Big-M formulation represents the SOS1 condition using Binary selectors and regular constraints. To replace an existing formulation with a native SOS1 constraint, pass a {class}`~ommx.Sos1BigMPromotionRequest` to {meth}`~ommx.Instance.promote_sos1_big_m`. This transformation validates the current constraints; it does not reverse a recorded lowering history.
+
+The default `mode="best_effort"` promotes independent valid formulations and returns successful and rejected outcomes in a {class}`~ommx.Sos1BigMPromotion` report. `mode="strict"` applies the batch only when every formulation is valid. See the API Reference for mathematical equivalence, bound tightening, selector requirements, overlapping claims, and exception contracts. Violation values and feasibility classification at a finite tolerance need not match before and after promotion.
 
 ## Accessing Evaluation Results
 

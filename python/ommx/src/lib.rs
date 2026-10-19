@@ -5,6 +5,8 @@ mod annotations;
 mod artifact;
 mod attached;
 mod bound;
+#[cfg(feature = "cli")]
+mod cli;
 mod constraint;
 #[cfg(feature = "remote-artifact")]
 mod dataset;
@@ -43,6 +45,7 @@ mod sampled_named_function;
 mod samples;
 mod solution;
 mod sos1_constraint;
+mod sos1_promotion;
 mod state;
 
 pub use artifact::*;
@@ -83,6 +86,7 @@ pub use sampled_named_function::*;
 pub use samples::*;
 pub use solution::*;
 pub use sos1_constraint::*;
+pub use sos1_promotion::*;
 pub use state::*;
 
 use pyo3::prelude::*;
@@ -148,6 +152,9 @@ pub fn get_default_atol() -> f64 {
 /// See <https://pyo3.rs/main/free-threading#supporting-free-threaded-python-with-pyo3>.
 #[pymodule(gil_used = false)]
 fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+    #[cfg(feature = "cli")]
+    m.add_function(wrap_pyfunction!(cli::_run_cli, m)?)?;
+
     // OMMX Artifact
     error::register_exceptions(py, m)?;
     m.add_class::<PyArchiveDescriptor>()?;
@@ -221,6 +228,9 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Sos1Constraint>()?;
     m.add_class::<AttachedSos1Constraint>()?;
     m.add_class::<RemovedSos1Constraint>()?;
+    m.add_class::<Sos1BigMSelectorClaim>()?;
+    m.add_class::<Sos1BigMPromotionRequest>()?;
+    m.add_class::<Sos1BigMPromotion>()?;
     m.add_class::<NamedFunction>()?;
     m.add_class::<RemovedConstraint>()?;
     m.add_class::<Provenance>()?;
@@ -286,11 +296,14 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "State",
     "Samples",
     "Bound",
+    // Cross-extension bridge failures
+    "BridgeError",
     // Domain operation signals
     "ExactIntegerSlackError",
     "InfeasibleDetected",
     "LogEncodingError",
     "PreparationTargetNotReachedError",
+    "Sos1BigMPromotionBatchRejectedError",
     // Function types
     "Linear",
     "Quadratic",
@@ -329,6 +342,9 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "Sos1Constraint",
     "AttachedSos1Constraint",
     "RemovedSos1Constraint",
+    "Sos1BigMSelectorClaim",
+    "Sos1BigMPromotionRequest",
+    "Sos1BigMPromotion",
     "RemovedConstraint",
     "Provenance",
     "ProvenanceKind",

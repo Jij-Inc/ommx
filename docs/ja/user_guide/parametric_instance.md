@@ -28,7 +28,7 @@ $$
 ここで、$N$はアイテムの数、$p_i$はアイテム$i$の価値、$w_i$はアイテム$i$の重さ、$W$はナップザックの容量です。$x_i$はアイテム$i$をナップザックに入れるかどうかを表すバイナリ変数です。`ommx.Instance` では $p_i$ や $w_i$ は固定値を使いましたが、ここではこれらをパラメータとして扱います。
 
 ```{code-cell} ipython3
-from ommx import ParametricInstance, DecisionVariable, Parameter, Instance
+from ommx import DecisionVariable, Instance, Parameter, ParametricInstance, Sense
 
 N = 6
 x = [DecisionVariable.binary(id=i, name="x", subscripts=[i]) for i in range(N)]
@@ -53,7 +53,7 @@ parametric_instance = ParametricInstance.from_components(
     parameters=p + w + [W],
     objective=objective,
     constraints={0: constraint},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 ```
 

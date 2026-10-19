@@ -33,7 +33,7 @@ A removed entry stores the original constraint together with `removed_reason` an
 The following example manually relaxes a regular constraint and lowers a OneHot constraint to a mathematically equivalent regular constraint.
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Instance, OneHotConstraint, ProvenanceKind
+from ommx import DecisionVariable, Instance, OneHotConstraint, ProvenanceKind, Sense
 
 x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
 instance = Instance.from_components(
@@ -41,7 +41,7 @@ instance = Instance.from_components(
     objective=x[0] + 2 * x[1],
     constraints={10: x[0] <= 0},
     one_hot_constraints={20: OneHotConstraint(variables=x)},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 
 instance.relax_constraint(
@@ -126,9 +126,9 @@ The same API works for Indicator, OneHot, and SOS1 by changing `kind=`. {meth}`~
 
 ## Evaluating Each Sample in a `SampleSet`
 
-{meth}`~ommx.Instance.evaluate_samples` preserves the active/removed distinction for every sample. {attr}`~ommx.SampleSet.feasible` and {attr}`~ommx.SampleSet.feasible_relaxed` map sample IDs to results for the four constraint families: the former checks active and removed constraints, while the latter checks active constraints only. `best_feasible` and `best_feasible_relaxed` select samples using these constraint-only results.
+{meth}`~ommx.Instance.evaluate_samples` preserves the active/removed distinction for every sample. {attr}`~ommx.SampleSet.feasible` and {attr}`~ommx.SampleSet.feasible_relaxed` map sample IDs to feasibility results. The former checks active and removed constraints, while the latter checks active constraints only. Both also check decision-variable kinds and bounds.
 
-These {class}`~ommx.SampleSet` results do not check decision-variable kinds or bounds. This differs from {attr}`~ommx.Solution.feasible` and {attr}`~ommx.Solution.feasible_relaxed`, which check the variable domains as well. When treating a selected sample as a final Solution, check feasibility on the Solution too.
+These results match the feasibility of the {class}`~ommx.Solution` extracted from the same sample. `best_feasible` and `best_feasible_relaxed` use these results, including variable-domain checks, to select samples.
 
 ```{code-cell} ipython3
 from ommx import Samples

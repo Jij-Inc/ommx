@@ -55,6 +55,14 @@ impl VariableBound {
         self.0.is_finite()
     }
 
+    /// Return whether ``value`` satisfies this bound under ``atol``.
+    ///
+    /// Membership treats the bound as the two inequality residuals
+    /// ``lower - value <= 0`` and ``value - upper <= 0``. Both use the same
+    /// tolerance semantics as regular inequality constraints after finite
+    /// evaluation. An infinite endpoint leaves that side unconstrained;
+    /// non-finite values and finite-endpoint residual overflow are not
+    /// contained.
     pub fn contains(&self, value: f64, atol: f64) -> crate::error::OmmxPyResult<bool> {
         let atol = ommx::ATol::new(atol)?;
         Ok(self.0.contains(value, atol))

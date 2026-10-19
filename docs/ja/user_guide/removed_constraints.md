@@ -33,7 +33,7 @@ removed entry は元の制約と `removed_reason`、`removed_reason_parameters` 
 次の例では、通常制約を手動で relax し、OneHot 制約を数学的に等価な通常制約へ lowering します。
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Instance, OneHotConstraint, ProvenanceKind
+from ommx import DecisionVariable, Instance, OneHotConstraint, ProvenanceKind, Sense
 
 x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
 instance = Instance.from_components(
@@ -41,7 +41,7 @@ instance = Instance.from_components(
     objective=x[0] + 2 * x[1],
     constraints={10: x[0] <= 0},
     one_hot_constraints={20: OneHotConstraint(variables=x)},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 
 instance.relax_constraint(
@@ -126,9 +126,9 @@ Indicator、OneHot、SOS1 についても `kind=` を切り替えて同じ API �
 
 ## SampleSet でサンプルごとに評価する
 
-{meth}`~ommx.Instance.evaluate_samples` も各サンプルについてactive / removed制約の区別を保持します。{attr}`~ommx.SampleSet.feasible` と {attr}`~ommx.SampleSet.feasible_relaxed` は、sample IDから4制約族についての判定結果へのdictです。前者はactiveとremoved、後者はactiveだけを検査します。`best_feasible` と `best_feasible_relaxed` も、この制約だけに基づく判定でsampleを選びます。
+{meth}`~ommx.Instance.evaluate_samples` も各サンプルについてactive / removed制約の区別を保持します。{attr}`~ommx.SampleSet.feasible` と {attr}`~ommx.SampleSet.feasible_relaxed` は、sample IDから実行可能性へのdictです。前者はactiveとremoved、後者はactiveだけを検査し、どちらも決定変数のkindとboundを検査します。
 
-{class}`~ommx.SampleSet` のこれらの判定は、決定変数のkindとboundを検査しません。この点は、それらも検査する {attr}`~ommx.Solution.feasible` / {attr}`~ommx.Solution.feasible_relaxed` と異なります。選んだsampleを最終的なSolutionとして扱う場合は、Solution側の実行可能性も確認してください。
+この判定は、同じsampleから取り出した {class}`~ommx.Solution` の実行可能性と一致します。`best_feasible` と `best_feasible_relaxed` も、変数のdomainを含むこの判定でsampleを選びます。
 
 ```{code-cell} ipython3
 from ommx import Samples

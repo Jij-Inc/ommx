@@ -106,7 +106,12 @@ impl Parse for crate::v1::Solution {
 
         let mut decision_variables = std::collections::BTreeMap::default();
         let mut variable_labels = crate::VariableLabelStore::default();
-        for dv in self.decision_variables {
+        for mut dv in self.decision_variables {
+            // In a Solution, substituted_value is a saved evaluation value,
+            // not a model fixing. It may violate the variable's domain; the
+            // root feasibility flags describe that result. Parse the definition
+            // separately and validate finiteness/value agreement below.
+            let saved_value = dv.substituted_value.take();
             // Parse the DecisionVariable to get strongly-typed version + drained label
             let parsed: crate::decision_variable::parse::ParsedDecisionVariable =
                 dv.parse_as(&(), message, "decision_variables")?;
@@ -114,12 +119,11 @@ impl Parse for crate::v1::Solution {
             let dv_id = parsed_id.into_inner();
             let parsed_dv = parsed.variable;
             let label = parsed.label;
-            let parsed_fixed_value = parsed.fixed_value;
 
             // Get the value from state or substituted_value
             let atol = ATol::default();
             let (value, substituted_value_assertion) =
-                match (state.entries.get(&dv_id), parsed_fixed_value.as_ref()) {
+                match (state.entries.get(&dv_id), saved_value.as_ref()) {
                     (Some(value), None) | (None, Some(value)) => (*value, None),
                     (Some(value), Some(substituted_value)) => (*value, Some(*substituted_value)),
                     (None, None) => {
@@ -270,13 +274,45 @@ impl Parse for v2::Solution {
         let evaluated_one_hot_constraints = self
             .evaluated_one_hot_constraints
             .map(|value| {
-                value.parse_as(&feasibility_atol, message, "evaluated_one_hot_constraints")
+                for (&id, row) in &value.entries {
+                    for &variable_id in &row.variables {
+                        validate_structural_member_id(
+                            &decision_variables,
+                            variable_id.into(),
+                            "one-hot",
+                            crate::OneHotConstraintID::from(id),
+                        )
+                        .map_err(|error| {
+                            ParseError::new(error).context(message, "evaluated_one_hot_constraints")
+                        })?;
+                    }
+                }
+                value
+                    .parse_with_values(&decision_variables, feasibility_atol)
+                    .map_err(|error| error.context(message, "evaluated_one_hot_constraints"))
             })
             .transpose()?
             .unwrap_or_default();
         let evaluated_sos1_constraints = self
             .evaluated_sos1_constraints
-            .map(|value| value.parse_as(&feasibility_atol, message, "evaluated_sos1_constraints"))
+            .map(|value| {
+                for (&id, row) in &value.entries {
+                    for &variable_id in &row.variables {
+                        validate_structural_member_id(
+                            &decision_variables,
+                            variable_id.into(),
+                            "SOS1",
+                            crate::Sos1ConstraintID::from(id),
+                        )
+                        .map_err(|error| {
+                            ParseError::new(error).context(message, "evaluated_sos1_constraints")
+                        })?;
+                    }
+                }
+                value
+                    .parse_with_values(&decision_variables, feasibility_atol)
+                    .map_err(|error| error.context(message, "evaluated_sos1_constraints"))
+            })
             .transpose()?
             .unwrap_or_default();
 
@@ -408,10 +444,11 @@ impl TryFrom<v2::Solution> for Solution {
 /// `Parse` impl above initializes those collections to
 /// `Default::default()` for symmetry. Round-trip through `to_v1_bytes` /
 /// `from_v1_bytes` preserves variable labels and regular-constraint context.
+/// Since v1 cannot store a tolerance, feasibility flags are recomputed from
+/// the retained constraints and variable values using [`ATol::default`],
+/// which the v1 parser also uses.
 impl From<Solution> for crate::v1::Solution {
     fn from(solution: Solution) -> Self {
-        let feasible = solution.feasible();
-        let feasible_relaxed = Some(solution.feasible_relaxed());
         let Solution {
             objective,
             evaluated_constraints,
@@ -427,6 +464,11 @@ impl From<Solution> for crate::v1::Solution {
             metadata,
             annotations,
         } = solution;
+        let atol = ATol::default();
+        let variables_feasible = decision_variables.values().all(|dv| dv.is_valid(atol));
+        let feasible = variables_feasible && evaluated_constraints.is_feasible(atol);
+        let feasible_relaxed =
+            Some(variables_feasible && evaluated_constraints.is_feasible_relaxed(atol));
         let state = {
             let entries = decision_variables
                 .iter()
@@ -498,7 +540,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: crate::indicator_constraint::IndicatorEvaluatedData {
                 evaluated_value: 0.0,
-                feasible: true,
+                activation_atol: crate::ATol::default(),
                 indicator_active: true,
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -527,7 +569,8 @@ mod tests {
         let constraint = crate::one_hot_constraint::EvaluatedOneHotConstraint {
             variables: std::collections::BTreeSet::from([variable_id]),
             stage: crate::one_hot_constraint::OneHotEvaluatedData {
-                feasible: true,
+                activation_atol: crate::ATol::default(),
+                violation: 0.0,
                 active_variable: Some(variable_id),
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -558,7 +601,8 @@ mod tests {
         let constraint = crate::sos1_constraint::EvaluatedSos1Constraint {
             variables: std::collections::BTreeSet::from([variable_id]),
             stage: crate::sos1_constraint::Sos1EvaluatedData {
-                feasible: true,
+                activation_atol: crate::ATol::default(),
+                violation: 0.0,
                 active_variable: None,
                 used_decision_variable_ids: [variable_id].into_iter().collect(),
             },
@@ -1441,7 +1485,6 @@ mod tests {
             stage: EvaluatedData {
                 evaluated_value: 0.0,
                 dual_variable: None,
-                feasible: true,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
         };
@@ -1519,7 +1562,6 @@ mod tests {
             equality: Equality::EqualToZero,
             stage: EvaluatedData {
                 evaluated_value: 0.0,
-                feasible: true,
                 used_decision_variable_ids: Default::default(),
                 dual_variable: None,
             },
@@ -1665,7 +1707,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 0.0,
-                feasible: true,
+                activation_atol: crate::ATol::default(),
                 indicator_active: true,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
@@ -1719,7 +1761,7 @@ mod tests {
             equality: crate::Equality::EqualToZero,
             stage: IndicatorEvaluatedData {
                 evaluated_value: 1.0,
-                feasible: true,
+                activation_atol: crate::ATol::default(),
                 indicator_active: false,
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
@@ -1767,9 +1809,10 @@ mod tests {
         let decision_variable =
             EvaluatedDecisionVariable::new(var_id, DecisionVariable::binary(), 1.0).unwrap();
         let one_hot = EvaluatedOneHotConstraint {
-            variables: BTreeSet::from([var_id]),
+            variables: BTreeSet::from([var_id, VariableID::from(2)]),
             stage: OneHotEvaluatedData {
-                feasible: true,
+                activation_atol: crate::ATol::default(),
+                violation: 0.0,
                 active_variable: Some(var_id),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },
@@ -1784,7 +1827,18 @@ mod tests {
                 )
                 .unwrap(),
             )
-            .decision_variables(BTreeMap::from([(var_id, decision_variable)]))
+            .decision_variables(BTreeMap::from([
+                (var_id, decision_variable),
+                (
+                    VariableID::from(2),
+                    EvaluatedDecisionVariable::new(
+                        VariableID::from(2),
+                        DecisionVariable::binary(),
+                        0.0,
+                    )
+                    .unwrap(),
+                ),
+            ]))
             .sense(Sense::Minimize)
             .build()
             .unwrap();
@@ -1797,12 +1851,12 @@ mod tests {
             .entries
             .get_mut(&1)
             .unwrap();
-        row.feasible = false;
-        row.active_variable = None;
+        row.active_variable = Some(2);
 
         let err = Solution::try_from(proto).unwrap_err();
         assert!(
-            err.to_string().contains("active_variable=None")
+            err.to_string()
+                .contains("active_variable=Some(VariableID(2))")
                 && err
                     .to_string()
                     .contains("does not match decision-variable values"),
@@ -1824,7 +1878,8 @@ mod tests {
         let one_hot = EvaluatedOneHotConstraint {
             variables: BTreeSet::from([var_id]),
             stage: OneHotEvaluatedData {
-                feasible: true,
+                activation_atol: crate::ATol::default(),
+                violation: 0.0,
                 active_variable: Some(var_id),
                 used_decision_variable_ids: [var_id].into_iter().collect(),
             },

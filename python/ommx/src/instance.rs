@@ -14,12 +14,61 @@ use crate::{
 };
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
-    exceptions::{PyKeyError, PyValueError},
+    exceptions::{PyKeyError, PyTypeError, PyValueError},
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+#[derive(Default)]
+struct StringMapping(HashMap<String, String>);
+
+impl<'py> FromPyObject<'_, 'py> for StringMapping {
+    type Error = PyErr;
+
+    fn extract(value: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let type_error = || PyTypeError::new_err("parameters must be a Mapping[str, str]");
+        let items = value.call_method0("items").map_err(|_| type_error())?;
+        let mut parameters = HashMap::new();
+        for item in items.try_iter().map_err(|_| type_error())? {
+            let (key, value) = item?
+                .extract::<(String, String)>()
+                .map_err(|_| type_error())?;
+            parameters.insert(key, value);
+        }
+        Ok(Self(parameters))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for StringMapping {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "collections.abc.Mapping[str, str]".to_string(),
+            source_module: None,
+            import: ["collections.abc".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
+impl<'py> IntoPyObject<'py> for StringMapping {
+    type Target = PyDict;
+    type Output = Bound<'py, PyDict>;
+    type Error = PyErr;
+
+    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
+        let mapping = PyDict::new(py);
+        for (key, value) in self.0 {
+            mapping.set_item(key, value)?;
+        }
+        Ok(mapping)
+    }
+}
 
 /// Read-only objective semantics used when evaluating solver output.
 ///
@@ -95,6 +144,101 @@ pub struct Instance {
 
 impl_instance_annotations!(Instance);
 
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
+#[pymethods]
+impl Instance {
+    /// Apply one simultaneous bound-tightening pass using all active regular constraints.
+    ///
+    /// Calls {meth}`tighten_bounds_simultaneously_once_using_constraints` with
+    /// every active regular constraint ID and the same ``max_terms`` limit.
+    /// Non-affine rows and rows exceeding ``max_terms`` variable terms are skipped. All
+    /// rows read the bounds at entry, and updates are applied together once.
+    /// Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
+    /// The same tolerance, supported-domain and atomicity rules apply as for
+    /// the explicitly selected form.
+    /// ``max_terms`` defaults to 32 and excludes the constant term.
+    #[pyo3(signature = (*, max_terms=32, atol=None))]
+    pub fn tighten_bounds_simultaneously_once(
+        &mut self,
+        py: Python<'_>,
+        max_terms: usize,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<BTreeMap<u64, crate::VariableBound>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let atol = atol.map(ommx::ATol::new).transpose()?.unwrap_or_default();
+        Ok(self
+            .inner
+            .tighten_bounds_simultaneously_once(max_terms, atol)?
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), crate::VariableBound(bound)))
+            .collect())
+    }
+
+    /// Apply one simultaneous bound-tightening pass using selected regular constraints.
+    ///
+    /// ``constraint_ids`` is a set of active regular constraint IDs. Unknown
+    /// and removed IDs are errors; an empty set applies no updates. Selected
+    /// non-affine rows are skipped. All eligible variables in the selected
+    /// rows may have their bounds tightened.
+    /// Only compact polynomial functions of degree at most one are used;
+    /// composed expressions are skipped even when mathematically affine.
+    ///
+    /// ``max_terms`` limits each affine row to this many variable terms
+    /// (default: 32). The constant term does not count. Rows exceeding the
+    /// limit are skipped before domain lookup or candidate evaluation. Terms
+    /// of fixed, semi and dependent variables still count. With a zero limit,
+    /// only constant rows are processed, including contradiction detection.
+    ///
+    /// Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
+    /// Every row reads the bounds at entry; all updates are collected and applied
+    /// together. Newly tightened bounds are not reused during this call. Call
+    /// again to propagate changes through further rows.
+    /// Candidate extrema are combined before comparing changes with ``atol``.
+    /// When continuous stored endpoints cross but their tolerated domains overlap,
+    /// use the interval between the endpoints, intersected with the entry bounds.
+    /// Both sides of equalities are used. Tolerance is accounted for algebraically:
+    /// continuous domains expand to ``[lower - atol, upper + atol]``, and row
+    /// residuals may be at most ``atol``. For ``a*x + r <= 0`` with ``a > 0``,
+    /// the limit is ``(atol - min(r)) / a``. Subtract ``atol`` to store a continuous
+    /// upper bound, or round down for an integer/binary upper bound. Negative
+    /// coefficients give the corresponding lower bound. Changes within ``atol``
+    /// are ignored.
+    ///
+    /// Residual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate
+    /// arithmetic uses ordinary floating-point operations. No point-evaluation
+    /// boundary is searched. Rounding, cancellation and evaluation order can
+    /// change feasibility near numerical boundaries, even when subsequent
+    /// evaluation uses the same ``atol``.
+    ///
+    /// Only the selected active regular constraints are used. Unbounded domains
+    /// remain infinite. An upper/lower candidate with a non-finite residual or
+    /// boundary calculation is skipped; other candidates in the same row are
+    /// still processed. Semi-variable domains include
+    /// zero when deriving other bounds, but semi, fixed and dependent variables
+    /// are not changed. This is not a complete infeasibility detector.
+    ///
+    /// Requires finite ``atol < 1``. On failure the instance is unchanged.
+    /// If omitted, {func}`~ommx.get_default_atol` supplies the tolerance.
+    #[pyo3(signature = (constraint_ids, *, max_terms=32, atol=None))]
+    pub fn tighten_bounds_simultaneously_once_using_constraints(
+        &mut self,
+        py: Python<'_>,
+        constraint_ids: BTreeSet<u64>,
+        max_terms: usize,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<BTreeMap<u64, crate::VariableBound>> {
+        let _guard = crate::TRACING.attach_parent_context(py);
+        let atol = atol.map(ommx::ATol::new).transpose()?.unwrap_or_default();
+        let ids = constraint_ids.into_iter().map(ConstraintID::from).collect();
+        Ok(self
+            .inner
+            .tighten_bounds_simultaneously_once_using_constraints(&ids, max_terms, atol)?
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), crate::VariableBound(bound)))
+            .collect())
+    }
+}
+
 impl Instance {
     fn empty_with_sense(sense: Sense) -> OmmxPyResult<Self> {
         Self::from_components(
@@ -108,6 +252,34 @@ impl Instance {
             None,
             None,
         )
+    }
+
+    fn decision_variable_label(
+        name: Option<String>,
+        subscripts: Vec<i64>,
+        parameters: StringMapping,
+        description: Option<String>,
+    ) -> ommx::DecisionVariableLabel {
+        ommx::DecisionVariableLabel {
+            name,
+            subscripts,
+            parameters: parameters.0.into_iter().collect(),
+            description,
+        }
+    }
+
+    fn atol_or_default(value: Option<f64>) -> OmmxPyResult<ommx::ATol> {
+        match value {
+            Some(value) => Ok(ommx::ATol::new(value)?),
+            None => Ok(ommx::ATol::default()),
+        }
+    }
+
+    fn attach_decision_variable(
+        slf: Bound<'_, Self>,
+        id: ommx::VariableID,
+    ) -> crate::AttachedDecisionVariable {
+        crate::AttachedDecisionVariable::from_instance(slf.unbind(), id)
     }
 }
 
@@ -282,9 +454,9 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance
+    /// >>> from ommx import Instance, Sense
     /// >>> instance = Instance.minimize()
-    /// >>> instance.sense == Instance.MINIMIZE
+    /// >>> instance.sense == Sense.Minimize
     /// True
     #[deprecated(note = "Use Instance.minimize() instead.")]
     #[staticmethod]
@@ -294,8 +466,8 @@ impl Instance {
 
     /// Create an empty minimization instance with a zero objective.
     ///
-    /// Decision variables and constraints can be added incrementally with
-    /// {meth}`new_binary` and {meth}`add_constraint`.
+    /// Decision variables and constraints can be added incrementally with the
+    /// `new_*` methods and {meth}`add_constraint`.
     #[staticmethod]
     pub fn minimize() -> OmmxPyResult<Self> {
         Self::empty_with_sense(Sense::Minimize)
@@ -303,19 +475,21 @@ impl Instance {
 
     /// Create an empty maximization instance with a zero objective.
     ///
-    /// Decision variables and constraints can be added incrementally with
-    /// {meth}`new_binary` and {meth}`add_constraint`.
+    /// Decision variables and constraints can be added incrementally with the
+    /// `new_*` methods and {meth}`add_constraint`.
     #[staticmethod]
     pub fn maximize() -> OmmxPyResult<Self> {
         Self::empty_with_sense(Sense::Maximize)
     }
 
+    /// Compatibility alias for {attr}`Sense.Maximize`.
     #[classattr]
     #[pyo3(name = "MAXIMIZE")]
     fn class_maximize() -> Sense {
         Sense::Maximize
     }
 
+    /// Compatibility alias for {attr}`Sense.Minimize`.
     #[classattr]
     #[pyo3(name = "MINIMIZE")]
     fn class_minimize() -> Sense {
@@ -481,32 +655,193 @@ impl Instance {
     /// - `description`: Optional human-readable description.
     ///
     /// Raises {class}`ValueError` if the maximum decision-variable ID is
-    /// `2**64 - 1` and no larger automatic ID can be assigned.
-    #[pyo3(signature = (name=None, *, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn new_binary(
+    /// `2**64 - 1` and no larger automatic ID can be assigned. On failure, no
+    /// variable or modeling label is added to the instance.
+    #[pyo3(signature = (name=None, *, subscripts=Vec::new(), parameters=StringMapping::default(), description=None))]
+    fn new_binary(
         slf: Bound<'_, Self>,
         name: Option<String>,
         subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
+        parameters: StringMapping,
         description: Option<String>,
     ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
-        let label = ommx::DecisionVariableLabel {
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
-        };
+        let label = Self::decision_variable_label(name, subscripts, parameters, description);
         let id = {
-            let mut inst = slf.borrow_mut();
-            let id = inst.inner.next_variable_id()?;
-            inst.inner
-                .add_decision_variable(id, ommx::DecisionVariable::binary(), label)?;
-            id
+            slf.borrow_mut().inner.new_binary(
+                ommx::Bound::of_binary(),
+                label,
+                None,
+                ommx::ATol::default(),
+            )?
         };
-        Ok(crate::AttachedDecisionVariable::from_instance(
-            slf.unbind(),
-            id,
-        ))
+        Ok(Self::attach_decision_variable(slf, id))
+    }
+
+    /// Create and add an integer decision variable with an automatically assigned ID.
+    ///
+    /// The bounds default to `(-inf, inf)`. Each finite side is normalized to
+    /// the least or greatest integer value that satisfies the original bound
+    /// under `atol`; an infinite side remains unbounded. Bound membership uses
+    /// the same inequality-residual tolerance semantics as constraint
+    /// feasibility. Returns an
+    /// {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+    /// expressions.
+    ///
+    /// **Args:**
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `lower`: Lower bound of the variable.
+    /// - `upper`: Upper bound of the variable.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    /// - `atol`: Absolute tolerance for integer-bound normalization. If
+    ///   omitted, the current default returned by
+    ///   {func}`~ommx.get_default_atol` is used.
+    ///
+    /// Raises {class}`ValueError` if the bounds are invalid or normalization
+    /// yields no integer value, or if no larger automatic ID can be assigned.
+    /// On failure, no variable or modeling label is added to the instance.
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=StringMapping::default(), description=None, atol=None))]
+    fn new_integer(
+        slf: Bound<'_, Self>,
+        name: Option<String>,
+        lower: f64,
+        upper: f64,
+        subscripts: Vec<i64>,
+        parameters: StringMapping,
+        description: Option<String>,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let bound = ommx::Bound::new(lower, upper)?;
+        let label = Self::decision_variable_label(name, subscripts, parameters, description);
+        let atol = Self::atol_or_default(atol)?;
+        let id = {
+            slf.borrow_mut()
+                .inner
+                .new_integer(bound, label, None, atol)?
+        };
+        Ok(Self::attach_decision_variable(slf, id))
+    }
+
+    /// Create and add a continuous decision variable with an automatically assigned ID.
+    ///
+    /// The bounds default to `(-inf, inf)`. Returns an
+    /// {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+    /// expressions.
+    ///
+    /// **Args:**
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `lower`: Lower bound of the variable.
+    /// - `upper`: Upper bound of the variable.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    ///
+    /// Raises {class}`ValueError` if the bounds are invalid or if no larger
+    /// automatic ID can be assigned. On failure, no variable or modeling label
+    /// is added to the instance.
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=StringMapping::default(), description=None))]
+    fn new_continuous(
+        slf: Bound<'_, Self>,
+        name: Option<String>,
+        lower: f64,
+        upper: f64,
+        subscripts: Vec<i64>,
+        parameters: StringMapping,
+        description: Option<String>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let bound = ommx::Bound::new(lower, upper)?;
+        let label = Self::decision_variable_label(name, subscripts, parameters, description);
+        let id = {
+            slf.borrow_mut()
+                .inner
+                .new_continuous(bound, label, None, ommx::ATol::default())?
+        };
+        Ok(Self::attach_decision_variable(slf, id))
+    }
+
+    /// Create and add a semi-integer decision variable with an automatically assigned ID.
+    ///
+    /// The bounds default to `(-inf, inf)`. Each finite side is normalized under
+    /// `atol` using the same residual-feasibility rule as
+    /// {meth}`~ommx.Instance.new_integer`, while an infinite side remains
+    /// unbounded. Unlike an integer variable, if the bound contains no integer,
+    /// its normalized bound becomes `[0, 0]`, preserving the zero alternative
+    /// in the semi-integer domain. Returns an
+    /// {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+    /// expressions.
+    ///
+    /// **Args:**
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `lower`: Lower bound of the variable.
+    /// - `upper`: Upper bound of the variable.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    /// - `atol`: Absolute tolerance for integer-bound normalization. If
+    ///   omitted, the current default returned by
+    ///   {func}`~ommx.get_default_atol` is used.
+    ///
+    /// Raises {class}`ValueError` if the bounds are invalid or if no larger
+    /// automatic ID can be assigned. On failure, no variable or modeling label
+    /// is added to the instance.
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=StringMapping::default(), description=None, atol=None))]
+    fn new_semi_integer(
+        slf: Bound<'_, Self>,
+        name: Option<String>,
+        lower: f64,
+        upper: f64,
+        subscripts: Vec<i64>,
+        parameters: StringMapping,
+        description: Option<String>,
+        atol: Option<f64>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let bound = ommx::Bound::new(lower, upper)?;
+        let label = Self::decision_variable_label(name, subscripts, parameters, description);
+        let atol = Self::atol_or_default(atol)?;
+        let id = {
+            slf.borrow_mut()
+                .inner
+                .new_semi_integer(bound, label, None, atol)?
+        };
+        Ok(Self::attach_decision_variable(slf, id))
+    }
+
+    /// Create and add a semi-continuous decision variable with an automatically assigned ID.
+    ///
+    /// The bounds default to `(-inf, inf)`. Returns an
+    /// {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+    /// expressions.
+    ///
+    /// **Args:**
+    /// - `name`: Optional human-readable modeling name. Names need not be unique.
+    /// - `lower`: Lower bound of the variable.
+    /// - `upper`: Upper bound of the variable.
+    /// - `subscripts`: Optional integer indices from the source model.
+    /// - `parameters`: Optional string-valued indices from the source model.
+    /// - `description`: Optional human-readable description.
+    ///
+    /// Raises {class}`ValueError` if the bounds are invalid or if no larger
+    /// automatic ID can be assigned. On failure, no variable or modeling label
+    /// is added to the instance.
+    #[pyo3(signature = (name=None, *, lower=f64::NEG_INFINITY, upper=f64::INFINITY, subscripts=Vec::new(), parameters=StringMapping::default(), description=None))]
+    fn new_semi_continuous(
+        slf: Bound<'_, Self>,
+        name: Option<String>,
+        lower: f64,
+        upper: f64,
+        subscripts: Vec<i64>,
+        parameters: StringMapping,
+        description: Option<String>,
+    ) -> OmmxPyResult<crate::AttachedDecisionVariable> {
+        let bound = ommx::Bound::new(lower, upper)?;
+        let label = Self::decision_variable_label(name, subscripts, parameters, description);
+        let id = {
+            slf.borrow_mut()
+                .inner
+                .new_semi_continuous(bound, label, None, ommx::ATol::default())?
+        };
+        Ok(Self::attach_decision_variable(slf, id))
     }
 
     /// Return an {class}`~ommx.AttachedDecisionVariable` bound to the
@@ -846,12 +1181,11 @@ impl Instance {
     /// exact discrete variable values.
     ///
     /// Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. The
-    /// Indicator bulk conversion validates its complete family before mutating
-    /// it. The OneHot and SOS1 bulk conversions do not provide family-wide
-    /// rollback: OneHot constraints are applied in ascending original ID order,
-    /// while SOS1 validates mathematical preconditions first but may partially
-    /// allocate auxiliary IDs before a later allocation fails. The whole
-    /// operation is not transactional across families either.
+    /// Indicator and SOS1 bulk conversions validate their complete families
+    /// before mutation, including generated-ID capacity for SOS1. OneHot
+    /// constraints are applied in ascending original ID order without
+    /// family-wide rollback. The whole operation is not transactional across
+    /// families: an error does not roll back earlier completed families.
     ///
     /// Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
     /// with a non-finite bound).
@@ -1710,14 +2044,14 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint
+    /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
     /// ...     constraints={},
     /// ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
-    /// ...     sense=Instance.MINIMIZE,
+    /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> new_id = instance.convert_one_hot_to_constraint(1)
     /// >>> instance.one_hot_constraints
@@ -1745,7 +2079,7 @@ impl Instance {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint
+    /// >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(4)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -1755,7 +2089,7 @@ impl Instance {
     /// ...         1: OneHotConstraint(variables=x[:2]),
     /// ...         2: OneHotConstraint(variables=x[2:]),
     /// ...     },
-    /// ...     sense=Instance.MINIMIZE,
+    /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_all_one_hots_to_constraints()
     /// [0, 1]
@@ -1795,10 +2129,10 @@ impl Instance {
     /// Raises if any $x_i$ has a non-binary bound that is not finite, if its domain
     /// excludes $0$, or if its kind is semi-continuous / semi-integer (the split
     /// domain $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase
-    /// yet, so Big-M conversion of these kinds is not supported). These
-    /// mathematical preconditions are validated before mutation. Auxiliary
-    /// variable allocation then proceeds in variable-ID order; if a later ID
-    /// allocation fails, earlier auxiliary variables remain in the Instance.
+    /// yet, so Big-M conversion of these kinds is not supported), or if there
+    /// is insufficient decision-variable or regular-constraint ID capacity.
+    /// All preconditions, including generated-ID capacity, are validated before
+    /// mutation. Any error leaves the Instance unchanged.
     ///
     /// On success, the original SOS1 constraint is moved to
     /// {attr}`~ommx.Instance.removed_sos1_constraints` with
@@ -1811,14 +2145,14 @@ impl Instance {
     ///
     /// All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
     ///
-    /// >>> from ommx import Instance, DecisionVariable, Sos1Constraint
+    /// >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
     /// ...     constraints={},
     /// ...     sos1_constraints={1: Sos1Constraint(variables=x)},
-    /// ...     sense=Instance.MINIMIZE,
+    /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_sos1_to_constraints(1)
     /// [0]
@@ -1839,14 +2173,13 @@ impl Instance {
     /// rule. Returns a dict mapping each original SOS1 ID to the list of regular
     /// constraint IDs it produced.
     ///
-    /// Every active SOS1 is checked for its mathematical preconditions up front.
-    /// If that validation fails, no mutation happens. Applying the validated
-    /// plans is not family-wide atomic: earlier SOS1 conversions and earlier
-    /// auxiliary-variable allocations remain if a later ID allocation fails.
+    /// Atomic: every active SOS1 and the total generated-ID capacity are
+    /// validated before mutation. If validation fails, including because IDs
+    /// are exhausted, the Instance is left unchanged.
     ///
     /// # Examples
     ///
-    /// >>> from ommx import Instance, DecisionVariable, Sos1Constraint
+    /// >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
     /// >>> x = [DecisionVariable.binary(i) for i in range(4)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
@@ -1856,7 +2189,7 @@ impl Instance {
     /// ...         1: Sos1Constraint(variables=x[:2]),
     /// ...         2: Sos1Constraint(variables=x[2:]),
     /// ...     },
-    /// ...     sense=Instance.MINIMIZE,
+    /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_all_sos1_to_constraints()
     /// {1: [0], 2: [1]}
@@ -1932,7 +2265,7 @@ impl Instance {
     /// Convert an inequality indicator where the upper side is active:
     ///
     /// >>> from ommx import (
-    /// ...     Instance, DecisionVariable, IndicatorConstraint, Equality,
+    /// ...     Instance, DecisionVariable, IndicatorConstraint, Equality, Sense,
     /// ... )
     /// >>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)
     /// >>> y = DecisionVariable.binary(1)
@@ -1946,7 +2279,7 @@ impl Instance {
     /// ...     objective=x,
     /// ...     constraints={},
     /// ...     indicator_constraints={1: ic},
-    /// ...     sense=Instance.MINIMIZE,
+    /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_indicator_to_constraint(1)
     /// [0]

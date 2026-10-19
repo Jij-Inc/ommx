@@ -1,7 +1,6 @@
 use crate::logical_memory::LogicalMemoryProfile;
-use crate::{SampleID, VariableIDSet};
+use crate::VariableIDSet;
 use fnv::FnvHashMap;
-use std::collections::BTreeMap;
 
 use super::Constraint;
 
@@ -68,19 +67,24 @@ pub struct Sampled;
 // ===== Stage data types for Evaluated/Sampled =====
 
 /// Data carried by a constraint in the Evaluated stage.
+///
+/// Stores numeric results, with no retained feasibility decision or tolerance.
+/// Feasibility queries receive their own absolute tolerance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluatedData {
     pub evaluated_value: f64,
-    pub feasible: bool,
     pub used_decision_variable_ids: VariableIDSet,
     pub dual_variable: Option<f64>,
 }
 
 /// Data carried by a constraint in the Sampled stage.
+///
+/// Sample IDs in dual values, when present, must match evaluated values.
+/// Feasibility queries receive their own absolute tolerance; the numeric results
+/// do not retain a feasibility decision or its tolerance.
 #[derive(Debug, Clone)]
 pub struct SampledData {
     pub evaluated_values: crate::Sampled<f64>,
-    pub feasible: BTreeMap<SampleID, bool>,
     pub used_decision_variable_ids: VariableIDSet,
     pub dual_variables: Option<crate::Sampled<f64>>,
 }

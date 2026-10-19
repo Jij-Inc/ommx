@@ -1,0 +1,463 @@
+use super::*;
+use crate::{v1::State, IndicatorConstraint, OneHotConstraint, Sos1Constraint};
+use proptest::prelude::*;
+
+fn assert_contract<C: ConstraintType>(constraint: &C::Created, state: &State, atol: ATol) {
+    let evaluated = constraint.evaluate(state, atol).unwrap();
+    let violation = evaluated.violation();
+    assert!(violation >= 0.0);
+    assert_eq!(evaluated.is_feasible(atol), violation <= *atol);
+    let samples = crate::Sampled::new([vec![0.into(), 1.into()]], [state.clone()]).unwrap();
+    let sampled = constraint.evaluate_samples(&samples, atol).unwrap();
+    for id in [0.into(), 1.into()] {
+        assert_eq!(sampled.violation_for(id), Some(violation));
+        assert_eq!(
+            sampled.is_feasible_for(id, atol),
+            Some(evaluated.is_feasible(atol))
+        );
+        let extracted = sampled.get(id).unwrap();
+        assert_eq!(extracted.violation(), violation);
+        assert_eq!(extracted.is_feasible(atol), evaluated.is_feasible(atol));
+        for query_atol in [ATol::new(1e-12).unwrap(), ATol::new(0.25).unwrap()] {
+            assert_eq!(extracted.is_feasible(query_atol), violation <= *query_atol);
+            assert_eq!(
+                sampled.is_feasible_for(id, query_atol),
+                Some(violation <= *query_atol)
+            );
+            assert_eq!(extracted.violation(), violation);
+        }
+    }
+    assert_eq!(sampled.violation_for(99.into()), None);
+    assert_eq!(sampled.is_feasible_for(99.into(), atol), None);
+}
+
+#[test]
+fn every_family_uses_the_same_inclusive_scalar_threshold() {
+    for tolerance in [0.125, 2.0_f64.powi(-20), 2.0_f64.powi(-40)] {
+        let atol = ATol::new(tolerance).unwrap();
+        for multiplier in [0.0, 0.5, 1.0, 1.25] {
+            let value = tolerance * multiplier;
+            let state = State::from_iter([(0, 1.0), (1, value), (2, 0.0)]);
+            for equality in [
+                crate::Equality::EqualToZero,
+                crate::Equality::LessThanOrEqualToZero,
+            ] {
+                let function = crate::Function::from(crate::linear!(1));
+                let constraint = Constraint {
+                    equality,
+                    stage: crate::CreatedData {
+                        function: function.clone(),
+                    },
+                };
+                assert_contract::<Constraint>(&constraint, &state, atol);
+                let indicator = IndicatorConstraint::new(0.into(), equality, function);
+                assert_contract::<IndicatorConstraint>(&indicator, &state, atol);
+                let mut off = state.clone();
+                off.entries.insert(0, 0.0);
+                assert_contract::<IndicatorConstraint>(&indicator, &off, atol);
+                assert_eq!(indicator.evaluate(&off, atol).unwrap().violation(), 0.0);
+            }
+            let variables = [0.into(), 1.into(), 2.into()].into_iter().collect();
+            let one_hot = OneHotConstraint::new(variables).unwrap();
+            let sos1 = Sos1Constraint::new(one_hot.variables.clone()).unwrap();
+            assert_contract::<OneHotConstraint>(&one_hot, &state, atol);
+            assert_contract::<Sos1Constraint>(&sos1, &state, atol);
+            assert_eq!(one_hot.evaluate(&state, atol).unwrap().violation(), value);
+            assert_eq!(sos1.evaluate(&state, atol).unwrap().violation(), value);
+        }
+    }
+}
+
+#[test]
+fn small_member_errors_accumulate_without_input_canonicalization() {
+    for tolerance in [2.0_f64.powi(-10), 2.0_f64.powi(-20), 2.0_f64.powi(-40)] {
+        let atol = ATol::new(tolerance).unwrap();
+        let variables = [0.into(), 1.into(), 2.into()].into_iter().collect();
+        let one_hot = OneHotConstraint::new(variables).unwrap();
+        let sos1 = Sos1Constraint::new(one_hot.variables.clone()).unwrap();
+        let state = State::from_iter([(0, 1.0), (1, 0.75 * tolerance), (2, 0.75 * tolerance)]);
+        let one_hot_result = one_hot.evaluate(&state, atol).unwrap();
+        let sos1_result = sos1.evaluate(&state, atol).unwrap();
+        assert_eq!(one_hot_result.violation(), 1.5 * tolerance);
+        assert_eq!(sos1_result.violation(), 1.5 * tolerance);
+        assert!(!one_hot_result.is_feasible(atol));
+        assert!(!sos1_result.is_feasible(atol));
+        assert_eq!(one_hot_result.stage.active_variable, None);
+        assert_eq!(sos1_result.stage.active_variable, None);
+        assert_contract::<OneHotConstraint>(&one_hot, &state, atol);
+        assert_contract::<Sos1Constraint>(&sos1, &state, atol);
+    }
+}
+
+proptest! {
+    #[test]
+    fn structural_metrics_match_minimum_changes_and_roundtrip(values in prop::array::uniform3(-4.0_f64..4.0)) {
+        let atol = ATol::new(1e-4).unwrap();
+        let state = State::from_iter(values.into_iter().enumerate().map(|(id, value)| (id as u64, value)));
+        let variables = [0.into(), 1.into(), 2.into()].into_iter().collect();
+        let one_hot = OneHotConstraint::new(variables).unwrap();
+        let sos1 = Sos1Constraint::new(one_hot.variables.clone()).unwrap();
+        let expected_one_hot = (0..3).map(|selected| values.iter().enumerate().map(|(i, x)| (x - if i == selected { 1.0 } else { 0.0 }).abs()).sum::<f64>()).fold(f64::INFINITY, f64::min);
+        let expected_sos1 = (0..3).map(|selected| values.iter().enumerate().filter(|(i, _)| *i != selected).map(|(_, x)| x.abs()).sum::<f64>()).fold(f64::INFINITY, f64::min);
+        let evaluated_one_hot = one_hot.evaluate(&state, atol).unwrap();
+        let evaluated_sos1 = sos1.evaluate(&state, atol).unwrap();
+        prop_assert!((evaluated_one_hot.violation() - expected_one_hot).abs() < 1e-12);
+        prop_assert_eq!(evaluated_sos1.violation(), expected_sos1);
+        assert_contract::<OneHotConstraint>(&one_hot, &state, atol);
+        assert_contract::<Sos1Constraint>(&sos1, &state, atol);
+        let wire: crate::v2::EvaluatedOneHotConstraint = evaluated_one_hot.clone().into_v2(atol);
+        prop_assert_eq!(wire.parse_with_values(|id| state.entries.get(&id.into_inner()).copied(), atol).unwrap(), evaluated_one_hot.clone());
+        let wire: crate::v2::EvaluatedSos1Constraint = evaluated_sos1.clone().into_v2(atol);
+        prop_assert_eq!(wire.parse_with_values(|id| state.entries.get(&id.into_inner()).copied(), atol).unwrap(), evaluated_sos1.clone());
+        let samples = crate::Sampled::from((SampleID::from(0), state));
+        let wire: crate::v2::SampledOneHotConstraint = one_hot.evaluate_samples(&samples, atol).unwrap().into_v2(atol);
+        prop_assert_eq!(wire.parse_with_values(|sid, id| samples.get(sid).and_then(|state| state.entries.get(&id.into_inner())).copied(), atol).unwrap().get(0.into()).unwrap(), evaluated_one_hot);
+        let wire: crate::v2::SampledSos1Constraint = sos1.evaluate_samples(&samples, atol).unwrap().into_v2(atol);
+        prop_assert_eq!(wire.parse_with_values(|sid, id| samples.get(sid).and_then(|state| state.entries.get(&id.into_inner())).copied(), atol).unwrap().get(0.into()).unwrap(), evaluated_sos1);
+    }
+}
+
+#[test]
+fn overflowed_violations_are_infeasible_and_survive_wire_roundtrip() {
+    let atol = ATol::default();
+    let variables = [0.into(), 1.into(), 2.into()].into_iter().collect();
+    let constraint = Sos1Constraint::new(variables).unwrap();
+    let state = State::from_iter([(0, f64::MAX), (1, f64::MAX), (2, f64::MAX)]);
+    let evaluated = constraint.evaluate(&state, atol).unwrap();
+    assert_eq!(evaluated.violation(), f64::INFINITY);
+    assert!(!evaluated.is_feasible(atol));
+    let wire: crate::v2::EvaluatedSos1Constraint = evaluated.clone().into_v2(atol);
+    assert_eq!(
+        wire.parse_with_values(|id| state.entries.get(&id.into_inner()).copied(), atol)
+            .unwrap(),
+        evaluated
+    );
+}
+
+#[test]
+fn restoration_rejects_invalid_member_values_and_inconsistent_feasibility() {
+    let atol = ATol::default();
+    for value in [
+        None,
+        Some(f64::NAN),
+        Some(f64::NEG_INFINITY),
+        Some(f64::INFINITY),
+    ] {
+        let wire = crate::v2::EvaluatedSos1Constraint {
+            variables: vec![0],
+            ..Default::default()
+        };
+        assert!(wire.parse_with_values(|_| value, atol).is_err());
+    }
+    let wire = crate::v2::EvaluatedSos1Constraint {
+        variables: vec![0],
+        feasible: false,
+        ..Default::default()
+    };
+    assert!(wire
+        .parse_with_values(|_| Some(0.0), atol)
+        .unwrap_err()
+        .to_string()
+        .contains("feasible must equal"));
+}
+
+#[test]
+fn wire_consumers_can_read_feasibility_and_its_tolerance_without_sdk_evaluation() {
+    use prost::Message;
+
+    let instance = crate::Instance::builder()
+        .sense(crate::Sense::Minimize)
+        .objective(crate::Function::Zero)
+        .decision_variables(
+            (0..3)
+                .map(|id| (id.into(), crate::DecisionVariable::continuous()))
+                .collect(),
+        )
+        .constraints(BTreeMap::new())
+        .sos1_constraints(BTreeMap::from([(
+            0.into(),
+            Sos1Constraint::new((0..3).map(Into::into).collect()).unwrap(),
+        )]))
+        .build()
+        .unwrap();
+    let state = State::from_iter([(0, 1.0), (1, 0.00006), (2, 0.00006)]);
+    let samples = crate::Sampled::from((7.into(), state.clone()));
+
+    for (tolerance, expected) in [(0.0001, false), (0.0002, true)] {
+        let atol = ATol::new(tolerance).unwrap();
+        let solution_bytes = instance.evaluate(&state, atol).unwrap().to_v2_bytes();
+        // A consumer only needs the generated protobuf types to read these fields.
+        let wire = crate::v2::Solution::decode(solution_bytes.as_slice()).unwrap();
+        assert_eq!(wire.feasibility_atol, Some(tolerance));
+        assert_eq!(wire.feasible, expected);
+        assert_eq!(wire.feasible_relaxed, Some(expected));
+        let row = &wire.evaluated_sos1_constraints.as_ref().unwrap().entries[&0];
+        assert_eq!(row.feasible, expected);
+        let restored = crate::Solution::from_v2_bytes(&solution_bytes).unwrap();
+        assert_eq!(restored.sos1_constraint_violation(0.into()), Some(0.00012));
+        assert_eq!(restored.feasible(), expected);
+
+        let sample_bytes = instance
+            .evaluate_samples(&samples, atol)
+            .unwrap()
+            .to_v2_bytes();
+        let wire = crate::v2::SampleSet::decode(sample_bytes.as_slice()).unwrap();
+        assert_eq!(wire.feasibility_atol, Some(tolerance));
+        assert_eq!(wire.feasible[&7], expected);
+        assert_eq!(wire.feasible_relaxed[&7], expected);
+        let row = &wire.sampled_sos1_constraints.as_ref().unwrap().entries[&0];
+        assert_eq!(row.feasible[&7], expected);
+        let restored = crate::SampleSet::from_v2_bytes(&sample_bytes)
+            .unwrap()
+            .get(7.into())
+            .unwrap();
+        assert_eq!(restored.sos1_constraint_violation(0.into()), Some(0.00012));
+        assert_eq!(restored.feasible(), expected);
+    }
+}
+
+#[test]
+fn partial_evaluation_preserves_instance_invariants_and_failure_is_atomic() {
+    let atol = ATol::new(0.125).unwrap();
+    let mut instance = crate::Instance::builder()
+        .sense(crate::Sense::Minimize)
+        .objective(crate::Function::Zero)
+        .decision_variables(
+            (0..3)
+                .map(|id| (id.into(), crate::DecisionVariable::continuous()))
+                .collect(),
+        )
+        .constraints(BTreeMap::new())
+        .sos1_constraints(BTreeMap::from([(
+            0.into(),
+            Sos1Constraint::new((0..3).map(Into::into).collect()).unwrap(),
+        )]))
+        .build()
+        .unwrap();
+    let original = instance.clone();
+    let fixed = State::from_iter([(1, 0.09375), (2, 0.09375)]);
+    // Dropping the fixed near-zero members would leave a singleton SOS1 and
+    // incorrectly make this infeasible completion feasible.
+    assert!(!original
+        .evaluate(
+            &State::from_iter([(0, 1.0), (1, 0.09375), (2, 0.09375)]),
+            atol
+        )
+        .unwrap()
+        .feasible());
+    let error = instance.partial_evaluate(&fixed, atol).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("without changing constraint feasibility"));
+    assert_eq!(instance, original);
+    assert!(original
+        .clone()
+        .into_partial_evaluated(&fixed, atol)
+        .is_err());
+
+    let zero = State::from_iter([(2, 0.0)]);
+    instance.partial_evaluate(&zero, atol).unwrap();
+    let restored = crate::Instance::from_v2_bytes(&instance.to_v2_bytes()).unwrap();
+    let state = State::from_iter([(0, 1.0), (1, 0.09375)]);
+    let result = restored.evaluate(&state, atol).unwrap();
+    assert_eq!(result.total_violation(), 0.09375);
+    assert!(result.feasible());
+}
+
+#[test]
+fn activation_decisions_retain_their_conditions_across_queries_and_extraction() {
+    let activation_atol = ATol::new(1.0 / 1024.0).unwrap();
+    let query_atol = ATol::new(4.0 * *activation_atol).unwrap();
+    let state = State::from_iter([
+        (0, 1.0 + 0.5 * *activation_atol),
+        (1, 0.75 * *activation_atol),
+        (2, 0.75 * *activation_atol),
+    ]);
+    let samples = crate::Sampled::from((SampleID::from(7), state.clone()));
+    macro_rules! check {
+        ($constraint:expr) => {{
+            let constraint = $constraint;
+            let evaluated = constraint.evaluate(&state, activation_atol).unwrap();
+            let before = evaluated.clone();
+            let sampled = constraint
+                .evaluate_samples(&samples, activation_atol)
+                .unwrap();
+            assert_eq!(evaluated.stage.activation_atol, activation_atol);
+            assert_eq!(sampled.stage.activation_atol, activation_atol);
+            assert!(!evaluated.is_feasible(activation_atol));
+            assert!(evaluated.is_feasible(query_atol));
+            assert_eq!(sampled.is_feasible_for(7.into(), query_atol), Some(true));
+            assert_eq!(sampled.get(7.into()).unwrap(), before);
+            assert_eq!(evaluated, before);
+        }};
+    }
+    check!(IndicatorConstraint::new(
+        0.into(),
+        crate::Equality::EqualToZero,
+        (crate::Function::from(crate::linear!(1)) + crate::Function::from(crate::linear!(2)))
+            .unwrap()
+    ));
+    check!(OneHotConstraint::new([0.into(), 1.into(), 2.into()].into()).unwrap());
+    check!(Sos1Constraint::new([0.into(), 1.into(), 2.into()].into()).unwrap());
+}
+
+#[test]
+fn hosts_reject_activation_conditions_the_current_wire_format_cannot_represent() {
+    let instance = crate::Instance::builder()
+        .sense(crate::Sense::Minimize)
+        .objective(crate::Function::Zero)
+        .constraints(BTreeMap::new())
+        .decision_variables(BTreeMap::from([(
+            0.into(),
+            crate::DecisionVariable::binary(),
+        )]))
+        .indicator_constraints(BTreeMap::from([(
+            0.into(),
+            IndicatorConstraint::new(
+                0.into(),
+                crate::Equality::EqualToZero,
+                crate::Function::Zero,
+            ),
+        )]))
+        .one_hot_constraints(BTreeMap::from([(
+            0.into(),
+            OneHotConstraint::new([0.into()].into()).unwrap(),
+        )]))
+        .sos1_constraints(BTreeMap::from([(
+            0.into(),
+            Sos1Constraint::new([0.into()].into()).unwrap(),
+        )]))
+        .build()
+        .unwrap();
+    let state = State::from_iter([(0, 1.0)]);
+    let original_atol = ATol::new(1e-4).unwrap();
+    let other_atol = ATol::new(1e-3).unwrap();
+    let solution = instance.evaluate(&state, original_atol).unwrap();
+    let samples = instance
+        .evaluate_samples(
+            &crate::Sampled::from((SampleID::from(0), state)),
+            original_atol,
+        )
+        .unwrap();
+    for family in 0..3 {
+        let error = crate::Solution::builder()
+            .sense(crate::Sense::Minimize)
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(solution.decision_variables().clone())
+            .evaluated_indicator_constraints_collection(if family == 0 {
+                solution.evaluated_indicator_constraints().clone()
+            } else {
+                Default::default()
+            })
+            .evaluated_one_hot_constraints_collection(if family == 1 {
+                solution.evaluated_one_hot_constraints().clone()
+            } else {
+                Default::default()
+            })
+            .evaluated_sos1_constraints_collection(if family == 2 {
+                solution.evaluated_sos1_constraints().clone()
+            } else {
+                Default::default()
+            })
+            .feasibility_atol(other_atol)
+            .build()
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("activation tolerance"),
+            "{error}"
+        );
+        let error = crate::SampleSet::builder()
+            .sense(crate::Sense::Minimize)
+            .objectives(samples.objectives().clone())
+            .constraints(BTreeMap::new())
+            .decision_variables(samples.decision_variables().clone())
+            .indicator_constraints_collection(if family == 0 {
+                samples.indicator_constraints().clone()
+            } else {
+                Default::default()
+            })
+            .one_hot_constraints_collection(if family == 1 {
+                samples.one_hot_constraints().clone()
+            } else {
+                Default::default()
+            })
+            .sos1_constraints_collection(if family == 2 {
+                samples.sos1_constraints().clone()
+            } else {
+                Default::default()
+            })
+            .feasibility_atol(other_atol)
+            .build()
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("activation tolerance"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
+fn sample_feasibility_matches_extracted_solutions_including_variable_domains() {
+    let atol = ATol::new(1.0 / 1024.0).unwrap();
+    for (variable, invalid, valid) in [
+        (crate::DecisionVariable::binary(), 0.5, 1.0),
+        (crate::DecisionVariable::integer(), 0.5, 1.0),
+        (
+            crate::DecisionVariable::continuous()
+                .with_bound(crate::Bound::new(0.0, 1.0).unwrap(), atol)
+                .unwrap(),
+            -2.0 * *atol,
+            -*atol,
+        ),
+    ] {
+        let instance = crate::Instance::builder()
+            .sense(crate::Sense::Minimize)
+            .objective(crate::Function::from(crate::linear!(0)))
+            .constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::from([(0.into(), variable)]))
+            .sos1_constraints(BTreeMap::from([(
+                0.into(),
+                Sos1Constraint::new([0.into()].into()).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        let invalid_state = State::from_iter([(0, invalid)]);
+        let valid_state = State::from_iter([(0, valid)]);
+        let samples = crate::Sampled::new(
+            [vec![0.into()], vec![1.into()]],
+            [invalid_state.clone(), valid_state.clone()],
+        )
+        .unwrap();
+        let sampled = instance.evaluate_samples(&samples, atol).unwrap();
+        let restored = crate::SampleSet::from_v2_bytes(&sampled.to_v2_bytes()).unwrap();
+        // Also exercise the checked builder; Instance evaluation uses the unchecked path.
+        let built = crate::SampleSet::builder()
+            .sense(*sampled.sense())
+            .objectives(sampled.objectives().clone())
+            .constraints_collection(sampled.constraints().clone())
+            .sos1_constraints_collection(sampled.sos1_constraints().clone())
+            .decision_variables(sampled.decision_variables().clone())
+            .feasibility_atol(atol)
+            .build()
+            .unwrap();
+        for result in [sampled, restored, built] {
+            for (id, state, feasible) in [(0, &invalid_state, false), (1, &valid_state, true)] {
+                let single = instance.evaluate(state, atol).unwrap();
+                let extracted = result.get(id.into()).unwrap();
+                assert_eq!(single.total_violation(), 0.0);
+                assert_eq!(extracted.total_violation(), 0.0);
+                assert_eq!(single.feasible(), feasible);
+                assert_eq!(extracted.feasible(), feasible);
+                assert_eq!(result.is_sample_feasible(id.into()), Some(feasible));
+                assert_eq!(result.is_sample_feasible_relaxed(id.into()), Some(feasible));
+            }
+            // The invalid state has a better objective and must still be excluded.
+            assert_eq!(result.best_feasible_id().unwrap(), 1.into());
+            assert_eq!(result.best_feasible_relaxed_id().unwrap(), 1.into());
+            let mut wire: crate::v2::SampleSet = result.into();
+            wire.feasible.insert(0, true);
+            assert!(crate::SampleSet::try_from(wire).is_err());
+        }
+    }
+}

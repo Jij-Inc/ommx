@@ -26,7 +26,7 @@ from ommx import (
 
 def _empty_instance() -> Instance:
     return Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[
             DecisionVariable.binary(0),
@@ -316,7 +316,7 @@ def test_sos1_on_parametric_rejects_parameter_id_in_variables():
 
 def _instance_with_mixed_kinds() -> Instance:
     return Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=Function.from_linear(Linear.constant(0.0)),
         decision_variables=[
             DecisionVariable.binary(0),

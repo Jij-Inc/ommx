@@ -1,6 +1,6 @@
 """Tests for indicator constraint support in PySCIPOpt adapter."""
 
-from ommx import Instance, DecisionVariable
+from ommx import DecisionVariable, Instance, Sense
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
@@ -17,7 +17,7 @@ def test_indicator_constraint_le():
         objective=x,
         constraints={},
         indicator_constraints={0: ic},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     solution = OMMXPySCIPOptAdapter.solve(instance)
@@ -39,7 +39,7 @@ def test_indicator_constraint_forced_on():
         objective=x,
         constraints={0: b >= 1},  # Force b = 1
         indicator_constraints={0: ic},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     solution = OMMXPySCIPOptAdapter.solve(instance)
@@ -61,7 +61,7 @@ def test_indicator_constraint_eq():
         objective=x,
         constraints={0: b >= 1},  # Force b = 1
         indicator_constraints={0: ic},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     solution = OMMXPySCIPOptAdapter.solve(instance)
@@ -87,7 +87,7 @@ def test_indicator_constraint_multiple():
         # At least one indicator must be on
         constraints={0: b1 + b2 >= 1},
         indicator_constraints={10: ic1, 11: ic2},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     solution = OMMXPySCIPOptAdapter.solve(instance)

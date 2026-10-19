@@ -1555,7 +1555,7 @@
               "name": "kind",
               "doc": "",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               },
@@ -3149,7 +3149,7 @@
             },
             {
               "name": "contains",
-              "doc": "",
+              "doc": "Return whether ``value`` satisfies this bound under ``atol``.\n\nMembership treats the bound as the two inequality residuals\n``lower - value <= 0`` and ``value - upper <= 0``. Both use the same\ntolerance semantics as regular inequality constraints after finite\nevaluation. An infinite endpoint leaves that side unconstrained;\nnon-finite values and finite-endpoint residual overflow are not\ncontained.",
               "signatures": [
                 {
                   "parameters": [
@@ -3351,6 +3351,21 @@
               "is_readonly": true
             }
           ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "BridgeError",
+          "doc": "An OMMX bridge protocol, registration, or transfer failure after loading the SDK.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [],
           "deprecated": null
         },
         {
@@ -3640,7 +3655,7 @@
             },
             {
               "name": "evaluate",
-              "doc": "Evaluate the constraint with the given state.\n\n**Args:**\n\n- `state`: A State object, dict[int, float], or iterable of (int, float) tuples\n- `atol`: Optional absolute tolerance for evaluation\n\n**Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility",
+              "doc": "Evaluate the constraint with the given state.\n\n**Args:**\n\n- `state`: A State object, dict[int, float], or iterable of (int, float) tuples\n- `atol`: Optional absolute tolerance for evaluation\n\n**Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``",
               "signatures": [
                 {
                   "parameters": [
@@ -3892,7 +3907,7 @@
           "attributes": [
             {
               "name": "EQUAL_TO_ZERO",
-              "doc": "Class constant for equality type: equal to zero (==)",
+              "doc": "Compatibility alias for {attr}`Equality.EqualToZero`.",
               "type_": {
                 "display": "Equality",
                 "link_target": null,
@@ -3901,7 +3916,7 @@
             },
             {
               "name": "LESS_THAN_OR_EQUAL_TO_ZERO",
-              "doc": "Class constant for equality type: less than or equal to zero (<=)",
+              "doc": "Compatibility alias for {attr}`Equality.LessThanOrEqualToZero`.",
               "type_": {
                 "display": "Equality",
                 "link_target": null,
@@ -4031,7 +4046,7 @@
         {
           "kind": "Class",
           "name": "DecisionVariable",
-          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\nConstruction raises ValueError when the kind discriminator is unknown or\nthe requested bound cannot be normalized for the selected variable kind.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse",
+          "doc": "Decision variable in an optimization problem.\n\nThis class represents a variable that will be optimized in a mathematical programming problem.\nIt supports various types (binary, integer, continuous, semi-integer, semi-continuous) and\ncan be used in arithmetic expressions to build objective functions and constraints.\nConstruction requires a {class}`~ommx.Kind` and raises ValueError when the\nrequested bound cannot be normalized for the selected variable kind.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n>>> x = DecisionVariable.integer(1)\n>>> x == 1  # Returns Constraint, not bool\nConstraint(...)\n\nFor object equality comparison, use the ``equals_to()`` method or compare IDs:\n\n>>> y = DecisionVariable.integer(2)\n>>> x.id == y.id\nFalse",
           "bases": [],
           "methods": [
             {
@@ -4401,7 +4416,7 @@
                     {
                       "name": "kind",
                       "type_": {
-                        "display": "int",
+                        "display": "Kind",
                         "link_target": null,
                         "children": []
                       },
@@ -5551,45 +5566,45 @@
           "attributes": [
             {
               "name": "BINARY",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Kind.Binary`.",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               }
             },
             {
               "name": "CONTINUOUS",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Kind.Continuous`.",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               }
             },
             {
               "name": "INTEGER",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Kind.Integer`.",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               }
             },
             {
               "name": "SEMI_CONTINUOUS",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Kind.SemiContinuous`.",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               }
             },
             {
               "name": "SEMI_INTEGER",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Kind.SemiInteger`.",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               }
@@ -5631,7 +5646,7 @@
               "name": "kind",
               "doc": "",
               "type_": {
-                "display": "int",
+                "display": "Kind",
                 "link_target": null,
                 "children": []
               },
@@ -5748,8 +5763,34 @@
           "bases": [],
           "methods": [
             {
+              "name": "is_feasible",
+              "doc": "Check feasibility using the supplied absolute tolerance.\n\nThe query compares the stored violation with ``atol``. It does not\nre-evaluate the function or canonicalize the input state.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "violation",
-              "doc": "Calculate the violation (constraint breach) value for this constraint\n\nReturns the amount by which this constraint is violated:\n- For $f(x) = 0$: returns $|f(x)|$\n- For $f(x) \\leq 0$: returns $\\max(0, f(x))$\n\nReturns 0.0 if the constraint is satisfied.",
+              "doc": "Calculate the violation (constraint breach) value for this constraint\n\nReturns the amount by which this constraint is violated:\n- For $f(x) = 0$: returns $|f(x)|$\n- For $f(x) \\leq 0$: returns $\\max(0, f(x))$\n\nZero implies feasibility. A small positive violation may also be feasible\nwithin the supplied query tolerance; the residual is not rounded to zero.",
               "signatures": [
                 {
                   "parameters": [],
@@ -5814,17 +5855,6 @@
               "doc": "Get the evaluated constraint value",
               "type_": {
                 "display": "float",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "feasible",
-              "doc": "Get the feasibility status",
-              "type_": {
-                "display": "bool",
                 "link_target": null,
                 "children": []
               },
@@ -9431,7 +9461,7 @@
             },
             {
               "name": "convert_all_one_hots_to_constraints",
-              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints in ascending\norder of the original one-hot IDs.\n\nConversions are applied one at a time in that order. This method does not\nprovide family-wide rollback if a later conversion fails; conversions\nalready completed remain in the instance.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=x[:2]),\n...         2: OneHotConstraint(variables=x[2:]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}",
+              "doc": "Convert every active one-hot constraint to a regular equality constraint.\n\nSee {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.\nReturns the IDs of the newly created regular constraints in ascending\norder of the original one-hot IDs.\n\nConversions are applied one at a time in that order. This method does not\nprovide family-wide rollback if a later conversion fails; conversions\nalready completed remain in the instance.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={\n...         1: OneHotConstraint(variables=x[:2]),\n...         2: OneHotConstraint(variables=x[2:]),\n...     },\n...     sense=Sense.Minimize,\n... )\n>>> instance.convert_all_one_hots_to_constraints()\n[0, 1]\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}",
               "signatures": [
                 {
                   "parameters": [],
@@ -9453,7 +9483,7 @@
             },
             {
               "name": "convert_all_sos1_to_constraints",
-              "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\nEvery active SOS1 is checked for its mathematical preconditions up front.\nIf that validation fails, no mutation happens. Applying the validated\nplans is not family-wide atomic: earlier SOS1 conversions and earlier\nauxiliary-variable allocations remain if a later ID allocation fails.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=x[:2]),\n...         2: Sos1Constraint(variables=x[2:]),\n...     },\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}",
+              "doc": "Convert every active SOS1 constraint to regular constraints using Big-M.\n\nSee {meth}`~ommx.Instance.convert_sos1_to_constraints` for the conversion\nrule. Returns a dict mapping each original SOS1 ID to the list of regular\nconstraint IDs it produced.\n\nAtomic: every active SOS1 and the total generated-ID capacity are\nvalidated before mutation. If validation fails, including because IDs\nare exhausted, the Instance is left unchanged.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(4)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={\n...         1: Sos1Constraint(variables=x[:2]),\n...         2: Sos1Constraint(variables=x[2:]),\n...     },\n...     sense=Sense.Minimize,\n... )\n>>> instance.convert_all_sos1_to_constraints()\n{1: [0], 2: [1]}\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}",
               "signatures": [
                 {
                   "parameters": [],
@@ -9486,7 +9516,7 @@
             },
             {
               "name": "convert_indicator_to_constraint",
-              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). The instance is not\nmutated on error.\n\n``atol`` controls which Function-body values the bound evaluator treats\nas zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes\nthe indicator variable is exactly binary; this does not canonicalize an\napproximate solver value near 0 or 1.\n\nOn success, the original indicator constraint is moved to\n{attr}`~ommx.Instance.removed_indicator_constraints` with\n``reason=\"ommx.Instance.convert_indicator_to_constraint\"`` and a\ncomma-separated ``constraint_ids`` parameter in returned order (empty\nwhen no side is emitted). Every generated regular constraint records a\n{class}`~ommx.Provenance` entry identifying the original indicator\nconstraint.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n>>> from ommx import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     constraints={},\n...     indicator_constraints={1: ic},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[0]\n>>> instance.indicator_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + 3*x1 - 5 <= 0)}",
+              "doc": "Convert an indicator constraint to regular constraints using the Big-M method.\n\nAn indicator constraint ``y = 1 → f(x) <= 0`` (or ``= 0``) is encoded with\nupper and lower Big-M sides computed from the interval bounds of $f(x)$:\n\n$$\nf(x) + u y - u \\leq 0, \\qquad -f(x) - l y + l \\leq 0,\n$$\n\nwhere $u \\geq \\sup f(x)$ and $l \\leq \\inf f(x)$ are the upper and lower\nbounds of $f$ over the decision variables' domains.\n\nSide emission:\n\n- For ``<=`` indicators, only the upper side is considered; it is emitted\n  iff $u > 0$. If $u \\leq 0$ the constraint is already implied by the\n  variable bounds and no Big-M is emitted.\n- For ``=`` indicators, both sides are considered independently: upper\n  emitted iff $u > 0$, lower emitted iff $l < 0$.\n\nWhen an equality side is skipped, the remaining constraints still enforce\nthe implication correctly because the skipped inequality is already implied\nby the variable bounds: e.g. $u \\leq 0$ together with the emitted lower side\nforces $f(x) = 0$ at $y = 1$ when $u = 0$, or renders $y = 1$ infeasible\nwhen $u < 0$ (correctly reflecting that $f(x) = 0$ has no solution under the\ngiven bounds). When both $u = 0$ and $l = 0$, the bound says $f(x) \\equiv 0$\nso the equality is vacuously satisfied and nothing is emitted.\n\nReturns the list of newly created regular constraint IDs in insertion order\n(upper first, then lower). The list is empty when both sides are redundant.\n\nRaises if the bound needed for an emitted side is non-finite, or if $f(x)$\nreferences a semi-continuous / semi-integer variable (the split domain\n$\\{0\\} \\cup [l, u]$ is not uniformly implemented, so Big-M conversion could\nsilently drop the upper side when $0 \\notin [l, u]$). The instance is not\nmutated on error.\n\n``atol`` controls which Function-body values the bound evaluator treats\nas zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes\nthe indicator variable is exactly binary; this does not canonicalize an\napproximate solver value near 0 or 1.\n\nOn success, the original indicator constraint is moved to\n{attr}`~ommx.Instance.removed_indicator_constraints` with\n``reason=\"ommx.Instance.convert_indicator_to_constraint\"`` and a\ncomma-separated ``constraint_ids`` parameter in returned order (empty\nwhen no side is emitted). Every generated regular constraint records a\n{class}`~ommx.Provenance` entry identifying the original indicator\nconstraint.\n\n# Examples\n\nConvert an inequality indicator where the upper side is active:\n\n>>> from ommx import (\n...     Instance, DecisionVariable, IndicatorConstraint, Equality, Sense,\n... )\n>>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)\n>>> y = DecisionVariable.binary(1)\n>>> ic = IndicatorConstraint(\n...     indicator_variable=y,\n...     function=x - 2,\n...     equality=Equality.LessThanOrEqualToZero,\n... )\n>>> instance = Instance.from_components(\n...     decision_variables=[x, y],\n...     objective=x,\n...     constraints={},\n...     indicator_constraints={1: ic},\n...     sense=Sense.Minimize,\n... )\n>>> instance.convert_indicator_to_constraint(1)\n[0]\n>>> instance.indicator_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + 3*x1 - 5 <= 0)}",
               "signatures": [
                 {
                   "parameters": [
@@ -9589,7 +9619,7 @@
             },
             {
               "name": "convert_one_hot_to_constraint",
-              "doc": "Convert a one-hot constraint to a regular equality constraint.\n\nA one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the\nlinear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality\nas a new regular constraint and moves the one-hot constraint into\n{attr}`~ommx.Instance.removed_one_hot_constraints` with\n``reason=\"ommx.Instance.convert_one_hot_to_constraint\"`` and a\n``constraint_id`` parameter pointing to the new regular constraint.\nThe generated regular constraint preserves the original one-hot context\nand appends a {class}`~ommx.Provenance` entry identifying the original\none-hot constraint.\n\nReturns the ID of the newly created regular constraint.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={1: OneHotConstraint(variables=x)},\n...     sense=Instance.MINIMIZE,\n... )\n>>> new_id = instance.convert_one_hot_to_constraint(1)\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 == 0)}\n>>> instance.removed_one_hot_constraints\n{1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}",
+              "doc": "Convert a one-hot constraint to a regular equality constraint.\n\nA one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the\nlinear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality\nas a new regular constraint and moves the one-hot constraint into\n{attr}`~ommx.Instance.removed_one_hot_constraints` with\n``reason=\"ommx.Instance.convert_one_hot_to_constraint\"`` and a\n``constraint_id`` parameter pointing to the new regular constraint.\nThe generated regular constraint preserves the original one-hot context\nand appends a {class}`~ommx.Provenance` entry identifying the original\none-hot constraint.\n\nReturns the ID of the newly created regular constraint.\n\n# Examples\n\n>>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     one_hot_constraints={1: OneHotConstraint(variables=x)},\n...     sense=Sense.Minimize,\n... )\n>>> new_id = instance.convert_one_hot_to_constraint(1)\n>>> instance.one_hot_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 == 0)}\n>>> instance.removed_one_hot_constraints\n{1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}",
               "signatures": [
                 {
                   "parameters": [
@@ -9615,7 +9645,7 @@
             },
             {
               "name": "convert_sos1_to_constraints",
-              "doc": "Convert a SOS1 constraint to regular constraints using the Big-M method.\n\nA SOS1 constraint over $\\{x_1, \\ldots, x_n\\}$ with each $x_i \\in [l_i, u_i]$\nasserts that at most one $x_i$ is non-zero. Per variable, a binary indicator\n$y_i$ is introduced with the Big-M pair\n\n$$\nx_i - u_i y_i \\leq 0, \\qquad l_i y_i - x_i \\leq 0\n$$\n\n(trivial sides $u_i = 0$ or $l_i = 0$ are skipped), together with the single\ncardinality constraint\n\n$$\n\\sum_i y_i - 1 \\leq 0.\n$$\n\nIf $x_i$ is already binary with bound $[0, 1]$, $x_i$ itself is reused as its\nindicator (no new variable, no Big-M pair).\n\nReturns the list of newly created regular constraint IDs in insertion order\n(Big-M upper/lower pairs per non-binary variable, followed by the cardinality\nsum).\n\nRaises if any $x_i$ has a non-binary bound that is not finite, if its domain\nexcludes $0$, or if its kind is semi-continuous / semi-integer (the split\ndomain $\\{0\\} \\cup [l, u]$ is not uniformly implemented across the codebase\nyet, so Big-M conversion of these kinds is not supported). These\nmathematical preconditions are validated before mutation. Auxiliary\nvariable allocation then proceeds in variable-ID order; if a later ID\nallocation fails, earlier auxiliary variables remain in the Instance.\n\nOn success, the original SOS1 constraint is moved to\n{attr}`~ommx.Instance.removed_sos1_constraints` with\n``reason=\"ommx.Instance.convert_sos1_to_constraints\"`` and a\ncomma-separated ``constraint_ids`` parameter in returned order. Every\ngenerated regular constraint records a {class}`~ommx.Provenance` entry\nidentifying the original SOS1 constraint.\n\n# Examples\n\nAll-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:\n\n>>> from ommx import Instance, DecisionVariable, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={1: Sos1Constraint(variables=x)},\n...     sense=Instance.MINIMIZE,\n... )\n>>> instance.convert_sos1_to_constraints(1)\n[0]\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 <= 0)}\n>>> instance.removed_sos1_constraints\n{1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}",
+              "doc": "Convert a SOS1 constraint to regular constraints using the Big-M method.\n\nA SOS1 constraint over $\\{x_1, \\ldots, x_n\\}$ with each $x_i \\in [l_i, u_i]$\nasserts that at most one $x_i$ is non-zero. Per variable, a binary indicator\n$y_i$ is introduced with the Big-M pair\n\n$$\nx_i - u_i y_i \\leq 0, \\qquad l_i y_i - x_i \\leq 0\n$$\n\n(trivial sides $u_i = 0$ or $l_i = 0$ are skipped), together with the single\ncardinality constraint\n\n$$\n\\sum_i y_i - 1 \\leq 0.\n$$\n\nIf $x_i$ is already binary with bound $[0, 1]$, $x_i$ itself is reused as its\nindicator (no new variable, no Big-M pair).\n\nReturns the list of newly created regular constraint IDs in insertion order\n(Big-M upper/lower pairs per non-binary variable, followed by the cardinality\nsum).\n\nRaises if any $x_i$ has a non-binary bound that is not finite, if its domain\nexcludes $0$, or if its kind is semi-continuous / semi-integer (the split\ndomain $\\{0\\} \\cup [l, u]$ is not uniformly implemented across the codebase\nyet, so Big-M conversion of these kinds is not supported), or if there\nis insufficient decision-variable or regular-constraint ID capacity.\nAll preconditions, including generated-ID capacity, are validated before\nmutation. Any error leaves the Instance unchanged.\n\nOn success, the original SOS1 constraint is moved to\n{attr}`~ommx.Instance.removed_sos1_constraints` with\n``reason=\"ommx.Instance.convert_sos1_to_constraints\"`` and a\ncomma-separated ``constraint_ids`` parameter in returned order. Every\ngenerated regular constraint records a {class}`~ommx.Provenance` entry\nidentifying the original SOS1 constraint.\n\n# Examples\n\nAll-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:\n\n>>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={},\n...     sos1_constraints={1: Sos1Constraint(variables=x)},\n...     sense=Sense.Minimize,\n... )\n>>> instance.convert_sos1_to_constraints(1)\n[0]\n>>> instance.sos1_constraints\n{}\n>>> instance.constraints\n{0: Constraint(x0 + x1 + x2 - 1 <= 0)}\n>>> instance.removed_sos1_constraints\n{1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}",
               "signatures": [
                 {
                   "parameters": [
@@ -9836,7 +9866,7 @@
             },
             {
               "name": "empty",
-              "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> instance.sense == Instance.MINIMIZE\nTrue",
+              "doc": "Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.\n\n# Examples\n\n>>> from ommx import Instance, Sense\n>>> instance = Instance.minimize()\n>>> instance.sense == Sense.Minimize\nTrue",
               "signatures": [
                 {
                   "parameters": [],
@@ -10628,7 +10658,7 @@
             },
             {
               "name": "lower_special_constraints",
-              "doc": "Lower selected active special constraint kinds into regular constraints.\n\nFor every kind in ``kinds_to_lower``, the corresponding bulk conversion\nis invoked\n({meth}`~ommx.Instance.convert_all_indicators_to_constraints`,\n{meth}`~ommx.Instance.convert_all_one_hots_to_constraints`, or\n{meth}`~ommx.Instance.convert_all_sos1_to_constraints`) when that kind is active. The\ninstance is mutated in place. Kinds omitted from ``kinds_to_lower``\nremain active, and an empty set is a no-op. This does not establish\n{class}`~ommx.InstanceClass` membership; check the resulting input separately.\n\nReturns the set of {class}`~ommx.SpecialConstraintKind` values that were\nrequested and active, and therefore actually lowered. Empty when no\nrequested kind was active.\n\n``atol`` controls zero-sensitive interval bounds used while lowering\nIndicator constraints. If omitted, :attr:`DEFAULT_ATOL` is used. This\naligns zero-sensitive Function body evaluation; lowering itself assumes\nexact discrete variable values.\n\nKinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. The\nIndicator bulk conversion validates its complete family before mutating\nit. The OneHot and SOS1 bulk conversions do not provide family-wide\nrollback: OneHot constraints are applied in ascending original ID order,\nwhile SOS1 validates mathematical preconditions first but may partially\nallocate auxiliary IDs before a later allocation fails. The whole\noperation is not transactional across families either.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
+              "doc": "Lower selected active special constraint kinds into regular constraints.\n\nFor every kind in ``kinds_to_lower``, the corresponding bulk conversion\nis invoked\n({meth}`~ommx.Instance.convert_all_indicators_to_constraints`,\n{meth}`~ommx.Instance.convert_all_one_hots_to_constraints`, or\n{meth}`~ommx.Instance.convert_all_sos1_to_constraints`) when that kind is active. The\ninstance is mutated in place. Kinds omitted from ``kinds_to_lower``\nremain active, and an empty set is a no-op. This does not establish\n{class}`~ommx.InstanceClass` membership; check the resulting input separately.\n\nReturns the set of {class}`~ommx.SpecialConstraintKind` values that were\nrequested and active, and therefore actually lowered. Empty when no\nrequested kind was active.\n\n``atol`` controls zero-sensitive interval bounds used while lowering\nIndicator constraints. If omitted, :attr:`DEFAULT_ATOL` is used. This\naligns zero-sensitive Function body evaluation; lowering itself assumes\nexact discrete variable values.\n\nKinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. The\nIndicator and SOS1 bulk conversions validate their complete families\nbefore mutation, including generated-ID capacity for SOS1. OneHot\nconstraints are applied in ascending original ID order without\nfamily-wide rollback. The whole operation is not transactional across\nfamilies: an error does not roll back earlier completed families.\n\nRaises if any underlying Big-M conversion fails (e.g. a SOS1 variable\nwith a non-finite bound).",
               "signatures": [
                 {
                   "parameters": [
@@ -10710,7 +10740,7 @@
             },
             {
               "name": "maximize",
-              "doc": "Create an empty maximization instance with a zero objective.\n\nDecision variables and constraints can be added incrementally with\n{meth}`new_binary` and {meth}`add_constraint`.",
+              "doc": "Create an empty maximization instance with a zero objective.\n\nDecision variables and constraints can be added incrementally with the\n`new_*` methods and {meth}`add_constraint`.",
               "signatures": [
                 {
                   "parameters": [],
@@ -10726,7 +10756,7 @@
             },
             {
               "name": "minimize",
-              "doc": "Create an empty minimization instance with a zero objective.\n\nDecision variables and constraints can be added incrementally with\n{meth}`new_binary` and {meth}`add_constraint`.",
+              "doc": "Create an empty minimization instance with a zero objective.\n\nDecision variables and constraints can be added incrementally with the\n`new_*` methods and {meth}`add_constraint`.",
               "signatures": [
                 {
                   "parameters": [],
@@ -10783,7 +10813,7 @@
             },
             {
               "name": "new_binary",
-              "doc": "Create and add a binary decision variable with an automatically assigned ID.\n\nReturns an {class}`~ommx.AttachedDecisionVariable` that can be used\ndirectly in expressions. The numeric ID remains available through its\n{attr}`~ommx.AttachedDecisionVariable.id` property.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n\nRaises {class}`ValueError` if the maximum decision-variable ID is\n`2**64 - 1` and no larger automatic ID can be assigned.",
+              "doc": "Create and add a binary decision variable with an automatically assigned ID.\n\nReturns an {class}`~ommx.AttachedDecisionVariable` that can be used\ndirectly in expressions. The numeric ID remains available through its\n{attr}`~ommx.AttachedDecisionVariable.id` property.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n\nRaises {class}`ValueError` if the maximum decision-variable ID is\n`2**64 - 1` and no larger automatic ID can be assigned. On failure, no\nvariable or modeling label is added to the instance.",
               "signatures": [
                 {
                   "parameters": [
@@ -10854,6 +10884,514 @@
                         "children": [
                           {
                             "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new_continuous",
+              "doc": "Create and add a continuous decision variable with an automatically assigned ID.\n\nThe bounds default to `(-inf, inf)`. Returns an\n{class}`~ommx.AttachedDecisionVariable` that can be used directly in\nexpressions.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `lower`: Lower bound of the variable.\n- `upper`: Upper bound of the variable.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n\nRaises {class}`ValueError` if the bounds are invalid or if no larger\nautomatic ID can be assigned. On failure, no variable or modeling label\nis added to the instance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "lower",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "float('-inf')"
+                      }
+                    },
+                    {
+                      "name": "upper",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "float('inf')"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new_integer",
+              "doc": "Create and add an integer decision variable with an automatically assigned ID.\n\nThe bounds default to `(-inf, inf)`. Each finite side is normalized to\nthe least or greatest integer value that satisfies the original bound\nunder `atol`; an infinite side remains unbounded. Bound membership uses\nthe same inequality-residual tolerance semantics as constraint\nfeasibility. Returns an\n{class}`~ommx.AttachedDecisionVariable` that can be used directly in\nexpressions.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `lower`: Lower bound of the variable.\n- `upper`: Upper bound of the variable.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n- `atol`: Absolute tolerance for integer-bound normalization. If\n  omitted, the current default returned by\n  {func}`~ommx.get_default_atol` is used.\n\nRaises {class}`ValueError` if the bounds are invalid or normalization\nyields no integer value, or if no larger automatic ID can be assigned.\nOn failure, no variable or modeling label is added to the instance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "lower",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "float('-inf')"
+                      }
+                    },
+                    {
+                      "name": "upper",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "float('inf')"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new_semi_continuous",
+              "doc": "Create and add a semi-continuous decision variable with an automatically assigned ID.\n\nThe bounds default to `(-inf, inf)`. Returns an\n{class}`~ommx.AttachedDecisionVariable` that can be used directly in\nexpressions.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `lower`: Lower bound of the variable.\n- `upper`: Upper bound of the variable.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n\nRaises {class}`ValueError` if the bounds are invalid or if no larger\nautomatic ID can be assigned. On failure, no variable or modeling label\nis added to the instance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "lower",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "float('-inf')"
+                      }
+                    },
+                    {
+                      "name": "upper",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "float('inf')"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedDecisionVariable",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new_semi_integer",
+              "doc": "Create and add a semi-integer decision variable with an automatically assigned ID.\n\nThe bounds default to `(-inf, inf)`. Each finite side is normalized under\n`atol` using the same residual-feasibility rule as\n{meth}`~ommx.Instance.new_integer`, while an infinite side remains\nunbounded. Unlike an integer variable, if the bound contains no integer,\nits normalized bound becomes `[0, 0]`, preserving the zero alternative\nin the semi-integer domain. Returns an\n{class}`~ommx.AttachedDecisionVariable` that can be used directly in\nexpressions.\n\n**Args:**\n- `name`: Optional human-readable modeling name. Names need not be unique.\n- `lower`: Lower bound of the variable.\n- `upper`: Upper bound of the variable.\n- `subscripts`: Optional integer indices from the source model.\n- `parameters`: Optional string-valued indices from the source model.\n- `description`: Optional human-readable description.\n- `atol`: Absolute tolerance for integer-bound normalization. If\n  omitted, the current default returned by\n  {func}`~ommx.get_default_atol` is used.\n\nRaises {class}`ValueError` if the bounds are invalid or if no larger\nautomatic ID can be assigned. On failure, no variable or modeling label\nis added to the instance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "lower",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "float('-inf')"
+                      }
+                    },
+                    {
+                      "name": "upper",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "float('inf')"
+                      }
+                    },
+                    {
+                      "name": "subscripts",
+                      "type_": {
+                        "display": "Sequence[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "[]"
+                      }
+                    },
+                    {
+                      "name": "parameters",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    },
+                    {
+                      "name": "description",
+                      "type_": {
+                        "display": "Optional[str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
                             "link_target": null,
                             "children": []
                           }
@@ -10996,7 +11534,7 @@
             },
             {
               "name": "prepare",
-              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\n``policy`` selects existing {class}`~ommx.Instance` owner operations.\nWhole-class membership is checked before the first phase and after each\nselected phase. Phases are applied at most once in this order, stopping\nas soon as membership is reached:\n\n1. ``special_constraints``:\n   {meth}`~ommx.Instance.lower_special_constraints`\n2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`\n3. ``integer_slack``:\n   {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,\n   followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only\n   when exact conversion is unavailable and ``slack_upper_bound`` is set\n4. ``fixed_penalty``\n5. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`\n6. ``binary_power_reduction``:\n   {meth}`~ommx.Instance.reduce_binary_power`\n\nSuccess guarantees ``input_class`` membership. When ``input_class`` is an\nAdapter's ``INPUT_CLASS``, that membership is the complete applicability\ncondition; converter-local or backend failures may still occur later.\n\nPreparation is not globally transactional. Changes committed by an\nearlier owner operation remain if a later operation raises an error.\nWithin the Integer-slack phase, active regular inequalities are processed\nin ascending constraint-ID order, and a later failure leaves earlier\nconversions committed. Other phases retain the mutation and failure\nsemantics of their owner operations.\n\nExisting Rust owner signals retain their Python exception mappings.\nWhen configured phases are exhausted without reaching ``input_class``,\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final\nmembership report through its ``report`` attribute.\n\n# Postconditions\n\nSelected owner operations establish their own output semantics, and\nsuccessful composition reaches the target class.\n\n>>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)\n>>> assert instance.prepare(InstanceClass.qubo(), policy) is None\n>>> assert InstanceClass.qubo().contains(instance)\n>>> assert instance.sense == Sense.Minimize\n>>> assert instance.objective.evaluate({0: 0}) == 2.0\n>>> solution = instance.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)\n>>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified",
+              "doc": "Apply the caller's ``policy`` to this instance in place to reach\n``input_class`` membership.\n\n``policy`` selects existing {class}`~ommx.Instance` owner operations.\nWhole-class membership is checked before the first phase and after each\nselected phase. Phases are applied at most once in this order, stopping\nas soon as membership is reached:\n\n1. ``special_constraints``:\n   {meth}`~ommx.Instance.lower_special_constraints`\n2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`\n3. ``integer_slack``:\n   {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,\n   followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only\n   when exact conversion is unavailable and ``slack_upper_bound`` is set\n4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`\n5. ``fixed_penalty``\n6. ``binary_power_reduction``:\n   {meth}`~ommx.Instance.reduce_binary_power`\n\nSuccess guarantees ``input_class`` membership. When ``input_class`` is an\nAdapter's ``INPUT_CLASS``, that membership is the complete applicability\ncondition; converter-local or backend failures may still occur later.\n\nPreparation is not globally transactional. Changes committed by an\nearlier owner operation remain if a later operation raises an error.\nWithin the Integer-slack phase, active regular inequalities are processed\nin ascending constraint-ID order, and a later failure leaves earlier\nconversions committed. Other phases retain the mutation and failure\nsemantics of their owner operations.\n\nExisting Rust owner signals retain their Python exception mappings.\nWhen configured phases are exhausted without reaching ``input_class``,\n{class}`~ommx.PreparationTargetNotReachedError` exposes the final\nmembership report through its ``report`` attribute.\n\n# Postconditions\n\nSelected owner operations establish their own output semantics, and\nsuccessful composition reaches the target class.\n\n>>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)\n>>> assert instance.prepare(InstanceClass.qubo(), policy) is None\n>>> assert InstanceClass.qubo().contains(instance)\n>>> assert instance.sense == Sense.Minimize\n>>> assert instance.objective.evaluate({0: 0}) == 2.0\n>>> solution = instance.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)\n>>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified",
               "signatures": [
                 {
                   "parameters": [
@@ -11021,6 +11559,55 @@
                   ],
                   "return_type": {
                     "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "promote_sos1_big_m",
+              "doc": "Validate and promote a batch of claimed SOS1 Big-M formulations.\n\nThe batch request is keyed by regular cardinality constraint ID.\nThe Rust {class}`Instance` checks every formulation against the same\nunchanged instance and reconciles conflicts before applying the plan.\nBounds are inferred using only each formulation's claimed Big-M links.\nSuccessful entries apply their prepared bounds together with promotion;\nrejected entries contribute no bound changes, and strict rejection\nleaves the entire instance unchanged.\nBoth modes return one {class}`~ommx.Sos1BigMPromotion` batch report:\n\n- ``mode=\"best_effort\"`` (default) applies independent valid formulations.\n  The report's ``promoted`` map associates each successful cardinality\n  ID with its allocated SOS1 ID; ``rejections`` maps rejected\n  cardinality IDs to diagnostic strings.\n- ``mode=\"strict\"`` requires every formulation to be valid. Any\n  rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`\n  before mutation. The exception's ``request_count`` is the batch\n  size and ``rejections`` contains all rejected cardinality IDs and\n  their diagnostics. A successful strict report has no rejections.\n\nOverlapping formulation rows are rejected; independent formulations\nmay share SOS1 members. An empty request returns an empty report.\nPlanning and application do not clone the instance.\n\nPromotion preserves the objective and mathematical feasible region on\noriginal members after projecting out fresh selectors. Positive link\nscaling is allowed; Big-M must cover the prepared member bounds exactly.\nBounds are derived directly from exact link-coefficient ratios without\ntolerance expansion. Integer limits are rounded inward; conversion to\nfloating-point bounds rounds outward. Exact clipping retains even\nsub-tolerance updates and does not read the default tolerance.\nCoverage validation is exact.\nPromotion does not promise identical\nviolations or feasibility classification at finite tolerance.\nUnknown mode strings raise {class}`ValueError` before planning.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "request",
+                      "type_": {
+                        "display": "Sos1BigMPromotionRequest",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "mode",
+                      "type_": {
+                        "display": "Literal[\"best_effort\", \"strict\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"best_effort\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"strict\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'best_effort'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1BigMPromotion",
                     "link_target": null,
                     "children": []
                   }
@@ -11445,6 +12032,137 @@
               "deprecated": null
             },
             {
+              "name": "tighten_bounds_simultaneously_once",
+              "doc": "Apply one simultaneous bound-tightening pass using all active regular constraints.\n\nCalls {meth}`tighten_bounds_simultaneously_once_using_constraints` with\nevery active regular constraint ID and the same ``max_terms`` limit.\nNon-affine rows and rows exceeding ``max_terms`` variable terms are skipped. All\nrows read the bounds at entry, and updates are applied together once.\nReturns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.\nThe same tolerance, supported-domain and atomicity rules apply as for\nthe explicitly selected form.\n``max_terms`` defaults to 32 and excludes the constant term.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "max_terms",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "32"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[int, Bound]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "Bound",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "tighten_bounds_simultaneously_once_using_constraints",
+              "doc": "Apply one simultaneous bound-tightening pass using selected regular constraints.\n\n``constraint_ids`` is a set of active regular constraint IDs. Unknown\nand removed IDs are errors; an empty set applies no updates. Selected\nnon-affine rows are skipped. All eligible variables in the selected\nrows may have their bounds tightened.\nOnly compact polynomial functions of degree at most one are used;\ncomposed expressions are skipped even when mathematically affine.\n\n``max_terms`` limits each affine row to this many variable terms\n(default: 32). The constant term does not count. Rows exceeding the\nlimit are skipped before domain lookup or candidate evaluation. Terms\nof fixed, semi and dependent variables still count. With a zero limit,\nonly constant rows are processed, including contradiction detection.\n\nReturns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.\nEvery row reads the bounds at entry; all updates are collected and applied\ntogether. Newly tightened bounds are not reused during this call. Call\nagain to propagate changes through further rows.\nCandidate extrema are combined before comparing changes with ``atol``.\nWhen continuous stored endpoints cross but their tolerated domains overlap,\nuse the interval between the endpoints, intersected with the entry bounds.\nBoth sides of equalities are used. Tolerance is accounted for algebraically:\ncontinuous domains expand to ``[lower - atol, upper + atol]``, and row\nresiduals may be at most ``atol``. For ``a*x + r <= 0`` with ``a > 0``,\nthe limit is ``(atol - min(r)) / a``. Subtract ``atol`` to store a continuous\nupper bound, or round down for an integer/binary upper bound. Negative\ncoefficients give the corresponding lower bound. Changes within ``atol``\nare ignored.\n\nResidual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate\narithmetic uses ordinary floating-point operations. No point-evaluation\nboundary is searched. Rounding, cancellation and evaluation order can\nchange feasibility near numerical boundaries, even when subsequent\nevaluation uses the same ``atol``.\n\nOnly the selected active regular constraints are used. Unbounded domains\nremain infinite. An upper/lower candidate with a non-finite residual or\nboundary calculation is skipped; other candidates in the same row are\nstill processed. Semi-variable domains include\nzero when deriving other bounds, but semi, fixed and dependent variables\nare not changed. This is not a complete infeasibility detector.\n\nRequires finite ``atol < 1``. On failure the instance is unchanged.\nIf omitted, {func}`~ommx.get_default_atol` supplies the tolerance.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint_ids",
+                      "type_": {
+                        "display": "set[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "max_terms",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "32"
+                      }
+                    },
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "Optional[float]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "float",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[int, Bound]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "Bound",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "to_hubo",
               "doc": "Convert the instance to a HUBO format.\n\n# Postconditions\n\nThe driver is equivalent to HUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.\n\n>>> import copy\n>>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> explicit = copy.copy(instance)\n>>> policy = PreparationPolicy.for_hubo(uniform_penalty_weight=2.0)\n>>> _ = explicit.prepare(InstanceClass.hubo(), policy)\n>>> expected = explicit.as_hubo_format()\n>>> actual = instance.to_hubo(uniform_penalty_weight=2.0)\n>>> assert actual == expected\n>>> assert InstanceClass.hubo().contains(instance)\n>>> assert instance.sense == Sense.Minimize\n>>> assert instance.objective.evaluate({0: 0}) == 2.0\n>>> solution = instance.evaluate({0: 0})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)\n\n# Errors\n\nMutually exclusive penalty options raise ``ValueError`` before mutating the instance.\n\n>>> unchanged = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize\n... )\n>>> before = unchanged.to_v2_bytes()\n>>> try:\n...     unchanged.to_hubo(uniform_penalty_weight=1.0, penalty_weights={7: 2.0})\n... except ValueError:\n...     pass\n... else:\n...     raise AssertionError(\"mutually exclusive penalty options were accepted\")\n>>> assert unchanged.to_v2_bytes() == before",
               "signatures": [
@@ -11782,7 +12500,7 @@
             },
             {
               "name": "MAXIMIZE",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Sense.Maximize`.",
               "type_": {
                 "display": "Sense",
                 "link_target": null,
@@ -11791,7 +12509,7 @@
             },
             {
               "name": "MINIMIZE",
-              "doc": "",
+              "doc": "Compatibility alias for {attr}`Sense.Minimize`.",
               "type_": {
                 "display": "Sense",
                 "link_target": null,
@@ -19957,7 +20675,7 @@
         {
           "kind": "Class",
           "name": "PreparationPolicy",
-          "doc": "Select optional transformations applied by {meth}`~ommx.Instance.prepare`.\n\nEach property selects at most one phase. Properties may be combined freely,\nalthough owner-operation validation and target membership can still make a\ncombination fail for a particular {class}`~ommx.Instance`.\n{meth}`~ommx.Instance.prepare` applies enabled phases at most once in this\norder: special constraints, active objective, Integer slack, fixed penalty,\nused-Integer encoding, then Binary-power reduction. It stops as soon as the\ntarget {class}`~ommx.InstanceClass` contains the instance.\n\n# Invariants\n\nA default policy selects no Preparation phase. Future phases also default\nto disabled.\n\n>>> from ommx import PreparationPolicy\n>>> policy = PreparationPolicy()\n>>> assert (\n...     policy.special_constraints,\n...     policy.objective,\n...     policy.integer_slack,\n...     policy.integer_encoding,\n...     policy.fixed_penalty,\n...     policy.binary_power_reduction,\n... ) == (None, None, None, None, None, None)",
+          "doc": "Select optional transformations applied by {meth}`~ommx.Instance.prepare`.\n\nEach property selects at most one phase. Properties may be combined freely,\nalthough owner-operation validation and target membership can still make a\ncombination fail for a particular {class}`~ommx.Instance`.\n{meth}`~ommx.Instance.prepare` applies enabled phases at most once in this\norder: special constraints, active objective, Integer slack, used-Integer\nencoding, fixed penalty, then Binary-power reduction. It stops as soon as the\ntarget {class}`~ommx.InstanceClass` contains the instance.\n\n# Invariants\n\nA default policy selects no Preparation phase. Future phases also default\nto disabled.\n\n>>> from ommx import PreparationPolicy\n>>> policy = PreparationPolicy()\n>>> assert (\n...     policy.special_constraints,\n...     policy.objective,\n...     policy.integer_slack,\n...     policy.integer_encoding,\n...     policy.fixed_penalty,\n...     policy.binary_power_reduction,\n... ) == (None, None, None, None, None, None)",
           "bases": [],
           "methods": [
             {
@@ -23732,8 +24450,19 @@
               "is_property": true
             },
             {
+              "name": "feasibility_atol",
+              "doc": "Absolute tolerance associated with the stored evaluation and feasibility results.\n\nPass this to an extracted constraint's explicit feasibility query to use\nthe enclosing result's threshold.",
+              "type_": {
+                "display": "float",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "feasible",
-              "doc": "Get feasibility status for all samples",
+              "doc": "Get feasibility status for all samples, including variable bounds and kinds.\n\nEach value matches the feasibility of the corresponding extracted Solution.",
               "type_": {
                 "display": "dict[int, bool]",
                 "link_target": null,
@@ -23755,7 +24484,7 @@
             },
             {
               "name": "feasible_relaxed",
-              "doc": "Get relaxed feasibility status for all samples",
+              "doc": "Get relaxed feasibility status for all samples.\n\nRemoved constraints are excluded; variable bounds and kinds still apply.",
               "type_": {
                 "display": "dict[int, bool]",
                 "link_target": null,
@@ -24023,7 +24752,45 @@
           "name": "SampledConstraint",
           "doc": "",
           "bases": [],
-          "methods": [],
+          "methods": [
+            {
+              "name": "feasible",
+              "doc": "Compute feasibility for every sample using the supplied tolerance.\n\nThis query does not re-evaluate the functions or change stored values.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "atol",
+                      "type_": {
+                        "display": "float",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "dict[int, bool]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "bool",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
           "attributes": [
             {
               "name": "description",
@@ -24067,28 +24834,6 @@
                   },
                   {
                     "display": "float",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "feasible",
-              "doc": "Get the feasibility status for all samples  ",
-              "type_": {
-                "display": "dict[int, bool]",
-                "link_target": null,
-                "children": [
-                  {
-                    "display": "int",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "bool",
                     "link_target": null,
                     "children": []
                   }
@@ -25071,8 +25816,67 @@
               "deprecated": null
             },
             {
+              "name": "constraint_violation",
+              "doc": "Get one constraint's nonnegative scalar violation.\n\nUses the definitions in {meth}`total_violation`, including for removed\nconstraints. IDs are independent for each `kind`. Raises `KeyError` when\nthe ID is absent from that constraint family.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "constraint_id",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"regular\", \"indicator\", \"one_hot\", \"sos1\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'regular'"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "constraints_df",
-              "doc": "DataFrame of evaluated constraints, dispatched on `kind=`. See\n{meth}`ommx.Instance.constraints_df` for column / `kind=` /\n`include=` semantics.\n\n`Solution` has no `removed=` parameter (no active/removed\ndistinction at the evaluated stage); reason data is gated by\n`\"removed_reason\"` in `include=`. When the flag is on, rows for\nconstraints removed before evaluation get `removed_reason` /\n`removed_reason.{key}` columns populated; other rows have NA.",
+              "doc": "DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.\n\nThe `violation` column uses {meth}`constraint_violation`. Dispatched on `kind=`. See\n{meth}`ommx.Instance.constraints_df` for column / `kind=` /\n`include=` semantics.\n\n`Solution` has no `removed=` parameter (no active/removed\ndistinction at the evaluated stage); reason data is gated by\n`\"removed_reason\"` in `include=`. When the flag is on, rows for\nconstraints removed before evaluation get `removed_reason` /\n`removed_reason.{key}` columns populated; other rows have NA.",
               "signatures": [
                 {
                   "parameters": [
@@ -25713,24 +26517,8 @@
               "deprecated": null
             },
             {
-              "name": "total_violation_l1",
-              "doc": "Calculate total constraint violation using L1 norm (sum of absolute violations)\n\nReturns the sum of violations across all constraints (including removed constraints):\n- For equality constraints: $\\sum |f(x)|$\n- For inequality constraints: $\\sum \\max(0, f(x))$",
-              "signatures": [
-                {
-                  "parameters": [],
-                  "return_type": {
-                    "display": "float",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "total_violation_l2",
-              "doc": "Calculate total constraint violation using L2 norm squared (sum of squared violations)\n\nReturns the sum of squared violations across all constraints (including removed constraints):\n- For equality constraints: $\\sum (f(x))^2$\n- For inequality constraints: $\\sum (\\max(0, f(x)))^2$",
+              "name": "total_violation",
+              "doc": "Sum the nonnegative scalar violation of every constraint, including removed constraints.\n\n- Equality: `abs(f(x))`; inequality: `max(0, f(x))`.\n- Indicator: the inner violation when active, otherwise zero.\n- OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.\n- SOS1: `min_i sum_{j != i} abs(x_j)`.\n\nEach constraint is feasible exactly when its violation is at most the\nevaluation tolerance. This threshold applies to each constraint separately,\nnot to the total. Zero therefore implies that all constraints are feasible.\nVariable bound and kind violations\nare not added. Values use the evaluated state after discrete-value\ncanonicalization. Lowering need not preserve the metric: a retained\noriginal and its generated constraints each contribute.\n\nUse {meth}`constraint_violation` for individual values, also available in\nthe `violation` column of {meth}`constraints_df` for every constraint kind.",
               "signatures": [
                 {
                   "parameters": [],
@@ -25932,6 +26720,17 @@
                 ]
               },
               "is_property": true
+            },
+            {
+              "name": "feasibility_atol",
+              "doc": "Absolute tolerance associated with the stored evaluation and feasibility results.\n\nPass this to an extracted constraint's explicit feasibility query to use\nthe enclosing result's threshold.",
+              "type_": {
+                "display": "float",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
             },
             {
               "name": "feasible",
@@ -26183,6 +26982,415 @@
                   "attribute": null
                 },
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "Sos1BigMPromotion",
+          "doc": "Read-only report for an entire SOS1 Big-M promotion batch.\n\nEach cardinality constraint ID in the request has exactly one outcome:\npromotion to an SOS1 constraint, or rejection with a diagnostic.\nThe ``promoted`` and ``rejections`` properties return snapshots derived\nfrom that single outcome map. Their keys are disjoint and their union is\nexactly the request's cardinality constraint IDs.\n\nBoth application modes return this report type. Strict mode returns it\nonly when all formulations were promoted. Membership, retained formulation\nhistory, and selector reconstruction remain owned by the mutated\n{class}`Instance`.",
+          "bases": [],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "promoted",
+              "doc": "Applied promotions: cardinality constraint ID to allocated SOS1 ID.",
+              "type_": {
+                "display": "dict[int, int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "rejections",
+              "doc": "Rejected formulations: cardinality constraint ID to diagnostic message.\n\nThese are diagnostic strings, not exception objects. Rejected\nformulations were not applied.",
+              "type_": {
+                "display": "dict[int, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "request_count",
+              "doc": "Number of formulations in the original batch request.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "Sos1BigMPromotionBatchRejectedError",
+          "doc": "One or more requests in a strict SOS1 Big-M promotion batch were rejected.",
+          "bases": [
+            {
+              "display": "RuntimeError",
+              "link_target": null,
+              "children": []
+            }
+          ],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "rejections",
+              "doc": "Diagnostic messages keyed by rejected cardinality constraint ID.",
+              "type_": {
+                "display": "dict[int, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "request_count",
+              "doc": "Number of formulations in the rejected strict batch.",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "Sos1BigMPromotionRequest",
+          "doc": "Untrusted stable-ID request for a batch of SOS1 Big-M promotions.\n\nOuter keys are regular cardinality constraint IDs. Each value maps intended\nSOS1 member IDs to selector claims for that formulation. A cardinality ID\noccurs at most once. Bounds, kinds, coefficients, and row contents are\nread from the current {class}`Instance` when the batch is validated.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "selector_claims",
+                      "type_": {
+                        "display": "Mapping[int, Mapping[int, Sos1BigMSelectorClaim]]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Mapping[int, Sos1BigMSelectorClaim]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "Sos1BigMSelectorClaim",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1BigMPromotionRequest",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "selector_claims",
+              "doc": "Formulation claims keyed by cardinality constraint ID, then member ID.",
+              "type_": {
+                "display": "dict[int, dict[int, Sos1BigMSelectorClaim]]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "dict[int, Sos1BigMSelectorClaim]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "Sos1BigMSelectorClaim",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "Sos1BigMSelectorClaim",
+          "doc": "Unchecked selector-role claim for one member of an SOS1 Big-M formulation.\n\nConstruct claims with {meth}`reused` or {meth}`fresh`. The claim contains\nstable IDs only; {meth}`~ommx.Instance.promote_sos1_big_m` validates the\ncurrent variable domains and regular-constraint rows before mutating the\ninstance.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "fresh",
+              "doc": "Claim a separate private Binary selector and its optional Big-M links.\n\nA link may be omitted only when the current member domain makes that\nside redundant. Supplied links are always validated by the Rust\n{class}`Instance` owner.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "selector",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "upper_link",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    },
+                    {
+                      "name": "lower_link",
+                      "type_": {
+                        "display": "Optional[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1BigMSelectorClaim",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "reused",
+              "doc": "Claim that the promoted member is itself a Binary selector.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Sos1BigMSelectorClaim",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "is_reused",
+              "doc": "Whether this claim reuses the member itself as its selector.",
+              "type_": {
+                "display": "bool",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "lower_link",
+              "doc": "Claimed lower-link constraint ID, if supplied.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "selector",
+              "doc": "Claimed fresh selector ID, or ``None`` for a reused selector.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "upper_link",
+              "doc": "Claimed upper-link constraint ID, if supplied.",
+              "type_": {
+                "display": "Optional[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
@@ -26959,6 +28167,46 @@
                         "children": []
                       }
                     ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "load_qplib_solution",
+              "doc": "Load a published QPLIB `.sol` file into a {class}`~ommx.State`.\n\nPass the variable count of the original QPLIB instance as\n`num_variables`. Omitted variables receive zero. The standard QPLIB\nsolution names `xN`, `bN`, and `iN` map to OMMX ID `N - 2`; `objvar`\nis ignored because the objective is computed by\n{meth}`~ommx.Instance.evaluate`. Custom names and other solvers' `.sol`\nformats are not supported. Names are case insensitive.\n\nMalformed input, duplicate IDs, nonfinite values, and out-of-range IDs\nraise `ValueError` with a line number. File read failures raise\n`RuntimeError`. Loading does not check bounds or feasibility.\n\n>>> import tempfile\n>>> from pathlib import Path\n>>> from ommx import State\n>>> with tempfile.TemporaryDirectory() as directory:\n...     path = Path(directory) / \"example.sol\"\n...     _ = path.write_text(\"objvar 12\\nx2 0.5\\nb4 1\\n\")\n...     state = State.load_qplib_solution(str(path), num_variables=3)\n>>> state.entries\n{0: 0.5, 1: 0.0, 2: 1.0}",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "num_variables",
+                      "type_": {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "State",
+                    "link_target": {
+                      "fqn": "ommx.State",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
                   }
                 }
               ],
@@ -34494,6 +35742,7 @@
     "ommx.AttachedSos1Constraint": "ommx",
     "ommx.BinaryPowerPreparation": "ommx",
     "ommx.Bound": "ommx",
+    "ommx.BridgeError": "ommx",
     "ommx.Constraint": "ommx",
     "ommx.DecisionVariable": "ommx",
     "ommx.DecisionVariableRole": "ommx",
@@ -34544,6 +35793,10 @@
     "ommx.Samples": "ommx",
     "ommx.Sense": "ommx",
     "ommx.Solution": "ommx",
+    "ommx.Sos1BigMPromotion": "ommx",
+    "ommx.Sos1BigMPromotionBatchRejectedError": "ommx",
+    "ommx.Sos1BigMPromotionRequest": "ommx",
+    "ommx.Sos1BigMSelectorClaim": "ommx",
     "ommx.Sos1Constraint": "ommx",
     "ommx.SpecialConstraintKind": "ommx",
     "ommx.SpecialConstraintPreparation": "ommx",

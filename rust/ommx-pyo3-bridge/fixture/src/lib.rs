@@ -1,12 +1,25 @@
 //! Downstream PyO3 extension used to exercise the bridge across a DSO boundary.
 
+mod transfer;
+
 use ommx::{Evaluate as _, ParametricInstance};
 use ommx_pyo3_bridge::{
-    PyConstraint, PyDecisionVariable, PyFunction, PyInstance, PyParametricInstance, PySampleSet,
-    PySolution,
+    BridgeError, PyConstraint, PyDecisionVariable, PyFunction, PyInstance, PyParametricInstance,
+    PySampleSet, PySolution, TransferProtocolId,
 };
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyType};
 use std::collections::{BTreeMap, HashMap};
+
+fn v2_target(py: Python<'_>) -> PyResult<ommx_pyo3_bridge::Target<ommx_pyo3_bridge::ProtobufV2>> {
+    ommx_pyo3_bridge::resolve_target::<ommx_pyo3_bridge::ProtobufV2>(py)?
+        .ok_or_else(|| BridgeError::no_supported_protocol(py, &[TransferProtocolId::ProtobufV2]))
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+fn bridge_error_type(py: Python<'_>) -> PyResult<Py<PyType>> {
+    BridgeError::type_object(py).map(Bound::unbind)
+}
 
 fn component_function() -> ommx::Function {
     let linear = (ommx::linear!(7) + ommx::coeff!(-3.0))
@@ -64,20 +77,18 @@ fn component_state() -> ommx::v1::State {
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-fn function() -> PyFunction {
-    component_function().into()
+fn function(py: Python<'_>) -> PyResult<PyFunction> {
+    v2_target(py)?.transfer(py, component_function())
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-fn composed_function() -> PyFunction {
-    composed_component_function().into()
+fn composed_function(py: Python<'_>) -> PyResult<PyFunction> {
+    v2_target(py)?.transfer(py, composed_component_function())
 }
 
-#[pyo3_stub_gen::derive::gen_stub_pyfunction]
-#[pyfunction]
-fn constraint() -> PyConstraint {
-    PyConstraint::new(
+fn component_constraint() -> (ommx::Constraint, ommx::ConstraintContext) {
+    (
         ommx::Constraint::less_than_or_equal_to_zero(component_function()),
         ommx::ConstraintContext {
             label: modeling_label("capacity"),
@@ -90,55 +101,66 @@ fn constraint() -> PyConstraint {
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-fn composed_constraint() -> PyConstraint {
-    PyConstraint::new(
-        ommx::Constraint::less_than_or_equal_to_zero(composed_component_function()),
-        ommx::ConstraintContext::default(),
+fn constraint(py: Python<'_>) -> PyResult<PyConstraint> {
+    v2_target(py)?.transfer(py, component_constraint())
+}
+
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+fn composed_constraint(py: Python<'_>) -> PyResult<PyConstraint> {
+    v2_target(py)?.transfer(
+        py,
+        (
+            ommx::Constraint::less_than_or_equal_to_zero(composed_component_function()),
+            ommx::ConstraintContext::default(),
+        ),
     )
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-fn decision_variable() -> PyDecisionVariable {
+fn decision_variable(py: Python<'_>) -> PyResult<PyDecisionVariable> {
     let id = ommx::VariableID::from(7);
-    PyDecisionVariable::new(id, component_decision_variable(), modeling_label("x"))
+    v2_target(py)?.transfer(py, (id, component_decision_variable(), modeling_label("x")))
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-fn instance() -> PyInstance {
-    component_instance().into()
+fn instance(py: Python<'_>) -> PyResult<PyInstance> {
+    v2_target(py)?.transfer(py, component_instance())
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-fn parametric_instance() -> PyParametricInstance {
-    ParametricInstance::from(component_instance()).into()
+fn parametric_instance(py: Python<'_>) -> PyResult<PyParametricInstance> {
+    v2_target(py)?.transfer(py, ParametricInstance::from(component_instance()))
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-fn solution() -> PySolution {
-    component_instance()
+fn solution(py: Python<'_>) -> PyResult<PySolution> {
+    let value = component_instance()
         .evaluate(&component_state(), ommx::ATol::default())
-        .expect("the fixture state is valid")
-        .into()
+        .expect("the fixture state is valid");
+    v2_target(py)?.transfer(py, value)
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
-fn sample_set() -> PySampleSet {
-    component_instance()
+fn sample_set(py: Python<'_>) -> PyResult<PySampleSet> {
+    let value = component_instance()
         .evaluate_samples(
             &ommx::Sampled::from(component_state()),
             ommx::ATol::default(),
         )
-        .expect("the fixture samples are valid")
-        .into()
+        .expect("the fixture samples are valid");
+    v2_target(py)?.transfer(py, value)
 }
 
 #[pymodule(gil_used = false)]
 fn ommx_pyo3_bridge_fixture(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    transfer::register(module)?;
+    module.add_function(wrap_pyfunction!(bridge_error_type, module)?)?;
     module.add_function(wrap_pyfunction!(function, module)?)?;
     module.add_function(wrap_pyfunction!(composed_function, module)?)?;
     module.add_function(wrap_pyfunction!(constraint, module)?)?;

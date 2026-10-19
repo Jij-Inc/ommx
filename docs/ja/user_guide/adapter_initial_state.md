@@ -21,7 +21,7 @@ OMMX Adapterの中には、最適化計算実行時に初期解を渡す機能�
 以下のインスタンスを用いて、初期解を渡す方法を説明します。
 
 ```{code-cell} ipython3
-from ommx import Instance, DecisionVariable, State
+from ommx import DecisionVariable, Instance, Sense, State
 
 x = DecisionVariable.integer(1, lower=0, upper=5)
 y = DecisionVariable.integer(2, lower=0, upper=5)
@@ -30,7 +30,7 @@ ommx_instance = Instance.from_components(
     decision_variables=[x, y],
     objective=x - y,
     constraints={0: x + y <= 5},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 ```
 

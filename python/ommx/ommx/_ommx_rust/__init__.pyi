@@ -33,6 +33,7 @@ __all__ = [
     "AutosavePolicy",
     "BinaryPowerPreparation",
     "Bound",
+    "BridgeError",
     "Constraint",
     "DecisionVariable",
     "DecisionVariableRole",
@@ -109,6 +110,10 @@ __all__ = [
     "Sense",
     "Solution",
     "Solve",
+    "Sos1BigMPromotion",
+    "Sos1BigMPromotionBatchRejectedError",
+    "Sos1BigMPromotionRequest",
+    "Sos1BigMSelectorClaim",
     "Sos1Constraint",
     "SpecialConstraintKind",
     "SpecialConstraintPreparation",
@@ -933,7 +938,7 @@ class AttachedDecisionVariable:
         The parent host this variable lives in.
         """
     @property
-    def kind(self) -> builtins.int: ...
+    def kind(self) -> Kind: ...
     @property
     def bound(self) -> Bound: ...
     @property
@@ -1340,14 +1345,29 @@ class Bound:
     def of_binary() -> Bound: ...
     def width(self) -> builtins.float: ...
     def is_finite(self) -> builtins.bool: ...
-    def contains(
-        self, value: builtins.float, atol: builtins.float
-    ) -> builtins.bool: ...
+    def contains(self, value: builtins.float, atol: builtins.float) -> builtins.bool:
+        r"""
+        Return whether ``value`` satisfies this bound under ``atol``.
+
+        Membership treats the bound as the two inequality residuals
+        ``lower - value <= 0`` and ``value - upper <= 0``. Both use the same
+        tolerance semantics as regular inequality constraints after finite
+        evaluation. An infinite endpoint leaves that side unconstrained;
+        non-finite values and finite-endpoint residual overflow are not
+        contained.
+        """
     def nearest_to_zero(self) -> builtins.float: ...
     def intersection(self, other: Bound) -> typing.Optional[Bound]: ...
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Bound: ...
     def __deepcopy__(self, _memo: typing.Any) -> Bound: ...
+
+class BridgeError(builtins.RuntimeError):
+    r"""
+    An OMMX bridge protocol, registration, or transfer failure after loading the SDK.
+    """
+
+    ...
 
 @typing.final
 class Constraint:
@@ -1365,11 +1385,11 @@ class Constraint:
 
     EQUAL_TO_ZERO: Equality
     r"""
-    Class constant for equality type: equal to zero (==)
+    Compatibility alias for {attr}`Equality.EqualToZero`.
     """
     LESS_THAN_OR_EQUAL_TO_ZERO: Equality
     r"""
-    Class constant for equality type: less than or equal to zero (<=)
+    Compatibility alias for {attr}`Equality.LessThanOrEqualToZero`.
     """
     @property
     def function(self) -> Function: ...
@@ -1427,7 +1447,7 @@ class Constraint:
         - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
         - `atol`: Optional absolute tolerance for evaluation
 
-        **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value and feasibility
+        **Returns:** {class}`~ommx.EvaluatedConstraint` containing the evaluated value. Query feasibility with ``is_feasible(atol=...)``
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -1507,8 +1527,8 @@ class DecisionVariable:
     This class represents a variable that will be optimized in a mathematical programming problem.
     It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
     can be used in arithmetic expressions to build objective functions and constraints.
-    Construction raises ValueError when the kind discriminator is unknown or
-    the requested bound cannot be normalized for the selected variable kind.
+    Construction requires a {class}`~ommx.Kind` and raises ValueError when the
+    requested bound cannot be normalized for the selected variable kind.
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
@@ -1525,15 +1545,30 @@ class DecisionVariable:
     False
     """
 
-    BINARY: builtins.int = 1
-    INTEGER: builtins.int = 2
-    CONTINUOUS: builtins.int = 3
-    SEMI_INTEGER: builtins.int = 4
-    SEMI_CONTINUOUS: builtins.int = 5
+    BINARY: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.Binary`.
+    """
+    INTEGER: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.Integer`.
+    """
+    CONTINUOUS: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.Continuous`.
+    """
+    SEMI_INTEGER: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.SemiInteger`.
+    """
+    SEMI_CONTINUOUS: Kind
+    r"""
+    Compatibility alias for {attr}`Kind.SemiContinuous`.
+    """
     @property
     def id(self) -> builtins.int: ...
     @property
-    def kind(self) -> builtins.int: ...
+    def kind(self) -> Kind: ...
     @property
     def bound(self) -> Bound: ...
     @property
@@ -1595,7 +1630,7 @@ class DecisionVariable:
     def __new__(
         cls,
         id: builtins.int,
-        kind: builtins.int,
+        kind: Kind,
         bound: Bound,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
@@ -1738,11 +1773,6 @@ class EvaluatedConstraint:
         Set the dual variable value
         """
     @property
-    def feasible(self) -> builtins.bool:
-        r"""
-        Get the feasibility status
-        """
-    @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
         Get the constraint name
@@ -1774,6 +1804,13 @@ class EvaluatedConstraint:
         r"""
         Get the used decision variable IDs
         """
+    def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
+        r"""
+        Check feasibility using the supplied absolute tolerance.
+
+        The query compares the stored violation with ``atol``. It does not
+        re-evaluate the function or canonicalize the input state.
+        """
     def violation(self) -> builtins.float:
         r"""
         Calculate the violation (constraint breach) value for this constraint
@@ -1782,7 +1819,8 @@ class EvaluatedConstraint:
         - For $f(x) = 0$: returns $|f(x)|$
         - For $f(x) \leq 0$: returns $\max(0, f(x))$
 
-        Returns 0.0 if the constraint is satisfied.
+        Zero implies feasibility. A small positive violation may also be feasible
+        within the supplied query tolerance; the residual is not rounded to zero.
         """
 
 @typing.final
@@ -3029,7 +3067,13 @@ class Instance:
     """
 
     MAXIMIZE: Sense
+    r"""
+    Compatibility alias for {attr}`Sense.Maximize`.
+    """
     MINIMIZE: Sense
+    r"""
+    Compatibility alias for {attr}`Sense.Minimize`.
+    """
     Description: type[InstanceDescription]
     @property
     def annotations(self) -> types.MappingProxyType[str, str]:
@@ -3280,6 +3324,78 @@ class Instance:
     def get_user_annotations(
         self, *, annotation_namespace: builtins.str = "org.ommx.user."
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def tighten_bounds_simultaneously_once(
+        self,
+        *,
+        max_terms: builtins.int = 32,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> builtins.dict[builtins.int, Bound]:
+        r"""
+        Apply one simultaneous bound-tightening pass using all active regular constraints.
+
+        Calls {meth}`tighten_bounds_simultaneously_once_using_constraints` with
+        every active regular constraint ID and the same ``max_terms`` limit.
+        Non-affine rows and rows exceeding ``max_terms`` variable terms are skipped. All
+        rows read the bounds at entry, and updates are applied together once.
+        Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
+        The same tolerance, supported-domain and atomicity rules apply as for
+        the explicitly selected form.
+        ``max_terms`` defaults to 32 and excludes the constant term.
+        """
+    def tighten_bounds_simultaneously_once_using_constraints(
+        self,
+        constraint_ids: builtins.set[builtins.int],
+        *,
+        max_terms: builtins.int = 32,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> builtins.dict[builtins.int, Bound]:
+        r"""
+        Apply one simultaneous bound-tightening pass using selected regular constraints.
+
+        ``constraint_ids`` is a set of active regular constraint IDs. Unknown
+        and removed IDs are errors; an empty set applies no updates. Selected
+        non-affine rows are skipped. All eligible variables in the selected
+        rows may have their bounds tightened.
+        Only compact polynomial functions of degree at most one are used;
+        composed expressions are skipped even when mathematically affine.
+
+        ``max_terms`` limits each affine row to this many variable terms
+        (default: 32). The constant term does not count. Rows exceeding the
+        limit are skipped before domain lookup or candidate evaluation. Terms
+        of fixed, semi and dependent variables still count. With a zero limit,
+        only constant rows are processed, including contradiction detection.
+
+        Returns a dictionary of variable IDs to their updated {class}`~ommx.Bound`.
+        Every row reads the bounds at entry; all updates are collected and applied
+        together. Newly tightened bounds are not reused during this call. Call
+        again to propagate changes through further rows.
+        Candidate extrema are combined before comparing changes with ``atol``.
+        When continuous stored endpoints cross but their tolerated domains overlap,
+        use the interval between the endpoints, intersected with the entry bounds.
+        Both sides of equalities are used. Tolerance is accounted for algebraically:
+        continuous domains expand to ``[lower - atol, upper + atol]``, and row
+        residuals may be at most ``atol``. For ``a*x + r <= 0`` with ``a > 0``,
+        the limit is ``(atol - min(r)) / a``. Subtract ``atol`` to store a continuous
+        upper bound, or round down for an integer/binary upper bound. Negative
+        coefficients give the corresponding lower bound. Changes within ``atol``
+        are ignored.
+
+        Residual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate
+        arithmetic uses ordinary floating-point operations. No point-evaluation
+        boundary is searched. Rounding, cancellation and evaluation order can
+        change feasibility near numerical boundaries, even when subsequent
+        evaluation uses the same ``atol``.
+
+        Only the selected active regular constraints are used. Unbounded domains
+        remain infinite. An upper/lower candidate with a non-finite residual or
+        boundary calculation is skipped; other candidates in the same row are
+        still processed. Semi-variable domains include
+        zero when deriving other bounds, but semi, fixed and dependent variables
+        are not changed. This is not a complete infeasibility detector.
+
+        Requires finite ``atol < 1``. On failure the instance is unchanged.
+        If omitted, {func}`~ommx.get_default_atol` supplies the tolerance.
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> Instance:
         r"""
@@ -3337,9 +3453,9 @@ class Instance:
 
         # Examples
 
-        >>> from ommx import Instance
+        >>> from ommx import Instance, Sense
         >>> instance = Instance.minimize()
-        >>> instance.sense == Instance.MINIMIZE
+        >>> instance.sense == Sense.Minimize
         True
         """
     @staticmethod
@@ -3347,16 +3463,16 @@ class Instance:
         r"""
         Create an empty minimization instance with a zero objective.
 
-        Decision variables and constraints can be added incrementally with
-        {meth}`new_binary` and {meth}`add_constraint`.
+        Decision variables and constraints can be added incrementally with the
+        `new_*` methods and {meth}`add_constraint`.
         """
     @staticmethod
     def maximize() -> Instance:
         r"""
         Create an empty maximization instance with a zero objective.
 
-        Decision variables and constraints can be added incrementally with
-        {meth}`new_binary` and {meth}`add_constraint`.
+        Decision variables and constraints can be added incrementally with the
+        `new_*` methods and {meth}`add_constraint`.
         """
     def add_decision_variable(
         self, variable: DecisionVariable
@@ -3378,7 +3494,7 @@ class Instance:
         name: typing.Optional[builtins.str] = None,
         *,
         subscripts: typing.Sequence[builtins.int] = [],
-        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        parameters: collections.abc.Mapping[str, str] = {},
         description: typing.Optional[builtins.str] = None,
     ) -> AttachedDecisionVariable:
         r"""
@@ -3395,7 +3511,141 @@ class Instance:
         - `description`: Optional human-readable description.
 
         Raises {class}`ValueError` if the maximum decision-variable ID is
-        `2**64 - 1` and no larger automatic ID can be assigned.
+        `2**64 - 1` and no larger automatic ID can be assigned. On failure, no
+        variable or modeling label is added to the instance.
+        """
+    def new_integer(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add an integer decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Each finite side is normalized to
+        the least or greatest integer value that satisfies the original bound
+        under `atol`; an infinite side remains unbounded. Bound membership uses
+        the same inequality-residual tolerance semantics as constraint
+        feasibility. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+        - `atol`: Absolute tolerance for integer-bound normalization. If
+          omitted, the current default returned by
+          {func}`~ommx.get_default_atol` is used.
+
+        Raises {class}`ValueError` if the bounds are invalid or normalization
+        yields no integer value, or if no larger automatic ID can be assigned.
+        On failure, no variable or modeling label is added to the instance.
+        """
+    def new_continuous(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a continuous decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+
+        Raises {class}`ValueError` if the bounds are invalid or if no larger
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
+        """
+    def new_semi_integer(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+        atol: typing.Optional[builtins.float] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a semi-integer decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Each finite side is normalized under
+        `atol` using the same residual-feasibility rule as
+        {meth}`~ommx.Instance.new_integer`, while an infinite side remains
+        unbounded. Unlike an integer variable, if the bound contains no integer,
+        its normalized bound becomes `[0, 0]`, preserving the zero alternative
+        in the semi-integer domain. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+        - `atol`: Absolute tolerance for integer-bound normalization. If
+          omitted, the current default returned by
+          {func}`~ommx.get_default_atol` is used.
+
+        Raises {class}`ValueError` if the bounds are invalid or if no larger
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
+        """
+    def new_semi_continuous(
+        self,
+        name: typing.Optional[builtins.str] = None,
+        *,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: collections.abc.Mapping[str, str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> AttachedDecisionVariable:
+        r"""
+        Create and add a semi-continuous decision variable with an automatically assigned ID.
+
+        The bounds default to `(-inf, inf)`. Returns an
+        {class}`~ommx.AttachedDecisionVariable` that can be used directly in
+        expressions.
+
+        **Args:**
+        - `name`: Optional human-readable modeling name. Names need not be unique.
+        - `lower`: Lower bound of the variable.
+        - `upper`: Upper bound of the variable.
+        - `subscripts`: Optional integer indices from the source model.
+        - `parameters`: Optional string-valued indices from the source model.
+        - `description`: Optional human-readable description.
+
+        Raises {class}`ValueError` if the bounds are invalid or if no larger
+        automatic ID can be assigned. On failure, no variable or modeling label
+        is added to the instance.
         """
     def attached_decision_variable(
         self, variable_id: builtins.int
@@ -3496,12 +3746,11 @@ class Instance:
         exact discrete variable values.
 
         Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. The
-        Indicator bulk conversion validates its complete family before mutating
-        it. The OneHot and SOS1 bulk conversions do not provide family-wide
-        rollback: OneHot constraints are applied in ascending original ID order,
-        while SOS1 validates mathematical preconditions first but may partially
-        allocate auxiliary IDs before a later allocation fails. The whole
-        operation is not transactional across families either.
+        Indicator and SOS1 bulk conversions validate their complete families
+        before mutation, including generated-ID capacity for SOS1. OneHot
+        constraints are applied in ascending original ID order without
+        family-wide rollback. The whole operation is not transactional across
+        families: an error does not roll back earlier completed families.
 
         Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
         with a non-finite bound).
@@ -4127,14 +4376,14 @@ class Instance:
 
         # Examples
 
-        >>> from ommx import Instance, DecisionVariable, OneHotConstraint
+        >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
         ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> new_id = instance.convert_one_hot_to_constraint(1)
         >>> instance.one_hot_constraints
@@ -4158,7 +4407,7 @@ class Instance:
 
         # Examples
 
-        >>> from ommx import Instance, DecisionVariable, OneHotConstraint
+        >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -4168,7 +4417,7 @@ class Instance:
         ...         1: OneHotConstraint(variables=x[:2]),
         ...         2: OneHotConstraint(variables=x[2:]),
         ...     },
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_all_one_hots_to_constraints()
         [0, 1]
@@ -4208,10 +4457,10 @@ class Instance:
         Raises if any $x_i$ has a non-binary bound that is not finite, if its domain
         excludes $0$, or if its kind is semi-continuous / semi-integer (the split
         domain $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase
-        yet, so Big-M conversion of these kinds is not supported). These
-        mathematical preconditions are validated before mutation. Auxiliary
-        variable allocation then proceeds in variable-ID order; if a later ID
-        allocation fails, earlier auxiliary variables remain in the Instance.
+        yet, so Big-M conversion of these kinds is not supported), or if there
+        is insufficient decision-variable or regular-constraint ID capacity.
+        All preconditions, including generated-ID capacity, are validated before
+        mutation. Any error leaves the Instance unchanged.
 
         On success, the original SOS1 constraint is moved to
         {attr}`~ommx.Instance.removed_sos1_constraints` with
@@ -4224,14 +4473,14 @@ class Instance:
 
         All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
 
-        >>> from ommx import Instance, DecisionVariable, Sos1Constraint
+        >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
         ...     sos1_constraints={1: Sos1Constraint(variables=x)},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_sos1_to_constraints(1)
         [0]
@@ -4252,14 +4501,13 @@ class Instance:
         rule. Returns a dict mapping each original SOS1 ID to the list of regular
         constraint IDs it produced.
 
-        Every active SOS1 is checked for its mathematical preconditions up front.
-        If that validation fails, no mutation happens. Applying the validated
-        plans is not family-wide atomic: earlier SOS1 conversions and earlier
-        auxiliary-variable allocations remain if a later ID allocation fails.
+        Atomic: every active SOS1 and the total generated-ID capacity are
+        validated before mutation. If validation fails, including because IDs
+        are exhausted, the Instance is left unchanged.
 
         # Examples
 
-        >>> from ommx import Instance, DecisionVariable, Sos1Constraint
+        >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
@@ -4269,7 +4517,7 @@ class Instance:
         ...         1: Sos1Constraint(variables=x[:2]),
         ...         2: Sos1Constraint(variables=x[2:]),
         ...     },
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_all_sos1_to_constraints()
         {1: [0], 2: [1]}
@@ -4340,7 +4588,7 @@ class Instance:
         Convert an inequality indicator where the upper side is active:
 
         >>> from ommx import (
-        ...     Instance, DecisionVariable, IndicatorConstraint, Equality,
+        ...     Instance, DecisionVariable, IndicatorConstraint, Equality, Sense,
         ... )
         >>> x = DecisionVariable.continuous(0, lower=0.0, upper=5.0)
         >>> y = DecisionVariable.binary(1)
@@ -4354,7 +4602,7 @@ class Instance:
         ...     objective=x,
         ...     constraints={},
         ...     indicator_constraints={1: ic},
-        ...     sense=Instance.MINIMIZE,
+        ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_indicator_to_constraint(1)
         [0]
@@ -5024,8 +5272,8 @@ class Instance:
            {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
            followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
            when exact conversion is unavailable and ``slack_upper_bound`` is set
-        4. ``fixed_penalty``
-        5. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+        4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+        5. ``fixed_penalty``
         6. ``binary_power_reduction``:
            {meth}`~ommx.Instance.reduce_binary_power`
 
@@ -5063,6 +5311,50 @@ class Instance:
         >>> solution = instance.evaluate({0: 0})
         >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)
         >>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
+        """
+    def promote_sos1_big_m(
+        self,
+        request: Sos1BigMPromotionRequest,
+        *,
+        mode: typing.Literal["best_effort", "strict"] = "best_effort",
+    ) -> Sos1BigMPromotion:
+        r"""
+        Validate and promote a batch of claimed SOS1 Big-M formulations.
+
+        The batch request is keyed by regular cardinality constraint ID.
+        The Rust {class}`Instance` checks every formulation against the same
+        unchanged instance and reconciles conflicts before applying the plan.
+        Bounds are inferred using only each formulation's claimed Big-M links.
+        Successful entries apply their prepared bounds together with promotion;
+        rejected entries contribute no bound changes, and strict rejection
+        leaves the entire instance unchanged.
+        Both modes return one {class}`~ommx.Sos1BigMPromotion` batch report:
+
+        - ``mode="best_effort"`` (default) applies independent valid formulations.
+          The report's ``promoted`` map associates each successful cardinality
+          ID with its allocated SOS1 ID; ``rejections`` maps rejected
+          cardinality IDs to diagnostic strings.
+        - ``mode="strict"`` requires every formulation to be valid. Any
+          rejection raises {class}`~ommx.Sos1BigMPromotionBatchRejectedError`
+          before mutation. The exception's ``request_count`` is the batch
+          size and ``rejections`` contains all rejected cardinality IDs and
+          their diagnostics. A successful strict report has no rejections.
+
+        Overlapping formulation rows are rejected; independent formulations
+        may share SOS1 members. An empty request returns an empty report.
+        Planning and application do not clone the instance.
+
+        Promotion preserves the objective and mathematical feasible region on
+        original members after projecting out fresh selectors. Positive link
+        scaling is allowed; Big-M must cover the prepared member bounds exactly.
+        Bounds are derived directly from exact link-coefficient ratios without
+        tolerance expansion. Integer limits are rounded inward; conversion to
+        floating-point bounds rounds outward. Exact clipping retains even
+        sub-tolerance updates and does not read the default tolerance.
+        Coverage validation is exact.
+        Promotion does not promise identical
+        violations or feasibility classification at finite tolerance.
+        Unknown mode strings raise {class}`ValueError` before planning.
         """
 
 @typing.final
@@ -6802,8 +7094,8 @@ class PreparationPolicy:
     although owner-operation validation and target membership can still make a
     combination fail for a particular {class}`~ommx.Instance`.
     {meth}`~ommx.Instance.prepare` applies enabled phases at most once in this
-    order: special constraints, active objective, Integer slack, fixed penalty,
-    used-Integer encoding, then Binary-power reduction. It stops as soon as the
+    order: special constraints, active objective, Integer slack, used-Integer
+    encoding, fixed penalty, then Binary-power reduction. It stops as soon as the
     target {class}`~ommx.InstanceClass` contains the instance.
 
     # Invariants
@@ -7733,17 +8025,29 @@ class SampleSet:
     @property
     def feasible(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get feasibility status for all samples
+        Get feasibility status for all samples, including variable bounds and kinds.
+
+        Each value matches the feasibility of the corresponding extracted Solution.
         """
     @property
     def feasible_relaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get relaxed feasibility status for all samples
+        Get relaxed feasibility status for all samples.
+
+        Removed constraints are excluded; variable bounds and kinds still apply.
         """
     @property
     def feasible_unrelaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
         Get unrelaxed feasibility status for all samples
+        """
+    @property
+    def feasibility_atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance associated with the stored evaluation and feasibility results.
+
+        Pass this to an extracted constraint's explicit feasibility query to use
+        the enclosing result's threshold.
         """
     @property
     def sense(self) -> Sense:
@@ -8047,10 +8351,13 @@ class SampledConstraint:
         r"""
         Get the evaluated values for all samples
         """
-    @property
-    def feasible(self) -> builtins.dict[builtins.int, builtins.bool]:
+    def feasible(
+        self, *, atol: builtins.float
+    ) -> builtins.dict[builtins.int, builtins.bool]:
         r"""
-        Get the feasibility status for all samples
+        Compute feasibility for every sample using the supplied tolerance.
+
+        This query does not re-evaluate the functions or change stored values.
         """
 
 @typing.final
@@ -8428,6 +8735,14 @@ class Solution:
         Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
         """
     @property
+    def feasibility_atol(self) -> builtins.float:
+        r"""
+        Absolute tolerance associated with the stored evaluation and feasibility results.
+
+        Pass this to an extracted constraint's explicit feasibility query to use
+        the enclosing result's threshold.
+        """
+    @property
     def sense(self) -> Sense:
         r"""
         Get the optimization sense (minimize or maximize)
@@ -8667,7 +8982,9 @@ class Solution:
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of evaluated constraints, dispatched on `kind=`. See
+        DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.
+
+        The `violation` column uses {meth}`constraint_violation`. Dispatched on `kind=`. See
         {meth}`ommx.Instance.constraints_df` for column / `kind=` /
         `include=` semantics.
 
@@ -8725,21 +9042,38 @@ class Solution:
         """
     def __copy__(self) -> Solution: ...
     def __deepcopy__(self, _memo: typing.Any) -> Solution: ...
-    def total_violation_l1(self) -> builtins.float:
+    def total_violation(self) -> builtins.float:
         r"""
-        Calculate total constraint violation using L1 norm (sum of absolute violations)
+        Sum the nonnegative scalar violation of every constraint, including removed constraints.
 
-        Returns the sum of violations across all constraints (including removed constraints):
-        - For equality constraints: $\sum |f(x)|$
-        - For inequality constraints: $\sum \max(0, f(x))$
+        - Equality: `abs(f(x))`; inequality: `max(0, f(x))`.
+        - Indicator: the inner violation when active, otherwise zero.
+        - OneHot: `min_i (abs(x_i - 1) + sum_{j != i} abs(x_j))`.
+        - SOS1: `min_i sum_{j != i} abs(x_j)`.
+
+        Each constraint is feasible exactly when its violation is at most the
+        evaluation tolerance. This threshold applies to each constraint separately,
+        not to the total. Zero therefore implies that all constraints are feasible.
+        Variable bound and kind violations
+        are not added. Values use the evaluated state after discrete-value
+        canonicalization. Lowering need not preserve the metric: a retained
+        original and its generated constraints each contribute.
+
+        Use {meth}`constraint_violation` for individual values, also available in
+        the `violation` column of {meth}`constraints_df` for every constraint kind.
         """
-    def total_violation_l2(self) -> builtins.float:
+    def constraint_violation(
+        self,
+        constraint_id: builtins.int,
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+    ) -> builtins.float:
         r"""
-        Calculate total constraint violation using L2 norm squared (sum of squared violations)
+        Get one constraint's nonnegative scalar violation.
 
-        Returns the sum of squared violations across all constraints (including removed constraints):
-        - For equality constraints: $\sum (f(x))^2$
-        - For inequality constraints: $\sum (\max(0, f(x)))^2$
+        Uses the definitions in {meth}`total_violation`, including for removed
+        constraints. IDs are independent for each `kind`. Raises `KeyError` when
+        the ID is absent from that constraint family.
         """
 
 @typing.final
@@ -8791,6 +9125,134 @@ class Solve:
         Adapter-defined diagnostics recorded during this solve.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class Sos1BigMPromotion:
+    r"""
+    Read-only report for an entire SOS1 Big-M promotion batch.
+
+    Each cardinality constraint ID in the request has exactly one outcome:
+    promotion to an SOS1 constraint, or rejection with a diagnostic.
+    The ``promoted`` and ``rejections`` properties return snapshots derived
+    from that single outcome map. Their keys are disjoint and their union is
+    exactly the request's cardinality constraint IDs.
+
+    Both application modes return this report type. Strict mode returns it
+    only when all formulations were promoted. Membership, retained formulation
+    history, and selector reconstruction remain owned by the mutated
+    {class}`Instance`.
+    """
+    @property
+    def request_count(self) -> builtins.int:
+        r"""
+        Number of formulations in the original batch request.
+        """
+    @property
+    def promoted(self) -> builtins.dict[builtins.int, builtins.int]:
+        r"""
+        Applied promotions: cardinality constraint ID to allocated SOS1 ID.
+        """
+    @property
+    def rejections(self) -> builtins.dict[builtins.int, builtins.str]:
+        r"""
+        Rejected formulations: cardinality constraint ID to diagnostic message.
+
+        These are diagnostic strings, not exception objects. Rejected
+        formulations were not applied.
+        """
+
+class Sos1BigMPromotionBatchRejectedError(builtins.RuntimeError):
+    r"""
+    One or more requests in a strict SOS1 Big-M promotion batch were rejected.
+    """
+    @property
+    def request_count(self) -> builtins.int:
+        r"""
+        Number of formulations in the rejected strict batch.
+        """
+    @property
+    def rejections(self) -> builtins.dict[builtins.int, builtins.str]:
+        r"""
+        Diagnostic messages keyed by rejected cardinality constraint ID.
+        """
+
+@typing.final
+class Sos1BigMPromotionRequest:
+    r"""
+    Untrusted stable-ID request for a batch of SOS1 Big-M promotions.
+
+    Outer keys are regular cardinality constraint IDs. Each value maps intended
+    SOS1 member IDs to selector claims for that formulation. A cardinality ID
+    occurs at most once. Bounds, kinds, coefficients, and row contents are
+    read from the current {class}`Instance` when the batch is validated.
+    """
+    @property
+    def selector_claims(
+        self,
+    ) -> builtins.dict[
+        builtins.int, builtins.dict[builtins.int, Sos1BigMSelectorClaim]
+    ]:
+        r"""
+        Formulation claims keyed by cardinality constraint ID, then member ID.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __new__(
+        cls,
+        selector_claims: typing.Mapping[
+            builtins.int, typing.Mapping[builtins.int, Sos1BigMSelectorClaim]
+        ],
+    ) -> Sos1BigMPromotionRequest: ...
+
+@typing.final
+class Sos1BigMSelectorClaim:
+    r"""
+    Unchecked selector-role claim for one member of an SOS1 Big-M formulation.
+
+    Construct claims with {meth}`reused` or {meth}`fresh`. The claim contains
+    stable IDs only; {meth}`~ommx.Instance.promote_sos1_big_m` validates the
+    current variable domains and regular-constraint rows before mutating the
+    instance.
+    """
+    @property
+    def is_reused(self) -> builtins.bool:
+        r"""
+        Whether this claim reuses the member itself as its selector.
+        """
+    @property
+    def selector(self) -> typing.Optional[builtins.int]:
+        r"""
+        Claimed fresh selector ID, or ``None`` for a reused selector.
+        """
+    @property
+    def upper_link(self) -> typing.Optional[builtins.int]:
+        r"""
+        Claimed upper-link constraint ID, if supplied.
+        """
+    @property
+    def lower_link(self) -> typing.Optional[builtins.int]:
+        r"""
+        Claimed lower-link constraint ID, if supplied.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    @staticmethod
+    def reused() -> Sos1BigMSelectorClaim:
+        r"""
+        Claim that the promoted member is itself a Binary selector.
+        """
+    @staticmethod
+    def fresh(
+        selector: builtins.int,
+        *,
+        upper_link: typing.Optional[builtins.int] = None,
+        lower_link: typing.Optional[builtins.int] = None,
+    ) -> Sos1BigMSelectorClaim:
+        r"""
+        Claim a separate private Binary selector and its optional Big-M links.
+
+        A link may be omitted only when the current member domain makes that
+        side redundant. Supplied links are always validated by the Rust
+        {class}`Instance` owner.
+        """
 
 @typing.final
 class Sos1Constraint:
@@ -8892,6 +9354,34 @@ class State:
     @entries.setter
     def entries(self, value: typing.Mapping[builtins.int, builtins.float]) -> None: ...
     def __new__(cls, entries: ToState) -> State: ...
+    @staticmethod
+    def load_qplib_solution(
+        path: builtins.str, *, num_variables: builtins.int
+    ) -> State:
+        r"""
+        Load a published QPLIB `.sol` file into a {class}`~ommx.State`.
+
+        Pass the variable count of the original QPLIB instance as
+        `num_variables`. Omitted variables receive zero. The standard QPLIB
+        solution names `xN`, `bN`, and `iN` map to OMMX ID `N - 2`; `objvar`
+        is ignored because the objective is computed by
+        {meth}`~ommx.Instance.evaluate`. Custom names and other solvers' `.sol`
+        formats are not supported. Names are case insensitive.
+
+        Malformed input, duplicate IDs, nonfinite values, and out-of-range IDs
+        raise `ValueError` with a line number. File read failures raise
+        `RuntimeError`. Loading does not check bounds or feasibility.
+
+        >>> import tempfile
+        >>> from pathlib import Path
+        >>> from ommx import State
+        >>> with tempfile.TemporaryDirectory() as directory:
+        ...     path = Path(directory) / "example.sol"
+        ...     _ = path.write_text("objvar 12\nx2 0.5\nb4 1\n")
+        ...     state = State.load_qplib_solution(str(path), num_variables=3)
+        >>> state.entries
+        {0: 0.5, 1: 0.0, 2: 1.0}
+        """
     @staticmethod
     def from_v1_bytes(bytes: bytes) -> State: ...
     def to_v1_bytes(self) -> bytes: ...
@@ -9138,6 +9628,7 @@ class SpecialConstraintKind(enum.Enum):
 
     def __hash__(self) -> builtins.int: ...
 
+def _run_cli(args: typing.Sequence[builtins.str]) -> builtins.int: ...
 def gc(
     *,
     root: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None,

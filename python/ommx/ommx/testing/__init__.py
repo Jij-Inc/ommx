@@ -2,7 +2,16 @@ import enum
 
 import numpy as np
 
-from ommx import Instance, DecisionVariable, Function, Constraint, Linear, State
+from ommx import (
+    Instance,
+    DecisionVariable,
+    Function,
+    Constraint,
+    Linear,
+    State,
+    Equality,
+    Sense,
+)
 
 
 class DataType(enum.Enum):
@@ -112,7 +121,7 @@ class SingleFeasibleLPGenerator:
             terms = {int(j): float(value) for j, value in enumerate(self._A[i])}
             linear = Linear(terms=terms, constant=float(-self._b[i]))
             constraint = Constraint(
-                equality=Constraint.EQUAL_TO_ZERO,
+                equality=Equality.EqualToZero,
                 function=Function(linear),
             )
             constraints[i] = constraint
@@ -122,7 +131,7 @@ class SingleFeasibleLPGenerator:
             decision_variables=decision_variables,
             objective=0,
             constraints=constraints,
-            sense=Instance.MINIMIZE,
+            sense=Sense.Minimize,
         )
 
     def get_v1_state(self) -> State:

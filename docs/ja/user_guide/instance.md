@@ -33,7 +33,7 @@ $$
 これに対応する `ommx.Instance` は次のようになります。
 
 ```{code-cell} ipython3
-from ommx import Instance
+from ommx import Instance, Sense
 
 instance = Instance.maximize()
 x = instance.new_binary("x")
@@ -44,7 +44,17 @@ instance.add_constraint(x * y == 0, "exclusive")
 
 `Instance` はモデルの構築時に決定変数と制約条件の数値 ID を自動的に割り当てます。割り当てられた ID は `x.id` や `add_constraint` が返すハンドルから確認できます。明示的な ID を持つコンポーネントを一度に組み立てる場合は、引き続き {meth}`~ommx.Instance.from_components` を使用できます。
 
-`new_binary` と `add_constraint` は、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を受け取れます。後ろの 3 フィールドはキーワード専用です。`add_constraint` では、省略したフィールドについて入力 Constraint が持つ既存ラベルを保持します。
+決定変数を作成するすべての `new_*` メソッドと `add_constraint` は、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を受け取れます。後ろの 3 フィールドはキーワード専用です。`new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous` では、`lower` と `upper` もキーワード専用で指定できます。さらに `new_integer` と `new_semi_integer` はキーワード専用の `atol` を受け取り、省略時には {func}`~ommx.get_default_atol` が返す現在の既定値を使います。`add_constraint` では、省略したフィールドについて入力 Constraint が持つ既存ラベルを保持します。
+
+Integer と SemiInteger では、有限なboundの各側を、指定したboundを`atol`のもとで満たす
+最小または最大の整数へ正規化します。無限な側はunboundedのまま保持します。
+Bound membershipは $x \in [l,u]$ を $l-x\leq 0$ と $x-u\leq 0$ という
+2つのresidual constraintとして解釈し、不等式constraintのfeasibilityと同じtolerance規則を
+使います。boundを満たす整数がない場合、`new_integer` は `ValueError` を返し、
+`new_semi_integer` はSemiIntegerのゼロ選択肢を保持するため `[0, 0]` を使います。
+Binaryのbound正規化でも、同じ規則で`0`と`1`のmembershipを判定します。
+
+各 `new_*` 呼び出しは、IDを割り当てる前に決定変数の定義全体を検証し、正規化します。boundまたはtoleranceが不正な場合や、既存の決定変数IDの最大値が `2**64 - 1` で、それより大きい自動IDを割り当てられない場合、決定変数もModelingLabelも `Instance` には追加されません。
 
 これらのコンポーネントはそれぞれに対応するプロパティが用意されています。目的関数については前節で説明した {class}`~ommx.Function` の形に変換されます。
 
@@ -52,10 +62,10 @@ instance.add_constraint(x * y == 0, "exclusive")
 instance.objective
 ```
 
-最大化問題には {meth}`~ommx.Instance.maximize`、最小化問題には {meth}`~ommx.Instance.minimize` を使用します。作成された Instance の `sense` には、それぞれ `Instance.MAXIMIZE` または `Instance.MINIMIZE` が設定されます。
+最大化問題には {meth}`~ommx.Instance.maximize`、最小化問題には {meth}`~ommx.Instance.minimize` を使用します。作成された Instance の `sense` には、それぞれ `Sense.Maximize` または `Sense.Minimize` が設定されます。
 
 ```{code-cell} ipython3
-instance.sense == Instance.MAXIMIZE
+instance.sense == Sense.Maximize
 ```
 
 ## 決定変数
@@ -70,6 +80,16 @@ instance.decision_variables_df()
 
 - `kind` はその決定変数の種類でBinary, Integer, Continuousに加えてSemiInteger, SemiContinuousがあります。
 - `lower` と `upper` はその決定変数の下限と上限です。Binaryの場合は $[0, 1]$ になります。
+
+数値 ID を `Instance` に自動で割り当てさせる場合は、これらすべての種類の決定変数を `Instance` 上で直接作成できます。返された attached 変数は、上の binary 変数と同様に式で利用できます。
+
+```{code-cell} ipython3
+typed = Instance.minimize()
+count = typed.new_integer("count", lower=0, upper=10)
+amount = typed.new_continuous("amount", lower=0)
+batch = typed.new_semi_integer("batch", lower=2, upper=10)
+rate = typed.new_semi_continuous("rate", lower=0.5, upper=4)
+```
 
 加えてOMMXは数理最適化を実務上のデータ分析に統合した時に必要になるようなメタデータを統合的に扱う事を目指して設計されているので、決定変数のメタデータを保持することができます。これらは数理モデル自体には影響を与えないので必須の情報ではありませんがデータ分析や可視化の際に有用です。
 
@@ -100,7 +120,7 @@ instance.constraints_df()
 
 OMMXでは制約条件もIDで管理されます。このIDは決定変数のIDとは独立です。制約条件のIDは `Instance` に登録する際に決まります: {meth}`~ommx.Instance.from_components` に渡す `constraints` 辞書のキーがそのまま制約条件のIDになります。
 
-制約条件に必須の情報は `equality` です。`equality` はその制約条件が等式制約 ({attr}`~ommx.Constraint.EQUAL_TO_ZERO`) か不等式制約 ({attr}`~ommx.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`) かを表します。$f(x) \geq 0$のタイプの制約条件は $-f(x) \leq 0$ として扱われることに注意してください。
+制約条件に必須の情報は `equality` です。`equality` はその制約条件が等式制約 ({attr}`~ommx.Equality.EqualToZero`) か不等式制約 ({attr}`~ommx.Equality.LessThanOrEqualToZero`) かを表します。$f(x) \geq 0$のタイプの制約条件は $-f(x) \leq 0$ として扱われることに注意してください。
 
 制約条件にも決定変数と同様にメタデータを保存することができます。決定変数と同様に `name`, `description`, `subscripts`, `parameters` が利用できます。これらのメタデータ全体を置き換える場合は `set_name`, `set_description`, `set_subscripts`, `set_parameters` を使います。既存の値に追記または merge したい場合は `add_subscripts`, `add_parameter`, `add_parameters` を使います。
 
@@ -115,6 +135,52 @@ print(f"{c.name=}")
 for cid, c in instance.constraints.items():
     print(f"id={cid}: {c}")
 ```
+
+(simultaneous-bound-tightening)=
+## Bound tightening
+
+すべての有効な通常制約を使う方法と、制約IDの集合を指定する方法で、変数のboundを締められます。
+
+```python
+changed_bounds = instance.tighten_bounds_simultaneously_once()  # 変数ID -> 更新後のBound
+# 通常制約のID 100と101だけを使う:
+changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
+# rowごとの変数項数の上限を変更する（既定値: 32）。
+changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
+```
+
+どちらのメソッドも、すべての対象制約が呼び出し開始時のboundを使い、導出した更新を
+まとめて1回適用します。同じ呼び出しの途中では新しいboundを再利用しません。
+更新を他の制約へ伝播させるには再度呼び出します。候補をすべて集約してから`atol`で
+更新差分を判定するため、候補の処理順序によって採用されるboundは変わりません。
+
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once`はすべての有効な通常制約を使います。
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`は指定したIDの
+制約だけを使います。不明・削除済みのIDは何も変更せずにエラーとし、空集合は更新しません。
+どちらも次数が1以下のcompact polynomial形式の関数を使います。非線形のrowや
+合成式（Expression）はスキップします。合成式は数学的にaffineな場合も対象外です。
+また、変数項が`max_terms`（既定値: 32）を超えるrowは、bound候補を評価する前に
+スキップします。定数項は数えませんが、固定変数・semi変数・従属変数の項は数えます。
+上限を0にすると定数だけのrowを処理し、その矛盾は引き続き検出します。
+スキップしたrowもInstance内には残ります。
+
+等式は両方向を処理します。許容誤差は代数的に反映し、連続変数のdomainを
+`[lower - atol, upper + atol]`に広げ、制約のresidualを`atol`まで許容します。
+`a*x + r <= 0`で`a > 0`なら、上限は`(atol - min(r)) / a`です。
+連続変数はそこから`atol`を引いて保存用の上界にし、整数・バイナリ変数は切り下げます。
+係数が負の場合は対応する下界を導出します。例えば`2*x <= 6`、`atol=0.125`では
+上限は`3.0625`となり、保存する上界は連続変数なら`2.9375`、整数変数なら`3`です。
+
+residualの区間は{meth}`~ommx.Function.evaluate_bound`で評価し、候補の計算には通常の
+浮動小数点演算を使います。点評価が許容する境界の探索は行いません。そのため、丸め、
+桁落ち、評価順序により、同じ`atol`でも数値的な境界付近のfeasibilityは変わり得ます。
+
+非有界なdomainの端点は無限のまま扱います。
+各上界・下界候補は対象変数の項を除いて導出します。残りのresidualや境界の計算が非有限に
+なった候補だけを破棄し、同じrowの他の候補は引き続き処理します。
+特殊制約は使いません。semi変数のdomainは他の変数を締める際に0を含めて扱いますが、
+semi変数、固定変数、従属変数自身のboundは変更しません。`atol`以内の変更は無視します。
+処理はatomicであり、実行不可能性を網羅的に検出するものではありません。
 
 ## 記号的な代入
 

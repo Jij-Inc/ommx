@@ -26,7 +26,7 @@ First, let's prepare the data we want to share. We will create an `ommx.Instance
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-from ommx import Instance, DecisionVariable, Constraint
+from ommx import Constraint, DecisionVariable, Equality, Instance, Sense
 from ommx_pyscipopt_adapter.adapter import OMMXPySCIPOptAdapter
 import pandas as pd
 
@@ -67,7 +67,7 @@ constraint = Constraint(
     # Specify the left-hand side of the constraint
     function=sum(data["w"][i] * x[i] for i in range(data["N"])) - data["W"],
     # Specify equality constraint (==0) or inequality constraint (<=0)
-    equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
+    equality=Equality.LessThanOrEqualToZero,
 )
 
 # Create an instance
@@ -79,7 +79,7 @@ instance = Instance.from_components(
     # Register all constraints (keys are constraint IDs)
     constraints={0: constraint},
     # Specify that it is a maximization problem
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 
 # Solve with SCIP

@@ -11,7 +11,7 @@ def _attached_constraint_with_missing_state():
         decision_variables=[variable],
         objective=0,
         constraints={0: variable == 0},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
     return instance.constraints[0].evaluate({})
 
@@ -22,7 +22,7 @@ def _instance_with_required_variable() -> ommx.Instance:
         decision_variables=[variable],
         objective=variable,
         constraints={},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
 
 
@@ -33,7 +33,7 @@ def _instance_with_one_hot_constraint() -> ommx.Instance:
         objective=0,
         constraints={},
         one_hot_constraints={0: ommx.OneHotConstraint(variables=variables)},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
 
 
@@ -44,7 +44,7 @@ def _dependent_instance_y_eq_scaled_x(coefficient: float) -> ommx.Instance:
         decision_variables=[x, y],
         objective=y,
         constraints={},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
     instance.substitute({10: coefficient * x})
     return instance
@@ -60,7 +60,7 @@ def _instance_with_sos1_derived_bound_conflict() -> ommx.Instance:
         objective=0,
         constraints={},
         sos1_constraints={0: ommx.Sos1Constraint(variables=variables)},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
 
 
@@ -78,7 +78,7 @@ def _instance_with_indicator_constraint() -> ommx.Instance:
                 equality=ommx.Equality.LessThanOrEqualToZero,
             )
         },
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
 
 
@@ -149,7 +149,7 @@ def test_non_binary_value_without_indicator_semantics_remains_infeasible() -> No
         decision_variables=[variable],
         objective=variable,
         constraints={},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
 
     assert not instance.evaluate({1: 0.5}).feasible
@@ -175,7 +175,7 @@ def test_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
         decision_variables=[variable],
         objective=0,
         constraints={0: sys.float_info.max * variable <= 0},
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
     instance.relax_constraint(0, "test")
     instance = instance.partial_evaluate({1: sys.float_info.max})
@@ -201,7 +201,7 @@ def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> 
                 equality=ommx.Equality.LessThanOrEqualToZero,
             )
         },
-        sense=ommx.Instance.MINIMIZE,
+        sense=ommx.Sense.Minimize,
     )
     instance.relax_indicator_constraint(0, "test")
     instance = instance.partial_evaluate({1: sys.float_info.max})

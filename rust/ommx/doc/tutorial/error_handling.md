@@ -38,6 +38,17 @@ returns the typed error directly):
   identifies the missing and unexpected active constraint IDs in a caller-owned
   fixed-penalty weight map, so the caller can correct the keys and retry the
   atomic operation on the unchanged [`Instance`](crate::Instance).
+- [`Sos1BigMPromotionBatchRejected`](crate::Sos1BigMPromotionBatchRejected) —
+  owns every rejected cardinality constraint ID and its error chain when a caller
+  requests fully-valid SOS1 Big-M batch application. The caller can repair or
+  remove those requests and retry against the unchanged
+  [`Instance`](crate::Instance).
+- [`OneHotPromotionBatchRejected`](crate::OneHotPromotionBatchRejected) —
+  retains rejected source IDs and errors for strict OneHot application or
+  fully-valid plan-to-hint export. The caller can repair or remove rejected
+  requests and retry against the unchanged instance. Fully-valid SOS1
+  plan-to-hint export likewise preserves `Sos1BigMPromotionBatchRejected` when
+  a batch contains rejections.
 - [`DecisionVariableError`](crate::DecisionVariableError), [`SubstitutionError`](crate::SubstitutionError), [`SolutionError`](crate::SolutionError),
   [`SampleSetError`](crate::SampleSetError) — domain-specific structured errors consumed by
   in-crate tests and downstream code that wants to react programmatically.

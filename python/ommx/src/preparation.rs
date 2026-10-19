@@ -392,8 +392,8 @@ impl From<ommx::FixedPenaltyPreparation> for FixedPenaltyPreparation {
 /// although owner-operation validation and target membership can still make a
 /// combination fail for a particular {class}`~ommx.Instance`.
 /// {meth}`~ommx.Instance.prepare` applies enabled phases at most once in this
-/// order: special constraints, active objective, Integer slack, fixed penalty,
-/// used-Integer encoding, then Binary-power reduction. It stops as soon as the
+/// order: special constraints, active objective, Integer slack, used-Integer
+/// encoding, fixed penalty, then Binary-power reduction. It stops as soon as the
 /// target {class}`~ommx.InstanceClass` contains the instance.
 ///
 /// # Invariants
@@ -698,8 +698,8 @@ impl Instance {
     ///    {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
     ///    followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
     ///    when exact conversion is unavailable and ``slack_upper_bound`` is set
-    /// 4. ``fixed_penalty``
-    /// 5. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+    /// 4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
+    /// 5. ``fixed_penalty``
     /// 6. ``binary_power_reduction``:
     ///    {meth}`~ommx.Instance.reduce_binary_power`
     ///

@@ -16,6 +16,8 @@ pub use prost::Message;
 
 // Public modules
 pub mod artifact;
+#[cfg(feature = "cli")]
+pub mod cli;
 #[cfg(feature = "remote-artifact")]
 pub mod dataset;
 pub mod experiment;

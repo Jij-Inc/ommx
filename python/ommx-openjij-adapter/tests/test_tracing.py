@@ -1,5 +1,5 @@
 from ommx.tracing import capture_trace
-from ommx import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance, Sense
 
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
@@ -25,7 +25,7 @@ def test_direct_sample_emits_convert_call_decode_spans():
         decision_variables=[x0, x1],
         objective=x0 + x1,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with capture_trace() as result:
@@ -42,7 +42,7 @@ def test_solve_delegates_to_sample_trace():
         decision_variables=[x0, x1],
         objective=x0 + x1,
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with capture_trace() as result:

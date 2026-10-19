@@ -1,5 +1,5 @@
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
-from ommx import Instance, DecisionVariable, Linear
+from ommx import DecisionVariable, Instance, Linear, Sense
 from ommx.adapter import InfeasibleDetected
 import pytest
 
@@ -17,7 +17,7 @@ def test_constant_constraint_feasible():
             Linear(terms={}, constant=1) >= 0,
             1: x <= 1,
         },
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     solution = OMMXPythonMIPAdapter.solve(instance)
 
@@ -40,7 +40,7 @@ def test_constant_constraint_infeasible():
             Linear(terms={}, constant=-1) >= 0,
             1: x <= 1,
         },
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
     with pytest.raises(InfeasibleDetected):
         OMMXPythonMIPAdapter.solve(instance)

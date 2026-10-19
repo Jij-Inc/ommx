@@ -23,6 +23,19 @@ includes:
     dir: proto
 
 tasks:
+  pyo3-bridge:receiver-test:
+    desc: Test the receiver contract without Rust SDK or stub generator dependencies
+    cmds:
+      - |
+        deps=$(cargo tree -p ommx-pyo3-bridge --no-default-features --edges normal,build --prefix none)
+        case "$deps" in
+          *"ommx v"*|*"prost v"*|*"pyo3-stub-gen v"*)
+            echo 'Receiver-only bridge unexpectedly depends on an SDK or codec' >&2
+            exit 1
+            ;;
+        esac
+      - cargo test -p ommx-pyo3-bridge --no-default-features
+
   codspeed:trigger:
     desc: Trigger the full CodSpeed suite on the current branch
     cmds:
@@ -35,8 +48,6 @@ tasks:
 
   pyo3-bridge:check:
     desc: Check generated PyO3 bridge stubs and fixture typing
-    env:
-      VIRTUAL_ENV: "{{.ROOT_DIR}}/.venv"
     cmds:
       - uv sync --locked --only-group typecheck --no-install-workspace --inexact
       - cargo run -p ommx-pyo3-bridge-fixture --bin stub_gen
@@ -50,11 +61,12 @@ tasks:
     cmds:
       - uv sync --locked --only-group build --only-group test --no-install-workspace --inexact
       - uv run --no-sync maturin develop --manifest-path rust/ommx-pyo3-bridge/fixture/Cargo.toml
-      - uv run --no-sync pytest -vv rust/ommx-pyo3-bridge/fixture/tests/test_bridge.py
+      - uv run --no-sync pytest -vv rust/ommx-pyo3-bridge/fixture/tests
 
   pyo3-bridge:test:
     desc: Run all PyO3 bridge integration checks
     cmds:
+      - task: pyo3-bridge:receiver-test
       - task: pyo3-bridge:check
       - task: pyo3-bridge:runtime-test
 

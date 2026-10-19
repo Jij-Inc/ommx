@@ -1,6 +1,13 @@
 import pytest
 
-from ommx import DecisionVariable, Instance, Linear, Parameter, ParametricInstance
+from ommx import (
+    DecisionVariable,
+    Instance,
+    Linear,
+    Parameter,
+    ParametricInstance,
+    Sense,
+)
 from ommx.display import FunctionDisplay
 
 
@@ -24,7 +31,7 @@ def test_format_function_accepts_to_function_and_returns_full_text(snapshot):
         DecisionVariable.binary(1, name="x", subscripts=[1]),
     ]
     instance = Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=0,
         decision_variables=x,
         constraints={},
@@ -36,7 +43,7 @@ def test_format_function_accepts_to_function_and_returns_full_text(snapshot):
 def test_display_function_returns_bounded_function_display_by_default(snapshot):
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(101)]
     instance = Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=0,
         decision_variables=x,
         constraints={},
@@ -58,7 +65,7 @@ def test_function_display_html_escapes_labels_and_reports_truncation(snapshot):
         DecisionVariable.binary(1, name="y"),
     ]
     instance = Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=0,
         decision_variables=x,
         constraints={},
@@ -79,7 +86,7 @@ def test_display_function_boundary_budgets(snapshot):
         DecisionVariable.binary(1, name="beta"),
     ]
     instance = Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=0,
         decision_variables=x,
         constraints={},
@@ -105,7 +112,7 @@ def test_parametric_instance_format_function_uses_parameter_labels(snapshot):
     x = DecisionVariable.binary(0, name="x")
     p = Parameter(100, name="p", parameters={"scenario": "base"})
     instance = ParametricInstance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=x + p,
         decision_variables=[x],
         constraints={},
@@ -118,7 +125,7 @@ def test_parametric_instance_format_function_uses_parameter_labels(snapshot):
 def test_unknown_ids_error_even_beyond_preview_budget():
     x = DecisionVariable.binary(0, name="x")
     instance = Instance.from_components(
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
         objective=0,
         decision_variables=[x],
         constraints={},

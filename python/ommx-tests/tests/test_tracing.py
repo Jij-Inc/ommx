@@ -18,6 +18,7 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import ReadableSpan
 
 from ommx import (
+    Sense,
     DecisionVariable,
     Equality,
     IndicatorConstraint,
@@ -43,7 +44,7 @@ def _instance_with_indicator() -> Instance:
         objective=x,
         constraints={},
         indicator_constraints={7: ic},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
 
@@ -143,7 +144,7 @@ def test_evaluate_emits_rust_span_under_python_parent() -> None:
         decision_variables=[x, y],
         objective=x + y,
         constraints={},
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     with tracer.start_as_current_span("python_parent") as parent_span:
@@ -171,7 +172,7 @@ def test_to_qubo_emits_active_format_span() -> None:
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     instance.to_qubo()

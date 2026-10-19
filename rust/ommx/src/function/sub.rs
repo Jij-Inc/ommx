@@ -42,7 +42,11 @@ impl Function {
             (Function::Polynomial(lhs), Function::Polynomial(rhs)) => {
                 Function::Polynomial((lhs - rhs)?)
             }
-            (lhs, rhs) => associative_operation(AssociativeOperator::Add, lhs, -rhs.clone()),
+            (lhs, rhs) => {
+                let mut out = lhs;
+                out.try_add_assign_in_place(-rhs.clone())?;
+                out
+            }
         };
         Ok(())
     }
@@ -90,7 +94,9 @@ impl Function {
                 Function::Polynomial((lhs - rhs)?)
             }
             (lhs, rhs) => {
-                associative_operation(AssociativeOperator::Add, lhs.clone(), -rhs.clone())
+                let mut out = lhs.clone();
+                out.try_add_assign_in_place(-rhs.clone())?;
+                out
             }
         })
     }
@@ -321,6 +327,7 @@ impl_sub_polynomial_rhs!(Polynomial, try_sub_polynomial_ref, try_sub_polynomial_
 
 #[cfg(test)]
 mod tests {
+    use super::super::operation::{unary_expression, UnaryOperator};
     use super::*;
     use crate::{coeff, linear, FunctionParameters, PolynomialParameters};
     use ::approx::assert_abs_diff_eq;
@@ -371,6 +378,47 @@ mod tests {
             prop_assert_eq!(lhs.clone() - &polynomial, lhs.clone() - Function::Polynomial(polynomial.clone()));
             prop_assert_eq!(&lhs - &polynomial, &lhs - Function::Polynomial(polynomial));
         }
+    }
+
+    #[test]
+    fn borrowed_subtraction_redispatches_after_double_negation() {
+        let lhs = Function::from(linear!(1));
+        let rhs = unary_expression(UnaryOperator::Neg, Function::from(linear!(2)));
+        let expected = Function::from((linear!(1) + linear!(2)).unwrap());
+        assert!(matches!(&rhs, Function::Expression(_)));
+
+        for actual in [
+            (lhs.clone() - rhs.clone()).unwrap(),
+            (&lhs - &rhs).unwrap(),
+            (&lhs - rhs.clone()).unwrap(),
+            (lhs.clone() - &rhs).unwrap(),
+        ] {
+            assert!(actual.is_polynomial());
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn borrowed_subtraction_preserves_double_negation_coefficient_error() {
+        let huge = Function::Constant(coeff!(f64::MAX));
+        let negative_huge = unary_expression(UnaryOperator::Neg, huge.clone());
+
+        assert!(matches!(
+            huge.clone() - negative_huge.clone(),
+            Err(CoefficientError::Infinite)
+        ));
+        assert!(matches!(
+            &huge - &negative_huge,
+            Err(CoefficientError::Infinite)
+        ));
+        assert!(matches!(
+            &huge - negative_huge.clone(),
+            Err(CoefficientError::Infinite)
+        ));
+        assert!(matches!(
+            huge - &negative_huge,
+            Err(CoefficientError::Infinite)
+        ));
     }
 
     #[test]

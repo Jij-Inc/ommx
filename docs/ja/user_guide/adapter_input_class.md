@@ -39,7 +39,7 @@ kernelspec:
 次の Instance には active な OneHot 制約があるため、OneHot を exact input として受け取らない PySCIPOpt Adapter の `INPUT_CLASS` には入りません。
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Instance, OneHotConstraint
+from ommx import DecisionVariable, Instance, OneHotConstraint, Sense
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 xs = [DecisionVariable.binary(i) for i in range(3)]
@@ -48,7 +48,7 @@ instance = Instance.from_components(
     objective=sum(xs),
     constraints={},
     one_hot_constraints={0: OneHotConstraint(variables=xs)},
-    sense=Instance.MAXIMIZE,
+    sense=Sense.Maximize,
 )
 
 input_class = OMMXPySCIPOptAdapter.INPUT_CLASS

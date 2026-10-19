@@ -1,6 +1,6 @@
 """Test SOS1 functionality with valid constraints."""
 
-from ommx import Instance, DecisionVariable, Sos1Constraint
+from ommx import DecisionVariable, Instance, Sense, Sos1Constraint
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
@@ -28,7 +28,7 @@ def test_sos1_constraint_functionality():
         objective=objective,
         constraints={1: dummy_constraint, 2: bigm1, 3: bigm2},  # type: ignore
         sos1_constraints={0: sos1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     # Create adapter and verify SOS1 constraint is added
@@ -66,7 +66,7 @@ def test_sos1_constraint_naming():
         objective=objective,
         constraints={10: constraint1},  # type: ignore
         sos1_constraints={42: sos1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     adapter = OMMXPySCIPOptAdapter(instance)
@@ -102,7 +102,7 @@ def test_sos1_constraint_naming_no_bigm():
         objective=objective,
         constraints={5: constraint1},  # type: ignore
         sos1_constraints={7: sos1},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     adapter = OMMXPySCIPOptAdapter(instance)

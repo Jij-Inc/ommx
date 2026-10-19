@@ -33,14 +33,12 @@ impl Evaluate for Constraint<Created> {
         let evaluated_value = self.stage.function.evaluate(solution, atol)?;
         let used_decision_variable_ids = self.stage.function.required_ids();
 
-        let feasible = self.equality.is_satisfied(evaluated_value, atol);
-
         Ok(EvaluatedConstraint {
             equality: self.equality,
             stage: EvaluatedData {
                 evaluated_value,
                 dual_variable: None,
-                feasible,
+
                 used_decision_variable_ids,
             },
         })
@@ -53,22 +51,11 @@ impl Evaluate for Constraint<Created> {
     ) -> crate::Result<Self::SampledOutput> {
         let evaluated_values = self.stage.function.evaluate_samples(samples, atol)?;
 
-        let feasible: std::collections::BTreeMap<crate::SampleID, bool> = evaluated_values
-            .iter()
-            .map(|(sample_id, evaluated_value)| {
-                (
-                    *sample_id,
-                    self.equality.is_satisfied(*evaluated_value, atol),
-                )
-            })
-            .collect();
-
         Ok(SampledConstraint {
             equality: self.equality,
             stage: SampledData {
                 evaluated_values,
                 dual_variables: None,
-                feasible,
                 used_decision_variable_ids: self.stage.function.required_ids(),
             },
         })
@@ -90,7 +77,8 @@ impl Evaluate for Constraint<Created> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{constraint_type::SampledConstraintBehavior, random::*, Sampled};
+    use crate::SampledConstraintData;
+    use crate::{random::*, Sampled};
     use proptest::prelude::*;
 
     #[test]
@@ -114,7 +102,7 @@ mod tests {
                 .unwrap();
             let sampled = constraint.evaluate_samples(&samples, atol).unwrap();
 
-            assert!(evaluated.stage.feasible);
+            assert!(evaluated.is_feasible(atol));
             assert_eq!(sampled.is_feasible(sample_id, atol), Some(true));
             assert!(sampled.feasible_ids(atol).contains(&sample_id));
 
@@ -129,7 +117,7 @@ mod tests {
                 .unwrap();
             let sampled = outside_constraint.evaluate_samples(&samples, atol).unwrap();
 
-            assert!(!evaluated.stage.feasible);
+            assert!(!evaluated.is_feasible(atol));
             assert_eq!(sampled.is_feasible(sample_id, atol), Some(false));
             assert!(sampled.infeasible_ids(atol).contains(&sample_id));
         }

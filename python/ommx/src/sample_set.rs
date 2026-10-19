@@ -6,6 +6,7 @@ use crate::{
     },
     Solution,
 };
+use ommx::SampledConstraintBehavior;
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyTuple},
@@ -208,7 +209,9 @@ impl SampleSet {
             .collect()
     }
 
-    /// Get feasibility status for all samples
+    /// Get feasibility status for all samples, including variable bounds and kinds.
+    ///
+    /// Each value matches the feasibility of the corresponding extracted Solution.
     #[getter]
     pub fn feasible(&self) -> BTreeMap<u64, bool> {
         self.inner
@@ -218,7 +221,9 @@ impl SampleSet {
             .collect()
     }
 
-    /// Get relaxed feasibility status for all samples
+    /// Get relaxed feasibility status for all samples.
+    ///
+    /// Removed constraints are excluded; variable bounds and kinds still apply.
     #[getter]
     pub fn feasible_relaxed(&self) -> BTreeMap<u64, bool> {
         self.inner
@@ -232,6 +237,15 @@ impl SampleSet {
     #[getter]
     pub fn feasible_unrelaxed(&self) -> BTreeMap<u64, bool> {
         self.feasible()
+    }
+
+    /// Absolute tolerance associated with the stored evaluation and feasibility results.
+    ///
+    /// Pass this to an extracted constraint's explicit feasibility query to use
+    /// the enclosing result's threshold.
+    #[getter]
+    pub fn feasibility_atol(&self) -> f64 {
+        self.inner.feasibility_atol().into_inner()
     }
 
     /// Get the optimization sense (minimize or maximize)
@@ -604,10 +618,7 @@ impl SampleSet {
                 )?;
                 for (constraint_id, label) in &constraint_labels {
                     let c_feasible = constraints[constraint_id]
-                        .stage
-                        .feasible
-                        .get(sample_id)
-                        .copied()
+                        .is_feasible_for(*sample_id, self.inner.feasibility_atol())
                         .unwrap_or(false);
                     dict.set_item(label.as_str(), c_feasible)?;
                 }
@@ -697,7 +708,7 @@ impl SampleSet {
                     let m = meta.collect_for(*id);
                     let dict = crate::pandas::WithModelingContext::new(
                         WithSampleIds {
-                            item: (*id, c),
+                            item: (*id, c, self.inner.feasibility_atol()),
                             sample_ids: &sample_ids,
                         },
                         &m,

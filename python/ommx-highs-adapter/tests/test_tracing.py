@@ -1,5 +1,5 @@
 from ommx.tracing import capture_trace
-from ommx import DecisionVariable, Instance
+from ommx import DecisionVariable, Instance, Sense
 
 from ommx_highs_adapter import OMMXHighsAdapter
 
@@ -10,7 +10,7 @@ def test_solve_emits_convert_solve_decode_spans():
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
         constraints={0: x[0] + x[1] + x[2] <= 2},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with capture_trace() as result:
@@ -29,7 +29,7 @@ def test_manual_flow_emits_convert_and_decode_spans():
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
         constraints={0: x[0] + x[1] + x[2] <= 2},
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     with capture_trace() as result:
