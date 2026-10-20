@@ -1,14 +1,12 @@
 # OMMX Python SDK 2.8.x
 
-2.8.0では、QPLIBファイル読み込み時の二次係数を修正し、再生成したQPLIBの
-Artifact配布版を採用します。目的関数値や実行可能領域を含む数学モデルが変わるため、
-更新後は影響を受けるQPLIBインスタンスの結果を再計算してください。
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.8.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.8.0)
 
-2.8.0の各ソルバーアダプターは、v2系のOMMX 2.8.0以降を必要とします。
+詳細な変更点は上のGitHub Releaseをご覧ください。以下に主な変更点をまとめます。
 
 ## バグ修正
 
-### QPLIBの二次係数と配布Artifactを修正 ([#1209](https://github.com/Jij-Inc/ommx/pull/1209))
+### QPLIBの二次係数と配布Artifactを修正 (2.8.0, [#1209](https://github.com/Jij-Inc/ommx/pull/1209))
 
 `Instance.load_qplib()`と`ommx.qplib.load_file()`で、目的関数と制約の
 対角項・交差項にQPLIB形式の係数`1/2`を適用するようになりました。
@@ -23,3 +21,7 @@ Rustのローダーも同じ配布版を使用します。バージョンなし�
 公開済みの参照先は固定し、patch更新では採用済みの配布版を維持します。
 MIPLIBは引き続きv2.7の配布版を使用します。取得先は
 [QPLIBチュートリアル](../tutorial/download_qplib_instance.ipynb)を参照してください。
+
+この修正により、目的関数値や実行可能領域を含む数学モデルが変わるため、
+更新後は影響を受けるQPLIBインスタンスの結果を再計算してください。
+2.8.0の各ソルバーアダプターは、v2系のOMMX 2.8.0以降を必要とします。

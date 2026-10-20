@@ -1,14 +1,12 @@
 # OMMX Python SDK 2.7.x
 
-2.7.0 には、同じ MPS ファイルから読み込まれる数学モデルと
-実行可能領域が変わる修正が含まれます。更新時には、影響を受けるモデルと
-過去のソルバーの結果を再確認してください。
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.7.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.7.0)
 
-2.7.0 の各ソルバーアダプターは、v2 系の OMMX 2.7.0 以降を必要とします。
+詳細な変更点は上のGitHub Releaseをご覧ください。以下に主な変更点をまとめます。
 
 ## バグ修正
 
-### 再生成した MIPLIB 配布版を読み込む ([#1204](https://github.com/Jij-Inc/ommx/pull/1204))
+### 再生成した MIPLIB 配布版を読み込む (2.7.0, [#1204](https://github.com/Jij-Inc/ommx/pull/1204))
 
 `ommx.dataset.miplib2017()` は、修正済みの v2 パーサーで元の MPS ファイルから
 再生成した `ghcr.io/jij-inc/ommx/v2.7/miplib2017:{name}` を読み込みます。
@@ -20,7 +18,7 @@ Rust の MIPLIB ローダーも同じ配布版を使用します。バージョ�
 リポジトリで配布します。取得先は
 [MIPLIB チュートリアル](../tutorial/download_miplib_instance.ipynb)を参照してください。
 
-### MPS 読み込み時に省略された二値変数の境界を保持 ([#1203](https://github.com/Jij-Inc/ommx/pull/1203))
+### MPS 読み込み時に省略された二値変数の境界を保持 (2.7.0, [#1203](https://github.com/Jij-Inc/ommx/pull/1203))
 
 `Instance.load_mps()` と `ommx.mps.load_file()` が、`INTORG`/`INTEND` 内にあり
 `BOUNDS` の指定がない変数を、Gurobi/HiGHS の MPS 解釈に従って `[0, 1]` の
@@ -31,3 +29,7 @@ Rust の MIPLIB ローダーも同じ配布版を使用します。バージョ�
 明示された境界指定は引き続き優先され、`LO`/`LI 0` で指定した非負の整数変数は
 上限なしのままです。パーサーの修正は保存済みの Artifact を書き換えません。
 上記の配布先変更により、`ommx.dataset.miplib2017()` から再生成した問題を取得できます。
+
+この修正により、同じ MPS ファイルから読み込まれる数学モデルと実行可能領域が
+変わる場合があります。更新時には、影響を受けるモデルと過去のソルバーの結果を
+再確認してください。2.7.0 の各ソルバーアダプターは、v2 系の OMMX 2.7.0 以降を必要とします。

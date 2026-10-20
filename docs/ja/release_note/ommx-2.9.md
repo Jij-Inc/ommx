@@ -1,9 +1,48 @@
 # OMMX Python SDK 2.9.x
 
-2.9.3では、protobufシリアライズ時のアノテーションとメタデータの保持、
-変数の名前と添字によるSCIP初期値の指定、二次目的関数に対するSCIP初期解の修正を行います。
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.9.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.9.0)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.9.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.9.1)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.9.2-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.9.2)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.9.3-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.9.3)
+
+詳細な変更点は上のGitHub Releaseをご覧ください。以下に主な変更点をまとめます。
+
+## 新機能
+
+### 名前と添字による SCIP 初期解の指定 (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
+
+`NamedState` で変数の名前と添字をキーとする初期値を指定できます。
+SCIP の `initial_state` に直接渡せるほか、`Instance.state_from_named_values()`
+で `State` に明示的に変換することもできます。
+
+```python
+initial_values: NamedState = {"x": {(0,): 1.0, (1,): 4.0}}
+solution = OMMXPySCIPOptAdapter.solve(instance, initial_state=initial_values)
+state = instance.state_from_named_values(initial_values)
+```
+
+対象インスタンスの変数 ID に変換するため、モデルの再生成で ID が変わっても値を再利用できます。
+見つからないキーは `KeyError`、複数の変数に一致する名前・添字は `ValueError` になります。
+文字列・整数への正規化でキーが重複する入力も `ValueError` になります。
+詳しい利用例は [名前と添字で初期値を指定する](../user_guide/named_initial_state.md) を参照してください。
 
 2.9.3のソルバーアダプターパッケージは、v2系のOMMX 2.9.3以降を必要とします。
+
+### Rust SDK v3からV1 Bridgeでモデルを受信 (2.9.0, [#1226](https://github.com/Jij-Inc/ommx/pull/1226))
+
+Rust側でProtobufV1を選択し、既存のPython SDK 2.xのクラスへモデルを
+転送できるようになりました。通常制約による定式化と、従来のソルバー
+アダプター向けの`ConstraintHints`を保持します。受信側SDKがデータを検証し、
+未対応の関数表現はエラーにします。
+
+Bridgeが扱う7型をトップレベルからもインポートできます。
+`ommx.Function`、`Constraint`、`DecisionVariable`、`Instance`、
+`ParametricInstance`、`Solution`、`SampleSet`は、それぞれ`ommx.v1`の
+同名クラスと同じクラスです。既存のインポートやソルバーAPIは引き続き使えます。
+Bridgeのプロトコル・データ検証の失敗は`ommx.BridgeError`で通知します。
+
+このSDKが受信できるのはProtobufV1です。送信側が転送前に数学的な表現を選び、
+Bridge自体は制約のloweringや昇格を行いません。
 
 ## バグ修正
 
@@ -81,41 +120,6 @@ HiGHS Adapter で項数の多い線形目的関数や制約を変換する際、
 `OMMXHighsAdapter.solve(instance)` を、構築済みモデルを求解する場合は
 `adapter.solver_input.run()` を使ってください。
 定数目的関数についても、定数値と最小化・最大化の方向を HiGHS モデルに保持します。
-
-## 新機能
-
-### 名前と添字による SCIP 初期解の指定 (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
-
-`NamedState` で変数の名前と添字をキーとする初期値を指定できます。
-SCIP の `initial_state` に直接渡せるほか、`Instance.state_from_named_values()`
-で `State` に明示的に変換することもできます。
-
-```python
-initial_values: NamedState = {"x": {(0,): 1.0, (1,): 4.0}}
-solution = OMMXPySCIPOptAdapter.solve(instance, initial_state=initial_values)
-state = instance.state_from_named_values(initial_values)
-```
-
-対象インスタンスの変数 ID に変換するため、モデルの再生成で ID が変わっても値を再利用できます。
-見つからないキーは `KeyError`、複数の変数に一致する名前・添字は `ValueError` になります。
-文字列・整数への正規化でキーが重複する入力も `ValueError` になります。
-詳しい利用例は [名前と添字で初期値を指定する](../user_guide/named_initial_state.md) を参照してください。
-
-### Rust SDK v3からV1 Bridgeでモデルを受信 (2.9.0, [#1226](https://github.com/Jij-Inc/ommx/pull/1226))
-
-Rust側でProtobufV1を選択し、既存のPython SDK 2.xのクラスへモデルを
-転送できるようになりました。通常制約による定式化と、従来のソルバー
-アダプター向けの`ConstraintHints`を保持します。受信側SDKがデータを検証し、
-未対応の関数表現はエラーにします。
-
-Bridgeが扱う7型をトップレベルからもインポートできます。
-`ommx.Function`、`Constraint`、`DecisionVariable`、`Instance`、
-`ParametricInstance`、`Solution`、`SampleSet`は、それぞれ`ommx.v1`の
-同名クラスと同じクラスです。既存のインポートやソルバーAPIは引き続き使えます。
-Bridgeのプロトコル・データ検証の失敗は`ommx.BridgeError`で通知します。
-
-このSDKが受信できるのはProtobufV1です。送信側が転送前に数学的な表現を選び、
-Bridge自体は制約のloweringや昇格を行いません。
 
 ## 改善
 

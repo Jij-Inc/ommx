@@ -1,10 +1,49 @@
 # OMMX Python SDK 2.9.x
 
-Version 2.9.3 preserves annotations and metadata through protobuf serialization,
-adds initial values grouped by variable name and subscripts for SCIP, and fixes
-SCIP initial solutions for quadratic objectives.
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.9.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.9.0)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.9.1-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.9.1)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.9.2-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.9.2)
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.9.3-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.9.3)
+
+See the GitHub Releases above for full details. The following summarizes the main changes.
+
+## New Features
+
+### Named states for SCIP initial solutions (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
+
+`NamedState` groups values by variable name and tuple subscripts. SCIP accepts
+these values directly through `initial_state`, and
+`Instance.state_from_named_values()` also provides explicit conversion to `State`:
+
+```python
+initial_values: NamedState = {"x": {(0,): 1.0, (1,): 4.0}}
+solution = OMMXPySCIPOptAdapter.solve(instance, initial_state=initial_values)
+state = instance.state_from_named_values(initial_values)
+```
+
+Keys are resolved against the target instance, so IDs may differ between models.
+Unknown keys raise `KeyError`; ambiguous pairs raise `ValueError`.
+Keys that collide after string or integer normalization also raise `ValueError`.
+See [Initial Values by Name and Subscripts](../user_guide/named_initial_state.md)
+for a complete example.
 
 The 2.9.3 solver adapter packages require OMMX 2.9.3 or later in the v2 line.
+
+### Receive Rust SDK v3 models over the V1 bridge (2.9.0, [#1226](https://github.com/Jij-Inc/ommx/pull/1226))
+
+Rust producers can negotiate ProtobufV1 and transfer models into the existing
+Python SDK 2.x classes, including regular constraint formulations and
+`ConstraintHints` for legacy solver adapters. The receiving SDK validates the
+payload and rejects unsupported function representations.
+
+The seven bridge types are now also available at the top level:
+`ommx.Function`, `Constraint`, `DecisionVariable`, `Instance`,
+`ParametricInstance`, `Solution`, and `SampleSet`. Each is the same class as its
+`ommx.v1` counterpart; existing imports and solver APIs continue to work.
+`ommx.BridgeError` identifies bridge protocol and payload failures.
+
+This SDK advertises ProtobufV1 only. A producer chooses its mathematical
+representation before transfer; the bridge does not lower or promote constraints.
 
 ## Bug Fixes
 
@@ -86,42 +125,6 @@ before adding constraints. Use `OMMXHighsAdapter.solve(instance)` for the comple
 workflow, or call `adapter.solver_input.run()` to solve a constructed model.
 Constant objectives also retain their value and minimization/maximization sense
 in the HiGHS model.
-
-## New Features
-
-### Named states for SCIP initial solutions (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
-
-`NamedState` groups values by variable name and tuple subscripts. SCIP accepts
-these values directly through `initial_state`, and
-`Instance.state_from_named_values()` also provides explicit conversion to `State`:
-
-```python
-initial_values: NamedState = {"x": {(0,): 1.0, (1,): 4.0}}
-solution = OMMXPySCIPOptAdapter.solve(instance, initial_state=initial_values)
-state = instance.state_from_named_values(initial_values)
-```
-
-Keys are resolved against the target instance, so IDs may differ between models.
-Unknown keys raise `KeyError`; ambiguous pairs raise `ValueError`.
-Keys that collide after string or integer normalization also raise `ValueError`.
-See [Initial Values by Name and Subscripts](../user_guide/named_initial_state.md)
-for a complete example.
-
-### Receive Rust SDK v3 models over the V1 bridge (2.9.0, [#1226](https://github.com/Jij-Inc/ommx/pull/1226))
-
-Rust producers can negotiate ProtobufV1 and transfer models into the existing
-Python SDK 2.x classes, including regular constraint formulations and
-`ConstraintHints` for legacy solver adapters. The receiving SDK validates the
-payload and rejects unsupported function representations.
-
-The seven bridge types are now also available at the top level:
-`ommx.Function`, `Constraint`, `DecisionVariable`, `Instance`,
-`ParametricInstance`, `Solution`, and `SampleSet`. Each is the same class as its
-`ommx.v1` counterpart; existing imports and solver APIs continue to work.
-`ommx.BridgeError` identifies bridge protocol and payload failures.
-
-This SDK advertises ProtobufV1 only. A producer chooses its mathematical
-representation before transfer; the bridge does not lower or promote constraints.
 
 ## Improvements
 

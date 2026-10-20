@@ -1,14 +1,12 @@
 # OMMX Python SDK 2.7.x
 
-Version 2.7.0 includes an MPS parsing correction that can change the
-mathematical model loaded from the same file, including its feasible set.
-Review affected models and previous solver results when upgrading.
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_2.7.0-blue?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-2.7.0)
 
-The 2.7.0 solver adapter packages require OMMX 2.7.0 or later in the v2 line.
+See the GitHub Releases above for full details. The following summarizes the main changes.
 
 ## Bug Fixes
 
-### Load the regenerated MIPLIB distribution ([#1204](https://github.com/Jij-Inc/ommx/pull/1204))
+### Load the regenerated MIPLIB distribution (2.7.0, [#1204](https://github.com/Jij-Inc/ommx/pull/1204))
 
 `ommx.dataset.miplib2017()` now reads from
 `ghcr.io/jij-inc/ommx/v2.7/miplib2017:{name}`, regenerated from the source MPS
@@ -21,7 +19,7 @@ Changes to the distribution format or mathematical model require a minor or
 major release and a new versioned repository. See the
 [MIPLIB tutorial](../tutorial/download_miplib_instance.ipynb) for the download path.
 
-### Preserve implicit binary bounds when loading MPS ([#1203](https://github.com/Jij-Inc/ommx/pull/1203))
+### Preserve implicit binary bounds when loading MPS (2.7.0, [#1203](https://github.com/Jij-Inc/ommx/pull/1203))
 
 `Instance.load_mps()` and `ommx.mps.load_file()` now give columns inside
 `INTORG`/`INTEND` with no `BOUNDS` entry the implicit binary domain `[0, 1]`,
@@ -33,3 +31,8 @@ Explicit bound records remain effective, including `LO`/`LI 0` for nonnegative
 integers with no upper limit. The parser correction does not rewrite stored
 Artifacts; the distribution change above supplies regenerated instances through
 `ommx.dataset.miplib2017()`.
+
+This correction can change the mathematical model loaded from the same file,
+including its feasible set. Review affected models and previous solver results
+when upgrading. The 2.7.0 solver adapter packages require OMMX 2.7.0 or later
+in the v2 line.
