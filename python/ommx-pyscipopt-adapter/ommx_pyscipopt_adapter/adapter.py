@@ -809,10 +809,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             if data.getNSols() == 0:
                 raise NoSolutionReturned("No solution was returned [status: timelimit]")
 
-        # NOTE: It is assumed that getBestSol will return an error
-        #       if there is no feasible solution.
+        sol = data.getBestSol()
+        if sol is None:
+            raise OMMXPySCIPOptAdapterError(
+                f"There is no feasible solution. [status: {data.getStatus()}]"
+            )
+
         try:
-            sol = data.getBestSol()
             # NOTE recreating the map instead of using `self.varname_map`, as
             # this is probably more robust.
             varname_map = {var.name: var for var in data.getVars()}
