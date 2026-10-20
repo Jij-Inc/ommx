@@ -17,6 +17,20 @@ penaltyによって除去される制約には、エンコード後の式が保�
 制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
 詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
 
+### 🆕 変数の名前と添字から State を作成 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
+
+`Instance.state_from_named_values()` で `NamedState` を対象インスタンスの
+変数 ID に変換できます。モデルの再生成で ID が変わっても、初期値を再利用できます。
+
+```python
+state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
+```
+
+見つからないキーは `KeyError`、複数の変数に一致する名前・添字は `ValueError` になります。
+SCIP アダプターの `initial_state` に `NamedState` を直接渡すこともできます。
+SCIP での利用例は {ref}`名前と添字で初期値を指定する <named-initial-state>`
+を参照してください。
+
 ### 🆕 同梱のエージェントプラグインとスキルを取得 ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
 
 `uv run ommx plugin path` と `uv run ommx plugin marketplace path` で、同梱プラグイン

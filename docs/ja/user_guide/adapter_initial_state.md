@@ -76,19 +76,23 @@ adapter = OMMXPySCIPOptAdapter(
 )
 ```
 
+(named-initial-state)=
 ## 名前と添字で初期値を指定する
 
-{meth}`~ommx.Instance.state_from_named_values` を使うと、これから解く
-インスタンスの名前と添字から変数 ID を引いて `State` を作れます。
+SCIP の `initial_state` 引数に `NamedState` を直接渡せます。アダプターが
+{meth}`~ommx.Instance.state_from_named_values` を使い、対象インスタンスの
+名前と添字から変数 ID を引いて `State` を作ります。
 モデルの再生成で変数 ID が変わっても、同じ名前付き初期値を再利用できます。
 
 ```{code-cell} ipython3
 from ommx import NamedState
 
 initial_values: NamedState = {"x": {(0,): 3.0, (1,): 2.0}}
-initial_state = ommx_instance.state_from_named_values(initial_values)
-solution = OMMXPySCIPOptAdapter.solve(ommx_instance, initial_state=initial_state)
+solution = OMMXPySCIPOptAdapter.solve(ommx_instance, initial_state=initial_values)
 assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
+
+# State が必要な場合は、明示的に変換することもできます。
+initial_state = ommx_instance.state_from_named_values(initial_values)
 ```
 
 添字のキーはタプルにします。スカラーは `()`、1次元は `(i,)`、2次元は `(i, j)` です。

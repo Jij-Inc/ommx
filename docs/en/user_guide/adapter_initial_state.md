@@ -78,19 +78,23 @@ adapter = OMMXPySCIPOptAdapter(
 )
 ```
 
+(named-initial-state)=
 ## Providing Values by Name and Subscripts
 
-Use {meth}`~ommx.Instance.state_from_named_values` to resolve names and subscripts
-against the instance you are about to solve. This lets you reuse the same
+Pass a `NamedState` directly to SCIP's `initial_state` argument. The adapter
+uses {meth}`~ommx.Instance.state_from_named_values` to resolve names and subscripts
+against the instance being solved. This lets you reuse the same
 initial values when rebuilding a model assigns different variable IDs.
 
 ```{code-cell} ipython3
 from ommx import NamedState
 
 initial_values: NamedState = {"x": {(0,): 3.0, (1,): 2.0}}
-initial_state = ommx_instance.state_from_named_values(initial_values)
-solution = OMMXPySCIPOptAdapter.solve(ommx_instance, initial_state=initial_state)
+solution = OMMXPySCIPOptAdapter.solve(ommx_instance, initial_state=initial_values)
 assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
+
+# Explicit conversion is also available when you need a State.
+initial_state = ommx_instance.state_from_named_values(initial_values)
 ```
 
 Subscript keys are tuples: `()` for a scalar, `(i,)` for one index, and

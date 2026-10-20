@@ -120,6 +120,20 @@ def test_reads_current_labels_on_each_call():
     assert instance.state_from_named_values({"y": {(1,): 1.0}}).entries == {x.id: 1.0}
 
 
+def test_empty_string_name_is_distinct_from_an_absent_name():
+    instance = Instance.minimize()
+    instance.new_binary()
+    named = instance.new_binary("")
+    assert instance.state_from_named_values({"": {(): 1.0}}).entries == {named.id: 1.0}
+    with pytest.raises(KeyError):
+        Instance.minimize().state_from_named_values({"": {(): 1.0}})
+
+
+def test_rejects_subscripts_outside_i64():
+    with pytest.raises(OverflowError):
+        Instance.minimize().state_from_named_values({"x": {(1 << 63,): 1.0}})
+
+
 @pytest.mark.parametrize(
     "values",
     [

@@ -46,10 +46,11 @@ instance.objective = 2 * x + y
 instance.add_constraint(x + y <= 5)
 
 initial_values: NamedState = {"x": {(0,): 1.0, (1,): 4.0}}
-solution = OMMXPySCIPOptAdapter.solve(
-    instance, initial_state=instance.state_from_named_values(initial_values)
-)
+solution = OMMXPySCIPOptAdapter.solve(instance, initial_state=initial_values)
 assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
+
+# Explicit conversion is also available when you need an ommx.State.
+state = instance.state_from_named_values(initial_values)
 ```
 
 For scalar variables use `()` as the subscript key. The conversion raises

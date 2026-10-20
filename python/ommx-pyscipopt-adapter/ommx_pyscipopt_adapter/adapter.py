@@ -24,6 +24,7 @@ from ommx import (
     InstanceClass,
     InstanceClassClause,
     Kind,
+    NamedState,
     PolynomialRequirement,
     PreparationPolicy,
     Sense,
@@ -541,11 +542,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self,
         ommx_instance: Instance,
         *,
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
     ):
         """
         :param ommx_instance: The ommx.Instance to solve.
-        :param initial_state: Optional initial solution state.
+        :param initial_state: Optional initial solution as a State, ID-keyed
+            values, or values grouped by name and tuple subscripts. Named values
+            are resolved against this instance with ``state_from_named_values``.
         """
         with _tracer.start_as_current_span("convert"):
             self.require_applicable(ommx_instance)
@@ -566,7 +569,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         cls,
         ommx_instance: Instance,
         *,
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
@@ -576,7 +579,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         the recommended PySCIPOpt policy before preparation-free execution.
 
         :param ommx_instance: The ommx.Instance to prepare and solve.
-        :param initial_state: Optional initial solution state.
+        :param initial_state: Optional initial solution as a State, ID-keyed
+            values, or values grouped by name and tuple subscripts.
 
         Examples
         =========
@@ -672,7 +676,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         cls,
         ommx_instance: Instance,
         *,
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """Solve an exact PySCIPOpt Adapter input without preparing it."""
@@ -1035,9 +1039,17 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         return quad_terms + linear_terms + constant
 
-    def _add_initial_state(self, initial_state: ToState) -> None:
+    def _add_initial_state(self, initial_state: ToState | NamedState) -> None:
+        if isinstance(initial_state, Mapping) and any(
+            isinstance(key, str) for key in initial_state
+        ):
+            state = self.instance.state_from_named_values(
+                cast(NamedState, initial_state)
+            )
+        else:
+            state = State(cast(ToState, initial_state))
         initial_sol = self.model.createSol()
-        for var_id, value in State(initial_state).entries.items():
+        for var_id, value in state.entries.items():
             var_name = str(var_id)
             if var_name in self.varname_map:
                 self.model.setSolVal(initial_sol, self.varname_map[var_name], value)

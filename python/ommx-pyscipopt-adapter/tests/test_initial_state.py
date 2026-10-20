@@ -6,7 +6,10 @@ from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
 @pytest.mark.parametrize("variable_ids", [(31, 107), (900, 41)])
-def test_named_initial_state_is_stored_before_optimization(variable_ids):
+@pytest.mark.parametrize("convert_explicitly", [False, True])
+def test_named_initial_state_is_stored_before_optimization(
+    variable_ids, convert_explicitly
+):
     x = DecisionVariable.integer(
         variable_ids[0], lower=0, upper=5, name="x", subscripts=[0]
     )
@@ -21,7 +24,9 @@ def test_named_initial_state_is_stored_before_optimization(variable_ids):
     )
     # The same user input works even when IDs and their ordering change.
     values: NamedState = {"x": {(0,): 1.0, (1,): 4.0}}
-    initial_state = instance.state_from_named_values(values)
+    initial_state = (
+        instance.state_from_named_values(values) if convert_explicitly else values
+    )
     adapter = OMMXPySCIPOptAdapter(instance, initial_state=initial_state)
     model = adapter.solver_input
 
@@ -40,6 +45,28 @@ def test_named_initial_state_is_stored_before_optimization(variable_ids):
     assert solution.feasible
     assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
     assert solution.objective == 10.0
+
+
+def test_solve_accepts_named_initial_state():
+    instance = Instance.maximize()
+    x = instance.new_integer("x", lower=0, upper=5)
+    instance.objective = x
+
+    solution = OMMXPySCIPOptAdapter.solve(instance, initial_state={"x": {(): 2.0}})
+
+    assert solution.state.entries == {x.id: 5.0}
+
+
+@pytest.mark.parametrize("ambiguous", [False, True])
+def test_named_initial_state_reports_label_errors(ambiguous):
+    instance = Instance.minimize()
+    instance.new_binary("x", subscripts=[0])
+    if ambiguous:
+        instance.new_binary("x", subscripts=[0])
+    values: NamedState = {"x": {(0 if ambiguous else 1,): 1.0}}
+
+    with pytest.raises(ValueError if ambiguous else KeyError):
+        OMMXPySCIPOptAdapter(instance, initial_state=values)
 
 
 def test_adapter_class_with_initial_state():

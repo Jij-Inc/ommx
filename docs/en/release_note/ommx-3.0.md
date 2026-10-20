@@ -17,6 +17,20 @@ Constraints removed by the penalty phase now store their encoded expressions.
 Their evaluated values and the original output objective are preserved through
 decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
 
+### 🆕 Create states from variable names and subscripts ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
+
+`Instance.state_from_named_values()` resolves a `NamedState` against the target
+instance's variable IDs, so initial values can be reused after rebuilding a model:
+
+```python
+state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
+```
+
+Unknown keys raise `KeyError`; ambiguous name/subscript pairs raise `ValueError`.
+The SCIP adapter also accepts `NamedState` directly through `initial_state`.
+See {ref}`Providing Values by Name and Subscripts <named-initial-state>`
+for a SCIP example.
+
 ### 🆕 Discover the bundled coding-agent plugin and skill ([#1264](https://github.com/Jij-Inc/ommx/pull/1264))
 
 `uv run ommx plugin path` and `uv run ommx plugin marketplace path` expose the
