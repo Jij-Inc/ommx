@@ -30,6 +30,33 @@ ommx_solution = OMMXPySCIPOptAdapter.solve(ommx_instance)
 print(ommx_solution)
 ```
 
+## Initial solution by variable name
+
+Pass values grouped by variable name and tuple subscripts to `initial_state`.
+The adapter resolves them against the instance being solved, so the same
+values can be reused when variable IDs change.
+
+```python markdown-code-runner
+from ommx import DecisionVariable, Instance, NamedState
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+x = DecisionVariable.integer(31, lower=0, upper=5, name="x", subscripts=[0])
+y = DecisionVariable.integer(107, lower=0, upper=5, name="x", subscripts=[1])
+instance = Instance.from_components(
+    decision_variables=[x, y], objective=2 * x + y,
+    constraints=[x + y <= 5], sense=Instance.MAXIMIZE,
+)
+initial_values: NamedState = {"x": {(0,): 1.0, (1,): 4.0}}
+solution = OMMXPySCIPOptAdapter.solve(instance, initial_state=initial_values)
+assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
+
+# Explicit conversion is also available when you need a State.
+state = instance.state_from_named_values(initial_values)
+```
+
+Use `()` for scalar variables. Unknown keys raise `KeyError`; ambiguous
+name/subscript pairs raise `ValueError`.
+
 ## SOS1 hints
 
 `use_sos1="auto"` (the default) uses native SCIP SOS1 constraints when the

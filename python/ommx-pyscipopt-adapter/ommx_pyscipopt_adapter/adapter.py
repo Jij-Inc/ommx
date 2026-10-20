@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Literal, Optional
+from typing import Literal, Mapping, Optional, cast
 
 import pyscipopt
 import math
 
+from ommx import NamedState
 
 from ommx.adapter import (
     SolverAdapter,
@@ -26,6 +27,7 @@ from ._sos1 import plan_sos1
 
 
 HintMode = Literal["disabled", "auto", "forced"]
+_OBJECTIVE_AUXILIARY_NAME = "auxiliary_for_linearized_objective"
 
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
@@ -36,7 +38,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         use_sos1: Literal["disabled", "auto", "forced"] = "auto",
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
     ):
         """
         :param ommx_instance: The ommx.v1.Instance to solve.
@@ -44,7 +46,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             - "disabled": Do not use SOS1 constraints.
             - "auto": Replace validated SOS1 formulations; retain ordinary rows for unsupported hints (default).
             - "forced": Require SOS1 hints and raise an error if any hint cannot be safely replaced.
-        :param initial_state: Optional initial solution state.
+        :param initial_state: Optional initial solution as a State, ID-keyed
+            values, or values grouped by name and tuple subscripts. Named values
+            are resolved against this instance with ``state_from_named_values``.
         """
         self.instance = ommx_instance
         self.use_sos1 = use_sos1
@@ -81,7 +85,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         use_sos1: Literal["disabled", "auto", "forced"] = "auto",
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
     ) -> Solution:
         """
         Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
@@ -91,7 +95,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             - "disabled": Do not use SOS1 constraints.
             - "auto": Replace validated SOS1 formulations; retain ordinary rows for unsupported hints (default).
             - "forced": Require SOS1 hints and raise an error if any hint cannot be safely replaced.
-        :param initial_state: Optional initial solution state.
+        :param initial_state: Optional initial solution as a State, ID-keyed
+            values, or values grouped by name and tuple subscripts.
 
         Examples
         =========
@@ -328,7 +333,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             # If objective function is quadratic, add the auxiliary variable for the linearized objective function,
             # because the setObjective method in PySCIPOpt does not support quadratic objective functions.
             self.model.addVar(
-                name="auxiliary_for_linearized_objective", vtype="C", lb=None, ub=None
+                name=_OBJECTIVE_AUXILIARY_NAME, vtype="C", lb=None, ub=None
             )
 
         self.varname_map = {var.name: var for var in self.model.getVars()}
@@ -360,7 +365,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             #     introduce the auxiliary variable z, and the linearized objective function problem is:
             #         min z
             #         s.t. z >= x^2 + y^2
-            auxiliary_var = self.varname_map["auxiliary_for_linearized_objective"]
+            auxiliary_var = self.varname_map[_OBJECTIVE_AUXILIARY_NAME]
 
             # Add the auxiliary variable to the objective function.
             self.model.setObjective(auxiliary_var, sense=sense)
@@ -456,10 +461,28 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         return quad_terms + linear_terms + constant
 
-    def _add_initial_state(self, initial_state: ToState) -> None:
+    def _add_initial_state(self, initial_state: ToState | NamedState) -> None:
+        if isinstance(initial_state, Mapping) and any(
+            isinstance(key, str) for key in initial_state
+        ):
+            state = self.instance.state_from_named_values(
+                cast(NamedState, initial_state)
+            )
+        else:
+            state = State(cast(ToState, initial_state))
+        values = {str(var_id): value for var_id, value in state.entries.items()}
+        if _OBJECTIVE_AUXILIARY_NAME in self.varname_map:
+            # SCIP initializes omitted coordinates to zero. Its objective
+            # auxiliary must describe that same complete initial point.
+            objective_state = {
+                var.id: values.get(str(var.id), 0.0)
+                for var in self.instance.used_decision_variables
+            }
+            values[_OBJECTIVE_AUXILIARY_NAME] = self.instance.objective.evaluate(
+                objective_state
+            )
         initial_sol = self.model.createSol()
-        for var_id, value in State(initial_state).entries.items():
-            var_name = str(var_id)
+        for var_name, value in values.items():
             if var_name in self.varname_map:
                 self.model.setSolVal(initial_sol, self.varname_map[var_name], value)
         # The free=True parameter means that solution will be freed afterwards.
