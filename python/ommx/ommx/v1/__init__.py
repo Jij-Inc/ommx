@@ -2201,7 +2201,7 @@ class ParametricInstance(UserAnnotationBase):
     @property
     def constraints(self) -> list[Constraint]:
         """
-        Get constraints as a list of :class:`Constraint
+        Get constraints as a list of :class:`Constraint` instances.
         """
         return [Constraint.from_protobuf(raw) for raw in self.raw.constraints]
 
@@ -3107,7 +3107,7 @@ class DecisionVariable(VariableBase):
     @property
     def substituted_value(self) -> float | None:
         """
-        The value of the decision variable fixed by `:py:attr:`~Instance.partial_evaluate` or presolvers.
+        The value fixed by :meth:`Instance.partial_evaluate` or presolvers.
         """
         return self.raw.substituted_value
 
