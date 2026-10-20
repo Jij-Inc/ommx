@@ -23,8 +23,8 @@ OMMX Adapterの中には、最適化計算実行時に初期解を渡す機能�
 ```{code-cell} ipython3
 from ommx import DecisionVariable, Instance, Sense, State
 
-x = DecisionVariable.integer(1, lower=0, upper=5)
-y = DecisionVariable.integer(2, lower=0, upper=5)
+x = DecisionVariable.integer(1, lower=0, upper=5, name="x", subscripts=[0])
+y = DecisionVariable.integer(2, lower=0, upper=5, name="x", subscripts=[1])
 
 ommx_instance = Instance.from_components(
     decision_variables=[x, y],
@@ -75,6 +75,31 @@ adapter = OMMXPySCIPOptAdapter(
     initial_state=initial_state,
 )
 ```
+
+## 名前と添字で初期値を指定する
+
+{meth}`~ommx.Instance.state_from_named_values` を使うと、これから解く
+インスタンスの名前と添字から変数 ID を引いて `State` を作れます。
+モデルの再生成で変数 ID が変わっても、同じ名前付き初期値を再利用できます。
+
+```{code-cell} ipython3
+from ommx import NamedState
+
+initial_values: NamedState = {"x": {(0,): 3.0, (1,): 2.0}}
+initial_state = ommx_instance.state_from_named_values(initial_values)
+solution = OMMXPySCIPOptAdapter.solve(ommx_instance, initial_state=initial_state)
+assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
+```
+
+添字のキーはタプルにします。スカラーは `()`、1次元は `(i,)`、2次元は `(i, j)` です。
+{meth}`~ommx.Solution.extract_all_decision_variables` の出力も渡せるため、
+以前の解の値を再利用できます。
+
+指定した名前・添字が見つからない場合は `KeyError`、複数の変数に一致する場合は
+`ValueError` になります。ラベルの `parameters` は照合に使いません。
+同じ名前・添字を持つ変数を区別するには ID をキーとする `State` を使ってください。
+一部の変数だけを指定することもでき、省略した変数は変換後の `State` に含まれません。
+初期値を省略した変数の扱いは、アダプターとソルバーによって異なります。
 
 ## 初期解の有無による比較の例
 

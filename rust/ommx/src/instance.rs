@@ -14,6 +14,8 @@ mod log_encode;
 pub use log_encode::LogEncodingUnavailable;
 mod logical_memory;
 mod named_function;
+mod named_state;
+pub use named_state::{NamedState, NamedStateError};
 mod new;
 mod one_hot;
 mod one_hot_promotion;

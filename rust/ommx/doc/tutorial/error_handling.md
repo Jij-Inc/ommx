@@ -71,6 +71,10 @@ returns the typed error directly):
 - [`MissingStateEntries`](crate::MissingStateEntries) and
   [`UnknownStateEntries`](crate::UnknownStateEntries) — state-shape signals for
   callers that add or remove entries before retrying evaluation.
+- [`NamedStateError`](crate::NamedStateError) — identifies an unknown or
+  ambiguous name/subscript key when constructing a state against an Instance.
+  Callers can correct or remove an unknown key, or use an ID-based state to
+  distinguish variables with the same name and subscripts.
 - [`InconsistentDependentValue`](crate::InconsistentDependentValue) and
   [`UnverifiableDependentAssertion`](crate::UnverifiableDependentAssertion) —
   dependent-variable assertion signals for callers that correct, defer, or
