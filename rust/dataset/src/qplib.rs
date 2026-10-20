@@ -21,7 +21,13 @@ pub fn package(path: &Path) -> Result<()> {
     // Input archive is expected to contain `*.qplib` files.
     for i in 0..ar.len() {
         let file = ar.by_index(i)?;
-        let file_name = file.name()?.to_string();
+        let file_name = match file.name() {
+            Ok(name) => name.into_owned(),
+            Err(err) => {
+                tracing::warn!("Skip: Failed to read name for ZIP entry {i}: {err}");
+                continue;
+            }
+        };
         let Some(name_with_suffix) = file_name.strip_suffix(".qplib").map(str::to_string) else {
             continue;
         };
