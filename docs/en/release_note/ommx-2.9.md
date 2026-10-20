@@ -76,6 +76,23 @@ in the HiGHS model.
 
 ## New Features
 
+### Named states for SCIP initial solutions ([#1274](https://github.com/Jij-Inc/ommx/pull/1274))
+
+`NamedState` groups values by variable name and tuple subscripts. SCIP accepts
+these values directly through `initial_state`, and
+`Instance.state_from_named_values()` also provides explicit conversion to `State`:
+
+```python
+initial_values: NamedState = {"x": {(0,): 1.0, (1,): 4.0}}
+solution = OMMXPySCIPOptAdapter.solve(instance, initial_state=initial_values)
+state = instance.state_from_named_values(initial_values)
+```
+
+Keys are resolved against the target instance, so IDs may differ between models.
+Unknown keys raise `KeyError`; ambiguous pairs raise `ValueError`.
+See [Initial Values by Name and Subscripts](../user_guide/named_initial_state.md)
+for a complete example.
+
 ### Receive Rust SDK v3 models over the V1 bridge (2.9.0, [#1226](https://github.com/Jij-Inc/ommx/pull/1226))
 
 Rust producers can negotiate ProtobufV1 and transfer models into the existing
