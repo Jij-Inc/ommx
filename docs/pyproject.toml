@@ -3,9 +3,10 @@
 # To write the book with the latest API, you should use the pyproject.toml in the `python/ommx` directory.
 [project]
 name = "ommx-book"
-version = "2.0.11"
+version = "2.9.3"
 description = "Jupyter Book for OMMX"
-requires-python = ">=3.9, <3.14"
+# OMMX Python SDK 2.1 and later require Python 3.10 or newer.
+requires-python = ">=3.10, <3.14"
 
 # These dependencies must be published ones.
 dependencies = [
@@ -13,11 +14,11 @@ dependencies = [
   "matplotlib>=3.9.4",
   "nbconvert>=7.16.4",
   "networkx>=3.2.1",
-  "ommx-highs-adapter>=2.0.11",
-  "ommx-openjij-adapter>=2.0.11",
-  "ommx-pyscipopt-adapter>=2.0.11",
-  "ommx-python-mip-adapter>=2.0.11",
-  "ommx>=2.0.11",
+  "ommx-highs-adapter>=2.9.3",
+  "ommx-openjij-adapter>=2.9.3",
+  "ommx-pyscipopt-adapter>=2.9.3",
+  "ommx-python-mip-adapter>=2.9.3",
+  "ommx>=2.9.3",
 ]
 
 [dependency-groups]
