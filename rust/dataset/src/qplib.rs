@@ -21,7 +21,7 @@ pub fn package(path: &Path) -> Result<()> {
     // Input archive is expected to contain `*.qplib` files.
     for i in 0..ar.len() {
         let file = ar.by_index(i)?;
-        let file_name = file.name().to_string();
+        let file_name = file.name()?.to_string();
         let Some(name_with_suffix) = file_name.strip_suffix(".qplib").map(str::to_string) else {
             continue;
         };

@@ -15,7 +15,7 @@ pub fn package(path: &Path) -> Result<()> {
     // Input archive is expected to contain `*.mps.gz` files on the root level.
     for i in 0..ar.len() {
         let file = ar.by_index(i)?;
-        let Some(name) = file.name().strip_suffix(".mps.gz").map(str::to_string) else {
+        let Some(name) = file.name()?.strip_suffix(".mps.gz").map(str::to_string) else {
             continue;
         };
         let Some(annotations) = annotation_dict.get(&name) else {
