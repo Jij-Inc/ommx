@@ -11974,6 +11974,42 @@
               "deprecated": null
             },
             {
+              "name": "state_from_named_values",
+              "doc": "Create an ID-keyed {class}`~ommx.State` from values grouped by name and subscripts.\n\n>>> from ommx import Instance, NamedState\n>>> instance = Instance.minimize()\n>>> x = instance.new_binary(\"x\", subscripts=[0])\n>>> values: NamedState = {\"x\": {(0,): 1.0}}\n>>> state = instance.state_from_named_values(values)\n>>> state.entries == {x.id: 1.0}\nTrue\n\nUse tuple keys: `()` for scalars, `(i,)` for one-dimensional variables,\nand `(i, j)` for two-dimensional variables. This also accepts the output\nof {meth}`~ommx.Solution.extract_all_decision_variables`, resolving IDs\nagainst this instance even when the source solution used different IDs.\n\nPartial states and empty mappings are accepted. Omitted variables are\nnot filled or inferred. Conversion does not validate values against\nkind, bounds, fixed values, or dependencies, or require finite values;\nuse {meth}`~ommx.Instance.evaluate` for validation.\n\nOnly names and subscripts identify variables; parameters and descriptions\nare ignored. Unnamed variables cannot be addressed. Raises `KeyError`\nfor an unknown name/subscript pair and `ValueError` when a supplied pair\nmatches multiple variables. In that case, use an ID-keyed state to\ndistinguish them. Ambiguous labels not supplied are allowed.\nInput keys that repeat after string or integer normalization also raise\n`ValueError` instead of overwriting earlier values.\nNeither this instance nor the input mapping is modified.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "values",
+                      "type_": {
+                        "display": "NamedState",
+                        "link_target": {
+                          "fqn": "ommx.NamedState",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "State",
+                    "link_target": {
+                      "fqn": "ommx.State",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "stats",
               "doc": "Get statistics about the instance.\n\nReturns a dictionary containing counts of decision variables and constraints\ncategorized by kind, usage, and status.\n\n**Returns:**\nA dictionary with the following structure:\n\n```text\n{\n    \"decision_variables\": {\n        \"total\": int,\n        \"by_kind\": {\n            \"binary\": int,\n            \"integer\": int,\n            \"continuous\": int,\n            \"semi_integer\": int,\n            \"semi_continuous\": int\n        },\n        \"by_usage\": {\n            \"used_in_objective\": int,\n            \"used_in_constraints\": int,\n            \"used\": int,\n            \"fixed\": int,\n            \"dependent\": int,\n            \"irrelevant\": int\n        }\n    },\n    \"constraints\": {\n        \"total\": int,\n        \"active\": int,\n        \"removed\": int\n    }\n}\n```\n\n# Examples\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> stats = instance.stats()\n>>> stats[\"decision_variables\"][\"total\"]\n0\n>>> stats[\"constraints\"][\"total\"]\n0",
               "signatures": [
@@ -28358,6 +28394,49 @@
         },
         {
           "kind": "TypeAlias",
+          "name": "NamedState",
+          "doc": "Decision-variable values grouped by name and tuple subscripts. Use () for scalars and (i,) for one-dimensional indices. Resolve against the target Instance with state_from_named_values.",
+          "definition": {
+            "display": "Mapping[str, Mapping[tuple[int, ...], float]]",
+            "link_target": null,
+            "children": [
+              {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              {
+                "display": "Mapping[tuple[int, ...], float]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "tuple[int, ...]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "int",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "...",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "display": "float",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "kind": "TypeAlias",
           "name": "ToSamples",
           "doc": "",
           "definition": {
@@ -35767,6 +35846,7 @@
     "ommx.Linear": "ommx",
     "ommx.LogEncodingError": "ommx",
     "ommx.NamedFunction": "ommx",
+    "ommx.NamedState": "ommx",
     "ommx.ObjectivePreparation": "ommx",
     "ommx.OneHotConstraint": "ommx",
     "ommx.Optimality": "ommx",

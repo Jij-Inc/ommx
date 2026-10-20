@@ -76,4 +76,5 @@ ommx
    _items/ommx.set_default_atol
    _items/ommx.VariableIDLike
    _items/ommx.ToState
+   _items/ommx.NamedState
    _items/ommx.ToSamples

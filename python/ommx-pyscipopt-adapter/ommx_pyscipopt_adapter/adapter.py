@@ -24,6 +24,7 @@ from ommx import (
     InstanceClass,
     InstanceClassClause,
     Kind,
+    NamedState,
     PolynomialRequirement,
     PreparationPolicy,
     Sense,
@@ -41,6 +42,7 @@ if TYPE_CHECKING:
 
 _tracer = trace.get_tracer("ommx.adapter.pyscipopt")
 _SCIP_TERMINATION_EVENT = "TERMINATION"
+_OBJECTIVE_AUXILIARY_NAME = "auxiliary_for_linearized_objective"
 
 _QUADRATIC_REGULAR_CONSTRAINT_POLYNOMIAL_REQUIREMENTS = {
     Equality.EqualToZero: PolynomialRequirement.at_most(2),
@@ -541,11 +543,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self,
         ommx_instance: Instance,
         *,
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
     ):
         """
         :param ommx_instance: The ommx.Instance to solve.
-        :param initial_state: Optional initial solution state.
+        :param initial_state: Optional initial solution as a State, ID-keyed
+            values, or values grouped by name and tuple subscripts. Named values
+            are resolved against this instance with ``state_from_named_values``.
         """
         with _tracer.start_as_current_span("convert"):
             self.require_applicable(ommx_instance)
@@ -566,7 +570,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         cls,
         ommx_instance: Instance,
         *,
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """
@@ -576,7 +580,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         the recommended PySCIPOpt policy before preparation-free execution.
 
         :param ommx_instance: The ommx.Instance to prepare and solve.
-        :param initial_state: Optional initial solution state.
+        :param initial_state: Optional initial solution as a State, ID-keyed
+            values, or values grouped by name and tuple subscripts.
 
         Examples
         =========
@@ -672,7 +677,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         cls,
         ommx_instance: Instance,
         *,
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
         diagnostics: DiagnosticsSink | None = None,
     ) -> Solution:
         """Solve an exact PySCIPOpt Adapter input without preparing it."""
@@ -859,7 +864,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             # If objective function is quadratic, add the auxiliary variable for the linearized objective function,
             # because the setObjective method in PySCIPOpt does not support quadratic objective functions.
             self.model.addVar(
-                name="auxiliary_for_linearized_objective", vtype="C", lb=None, ub=None
+                name=_OBJECTIVE_AUXILIARY_NAME, vtype="C", lb=None, ub=None
             )
 
         self.varname_map = {var.name: var for var in self.model.getVars()}
@@ -891,7 +896,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             #     introduce the auxiliary variable z, and the linearized objective function problem is:
             #         min z
             #         s.t. z >= x^2 + y^2
-            auxiliary_var = self.varname_map["auxiliary_for_linearized_objective"]
+            auxiliary_var = self.varname_map[_OBJECTIVE_AUXILIARY_NAME]
 
             # Add the auxiliary variable to the objective function.
             self.model.setObjective(auxiliary_var, sense=sense)
@@ -1035,10 +1040,28 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         return quad_terms + linear_terms + constant
 
-    def _add_initial_state(self, initial_state: ToState) -> None:
+    def _add_initial_state(self, initial_state: ToState | NamedState) -> None:
+        if isinstance(initial_state, Mapping) and any(
+            isinstance(key, str) for key in initial_state
+        ):
+            state = self.instance.state_from_named_values(
+                cast(NamedState, initial_state)
+            )
+        else:
+            state = State(cast(ToState, initial_state))
+        values = {str(var_id): value for var_id, value in state.entries.items()}
+        if _OBJECTIVE_AUXILIARY_NAME in self.varname_map:
+            # SCIP initializes omitted coordinates to zero. Its objective
+            # auxiliary must describe that same complete initial point.
+            objective_state = {
+                var.id: values.get(str(var.id), 0.0)
+                for var in self.instance.used_decision_variables
+            }
+            values[_OBJECTIVE_AUXILIARY_NAME] = self.instance.objective.evaluate(
+                objective_state
+            )
         initial_sol = self.model.createSol()
-        for var_id, value in State(initial_state).entries.items():
-            var_name = str(var_id)
+        for var_name, value in values.items():
             if var_name in self.varname_map:
                 self.model.setSolVal(initial_sol, self.varname_map[var_name], value)
         # The free=True parameter means that solution will be freed afterwards.

@@ -352,6 +352,13 @@ fn attachment_not_found_to_pyerr(
     PyKeyError::new_err(error.name().to_string())
 }
 
+fn named_state_error_to_pyerr(error: &ommx::NamedStateError, message: String) -> PyErr {
+    match error {
+        ommx::NamedStateError::UnknownVariable { .. } => PyKeyError::new_err(message),
+        _ => PyValueError::new_err(message),
+    }
+}
+
 fn invalid_local_registry_image_ref_to_pyerr(
     error: &ommx::artifact::local_registry::InvalidLocalRegistryImageRef,
     _message: String,
@@ -519,6 +526,7 @@ define_ommx_error_mappings!(
     ommx::artifact::local_registry::InvalidLocalRegistryImageRef => invalid_local_registry_image_ref_to_pyerr,
     ommx::experiment::AttachmentNotFound => attachment_not_found_to_pyerr,
     ommx::DecisionVariableError => decision_variable_error_to_pyerr,
+    ommx::NamedStateError => named_state_error_to_pyerr,
     ommx::SolutionError => solution_error_to_pyerr,
     ommx::SampleSetError => sample_set_error_to_pyerr,
     ommx::LogEncodingUnavailable => log_encoding_unavailable_to_pyerr,
