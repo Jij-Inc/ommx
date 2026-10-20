@@ -33,6 +33,7 @@ against another instance's IDs.
 Unknown name/subscript pairs raise `KeyError`; ambiguous pairs raise `ValueError`.
 Parameters and descriptions do not distinguish keys. For ambiguous variables,
 use an ID-keyed state. Partial mappings are accepted and omitted values are not
-filled; their treatment as initial values depends on the adapter and solver.
+filled. SCIP initializes omitted solver variables to zero.
+Keys that collide after string or integer normalization raise `ValueError`.
 Conversion does not check finiteness, bounds, kind, fixed values, or dependencies.
 Use evaluation for those checks. Neither the instance nor the input is modified.

@@ -5,6 +5,41 @@ import pytest
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
+@pytest.mark.parametrize("sense", [Instance.MINIMIZE, Instance.MAXIMIZE])
+@pytest.mark.parametrize("input_kind", ["named", "state", "ids"])
+@pytest.mark.parametrize("partial", [False, True])
+def test_quadratic_initial_state_initializes_solver_objective(
+    sense, input_kind, partial
+):
+    x = DecisionVariable.integer(31, lower=1, upper=5, name="x", subscripts=[0])
+    y = DecisionVariable.integer(107, lower=0, upper=5, name="x", subscripts=[1])
+    sign = 1 if sense == Instance.MINIMIZE else -1
+    instance = Instance.from_components(
+        decision_variables=[x, y],
+        objective=sign * (x * x + 2 * x * y + 3 * y + 7),
+        constraints=[],
+        sense=sense,
+    )
+    named: NamedState = {"x": {(0,): 2.0}} if partial else {"x": {(0,): 2.0, (1,): 3.0}}
+    state = instance.state_from_named_values(named)
+    initial_state = {"named": named, "state": state, "ids": state.entries}[input_kind]
+    adapter = OMMXPySCIPOptAdapter(instance, initial_state=initial_state)
+    model = adapter.solver_input
+    solution = model.getSols()[0]
+    auxiliary = next(
+        var
+        for var in model.getVars()
+        if var.name == "auxiliary_for_linearized_objective"
+    )
+    expected = sign * (11.0 if partial else 32.0)
+
+    assert model.getSolVal(solution, auxiliary) == pytest.approx(expected)
+    assert model.getSolObjVal(solution) == pytest.approx(expected)
+    assert model.checkSol(solution, printreason=False)
+    model.optimize()
+    assert adapter.decode(model).objective == pytest.approx(sign * 8.0)
+
+
 @pytest.mark.parametrize("variable_ids", [(31, 107), (900, 41)])
 @pytest.mark.parametrize("convert_explicitly", [False, True])
 def test_named_initial_state_is_stored_before_optimization(

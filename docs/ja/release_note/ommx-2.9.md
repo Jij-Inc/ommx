@@ -2,6 +2,12 @@
 
 ## バグ修正
 
+### SCIP の二次目的関数に対する初期解を修正 ([#1274](https://github.com/Jij-Inc/ommx/pull/1274))
+
+SCIP の目的関数用補助変数にも、指定した初期値から計算した値を設定するようになりました。
+元の問題で実行可能な初期値が、補助変数の未設定により実行不能になる問題を修正します。
+`State`、ID キー辞書、`NamedState` に適用され、省略した初期値はゼロとして目的値を計算します。
+
 ### protobufシリアライズ時のアノテーション消失を修正 ([#1262](https://github.com/Jij-Inc/ommx/pull/1262))
 
 `Instance`、`ParametricInstance`、`Solution`、`SampleSet` のユーザーアノテーションと
@@ -87,6 +93,7 @@ state = instance.state_from_named_values(initial_values)
 
 対象インスタンスの変数 ID に変換するため、モデルの再生成で ID が変わっても値を再利用できます。
 見つからないキーは `KeyError`、複数の変数に一致する名前・添字は `ValueError` になります。
+文字列・整数への正規化でキーが重複する入力も `ValueError` になります。
 詳しい利用例は [名前と添字で初期値を指定する](../user_guide/named_initial_state.md) を参照してください。
 
 ### Rust SDK v3からV1 Bridgeでモデルを受信 (2.9.0, [#1226](https://github.com/Jij-Inc/ommx/pull/1226))

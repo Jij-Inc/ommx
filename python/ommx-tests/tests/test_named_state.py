@@ -19,6 +19,36 @@ def make_instance(*variables: DecisionVariable) -> Instance:
     )
 
 
+class _DistinctInt(int):
+    __eq__ = object.__eq__
+    __hash__ = object.__hash__
+
+
+class _DistinctName(str):
+    __eq__ = object.__eq__
+    __hash__ = object.__hash__
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"x": {(_DistinctInt(0),): value for value in (1.0, 4.0)}},
+        {_DistinctName("x"): {(0,): value} for value in (1.0, 4.0)},
+    ],
+)
+def test_rejects_normalized_key_collisions(values):
+    assert sum(len(coordinates) for coordinates in values.values()) == 2
+    instance = make_instance(DecisionVariable.binary(31, name="x", subscripts=[0]))
+    with pytest.raises(ValueError, match="Duplicate.*normalization"):
+        instance.state_from_named_values(values)
+
+
+def test_normalizes_single_subclass_keys():
+    x = DecisionVariable.binary(31, name="x", subscripts=[0])
+    values: NamedState = {_DistinctName("x"): {(_DistinctInt(0),): 1.0}}
+    assert make_instance(x).state_from_named_values(values).entries == {x.id: 1.0}
+
+
 def test_named_state_is_exported():
     from ommx.v1 import NamedState as V1NamedState
 

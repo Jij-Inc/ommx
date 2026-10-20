@@ -492,6 +492,8 @@ class Instance(UserAnnotationBase):
         addressed. Use an ID-keyed state to distinguish ambiguous labels.
         Ambiguous labels not supplied are allowed. Neither this instance nor
         the input mapping is modified.
+        Input keys that repeat after string or integer normalization also raise
+        ValueError instead of overwriting earlier values.
         """
         type_message = (
             "named values must be a Mapping[str, Mapping[tuple[int, ...], float]]"
@@ -502,6 +504,11 @@ class Instance(UserAnnotationBase):
         for name, coordinates in values.items():
             if not isinstance(name, str) or not isinstance(coordinates, Mapping):
                 raise TypeError(type_message)
+            name = str.__str__(name)
+            if name in normalized:
+                raise ValueError(
+                    f"Duplicate variable name after string normalization: {name!r}"
+                )
             entries = {}
             for subscripts, value in coordinates.items():
                 if not isinstance(subscripts, tuple):
@@ -509,6 +516,10 @@ class Instance(UserAnnotationBase):
                 indices = tuple(operator.index(index) for index in subscripts)
                 if any(index < -(1 << 63) or index >= (1 << 63) for index in indices):
                     raise OverflowError("subscripts must fit a signed 64-bit integer")
+                if indices in entries:
+                    raise ValueError(
+                        f"Duplicate subscripts after integer normalization for name {name!r}: {list(indices)}"
+                    )
                 entries[indices] = value
             normalized[name] = entries
 
@@ -2295,7 +2306,7 @@ class ParametricInstance(UserAnnotationBase):
     @property
     def constraints(self) -> list[Constraint]:
         """
-        Get constraints as a list of :class:`Constraint
+        Get constraints as a list of :class:`Constraint` instances.
         """
         return [Constraint.from_protobuf(raw) for raw in self.raw.constraints]
 
@@ -3201,7 +3212,7 @@ class DecisionVariable(VariableBase):
     @property
     def substituted_value(self) -> float | None:
         """
-        The value of the decision variable fixed by `:py:attr:`~Instance.partial_evaluate` or presolvers.
+        The value fixed by :meth:`Instance.partial_evaluate` or presolvers.
         """
         return self.raw.substituted_value
 
