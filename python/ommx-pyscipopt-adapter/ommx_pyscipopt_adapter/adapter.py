@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Literal, Optional
+from typing import Literal, Mapping, Optional, cast
 
 import pyscipopt
 import math
 
+from ommx import NamedState
 
 from ommx.adapter import (
     SolverAdapter,
@@ -36,7 +37,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         use_sos1: Literal["disabled", "auto", "forced"] = "auto",
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
     ):
         """
         :param ommx_instance: The ommx.v1.Instance to solve.
@@ -44,7 +45,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             - "disabled": Do not use SOS1 constraints.
             - "auto": Replace validated SOS1 formulations; retain ordinary rows for unsupported hints (default).
             - "forced": Require SOS1 hints and raise an error if any hint cannot be safely replaced.
-        :param initial_state: Optional initial solution state.
+        :param initial_state: Optional initial solution as a State, ID-keyed
+            values, or values grouped by name and tuple subscripts. Named values
+            are resolved against this instance with ``state_from_named_values``.
         """
         self.instance = ommx_instance
         self.use_sos1 = use_sos1
@@ -81,7 +84,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         use_sos1: Literal["disabled", "auto", "forced"] = "auto",
-        initial_state: Optional[ToState] = None,
+        initial_state: Optional[ToState | NamedState] = None,
     ) -> Solution:
         """
         Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
@@ -91,7 +94,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             - "disabled": Do not use SOS1 constraints.
             - "auto": Replace validated SOS1 formulations; retain ordinary rows for unsupported hints (default).
             - "forced": Require SOS1 hints and raise an error if any hint cannot be safely replaced.
-        :param initial_state: Optional initial solution state.
+        :param initial_state: Optional initial solution as a State, ID-keyed
+            values, or values grouped by name and tuple subscripts.
 
         Examples
         =========
@@ -456,9 +460,17 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         return quad_terms + linear_terms + constant
 
-    def _add_initial_state(self, initial_state: ToState) -> None:
+    def _add_initial_state(self, initial_state: ToState | NamedState) -> None:
+        if isinstance(initial_state, Mapping) and any(
+            isinstance(key, str) for key in initial_state
+        ):
+            state = self.instance.state_from_named_values(
+                cast(NamedState, initial_state)
+            )
+        else:
+            state = State(cast(ToState, initial_state))
         initial_sol = self.model.createSol()
-        for var_id, value in State(initial_state).entries.items():
+        for var_id, value in state.entries.items():
             var_name = str(var_id)
             if var_name in self.varname_map:
                 self.model.setSolVal(initial_sol, self.varname_map[var_name], value)

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pandas import DataFrame, NA
 from abc import ABC, abstractmethod
 import copy
+import operator
 
 
 from .instance_pb2 import Instance as _Instance, Parameters
@@ -99,12 +100,20 @@ __all__ = [
     "SampledNamedFunction",
     # Type Alias
     "ToState",
+    "NamedState",
     "ToSamples",
 ]
 
 ToState: TypeAlias = Union[State, Mapping[int, float]]
 """
 Type alias for convertible types to :class:`State`.
+"""
+
+NamedState: TypeAlias = Mapping[str, Mapping[tuple[int, ...], float]]
+"""Decision-variable values grouped by name and tuple subscripts.
+
+Use ``()`` for scalars and ``(i,)`` for one-dimensional indices. Resolve keys
+against the target instance with :meth:`Instance.state_from_named_values`.
 """
 
 
@@ -452,6 +461,91 @@ class Instance(UserAnnotationBase):
         Get decision variables as a list of :class:`DecisionVariable` instances sorted by their IDs.
         """
         return [DecisionVariable(dv) for dv in self.raw.decision_variables]
+
+    def state_from_named_values(self, values: NamedState) -> State:
+        """Create an ID-keyed State from values grouped by name and subscripts.
+
+        >>> from ommx import DecisionVariable, Instance, NamedState
+        >>> x = DecisionVariable.binary(31, name="x", subscripts=[0])
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x], objective=x, constraints=[],
+        ...     sense=Instance.MINIMIZE,
+        ... )
+        >>> values: NamedState = {"x": {(0,): 1.0}}
+        >>> instance.state_from_named_values(values).entries
+        {31: 1.0}
+
+        Use tuple keys: ``()`` for scalars, ``(i,)`` for one index, and
+        ``(i, j)`` for two indices. The output of
+        :meth:`Solution.extract_all_decision_variables` is also accepted and
+        is resolved against this instance even when its IDs differ.
+
+        Partial states and empty mappings are accepted; omitted variables are
+        not filled or inferred. Values follow the State constructor's numeric
+        conversion, with negative zero normalized to positive zero. Finiteness,
+        kind, bounds, fixed values, and dependencies are checked by evaluation.
+
+        Raises KeyError for an unknown name/subscript pair, ValueError when a
+        supplied pair matches several variables, and TypeError for malformed
+        input. Subscripts must fit a signed 64-bit integer (OverflowError).
+        Parameters and descriptions are ignored. Unnamed variables cannot be
+        addressed. Use an ID-keyed state to distinguish ambiguous labels.
+        Ambiguous labels not supplied are allowed. Neither this instance nor
+        the input mapping is modified.
+        """
+        type_message = (
+            "named values must be a Mapping[str, Mapping[tuple[int, ...], float]]"
+        )
+        if not isinstance(values, Mapping):
+            raise TypeError(type_message)
+        normalized: dict[str, dict[tuple[int, ...], float]] = {}
+        for name, coordinates in values.items():
+            if not isinstance(name, str) or not isinstance(coordinates, Mapping):
+                raise TypeError(type_message)
+            entries = {}
+            for subscripts, value in coordinates.items():
+                if not isinstance(subscripts, tuple):
+                    raise TypeError(type_message)
+                indices = tuple(operator.index(index) for index in subscripts)
+                if any(index < -(1 << 63) or index >= (1 << 63) for index in indices):
+                    raise OverflowError("subscripts must fit a signed 64-bit integer")
+                entries[indices] = value
+            normalized[name] = entries
+
+        ids_by_label: dict[tuple[str, tuple[int, ...]], list[int]] = {}
+        for variable in self.decision_variables:
+            name = variable.name
+            if not name:
+                # The v2 name getter maps an absent optional name to "".
+                # Preserve that distinction when an empty-string key is requested.
+                if not normalized.get("") or not variable.to_protobuf().HasField(
+                    "name"
+                ):
+                    continue
+            key = (name, tuple(variable.subscripts))
+            ids_by_label.setdefault(key, []).append(variable.id)
+
+        result = {}
+        for name, coordinates in normalized.items():
+            for subscripts, value in coordinates.items():
+                ids = ids_by_label.get((name, subscripts), [])
+                if not ids:
+                    raise KeyError(
+                        f"No decision variable with name {name!r} and subscripts "
+                        f"{list(subscripts)}; correct or remove this key"
+                    )
+                if len(ids) != 1:
+                    raise ValueError(
+                        f"Decision variables {ids} share name {name!r} and subscripts "
+                        f"{list(subscripts)}; use an ID-based state to distinguish them"
+                    )
+                result[ids[0]] = value
+        state = State(result)
+        state.entries = {
+            variable_id: 0.0 if value == 0.0 else value
+            for variable_id, value in state.entries.items()
+        }
+        return state
 
     @property
     def decision_variable_names(self) -> set[str]:
