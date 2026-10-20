@@ -24,6 +24,11 @@ To obtain a `State` explicitly, use `Instance.state_from_named_values()`:
 ```python markdown-code-runner
 state = instance.state_from_named_values(initial_values)
 assert state.entries == {x.id: 1.0, y.id: 4.0}
+
+import math
+
+assert all(math.isfinite(value) for value in state.entries.values())
+assert instance.evaluate(state).feasible
 ```
 
 Use tuple keys: `()` for scalars, `(i,)` for one index, and `(i, j)` for two.
@@ -36,4 +41,9 @@ use an ID-keyed state. Partial mappings are accepted and omitted values are not
 filled. SCIP initializes omitted solver variables to zero.
 Keys that collide after string or integer normalization raise `ValueError`.
 Conversion does not check finiteness, bounds, kind, fixed values, or dependencies.
-Use evaluation for those checks. Neither the instance nor the input is modified.
+To require finite values, explicitly check the converted state's entries with
+`math.isfinite`; evaluation in SDK 2.x does not guarantee finiteness.
+Evaluate a complete state with `Instance.evaluate()` and inspect the returned
+`solution.feasible` for variable-kind, bound, and constraint feasibility.
+Evaluation can return an infeasible solution and also resolves fixed values and
+dependencies. Neither the instance nor the input is modified by conversion.

@@ -472,8 +472,14 @@ class Instance(UserAnnotationBase):
         ...     sense=Instance.MINIMIZE,
         ... )
         >>> values: NamedState = {"x": {(0,): 1.0}}
-        >>> instance.state_from_named_values(values).entries
+        >>> state = instance.state_from_named_values(values)
+        >>> state.entries
         {31: 1.0}
+        >>> import math
+        >>> all(math.isfinite(value) for value in state.entries.values())
+        True
+        >>> instance.evaluate(state).feasible
+        True
 
         Use tuple keys: ``()`` for scalars, ``(i,)`` for one index, and
         ``(i, j)`` for two indices. The output of
@@ -482,8 +488,13 @@ class Instance(UserAnnotationBase):
 
         Partial states and empty mappings are accepted; omitted variables are
         not filled or inferred. Values follow the State constructor's numeric
-        conversion, with negative zero normalized to positive zero. Finiteness,
-        kind, bounds, fixed values, and dependencies are checked by evaluation.
+        conversion, with negative zero normalized to positive zero. To require
+        finite values, explicitly check the converted State entries with
+        :func:`math.isfinite`; evaluation in SDK 2.x does not guarantee finiteness.
+        Evaluate a complete state with :meth:`Instance.evaluate` and inspect the
+        returned :attr:`Solution.feasible` for variable-kind, bound, and constraint
+        feasibility. Evaluation can return an infeasible solution and also
+        resolves fixed values and dependencies.
 
         Raises KeyError for an unknown name/subscript pair, ValueError when a
         supplied pair matches several variables, and TypeError for malformed

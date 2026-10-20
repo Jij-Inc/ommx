@@ -24,6 +24,11 @@ assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
 ```python markdown-code-runner
 state = instance.state_from_named_values(initial_values)
 assert state.entries == {x.id: 1.0, y.id: 4.0}
+
+import math
+
+assert all(math.isfinite(value) for value in state.entries.values())
+assert instance.evaluate(state).feasible
 ```
 
 添字のキーはタプルにします。スカラーは `()`、1次元は `(i,)`、2次元は `(i, j)` です。
@@ -36,4 +41,8 @@ assert state.entries == {x.id: 1.0, y.id: 4.0}
 SCIP では、初期値を省略したソルバー変数はゼロで初期化されます。
 文字列・整数への正規化でキーが重複する入力も `ValueError` になります。
 変換時には有限性、上下限、変数の種類、固定値、依存関係を検証しません。
-これらの検証には評価処理を使ってください。インスタンスと入力は変更しません。
+有限値が必要な場合は、変換後の State の各値を `math.isfinite` で明示的に確認してください。
+SDK 2.x の評価処理は有限性を保証しません。すべての変数の値を含む State を
+`Instance.evaluate()` で評価し、返された `solution.feasible` で変数の種類、上下限、
+制約に対する実行可能性を確認してください。評価処理は実行不可能な解も返し、
+固定値と依存関係の解決も行います。変換処理はインスタンスと入力を変更しません。
