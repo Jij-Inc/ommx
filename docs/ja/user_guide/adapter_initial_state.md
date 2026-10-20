@@ -103,7 +103,8 @@ initial_state = ommx_instance.state_from_named_values(initial_values)
 `ValueError` になります。ラベルの `parameters` は照合に使いません。
 同じ名前・添字を持つ変数を区別するには ID をキーとする `State` を使ってください。
 一部の変数だけを指定することもでき、省略した変数は変換後の `State` に含まれません。
-初期値を省略した変数の扱いは、アダプターとソルバーによって異なります。
+SCIP では、初期値を省略したソルバー変数はゼロで初期化されます。
+文字列・整数への正規化でキーが重複する入力も `ValueError` になります。
 
 ## 初期解の有無による比較の例
 

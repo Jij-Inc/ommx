@@ -3434,6 +3434,8 @@ class Instance:
         for an unknown name/subscript pair and `ValueError` when a supplied pair
         matches multiple variables. In that case, use an ID-keyed state to
         distinguish them. Ambiguous labels not supplied are allowed.
+        Input keys that repeat after string or integer normalization also raise
+        `ValueError` instead of overwriting earlier values.
         Neither this instance nor the input mapping is modified.
         """
     def add_decision_variable(

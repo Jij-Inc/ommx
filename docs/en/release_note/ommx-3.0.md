@@ -6,6 +6,13 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### 🛠 Preserve SCIP initial solutions for quadratic objectives ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
+
+SCIP's objective auxiliary is now initialized from the supplied variable values,
+so a feasible initial point also satisfies the adapter's quadratic-objective
+formulation. This applies to `State`, ID-keyed values, and `NamedState` inputs,
+including partial inputs whose omitted solver coordinates start at zero.
+
 ### 🛠 Batch integer encoding before penalty construction ([#1253](https://github.com/Jij-Inc/ommx/pull/1253))
 
 `Instance.prepare()` now applies integer encoding after slack conversion and
@@ -27,6 +34,7 @@ state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
 ```
 
 Unknown keys raise `KeyError`; ambiguous name/subscript pairs raise `ValueError`.
+Keys that collide after string or integer normalization also raise `ValueError`.
 The SCIP adapter also accepts `NamedState` directly through `initial_state`.
 See {ref}`Providing Values by Name and Subscripts <named-initial-state>`
 for a SCIP example.

@@ -105,8 +105,8 @@ Conversion raises `KeyError` when a supplied name/subscript pair is unknown and
 `ValueError` when it matches multiple variables. Label parameters are ignored;
 use an ID-keyed state to distinguish variables with identical names and
 subscripts. Conversion accepts partial mappings and leaves omitted variables
-out of the resulting state; how an adapter handles omitted initial values
-depends on the solver.
+out of the resulting state. SCIP initializes omitted solver variables to zero.
+Keys that collide after string or integer normalization raise `ValueError`.
 
 ## Example Comparison With and Without Initial Solution
 

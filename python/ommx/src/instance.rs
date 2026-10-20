@@ -38,13 +38,24 @@ impl<'py> FromPyObject<'_, 'py> for NamedStateInput {
         let mut result = BTreeMap::new();
         for item in value.call_method0("items")?.try_iter()? {
             let (name, values) = item?.extract::<(String, Bound<'py, PyAny>)>()?;
+            if result.contains_key(&name) {
+                return Err(PyValueError::new_err(format!(
+                    "Duplicate variable name after string normalization: {name:?}"
+                )));
+            }
             if !values.hasattr("items")? {
                 return Err(type_error());
             }
             let mut entries = BTreeMap::new();
             for item in values.call_method0("items")?.try_iter()? {
                 let (subscripts, value) = item?.extract::<(Bound<'py, PyTuple>, f64)>()?;
-                entries.insert(subscripts.extract::<Vec<i64>>()?, value);
+                let subscripts = subscripts.extract::<Vec<i64>>()?;
+                if entries.contains_key(&subscripts) {
+                    return Err(PyValueError::new_err(format!(
+                        "Duplicate subscripts after integer normalization for name {name:?}: {subscripts:?}"
+                    )));
+                }
+                entries.insert(subscripts, value);
             }
             result.insert(name, entries);
         }
@@ -682,6 +693,8 @@ impl Instance {
     /// for an unknown name/subscript pair and `ValueError` when a supplied pair
     /// matches multiple variables. In that case, use an ID-keyed state to
     /// distinguish them. Ambiguous labels not supplied are allowed.
+    /// Input keys that repeat after string or integer normalization also raise
+    /// `ValueError` instead of overwriting earlier values.
     /// Neither this instance nor the input mapping is modified.
     fn state_from_named_values(&self, values: NamedStateInput) -> OmmxPyResult<State> {
         Ok(State(self.inner.state_from_named_values(&values.0)?))

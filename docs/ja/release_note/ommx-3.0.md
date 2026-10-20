@@ -6,6 +6,13 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 🛠 SCIP の二次目的関数に対する初期解を修正 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
+
+SCIP の目的関数用補助変数にも、指定した初期値から計算した値を設定するようになりました。
+元の問題で実行可能な初期値が、補助変数の未設定により実行不能になる問題を修正します。
+`State`、ID キー辞書、`NamedState` のすべてに適用されます。
+初期値を一部だけ指定した場合、SCIP の省略座標はゼロとして目的値を計算します。
+
 ### 🛠 penalty構築前の整数エンコードと一括置換 ([#1253](https://github.com/Jij-Inc/ommx/pull/1253))
 
 `Instance.prepare()` は、slack変換の後、固定penaltyの前に整数エンコードを
@@ -27,6 +34,7 @@ state = instance.state_from_named_values({"x": {(0,): 1.0, (1,): 4.0}})
 ```
 
 見つからないキーは `KeyError`、複数の変数に一致する名前・添字は `ValueError` になります。
+文字列・整数への正規化でキーが重複する入力も `ValueError` になります。
 SCIP アダプターの `initial_state` に `NamedState` を直接渡すこともできます。
 SCIP での利用例は {ref}`名前と添字で初期値を指定する <named-initial-state>`
 を参照してください。
