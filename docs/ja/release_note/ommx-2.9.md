@@ -1,14 +1,19 @@
 # OMMX Python SDK 2.9.x
 
+2.9.3では、protobufシリアライズ時のアノテーションとメタデータの保持、
+変数の名前と添字によるSCIP初期値の指定、二次目的関数に対するSCIP初期解の修正を行います。
+
+2.9.3のソルバーアダプターパッケージは、v2系のOMMX 2.9.3以降を必要とします。
+
 ## バグ修正
 
-### SCIP の二次目的関数に対する初期解を修正 ([#1274](https://github.com/Jij-Inc/ommx/pull/1274))
+### SCIP の二次目的関数に対する初期解を修正 (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
 
 SCIP の目的関数用補助変数にも、指定した初期値から計算した値を設定するようになりました。
 元の問題で実行可能な初期値が、補助変数の未設定により実行不能になる問題を修正します。
 `State`、ID キー辞書、`NamedState` に適用され、省略した初期値はゼロとして目的値を計算します。
 
-### protobufシリアライズ時のアノテーション消失を修正 ([#1262](https://github.com/Jij-Inc/ommx/pull/1262))
+### protobufシリアライズ時のアノテーション消失を修正 (2.9.3, [#1262](https://github.com/Jij-Inc/ommx/pull/1262))
 
 `Instance`、`ParametricInstance`、`Solution`、`SampleSet` のユーザーアノテーションと
 メタデータが、`to_bytes()` / `from_bytes()` の往復で保持されるようになりました。
@@ -79,7 +84,7 @@ HiGHS Adapter で項数の多い線形目的関数や制約を変換する際、
 
 ## 新機能
 
-### 名前と添字による SCIP 初期解の指定 ([#1274](https://github.com/Jij-Inc/ommx/pull/1274))
+### 名前と添字による SCIP 初期解の指定 (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
 
 `NamedState` で変数の名前と添字をキーとする初期値を指定できます。
 SCIP の `initial_state` に直接渡せるほか、`Instance.state_from_named_values()`

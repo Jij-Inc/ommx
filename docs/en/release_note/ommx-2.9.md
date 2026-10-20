@@ -1,15 +1,21 @@
 # OMMX Python SDK 2.9.x
 
+Version 2.9.3 preserves annotations and metadata through protobuf serialization,
+adds initial values grouped by variable name and subscripts for SCIP, and fixes
+SCIP initial solutions for quadratic objectives.
+
+The 2.9.3 solver adapter packages require OMMX 2.9.3 or later in the v2 line.
+
 ## Bug Fixes
 
-### Preserve SCIP initial solutions for quadratic objectives ([#1274](https://github.com/Jij-Inc/ommx/pull/1274))
+### Preserve SCIP initial solutions for quadratic objectives (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
 
 SCIP's objective auxiliary is initialized from the supplied variable values,
 so a feasible initial point also satisfies the quadratic-objective formulation.
 This applies to `State`, ID-keyed values, and `NamedState`, including partial
 inputs whose omitted solver coordinates start at zero.
 
-### Preserve annotations in protobuf payloads ([#1262](https://github.com/Jij-Inc/ommx/pull/1262))
+### Preserve annotations in protobuf payloads (2.9.3, [#1262](https://github.com/Jij-Inc/ommx/pull/1262))
 
 `Instance`, `ParametricInstance`, `Solution`, and `SampleSet` now retain user
 annotations and typed metadata through `to_bytes()` / `from_bytes()`. Instance
@@ -83,7 +89,7 @@ in the HiGHS model.
 
 ## New Features
 
-### Named states for SCIP initial solutions ([#1274](https://github.com/Jij-Inc/ommx/pull/1274))
+### Named states for SCIP initial solutions (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
 
 `NamedState` groups values by variable name and tuple subscripts. SCIP accepts
 these values directly through `initial_state`, and
