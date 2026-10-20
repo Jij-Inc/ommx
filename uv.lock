@@ -2830,7 +2830,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "ommx", editable = "python/ommx" },
-    { name = "pyscipopt", specifier = ">=6.0.0,<7.0.0" },
+    { name = "pyscipopt", specifier = ">=6.1.0,<7.0.0" },
 ]
 
 [[package]]
