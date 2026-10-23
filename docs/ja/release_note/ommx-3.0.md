@@ -6,6 +6,13 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 🛠 制約IDの枯渇をpanicではなくエラーとして報告 ([#1269](https://github.com/Jij-Inc/ommx/pull/1269))
+
+OneHot・Indicatorの単体変換と一括変換は、生成する通常制約のIDが足りない場合、
+panicではなく `RuntimeError` を返します。一括変換では必要なIDの総数を事前に
+確認するため、容量不足でInstanceが途中まで変更されることはありません。
+最後のIDまで使い切る変換や、通常制約を生成しない変換は引き続き成功します。
+
 ### 🛠 penalty構築前の整数エンコードと一括置換 ([#1253](https://github.com/Jij-Inc/ommx/pull/1253))
 
 `Instance.prepare()` は、slack変換の後、固定penaltyの前に整数エンコードを

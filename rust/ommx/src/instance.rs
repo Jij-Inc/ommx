@@ -832,7 +832,8 @@ impl Instance {
     /// # Errors
     ///
     /// Returns an error from a selected conversion, for example when Big-M
-    /// lowering requires a finite bound that is unavailable. Completed
+    /// lowering requires a finite bound that is unavailable or the generated
+    /// constraint IDs cannot be allocated. Completed
     /// conversions are not rolled back if a later conversion fails, including
     /// a later one-hot conversion within the same family. To preserve the
     /// source instance, lower a clone and discard it on error.
@@ -1477,6 +1478,41 @@ mod lower_special_constraints_tests {
             instance.active_special_constraint_kinds(),
             [SpecialConstraintKind::Sos1].into_iter().collect()
         );
+    }
+
+    #[test]
+    fn indicator_conversion_remains_when_one_hot_lowering_exhausts_regular_constraint_ids() {
+        let mut instance = instance_with_all_special_constraint_kinds();
+        instance
+            .insert_constraint(
+                ConstraintID::from(u64::MAX - 1),
+                Constraint::equal_to_zero(Function::Zero),
+            )
+            .unwrap();
+        let mut after_indicator_conversion = instance.clone();
+        assert_eq!(
+            after_indicator_conversion
+                .convert_all_indicators_to_constraints(ATol::default())
+                .unwrap(),
+            BTreeMap::from([(
+                IndicatorConstraintID::from(1),
+                vec![ConstraintID::from(u64::MAX)],
+            )]),
+        );
+        let kinds_to_lower: SpecialConstraintKinds = [
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
+        ]
+        .into_iter()
+        .collect();
+
+        instance
+            .lower_special_constraints(&kinds_to_lower, ATol::default())
+            .unwrap_err();
+
+        assert_eq!(instance, after_indicator_conversion);
+        assert!(instance.indicator_constraints().is_empty());
+        assert_eq!(instance.one_hot_constraints().len(), 1);
     }
 
     #[test]
