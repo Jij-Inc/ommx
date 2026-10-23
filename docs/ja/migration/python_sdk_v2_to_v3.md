@@ -421,6 +421,8 @@ v2のOpenJij Adapterでは、constructor、`sample()`、`solve()` が
 `inequality_integer_slack_max_range`を直接受け取っていました。v3ではこれらの選択を推奨
 `PreparationPolicy`へ移します。
 
+`INPUT_CLASS`が表す直接受け取れる範囲は[Adapterのexact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)、推奨Policyと呼び出し側の選択は[Instance PreparationとPreparationPolicy](../user_guide/preparation_policy.md)を参照してください。独自のPolicyを適用する手順は[Preparationで変換する制約族を選ぶ](../how_to/customize_preparation.md)にまとめています。
+
 - `uniform_penalty_weight`と`penalty_weights`は`policy.fixed_penalty`へ移す。
 - `inequality_integer_slack_max_range`は`policy.integer_slack`へ移す。
 

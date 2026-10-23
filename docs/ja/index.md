@@ -39,6 +39,7 @@ assert solution.objective == 1
 | やりたいこと | 最初に読むページ | この段階で学ぶこと |
 |---|---|---|
 | ソルバーで問題を解く | [Adapterで解くTutorial](./tutorial/solve_with_ommx_adapter) | Instanceを作り、求解して結果を読む |
+| 独自のAdapterを実装する | [Adapter Developer Guide](./developer_guide/adapter.md) | 入力・変換・評価の契約と参照実装 |
 | 問題や候補解の意味を理解する | [Instance](./user_guide/instance.md) → [StateからSolutionへの評価](./user_guide/solution.md) | 変数の役割、実行可能性、目的値、最適性の違い |
 | 特殊制約を使う | [特殊制約の意味と評価](./user_guide/special_constraints.md) | Indicator・OneHot・SOS1の成立条件 |
 | 変換後の結果を解釈する | [変換後の問題とRemoved constraints](./user_guide/removed_constraints.md) | activeな問題と、元の条件を使った評価の違い |
@@ -48,6 +49,18 @@ assert solution.objective == 1
 | 問題や結果を保存・共有する | [Artifact共有Tutorial](./tutorial/share_in_ommx_artifact.md) | メタデータとともに受け渡す |
 
 Tutorialは小さな成功例から操作を学ぶためのものです。User Guideは仕組みや意味を理解するために、API Referenceは個々の操作の引数・前提条件・保証を確認するために使います。全ページを順に読む必要はありません。
+
+## Adapterを使う・作る
+
+Adapterを使って解きたい人は、次の3つのTutorialで、変換なしの求解からOMMXによるPreparationへ進めます。
+
+1. [PySCIPOpt Adapterで0-1ナップサック問題を解く](./tutorial/solve_with_ommx_adapter)：Instanceを作り、`solve()`を呼び、pandasで結果を読む。
+2. [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1の意味を知り、対応ソルバーでそのまま解く。
+3. [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter.md)：特殊制約を直接扱わないHiGHSへ、loweringを経て同じモデルを渡す。
+
+独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。QUBOソルバーへの応用例は[OpenJij AdapterのTutorial](./tutorial/tsp_sampling_with_openjij_adapter)にあります。
+
+Adapterを実装する人は、利用者向けTutorialの通読ではなく、[Developer Guide](./developer_guide/adapter.md)から共通の入力・変換・評価の契約と参照実装を確認してください。
 
 ## データの交換と共有を支える仕組み
 
@@ -77,13 +90,22 @@ Artifactには、問題と結果に加えて「何を、どの設定で解いた
 :hidden:
 
 tutorial/solve_with_ommx_adapter
+tutorial/solve_special_constraints_with_pyscipopt_adapter
+tutorial/prepare_instance_for_adapter
 tutorial/tsp_sampling_with_openjij_adapter
-tutorial/switching_adapters
 tutorial/experiment_management
 tutorial/share_in_ommx_artifact
 tutorial/download_miplib_instance
 tutorial/download_qplib_instance
-tutorial/implement_adapter
+```
+
+```{toctree}
+:caption: How-to Guide
+:maxdepth: 1
+:hidden:
+
+how_to/customize_preparation
+how_to/compare_adapters
 ```
 
 ```{toctree}
@@ -106,7 +128,8 @@ user_guide/removed_constraints
 :hidden:
 
 user_guide/supported_ommx_adapters
-user_guide/capability_model
+user_guide/adapter_input_class
+user_guide/preparation_policy
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
 ```
@@ -120,6 +143,14 @@ user_guide/experiment
 user_guide/tracing
 user_guide/cli
 user_guide/agent_skills
+```
+
+```{toctree}
+:caption: Developer Guide
+:maxdepth: 1
+:hidden:
+
+developer_guide/adapter
 ```
 
 ```{toctree}
