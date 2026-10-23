@@ -254,6 +254,32 @@ def test_error_not_optimized_model():
     assert "The model may not be optimized." in str(e.value)
 
 
+@pytest.mark.parametrize("has_variable", [False, True])
+def test_error_no_best_solution(has_variable):
+    x = DecisionVariable.binary(0)
+    instance = Instance.from_components(
+        decision_variables=[x] if has_variable else [],
+        objective=x if has_variable else 0,
+        constraints={},
+        sense=Sense.Minimize,
+    )
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
+    if not has_variable:
+        # SCIP solves an empty model before checking the solution limit.
+        model.addVar(name="auxiliary", vtype="B")
+    model.setParam("limits/solutions", 0)
+    model.optimize()
+    assert model.getStatus() == "sollimit"
+    assert model.getBestSol() is None
+
+    with pytest.raises(
+        OMMXPySCIPOptAdapterError,
+        match=r"There is no feasible solution\. \[status: sollimit\]",
+    ):
+        adapter.decode_to_state(model)
+
+
 def test_error_infeasible_model():
     x = DecisionVariable.continuous(1)
     ommx_instance = Instance.from_components(

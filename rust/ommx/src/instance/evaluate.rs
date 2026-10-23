@@ -514,6 +514,13 @@ impl Instance {
     /// consume canonicalized non-fixed, non-dependent inputs. A dependent
     /// assertion is compared with the value derived from those inputs before the
     /// target kind is canonicalized.
+    ///
+    /// Irrelevant variables are not determined by optimization or reconstruction.
+    /// Supplied values follow the same canonicalization rules above. When
+    /// omitted, Binary, Integer, and Continuous variables receive the value in
+    /// their bound nearest to zero; SemiInteger and SemiContinuous variables
+    /// receive zero. Supply an irrelevant value explicitly when its choice
+    /// matters for output objectives, named functions, or removed constraints.
     pub fn populate_state(&self, state: v1::State, atol: ATol) -> Result<v1::State> {
         self.prepare_state_population().populate(state, atol)
     }
@@ -1555,6 +1562,52 @@ mod tests {
                 assert_eq!(distinct_ids.len(), 1);
                 assert!(distinct_ids.contains(&crate::SampleID::from(8)));
             }
+        }
+    }
+
+    #[test]
+    fn evaluate_defaults_omitted_irrelevant_values_but_respects_explicit_values() {
+        for (kind, lower, upper, default, explicit) in [
+            (Kind::Binary, 0.0, 1.0, 0.0, 1.0),
+            (Kind::Integer, 2.0, 5.0, 2.0, 4.0),
+            (Kind::Continuous, -5.0, -2.0, -2.0, -3.0),
+            (Kind::SemiInteger, 2.0, 5.0, 0.0, 3.0),
+            (Kind::SemiContinuous, 2.0, 5.0, 0.0, 3.5),
+        ] {
+            let irrelevant = crate::DecisionVariable::new(
+                kind,
+                crate::Bound::new(lower, upper).unwrap(),
+                ATol::default(),
+            )
+            .unwrap();
+            let instance = Instance::new(
+                Sense::Minimize,
+                Function::from(linear!(1)),
+                BTreeMap::from([
+                    (VariableID::from(1), crate::DecisionVariable::binary()),
+                    (VariableID::from(2), irrelevant),
+                ]),
+                BTreeMap::new(),
+            )
+            .unwrap();
+            assert_eq!(
+                instance.decision_variable_role(VariableID::from(2)),
+                Some(crate::DecisionVariableRole::Irrelevant),
+            );
+
+            let defaulted = instance
+                .evaluate(&v1::State::from_iter([(1, 1.0)]), ATol::default())
+                .unwrap();
+            assert_eq!(defaulted.state().entries[&2], default);
+
+            let supplied = instance
+                .evaluate(
+                    &v1::State::from_iter([(1, 1.0), (2, explicit)]),
+                    ATol::default(),
+                )
+                .unwrap();
+            assert_eq!(supplied.state().entries[&2], explicit);
+            assert_eq!(supplied.objective(), defaulted.objective());
         }
     }
 

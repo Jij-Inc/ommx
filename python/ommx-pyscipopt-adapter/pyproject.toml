@@ -19,7 +19,7 @@ classifiers = [
   "License :: OSI Approved :: Apache Software License",
   "License :: OSI Approved :: MIT License",
 ]
-dependencies = ["ommx >= 3.0.0b8, < 4.0.0","PySCIPOpt >= 6.0.0, < 7.0.0"]
+dependencies = ["ommx >= 3.0.0b8, < 4.0.0", "PySCIPOpt >= 6.1.0, < 7.0.0"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"

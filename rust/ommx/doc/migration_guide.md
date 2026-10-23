@@ -864,9 +864,11 @@ let irrelevant = instance.irrelevant_decision_variable_ids();
 
 Use [`Instance::decision_variable_usage`](crate::Instance::decision_variable_usage)
 when you still need the reverse usage index for variables that appear in
-objective / constraint / named-function bodies. The direct role helpers are the
-preferred replacement for migration code that only needs fixed / dependent /
-irrelevant classification.
+the active objective or active constraints, including special constraints.
+References only in named functions, removed constraints, the output objective,
+or dependency right-hand sides do not contribute to this index. The direct role
+helpers are the preferred replacement for migration code that only needs fixed /
+dependent / irrelevant classification.
 
 ### Named-function table ownership
 

@@ -48,6 +48,64 @@ The `new` method validates that all variable IDs used in the objective function 
 constraints are defined in the decision variables map, returning an error if any
 undefined variables are referenced.
 
+## Declared variables and solver-used variables
+
+An `Instance` can retain more variables than the solver needs to choose. Its
+[`decision_variables()`](crate::Instance::decision_variables) contains all retained
+definitions; [`used_decision_variables()`](crate::Instance::used_decision_variables)
+and [`used_decision_variable_ids()`](crate::Instance::used_decision_variable_ids)
+describe only the current active objective and constraints.
+
+For example, fixing one variable by partial evaluation leaves only the other
+variable for the solver to choose. The fixed variable is retained so the result
+can still be expressed in terms of the original model:
+
+```rust
+use ommx::{
+    linear, v1::State, ATol, DecisionVariable, Evaluate, Function, Instance,
+    Sense, VariableID,
+};
+use std::collections::BTreeMap;
+
+let mut instance = Instance::new(
+    Sense::Minimize,
+    Function::from((linear!(1) + linear!(2))?),
+    BTreeMap::from([
+        (VariableID::from(1), DecisionVariable::binary()),
+        (VariableID::from(2), DecisionVariable::binary()),
+    ]),
+    BTreeMap::new(),
+)?;
+assert_eq!(instance.used_decision_variables().len(), 2);
+
+instance.partial_evaluate(&State::from_iter([(1, 1.0)]), ATol::default())?;
+assert_eq!(instance.decision_variables().len(), 2);
+assert_eq!(instance.used_decision_variables().len(), 1);
+assert_eq!(instance.used_decision_variable_ids(), [VariableID::from(2)].into());
+
+// The solver supplies only x2; Instance supplies the stored value of x1.
+let solver_state = State::from_iter([(2, 0.0)]);
+let solution = instance.evaluate(&solver_state, ATol::default())?;
+assert_eq!(solution.state().entries[&1], 1.0);
+assert_eq!(*solution.objective(), 1.0);
+# Ok::<(), ommx::Error>(())
+```
+
+Variable encodings can likewise replace an original variable with a dependency
+on new solver variables. Variables referenced only by named functions, removed
+constraints, or the output objective are also not solver-used. A variable may
+even be declared without being referenced at all. Use
+[`decision_variable_role()`](crate::Instance::decision_variable_role) to inspect
+the distinction between **used**, **fixed**, **dependent**, and **irrelevant**.
+Omitted irrelevant variables receive defaults, not reconstructed or optimized
+values. Include their values explicitly when the choice matters for reporting;
+see [`populate_state()`](crate::Instance::populate_state).
+
+For a solver integration, enumerate the used variables on the instance actually
+sent to the solver, and evaluate its returned state with that same instance.
+The other definitions are retained model data, not additional free solver
+variables; they should not be discarded just because they are not used.
+
 ## Incremental decision-variable construction
 
 When the instance should allocate variable IDs, use its typed `new_*` methods.

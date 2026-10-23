@@ -30,6 +30,32 @@ ommx_solution = OMMXPySCIPOptAdapter.solve(ommx_instance)
 print(ommx_solution)
 ```
 
+## Initial solution by variable name
+
+Resolve names and tuple subscripts against the instance you are solving, so
+the same initial values can be reused when variable IDs change.
+
+```python markdown-code-runner
+from ommx import Instance, NamedState
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+instance = Instance.maximize()
+x = instance.new_integer("x", lower=0, upper=5, subscripts=[0])
+y = instance.new_integer("x", lower=0, upper=5, subscripts=[1])
+instance.objective = 2 * x + y
+instance.add_constraint(x + y <= 5)
+
+initial_values: NamedState = {"x": {(0,): 1.0, (1,): 4.0}}
+solution = OMMXPySCIPOptAdapter.solve(instance, initial_state=initial_values)
+assert solution.state.entries == {x.id: 5.0, y.id: 0.0}
+
+# Explicit conversion is also available when you need an ommx.State.
+state = instance.state_from_named_values(initial_values)
+```
+
+For scalar variables use `()` as the subscript key. The conversion raises
+`KeyError` for unknown names/subscripts and `ValueError` for ambiguous pairs.
+
 ## Reference
 
 TBW
