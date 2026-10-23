@@ -224,8 +224,12 @@ impl OutputObjective {
 /// Solver integrations should build their backend variables from the used set,
 /// then evaluate the returned state with this same instance through
 /// [`Evaluate::evaluate`]. Evaluation supplies stored fixed values and computes
-/// dependent values. The remaining model data is retained for interpreting the
-/// result, not sent to the solver as additional free variables. See
+/// dependent values. Omitted irrelevant variables receive defaults, not values
+/// recovered from a previous solution or chosen by optimization. Supply their
+/// values explicitly when their choice matters for output-only expressions;
+/// see [`Self::populate_state`]. The remaining model data is retained for
+/// interpreting the result, not sent to the solver as additional free variables.
+/// See
 /// [`Self::decision_variable_role`] to inspect a variable's role, and the
 /// [Instance tutorial](crate::doc::tutorial::instance) for a worked example.
 ///

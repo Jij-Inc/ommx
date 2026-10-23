@@ -523,6 +523,9 @@ impl Instance {
     /// other model data: evaluate the returned state with the same instance
     /// using [`Self::evaluate`] to reconstruct fixed and dependent values and
     /// evaluate the output objective and removed constraints.
+    /// Omitted irrelevant variables are filled with defaults, not optimized
+    /// values. To choose their values for reporting, include them explicitly in
+    /// the returned state; see [`Self::populate_state`].
     ///
     /// See [`Self::used_decision_variables`] for the corresponding definitions
     /// and [`Self::decision_variable_usage`] to inspect where an ID is used.

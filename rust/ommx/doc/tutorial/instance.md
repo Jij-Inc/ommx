@@ -97,6 +97,9 @@ constraints, or the output objective are also not solver-used. A variable may
 even be declared without being referenced at all. Use
 [`decision_variable_role()`](crate::Instance::decision_variable_role) to inspect
 the distinction between **used**, **fixed**, **dependent**, and **irrelevant**.
+Omitted irrelevant variables receive defaults, not reconstructed or optimized
+values. Include their values explicitly when the choice matters for reporting;
+see [`populate_state()`](crate::Instance::populate_state).
 
 For a solver integration, enumerate the used variables on the instance actually
 sent to the solver, and evaluate its returned state with that same instance.

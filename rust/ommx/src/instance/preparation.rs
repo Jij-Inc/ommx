@@ -441,9 +441,10 @@ impl Instance {
     /// [`Evaluate::evaluate`](crate::Evaluate::evaluate) or
     /// [`Evaluate::evaluate_samples`](crate::Evaluate::evaluate_samples).
     /// Preparation retains the output objective and reconstruction information
-    /// while allowing the active formulation sent to the solver to change. After penalty
-    /// conversion, check the evaluated solution's feasibility: a solver can
-    /// return a state that violates a constraint now represented by a penalty.
+    /// while allowing the active formulation sent to the solver to change.
+    /// After penalty conversion, check the evaluated solution's feasibility:
+    /// a solver can return a state that violates a constraint now represented
+    /// by a penalty.
     /// Use [`Self::map_active_optimality`] to report the backend's optimality
     /// status only when it remains valid for the output objective.
     ///

@@ -73,6 +73,9 @@ impl Instance {
     /// This method transforms a constrained optimization problem into an unconstrained one by
     /// adding penalty terms to the objective function. Each constraint $f(x) = 0$ or $f(x) \leq 0$
     /// is converted to a penalty term $\lambda \cdot f(x)^2$ where $\lambda$ is a penalty parameter.
+    /// This squares inequality bodies even when the inequality is satisfied;
+    /// see the inequality warning on [`Self::uniform_penalty_method_with_fixed_weight`]
+    /// before choosing a penalty formulation.
     ///
     /// # Returns
     ///
@@ -226,6 +229,9 @@ impl Instance {
     /// objective and $-w_{id} f_{id}(x)^2$ to a maximization objective, where
     /// $w_{id}$ is the normalized nonnegative magnitude. OMMX does not decide
     /// whether a weight is large enough for an application's penalty rule.
+    /// Inequality bodies are squared without clipping negative residuals;
+    /// see [`Self::uniform_penalty_method_with_fixed_weight`] before choosing
+    /// the penalty formulation and weights.
     ///
     /// No parameter ID or assignment is created, and the instance's recorded
     /// parameter assignments remain exactly unchanged.
@@ -321,8 +327,10 @@ impl Instance {
     /// Convert constraints to penalty terms using a single penalty parameter.
     ///
     /// This method is similar to `penalty_method` but uses a single penalty parameter $\lambda$
-    /// for all constraints. The penalty term is the sum of squared constraint violations:
+    /// for all constraints. The penalty term is the sum of squared constraint bodies:
     /// $\lambda \cdot \sum_i f_i(x)^2$ where $f_i(x)$ represents each constraint.
+    /// A satisfied inequality can therefore have a nonzero penalty; see the
+    /// warning on [`Self::uniform_penalty_method_with_fixed_weight`].
     ///
     /// # Returns
     ///
@@ -461,9 +469,10 @@ impl Instance {
     /// Convert every active regular constraint to a penalty term with one fixed weight.
     ///
     /// Use this to build a penalty objective when all active regular constraints
-    /// should share the same weight. Lower or remove active Indicator, OneHot,
-    /// and SOS1 constraints first; this method rejects them without changing
-    /// the instance, even if no regular constraints are active.
+    /// should share the same weight. Lower active Indicator, OneHot, and SOS1
+    /// constraints first with [`Self::lower_special_constraints`]; this method
+    /// rejects them without changing the instance, even if no regular
+    /// constraints are active.
     ///
     /// `weight` is a penalty magnitude: when a penalty is applied, it must be
     /// finite and at least `-atol`. A value in `[-atol, 0)` is normalized to zero.
@@ -471,6 +480,14 @@ impl Instance {
     /// objective and $-w f_i(x)^2$ to a maximization objective, where $w$ is the
     /// normalized nonnegative magnitude. OMMX does not decide whether the
     /// weight is large enough for an application's penalty rule.
+    ///
+    /// **Inequalities are squared as written**, not converted to squared
+    /// violations: $f_i(x)^2$ can be positive even when $f_i(x) < 0$ satisfies
+    /// the constraint. If the penalty should vanish on every feasible assignment,
+    /// reformulate inequalities as equalities with suitable slack first. For
+    /// supported integer-slack cases, see
+    /// [`Self::convert_inequality_to_equality_with_integer_slack`]. Increasing
+    /// the weight alone does not correct the penalty's shape.
     ///
     /// No parameter ID or assignment is created, and the instance's recorded
     /// parameter assignments remain exactly unchanged.
@@ -1150,6 +1167,41 @@ mod tests {
             objective.evaluate(&state, ATol::default()).unwrap()
         );
         assert_no_active_constraints(&zero_weight);
+    }
+
+    #[test]
+    fn uniform_fixed_penalty_squares_satisfied_inequality_bodies() {
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::from(linear!(1)),
+            BTreeMap::from([(VariableID::from(1), DecisionVariable::binary())]),
+            BTreeMap::from([(
+                ConstraintID::from(1),
+                Constraint::less_than_or_equal_to_zero(Function::from(
+                    (linear!(1) + coeff!(-1.0)).unwrap(),
+                )),
+            )]),
+        )
+        .unwrap();
+        instance
+            .uniform_penalty_method_with_fixed_weight(2.0, ATol::default())
+            .unwrap();
+
+        // Both states are feasible for x <= 1, but the active objective now
+        // prefers x = 1; the original objective prefers x = 0.
+        for (value, active_objective) in [(0.0, 2.0), (1.0, 1.0)] {
+            let state = State::from_iter([(1, value)]);
+            assert_eq!(
+                instance
+                    .objective()
+                    .evaluate(&state, ATol::default())
+                    .unwrap(),
+                active_objective,
+            );
+            let solution = instance.evaluate(&state, ATol::default()).unwrap();
+            assert!(solution.feasible());
+            assert_eq!(*solution.objective(), value);
+        }
     }
 
     #[test]
