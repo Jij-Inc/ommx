@@ -6,6 +6,14 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### 🛠 Report generated constraint ID exhaustion as an error ([#1269](https://github.com/Jij-Inc/ommx/pull/1269))
+
+Single and bulk OneHot/Indicator lowering now raises `RuntimeError` instead of
+panicking when there are not enough regular-constraint IDs for the generated
+rows. Each bulk conversion checks the total required capacity before changing
+the instance. The last available ID remains usable, and conversions producing
+no rows do not require free IDs.
+
 ### 🛠 Preserve SCIP initial solutions for quadratic objectives ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 SCIP's objective auxiliary is now initialized from the supplied variable values,

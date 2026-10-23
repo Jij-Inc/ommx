@@ -206,14 +206,42 @@ impl OutputObjective {
 
 /// Instance, represents a mathematical optimization problem.
 ///
+/// # Declared and solver-used variables
+///
+/// An instance can retain a decision variable even when the solver no longer
+/// needs to choose its value. For example, partial evaluation fixes a variable
+/// and substitutes its value into the active problem, but keeps its definition
+/// and fixed value so the result can still include that original variable.
+/// Encoding a variable in terms of other variables similarly retains the
+/// information needed to reconstruct it.
+///
+/// [`Self::decision_variables`] returns all retained variable definitions.
+/// [`Self::used_decision_variables`] and [`Self::used_decision_variable_ids`]
+/// return only those referenced by the current active objective or active
+/// constraints, including every special-constraint family. This is a structural
+/// property of the current instance, not a solver's presolve result. References
+/// only in the output objective, named functions, or removed constraints do not
+/// make a variable solver-used; merely declaring a variable does not either.
+///
+/// Solver integrations should build their backend variables from the used set,
+/// then evaluate the returned state with this same instance through
+/// [`Evaluate::evaluate`]. Evaluation supplies stored fixed values and computes
+/// dependent values. Omitted irrelevant variables receive defaults, not values
+/// recovered from a previous solution or chosen by optimization. Supply their
+/// values explicitly when their choice matters for output-only expressions;
+/// see [`Self::populate_state`]. The remaining model data is retained for
+/// interpreting the result, not sent to the solver as additional free variables.
+/// See
+/// [`Self::decision_variable_role`] to inspect a variable's role, and the
+/// [Instance tutorial](crate::doc::tutorial::instance) for a worked example.
+///
 /// # Multi-type constraint architecture
 ///
 /// Instance holds multiple [`ConstraintCollection`]s, one per constraint type:
 /// - [`Constraint`]: standard constraints (`f(x) = 0` or `f(x) <= 0`)
 /// - [`IndicatorConstraint`]: indicator constraints (`binvar = 1 → f(x) <= 0`)
-///
-/// Future constraint types (Disjunction, SOS1, OneHot, etc.) follow the same pattern:
-/// add a new `ConstraintCollection<NewType>` field. See [`crate::constraint_type::ConstraintType`] for details.
+/// - [`OneHotConstraint`]: exactly one member variable is 1
+/// - [`Sos1Constraint`]: at most one member variable is nonzero
 ///
 /// Each constraint type has its own independent [`ConstraintID`] space:
 /// constraint ID 1 for a regular constraint and constraint ID 1 for an indicator constraint
@@ -273,6 +301,7 @@ impl OutputObjective {
 ///   - **used**: Variable IDs appearing in the active objective or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
+///   - **irrelevant**: All other declared variables; these do not affect the active formulation
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
@@ -775,32 +804,41 @@ impl Instance {
 
     /// Lower selected active special constraint families into regular constraints.
     ///
-    /// For every family in `kinds_to_lower`, call the corresponding bulk
-    /// conversion (`convert_all_indicators_to_constraints`,
-    /// `convert_all_one_hots_to_constraints`, or
-    /// `convert_all_sos1_to_constraints`) when that family is active. Families
-    /// omitted from `kinds_to_lower` remain active. Passing an empty set is a
-    /// no-op. This operation does not establish membership in an
-    /// [`crate::InstanceClass`]; check the resulting instance separately.
-    /// `atol` is passed to the interval bound used while lowering Indicator
-    /// constraints so zero-sensitive Function-body semantics are explicit.
-    /// The algebraic special-constraint conversions assume exact discrete
-    /// variable values; this operation does not canonicalize approximate
-    /// solver output near 0 or 1.
+    /// When writing a solver integration, select the families that the backend
+    /// cannot accept natively in `kinds_to_lower`. Unselected families remain
+    /// active, and passing an empty set leaves the instance unchanged. The
+    /// original constraints are retained in their removed collections, with
+    /// provenance linking generated regular constraints to their sources.
+    ///
+    /// Lowering alone need not make the instance acceptable to the backend:
+    /// generated variables or regular constraints may violate other input
+    /// requirements. Check the resulting [`crate::InstanceClass`] membership,
+    /// or use [`Self::prepare`] to target a class with a policy.
+    ///
+    /// # Conversion rules
+    ///
+    /// See [`Self::convert_all_indicators_to_constraints`],
+    /// [`Self::convert_all_one_hots_to_constraints`], and
+    /// [`Self::convert_all_sos1_to_constraints`] for each family's formulas,
+    /// preconditions, and mutation guarantees. `atol` controls zero-sensitive
+    /// interval bounds for Indicator bodies. Lowering assumes exact discrete
+    /// values; it does not round approximate solver output near 0 or 1.
+    ///
+    /// # Returns
     ///
     /// Returns the set of families that were requested and active, and therefore
     /// actually lowered. Families are processed in the deterministic order
     /// `Indicator`, `OneHot`, `Sos1`, matching [`SpecialConstraintKinds`]'s
     /// iteration order. The set is empty when no selected family was active.
-    /// Each lowering is emitted as an `INFO`-level [`tracing`] event inside the
-    /// `lower_special_constraints` span (target `ommx::instance`) so it surfaces
-    /// through `pyo3-tracing-opentelemetry` on the Python side.
     ///
-    /// Errors if any underlying conversion fails (e.g. SOS1 / indicator with
-    /// non-finite bounds). Each per-type conversion is atomic, but this method
-    /// is **not** atomic across types: earlier conversions are not rolled back
-    /// if a later one fails. Callers that need cross-type atomicity should
-    /// validate / clone up front.
+    /// # Errors
+    ///
+    /// Returns an error from a selected conversion, for example when Big-M
+    /// lowering requires a finite bound that is unavailable or the generated
+    /// constraint IDs cannot be allocated. Completed
+    /// conversions are not rolled back if a later conversion fails, including
+    /// a later one-hot conversion within the same family. To preserve the
+    /// source instance, lower a clone and discard it on error.
     #[tracing::instrument(skip_all)]
     pub fn lower_special_constraints(
         &mut self,
@@ -908,6 +946,7 @@ impl Instance {
 ///   - **used**: Variable IDs appearing in the active objective or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
+///   - **irrelevant**: All other declared variables; these do not affect the active formulation
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
@@ -1441,6 +1480,41 @@ mod lower_special_constraints_tests {
             instance.active_special_constraint_kinds(),
             [SpecialConstraintKind::Sos1].into_iter().collect()
         );
+    }
+
+    #[test]
+    fn indicator_conversion_remains_when_one_hot_lowering_exhausts_regular_constraint_ids() {
+        let mut instance = instance_with_all_special_constraint_kinds();
+        instance
+            .insert_constraint(
+                ConstraintID::from(u64::MAX - 1),
+                Constraint::equal_to_zero(Function::Zero),
+            )
+            .unwrap();
+        let mut after_indicator_conversion = instance.clone();
+        assert_eq!(
+            after_indicator_conversion
+                .convert_all_indicators_to_constraints(ATol::default())
+                .unwrap(),
+            BTreeMap::from([(
+                IndicatorConstraintID::from(1),
+                vec![ConstraintID::from(u64::MAX)],
+            )]),
+        );
+        let kinds_to_lower: SpecialConstraintKinds = [
+            SpecialConstraintKind::Indicator,
+            SpecialConstraintKind::OneHot,
+        ]
+        .into_iter()
+        .collect();
+
+        instance
+            .lower_special_constraints(&kinds_to_lower, ATol::default())
+            .unwrap_err();
+
+        assert_eq!(instance, after_indicator_conversion);
+        assert!(instance.indicator_constraints().is_empty());
+        assert_eq!(instance.one_hot_constraints().len(), 1);
     }
 
     #[test]

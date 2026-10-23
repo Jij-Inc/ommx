@@ -65,6 +65,9 @@ impl Instance {
     /// with `reason = "ommx.Instance.convert_sos1_to_constraints"` and a
     /// `constraint_ids` parameter listing the new regular constraint IDs
     /// (comma-separated in insertion order).
+    /// To trace a generated solver row back to the original model, read its
+    /// [`Provenance::Sos1Constraint`] entry in [`Self::constraint_context`]; it
+    /// names the original SOS1 ID.
     ///
     /// Returns the [`ConstraintID`]s of the newly created regular constraints in
     /// insertion order: Big-M upper/lower pairs per non-binary variable (sorted by

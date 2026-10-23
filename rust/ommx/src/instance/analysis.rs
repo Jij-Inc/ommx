@@ -510,10 +510,36 @@ impl Instance {
             .collect()
     }
 
+    /// Return the decision-variable IDs needed by the active solver formulation.
+    ///
+    /// When writing a solver integration, use this set rather than all declared
+    /// variables to decide which backend variables to create. It contains IDs
+    /// referenced by the active objective or active regular, Indicator, OneHot,
+    /// or SOS1 constraints, including an Indicator's controlling variable.
+    ///
+    /// References occurring only in the output objective, named functions,
+    /// removed constraints, or dependency right-hand sides do not contribute
+    /// to this set. This is a solver-input view, not permission to delete the
+    /// other model data: evaluate the returned state with the same instance
+    /// using [`Self::evaluate`] to reconstruct fixed and dependent values and
+    /// evaluate the output objective and removed constraints.
+    /// Omitted irrelevant variables are filled with defaults, not optimized
+    /// values. To choose their values for reporting, include them explicitly in
+    /// the returned state; see [`Self::populate_state`].
+    ///
+    /// See [`Self::used_decision_variables`] for the corresponding definitions
+    /// and [`Self::decision_variable_usage`] to inspect where an ID is used.
     pub fn used_decision_variable_ids(&self) -> VariableIDSet {
         used_decision_variable_ids_except(self, &SolverUseExcept::default())
     }
 
+    /// Return the decision variables in [`Self::used_decision_variable_ids`], keyed by ID.
+    ///
+    /// Use these definitions to create the backend variables for this instance,
+    /// rather than iterating over every row in [`Self::decision_variables`].
+    /// Preparation can change this set, so query the instance that will actually
+    /// be sent to the solver. See [`Self::used_decision_variable_ids`] for the
+    /// included references and result-evaluation guidance.
     pub fn used_decision_variables(&self) -> BTreeMap<VariableID, &DecisionVariable> {
         let used_ids = self.used_decision_variable_ids();
         self.decision_variables
