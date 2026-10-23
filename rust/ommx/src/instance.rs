@@ -204,14 +204,38 @@ impl OutputObjective {
 
 /// Instance, represents a mathematical optimization problem.
 ///
+/// # Declared and solver-used variables
+///
+/// An instance can retain a decision variable even when the solver no longer
+/// needs to choose its value. For example, partial evaluation fixes a variable
+/// and substitutes its value into the active problem, but keeps its definition
+/// and fixed value so the result can still include that original variable.
+/// Encoding a variable in terms of other variables similarly retains the
+/// information needed to reconstruct it.
+///
+/// [`Self::decision_variables`] returns all retained variable definitions.
+/// [`Self::used_decision_variables`] and [`Self::used_decision_variable_ids`]
+/// return only those referenced by the current active objective or active
+/// constraints, including every special-constraint family. This is a structural
+/// property of the current instance, not a solver's presolve result. References
+/// only in the output objective, named functions, or removed constraints do not
+/// make a variable solver-used; merely declaring a variable does not either.
+///
+/// Solver integrations should build their backend variables from the used set,
+/// then evaluate the returned state with this same instance through
+/// [`Evaluate::evaluate`]. Evaluation supplies stored fixed values and computes
+/// dependent values. The remaining model data is retained for interpreting the
+/// result, not sent to the solver as additional free variables. See
+/// [`Self::decision_variable_role`] to inspect a variable's role, and the
+/// [Instance tutorial](crate::doc::tutorial::instance) for a worked example.
+///
 /// # Multi-type constraint architecture
 ///
 /// Instance holds multiple [`ConstraintCollection`]s, one per constraint type:
 /// - [`Constraint`]: standard constraints (`f(x) = 0` or `f(x) <= 0`)
 /// - [`IndicatorConstraint`]: indicator constraints (`binvar = 1 → f(x) <= 0`)
-///
-/// Future constraint types (Disjunction, SOS1, OneHot, etc.) follow the same pattern:
-/// add a new `ConstraintCollection<NewType>` field. See [`crate::constraint_type::ConstraintType`] for details.
+/// - [`OneHotConstraint`]: exactly one member variable is 1
+/// - [`Sos1Constraint`]: at most one member variable is nonzero
 ///
 /// Each constraint type has its own independent [`ConstraintID`] space:
 /// constraint ID 1 for a regular constraint and constraint ID 1 for an indicator constraint
@@ -271,6 +295,7 @@ impl OutputObjective {
 ///   - **used**: Variable IDs appearing in the active objective or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
+///   - **irrelevant**: All other declared variables; these do not affect the active formulation
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
@@ -914,6 +939,7 @@ impl Instance {
 ///   - **used**: Variable IDs appearing in the active objective or active constraints
 ///   - **fixed**: Variable IDs present in [`Self::fixed_decision_variable_values`] and not used
 ///   - **dependent**: Keys of `decision_variable_dependency` that are not used or fixed
+///   - **irrelevant**: All other declared variables; these do not affect the active formulation
 /// - [`DecisionVariableUsage`] is the reverse-usage index for used decision variables only.
 /// - [`Self::named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; named-function rows do not carry IDs.
