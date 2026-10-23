@@ -1565,7 +1565,7 @@ Instance.from_components(..., constraints={5: c}, ...)
 - {class}`~ommx.OneHotConstraint` — 従来 `ConstraintHints.OneHot` として扱われていた one-hot 制約
 - {class}`~ommx.Sos1Constraint` — 従来 `ConstraintHints.Sos1` として扱われていた SOS1 制約
 
-具体的な使い方と評価結果の参照については [特殊制約型](../user_guide/special_constraints.md)、Indicator 制約の relax / restore ワークフローについては [Removed constraints と実行可能性](../user_guide/removed_constraints.md) を参照してください。
+具体的な使い方と評価結果の参照については [特殊制約の意味と評価](../user_guide/special_constraints.md)、Indicator 制約を含む active / removed の扱いについては [変換後の問題とRemoved constraints](../user_guide/removed_constraints.md) を参照してください。
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
 
