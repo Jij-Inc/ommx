@@ -1,7 +1,129 @@
 ---
-orphan: true
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx
+  language: python
+  name: python3
 ---
 
-# Download Benchmark Instances
+# Downloading a QPLIB Instance
 
-The MIPLIB and QPLIB tutorials have been consolidated into [Download Benchmark Instances](./download_benchmark_instance.md).
+The OMMX repository provides quadratic programming benchmark instances from QPLIB in OMMX Artifact format.
+
+```{note}
+`dataset.qplib` uses the published
+`ghcr.io/jij-inc/ommx/v2.8/qplib:{numeric-tag}` distribution
+([package](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fv2.8%2Fqplib)).
+These 453 Artifacts were regenerated with corrected quadratic coefficients in
+OMMX 2.8.0 and can also be read by the v3 SDK. The distribution version is
+independent of the installed SDK version.
+
+Distribution format or mathematical-model changes require an SDK minor or
+major release and a new `/v{major}.{minor}/` namespace. Patch releases keep
+their adopted distribution, and published path/tag references remain immutable.
+The loader selects the corrected distribution even when old unversioned
+Artifacts are cached. Previously saved instances must be reimported to receive
+the coefficient correction.
+
+The [v2.8 publication record](https://github.com/Jij-Inc/ommx/blob/b4cffe9f1ce5323c15de67eca55b05d9f87285a0/rust/dataset/distributions/v2.8/README.md)
+contains the source archive, model comparisons, and published digests.
+
+QPLIB is a library of quadratic programming instances. For more information about QPLIB, see the [QPLIB website](http://qplib.zib.de/).
+
+Please see [this page](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) for information on GitHub Container Registry.
+```
+
+You can easily download these instances with the OMMX SDK, then directly use them as inputs to OMMX Adapters.
+For example, to solve the QPLIB_3514 instance ([reference](http://qplib.zib.de/QPLIB_3514.html)) with PySCIPOpt, you can:
+
+1. Download the 3514 instance with `dataset.qplib` from the OMMX Python SDK.
+2. Solve with PySCIPOpt via the OMMX PySCIPOpt Adapter.
+
+Here is a sample Python code:
+
+```{code-cell} ipython3
+# OMMX Python SDK
+from ommx import dataset
+# OMMX PySCIPOpt Adapter
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+# Step 1: Download the 3514 instance from QPLIB
+instance = dataset.qplib("3514")
+
+# Step 2: Solve with PySCIPOpt via the OMMX PySCIPOpt Adapter
+solution = OMMXPySCIPOptAdapter.solve(instance)
+```
+
+This makes it easy to benchmark quadratic programming solvers using the same QPLIB instances.
+
+## Evaluate a published solution
+
+Download the `.qplib` and `.sol` files for the same instance from the
+[QPLIB website](https://qplib.zib.de/QPLIB_0018.html), then evaluate the
+published state without running a solver:
+
+```python
+from ommx import Instance, State
+
+instance = Instance.load_qplib("QPLIB_0018.qplib")
+state = State.load_qplib_solution(
+    "QPLIB_0018.sol", num_variables=len(instance.decision_variables)
+)
+solution = instance.evaluate(state, atol=1e-8)
+print(solution.objective, solution.feasible)
+```
+
+Pass the variable count of the original QPLIB instance so that omitted values
+are filled with zero. `State.load_qplib_solution` supports the standard names
+in QPLIB's published `.sol` files. The reported `objvar` value is not a
+decision variable; `Instance.evaluate` computes the objective and feasibility
+from the imported state. See {meth}`~ommx.State.load_qplib_solution` for the
+file format and error behavior.
+
++++
+
+## Note about Annotations with the Instance
+
+The downloaded instance includes various annotations accessible via the `annotations` property:
+
+```{code-cell} ipython3
+import pandas as pd
+# Display annotations in tabular form using pandas
+pd.DataFrame.from_dict(instance.annotations, orient="index", columns=["Value"]).sort_index()
+```
+
+These instances have both dataset-level annotations and dataset-specific annotations.
+
+There are seven dataset-wide annotations with dedicated properties:
+
+| Annotation                                    | Property          | Description                                               |
+|----------------------------------------------|-------------------|-----------------------------------------------------------|
+| `org.ommx.v1.instance.authors`               | `authors`         | The authors of the instance                              |
+| `org.ommx.v1.instance.constraints`           | `num_constraints` | The number of constraint conditions in the instance      |
+| `org.ommx.v1.instance.created`               | `created`         | The date of the instance was saved as an OMMX Artifact   |
+| `org.ommx.v1.instance.dataset`               | `dataset`         | The name of the dataset to which this instance belongs   |
+| `org.ommx.v1.instance.license`               | `license`         | The license of this dataset                              |
+| `org.ommx.v1.instance.title`                 | `title`           | The name of the instance                                 |
+| `org.ommx.v1.instance.variables`             | `num_variables`   | The total number of decision variables in the instance   |
+
+## QPLIB Annotations
+
+QPLIB instances include comprehensive annotations that describe the mathematical properties of quadratic programming problems. These annotations are based on the official QPLIB specification and are prefixed with `org.ommx.qplib.*`.
+
+For detailed information about all available QPLIB annotations and their meanings, please refer to the [official QPLIB documentation](https://qplib.zib.de/doc.html).
+
+For example, you can check the problem type and objective curvature of the QPLIB instance:
+
+```{code-cell} ipython3
+# QPLIB-specific annotations
+print(f"Problem type: {instance.annotations['org.ommx.qplib.probtype']}")
+print(f"Objective type: {instance.annotations['org.ommx.qplib.objtype']}")
+print(f"Objective curvature: {instance.annotations['org.ommx.qplib.objcurvature']}")
+print(f"Number of variables: {instance.annotations['org.ommx.qplib.nvars']}")
+print(f"Number of constraints: {instance.annotations['org.ommx.qplib.ncons']}")
+```

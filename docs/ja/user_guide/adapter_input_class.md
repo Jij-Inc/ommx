@@ -39,17 +39,13 @@ kernelspec:
 次の Instance には active な OneHot 制約があるため、OneHot を exact input として受け取らない PySCIPOpt Adapter の `INPUT_CLASS` には入りません。
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Instance, OneHotConstraint, Sense
+from ommx import Instance, OneHotConstraint
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-xs = [DecisionVariable.binary(i) for i in range(3)]
-instance = Instance.from_components(
-    decision_variables=xs,
-    objective=sum(xs),
-    constraints={},
-    one_hot_constraints={0: OneHotConstraint(variables=xs)},
-    sense=Sense.Maximize,
-)
+instance = Instance.maximize()
+xs = [instance.new_binary("x", subscripts=[i]) for i in range(3)]
+instance.objective = sum(xs)
+instance.add_one_hot_constraint(OneHotConstraint(variables=xs))
 
 input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
 assert not input_class.contains(instance)
@@ -70,6 +66,8 @@ Membership は、目的関数と active な4種類の制約族（通常制約、
 - named function だけが参照する変数
 - `output_objective` だけが参照する変数
 
+Instanceが保持する変数と、現在の問題で使う変数の区別は[Instanceの基本モデル](./instance.md)を参照してください。
+
 同様に、removed constraint は relation、次数、特殊制約の有無の判定対象ではありません。したがって、特殊制約を通常制約へ lowering した Instance は、変換元を removed constraint として保持したまま、特殊制約を許さない `INPUT_CLASS` に入れます。active と removed の意味は [Removed constraints と実行可能性](./removed_constraints.md) を参照してください。
 
 ## INPUT_CLASS と Adapter applicability
@@ -88,4 +86,4 @@ Membershipを満たしても、converterやBackendのすべての処理が成功
 
 通常の`solve()`と`sample()`は、入力のcopyを作って推奨PolicyでPreparationし、`INPUT_CLASS` membershipへ到達してから厳格な実行経路を呼びます。呼び出し元のInstanceは変更しません。
 
-一方、`solve_without_preparation()`、`sample_without_preparation()`、Adapter constructorはPreparationを行いません。これらへ渡すInstanceは、呼び出し前から`INPUT_CLASS`に入っている必要があります。Policyをapplication固有に編集する場合の一連の操作は[Adapter向けにInstanceを準備する](../tutorial/prepare_instance_for_adapter.md)を参照してください。
+一方、`solve_without_preparation()`、`sample_without_preparation()`、Adapter constructorはPreparationを行いません。これらへ渡すInstanceは、呼び出し前から`INPUT_CLASS`に入っている必要があります。Policyをapplication固有に編集する場合の一連の操作は[Preparationで変換する制約族を選ぶ](../how_to/customize_preparation.md)を参照してください。

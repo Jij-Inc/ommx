@@ -13,6 +13,8 @@
 - Backendへ渡す決定変数: {attr}`~ommx.Instance.used_decision_variables`
 - Backendの出力を評価するAPI: {meth}`~ommx.Instance.evaluate` / {meth}`~ommx.Instance.evaluate_samples`
 
+Instanceが保持する変数の一覧は、そのままBackend変数の一覧にはなりません。変換前の表現や評価のために保持している変数もあります。この区別が初見なら、[Instanceの基本モデル](../user_guide/instance.md)を先に確認してください。
+
 ## Adapterが実装する契約
 
 - `INPUT_CLASS`を必ず宣言する。これはAdapterがPreparationなしで直接受け取るInstanceの集合であり、applicabilityの完全な条件でもあります。
@@ -20,8 +22,8 @@
 - Solver Adapterは{meth}`~ommx.adapter.SolverAdapter.solve_without_preparation`、Sampler Adapterは{meth}`~ommx.adapter.SamplerAdapter.sample_without_preparation`を実装する。これらは入力をPreparationせず、non-memberを拒否する厳格な経路です。
 - 通常の`solve()`と`sample()`は入力のcopyへ{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy`を適用してから厳格な経路を呼びます。Backend固有の引数のためにこれらをoverrideする場合も、このcopy、Preparation、strict methodという順序を保ちます。
 - Adapter constructorもexact inputだけを受け取り、Preparationしません。
-- Backendには{attr}`~ommx.Instance.used_decision_variables`だけをencodeし、OMMX IDとBackend変数の対応を保持して、すべてのused IDをdecodeする。fixed、dependent、irrelevant、removed-constraint-only、named-function-only、`output_objective`-onlyの変数は独立したBackend入力ではありません。
-- decodeしたstateまたはsamplesは、Backendへ渡した同じexact Instanceで評価する。そのInstanceがdependent variableの復元とremoved constraintの評価を所有します。
+- OMMX由来の独立変数としてBackendへencodeするのは、{attr}`~ommx.Instance.used_decision_variables`に限定する。Backend独自の補助変数を追加することはできます。OMMX IDとBackend変数の対応を保持し、すべてのused IDをdecodeしてください。fixed、dependent、irrelevant、removed-constraint-only、named-function-only、`output_objective`-onlyの変数は独立したBackend入力ではありません。
+- decodeしたstateまたはsamplesは、Backend入力の作成に使ったexact Instanceと数学的に同じ、作成後に変更していないsnapshotで評価する。そのInstanceがdependent variableの復元とremoved constraintの評価を所有します。
 
 ## 参照実装
 

@@ -89,7 +89,7 @@ sense in the HiGHS model.
 
 Use `OMMXHighsAdapter.solve(instance)` for model construction, solving, and
 solution recovery, or call `adapter.solver_input.run()` to solve a constructed
-model. See the [adapter tutorial](../tutorial/solve_with_ommx_adapter).
+model. See the [adapter tutorial](../tutorial/solve_with_ommx_adapter.md).
 
 When assembling long linear objectives and constraints, the adapter now adds
 terms without repeatedly copying the accumulated expression.
@@ -584,9 +584,9 @@ Adapter implementations must express every accepted-model condition in
 in the solver-input construction path; their failures are conversion or backend
 errors rather than `AdapterNotApplicableError`. In particular, OpenJij signed-ID
 and finite-coefficient validation now occurs when sampler input is built. See
-[Adapter exact inputs](../user_guide/adapter_input_class.md) and the
-[Adapter Developer Guide](../developer_guide/adapter.md) for the responsibility
-boundary.
+[Adapter input classes](../user_guide/capability_model.md) and the
+[Adapter implementation tutorial](../tutorial/implement_adapter.md) for the
+responsibility boundary.
 
 ### Adapter input classes are required ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
 
@@ -595,7 +595,7 @@ Concrete `SolverAdapter` and `SamplerAdapter` implementations must declare
 declaration. In-repository adapters now expose `InstanceClass` directly, so
 callers can pass `Adapter.INPUT_CLASS` to {meth}`~ommx.Instance.prepare` without
 an `is not None` guard. A missing declaration still produces a clear `TypeError`
-when applicability is checked. See the [Adapter Developer Guide](../developer_guide/adapter.md)
+when applicability is checked. See the [Adapter implementation tutorial](../tutorial/implement_adapter.md)
 for the complete contract.
 
 ## 3.0.0 Beta 3
@@ -663,10 +663,7 @@ replace OpenJij's model-conversion options and the prerelease
 [Sampling with OpenJij](../tutorial/tsp_sampling_with_openjij_adapter) for a
 complete example and the
 [Python SDK v2 to v3 Migration Guide](../migration/python_sdk_v2_to_v3.md) for
-the corresponding API replacements. The current contracts are described in
-[Adapter exact inputs](../user_guide/adapter_input_class.md),
-[Instance Preparation and PreparationPolicy](../user_guide/preparation_policy.md),
-and [Removed constraints and feasibility](../user_guide/removed_constraints.md).
+the corresponding API replacements.
 
 ## 3.0.0 Beta 2
 
@@ -724,10 +721,9 @@ source_samples = preparation.evaluate_source(prepared_samples)
 Finite penalties and approximate integer slack now require explicit opt-in.
 Every prepared value is a new {class}`~ommx.Instance`, so applicability must be
 checked on `preparation.input`, not inferred from the source. See
-[Adapter exact inputs](../user_guide/adapter_input_class.md),
-[Instance Preparation and PreparationPolicy](../user_guide/preparation_policy.md),
-and the [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) for
-the accepted model classes and preparation details.
+[Adapter input classes](../user_guide/capability_model.md) and the
+[OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) for the
+accepted model classes and preparation details.
 
 When migrating from 2.6.1, catch `AdapterNotApplicableError` instead of an
 adapter-specific exception for unsupported input. The canonical infeasibility
@@ -1629,7 +1625,7 @@ In addition to regular constraints, the following three special constraint types
 - {class}`~ommx.OneHotConstraint` — replaces the previous `ConstraintHints.OneHot` metadata
 - {class}`~ommx.Sos1Constraint` — replaces the previous `ConstraintHints.Sos1` metadata
 
-For concrete usage and evaluation-result access, see [Special Constraints](../user_guide/special_constraints.md). For the Indicator relax / restore workflow, see [Removed constraints and feasibility](../user_guide/removed_constraints.md).
+For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see [Special Constraints](../user_guide/special_constraints.md).
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
 

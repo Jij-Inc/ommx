@@ -35,8 +35,8 @@ impl ProvenanceKind {
 ///
 /// When a special constraint (indicator / one-hot / SOS1) is converted into a
 /// regular {class}`~ommx.Constraint` — for example via
-/// {meth}`~ommx.Instance.convert_one_hot_to_constraint` or
-/// {meth}`~ommx.Instance.lower_special_constraints` —
+/// :meth:`~ommx.Instance.convert_one_hot_to_constraint` or
+/// :meth:`~ommx.Instance.lower_special_constraints` —
 /// the generated constraint records a {class}`Provenance` entry naming the
 /// original special constraint. This lets callers trace a regular constraint
 /// back to the special constraint it was derived from.

@@ -14,16 +14,16 @@ kernelspec:
 複数のAdapterで最適化問題を解いて結果を比較する
 =========================================
 
-OMMX Adapterは共通化されたAPIを持つため、同じ問題を複数のソルバーで解いて結果を比較できます。[PySCIPOpt Adapterで特殊制約をそのまま解く](./solve_special_constraints_with_pyscipopt_adapter.md)と[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md)では、Adapterによって直接受け取れるInstanceと推奨Preparationが異なる例を見ました。このページでは、HiGHSとPySCIPOptのどちらにも変換なしで渡せる簡単なモデルを使います。
+OMMX Adapterで問題を解けるようになったら、同じInstanceを複数のAdapterへ渡して結果を比較できます。このページでは、HiGHSとPySCIPOptのどちらにも変換なしで渡せる簡単なモデルを使います。`pip install ommx-highs-adapter ommx-pyscipopt-adapter matplotlib`で必要なライブラリを用意してください。
 
-easy APIの`solve()`はprivate copyを作ってPreparationするため、1つのsource `Instance`を複数のAdapterで再利用しても、変換が互いに影響しません。この例のsourceは両方の`INPUT_CLASS`に最初から入るため、どちらのAdapterでも変換は不要です。比較にapplication固有のPreparationが必要なら、Adapterごとにsourceのcopyを作り、それぞれの`INPUT_CLASS`へPreparationして`solve_without_preparation()`へ渡します。
+`solve()`は元のInstanceを変更しないため、1つのInstanceを再利用できます。Adapterによって必要な変換が異なる場合も、それぞれが独立したcopyを準備します。独自のPolicyを使う方法は[Preparationで変換する制約族を選ぶ](./customize_preparation.md)を参照してください。
 
 ここでは、HiGHSとSCIPのどちらも直接受け取れる簡単なナップザック問題を考えましょう：
 
 $$
 \begin{aligned}
 \mathrm{maximize} \quad & \sum_{i=0}^{N-1} v_i x_i \\
-\mathrm{s.t.} \quad & \sum_{i=0}^{n-1} w_i x_i - W \leq 0, \\
+\mathrm{s.t.} \quad & \sum_{i=0}^{N-1} w_i x_i - W \leq 0, \\
 & x_{i} \in \{ 0, 1\} 
 \end{aligned}
 $$

@@ -43,11 +43,11 @@ assert input_class.contains(prepared)
 result = Adapter.solve_without_preparation(prepared)
 ```
 
-`prepare()`は渡されたInstanceをin-placeに変更します。通常の`solve()`と`sample()`が作るcopyはこの変更を呼び出し元から隔離します。明示的な経路でsource modelを別のAdapterにも使う場合や変換前後を比較する場合は、自分でcopyしてください。実行可能な例は[Adapter向けにInstanceを準備する](../tutorial/prepare_instance_for_adapter.md)を参照してください。
+`prepare()`は渡されたInstanceをin-placeに変更します。通常の`solve()`と`sample()`が作るcopyはこの変更を呼び出し元から隔離します。明示的な経路でsource modelを別のAdapterにも使う場合や変換前後を比較する場合は、自分でcopyしてください。実行可能な例は[Preparationで変換する制約族を選ぶ](../how_to/customize_preparation.md)を参照してください。
 
 ## PreparationPolicy が選ぶ phase
 
-`PreparationPolicy` の各 field は optional で、未指定の phase は実行されません。デフォルトではすべての phase が無効です。各 field は変換の実装そのものではなく、`Instance` が所有する既存操作のうちどれを呼ぶかを選択します。各操作の入力条件や error は、その owner operation が引き続き所有します。
+`PreparationPolicy` の各 field は optional で、未指定の phase は実行されません。デフォルトではすべての phase が無効です。各 field は、`Instance`の変換操作のうちどれを呼ぶかを選択します。各操作の入力条件やerrorは、対応するメソッドのAPI Referenceを参照してください。
 
 {meth}`~ommx.Instance.prepare` は、選択された phase を高々1回ずつ次の固定順序で適用します。
 
@@ -76,12 +76,12 @@ assert input_class.contains(instance)
 
 converterやBackendは、その後のsolver input構築や実行で別のerrorを返すことがあります。それらは追加のapplicability条件ではありません。
 
-Solver の出力を {class}`~ommx.Solution` や {class}`~ommx.SampleSet` に戻すときも、Adapter へ渡した同じ prepared Instance が評価の owner です。その Instance が保持する decision-variable dependency と removed constraint により、encoding 前の変数値や変換前の制約も評価できます。removed constraint の評価規則は [Removed constraints と実行可能性](./removed_constraints.md) を参照してください。
+Solverの出力を{class}`~ommx.Solution`や{class}`~ommx.SampleSet`に戻すときも、Adapterへ渡した同じprepared Instanceで評価します。そのInstanceが保持する変数間のdependencyとremoved constraintにより、encoding前の変数値や変換前の制約も評価できます。値の復元は[Instanceの基本モデル](./instance.md)、制約の評価規則は[Removed constraintsと実行可能性](./removed_constraints.md)を参照してください。
 
 ## 到達できない場合と部分的な変更
 
 すべての configured phase を適用しても target に到達しない場合、{class}`~ommx.PreparationTargetNotReachedError` が送出されます。`report` 属性には、最終状態に対する {class}`~ommx.InstanceClassMembershipReport` が入ります。呼び出し側は report を見て Policy を追加・変更するか、異なる target を選べます。
 
-Preparation全体を囲むglobal transactionはありません。後のphaseやowner operationが失敗しても、それより前に完了した変更はInstanceに残ります。個々のowner operationがどこまで検証してから変更するかは、それぞれのAPI contractに従います。通常の`solve()`と`sample()`ではこの部分的な変更も内部copyだけに残ります。明示的な`prepare()`でsourceを失敗前の状態に保つ必要がある場合は、先にcopyを作ってください。
+Preparation全体が失敗しても、自動的に変更前の状態へ戻るわけではありません。後のphaseが失敗しても、それより前に完了した変更はInstanceに残ります。通常の`solve()`と`sample()`ではこの変更も内部copyだけに残ります。明示的な`prepare()`でsourceを失敗前の状態に保つ必要がある場合は、先にcopyを作ってください。個々の変換が失敗時にどこまで変更を残すかは、それぞれのAPI Referenceを参照してください。
 
-この failure semantics は Preparation の詳細です。最初に Adapter を利用するときは Tutorial の happy path から始め、必要になった時点で本節と各 owner operation の API Reference を確認してください。
+初めてAdapterを使う場合は[Tutorial](../tutorial/prepare_instance_for_adapter.md)から始め、失敗時の処理が必要になった時点で本節と各変換のAPI Referenceを確認してください。

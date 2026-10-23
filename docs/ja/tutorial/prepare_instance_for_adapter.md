@@ -15,11 +15,7 @@ kernelspec:
 
 前の[PySCIPOpt Adapterで特殊制約をそのまま解く](./solve_special_constraints_with_pyscipopt_adapter.md)では、Indicator制約とSOS1制約をSCIPへ直接渡しました。しかし、すべてのAdapterが同じ種類のInstanceを直接受け取れるわけではありません。
 
-このチュートリアルでは、同じモデルをHiGHS Adapterで2通りに解きます。覚えておくことは次の3つです。
-
-1. `INPUT_CLASS`はpreparation-free APIが直接受け取るexactな集合である。
-2. `solve()`はcopyを作り、Adapterの推奨Policyで自動的にPreparationする。
-3. customな選択が必要なら、自分でcopyをPreparationして`solve_without_preparation()`へ渡す。
+このチュートリアルでは、同じモデルをHiGHS Adapterで解きます。覚えておくことは、**Adapterが直接扱えない表現も、OMMXが変換してから渡せる**ということです。この準備をInstance Preparationと呼びます。
 
 ## 必要なライブラリのインストール
 
@@ -57,24 +53,13 @@ source.add_sos1_constraint(
 )
 ```
 
-## Adapterが直接受け取れる入力を確認する
+## `solve()`にPreparationを任せる
 
-各Adapterの `INPUT_CLASS` は、そのAdapterが**変換なしで直接受け取れるInstanceの集合**です。`contains()` を使うと、手元のInstanceがその集合に入っているか確認できます。
+HiGHS Adapterは通常の線形制約を受け取れますが、Indicator制約やSOS1制約は直接受け取りません。それでも、前のページと同じように`solve()`を呼び出せます。
 
 ```{code-cell} ipython3
 from ommx_highs_adapter import OMMXHighsAdapter
 
-highs_input_class = OMMXHighsAdapter.INPUT_CLASS
-assert not highs_input_class.contains(source)
-```
-
-HiGHS Adapterは通常の線形制約を受け取れますが、Indicator制約やSOS1制約は直接受け取りません。したがって、この時点の`source`を`solve_without_preparation()`へ渡すことはできません。
-
-## `solve()`にPreparationを任せる
-
-通常の`solve()`は`source`のcopyを内部で作り、そのcopyを推奨PolicyでPreparationしてから解きます。HiGHS Adapterの推奨Policyは、Indicator制約とSOS1制約を通常の線形制約へ変換します。
-
-```{code-cell} ipython3
 solution = OMMXHighsAdapter.solve(source)
 
 assert solution.feasible
@@ -87,38 +72,24 @@ assert source.sos1_constraints
 solution.decision_variables_df()
 ```
 
-## 同じPreparationを明示的に行う
+`solve()`は、元のInstanceを変更せず、そのcopyをHiGHS向けに準備してから解きます。このモデルではIndicator制約とSOS1制約を通常の線形制約へ変換します。特殊制約を通常制約へ書き換える操作を**lowering**と呼びます。
 
-applicationがPolicyを確認・編集する必要がある場合は、新しい推奨Policyを取得し、選んだInstanceをPreparationして、厳格な`solve_without_preparation()`を使います。元のモデルを残すため、ここでは`copy.copy()`で作ったcopyへ、`solve()`の内部と同じ推奨Policyを明示的に適用します。
+この例の変数はすべてBinaryであり、変換に必要な有限の上下限があります。任意のモデルを必ず変換できるわけではありません。個々のloweringの数式や適用条件はAPI Referenceで説明します。
+
+## 直接受け取れる範囲と、変換の方針
+
+Adapterが直接受け取るInstanceの集合を`INPUT_CLASS`、その集合へ向けて選ぶ変換の方針を`PreparationPolicy`と呼びます。次のコードで、今回のsourceにはHiGHS向けの変換が必要だったことを確認できます。
 
 ```{code-cell} ipython3
-import copy
-
-policy = OMMXHighsAdapter.recommended_preparation_policy()
-
-prepared = copy.copy(source)
-prepared.prepare(highs_input_class, policy)
-
-# 変換後のInstanceはHiGHS Adapterへ直接渡せる
-assert highs_input_class.contains(prepared)
-
-# コピー元のsourceは変えず、preparedだけが変換されている
-assert source.indicator_constraints
-assert source.sos1_constraints
-assert not prepared.indicator_constraints
-assert not prepared.sos1_constraints
-
-prepared_solution = OMMXHighsAdapter.solve_without_preparation(prepared)
-assert prepared_solution.feasible
-assert abs(prepared_solution.objective - 20.0) < 1e-8
-prepared_solution.decision_variables_df()
+assert not OMMXHighsAdapter.INPUT_CLASS.contains(source)
 ```
+
+`solve()`はAdapterの推奨Policyを使いました。HiGHSの場合は今回のloweringを推奨しているため、利用者が変換コードを書く必要はありませんでした。一方、変換の選択や設定がアプリケーションに依存する場合は、推奨をそのまま使わず、自分でPolicyを選びます。
 
 ## まとめ
 
-- `INPUT_CLASS`は`solve_without_preparation()`が変換なしで直接受け取れる入力の集合です。
-- `solve()`は入力のcopyを推奨PolicyでPreparationするため、元のInstanceを変更しません。
-- 推奨Policy自体は変換の提案であり、取得しただけではInstanceを変更しません。
-- Policyを編集するときは、copyを`prepare()`して`solve_without_preparation()`へ渡します。
+- 特殊制約を直接扱わないAdapterでも、loweringして解ける場合があります。
+- `solve()`は入力のcopyに推奨Policyを適用するため、元のInstanceを変更しません。
+- `INPUT_CLASS`は直接受け取れる範囲、`PreparationPolicy`はそこへ向かう変換の選択です。
 
-`INPUT_CLASS` の詳しい読み方は[Adapter の exact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)、Policyの選択とPreparationの詳しい動作は[Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md)を参照してください。Indicator、OneHot、SOS1の数学的な意味は[特殊制約型](../user_guide/special_constraints.md)、Preparationで取り除いた制約を使って元のモデルを評価できる仕組みは[Removed constraints と実行可能性](../user_guide/removed_constraints.md)で説明しています。
+自分で変換を選ぶ必要が生じたら、操作ガイド[Preparationで変換する制約族を選ぶ](../how_to/customize_preparation.md)へ進んでください。仕組みを理解するには[Adapterのexact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)と[Instance PreparationとPreparationPolicy](../user_guide/preparation_policy.md)を参照してください。

@@ -11,64 +11,71 @@ kernelspec:
   name: python3
 ---
 
-Solve with Multiple Adapters and Compare the Results
-=====================================================
+Solve with multiple adapters and compare the results
+======================================================
 
-OMMX Adapters share a common API, so you can solve the same problem with multiple solvers and compare their results. In [Solve Special Constraints Directly with the PySCIPOpt Adapter](./solve_special_constraints_with_pyscipopt_adapter.md) and [Prepare an Instance for an Adapter](./prepare_instance_for_adapter.md), we saw that different Adapters have different exact inputs. On this page, we use a simple model that both HiGHS and PySCIPOpt accept without conversion.
-
-The easy `solve()` API makes and prepares a private copy, so the same source `Instance` can be reused across Adapters without cross-contamination. In this example the source already belongs to both `INPUT_CLASS` values, so neither Adapter needs a conversion. If a comparison requires application-specific Preparation, make one source copy per Adapter, prepare each toward its own `INPUT_CLASS`, and call `solve_without_preparation()`.
-
-Consider the following knapsack problem, which both HiGHS and SCIP accept directly:
+Since the OMMX Adapter provides a unified API, you can solve the same problem using multiple solvers and compare the results. Let's consider a simple knapsack problem as an example:
 
 $$
 \begin{aligned}
 \mathrm{maximize} \quad & \sum_{i=0}^{N-1} v_i x_i \\
 \mathrm{s.t.} \quad & \sum_{i=0}^{n-1} w_i x_i - W \leq 0, \\
-& x_{i} \in \{ 0, 1\}
+& x_{i} \in \{ 0, 1\} 
 \end{aligned}
 $$
 
 ```{code-cell} ipython3
-from ommx import Instance
+from ommx import DecisionVariable, Instance, Sense
 
 v = [10, 13, 18, 31, 7, 15]
 w = [11, 25, 20, 35, 10, 33]
 W = 47
 N = len(v)
 
-instance = Instance.maximize()
-x = [instance.new_binary("x", subscripts=[i]) for i in range(N)]
-instance.objective = sum(v[i] * x[i] for i in range(N))
-instance.add_constraint(
-    sum(w[i] * x[i] for i in range(N)) <= W,
-    "weight limit",
+x = [
+    DecisionVariable.binary(
+        id=i,
+        name="x",
+        subscripts=[i],
+    )
+    for i in range(N)
+]
+instance = Instance.from_components(
+    decision_variables=x,
+    objective=sum(v[i] * x[i] for i in range(N)),
+    constraints={0: sum(w[i] * x[i] for i in range(N)) - W <= 0},
+    sense=Sense.Maximize,
 )
 ```
 
-## Solve with Multiple Solvers
+## Solve with multiple adapters
 
-Here we use the open-source HiGHS and SCIP Adapters developed alongside the OMMX Python SDK. Adapters for other solvers use the same interface. See [Supported Adapters](../user_guide/supported_ommx_adapters.md) for the complete list.
+Here, we will use OSS adapters developed as a part of OMMX Python SDK.
+For non-OSS solvers, adapters are also available and can be used with the same interface.
+A complete list of supported adapters for each solver can be found in [Supported Adapters](../user_guide/supported_ommx_adapters.md).
+
+Here, let's solve the knapsack problem with OSS solvers, Highs, SCIP.
 
 ```{code-cell} ipython3
 from ommx_highs_adapter import OMMXHighsAdapter
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
-# Adapters to compare
+# List of adapters to use
 adapters = {
     "highs": OMMXHighsAdapter,
     "scip": OMMXPySCIPOptAdapter,
 }
 
-# Each Adapter receives the same source and owns its private working copy.
+# Solve the problem using each adapter
 solutions = {
     name: adapter.solve(instance) for name, adapter in adapters.items()
 }
 ```
 
-## Compare the Results
+## Compare the results
 
-This knapsack problem is small, so both solvers find an optimal solution.
+Since this knapsack problem is simple, all solvers will find the optimal solution.
 
 ```{code-cell} ipython3
 from matplotlib import pyplot as plt
@@ -86,7 +93,7 @@ for name, solution in solutions.items():
 plt.legend()
 ```
 
-For some analyses, it is useful to concatenate the pandas `DataFrame` values returned by `decision_variables_df()`.
+It would be convenient to concatenate the `pandas.DataFrame` obtained with `decision_variables_df` when analyzing the results of multiple solvers.
 
 ```{code-cell} ipython3
 import pandas
