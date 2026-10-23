@@ -16,10 +16,93 @@ use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
     exceptions::{PyKeyError, PyTypeError, PyValueError},
     prelude::*,
-    types::{PyBytes, PyDict},
+    types::{PyBytes, PyDict, PyFloat, PyInt, PyString, PyTuple},
     Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+struct NamedStateInput(ommx::NamedState);
+
+impl<'py> FromPyObject<'_, 'py> for NamedStateInput {
+    type Error = PyErr;
+
+    fn extract(value: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        let type_error = || {
+            PyTypeError::new_err(
+                "named values must be a Mapping[str, Mapping[tuple[int, ...], float]]",
+            )
+        };
+        if !value.hasattr("items")? {
+            return Err(type_error());
+        }
+        let mut result = BTreeMap::new();
+        for item in value.call_method0("items")?.try_iter()? {
+            let (name, values) = item?.extract::<(String, Bound<'py, PyAny>)>()?;
+            if result.contains_key(&name) {
+                return Err(PyValueError::new_err(format!(
+                    "Duplicate variable name after string normalization: {name:?}"
+                )));
+            }
+            if !values.hasattr("items")? {
+                return Err(type_error());
+            }
+            let mut entries = BTreeMap::new();
+            for item in values.call_method0("items")?.try_iter()? {
+                let (subscripts, value) = item?.extract::<(Bound<'py, PyTuple>, f64)>()?;
+                let subscripts = subscripts.extract::<Vec<i64>>()?;
+                if entries.contains_key(&subscripts) {
+                    return Err(PyValueError::new_err(format!(
+                        "Duplicate subscripts after integer normalization for name {name:?}: {subscripts:?}"
+                    )));
+                }
+                entries.insert(subscripts, value);
+            }
+            result.insert(name, entries);
+        }
+        Ok(Self(result))
+    }
+}
+
+impl pyo3_stub_gen::PyStubType for NamedStateInput {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::locally_defined("NamedState", "ommx._ommx_rust".into())
+    }
+
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        Self::type_input()
+    }
+}
+
+enum NamedStateMapping {}
+
+impl pyo3_stub_gen::PyStubType for NamedStateMapping {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            name: "collections.abc.Mapping[str, collections.abc.Mapping[tuple[int, ...], float]]"
+                .into(),
+            source_module: None,
+            import: ["collections.abc".into()].into(),
+            type_refs: Default::default(),
+        }
+    }
+}
+
+impl pyo3_stub_gen::runtime::PyRuntimeType for NamedStateMapping {
+    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+        let mapping = py.import("collections.abc")?.getattr("Mapping")?;
+        let subscripts = py
+            .get_type::<PyTuple>()
+            .get_item((py.get_type::<PyInt>(), py.Ellipsis()))?;
+        let values = mapping.get_item((subscripts, py.get_type::<PyFloat>()))?;
+        mapping.get_item((py.get_type::<PyString>(), values))
+    }
+}
+
+pyo3_stub_gen::type_alias!(
+    "ommx._ommx_rust",
+    NamedState = NamedStateMapping,
+    "Decision-variable values grouped by name and tuple subscripts. Use () for scalars and (i,) for one-dimensional indices. Resolve against the target Instance with state_from_named_values."
+);
 
 #[derive(Default)]
 struct StringMapping(HashMap<String, String>);
@@ -583,6 +666,38 @@ impl Instance {
     #[getter]
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.inner.decision_variable_names()
+    }
+
+    /// Create an ID-keyed {class}`~ommx.State` from values grouped by name and subscripts.
+    ///
+    /// >>> from ommx import Instance, NamedState
+    /// >>> instance = Instance.minimize()
+    /// >>> x = instance.new_binary("x", subscripts=[0])
+    /// >>> values: NamedState = {"x": {(0,): 1.0}}
+    /// >>> state = instance.state_from_named_values(values)
+    /// >>> state.entries == {x.id: 1.0}
+    /// True
+    ///
+    /// Use tuple keys: `()` for scalars, `(i,)` for one-dimensional variables,
+    /// and `(i, j)` for two-dimensional variables. This also accepts the output
+    /// of {meth}`~ommx.Solution.extract_all_decision_variables`, resolving IDs
+    /// against this instance even when the source solution used different IDs.
+    ///
+    /// Partial states and empty mappings are accepted. Omitted variables are
+    /// not filled or inferred. Conversion does not validate values against
+    /// kind, bounds, fixed values, or dependencies, or require finite values;
+    /// use {meth}`~ommx.Instance.evaluate` for validation.
+    ///
+    /// Only names and subscripts identify variables; parameters and descriptions
+    /// are ignored. Unnamed variables cannot be addressed. Raises `KeyError`
+    /// for an unknown name/subscript pair and `ValueError` when a supplied pair
+    /// matches multiple variables. In that case, use an ID-keyed state to
+    /// distinguish them. Ambiguous labels not supplied are allowed.
+    /// Input keys that repeat after string or integer normalization also raise
+    /// `ValueError` instead of overwriting earlier values.
+    /// Neither this instance nor the input mapping is modified.
+    fn state_from_named_values(&self, values: NamedStateInput) -> OmmxPyResult<State> {
+        Ok(State(self.inner.state_from_named_values(&values.0)?))
     }
 
     /// Get all unique named function names in this instance

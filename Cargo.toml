@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "3.0.0-beta.7"
+version = "3.0.0-beta.8"
 edition = "2021"
 rust-version = "1.89"
 license = "MIT OR Apache-2.0"
@@ -78,7 +78,7 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = "2.5.8"
 uuid = { version = "1.23.1", features = ["v4"] }
-zip = "8.6.0"
+zip = "9.0.4"
 zstd = "0.14.0"
 
 [workspace.lints.clippy]

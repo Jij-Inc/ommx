@@ -71,6 +71,7 @@ __all__ = [
     "LinearLike",
     "LogEncodingError",
     "NamedFunction",
+    "NamedState",
     "ObjectivePreparation",
     "OneHotConstraint",
     "OpenSolve",
@@ -139,6 +140,13 @@ __all__ = [
 ]
 
 LinearLike: TypeAlias = Linear | DecisionVariable | AttachedDecisionVariable
+NamedState: TypeAlias = collections.abc.Mapping[
+    str, collections.abc.Mapping[tuple[int, ...], float]
+]
+r"""
+Decision-variable values grouped by name and tuple subscripts. Use () for scalars and (i,) for one-dimensional indices. Resolve against the target Instance with state_from_named_values.
+"""
+
 ScalarLike: TypeAlias = builtins.int | builtins.float | numpy.integer | numpy.floating
 ToFunction: TypeAlias = (
     builtins.int
@@ -3398,6 +3406,37 @@ class Instance:
 
         Decision variables and constraints can be added incrementally with the
         `new_*` methods and {meth}`add_constraint`.
+        """
+    def state_from_named_values(self, values: NamedState) -> State:
+        r"""
+        Create an ID-keyed {class}`~ommx.State` from values grouped by name and subscripts.
+
+        >>> from ommx import Instance, NamedState
+        >>> instance = Instance.minimize()
+        >>> x = instance.new_binary("x", subscripts=[0])
+        >>> values: NamedState = {"x": {(0,): 1.0}}
+        >>> state = instance.state_from_named_values(values)
+        >>> state.entries == {x.id: 1.0}
+        True
+
+        Use tuple keys: `()` for scalars, `(i,)` for one-dimensional variables,
+        and `(i, j)` for two-dimensional variables. This also accepts the output
+        of {meth}`~ommx.Solution.extract_all_decision_variables`, resolving IDs
+        against this instance even when the source solution used different IDs.
+
+        Partial states and empty mappings are accepted. Omitted variables are
+        not filled or inferred. Conversion does not validate values against
+        kind, bounds, fixed values, or dependencies, or require finite values;
+        use {meth}`~ommx.Instance.evaluate` for validation.
+
+        Only names and subscripts identify variables; parameters and descriptions
+        are ignored. Unnamed variables cannot be addressed. Raises `KeyError`
+        for an unknown name/subscript pair and `ValueError` when a supplied pair
+        matches multiple variables. In that case, use an ID-keyed state to
+        distinguish them. Ambiguous labels not supplied are allowed.
+        Input keys that repeat after string or integer normalization also raise
+        `ValueError` instead of overwriting earlier values.
+        Neither this instance nor the input mapping is modified.
         """
     def add_decision_variable(
         self, variable: DecisionVariable
