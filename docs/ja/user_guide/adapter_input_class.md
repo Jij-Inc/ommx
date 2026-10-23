@@ -24,13 +24,15 @@ kernelspec:
 `INPUT_CLASS` の型である {class}`~ommx.InstanceClass` は、複数の {class}`~ommx.InstanceClassClause` の有限合併、つまりいずれか1つの clause を満たす Instance の集合です。1つの clause の中では、次の条件をすべて同時に満たす必要があります。
 
 - 使用中の決定変数の kind
-- 目的関数の次数
-- 通常制約の relation と次数
-- Indicator 制約本体の relation と次数
+- 目的関数の多項式表現と次数
+- 通常制約の relation、多項式表現、次数
+- Indicator 制約本体の relation、多項式表現、次数
 - active な OneHot 制約、SOS1 制約を許すか
 - 最適化 sense
 
 例えば「連続変数だけを使う二次計画」と「整数変数を使える線形計画」を別々の clause で宣言しても、その条件を clause 間で組み合わせた混合整数二次計画が自動的に含まれるわけではありません。
+
+`Function` の表現形式も判定対象です。`Function` として保持した線形式 `g` の `g ** 2` は自動展開されないため、数学的には二次式でも、多項式表現を要求する `INPUT_CLASS` には入りません。展開済みの多項式として構築する `g * g` との違いは、[Functionの説明](./function.md)を参照してください。
 
 ## Membership を調べる
 
