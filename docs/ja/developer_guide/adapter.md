@@ -2,7 +2,7 @@
 
 このページは、独自のBackendをOMMXへ接続するAdapter実装者向けの入口です。まず、Adapter利用者にも共通する次のモデルを確認してください。
 
-1. [Adapterのexact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)
+1. [InstanceClassとAdapterの入力条件](../user_guide/instance_class.md)
 2. [Instance PreparationとPreparationPolicy](../user_guide/preparation_policy.md)
 3. [Removed constraintsと実行可能性](../user_guide/removed_constraints.md)
 
@@ -23,7 +23,7 @@ Instanceが保持する変数の一覧は、そのままBackend変数の一覧�
 - 通常の`solve()`と`sample()`は入力のcopyへ{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy`を適用してから厳格な経路を呼びます。Backend固有の引数のためにこれらをoverrideする場合も、このcopy、Preparation、strict methodという順序を保ちます。
 - Adapter constructorもexact inputだけを受け取り、Preparationしません。
 - OMMX由来の独立変数としてBackendへencodeするのは、{attr}`~ommx.Instance.used_decision_variables`に限定する。Backend独自の補助変数を追加することはできます。OMMX IDとBackend変数の対応を保持し、すべてのused IDをdecodeしてください。fixed、dependent、irrelevant、removed-constraint-only、named-function-only、`output_objective`-onlyの変数は独立したBackend入力ではありません。
-- decodeしたstateまたはsamplesは、Backend入力の作成に使ったexact Instanceと数学的に同じ、作成後に変更していないsnapshotで評価する。Adapter内にprivateなcopyを保持するか、encodeからBackend実行、decode完了まで入力を変更しない契約を設けてください。そのInstanceがdependent variableの復元とremoved constraintの評価を所有します。
+- decodeしたstateまたはsamplesは、Backend入力の作成に使った同じInstanceで評価する。encodeからBackend実行、decode完了まで、そのInstanceを変更しない契約を設けてください。そのInstanceがdependent variableの復元とremoved constraintの評価を所有します。呼び出し側が元のInstanceを変更しながら使う必要がある場合に限り、Adapter内部でcopyを保持する方法を検討します。
 
 Backendが報告した最適性をSolutionへ付与するときは、評価に使ったInstanceの{meth}`~ommx.Instance.map_active_optimality`を通してください。変換後の問題の最適性と、返す目的値に対する最適性の区別は[Removed constraintsと実行可能性](../user_guide/removed_constraints.md)を参照してください。
 

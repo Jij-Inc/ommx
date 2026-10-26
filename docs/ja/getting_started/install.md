@@ -1,6 +1,6 @@
 # Python SDKとAdapterのインストール
 
-最初の3つのAdapter Tutorialでは、**OMMX Python SDK v3のプレビュー版**を使います。このページの手順で、SDKとAdapterのバージョンをそろえた環境を用意してください。
+ここから案内する例では、**OMMX Python SDK v3のプレビュー版**を使います。まずSDKを導入し、ソルバーを使う場合だけ必要なAdapterを追加してください。
 
 バージョンを指定せずにインストールすると、安定版のv2が選ばれるため、Tutorialのv3 APIを使えません。ここでは、公開済みの`3.0.0b7`で実行を確認した手順を示します。
 
@@ -42,35 +42,60 @@ python -m pip install ipykernel
 python -m ipykernel install --user --name ommx-book --display-name "OMMX Book"
 ```
 
-## 2. SDKと使うAdapterをインストールする
-
-まず、最初の2つのTutorialで使うPySCIPOpt AdapterとSDKを入れます。HiGHSなど、使わないAdapterを先に入れる必要はありません。
+(install-python-sdk)=
+## 2. Python SDKをインストールする
 
 ```sh
-python -m pip install "ommx==3.0.0b7" "ommx-pyscipopt-adapter==3.0.0b7"
+python -m pip install "ommx==3.0.0b7"
 ```
 
-この環境で、次の2つのTutorialを実行できます。
+[Instanceを変換して結果を確認する](../how_to/transform_instance_without_solver.md)場合は、ここまでで準備が完了です。[InstanceClassの説明](../user_guide/instance_class.md)のmembership例もSDKだけで実行できます。
+
+(install-adapters)=
+## 3. ソルバーを使う場合だけAdapterを追加する
+
+### PySCIPOpt Adapter
+
+```sh
+python -m pip install "ommx-pyscipopt-adapter==3.0.0b7"
+```
+
+このAdapterで、最初の二つのTutorialと[独自Policyの操作ガイド](../how_to/customize_preparation.md)を実行できます。
 
 1. [PySCIPOpt Adapterで0-1ナップサック問題を解く](../tutorial/solve_with_ommx_adapter)：変換せずに求解し、結果を読む。
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1を使う。
 
-[Preparationで変換する制約族を選ぶ](../how_to/customize_preparation.md)も、この環境で実行できます。
-
-## 3. HiGHSを使うときに追加する
-
-[Adapter向けにInstanceを準備する](../tutorial/prepare_instance_for_adapter.md)へ進む場合は、同じ仮想環境へHiGHS Adapterを追加します。このTutorialだけを実行する場合に必要なのは、SDKとHiGHS Adapterです。
+### HiGHS Adapter
 
 ```sh
-python -m pip install "ommx==3.0.0b7" "ommx-highs-adapter==3.0.0b7"
+python -m pip install "ommx-highs-adapter==3.0.0b7"
 ```
 
-[複数のAdapterで結果を比較する](../how_to/compare_adapters.md)では、両Adapterに加えて、グラフの描画用にmatplotlibも必要です。
+このAdapterで、3つ目のTutorial[Adapter向けにInstanceを準備する](../tutorial/prepare_instance_for_adapter.md)を実行できます。ページ内でモデルを作り直すため、前のTutorialの実行状態やPySCIPOpt Adapterは必要ありません。
+
+[複数のAdapterで結果を比較する](../how_to/compare_adapters.md)では、両方のAdapterと、グラフ描画用のmatplotlibを用意してください。
+
+```sh
+python -m pip install matplotlib
+```
+
+(install-openjij-adapter)=
+### OpenJij Adapter
+
+手順1・2で用意したSDKの`3.0.0b7`の環境に、同じバージョンのAdapterを追加します。
+
+```sh
+python -m pip install "ommx-openjij-adapter==3.0.0b7"
+```
+
+[OpenJij Adapterで小さな問題をサンプリングする](../how_to/sample_with_openjij_adapter)ための環境です。OpenJij本体も依存関係として導入されるため、別途の導入やソルバーのライセンス設定は必要ありません。PySCIPOptやHiGHSなど、ほかのAdapterは使いません。
+
+任意の応用例である[TSPのNotebook](../tutorial/tsp_sampling_with_openjij_adapter)では、図を描くためにmatplotlibも追加します。
 
 ```sh
 python -m pip install matplotlib
 ```
 
 ```{note}
-このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、このページから案内する3つのTutorialと2つのHow-toです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
+このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するInstance変換How-toとmembership例、3つのAdapter Tutorialと2つのAdapter How-to、およびOpenJijの小さなサンプリングHow-toとTSPのNotebookです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
 ```

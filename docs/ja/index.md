@@ -4,7 +4,7 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）は、**ソルバ�
 
 最適化の結果を理解するには、「変数にどの値が入ったか」だけでは不十分です。変数が取りうる値と満たすべき制約、比較する目的値、変換後の結果を元の問題でどう解釈するかが必要です。OMMXは、その基準を特定のソルバーの内部表現に委ねずに扱います。
 
-## ソルバーを呼ばなくても、候補を評価できる
+## 手元の候補を評価する
 
 例えば、二つの項目を同時には選べない問題を記述して、手元の候補を検査できます。
 
@@ -22,7 +22,7 @@ assert solution.feasible
 assert solution.objective == 1
 ```
 
-この評価にソルバーは必要ありません。一方、候補を探索して解を求めたい場合は、同じ問題をAdapter経由でソルバーへ渡せます。評価で「この候補は実行可能か」を確認することと、求解で「より良い候補を探す」ことは別の操作です。
+候補を探索して解を求めたい場合は、同じ問題をAdapter経由でソルバーへ渡せます。評価で「この候補は実行可能か」を確認することと、求解で「より良い候補を探す」ことは別の操作です。
 
 ## 問題の意味と、解くための表現を分ける
 
@@ -39,9 +39,11 @@ assert solution.objective == 1
 | やりたいこと | 最初に読むページ | この段階で学ぶこと |
 |---|---|---|
 | ソルバーで問題を解く | [Adapterで解くTutorial](./tutorial/solve_with_ommx_adapter) | Instanceを作り、求解して結果を読む |
+| OpenJijでサンプリングする | [小さな問題をサンプリングするHow-to](./how_to/sample_with_openjij_adapter) | 重みを設定して問題を準備し、候補を目的値と実行可能性で読む |
 | 独自のAdapterを実装する | [Adapter Developer Guide](./developer_guide/adapter.md) | 入力・変換・評価の契約と参照実装 |
 | 問題や候補解の意味を理解する | [Instance](./user_guide/instance.md) → [StateからSolutionへの評価](./user_guide/solution.md) | 変数の役割、実行可能性、目的値、最適性の違い |
 | 特殊制約を使う | [特殊制約の意味と評価](./user_guide/special_constraints.md) | Indicator・OneHot・SOS1の成立条件 |
+| 問題を変換し、結果を確認する | [Instanceを変換するHow-to](./how_to/transform_instance_without_solver.md) | target classとPolicyを指定し、変換結果と手元の候補を検査する |
 | 変換後の結果を解釈する | [変換後の問題とRemoved constraints](./user_guide/removed_constraints.md) | activeな問題と、元の条件を使った評価の違い |
 | 複数の候補を比較する | [SampleSet](./user_guide/sample_set.md) | サンプルごとの評価と、得られた候補の中からの選択 |
 | 既存の問題を入手する | [MIPLIB](./tutorial/download_miplib_instance.md) / [QPLIB](./tutorial/download_qplib_instance.md) | 公開された最適化問題の取得 |
@@ -58,7 +60,9 @@ Adapterを使って解きたい人は、まず[Python SDKとAdapterのインス�
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1の意味を知り、対応ソルバーでそのまま解く。
 3. [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter.md)：特殊制約を直接扱わないHiGHSへ、loweringを経て同じモデルを渡す。
 
-独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。サンプリングの応用例として、[OpenJij AdapterでTSPを扱うTutorial](./tutorial/tsp_sampling_with_openjij_adapter)もあります。これは上記3つのTutorialの必須の続きではありません。
+独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。
+
+OpenJijを使いたい人は、上記3つのTutorialを実行せず、[OpenJij Adapterで小さな問題をサンプリングする](./how_to/sample_with_openjij_adapter)から始められます。[TSPのNotebook](./tutorial/tsp_sampling_with_openjij_adapter)は任意の応用例です。
 
 Adapterを実装する人は、利用者向けTutorialの通読ではなく、[Developer Guide](./developer_guide/adapter.md)から共通の入力・変換・評価の契約と参照実装を確認してください。
 
@@ -114,6 +118,8 @@ tutorial/download_qplib_instance
 
 how_to/customize_preparation
 how_to/compare_adapters
+how_to/transform_instance_without_solver
+how_to/sample_with_openjij_adapter
 ```
 
 ```{toctree}
@@ -131,13 +137,13 @@ user_guide/removed_constraints
 ```
 
 ```{toctree}
-:caption: User Guide：Adapter
+:caption: User Guide：変換とソルバー接続
 :maxdepth: 1
 :hidden:
 
-user_guide/supported_ommx_adapters
-user_guide/adapter_input_class
+user_guide/instance_class
 user_guide/preparation_policy
+user_guide/supported_ommx_adapters
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
 ```

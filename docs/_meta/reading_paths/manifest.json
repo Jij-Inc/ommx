@@ -322,9 +322,10 @@
       "label": "SampleSetから実行可能な候補を選ぶ",
       "owner": "G4M",
       "requires": [
-        "samples.counts",
+        "instance.model",
         "solution.read",
-        "feasibility.basic"
+        "feasibility.basic",
+        "sense"
       ],
       "external": false,
       "aliases": [
@@ -332,7 +333,23 @@
         "best_feasible",
         "summary_with_constraints"
       ],
-      "scope": ""
+      "scope": "既存のSampleSetから候補を読む能力。Samples/Stateを自作することや出現回数の内部表現は前提にしない。"
+    },
+    {
+      "id": "sampling.reported_results",
+      "label": "サンプラーのenergyとOMMXの報告目的値・実行可能性を区別する",
+      "owner": "G8",
+      "requires": [
+        "instance.model",
+        "constraint.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "backend energy",
+        "reported objective"
+      ],
+      "scope": "具体例でサンプラーの探索値とOMMXの報告値を区別する。Stateを使った手動評価、output_objectiveの全仕様、feasible_relaxed、一般の変換保証の習得とは区別する。"
     },
     {
       "id": "numeric.tolerance",
@@ -1307,7 +1324,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "PR #1159のレビュー修正で、最初のPySCIPOpt実行にHiGHSを要求せず、必要な時点で追加する手順にする。公開b7の3 Tutorial・2 How-to用の環境であり、全Book共通の互換性記録やK-acceptanceの完了ではない。",
+      "notes": "PR #1159のレビュー修正で、最初のPySCIPOpt実行にHiGHSを要求せず、必要な時点で追加する手順にする。公開b7の3 Tutorial・2 How-to用の環境であり、全Book共通の互換性記録やK-acceptanceの完了ではない。 PR #1284（I1）はSDKのみで止められる導入を先に置き、必要なAdapterだけ後で追加する。Cで追加したNotebookカーネル手順は保持する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2216,6 +2233,8 @@
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/sample_set.md"
       ],
       "requires": [
+        "instance.model",
+        "sense",
         "state.values",
         "evaluation.basic",
         "solution.read",
@@ -2634,7 +2653,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "class.quboの局所導入は設計案。現#1284本文への実装は未完了。",
+      "notes": "class.quboの局所導入は設計案。現#1284本文への実装は未完了。 I1の読者レビュー修正ではmembership例の後にFunctionの表現形式の詳細を置き、OneHotの数学的な条件と専用表現を局所的に区別する。active/usedの詳細やAdapter適用は基本のmembership例の後に置く。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2730,7 +2749,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "I1ではtarget・Policy・prepareの共通モデルをAdapter適用より先に置く。直入読者向けにOneHot/loweringとphaseを局所説明する。個別操作の数式・適用条件はAPI Reference、G7の一般的な変換保証は後続作業のまま。 明示的なprepareの基本例はin-placeとし、変換前のInstance本体を後で使う必要がある場合のみcopyを説明する。Adapter easy API内部のcopy契約とは区別する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2960,12 +2979,10 @@
           "introduces": [
             "class.membership",
             "preparation.target",
-            "policy.select",
-            "mutation.copy"
+            "policy.select"
           ],
           "uses": [
-            "policy.select",
-            "mutation.copy"
+            "policy.select"
           ],
           "mentions": []
         },
@@ -2984,7 +3001,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "PR #1159のレビュー修正では、推奨Policyを部分的に上書きするのではなく、OneHot loweringだけを有効にした新規Policyを作る。「許可する変換を固定する」という説明と実行を一致させる。",
+      "notes": "PR #1159のレビュー修正では、推奨Policyを部分的に上書きするのではなく、OneHot loweringだけを有効にした新規Policyを作る。「許可する変換を固定する」という説明と実行を一致させる。 同じInstanceをin-placeに準備し、そのままstrict実行する。元のInstanceの保存やcopyはこの操作の前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3450,7 +3467,7 @@
     },
     {
       "id": "P11",
-      "title": "ソルバーなしでInstanceを変換し検査する",
+      "title": "Instanceを変換し、結果を確認する",
       "slice": "I",
       "role": "how-to",
       "status": "existing",
@@ -3475,7 +3492,9 @@
             "constraint.basics",
             "sense",
             "instance.build",
-            "special.onehot"
+            "special.onehot",
+            "state.values",
+            "evaluation.basic"
           ],
           "uses": [
             "instance.build",
@@ -3490,13 +3509,11 @@
             "expression.form",
             "class.declare",
             "preparation.target",
-            "policy.select",
-            "mutation.copy"
+            "policy.select"
           ],
           "uses": [
             "class.declare",
             "policy.select",
-            "mutation.copy",
             "preparation.target"
           ],
           "mentions": []
@@ -3505,8 +3522,6 @@
           "id": "evaluate",
           "introduces": [
             "constraints.lifecycle",
-            "state.values",
-            "evaluation.basic",
             "solution.read",
             "feasibility.basic",
             "optimality.limit",
@@ -3530,7 +3545,7 @@
         "experiment.record"
       ],
       "parent_page": null,
-      "notes": "局所導入を備える独立入口。source本文の観察と上記設計契約は別記録。",
+      "notes": "局所導入を備える独立入口。source本文の観察と上記設計契約は別記録。 I1の修正ではactive/removedをこのページで短く定義する。実行例が確認するのは指定したOneHot loweringと手元の候補に限る。一般の変換保証や全feasibility viewの習得・I全体の完了とはみなさない。 ユーザー方針によりcopyは使わず同じInstanceへprepareする。比較用に保存するのは変換前の評価結果だけであるため、基本の候補評価を変換より前に導入する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3539,11 +3554,13 @@
     },
     {
       "id": "P12",
-      "title": "OpenJijでサンプリングし候補を評価する",
+      "title": "OpenJij Adapterで小さな問題をサンプリングする",
       "slice": "D",
       "role": "how-to",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/sample_with_openjij_adapter.ipynb"
+      ],
       "source_urls": [],
       "requires": [
         "ext.math",
@@ -3560,58 +3577,62 @@
             "constraint.basics",
             "sense",
             "instance.build",
-            "special.onehot"
+            "special.onehot",
+            "adapter.basic",
+            "class.membership"
           ],
           "uses": [
             "instance.build",
-            "special.onehot"
+            "special.onehot",
+            "class.membership"
           ],
           "mentions": []
         },
         {
           "id": "prepare",
           "introduces": [
-            "adapter.basic",
-            "class.membership",
             "preparation.target",
             "policy.select",
-            "mutation.copy",
-            "penalty.choice",
-            "adapter.strict"
+            "penalty.choice"
           ],
           "uses": [
             "policy.select",
             "penalty.choice",
-            "preparation.target",
-            "adapter.strict"
+            "preparation.target"
           ],
           "mentions": []
         },
         {
           "id": "samples",
           "introduces": [
-            "state.values",
-            "evaluation.basic",
-            "solution.read",
+            "adapter.strict",
             "feasibility.basic",
-            "optimality.limit",
-            "samples.counts",
-            "sampleset.read",
+            "sampling.reported_results"
+          ],
+          "uses": [
+            "adapter.strict",
+            "sampling.reported_results"
+          ],
+          "mentions": [
             "constraints.lifecycle",
             "objective.views",
-            "feasibility.views",
-            "evaluation.snapshot"
+            "transformation.guarantees"
+          ]
+        },
+        {
+          "id": "choose",
+          "introduces": [
+            "solution.read",
+            "variables.metadata",
+            "sampleset.read",
+            "optimality.limit"
           ],
           "uses": [
             "sampleset.read",
-            "objective.views",
-            "feasibility.views",
-            "evaluation.snapshot"
+            "variables.metadata",
+            "optimality.limit"
           ],
-          "mentions": [
-            "class.qubo",
-            "transformation.guarantees"
-          ]
+          "mentions": []
         }
       ],
       "deferred": [
@@ -3620,10 +3641,12 @@
         "artifact.format"
       ],
       "parent_page": null,
-      "notes": "旧T7の配置変更。OpenJijの実際のINPUT_CLASSを使い、QUBO限定を前提にしない。",
+      "notes": "D/P12は初見読者向けの独立Notebook。実際のINPUT_CLASSとfreshな推奨Policyへ重みを追加し、同一Instanceをprepareしてstrict samplingする。重み変更時はモデル構築からやり直す。手動のState/evaluate、Samples自作、copy、一般の変換保証の習得を主張しない。出力を含む本文検査と実行記録はPRに分離し、歴史的baselineは書き換えない。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/how_to/sample_with_openjij_adapter.ipynb"
+      ]
     },
     {
       "id": "T8",
@@ -3646,16 +3669,14 @@
         "class.membership",
         "preparation.target",
         "policy.select",
-        "mutation.copy",
         "penalty.choice",
         "adapter.strict",
-        "state.values",
-        "evaluation.basic",
         "solution.read",
         "feasibility.basic",
         "optimality.limit",
-        "samples.counts",
-        "sampleset.read"
+        "sampleset.read",
+        "variables.metadata",
+        "sampling.reported_results"
       ],
       "sections": [
         {
@@ -3681,7 +3702,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "読者前提P12相当を明示する。TSP固有の定式化と可視化は局所説明。",
+      "notes": "P12相当の概念前提は明示し、コード実行状態は引き継がない。TSP固有の定式化と可視化は局所説明。公開b7のSDK/OpenJij Adapterと追加matplotlibへ導入を接続する。任意応用だが本文と出力の検証対象。copyや手動State評価は前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3738,7 +3759,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "PR #1159のレビュー修正で、encodeからdecode完了まで入力を不変に保つ契約、最適性情報のmapping、revisionを固定した参照実装を明記する。PySCIPOptの入力参照保持をisolated snapshotの保証と混同しない。変数の詳細の概念所有はInstance/G6側に残す。",
+      "notes": "PR #1159のレビュー修正で、encodeからdecode完了まで入力を不変に保つ契約、最適性情報のmapping、revisionを固定した参照実装を明記する。PySCIPOptの入力参照保持をisolated snapshotの保証と混同しない。変数の詳細の概念所有はInstance/G6側に残す。 同じ入力をencodeからdecodeまで変更せず保持する契約を先に示し、private copyを既定の実装手順として勧めない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4236,7 +4257,7 @@
     },
     {
       "id": "transform",
-      "title": "ソルバーを使わない変換",
+      "title": "Instanceの変換と結果確認",
       "initial": [
         "ext.math",
         "ext.python",
