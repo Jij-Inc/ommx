@@ -115,6 +115,9 @@ Run `task -l` to see all available commands.
 
 ## Review Perspectives
 
+### Book Reader Paths
+- When planning, writing, or reviewing Book changes that affect reader prerequisites, concept introduction order, or navigation between learning tasks, use `.agents/skills/book-reading-review/SKILL.md`.
+
 ### Domain Responsibility Analysis
 - At the start of every review, use `.agents/skills/domain-responsibility-review/SKILL.md`.
 - First restate the global OMMX domain semantics, then identify each domain invariant, confirm where it is explicitly represented, and verify that no operation can break it.

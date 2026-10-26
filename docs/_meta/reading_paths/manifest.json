@@ -1,0 +1,4548 @@
+{
+  "schema_version": 1,
+  "title": "OMMX Book 概念とページの依存台帳",
+  "created_at": "2026-10-26",
+  "language": "ja",
+  "scope": "日本語Bookの主要概念とページ/節の編集契約。Qamomileは後続。API全項目の網羅ではない。",
+  "baseline": {
+    "repository": "Jij-Inc/ommx",
+    "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
+    "source_pr": 1284,
+    "main_revision": "027b9b2e9e0e605a4f46977438a920a9c63533f6",
+    "issue": "https://github.com/Jij-Inc/ommx/issues/1283",
+    "issue_updated_at": "2026-10-26T07:15:10Z",
+    "note": "Historical source baseline for proposed contracts; not the current main or a claim that the Book implements them. Resolve the live review revision separately."
+  },
+  "interpretation": {
+    "knowledge_unit": "概念名ではなく読者の学習成果。solution.readとevaluation.basic等を分ける。",
+    "introduces": "その節で必要な意味・操作・結果の読み方を説明し、その能力を習得できるという編集上の宣言。",
+    "uses": "理解を前提に操作・判断・結果読解を要求する。",
+    "mentions": "名称、見取り図、参照リンク、説明を要求しないコード/出力の露出。既習に加えない。",
+    "requires": "ページへの明示的な概念前提。単なるリンクや推奨順は代用しない。",
+    "owner": "詳しい説明を統括する正本。唯一の初出ページや必読ページではない。",
+    "optional_sections": "親ページと別ID。親を読んでも任意節の知識は付与しない。",
+    "route_join": "別々の経路が合流したら保証される既知概念は共通部分。",
+    "validation_limit": "検査は明示注釈間の整合性を調べる。自然言語本文の正確性・理解度・SDK実行は証明しない。"
+  },
+  "concepts": [
+    {
+      "id": "ext.math",
+      "label": "数理最適化の基礎（変数・目的・制約）",
+      "owner": null,
+      "requires": [],
+      "external": true,
+      "aliases": [],
+      "scope": ""
+    },
+    {
+      "id": "ext.python",
+      "label": "Pythonの基礎",
+      "owner": null,
+      "requires": [],
+      "external": true,
+      "aliases": [],
+      "scope": ""
+    },
+    {
+      "id": "ext.table",
+      "label": "表とDataFrameの基礎",
+      "owner": null,
+      "requires": [],
+      "external": true,
+      "aliases": [],
+      "scope": ""
+    },
+    {
+      "id": "ext.cli",
+      "label": "コマンドラインの基礎",
+      "owner": null,
+      "requires": [],
+      "external": true,
+      "aliases": [],
+      "scope": ""
+    },
+    {
+      "id": "ext.rust",
+      "label": "Rustの基礎",
+      "owner": null,
+      "requires": [],
+      "external": true,
+      "aliases": [],
+      "scope": ""
+    },
+    {
+      "id": "instance.model",
+      "label": "Instanceが表す問題と共通の意味",
+      "owner": "G1",
+      "requires": [
+        "ext.math"
+      ],
+      "external": false,
+      "aliases": [
+        "Instance"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "variable.basics",
+      "label": "変数ID・種類・定義域を読む",
+      "owner": "G1",
+      "requires": [
+        "ext.math"
+      ],
+      "external": false,
+      "aliases": [
+        "DecisionVariable",
+        "Kind.Binary",
+        "Kind.Integer",
+        "Kind.Continuous",
+        "決定変数"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "variables.metadata",
+      "label": "変数のname・subscriptsとIDを区別する",
+      "owner": "G1.names",
+      "requires": [
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "name",
+        "subscripts"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "expression.basics",
+      "label": "ID・演算子・係数から式を構成する",
+      "owner": "G2",
+      "requires": [
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "Function",
+        "Polynomial",
+        "Linear",
+        "Quadratic",
+        "式木"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "expression.evaluate",
+      "label": "Function単体に値を与えて評価する",
+      "owner": "G2",
+      "requires": [
+        "expression.basics",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "Function.evaluate"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "expression.form",
+      "label": "数学的な式と格納表現の違いを読む",
+      "owner": "G2.support",
+      "requires": [
+        "expression.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "Expr",
+        "polynomial representation",
+        "格納表現"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "constraint.basics",
+      "label": "通常制約の関係と充足を読む",
+      "owner": "G1",
+      "requires": [
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "Constraint",
+        "EqualToZero",
+        "LessThanOrEqualToZero",
+        "通常制約"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "sense",
+      "label": "最小化と最大化の向きを読む",
+      "owner": "G1",
+      "requires": [
+        "ext.math"
+      ],
+      "external": false,
+      "aliases": [
+        "Sense",
+        "Minimize",
+        "Maximize",
+        "最小化",
+        "最大化"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "instance.build",
+      "label": "変数・目的・制約からInstanceを構成する",
+      "owner": "G1",
+      "requires": [
+        "instance.model",
+        "variable.basics",
+        "expression.basics",
+        "constraint.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "Instance.minimize",
+        "Instance.maximize",
+        "Instance.from_components"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "state.values",
+      "label": "Stateを変数IDから値への割当てとして読む",
+      "owner": "G4S",
+      "requires": [
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "State",
+        "state="
+      ],
+      "scope": ""
+    },
+    {
+      "id": "evaluation.basic",
+      "label": "与えた候補をInstanceで評価する",
+      "owner": "G4S",
+      "requires": [
+        "instance.model",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "evaluate",
+        "候補解の評価"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "solution.read",
+      "label": "Solutionの変数値と目的値を読む",
+      "owner": "G4S",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "Solution",
+        "decision_variables_df",
+        "objective"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "solution.extract",
+      "label": "nameとsubscriptsで変数値を抽出する",
+      "owner": "G4S.extract",
+      "requires": [
+        "solution.read",
+        "variables.metadata"
+      ],
+      "external": false,
+      "aliases": [
+        "extract_decision_variables"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "feasibility.basic",
+      "label": "候補の実行可能性と違反を読む",
+      "owner": "G4S",
+      "requires": [
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "feasible",
+        "violation",
+        "実行可能性"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "optimality.limit",
+      "label": "候補評価と最適性保証を区別する",
+      "owner": "G4S",
+      "requires": [
+        "sense",
+        "feasibility.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "optimality",
+        "最適性",
+        "最適解"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "samples.counts",
+      "label": "Samplesの複数候補と出現回数を読む",
+      "owner": "G4M",
+      "requires": [
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "Samples",
+        "num_occurrences",
+        "sample_ids",
+        "shots"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "sampleset.read",
+      "label": "SampleSetから実行可能な候補を選ぶ",
+      "owner": "G4M",
+      "requires": [
+        "samples.counts",
+        "solution.read",
+        "feasibility.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "SampleSet",
+        "best_feasible",
+        "summary_with_constraints"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "numeric.tolerance",
+      "label": "許容誤差を含む評価規則を判断する",
+      "owner": "G4S.numeric",
+      "requires": [
+        "evaluation.basic",
+        "feasibility.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "atol",
+        "ATol",
+        "許容誤差"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "named.outputs",
+      "label": "評価用の名前付き式を読む",
+      "owner": "G2.named",
+      "requires": [
+        "expression.basics",
+        "evaluation.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "NamedFunction",
+        "named_functions"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "variables.roles",
+      "label": "retainedとusedの変数を区別する",
+      "owner": "G6",
+      "requires": [
+        "instance.model",
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "used_decision_variables",
+        "retained",
+        "required_ids",
+        "used_ids"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "variables.recovery",
+      "label": "固定値と依存変数の復元を読む",
+      "owner": "G6",
+      "requires": [
+        "variables.roles",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "fixed",
+        "dependent",
+        "dependency",
+        "復元"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "variables.defaults",
+      "label": "不要な変数へのdefault補完を区別する",
+      "owner": "G6",
+      "requires": [
+        "variables.roles",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "irrelevant",
+        "default_fill",
+        "default",
+        "不要な変数"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "special.indicator",
+      "label": "Indicatorの含意を読む",
+      "owner": "G3",
+      "requires": [
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "Indicator",
+        "indicator",
+        "指示制約"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "special.onehot",
+      "label": "OneHotの意味を読む",
+      "owner": "G3",
+      "requires": [
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "OneHot",
+        "one_hot",
+        "One-hot"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "special.sos1",
+      "label": "SOS1の意味を読む",
+      "owner": "G3",
+      "requires": [
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "Sos1",
+        "SOS1",
+        "sos1"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "constraints.lifecycle",
+      "label": "activeとremovedの制約を区別する",
+      "owner": "G8",
+      "requires": [
+        "instance.model",
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "removed_constraints",
+        "active_constraints",
+        "removed constraint"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "objective.views",
+      "label": "active objectiveとoutput objectiveを区別する",
+      "owner": "G8",
+      "requires": [
+        "evaluation.basic",
+        "expression.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "output_objective",
+        "active objective",
+        "output objective"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "feasibility.views",
+      "label": "activeのみとremovedを含む実行可能性を区別する",
+      "owner": "G8",
+      "requires": [
+        "constraints.lifecycle",
+        "feasibility.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "feasible_relaxed",
+        "feasible"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "evaluation.snapshot",
+      "label": "候補を対応するInstanceで評価する",
+      "owner": "G8",
+      "requires": [
+        "evaluation.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "prepared Instance",
+        "snapshot"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "class.membership",
+      "label": "InstanceClassへの所属を判定する",
+      "owner": "G9",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "InstanceClass",
+        "contains",
+        "check_membership",
+        "membership"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "class.declare",
+      "label": "構造条件でtarget classを宣言する",
+      "owner": "G9",
+      "requires": [
+        "class.membership",
+        "variable.basics",
+        "expression.form",
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "InstanceClassClause",
+        "PolynomialRequirement",
+        "allowed_variable_kinds"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "class.scope",
+      "label": "所属判定のactive・usedの対象範囲を読む",
+      "owner": "G9.scope",
+      "requires": [
+        "class.membership",
+        "variables.roles",
+        "constraints.lifecycle",
+        "objective.views"
+      ],
+      "external": false,
+      "aliases": [
+        "used variables",
+        "active constraints",
+        "active objective"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "class.qubo",
+      "label": "QUBOを問題クラスの一例として読む",
+      "owner": "G9",
+      "requires": [
+        "class.membership",
+        "expression.basics",
+        "constraint.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "InstanceClass.qubo",
+        "QUBO",
+        "qubo"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.basic",
+      "label": "Adapterで問題を実行し候補を受け取る",
+      "owner": "G11",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "Adapter",
+        "solve",
+        "sample"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.auto_prepare",
+      "label": "Adapterがcopyに必要な変換を行うことを読む",
+      "owner": "G10",
+      "requires": [
+        "adapter.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "automatic Preparation",
+        "自動Preparation",
+        "自動的"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "preparation.target",
+      "label": "targetに向けたPreparationと停止条件を読む",
+      "owner": "G10",
+      "requires": [
+        "class.membership"
+      ],
+      "external": false,
+      "aliases": [
+        "prepare",
+        "Preparation",
+        "target"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "policy.select",
+      "label": "変換方針を選択し編集する",
+      "owner": "G10",
+      "requires": [
+        "preparation.target"
+      ],
+      "external": false,
+      "aliases": [
+        "PreparationPolicy",
+        "recommended_preparation_policy",
+        "Policy"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "mutation.copy",
+      "label": "copyとin-place変更の責任を区別する",
+      "owner": "G10",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "copy.copy",
+        "in-place",
+        "rollback"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.strict",
+      "label": "準備済み入力をstrict APIで実行する",
+      "owner": "G10",
+      "requires": [
+        "adapter.basic",
+        "preparation.target"
+      ],
+      "external": false,
+      "aliases": [
+        "solve_without_preparation",
+        "sample_without_preparation"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "penalty.choice",
+      "label": "penaltyとweightの選択を読む",
+      "owner": "G7.penalty",
+      "requires": [
+        "constraint.basics",
+        "expression.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "FixedPenaltyPreparation",
+        "penalty_weights",
+        "uniform_penalty_weight",
+        "penalty",
+        "ペナルティ"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "encoding.integer",
+      "label": "整数からBinaryへの対応を読む",
+      "owner": "G7.encoding",
+      "requires": [
+        "variable.basics",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "IntegerEncoding",
+        "log_encode",
+        "encoding"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "slack.variable",
+      "label": "不等式へのslack導入を読む",
+      "owner": "G7.encoding",
+      "requires": [
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "IntegerSlack",
+        "slack",
+        "スラック"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "transformation.guarantees",
+      "label": "状態・実行可能性・目的・最適性の対応を区別する",
+      "owner": "G7",
+      "requires": [
+        "evaluation.basic",
+        "feasibility.basic",
+        "optimality.limit"
+      ],
+      "external": false,
+      "aliases": [
+        "同値",
+        "equivalence",
+        "projection",
+        "relaxation"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "conditioning",
+      "label": "変数固定を部分問題への制限として読む",
+      "owner": "G7.conditioning",
+      "requires": [
+        "transformation.guarantees",
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "partial_evaluate",
+        "conditioning",
+        "部分問題"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "bigm.contract",
+      "label": "Big-M変換の式と成立条件を確認する",
+      "owner": "R_API.transform",
+      "requires": [
+        "constraint.basics",
+        "variable.basics",
+        "transformation.guarantees"
+      ],
+      "external": false,
+      "aliases": [
+        "Big-M",
+        "BigM",
+        "big_m"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "function.support",
+      "label": "式の表現形と対応範囲を区別する",
+      "owner": "G2.support",
+      "requires": [
+        "expression.form",
+        "class.membership"
+      ],
+      "external": false,
+      "aliases": [
+        "PolynomialRequirement",
+        "非多項式",
+        "polynomial"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "function.representation",
+      "label": "式の内部表現とwireとの対応を読む",
+      "owner": "R_WIRE.function",
+      "requires": [
+        "expression.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "RPN",
+        "reverse Polish",
+        "wire"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "parametric.materialize",
+      "label": "固定構造にparameterを与えてInstanceにする",
+      "owner": "G5",
+      "requires": [
+        "instance.model",
+        "expression.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "ParametricInstance",
+        "Parameter",
+        "with_parameters"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.diagnostics",
+      "label": "bound・gap・終了理由の対象を読む",
+      "owner": "P4",
+      "requires": [
+        "adapter.basic",
+        "optimality.limit"
+      ],
+      "external": false,
+      "aliases": [
+        "Diagnostics",
+        "diagnostics",
+        "bound",
+        "gap",
+        "termination"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.initial_state",
+      "label": "初期候補を実行系へ渡す",
+      "owner": "P5",
+      "requires": [
+        "adapter.basic",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "initial_state",
+        "warm start",
+        "初期解"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "trace.events",
+      "label": "実行区間のトレースを読む",
+      "owner": "P6",
+      "requires": [
+        "evaluation.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "tracing",
+        "traced",
+        "Trace",
+        "ChromeTrace"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "model.import",
+      "label": "外部モデルやデータからInstanceを得る",
+      "owner": "P3",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "MIPLIB",
+        "QPLIB",
+        "MPS",
+        "JijModeling",
+        "dataset"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "sdk.environment",
+      "label": "SDK・依存・実行環境の版を揃える",
+      "owner": "SETUP.common",
+      "requires": [],
+      "external": false,
+      "aliases": [
+        "pip install",
+        "3.0.0b7",
+        "virtualenv",
+        "venv"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "wire.serialization",
+      "label": "問題や候補をシリアライズする",
+      "owner": "R_WIRE",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "to_bytes",
+        "from_bytes",
+        "to_v2_bytes",
+        "from_v2_bytes",
+        "protobuf"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "wire.compatibility",
+      "label": "SDK版とwire版を区別する",
+      "owner": "R_WIRE",
+      "requires": [
+        "wire.serialization",
+        "sdk.environment"
+      ],
+      "external": false,
+      "aliases": [
+        "wire-schema",
+        "wire format",
+        "schema version"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "artifact.roundtrip",
+      "label": "Artifactにデータをまとめ保存して読む",
+      "owner": "G13",
+      "requires": [
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "Artifact",
+        "ArtifactDraft",
+        "save_archive",
+        "load_archive"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "artifact.lifecycle",
+      "label": "draftとcommit後の状態を区別する",
+      "owner": "G13",
+      "requires": [
+        "artifact.roundtrip"
+      ],
+      "external": false,
+      "aliases": [
+        "commit",
+        "draft"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "artifact.identity",
+      "label": "name・tag・digestを使い分ける",
+      "owner": "G13.identity",
+      "requires": [
+        "artifact.roundtrip"
+      ],
+      "external": false,
+      "aliases": [
+        "digest",
+        "tag",
+        "name"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "artifact.registry",
+      "label": "registryにpush/pullして共有する",
+      "owner": "P8",
+      "requires": [
+        "artifact.identity"
+      ],
+      "external": false,
+      "aliases": [
+        "registry",
+        "push",
+        "pull",
+        "authentication"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "artifact.format",
+      "label": "Artifactの相互運用仕様を読む",
+      "owner": "R_ARTIFACT",
+      "requires": [
+        "artifact.identity",
+        "wire.serialization"
+      ],
+      "external": false,
+      "aliases": [
+        "OCI",
+        "manifest",
+        "descriptor",
+        "mediaType"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "attachment.standard",
+      "label": "標準の添付データを記録して読む",
+      "owner": "P10",
+      "requires": [
+        "artifact.roundtrip"
+      ],
+      "external": false,
+      "aliases": [
+        "Attachment",
+        "attach",
+        "add_json",
+        "add_file"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "attachment.codec",
+      "label": "独自データのCodec契約を実装する",
+      "owner": "R_CODEC",
+      "requires": [
+        "attachment.standard",
+        "wire.serialization"
+      ],
+      "external": false,
+      "aliases": [
+        "Codec",
+        "encode",
+        "decode"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "experiment.record",
+      "label": "Experiment・Run・Solve/Samplingを関連付ける",
+      "owner": "G12",
+      "requires": [
+        "instance.model",
+        "solution.read"
+      ],
+      "external": false,
+      "aliases": [
+        "Experiment",
+        "Run",
+        "log_solve",
+        "log_sample",
+        "Sampling"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "experiment.conditions",
+      "label": "試行条件としてparameterを記録する",
+      "owner": "G12",
+      "requires": [
+        "experiment.record"
+      ],
+      "external": false,
+      "aliases": [
+        "log_parameter"
+      ],
+      "scope": "ParametricInstanceの数学的なParameterとは別の概念。"
+    },
+    {
+      "id": "experiment.persist",
+      "label": "実験を保存し別プロセスで読み直す",
+      "owner": "G12",
+      "requires": [
+        "experiment.record"
+      ],
+      "external": false,
+      "aliases": [
+        "Experiment.load",
+        "loaded_experiment",
+        "save",
+        "reopen"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "experiment.resume",
+      "label": "再開・継続・forkを選択する",
+      "owner": "P7",
+      "requires": [
+        "experiment.persist"
+      ],
+      "external": false,
+      "aliases": [
+        "resume",
+        "fork",
+        "checkpoint",
+        "restore"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "experiment.reproduce",
+      "label": "保存済み結果と計算再現の条件を区別する",
+      "owner": "G12.reproducibility",
+      "requires": [
+        "experiment.persist",
+        "mutation.copy"
+      ],
+      "external": false,
+      "aliases": [
+        "reproducibility",
+        "再現性",
+        "再現"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "cli.operations",
+      "label": "保存データをCLIで調査・整理する",
+      "owner": "P9",
+      "requires": [
+        "artifact.roundtrip"
+      ],
+      "external": false,
+      "aliases": [
+        "ommx artifact",
+        "ommx experiment",
+        "cleanup",
+        "catalog",
+        "gc"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.contract",
+      "label": "Adapterのexact inputと評価snapshotを守る",
+      "owner": "DEV_A",
+      "requires": [
+        "adapter.basic",
+        "class.membership",
+        "evaluation.basic",
+        "variables.roles"
+      ],
+      "external": false,
+      "aliases": [
+        "INPUT_CLASS",
+        "require_applicable",
+        "snapshot",
+        "unchanged"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "adapter.encode_decode",
+      "label": "使用変数とbackend表現の対応を実装する",
+      "owner": "DEV_A",
+      "requires": [
+        "adapter.contract",
+        "variables.recovery"
+      ],
+      "external": false,
+      "aliases": [
+        "encode",
+        "decode",
+        "used_decision_variables"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "integration.language",
+      "label": "他言語・他ツールの入出力を接続する",
+      "owner": "DEV_X",
+      "requires": [
+        "instance.model",
+        "evaluation.basic",
+        "wire.serialization"
+      ],
+      "external": false,
+      "aliases": [
+        "Rust",
+        "Rustdoc",
+        "interoperability",
+        "相互運用"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "migration.api",
+      "label": "旧SDKのAPIを現行APIへ対応付ける",
+      "owner": "MIG3",
+      "requires": [
+        "sdk.environment",
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "migration",
+        "ommx.v1",
+        "移行"
+      ],
+      "scope": ""
+    },
+    {
+      "id": "aux.agent_skills",
+      "label": "補助的なAgent skillsを導入する",
+      "owner": "AUX",
+      "requires": [
+        "sdk.environment"
+      ],
+      "external": false,
+      "aliases": [
+        "agent skills",
+        "skill installer"
+      ],
+      "scope": ""
+    }
+  ],
+  "pages": [
+    {
+      "id": "HOME",
+      "title": "Bookの入口と目的別案内",
+      "slice": "K",
+      "role": "orientation",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/index.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/index.md"
+      ],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "overview",
+          "introduces": [
+            "instance.model"
+          ],
+          "uses": [],
+          "mentions": [
+            "adapter.basic",
+            "class.membership",
+            "preparation.target",
+            "artifact.roundtrip",
+            "experiment.record",
+            "class.qubo",
+            "bigm.contract"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "名称への言及・ナビゲーションからは習得を推定しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/index.md"
+      ]
+    },
+    {
+      "id": "SETUP",
+      "title": "対応バージョンと実行環境",
+      "slice": "K",
+      "role": "setup",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/getting_started/install.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/getting_started/install.md"
+      ],
+      "requires": [
+        "ext.python"
+      ],
+      "sections": [
+        {
+          "id": "environment",
+          "introduces": [
+            "sdk.environment"
+          ],
+          "uses": [
+            "sdk.environment"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/getting_started/install.md"
+      ]
+    },
+    {
+      "id": "SETUP.common",
+      "title": "言語共通のバージョン対応",
+      "slice": "K",
+      "role": "setup-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [],
+      "sections": [
+        {
+          "id": "versions",
+          "introduces": [
+            "sdk.environment"
+          ],
+          "uses": [
+            "sdk.environment"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "SETUP",
+      "notes": "Rust/他言語読者がPython環境構築を前提にしないための案内。親SETUPを読む必要はない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "T1",
+      "title": "最初の問題を解き結果を読む",
+      "slice": "C",
+      "role": "tutorial",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/tutorial/solve_with_ommx_adapter.ipynb"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/solve_with_ommx_adapter.ipynb"
+      ],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "model",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build"
+          ],
+          "uses": [
+            "instance.build"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "execute",
+          "introduces": [
+            "adapter.basic"
+          ],
+          "uses": [
+            "adapter.basic"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "result",
+          "introduces": [
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": [
+            "constraints.lifecycle",
+            "variables.roles",
+            "named.outputs"
+          ]
+        }
+      ],
+      "deferred": [
+        "class.membership",
+        "class.declare",
+        "policy.select",
+        "adapter.strict",
+        "bigm.contract",
+        "artifact.format",
+        "variables.recovery",
+        "variables.defaults"
+      ],
+      "parent_page": null,
+      "notes": "出力中のused_ids/removed_constraints等は、読解を要求しなければexposureのみ。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/solve_with_ommx_adapter.ipynb"
+      ]
+    },
+    {
+      "id": "T2",
+      "title": "特殊制約をそのまま使って解く",
+      "slice": "C",
+      "role": "tutorial",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/tutorial/solve_special_constraints_with_pyscipopt_adapter.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/solve_special_constraints_with_pyscipopt_adapter.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.build",
+        "constraint.basics",
+        "adapter.basic",
+        "solution.read",
+        "feasibility.basic"
+      ],
+      "sections": [
+        {
+          "id": "special",
+          "introduces": [
+            "special.indicator",
+            "special.sos1"
+          ],
+          "uses": [
+            "special.indicator",
+            "special.sos1"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "solve",
+          "introduces": [],
+          "uses": [
+            "adapter.basic",
+            "solution.read",
+            "feasibility.basic"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "bigm.contract",
+        "policy.select",
+        "class.declare"
+      ],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/solve_special_constraints_with_pyscipopt_adapter.md"
+      ]
+    },
+    {
+      "id": "T3",
+      "title": "別のAdapterで自動Preparationを使う",
+      "slice": "C",
+      "role": "tutorial",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/tutorial/prepare_instance_for_adapter.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/prepare_instance_for_adapter.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.build",
+        "adapter.basic",
+        "solution.read",
+        "feasibility.basic",
+        "special.indicator",
+        "special.sos1"
+      ],
+      "sections": [
+        {
+          "id": "automatic",
+          "introduces": [
+            "adapter.auto_prepare"
+          ],
+          "uses": [
+            "adapter.auto_prepare",
+            "adapter.basic"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "read",
+          "introduces": [],
+          "uses": [
+            "solution.read",
+            "feasibility.basic"
+          ],
+          "mentions": [
+            "class.membership",
+            "policy.select"
+          ]
+        }
+      ],
+      "deferred": [
+        "class.declare",
+        "policy.select",
+        "adapter.strict",
+        "bigm.contract"
+      ],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/prepare_instance_for_adapter.md"
+      ]
+    },
+    {
+      "id": "T4",
+      "title": "既存の問題と候補を評価する",
+      "slice": "E",
+      "role": "tutorial",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "given",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "constraint.basics",
+            "sense",
+            "model.import",
+            "state.values"
+          ],
+          "uses": [
+            "model.import",
+            "state.values"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "evaluate",
+          "introduces": [
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "adapter.basic",
+        "instance.build",
+        "policy.select",
+        "artifact.format"
+      ],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "T5",
+      "title": "二つの試行を記録し保存後に読み直す",
+      "slice": "F",
+      "role": "tutorial",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/tutorial/experiment_management.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/experiment_management.md"
+      ],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "minimal_problem",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build"
+          ],
+          "uses": [
+            "instance.build"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "run",
+          "introduces": [
+            "adapter.basic",
+            "solution.read"
+          ],
+          "uses": [
+            "adapter.basic",
+            "solution.read"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "record",
+          "introduces": [
+            "experiment.record",
+            "experiment.conditions"
+          ],
+          "uses": [
+            "experiment.record",
+            "experiment.conditions"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "reopen",
+          "introduces": [
+            "experiment.persist"
+          ],
+          "uses": [
+            "experiment.persist"
+          ],
+          "mentions": [
+            "experiment.reproduce",
+            "attachment.standard"
+          ]
+        }
+      ],
+      "deferred": [
+        "parametric.materialize",
+        "attachment.codec",
+        "artifact.format",
+        "artifact.registry",
+        "class.qubo"
+      ],
+      "parent_page": null,
+      "notes": "具体例が使う一つのbackend依存は環境欄に明記。独自Codecを初回成功の前提にしない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/experiment_management.md"
+      ]
+    },
+    {
+      "id": "T6",
+      "title": "Artifactで問題と結果を受け渡す",
+      "slice": "G",
+      "role": "tutorial",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/tutorial/share_in_ommx_artifact.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/share_in_ommx_artifact.md"
+      ],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "data",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "constraint.basics",
+            "sense",
+            "state.values",
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "evaluation.basic"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "save",
+          "introduces": [
+            "artifact.roundtrip"
+          ],
+          "uses": [
+            "artifact.roundtrip"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "read",
+          "introduces": [],
+          "uses": [
+            "artifact.roundtrip",
+            "solution.read",
+            "feasibility.basic"
+          ],
+          "mentions": [
+            "artifact.identity",
+            "artifact.format",
+            "attachment.standard"
+          ]
+        }
+      ],
+      "deferred": [
+        "adapter.basic",
+        "artifact.format",
+        "artifact.registry",
+        "attachment.codec"
+      ],
+      "parent_page": null,
+      "notes": "入力準備もsolver不要にする。hidden cellの実行依存は別途検査。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/share_in_ommx_artifact.md"
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Instanceと問題の基本モデル",
+      "slice": "B/I",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/instance.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/instance.md"
+      ],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "model",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build"
+          ],
+          "uses": [
+            "instance.model",
+            "instance.build"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "preview",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "state.values",
+            "solution.read",
+            "variables.roles",
+            "variables.recovery",
+            "variables.defaults"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "現物の変数役割詳細はG6へ分離する設計。G1訪問だけでG6の知識を付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/instance.md"
+      ]
+    },
+    {
+      "id": "G1.names",
+      "title": "変数の名前と添字",
+      "slice": "B/I",
+      "role": "guide-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "names",
+          "introduces": [
+            "variables.metadata"
+          ],
+          "uses": [
+            "variables.metadata"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G1",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G2",
+      "title": "Functionによる式の構築と評価",
+      "slice": "I",
+      "role": "guide",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/function.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/function.md"
+      ],
+      "requires": [
+        "ext.math",
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "expression",
+          "introduces": [
+            "expression.basics"
+          ],
+          "uses": [
+            "expression.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "evaluate",
+          "introduces": [
+            "state.values",
+            "expression.evaluate"
+          ],
+          "uses": [
+            "expression.evaluate"
+          ],
+          "mentions": [
+            "function.support",
+            "function.representation"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/function.md"
+      ]
+    },
+    {
+      "id": "G2.support",
+      "title": "式の対応範囲と表現条件",
+      "slice": "I",
+      "role": "guide-section",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/function.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/function.md"
+      ],
+      "requires": [
+        "expression.basics",
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "form",
+          "introduces": [
+            "expression.form"
+          ],
+          "uses": [
+            "expression.form"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "limits",
+          "introduces": [
+            "class.membership",
+            "function.support"
+          ],
+          "uses": [
+            "function.support"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G2",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/function.md"
+      ]
+    },
+    {
+      "id": "G2.named",
+      "title": "名前付きの評価式",
+      "slice": "I",
+      "role": "guide-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "expression.basics",
+        "evaluation.basic"
+      ],
+      "sections": [
+        {
+          "id": "outputs",
+          "introduces": [
+            "named.outputs"
+          ],
+          "uses": [
+            "named.outputs"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G2",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G3",
+      "title": "特殊制約の意味",
+      "slice": "B",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/special_constraints.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/special_constraints.md"
+      ],
+      "requires": [
+        "ext.math",
+        "variable.basics",
+        "constraint.basics"
+      ],
+      "sections": [
+        {
+          "id": "families",
+          "introduces": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1"
+          ],
+          "uses": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "adapter.basic",
+        "bigm.contract",
+        "policy.select"
+      ],
+      "parent_page": null,
+      "notes": "意味の説明と評価例の前提を分離する提案。評価例はG3.evaluateの契約で扱う。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/special_constraints.md"
+      ]
+    },
+    {
+      "id": "G3.evaluate",
+      "title": "特殊制約の候補を評価する例",
+      "slice": "B",
+      "role": "guide-section",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/special_constraints.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/special_constraints.md"
+      ],
+      "requires": [
+        "special.indicator",
+        "special.onehot",
+        "special.sos1",
+        "state.values",
+        "evaluation.basic",
+        "feasibility.basic"
+      ],
+      "sections": [
+        {
+          "id": "examples",
+          "introduces": [],
+          "uses": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1",
+            "state.values",
+            "evaluation.basic",
+            "feasibility.basic"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G3",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/special_constraints.md"
+      ]
+    },
+    {
+      "id": "G4S",
+      "title": "Solutionと候補評価",
+      "slice": "B",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/solution.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/solution.md"
+      ],
+      "requires": [
+        "ext.math",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics",
+        "sense"
+      ],
+      "sections": [
+        {
+          "id": "candidate",
+          "introduces": [
+            "state.values",
+            "evaluation.basic",
+            "solution.read"
+          ],
+          "uses": [
+            "evaluation.basic",
+            "solution.read"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "interpretation",
+          "introduces": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": [
+            "numeric.tolerance",
+            "constraints.lifecycle",
+            "objective.views"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/solution.md"
+      ]
+    },
+    {
+      "id": "G4S.numeric",
+      "title": "評価の許容誤差",
+      "slice": "B/I",
+      "role": "guide-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/solution.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/solution.md"
+      ],
+      "requires": [
+        "evaluation.basic",
+        "feasibility.basic"
+      ],
+      "sections": [
+        {
+          "id": "numeric",
+          "introduces": [
+            "numeric.tolerance"
+          ],
+          "uses": [
+            "numeric.tolerance"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G4S",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/solution.md"
+      ]
+    },
+    {
+      "id": "G4S.extract",
+      "title": "名前と添字による結果の抽出",
+      "slice": "B/J",
+      "role": "guide-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "solution.read",
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "extract",
+          "introduces": [
+            "variables.metadata",
+            "solution.extract"
+          ],
+          "uses": [
+            "solution.extract"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G4S",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G4M",
+      "title": "SampleSetと複数候補の評価",
+      "slice": "B",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/sample_set.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/sample_set.md"
+      ],
+      "requires": [
+        "state.values",
+        "evaluation.basic",
+        "solution.read",
+        "feasibility.basic",
+        "optimality.limit"
+      ],
+      "sections": [
+        {
+          "id": "samples",
+          "introduces": [
+            "samples.counts",
+            "sampleset.read"
+          ],
+          "uses": [
+            "sampleset.read"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/sample_set.md"
+      ]
+    },
+    {
+      "id": "G5",
+      "title": "ParametricInstanceと固定構造の問題族",
+      "slice": "I",
+      "role": "guide",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/parametric_instance.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/parametric_instance.md"
+      ],
+      "requires": [
+        "instance.model",
+        "expression.basics"
+      ],
+      "sections": [
+        {
+          "id": "parameters",
+          "introduces": [
+            "parametric.materialize"
+          ],
+          "uses": [
+            "parametric.materialize"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/parametric_instance.md"
+      ]
+    },
+    {
+      "id": "G6",
+      "title": "変数の役割と値の復元・補完",
+      "slice": "I",
+      "role": "guide",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "instance.model",
+        "variable.basics",
+        "state.values"
+      ],
+      "sections": [
+        {
+          "id": "roles",
+          "introduces": [
+            "variables.roles"
+          ],
+          "uses": [
+            "variables.roles"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "population",
+          "introduces": [
+            "variables.recovery",
+            "variables.defaults"
+          ],
+          "uses": [
+            "variables.recovery",
+            "variables.defaults"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G7",
+      "title": "変換によって何が保持されるか",
+      "slice": "I",
+      "role": "guide",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "evaluation.basic",
+        "feasibility.basic",
+        "optimality.limit"
+      ],
+      "sections": [
+        {
+          "id": "guarantees",
+          "introduces": [
+            "transformation.guarantees"
+          ],
+          "uses": [
+            "transformation.guarantees"
+          ],
+          "mentions": [
+            "penalty.choice",
+            "conditioning",
+            "encoding.integer",
+            "bigm.contract"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G7.penalty",
+      "title": "ペナルティ化の対応と保証",
+      "slice": "I",
+      "role": "guide-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "transformation.guarantees",
+        "constraint.basics",
+        "expression.basics",
+        "sense"
+      ],
+      "sections": [
+        {
+          "id": "penalty",
+          "introduces": [
+            "penalty.choice"
+          ],
+          "uses": [
+            "penalty.choice",
+            "transformation.guarantees"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G7",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G7.encoding",
+      "title": "補助変数と符号化の対応",
+      "slice": "I",
+      "role": "guide-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "transformation.guarantees",
+        "variable.basics",
+        "state.values",
+        "constraint.basics"
+      ],
+      "sections": [
+        {
+          "id": "encoding",
+          "introduces": [
+            "encoding.integer",
+            "slack.variable"
+          ],
+          "uses": [
+            "encoding.integer",
+            "slack.variable",
+            "transformation.guarantees"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G7",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G7.conditioning",
+      "title": "変数固定と部分問題",
+      "slice": "I",
+      "role": "guide-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "transformation.guarantees",
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "condition",
+          "introduces": [
+            "conditioning"
+          ],
+          "uses": [
+            "conditioning"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G7",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G8",
+      "title": "変換後の制約と目的関数",
+      "slice": "B/K",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/removed_constraints.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/removed_constraints.md"
+      ],
+      "requires": [
+        "instance.model",
+        "constraint.basics",
+        "expression.basics",
+        "sense",
+        "evaluation.basic",
+        "feasibility.basic",
+        "optimality.limit"
+      ],
+      "sections": [
+        {
+          "id": "retained",
+          "introduces": [
+            "constraints.lifecycle",
+            "objective.views",
+            "feasibility.views",
+            "evaluation.snapshot"
+          ],
+          "uses": [
+            "constraints.lifecycle",
+            "objective.views",
+            "feasibility.views",
+            "evaluation.snapshot"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "limits",
+          "introduces": [],
+          "uses": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": [
+            "transformation.guarantees",
+            "penalty.choice"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/removed_constraints.md"
+      ]
+    },
+    {
+      "id": "G8.population",
+      "title": "変換後評価での復元とdefault補完",
+      "slice": "B/I",
+      "role": "guide-section",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/removed_constraints.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/removed_constraints.md"
+      ],
+      "requires": [
+        "variables.roles",
+        "variables.recovery",
+        "variables.defaults",
+        "evaluation.snapshot",
+        "feasibility.views"
+      ],
+      "sections": [
+        {
+          "id": "population",
+          "introduces": [],
+          "uses": [
+            "variables.roles",
+            "variables.recovery",
+            "variables.defaults",
+            "evaluation.snapshot",
+            "feasibility.views"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G8",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/removed_constraints.md"
+      ]
+    },
+    {
+      "id": "G9",
+      "title": "InstanceClassと入力条件",
+      "slice": "I",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/instance_class.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/instance_class.md"
+      ],
+      "requires": [
+        "instance.model",
+        "variable.basics",
+        "expression.basics",
+        "constraint.basics",
+        "sense"
+      ],
+      "sections": [
+        {
+          "id": "membership",
+          "introduces": [
+            "class.membership"
+          ],
+          "uses": [
+            "class.membership"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "declaration",
+          "introduces": [
+            "expression.form",
+            "class.declare"
+          ],
+          "uses": [
+            "expression.form",
+            "class.declare"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "examples",
+          "introduces": [
+            "class.qubo"
+          ],
+          "uses": [
+            "class.qubo"
+          ],
+          "mentions": [
+            "adapter.basic",
+            "preparation.target"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "class.quboの局所導入は設計案。現#1284本文への実装は未完了。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/instance_class.md"
+      ]
+    },
+    {
+      "id": "G9.scope",
+      "title": "InstanceClassが検査する対象範囲",
+      "slice": "I",
+      "role": "guide-section",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/instance_class.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/instance_class.md"
+      ],
+      "requires": [
+        "class.membership",
+        "variables.roles",
+        "constraints.lifecycle",
+        "objective.views"
+      ],
+      "sections": [
+        {
+          "id": "scope",
+          "introduces": [
+            "class.scope"
+          ],
+          "uses": [
+            "class.scope"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G9",
+      "notes": "containsの基本操作と、active/used/removed-only/output-onlyの厳密な対象範囲を区別する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/instance_class.md"
+      ]
+    },
+    {
+      "id": "G10",
+      "title": "PreparationとPolicy",
+      "slice": "I",
+      "role": "guide",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/preparation_policy.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/preparation_policy.md"
+      ],
+      "requires": [
+        "instance.model",
+        "class.membership"
+      ],
+      "sections": [
+        {
+          "id": "target",
+          "introduces": [
+            "preparation.target",
+            "policy.select",
+            "mutation.copy"
+          ],
+          "uses": [
+            "preparation.target",
+            "policy.select",
+            "mutation.copy"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "adapter_application",
+          "introduces": [
+            "adapter.basic",
+            "adapter.auto_prepare",
+            "adapter.strict"
+          ],
+          "uses": [
+            "adapter.auto_prepare",
+            "adapter.strict"
+          ],
+          "mentions": [
+            "penalty.choice",
+            "bigm.contract"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/preparation_policy.md"
+      ]
+    },
+    {
+      "id": "G11",
+      "title": "Adapterを選ぶ",
+      "slice": "J",
+      "role": "guide",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/supported_ommx_adapters.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/supported_ommx_adapters.md"
+      ],
+      "requires": [
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "selection",
+          "introduces": [
+            "adapter.basic",
+            "class.membership",
+            "adapter.auto_prepare"
+          ],
+          "uses": [
+            "adapter.basic",
+            "class.membership"
+          ],
+          "mentions": [
+            "policy.select",
+            "class.qubo"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/supported_ommx_adapters.md"
+      ]
+    },
+    {
+      "id": "G12",
+      "title": "Experimentの記録モデル",
+      "slice": "F",
+      "role": "guide",
+      "status": "planned",
+      "source_paths": [
+        "docs/ja/user_guide/experiment.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/experiment.md"
+      ],
+      "requires": [
+        "instance.model",
+        "solution.read"
+      ],
+      "sections": [
+        {
+          "id": "records",
+          "introduces": [
+            "experiment.record",
+            "experiment.conditions",
+            "experiment.persist"
+          ],
+          "uses": [
+            "experiment.record",
+            "experiment.conditions",
+            "experiment.persist"
+          ],
+          "mentions": [
+            "experiment.resume",
+            "experiment.reproduce"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "現在のexperiment.mdは主に検索・復帰・整理。新しい概念説明の完成とは数えない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/experiment.md"
+      ]
+    },
+    {
+      "id": "G12.reproducibility",
+      "title": "記録と計算再現の境界",
+      "slice": "F",
+      "role": "guide-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "experiment.persist",
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "reproduce",
+          "introduces": [
+            "mutation.copy",
+            "experiment.reproduce"
+          ],
+          "uses": [
+            "experiment.reproduce"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G12",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G13",
+      "title": "Artifactの保存と受け渡しモデル",
+      "slice": "G",
+      "role": "guide",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "storage",
+          "introduces": [
+            "artifact.roundtrip",
+            "artifact.lifecycle"
+          ],
+          "uses": [
+            "artifact.roundtrip",
+            "artifact.lifecycle"
+          ],
+          "mentions": [
+            "artifact.identity",
+            "artifact.format"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "G13.identity",
+      "title": "Artifactの名前と同一性",
+      "slice": "G",
+      "role": "guide-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "artifact.roundtrip"
+      ],
+      "sections": [
+        {
+          "id": "identity",
+          "introduces": [
+            "artifact.identity"
+          ],
+          "uses": [
+            "artifact.identity"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G13",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "P1",
+      "title": "Policyを編集して明示的に準備する",
+      "slice": "C",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/customize_preparation.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/how_to/customize_preparation.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model",
+        "instance.build",
+        "constraint.basics",
+        "adapter.basic",
+        "solution.read",
+        "feasibility.basic"
+      ],
+      "sections": [
+        {
+          "id": "source",
+          "introduces": [
+            "special.onehot",
+            "special.sos1"
+          ],
+          "uses": [
+            "special.onehot",
+            "special.sos1"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "policy",
+          "introduces": [
+            "class.membership",
+            "preparation.target",
+            "policy.select",
+            "mutation.copy"
+          ],
+          "uses": [
+            "policy.select",
+            "mutation.copy"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "execute",
+          "introduces": [
+            "adapter.strict"
+          ],
+          "uses": [
+            "preparation.target",
+            "adapter.strict",
+            "solution.read"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/customize_preparation.md"
+      ]
+    },
+    {
+      "id": "P2",
+      "title": "同じ問題の結果をAdapter間で比較する",
+      "slice": "J",
+      "role": "how-to",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/how_to/compare_adapters.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/how_to/compare_adapters.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.build",
+        "variable.basics",
+        "constraint.basics",
+        "adapter.basic",
+        "solution.read",
+        "feasibility.basic",
+        "optimality.limit"
+      ],
+      "sections": [
+        {
+          "id": "execute",
+          "introduces": [
+            "special.indicator",
+            "special.sos1",
+            "adapter.auto_prepare"
+          ],
+          "uses": [
+            "adapter.basic",
+            "solution.read"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "extract",
+          "introduces": [
+            "variables.metadata",
+            "solution.extract"
+          ],
+          "uses": [
+            "solution.extract"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "compare",
+          "introduces": [],
+          "uses": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": [
+            "adapter.diagnostics"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "現extract_decision_variablesのtuple添字を局所説明する提案。比較の基準は共通の目的・実行可能性。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/compare_adapters.md"
+      ]
+    },
+    {
+      "id": "P3",
+      "title": "モデルとデータセットを取り込む",
+      "slice": "E",
+      "role": "how-to",
+      "status": "planned",
+      "source_paths": [
+        "docs/ja/tutorial/download_miplib_instance.md",
+        "docs/ja/tutorial/download_qplib_instance.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/download_miplib_instance.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/download_qplib_instance.md"
+      ],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "load",
+          "introduces": [
+            "instance.model",
+            "model.import"
+          ],
+          "uses": [
+            "model.import"
+          ],
+          "mentions": [
+            "wire.serialization",
+            "artifact.roundtrip"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/download_miplib_instance.md",
+        "docs/ja/tutorial/download_qplib_instance.md"
+      ]
+    },
+    {
+      "id": "P4",
+      "title": "終了理由と進捗を読む",
+      "slice": "J",
+      "role": "how-to",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/adapter_diagnostics.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/adapter_diagnostics.md"
+      ],
+      "requires": [
+        "adapter.basic",
+        "optimality.limit"
+      ],
+      "sections": [
+        {
+          "id": "diagnostics",
+          "introduces": [
+            "adapter.diagnostics"
+          ],
+          "uses": [
+            "adapter.diagnostics"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/adapter_diagnostics.md"
+      ]
+    },
+    {
+      "id": "P5",
+      "title": "初期候補を渡す",
+      "slice": "J",
+      "role": "how-to",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/adapter_initial_state.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/adapter_initial_state.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "adapter.basic",
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "initial",
+          "introduces": [
+            "state.values",
+            "adapter.initial_state"
+          ],
+          "uses": [
+            "adapter.initial_state"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/adapter_initial_state.md"
+      ]
+    },
+    {
+      "id": "P6",
+      "title": "変換と実行の時間を調べる",
+      "slice": "J",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/tracing.ipynb"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/tracing.ipynb"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "evaluation.basic"
+      ],
+      "sections": [
+        {
+          "id": "trace",
+          "introduces": [
+            "trace.events"
+          ],
+          "uses": [
+            "trace.events"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "experiment.record",
+        "class.qubo"
+      ],
+      "parent_page": null,
+      "notes": "Experimentとの連携は任意節P6.experiment。関数名build_quboは名前の露出に留める。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/tracing.ipynb"
+      ]
+    },
+    {
+      "id": "P6.experiment",
+      "title": "トレースを実験に記録する",
+      "slice": "J/F",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/tracing.ipynb"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/tracing.ipynb"
+      ],
+      "requires": [
+        "trace.events",
+        "experiment.record"
+      ],
+      "sections": [
+        {
+          "id": "attach",
+          "introduces": [],
+          "uses": [
+            "trace.events",
+            "experiment.record"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P6",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/tracing.ipynb"
+      ]
+    },
+    {
+      "id": "P7",
+      "title": "実験を再開・継続・forkする",
+      "slice": "F",
+      "role": "how-to",
+      "status": "planned",
+      "source_paths": [
+        "docs/ja/user_guide/experiment.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/experiment.md"
+      ],
+      "requires": [
+        "experiment.persist"
+      ],
+      "sections": [
+        {
+          "id": "resume",
+          "introduces": [
+            "experiment.resume"
+          ],
+          "uses": [
+            "experiment.resume"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/experiment.md"
+      ]
+    },
+    {
+      "id": "P8",
+      "title": "registryでArtifactを共有する",
+      "slice": "G",
+      "role": "how-to",
+      "status": "planned",
+      "source_paths": [
+        "docs/ja/tutorial/share_in_ommx_artifact.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/share_in_ommx_artifact.md"
+      ],
+      "requires": [
+        "ext.cli",
+        "artifact.roundtrip"
+      ],
+      "sections": [
+        {
+          "id": "identity",
+          "introduces": [
+            "artifact.identity"
+          ],
+          "uses": [
+            "artifact.identity"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "remote",
+          "introduces": [
+            "artifact.registry"
+          ],
+          "uses": [
+            "artifact.registry"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/share_in_ommx_artifact.md"
+      ]
+    },
+    {
+      "id": "P9",
+      "title": "保存したデータをCLIで調査・整理する",
+      "slice": "J",
+      "role": "how-to",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/user_guide/cli.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/cli.md"
+      ],
+      "requires": [
+        "ext.cli",
+        "sdk.environment",
+        "artifact.roundtrip"
+      ],
+      "sections": [
+        {
+          "id": "operations",
+          "introduces": [
+            "artifact.identity",
+            "cli.operations"
+          ],
+          "uses": [
+            "cli.operations"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "SDK同梱CLIの版制約は概念前提と別のenvironment_requirementsで扱う。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/cli.md"
+      ]
+    },
+    {
+      "id": "P10",
+      "title": "標準の添付データを扱う",
+      "slice": "F",
+      "role": "how-to",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "artifact.roundtrip"
+      ],
+      "sections": [
+        {
+          "id": "attach",
+          "introduces": [
+            "attachment.standard"
+          ],
+          "uses": [
+            "attachment.standard"
+          ],
+          "mentions": [
+            "attachment.codec"
+          ]
+        }
+      ],
+      "deferred": [
+        "attachment.codec"
+      ],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "P10.codec",
+      "title": "独自データのCodecを使う",
+      "slice": "F",
+      "role": "how-to-section",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "attachment.standard",
+        "wire.serialization"
+      ],
+      "sections": [
+        {
+          "id": "custom",
+          "introduces": [
+            "attachment.codec"
+          ],
+          "uses": [
+            "attachment.codec"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P10",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "P11",
+      "title": "ソルバーなしでInstanceを変換し検査する",
+      "slice": "I",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/transform_instance_without_solver.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/how_to/transform_instance_without_solver.md"
+      ],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "source",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build",
+            "special.onehot"
+          ],
+          "uses": [
+            "instance.build",
+            "special.onehot"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "target",
+          "introduces": [
+            "class.membership",
+            "expression.form",
+            "class.declare",
+            "preparation.target",
+            "policy.select",
+            "mutation.copy"
+          ],
+          "uses": [
+            "class.declare",
+            "policy.select",
+            "mutation.copy",
+            "preparation.target"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "evaluate",
+          "introduces": [
+            "constraints.lifecycle",
+            "state.values",
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit",
+            "feasibility.views",
+            "evaluation.snapshot",
+            "transformation.guarantees"
+          ],
+          "uses": [
+            "constraints.lifecycle",
+            "evaluation.basic",
+            "feasibility.views",
+            "evaluation.snapshot",
+            "transformation.guarantees"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [
+        "adapter.basic",
+        "adapter.strict",
+        "experiment.record"
+      ],
+      "parent_page": null,
+      "notes": "局所導入を備える独立入口。source本文の観察と上記設計契約は別記録。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/transform_instance_without_solver.md"
+      ]
+    },
+    {
+      "id": "P12",
+      "title": "OpenJijでサンプリングし候補を評価する",
+      "slice": "D",
+      "role": "how-to",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "model",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "sense",
+            "instance.build",
+            "special.onehot"
+          ],
+          "uses": [
+            "instance.build",
+            "special.onehot"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "prepare",
+          "introduces": [
+            "adapter.basic",
+            "class.membership",
+            "preparation.target",
+            "policy.select",
+            "mutation.copy",
+            "penalty.choice",
+            "adapter.strict"
+          ],
+          "uses": [
+            "policy.select",
+            "penalty.choice",
+            "preparation.target",
+            "adapter.strict"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "samples",
+          "introduces": [
+            "state.values",
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit",
+            "samples.counts",
+            "sampleset.read",
+            "constraints.lifecycle",
+            "objective.views",
+            "feasibility.views",
+            "evaluation.snapshot"
+          ],
+          "uses": [
+            "sampleset.read",
+            "objective.views",
+            "feasibility.views",
+            "evaluation.snapshot"
+          ],
+          "mentions": [
+            "class.qubo",
+            "transformation.guarantees"
+          ]
+        }
+      ],
+      "deferred": [
+        "bigm.contract",
+        "encoding.integer",
+        "artifact.format"
+      ],
+      "parent_page": null,
+      "notes": "旧T7の配置変更。OpenJijの実際のINPUT_CLASSを使い、QUBO限定を前提にしない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "T8",
+      "title": "TSPをサンプラーで扱う任意の応用例",
+      "slice": "D",
+      "role": "application",
+      "status": "revise",
+      "source_paths": [
+        "docs/ja/tutorial/tsp_sampling_with_openjij_adapter.ipynb"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/tsp_sampling_with_openjij_adapter.ipynb"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.build",
+        "constraint.basics",
+        "adapter.basic",
+        "class.membership",
+        "preparation.target",
+        "policy.select",
+        "mutation.copy",
+        "penalty.choice",
+        "adapter.strict",
+        "state.values",
+        "evaluation.basic",
+        "solution.read",
+        "feasibility.basic",
+        "optimality.limit",
+        "samples.counts",
+        "sampleset.read"
+      ],
+      "sections": [
+        {
+          "id": "tsp",
+          "introduces": [],
+          "uses": [
+            "instance.build",
+            "constraint.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "sample",
+          "introduces": [],
+          "uses": [
+            "policy.select",
+            "penalty.choice",
+            "adapter.strict",
+            "sampleset.read"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "読者前提P12相当を明示する。TSP固有の定式化と可視化は局所説明。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/tutorial/tsp_sampling_with_openjij_adapter.ipynb"
+      ]
+    },
+    {
+      "id": "DEV_A",
+      "title": "Adapterを実装する",
+      "slice": "C",
+      "role": "developer",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/developer_guide/adapter.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/developer_guide/adapter.md"
+      ],
+      "requires": [
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "state.values",
+        "evaluation.basic",
+        "adapter.basic",
+        "class.membership"
+      ],
+      "sections": [
+        {
+          "id": "variables",
+          "introduces": [
+            "variables.roles",
+            "variables.recovery",
+            "variables.defaults"
+          ],
+          "uses": [
+            "variables.roles",
+            "variables.recovery"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "contract",
+          "introduces": [
+            "adapter.contract",
+            "adapter.encode_decode"
+          ],
+          "uses": [
+            "adapter.contract",
+            "adapter.encode_decode"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/developer_guide/adapter.md"
+      ]
+    },
+    {
+      "id": "DEV_X",
+      "title": "別のツールと言語を接続する",
+      "slice": "K",
+      "role": "developer",
+      "status": "planned",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "instance.model",
+        "evaluation.basic",
+        "wire.serialization"
+      ],
+      "sections": [
+        {
+          "id": "integration",
+          "introduces": [
+            "integration.language"
+          ],
+          "uses": [
+            "integration.language"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "R_API",
+      "title": "Python API Referenceの入口",
+      "slice": "A/K",
+      "role": "reference",
+      "status": "existing",
+      "source_paths": [
+        "docs/api/index.rst"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/api/index.rst"
+      ],
+      "requires": [
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "index",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "instance.model",
+            "class.membership",
+            "preparation.target"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "Referenceへのリンクだけで概念を既習にしない。個別APIは必要なsectionへ粒度を下げる。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/api/index.rst"
+      ]
+    },
+    {
+      "id": "R_API.transform",
+      "title": "変換APIの厳密な条件",
+      "slice": "A",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/instance.rs"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/python/ommx/src/instance.rs"
+      ],
+      "requires": [
+        "constraint.basics",
+        "variable.basics",
+        "transformation.guarantees"
+      ],
+      "sections": [
+        {
+          "id": "contracts",
+          "introduces": [
+            "bigm.contract"
+          ],
+          "uses": [
+            "bigm.contract"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/instance.rs"
+      ]
+    },
+    {
+      "id": "R_RUST",
+      "title": "Rust API Referenceへの入口",
+      "slice": "K",
+      "role": "reference",
+      "status": "external",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "ext.rust",
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "index",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "integration.language"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "バージョン対応Rustdoc。全項目の内容監査は別対象。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "R_WIRE",
+      "title": "Messageのwire仕様",
+      "slice": "K",
+      "role": "reference",
+      "status": "external",
+      "source_paths": [
+        "proto/ommx/v1/instance.proto"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/proto/ommx/v1/instance.proto"
+      ],
+      "requires": [
+        "instance.model",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "wire",
+          "introduces": [
+            "wire.serialization",
+            "wire.compatibility"
+          ],
+          "uses": [
+            "wire.serialization",
+            "wire.compatibility"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "proto/ommx/v1/instance.proto"
+      ]
+    },
+    {
+      "id": "R_WIRE.function",
+      "title": "Functionのwire表現",
+      "slice": "I/K",
+      "role": "reference-section",
+      "status": "external",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "expression.basics"
+      ],
+      "sections": [
+        {
+          "id": "function",
+          "introduces": [
+            "function.representation"
+          ],
+          "uses": [
+            "function.representation"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_WIRE",
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "R_ARTIFACT",
+      "title": "Artifact形式の相互運用仕様",
+      "slice": "G/K",
+      "role": "reference",
+      "status": "external",
+      "source_paths": [
+        "rust/ommx/doc/artifact_design.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/rust/ommx/doc/artifact_design.md"
+      ],
+      "requires": [
+        "artifact.identity",
+        "wire.serialization"
+      ],
+      "sections": [
+        {
+          "id": "format",
+          "introduces": [
+            "artifact.format"
+          ],
+          "uses": [
+            "artifact.format"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "rust/ommx/doc/artifact_design.md"
+      ]
+    },
+    {
+      "id": "R_CODEC",
+      "title": "Codecの契約",
+      "slice": "F/K",
+      "role": "reference",
+      "status": "external",
+      "source_paths": [],
+      "source_urls": [],
+      "requires": [
+        "attachment.standard",
+        "wire.serialization"
+      ],
+      "sections": [
+        {
+          "id": "codec",
+          "introduces": [
+            "attachment.codec"
+          ],
+          "uses": [
+            "attachment.codec"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": []
+    },
+    {
+      "id": "MIG3",
+      "title": "Python SDK v2からv3への移行",
+      "slice": "K",
+      "role": "migration",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/migration/python_sdk_v2_to_v3.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/migration/python_sdk_v2_to_v3.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "migration",
+          "introduces": [
+            "migration.api"
+          ],
+          "uses": [
+            "migration.api"
+          ],
+          "mentions": [
+            "wire.compatibility",
+            "class.membership",
+            "preparation.target"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "旧版経験者向け。旧namespaceの出現を現在APIの導入とみなさない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/migration/python_sdk_v2_to_v3.md"
+      ]
+    },
+    {
+      "id": "MIG2",
+      "title": "Python SDK v1からv2への移行",
+      "slice": "K",
+      "role": "historical",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/migration/python_sdk_v1_to_v2.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/migration/python_sdk_v1_to_v2.md"
+      ],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model"
+      ],
+      "sections": [
+        {
+          "id": "historical",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "migration.api",
+            "wire.serialization"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "歴史的内容。現行経路へ知識を自動exportしない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/migration/python_sdk_v1_to_v2.md"
+      ]
+    },
+    {
+      "id": "RELEASE",
+      "title": "リリース情報",
+      "slice": "K",
+      "role": "release",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/release_note/ommx-1.5.md",
+        "docs/ja/release_note/ommx-1.6.md",
+        "docs/ja/release_note/ommx-1.7.md",
+        "docs/ja/release_note/ommx-1.8.md",
+        "docs/ja/release_note/ommx-1.9.md",
+        "docs/ja/release_note/ommx-2.0.md",
+        "docs/ja/release_note/ommx-2.1.md",
+        "docs/ja/release_note/ommx-2.2.md",
+        "docs/ja/release_note/ommx-2.3.md",
+        "docs/ja/release_note/ommx-2.4.md",
+        "docs/ja/release_note/ommx-2.5.md",
+        "docs/ja/release_note/ommx-3.0.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-1.5.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-1.6.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-1.7.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-1.8.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-1.9.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.0.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.1.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.2.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.3.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.4.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-2.5.md",
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/release_note/ommx-3.0.md"
+      ],
+      "requires": [
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "release",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "migration.api",
+            "class.membership",
+            "preparation.target"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "各リリース記事は実出現一覧に個別収録。本文の既習前提にはしない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/release_note/ommx-1.5.md",
+        "docs/ja/release_note/ommx-1.6.md",
+        "docs/ja/release_note/ommx-1.7.md",
+        "docs/ja/release_note/ommx-1.8.md",
+        "docs/ja/release_note/ommx-1.9.md",
+        "docs/ja/release_note/ommx-2.0.md",
+        "docs/ja/release_note/ommx-2.1.md",
+        "docs/ja/release_note/ommx-2.2.md",
+        "docs/ja/release_note/ommx-2.3.md",
+        "docs/ja/release_note/ommx-2.4.md",
+        "docs/ja/release_note/ommx-2.5.md",
+        "docs/ja/release_note/ommx-3.0.md"
+      ]
+    },
+    {
+      "id": "AUX",
+      "title": "補助的なAgent skills",
+      "slice": "K",
+      "role": "auxiliary",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/agent_skills.md"
+      ],
+      "source_urls": [
+        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/agent_skills.md"
+      ],
+      "requires": [
+        "sdk.environment",
+        "ext.cli"
+      ],
+      "sections": [
+        {
+          "id": "skills",
+          "introduces": [
+            "aux.agent_skills"
+          ],
+          "uses": [
+            "aux.agent_skills"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/agent_skills.md"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "id": "solve",
+      "title": "最初の求解から別Adapterまで",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "T2",
+        "T3"
+      ]
+    },
+    {
+      "id": "candidate",
+      "title": "候補評価への独立入口",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T4"
+      ]
+    },
+    {
+      "id": "transform",
+      "title": "ソルバーを使わない変換",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "P11"
+      ]
+    },
+    {
+      "id": "sampler",
+      "title": "サンプラーへの独立入口",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "P12"
+      ]
+    },
+    {
+      "id": "artifact",
+      "title": "Artifactの独立往復",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T6"
+      ]
+    },
+    {
+      "id": "experiment",
+      "title": "Experimentの独立往復",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T5"
+      ]
+    },
+    {
+      "id": "policy",
+      "title": "既知の基本モデルからPolicy編集",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "P1"
+      ]
+    },
+    {
+      "id": "comparison",
+      "title": "同じ問題を別Adapterで比較",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "P2"
+      ]
+    },
+    {
+      "id": "tsp",
+      "title": "サンプリングからTSPへ",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "P12",
+        "T8"
+      ]
+    },
+    {
+      "id": "tracing",
+      "title": "評価処理のトレース",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T4",
+        "P6"
+      ]
+    },
+    {
+      "id": "trace_record",
+      "title": "任意の実験連携節",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T4",
+        "P6",
+        "T5",
+        "P6.experiment"
+      ]
+    },
+    {
+      "id": "custom_data",
+      "title": "標準添付から独自Codecへ",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T6",
+        "P10",
+        "R_WIRE",
+        "P10.codec"
+      ]
+    },
+    {
+      "id": "registry",
+      "title": "ローカル受け渡しからremoteへ",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T6",
+        "P8"
+      ]
+    },
+    {
+      "id": "cli",
+      "title": "ArtifactからCLI操作へ",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T6",
+        "P9"
+      ]
+    },
+    {
+      "id": "resume",
+      "title": "保存済み実験を再開する",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T5",
+        "P7"
+      ]
+    },
+    {
+      "id": "diagnostics",
+      "title": "候補評価とsolver診断の区別",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "P4"
+      ]
+    },
+    {
+      "id": "initial",
+      "title": "初期候補を渡す",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "T1",
+        "P5"
+      ]
+    },
+    {
+      "id": "adapter_author",
+      "title": "Adapter著者",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G4S",
+        "G9",
+        "G11",
+        "DEV_A"
+      ]
+    },
+    {
+      "id": "rust_reader",
+      "title": "Rust利用者",
+      "initial": [
+        "ext.math",
+        "ext.rust"
+      ],
+      "steps": [
+        "SETUP.common",
+        "G1",
+        "G4S",
+        "R_RUST"
+      ]
+    },
+    {
+      "id": "language_integration",
+      "title": "他言語の入出力接続",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "SETUP.common",
+        "G1",
+        "G4S",
+        "R_WIRE",
+        "DEV_X"
+      ]
+    },
+    {
+      "id": "both_entries",
+      "title": "二つの入口からの合流",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "ext.table",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        {
+          "alternatives": [
+            [
+              "T1"
+            ],
+            [
+              "T4"
+            ]
+          ]
+        },
+        "T6"
+      ]
+    }
+  ],
+  "environment_requirements": [
+    {
+      "page": "SETUP",
+      "observed": "公開SDK 3.0.0b7を案内。Adapterは任意追加。"
+    },
+    {
+      "page": "P9",
+      "observed": "現cli.mdはPython同梱CLIを3.0.0b8以降と記載。SETUPとは別に版整合を検査する。"
+    },
+    {
+      "page": "T6",
+      "observed": "現物のhidden preparationにはSCIPがある。概念前提と実行依存を別検査する。"
+    }
+  ],
+  "review_notes": [
+    {
+      "topic": "annotation_scope",
+      "status": "open",
+      "note": "Imported proposed contracts are not a certification of the current Book. Review the affected source and concept granularity before relying on a declared introduction."
+    },
+    {
+      "topic": "semi_variable_domains",
+      "status": "open",
+      "note": "variable.basics does not prove that a Binary example taught SemiInteger/SemiContinuous. The observed default-rule-before-domain explanation needs a narrower capability or an explicit source reorder during the relevant Book edit."
+    },
+    {
+      "topic": "direct_entries",
+      "status": "open",
+      "note": "The 21 initial routes are representative, not exhaustive: audit homepage-to-Guide entries as well as the declared routes. Homepage cognitive load is not covered by the set-based checker."
+    },
+    {
+      "topic": "transformed_evaluation",
+      "status": "open",
+      "note": "Recheck early removed/output-objective references, named-function prerequisites, and source-observation omissions against the reviewed revision rather than treating mention annotations as accepted judgments."
+    }
+  ]
+}
