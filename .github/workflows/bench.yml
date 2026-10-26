@@ -48,7 +48,7 @@ jobs:
       - name: Build CodSpeed Benchmark Target(s)
         run: cargo codspeed build -p ommx --no-default-features
       - name: Run the benchmarks
-        uses: CodSpeedHQ/action@v5.5.0
+        uses: CodSpeedHQ/action@v5.6.0
         with:
           run: cargo codspeed run -p ommx
           mode: simulation
@@ -62,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@v10.3.2
         with:
           # CodSpeed looks working with `sys.monitoring`, which has been introduced in 3.12,
           # but updates in 3.13 seems to be required for generating trace information.
@@ -85,7 +85,7 @@ jobs:
           uv pip install --no-sources wheels/*.whl python/ommx-highs-adapter
 
       - name: Run benchmarks
-        uses: CodSpeedHQ/action@v5.5.0
+        uses: CodSpeedHQ/action@v5.6.0
         with:
           run: |
             if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.suite }}" = "full" ]; then
