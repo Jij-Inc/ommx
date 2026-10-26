@@ -322,9 +322,10 @@
       "label": "SampleSetから実行可能な候補を選ぶ",
       "owner": "G4M",
       "requires": [
-        "samples.counts",
+        "instance.model",
         "solution.read",
-        "feasibility.basic"
+        "feasibility.basic",
+        "sense"
       ],
       "external": false,
       "aliases": [
@@ -332,7 +333,23 @@
         "best_feasible",
         "summary_with_constraints"
       ],
-      "scope": ""
+      "scope": "既存のSampleSetから候補を読む能力。Samples/Stateを自作することや出現回数の内部表現は前提にしない。"
+    },
+    {
+      "id": "sampling.reported_results",
+      "label": "サンプラーのenergyとOMMXの報告目的値・実行可能性を区別する",
+      "owner": "G8",
+      "requires": [
+        "instance.model",
+        "constraint.basics",
+        "sense"
+      ],
+      "external": false,
+      "aliases": [
+        "backend energy",
+        "reported objective"
+      ],
+      "scope": "具体例でサンプラーの探索値とOMMXの報告値を区別する。Stateを使った手動評価、output_objectiveの全仕様、feasible_relaxed、一般の変換保証の習得とは区別する。"
     },
     {
       "id": "numeric.tolerance",
@@ -2216,6 +2233,8 @@
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/sample_set.md"
       ],
       "requires": [
+        "instance.model",
+        "sense",
         "state.values",
         "evaluation.basic",
         "solution.read",
@@ -3535,11 +3554,13 @@
     },
     {
       "id": "P12",
-      "title": "OpenJijでサンプリングし候補を評価する",
+      "title": "OpenJij Adapterで小さな問題をサンプリングする",
       "slice": "D",
       "role": "how-to",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/sample_with_openjij_adapter.ipynb"
+      ],
       "source_urls": [],
       "requires": [
         "ext.math",
@@ -3556,58 +3577,62 @@
             "constraint.basics",
             "sense",
             "instance.build",
-            "special.onehot"
+            "special.onehot",
+            "adapter.basic",
+            "class.membership"
           ],
           "uses": [
             "instance.build",
-            "special.onehot"
+            "special.onehot",
+            "class.membership"
           ],
           "mentions": []
         },
         {
           "id": "prepare",
           "introduces": [
-            "adapter.basic",
-            "class.membership",
             "preparation.target",
             "policy.select",
-            "mutation.copy",
-            "penalty.choice",
-            "adapter.strict"
+            "penalty.choice"
           ],
           "uses": [
             "policy.select",
             "penalty.choice",
-            "preparation.target",
-            "adapter.strict"
+            "preparation.target"
           ],
           "mentions": []
         },
         {
           "id": "samples",
           "introduces": [
-            "state.values",
-            "evaluation.basic",
-            "solution.read",
+            "adapter.strict",
             "feasibility.basic",
-            "optimality.limit",
-            "samples.counts",
-            "sampleset.read",
+            "sampling.reported_results"
+          ],
+          "uses": [
+            "adapter.strict",
+            "sampling.reported_results"
+          ],
+          "mentions": [
             "constraints.lifecycle",
             "objective.views",
-            "feasibility.views",
-            "evaluation.snapshot"
+            "transformation.guarantees"
+          ]
+        },
+        {
+          "id": "choose",
+          "introduces": [
+            "solution.read",
+            "variables.metadata",
+            "sampleset.read",
+            "optimality.limit"
           ],
           "uses": [
             "sampleset.read",
-            "objective.views",
-            "feasibility.views",
-            "evaluation.snapshot"
+            "variables.metadata",
+            "optimality.limit"
           ],
-          "mentions": [
-            "class.qubo",
-            "transformation.guarantees"
-          ]
+          "mentions": []
         }
       ],
       "deferred": [
@@ -3616,10 +3641,12 @@
         "artifact.format"
       ],
       "parent_page": null,
-      "notes": "旧T7の配置変更。OpenJijの実際のINPUT_CLASSを使い、QUBO限定を前提にしない。",
+      "notes": "D/P12は初見読者向けの独立Notebook。実際のINPUT_CLASSとfreshな推奨Policyへ重みを追加し、同一Instanceをprepareしてstrict samplingする。重み変更時はモデル構築からやり直す。手動のState/evaluate、Samples自作、copy、一般の変換保証の習得を主張しない。出力を含む本文検査と実行記録はPRに分離し、歴史的baselineは書き換えない。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/how_to/sample_with_openjij_adapter.ipynb"
+      ]
     },
     {
       "id": "T8",
@@ -3642,16 +3669,14 @@
         "class.membership",
         "preparation.target",
         "policy.select",
-        "mutation.copy",
         "penalty.choice",
         "adapter.strict",
-        "state.values",
-        "evaluation.basic",
         "solution.read",
         "feasibility.basic",
         "optimality.limit",
-        "samples.counts",
-        "sampleset.read"
+        "sampleset.read",
+        "variables.metadata",
+        "sampling.reported_results"
       ],
       "sections": [
         {
@@ -3677,7 +3702,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "読者前提P12相当を明示する。TSP固有の定式化と可視化は局所説明。",
+      "notes": "P12相当の概念前提は明示し、コード実行状態は引き継がない。TSP固有の定式化と可視化は局所説明。公開b7のSDK/OpenJij Adapterと追加matplotlibへ導入を接続する。任意応用だが本文と出力の検証対象。copyや手動State評価は前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [

@@ -13,6 +13,8 @@ OMMXで記述した最適化問題をソルバーで解くには、ソルバー�
 ## OSSのソルバー/サンプラー用Adapter
 OMMXリポジトリでは、複数のOSSのソルバー/サンプラー用Adapterがサポートされています。
 
+OpenJijを使う場合は、[小さな問題をサンプリングするHow-to](../how_to/sample_with_openjij_adapter)へ直接進めます。このページで紹介するほかのソルバーや、そのTutorialの実行は前提ではありません。
+
 | Package name | PyPI | API Reference | Description |
 |:--- |:--- |:--- |:--- |
 | [ommx-highs-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-highs-adapter) | [![ommx-highs-adapter](https://img.shields.io/pypi/v/ommx-highs-adapter)](https://pypi.org/project/ommx-highs-adapter/) | [![main](https://img.shields.io/badge/API_Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_highs_adapter/index.html) | Adapter for [HiGHS](https://github.com/ERGO-Code/HiGHS)
