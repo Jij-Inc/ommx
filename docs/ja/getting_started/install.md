@@ -79,6 +79,23 @@ python -m pip install "ommx-highs-adapter==3.0.0b7"
 python -m pip install matplotlib
 ```
 
+(install-openjij-adapter)=
+### OpenJij Adapter
+
+手順1・2で用意したSDKの`3.0.0b7`の環境に、同じバージョンのAdapterを追加します。
+
+```sh
+python -m pip install "ommx-openjij-adapter==3.0.0b7"
+```
+
+[OpenJij Adapterで小さな問題をサンプリングする](../how_to/sample_with_openjij_adapter)ための環境です。OpenJij本体も依存関係として導入されるため、別途の導入やソルバーのライセンス設定は必要ありません。PySCIPOptやHiGHSなど、ほかのAdapterは使いません。
+
+任意の応用例である[TSPのNotebook](../tutorial/tsp_sampling_with_openjij_adapter)では、図を描くためにmatplotlibも追加します。
+
+```sh
+python -m pip install matplotlib
+```
+
 ```{note}
-このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するInstance変換How-toとmembership例、および3つのAdapter Tutorialと2つのAdapter How-toです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
+このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するInstance変換How-toとmembership例、3つのAdapter Tutorialと2つのAdapter How-to、およびOpenJijの小さなサンプリングHow-toとTSPのNotebookです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
 ```

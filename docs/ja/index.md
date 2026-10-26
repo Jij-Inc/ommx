@@ -39,6 +39,7 @@ assert solution.objective == 1
 | やりたいこと | 最初に読むページ | この段階で学ぶこと |
 |---|---|---|
 | ソルバーで問題を解く | [Adapterで解くTutorial](./tutorial/solve_with_ommx_adapter) | Instanceを作り、求解して結果を読む |
+| OpenJijでサンプリングする | [小さな問題をサンプリングするHow-to](./how_to/sample_with_openjij_adapter) | 重みを設定して問題を準備し、候補を目的値と実行可能性で読む |
 | 独自のAdapterを実装する | [Adapter Developer Guide](./developer_guide/adapter.md) | 入力・変換・評価の契約と参照実装 |
 | 問題や候補解の意味を理解する | [Instance](./user_guide/instance.md) → [StateからSolutionへの評価](./user_guide/solution.md) | 変数の役割、実行可能性、目的値、最適性の違い |
 | 特殊制約を使う | [特殊制約の意味と評価](./user_guide/special_constraints.md) | Indicator・OneHot・SOS1の成立条件 |
@@ -59,7 +60,9 @@ Adapterを使って解きたい人は、まず[Python SDKとAdapterのインス�
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1の意味を知り、対応ソルバーでそのまま解く。
 3. [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter.md)：特殊制約を直接扱わないHiGHSへ、loweringを経て同じモデルを渡す。
 
-独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。サンプリングの応用例として、[OpenJij AdapterでTSPを扱うTutorial](./tutorial/tsp_sampling_with_openjij_adapter)もあります。これは上記3つのTutorialの必須の続きではありません。
+独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。
+
+OpenJijを使いたい人は、上記3つのTutorialを実行せず、[OpenJij Adapterで小さな問題をサンプリングする](./how_to/sample_with_openjij_adapter)から始められます。[TSPのNotebook](./tutorial/tsp_sampling_with_openjij_adapter)は任意の応用例です。
 
 Adapterを実装する人は、利用者向けTutorialの通読ではなく、[Developer Guide](./developer_guide/adapter.md)から共通の入力・変換・評価の契約と参照実装を確認してください。
 
@@ -116,6 +119,7 @@ tutorial/download_qplib_instance
 how_to/customize_preparation
 how_to/compare_adapters
 how_to/transform_instance_without_solver
+how_to/sample_with_openjij_adapter
 ```
 
 ```{toctree}
