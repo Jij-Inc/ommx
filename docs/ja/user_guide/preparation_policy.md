@@ -1,6 +1,6 @@
 # Instance Preparation と PreparationPolicy
 
-Instance Preparationは、{class}`~ommx.Instance`に既存の変換操作を適用し、targetの{class}`~ommx.InstanceClass`に属する表現へ近づける仕組みです。**変換先を表すclass、許可する操作を選ぶPolicy、実際に変換する`Instance.prepare()`を分けて考えます。** ソルバーやAdapterがなくても利用できます。
+Instance Preparationは、{class}`~ommx.Instance`に既存の変換操作を適用し、targetの{class}`~ommx.InstanceClass`に属する表現へ近づける仕組みです。**変換先を表すclass、許可する操作を選ぶPolicy、実際に変換する`Instance.prepare()`を分けて考えます。**
 
 | 要素 | 役割 |
 |---|---|
@@ -8,17 +8,15 @@ Instance Preparationは、{class}`~ommx.Instance`に既存の変換操作を適�
 | PreparationPolicy | 使ってよい変換操作と設定の選択 |
 | Instance.prepare | そのInstanceへ変換を適用し、target membershipを検査する |
 
-classの意味は[InstanceClassとAdapterの入力条件](./instance_class.md)、SDKだけで一連の操作を実行する例は[ソルバーなしの変換How-to](../how_to/transform_instance_without_solver.md)を参照してください。後半では、この共通の仕組みをAdapterに適用します。
+classの意味は[InstanceClassとAdapterの入力条件](./instance_class.md)、一連の操作例は[Instanceを変換するHow-to](../how_to/transform_instance_without_solver.md)を参照してください。後半では、この共通の仕組みをAdapterに適用します。
 
 ## Policyを作ることと、変換することは別
 
 {class}`~ommx.PreparationPolicy`は、変換操作の選択を保持する値です。Policyを作成・編集しただけではInstanceは変わりません。
 
-例えば「ちょうど一つを選ぶ」というOneHotの条件を、通常の等式へ置き換えるPolicyは次のように作ります。特殊制約を通常の制約へ書き換える操作をloweringと呼びます。ここでは変換元の`source`と、変換先の`target`が用意されているとします。
+例えば「ちょうど一つを選ぶ」というOneHotの条件を、通常の等式へ置き換えるPolicyは次のように作ります。特殊制約を通常の制約へ書き換える操作をloweringと呼びます。ここでは変換する`instance`と、変換先の`target`が用意されているとします。
 
 ```python
-import copy
-
 from ommx import (
     PreparationPolicy, SpecialConstraintKind, SpecialConstraintPreparation,
 )
@@ -29,12 +27,11 @@ policy = PreparationPolicy(
     )
 )
 
-prepared = copy.copy(source)
-prepared.prepare(target, policy)
-assert target.contains(prepared)
+instance.prepare(target, policy)
+assert target.contains(instance)
 ```
 
-{meth}`~ommx.Instance.prepare`は呼び出したInstanceをin-placeに変更します。sourceを残して変換前後を比較する場合は、上のようにcopyへ適用します。sourceとtargetの構築も含む実行例は[変換How-to](../how_to/transform_instance_without_solver.md)にあります。
+{meth}`~ommx.Instance.prepare`は呼び出したInstanceをin-placeに変更します。変換前のInstance自体を後でも使う必要がある場合だけ、事前にcopyを作ります。候補の評価結果を比較するだけなら、変換前に評価結果を保存しておけば十分です。Instanceとtargetの構築も含む実行例は[変換How-to](../how_to/transform_instance_without_solver.md)にあります。
 
 ## Targetに入った時点で止まる
 
@@ -43,10 +40,10 @@ PreparationはPolicyのすべての操作を必ず最後まで実行する仕組
 成功時に成立する条件は、指定したtargetへのmembershipです。
 
 ```python
-assert target.contains(prepared)
+assert target.contains(instance)
 ```
 
-この条件だけでは、元の問題との数学的な等価性や最適性は保証されません。変換元の条件、使う操作、その操作が保存するものを個別に確認します。Preparationは求解ではなく、ここで作業を終えることもできます。
+この条件だけでは、元の問題との数学的な等価性や最適性は保証されません。変換元の条件、使う操作、その操作が保存するものを個別に確認します。
 
 変換後の候補は、そのInstanceが保持する変数・制約・目的の情報を使って解釈します。{ref}`Instanceの変数の役割 <instance-variable-roles>`と[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。
 
@@ -76,8 +73,8 @@ Adapterは、直接受け取れるInstanceの集合を`INPUT_CLASS`として宣�
 通常の求解・samplingには、まず`solve()`または`sample()`を使えます。標準のeasy APIは、入力のcopyを作り、Adapterの推奨Policyでprepareしてから厳格なmethodを呼びます。
 
 ```python
-# sourceは変更されない。内部のcopyだけがPreparationされる。
-result = Adapter.solve(source)
+# 呼び出し元のinstanceは変更されない。内部のcopyだけがPreparationされる。
+result = Adapter.solve(instance)
 ```
 
 {meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy`は、Adapterのexact inputへ到達する際に一般的に有用なPolicyを返します。この呼び出しは次の性質を持ちます。
@@ -93,23 +90,22 @@ input_class = Adapter.INPUT_CLASS
 policy = Adapter.recommended_preparation_policy()
 
 # 必要なら、application固有の判断でpolicyを編集する。
-prepared = copy.copy(source)
-prepared.prepare(input_class, policy)
+instance.prepare(input_class, policy)
 
-assert input_class.contains(prepared)
-result = Adapter.solve_without_preparation(prepared)
+assert input_class.contains(instance)
+result = Adapter.solve_without_preparation(instance)
 ```
 
 `*_without_preparation()`とAdapter constructorはPreparationしません。上の経路では、編集したPolicyを自分で適用してから渡します。一連の実行例は[Preparationで変換する制約族を選ぶ](../how_to/customize_preparation.md)を参照してください。
 
 Adapterでは`INPUT_CLASS` membershipがapplicabilityです。converterやBackendは、その後のsolver input構築や実行で別のerrorを返すことがあります。それらは追加のapplicability条件ではありません。
 
-Solverの出力を{class}`~ommx.Solution`や{class}`~ommx.SampleSet`に戻すときも、Adapterへ渡した同じprepared Instanceで評価します。そのInstanceが保持する変数間のdependencyとremoved constraintにより、encoding前の変数値や変換前の制約も評価できます。値の復元は[Instanceの基本モデル](./instance.md)、制約の評価規則は[Removed constraintsと実行可能性](./removed_constraints.md)を参照してください。
+Solverの出力を{class}`~ommx.Solution`や{class}`~ommx.SampleSet`に戻すときも、Adapterへ渡した同じ変換済みInstanceで評価します。そのInstanceが保持する変数間のdependencyとremoved constraintにより、encoding前の変数値や変換前の制約も評価できます。値の復元は[Instanceの基本モデル](./instance.md)、制約の評価規則は[Removed constraintsと実行可能性](./removed_constraints.md)を参照してください。
 
 ## 詳細：到達できない場合と部分的な変更
 
 すべての configured phase を適用しても target に到達しない場合、{class}`~ommx.PreparationTargetNotReachedError` が送出されます。`report` 属性には、最終状態に対する {class}`~ommx.InstanceClassMembershipReport` が入ります。呼び出し側は report を見て Policy を追加・変更するか、異なる target を選べます。
 
-Preparation全体が失敗しても、自動的に変更前の状態へ戻るわけではありません。後のphaseが失敗しても、それより前に完了した変更はInstanceに残ります。通常の`solve()`と`sample()`ではこの変更も内部copyだけに残ります。明示的な`prepare()`でsourceを失敗前の状態に保つ必要がある場合は、先にcopyを作ってください。個々の変換が失敗時にどこまで変更を残すかは、それぞれのAPI Referenceを参照してください。
+Preparation全体が失敗しても、自動的に変更前の状態へ戻るわけではありません。後のphaseが失敗しても、それより前に完了した変更はInstanceに残ります。通常の`solve()`と`sample()`ではこの変更も内部copyだけに残ります。明示的な`prepare()`で失敗後も変換前のInstance自体を使う必要がある場合だけ、事前にcopyを作ってください。個々の変換が失敗時にどこまで変更を残すかは、それぞれのAPI Referenceを参照してください。
 
 初めてAdapterを使う場合は[Tutorial](../tutorial/prepare_instance_for_adapter.md)から始め、失敗時の処理が必要になった時点で本節と各変換のAPI Referenceを確認してください。

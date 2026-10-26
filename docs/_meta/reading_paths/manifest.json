@@ -2730,7 +2730,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "I1ではtarget・Policy・prepareの共通モデルをAdapter適用より先に置く。直入読者向けにOneHot/loweringとphaseを局所説明する。個別操作の数式・適用条件はAPI Reference、G7の一般的な変換保証は後続作業のまま。",
+      "notes": "I1ではtarget・Policy・prepareの共通モデルをAdapter適用より先に置く。直入読者向けにOneHot/loweringとphaseを局所説明する。個別操作の数式・適用条件はAPI Reference、G7の一般的な変換保証は後続作業のまま。 明示的なprepareの基本例はin-placeとし、変換前のInstance本体を後で使う必要がある場合のみcopyを説明する。Adapter easy API内部のcopy契約とは区別する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2960,12 +2960,10 @@
           "introduces": [
             "class.membership",
             "preparation.target",
-            "policy.select",
-            "mutation.copy"
+            "policy.select"
           ],
           "uses": [
-            "policy.select",
-            "mutation.copy"
+            "policy.select"
           ],
           "mentions": []
         },
@@ -2984,7 +2982,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "PR #1159のレビュー修正では、推奨Policyを部分的に上書きするのではなく、OneHot loweringだけを有効にした新規Policyを作る。「許可する変換を固定する」という説明と実行を一致させる。",
+      "notes": "PR #1159のレビュー修正では、推奨Policyを部分的に上書きするのではなく、OneHot loweringだけを有効にした新規Policyを作る。「許可する変換を固定する」という説明と実行を一致させる。 同じInstanceをin-placeに準備し、そのままstrict実行する。元のInstanceの保存やcopyはこの操作の前提にしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3450,7 +3448,7 @@
     },
     {
       "id": "P11",
-      "title": "ソルバーなしでInstanceを変換し検査する",
+      "title": "Instanceを変換し、結果を確認する",
       "slice": "I",
       "role": "how-to",
       "status": "existing",
@@ -3475,7 +3473,9 @@
             "constraint.basics",
             "sense",
             "instance.build",
-            "special.onehot"
+            "special.onehot",
+            "state.values",
+            "evaluation.basic"
           ],
           "uses": [
             "instance.build",
@@ -3490,13 +3490,11 @@
             "expression.form",
             "class.declare",
             "preparation.target",
-            "policy.select",
-            "mutation.copy"
+            "policy.select"
           ],
           "uses": [
             "class.declare",
             "policy.select",
-            "mutation.copy",
             "preparation.target"
           ],
           "mentions": []
@@ -3505,8 +3503,6 @@
           "id": "evaluate",
           "introduces": [
             "constraints.lifecycle",
-            "state.values",
-            "evaluation.basic",
             "solution.read",
             "feasibility.basic",
             "optimality.limit",
@@ -3530,7 +3526,7 @@
         "experiment.record"
       ],
       "parent_page": null,
-      "notes": "局所導入を備える独立入口。source本文の観察と上記設計契約は別記録。 I1の修正ではactive/removedをこのページで短く定義する。実行例が確認するのは指定したOneHot loweringと手元の候補に限る。一般の変換保証や全feasibility viewの習得・I全体の完了とはみなさない。",
+      "notes": "局所導入を備える独立入口。source本文の観察と上記設計契約は別記録。 I1の修正ではactive/removedをこのページで短く定義する。実行例が確認するのは指定したOneHot loweringと手元の候補に限る。一般の変換保証や全feasibility viewの習得・I全体の完了とはみなさない。 ユーザー方針によりcopyは使わず同じInstanceへprepareする。比較用に保存するのは変換前の評価結果だけであるため、基本の候補評価を変換より前に導入する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3738,7 +3734,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "PR #1159のレビュー修正で、encodeからdecode完了まで入力を不変に保つ契約、最適性情報のmapping、revisionを固定した参照実装を明記する。PySCIPOptの入力参照保持をisolated snapshotの保証と混同しない。変数の詳細の概念所有はInstance/G6側に残す。",
+      "notes": "PR #1159のレビュー修正で、encodeからdecode完了まで入力を不変に保つ契約、最適性情報のmapping、revisionを固定した参照実装を明記する。PySCIPOptの入力参照保持をisolated snapshotの保証と混同しない。変数の詳細の概念所有はInstance/G6側に残す。 同じ入力をencodeからdecodeまで変更せず保持する契約を先に示し、private copyを既定の実装手順として勧めない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4236,7 +4232,7 @@
     },
     {
       "id": "transform",
-      "title": "ソルバーを使わない変換",
+      "title": "Instanceの変換と結果確認",
       "initial": [
         "ext.math",
         "ext.python",

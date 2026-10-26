@@ -15,7 +15,7 @@ kernelspec:
 
 {class}`~ommx.InstanceClass` は、指定した表現の条件を満たす {class}`~ommx.Instance` の集合です。例えば「Binary変数と線形等式だけを使う最大化問題」を表せます。**いまのInstanceがその条件を満たすかを調べるもので、Instanceを変換するものではありません。**
 
-InstanceClassはソルバーを使わない変換・検査にも使えます。Adapterの`INPUT_CLASS`は、その用途の一つです。このページの前半はSDKだけで実行でき、後半でAdapterへの適用を説明します。
+InstanceClassは、表現の検査や変換先の指定に使います。Adapterの`INPUT_CLASS`は、その用途の一つです。このページではclassの条件と判定方法を説明し、後半でAdapterへの適用を扱います。
 
 ## InstanceClass が表す集合
 
@@ -74,7 +74,7 @@ print(report)
 
 `check_membership()` の mismatch の型や属性は、{class}`~ommx.InstanceClassMismatch` と {class}`~ommx.InstanceClassClauseReport` の API Reference を参照してください。
 
-このInstanceを通常の等式へ変換する操作は、[ソルバーなしの変換How-to](../how_to/transform_instance_without_solver.md)で実行できます。変換先のclassと、使ってよい変換を指定するPolicyの関係は[Instance PreparationとPreparationPolicy](./preparation_policy.md)で説明します。
+このInstanceを通常の等式へ変換する操作は、[Instanceを変換するHow-to](../how_to/transform_instance_without_solver.md)で実行できます。変換先のclassと、使ってよい変換を指定するPolicyの関係は[Instance PreparationとPreparationPolicy](./preparation_policy.md)で説明します。
 
 ## 数学的な条件と表現形式は別
 

@@ -4,7 +4,7 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）は、**ソルバ�
 
 最適化の結果を理解するには、「変数にどの値が入ったか」だけでは不十分です。変数が取りうる値と満たすべき制約、比較する目的値、変換後の結果を元の問題でどう解釈するかが必要です。OMMXは、その基準を特定のソルバーの内部表現に委ねずに扱います。
 
-## ソルバーを呼ばなくても、候補を評価できる
+## 手元の候補を評価する
 
 例えば、二つの項目を同時には選べない問題を記述して、手元の候補を検査できます。
 
@@ -22,7 +22,7 @@ assert solution.feasible
 assert solution.objective == 1
 ```
 
-この評価にソルバーは必要ありません。一方、候補を探索して解を求めたい場合は、同じ問題をAdapter経由でソルバーへ渡せます。評価で「この候補は実行可能か」を確認することと、求解で「より良い候補を探す」ことは別の操作です。
+候補を探索して解を求めたい場合は、同じ問題をAdapter経由でソルバーへ渡せます。評価で「この候補は実行可能か」を確認することと、求解で「より良い候補を探す」ことは別の操作です。
 
 ## 問題の意味と、解くための表現を分ける
 
@@ -42,7 +42,7 @@ assert solution.objective == 1
 | 独自のAdapterを実装する | [Adapter Developer Guide](./developer_guide/adapter.md) | 入力・変換・評価の契約と参照実装 |
 | 問題や候補解の意味を理解する | [Instance](./user_guide/instance.md) → [StateからSolutionへの評価](./user_guide/solution.md) | 変数の役割、実行可能性、目的値、最適性の違い |
 | 特殊制約を使う | [特殊制約の意味と評価](./user_guide/special_constraints.md) | Indicator・OneHot・SOS1の成立条件 |
-| ソルバーを呼ばずに問題を変換・検査する | [Instanceを変換するHow-to](./how_to/transform_instance_without_solver.md) | target classとPolicyを指定し、変換結果と手元の候補を検査する |
+| 問題を変換し、結果を確認する | [Instanceを変換するHow-to](./how_to/transform_instance_without_solver.md) | target classとPolicyを指定し、変換結果と手元の候補を検査する |
 | 変換後の結果を解釈する | [変換後の問題とRemoved constraints](./user_guide/removed_constraints.md) | activeな問題と、元の条件を使った評価の違い |
 | 複数の候補を比較する | [SampleSet](./user_guide/sample_set.md) | サンプルごとの評価と、得られた候補の中からの選択 |
 | 既存の問題を入手する | [MIPLIB](./tutorial/download_miplib_instance.md) / [QPLIB](./tutorial/download_qplib_instance.md) | 公開された最適化問題の取得 |

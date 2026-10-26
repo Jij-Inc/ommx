@@ -49,7 +49,7 @@ python -m ipykernel install --user --name ommx-book --display-name "OMMX Book"
 python -m pip install "ommx==3.0.0b7"
 ```
 
-[ソルバーを使わずにInstanceを変換・検査する](../how_to/transform_instance_without_solver.md)場合は、ここまでで準備が完了です。[InstanceClassの説明](../user_guide/instance_class.md)のmembership例もSDKだけで実行できます。
+[Instanceを変換して結果を確認する](../how_to/transform_instance_without_solver.md)場合は、ここまでで準備が完了です。[InstanceClassの説明](../user_guide/instance_class.md)のmembership例もSDKだけで実行できます。
 
 (install-adapters)=
 ## 3. ソルバーを使う場合だけAdapterを追加する
@@ -80,5 +80,5 @@ python -m pip install matplotlib
 ```
 
 ```{note}
-このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するSDKだけの変換How-toとmembership例、および3つのAdapter Tutorialと2つのAdapter How-toです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
+このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するInstance変換How-toとmembership例、および3つのAdapter Tutorialと2つのAdapter How-toです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
 ```
