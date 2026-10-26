@@ -21,20 +21,18 @@ InstanceClassはソルバーを使わない変換・検査にも使えます。A
 
 InstanceClassは、複数の {class}`~ommx.InstanceClassClause` の有限合併、つまりいずれか1つのclauseを満たすInstanceの集合です。1つのclauseの中では、次の条件をすべて同時に満たす必要があります。
 
-- 使用中の決定変数の kind
+- 使用中の決定変数の種類（kind）
 - 目的関数の多項式表現と次数
-- 通常制約の relation、多項式表現、次数
-- Indicator 制約本体の relation、多項式表現、次数
-- active な OneHot 制約、SOS1 制約を許すか
-- 最適化 sense
+- 通常制約の関係（等式・不等式）、多項式表現、次数
+- Indicator 制約本体の関係、多項式表現、次数
+- 現在の問題で課す（activeな）OneHot制約、SOS1制約を許すか
+- 最大化・最小化の向き（sense）
 
 例えば「連続変数だけを使う二次計画」と「整数変数を使える線形計画」を別々の clause で宣言しても、その条件を clause 間で組み合わせた混合整数二次計画が自動的に含まれるわけではありません。
 
-`Function`の表現形式も判定対象です。`Function`として保持した線形式`g`の`g ** 2`は自動展開されないため、数学的には二次式でも、多項式表現を要求するclassには入りません。展開済みの多項式として構築する`g * g`との違いは、[Functionの説明](./function.md)を参照してください。
-
 ## Membership を調べる
 
-{meth}`~ommx.InstanceClass.contains` は membership を `bool` で返します。含まれない理由も必要なら、{meth}`~ommx.InstanceClass.check_membership` が clause ごとの {class}`~ommx.InstanceClassMembershipReport` を返します。どちらも副作用を持ちません。
+Instanceがclassの条件を満たし、その集合に含まれることをmembershipと呼びます。{meth}`~ommx.InstanceClass.contains`はその判定を`bool`で返します。含まれない理由も必要なら、{meth}`~ommx.InstanceClass.check_membership`がclauseごとの{class}`~ommx.InstanceClassMembershipReport`を返します。どちらも副作用を持ちません。
 
 {ref}`SDKの導入手順 <install-python-sdk>`で用意した環境を使います。次はBinary変数、線形目的関数、通常の線形等式を許すclassです。OneHotなどの特殊制約は許しません。
 
@@ -56,7 +54,7 @@ target = InstanceClass([
 ])
 ```
 
-OneHotを持つInstanceは、このclassには入りません。membershipを調べてもOneHotは変換されません。
+OneHotは「ちょうど一つを選ぶ」という条件です。数学的には線形等式でも表せますが、OneHotという専用の特殊制約として保持している間は、通常の等式だけを許すこのclassには入りません。membershipを調べてもOneHotは変換されません。
 
 ```{code-cell} ipython3
 from ommx import Instance, OneHotConstraint
@@ -78,7 +76,13 @@ print(report)
 
 このInstanceを通常の等式へ変換する操作は、[ソルバーなしの変換How-to](../how_to/transform_instance_without_solver.md)で実行できます。変換先のclassと、使ってよい変換を指定するPolicyの関係は[Instance PreparationとPreparationPolicy](./preparation_policy.md)で説明します。
 
-## 判定対象は active な数学的内容
+## 数学的な条件と表現形式は別
+
+`Function`の表現形式も判定対象です。`Function`として保持した線形式`g`の`g ** 2`は自動展開されないため、数学的には二次式でも、多項式表現を要求するclassには入りません。展開済みの多項式として構築する`g * g`との違いは、[Functionの説明](./function.md)を参照してください。
+
+Membershipは要求した表現への適合であり、変換前後の数学的な等価性や最適性を証明するものではありません。それらは、選んだ変換操作とその適用条件によって決まります。
+
+## 詳細：判定対象はactiveな数学的内容
 
 Membership は、目的関数と active な4種類の制約族（通常制約、Indicator、OneHot、SOS1）で実際に使われる決定変数から判定されます。{attr}`~ommx.Instance.used_decision_variables` に含まれない次の変数は、variable kind の判定対象になりません。
 
@@ -90,8 +94,6 @@ Membership は、目的関数と active な4種類の制約族（通常制約、
 Instanceが保持する変数と、現在の問題で使う変数の区別は[Instanceの基本モデル](./instance.md)を参照してください。
 
 同様に、removed constraintはrelation、次数、特殊制約の有無の判定対象ではありません。特殊制約を通常制約へloweringしたInstanceは、変換元をremovedとして保持したまま、特殊制約を許さないclassに入れます。activeとremovedの意味は[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。
-
-Membershipは要求した表現への適合であり、変換前後の数学的な等価性や最適性を証明するものではありません。それらは、選んだ変換操作とその適用条件によって決まります。
 
 ## Adapterへの適用：INPUT_CLASSとapplicability
 

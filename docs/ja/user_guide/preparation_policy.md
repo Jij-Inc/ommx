@@ -14,7 +14,7 @@ classの意味は[InstanceClassとAdapterの入力条件](./instance_class.md)�
 
 {class}`~ommx.PreparationPolicy`は、変換操作の選択を保持する値です。Policyを作成・編集しただけではInstanceは変わりません。
 
-例えば、OneHotを通常の制約へloweringするPolicyは次のように作ります。ここでは変換元の`source`と、変換先の`target`が用意されているとします。
+例えば「ちょうど一つを選ぶ」というOneHotの条件を、通常の等式へ置き換えるPolicyは次のように作ります。特殊制約を通常の制約へ書き換える操作をloweringと呼びます。ここでは変換元の`source`と、変換先の`target`が用意されているとします。
 
 ```python
 import copy
@@ -38,7 +38,7 @@ assert target.contains(prepared)
 
 ## Targetに入った時点で止まる
 
-PreparationはPolicyのすべての操作を必ず最後まで実行するbatch recipeではありません。実行前と各selected phaseの完了後にInstance全体のmembershipを調べ、targetに入った時点で停止します。最初からmemberならInstanceは変更されません。
+PreparationはPolicyのすべての操作を必ず最後まで実行する仕組みではありません。実行前と、選択した変換段階（phase）の完了後にInstance全体のmembershipを調べ、targetに入った時点で停止します。最初からmemberならInstanceは変更されません。
 
 成功時に成立する条件は、指定したtargetへのmembershipです。
 

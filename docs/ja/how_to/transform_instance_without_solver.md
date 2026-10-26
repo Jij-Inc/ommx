@@ -86,7 +86,7 @@ assert not target.contains(source)
 
 ## 4. Activeとremovedを確認する
 
-変換後は通常の制約が一つあり、元のOneHotはremoved側に保持されています。sourceには変更がありません。
+現在の問題で課す制約をactive、課す条件から外して評価用に保持する制約をremovedと呼びます。変換後は通常のactiveな制約が一つあり、元のOneHotはremoved側に保持されています。sourceには変更がありません。
 
 ```{code-cell} ipython3
 assert len(prepared.constraints) == 1

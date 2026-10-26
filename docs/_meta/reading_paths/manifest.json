@@ -1307,7 +1307,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "PR #1159のレビュー修正で、最初のPySCIPOpt実行にHiGHSを要求せず、必要な時点で追加する手順にする。公開b7の3 Tutorial・2 How-to用の環境であり、全Book共通の互換性記録やK-acceptanceの完了ではない。",
+      "notes": "PR #1159のレビュー修正で、最初のPySCIPOpt実行にHiGHSを要求せず、必要な時点で追加する手順にする。公開b7の3 Tutorial・2 How-to用の環境であり、全Book共通の互換性記録やK-acceptanceの完了ではない。 PR #1284（I1）はSDKのみで止められる導入を先に置き、必要なAdapterだけ後で追加する。Cで追加したNotebookカーネル手順は保持する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2634,7 +2634,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "class.quboの局所導入は設計案。現#1284本文への実装は未完了。",
+      "notes": "class.quboの局所導入は設計案。現#1284本文への実装は未完了。 I1の読者レビュー修正ではmembership例の後にFunctionの表現形式の詳細を置き、OneHotの数学的な条件と専用表現を局所的に区別する。active/usedの詳細やAdapter適用は基本のmembership例の後に置く。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2730,7 +2730,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "I1ではtarget・Policy・prepareの共通モデルをAdapter適用より先に置く。直入読者向けにOneHot/loweringとphaseを局所説明する。個別操作の数式・適用条件はAPI Reference、G7の一般的な変換保証は後続作業のまま。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3530,7 +3530,7 @@
         "experiment.record"
       ],
       "parent_page": null,
-      "notes": "局所導入を備える独立入口。source本文の観察と上記設計契約は別記録。",
+      "notes": "局所導入を備える独立入口。source本文の観察と上記設計契約は別記録。 I1の修正ではactive/removedをこのページで短く定義する。実行例が確認するのは指定したOneHot loweringと手元の候補に限る。一般の変換保証や全feasibility viewの習得・I全体の完了とはみなさない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
