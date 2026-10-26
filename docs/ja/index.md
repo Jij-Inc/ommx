@@ -1,88 +1,75 @@
 # OMMXとは？
 
-OMMX（Open Mathematical prograMming eXchange; オミキス）とは、数理最適化を実務に応用する過程で必要となる、ソフトウェア間や人間同士のデータ交換を実現するためのオープンなデータ形式と、それを操作するためのSDKの総称です。
+OMMX（Open Mathematical prograMming eXchange; オミキス）は、**ソルバーから独立して、最適化問題とその候補解の意味を定義する**オープンなプロジェクトです。問題を記述するデータ形式と、それを構築・評価・変換・保存するSDK、ソルバーにつなぐAdapterを提供します。
 
-## 数理最適化におけるデータの交換
+最適化の結果を理解するには、「変数にどの値が入ったか」だけでは不十分です。変数が取りうる値と満たすべき制約、比較する目的値、変換後の結果を元の問題でどう解釈するかが必要です。OMMXは、その基準を特定のソルバーの内部表現に委ねずに扱います。
 
-数理最適化の技術を実務に応用する過程では、多くのデータが生成され、それらのデータを適切に管理・共有することが求められます。数理最適化そのものの研究プロセスとは異なり、実務への応用のプロセスは次の図のように複数のフェーズからなり、それぞれのフェーズにおいてそれぞれの作業に応じたソフトウェアを使う必要があります。
+## ソルバーを呼ばなくても、候補を評価できる
 
-```{figure} ./assets/introduction_01.png
-:alt: 数理最適化のワークフロー概略図
+例えば、二つの項目を同時には選べない問題を記述して、手元の候補を検査できます。
 
-数理最適化のワークフロー。
+```python
+from ommx import Instance
+
+instance = Instance.maximize()
+x = instance.new_binary("x")
+y = instance.new_binary("y")
+instance.objective = x + y
+instance.add_constraint(x * y == 0)
+
+solution = instance.evaluate({x.id: 1, y.id: 0})
+assert solution.feasible
+assert solution.objective == 1
 ```
 
-例えば、データ分析では標準的なデータサイエンスのツールである `pandas` や `matplotlib`が、定式化ではモデラーと呼ばれる `jijmodeling` や `JuMP` のような数理最適化専用のツールが、最適化の実行には `Gurobi` や `SCIP` などのソルバーが、それぞれ使われます。これらのソフトウェアは、それぞれにとって都合の良いデータ形式を扱うため、相互に運用するにはデータの変換が必要となります。そのため、このような変換は使うツールが増えるほどに組み合わせ的に複雑化していきます。もし標準となるデータ形式が一つ存在すれば、それぞれのツールごとに標準データ形式との相互変換を用意するだけで、どのツールとも連携できるようになり、全体として大幅な効率化が期待できます。
+この評価にソルバーは必要ありません。一方、候補を探索して解を求めたい場合は、同じ問題をAdapter経由でソルバーへ渡せます。評価で「この候補は実行可能か」を確認することと、求解で「より良い候補を探す」ことは別の操作です。
 
-加えて、これらの作業は複数人で分担して行われることが一般的であるため、担当者間でデータを受け渡せる必要があります。人間同士がデータをやり取りする際に重要になるのは、そのデータが何を表し、何のために作られたのかを記述するメタデータです。例えば、ある最適化問題のインスタンスを解いた結果がファイルとして保存されている時、そのファイルに「どの問題を」「どのソルバーで」「どのような設定で」解いたかが記載されていなければ、そのファイルに保存されている情報を別の用途に使うことは出来ません。これを解決するためにはメタデータを付与することが必要ですが、そのメタデータの形式が統一されていなければ、データのやり取りが困難になります。
+## 問題の意味と、解くための表現を分ける
 
-## OMMXを構成する要素
+ソルバーごとに、直接扱える目的関数や制約は異なります。OMMXは、問題を最初から一つのソルバーの表現に固定するのではなく、必要に応じて別の表現へ変換します。
 
-これらのデータの交換における問題を解決するため、OMMXが開発されました。OMMXは次の4つのコンポーネントで構成されています
+例えば「いくつかの変数のうち、ちょうど一つを選ぶ」という条件を、対応するソルバーにはそのまま渡し、必要なら通常の等式へ変換して渡せます。この条件そのものの意味はOMMXが定義します。変換後も、元の変数や制約で結果を確認するための情報を保持できます。
 
-- OMMX Message
-    
-    ソフトウェア間でデータを交換するための、プログラミング言語やOSによらないデータ形式
-    
-- OMMX Artifact
-    
-    人間同士でデータを交換するための、メタデータ付きパッケージ形式
-    
-- OMMX SDK
-    
-    OMMX MessageとOMMX Artifactを効率的に操作・生成するためのフレームワーク
-    
-- OMMX Adapters
-    
-    ソルバーなどの数理最適化ソフトウェアとOMMXのデータ形式を相互に連携するためのソフトウェア群
-    
+ただし、変換が何を保存するかは操作ごとに異なります。同じ条件を別の式で表す場合もあれば、課す条件や比較する目的値を変える場合もあります。変換前後の実行可能性・目的値・最適性を、すべて同じ保証として扱うことはできません。具体的な条件の例は[特殊制約](./user_guide/special_constraints.md)、変換した問題の結果の読み方は[変換後の問題とRemoved constraints](./user_guide/removed_constraints.md)で説明します。
 
-### OMMX Message
+このソルバーに依存しない問題記述は、将来、勤務パターンのような業務上の条件を直接記述したり、意味が変わらないことを確かめながら問題を単純化したりする土台にもなります。これらは将来の方向性であり、現在の対応機能を示すものではありません。
 
-OMMX Messageはソフトウェア間でデータ交換を行うために設計されたデータ形式です。これは[Protocol Buffers](https://protobuf.dev/)を用いて定義されており、これにより特定のプログラミング言語やOSに依存しないデータ形式を実現しています。OMMX Messageは、数理最適化の問題（protobuf wire format では `ommx.v1.Instance`、Python SDK では [`ommx.Instance`](./user_guide/instance.md)）や解（wire format では `ommx.v1.Solution`、Python SDK では [`ommx.Solution`](./user_guide/solution.md)）のデータなどを表現するためのスキーマを定義します。
-さらに、Protocol Buffersの機能により、ほとんどの実用的なプログラミング言語に対してOMMX Messageを利用するためのライブラリを自動生成することができ、特にPythonとRust向けのライブラリはOMMX SDKの一部として提供されています。
+## 目的に合わせて読み始める
 
-protobuf schema としての `ommx.v1.Instance` などのデータ構造はMessageと呼ばれ、それぞれのMessageは複数のフィールドを持ちます。例えば、 `Instance` は次のようなフィールドを持ちます（簡単のために、一部省略しています）:
+| やりたいこと | 最初に読むページ | この段階で学ぶこと |
+|---|---|---|
+| ソルバーで問題を解く | [Adapterで解くTutorial](./tutorial/solve_with_ommx_adapter) | Instanceを作り、求解して結果を読む |
+| 問題や候補解の意味を理解する | [Instance](./user_guide/instance.md) → [StateからSolutionへの評価](./user_guide/solution.md) | 変数の役割、実行可能性、目的値、最適性の違い |
+| 特殊制約を使う | [特殊制約の意味と評価](./user_guide/special_constraints.md) | Indicator・OneHot・SOS1の成立条件 |
+| 変換後の結果を解釈する | [変換後の問題とRemoved constraints](./user_guide/removed_constraints.md) | activeな問題と、元の条件を使った評価の違い |
+| 複数の候補を比較する | [SampleSet](./user_guide/sample_set.md) | サンプルごとの評価と、得られた候補の中からの選択 |
+| 既存の問題を入手する | [MIPLIB](./tutorial/download_miplib_instance.md) / [QPLIB](./tutorial/download_qplib_instance.md) | 公開された最適化問題の取得 |
+| 実験を記録・比較する | [実験管理Tutorial](./tutorial/experiment_management.md) | 条件と結果を対応づけた記録 |
+| 問題や結果を保存・共有する | [Artifact共有Tutorial](./tutorial/share_in_ommx_artifact.md) | メタデータとともに受け渡す |
 
-```protobuf
-message Instance {
-  // 決定変数
-  repeated DecisionVariable decision_variables = 2;
-  // 目的関数
-  Function objective = 3;
-  // 制約条件
-  repeated Constraint constraints = 4;
-  // 最大化・最小化
-  Sense sense = 5;
-}
-```
+Tutorialは小さな成功例から操作を学ぶためのものです。User Guideは仕組みや意味を理解するために、API Referenceは個々の操作の引数・前提条件・保証を確認するために使います。全ページを順に読む必要はありません。
 
-`Instance`をはじめ、決定変数を表すMessage `ommx.v1.DecisionVariable` や目的関数や制約条件として使うための数学的な関数を表すための `ommx.v1.Function` などのMessageが protobuf namespace `ommx.v1` の元で定義されています。Python のユーザーコードでは、対応する SDK domain class を top-level `ommx` から、例えば `from ommx import Instance, DecisionVariable, Function` のように import します。OMMXで定義されているMessageの一覧は、 [OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html) にまとめられています。
+## データの交換と共有を支える仕組み
 
-一部のソルバーは直接 OMMX `Instance` payload を読み込むことができますが、そうでないソルバーに対しては、OMMX Adapterを使ってOMMX Messageをソルバーが扱える形式に変換します。必要になったソフトウェアに対してOMMX Adapterを作成することで、OMMXと連携可能な他のソフトウェアと容易にデータ連携を実現できます。
+問題や解に共通の意味を与えることで、ソフトウェア間だけでなく、担当者間でも同じ問題と結果を扱えます。OMMXは次の要素でその受け渡しを支えます。
+
+| 要素 | 役割 |
+|---|---|
+| OMMX Message | 問題や解を表す、言語・OSに依存しないデータ形式 |
+| OMMX SDK | 問題と結果の構築・評価・変換・読み書き |
+| OMMX Adapter | OMMXと個々のソルバーの入力・出力の接続 |
+| OMMX Artifact | 問題・結果・添付データをメタデータ付きで保存・共有するパッケージ |
+
+Messageのスキーマは[Protocol Buffers](https://protobuf.dev/)で定義され、PythonとRustのSDKを提供しています。Pythonのユーザーコードでは `from ommx import Instance` のように公開APIを使います。wire formatのスキーマは[OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html)を参照してください。
 
 ```{figure} ./assets/introduction_02.png
-:alt: OMMX MessageとOMMX Adapterの関係を表す図
+:alt: 共通のOMMX表現を介して複数のソフトウェアを接続する図
 :width: 70%
 
-OMMXが実現するソフトウェア間のデータ交換。
+共通の問題・結果表現を介して、ソフトウェアを接続する。
 ```
 
-### OMMX Artifact
-
-OMMX Artifactは、人間同士のデータ交換のために設計された、メタデータ付きパッケージ形式です。これは、コンテナ（Dockerなどのこと）の標準化団体である [OCI (Open Container Initiative)](https://opencontainers.org/) によって定義された OCI Artifactをベースにしています。OCIの標準化では、コンテナは通常のTarアーカイブによって実現され、コンテナの中身であるファイルと共に実行するコマンド等のメタデータが保存されています。これを汎用のパッケージ形式として利用するための仕様が OCI Artifact です。
-
-OCI Artifactでは、パッケージの中身をレイヤーという単位で管理します。一つのコンテナには複数のレイヤーとManifest（目録）と呼ばれるメタデータが含まれます。コンテナを読み込むときは、まずManifestを確認し、その情報に基づいて各レイヤーを読み込むことで、必要なデータを取り出します。各レイヤーはバイナリデータ（BLOB）として保存され、 [Media Type](https://www.iana.org/assignments/media-types/media-types.xhtml) がメタデータとして付与されています。例えば、PDFファイルを保存する場合、 `application/pdf` というMedia Typeが付与されているため、OCI Artifactを読み込むソフトウェアはこのMedia Typeを見て、それがPDFファイルであると認識します。
-
-OMMXでは、OMMX Messageのそれぞれに対して `application/org.ommx.v1.instance` などのMedia Typeを定義し、OMMX MessageをProtocol Buffersでシリアライズしたバイナリを含むOCI ArtifactをOMMX Artifactと呼称しています。厳密に言えば、OMMXはOCI Artifactを何も拡張していないので、OMMX ArtifactをOCI Artifactの一種として扱うことができます。
-
-OCI Artifactをパッケージ形式として利用する利点は、これが全く正規のコンテナとして扱えることです。つまり、[DockerHub](https://hub.docker.com/) や [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) をそのまま利用してデータの管理・配布を行うことができます。これにより、例えば、多くのコンテナと同様に、数GBに及ぶベンチマークセットを不特定多数に対して配布することが容易になります。OMMXではこの機能を利用して、代表的なデータセットである [MIPLIB 2017](https://miplib.zib.de/) のデータを[GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017)で配布しています。詳しくは [MIPLIBインスタンスをダウンロードする](./tutorial/download_miplib_instance.md) を参照してください。
-
-```{figure} ./assets/introduction_03.png
-:alt: OMMX MessageとOMMX Artifactの関係を表す図
-
-OMMXが実現する人間同士のデータ交換。
-```
+Artifactには、問題と結果に加えて「何を、どの設定で解いたか」を記録できます。[OCI Artifact](https://opencontainers.org/)を利用しているため、GitHub Container Registryなど既存のregistryで配布することもできます。OMMXはこの仕組みでMIPLIBやQPLIBの問題を公開しています。
 
 ```{toctree}
 :caption: Tutorial
@@ -100,24 +87,39 @@ tutorial/implement_adapter
 ```
 
 ```{toctree}
-:caption: User Guide
+:caption: User Guide：問題と評価
 :maxdepth: 1
 :hidden:
 
-user_guide/cli
-user_guide/agent_skills
-user_guide/supported_ommx_adapters
-user_guide/adapter_diagnostics
-user_guide/adapter_initial_state
-user_guide/function
 user_guide/instance
-user_guide/parametric_instance
 user_guide/solution
 user_guide/sample_set
+user_guide/function
+user_guide/parametric_instance
 user_guide/special_constraints
+user_guide/removed_constraints
+```
+
+```{toctree}
+:caption: User Guide：Adapter
+:maxdepth: 1
+:hidden:
+
+user_guide/supported_ommx_adapters
 user_guide/capability_model
+user_guide/adapter_diagnostics
+user_guide/adapter_initial_state
+```
+
+```{toctree}
+:caption: User Guide：記録と運用
+:maxdepth: 1
+:hidden:
+
 user_guide/experiment
 user_guide/tracing
+user_guide/cli
+user_guide/agent_skills
 ```
 
 ```{toctree}

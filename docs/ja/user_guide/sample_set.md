@@ -14,14 +14,14 @@ kernelspec:
 ommx.SampleSet
 =================
 
-{class}`~ommx.Solution` はソルバーが一つの解を返す場合の表現ですが、数理最適化ソルバーによっては複数の解を返す場合があり、主にサンプラーと呼ばれます。OMMXでは複数の解を表現するために次の二つのデータ構造を用意しています：
+[StateからSolutionへの評価](./solution.md)は一つの候補を扱いました。複数の候補を同じInstanceで評価する場合は、{class}`~ommx.Samples` と {class}`~ommx.SampleSet` を使います。候補はサンプラーと呼ばれるソルバーから得ることも、手動で用意することもできます。
 
 | データ構造  | 説明 |
 |:----------|:-----|
-| {class}`~ommx.Samples` | 決定変数のIDに対して得られた複数の解の値を列挙したもの |
+| {class}`~ommx.Samples` | 変数IDから値への対応を、候補ごとに保持したもの |
 | {class}`~ommx.SampleSet` | 決定変数の値に加えて、目的関数や制約条件の評価を行ったもの |
 
-`Samples`が`State`に相当し、`SampleSet`が`Solution`に相当します。このノートブックでは、`SampleSet`の使い方を説明します。
+`Samples`が`State`に相当し、`SampleSet`が`Solution`に相当します。実行可能性や目的値の意味もSolutionと同じです。
 
 SampleSetの作成
 --------------
@@ -83,7 +83,7 @@ sample_set.summary
 `summary`属性は各サンプルの目的値と実行可能性をデータフレーム形式で表示します。 `sample_id=2` のサンプルは制約条件を満たしていないので `feasible=False` となっています。このテーブルはFeasibleなものを上に、さらにその中で`SampleSet.sense`に応じてより良い目的関数の値を持つものを上に表示します。
 
 ```{note}
-`evaluate_samples` の引数はここでは分かり易いように `to_samples` で変換した `ommx.Samples` を渡していますが、`to_samples` は自動的に呼ばれるので省略することもできます。
+`evaluate_samples` には `Samples` を渡す代わりに、サンプルIDをキーとする辞書や、値の割り当てを並べたリストを直接渡すこともできます。
 ```
 
 個々のサンプルの取り出し
@@ -100,13 +100,12 @@ print(f"{solution.objective=}")
 solution.decision_variables_df()
 ```
 
-最適解の取り出し
+得られた候補の中から最良の実行可能なものを選ぶ
 -------------
-`SampleSet.best_feasible`は、実行可能なサンプルの中で最大の目的値を持つ最良の実行可能サンプルを返します：
+`SampleSet.best_feasible`は、得られた実行可能なサンプルの中で、`sense`に応じて最も良い目的値を持つものを返します。候補の集合で最良であることは、元の問題の最適解であることを意味しません。
 
 ```{code-cell} ipython3
 solution = sample_set.best_feasible
-assert solution is not None  # 最適な解が存在しない場合は None
 
 print(f"{solution.objective=}")
 solution.decision_variables_df()
@@ -134,3 +133,12 @@ except ValueError as e:
 ```{note}
 実行可能でない解のうちどれが最善かは非常に多彩な基準が考えられるため、OMMXでは提供していません。必要に応じて自分で実装してください。
 ```
+
+変換済みの問題を評価する場合
+-------------------------
+
+ここまでの例では、作成した問題をそのまま評価しました。Instanceを変換した場合は、変換済みのInstanceで候補を評価します。
+
+現在解く問題から外した制約を、結果の検査のために残したものをremoved constraintsと呼びます。また、現在の目的関数とは別に、報告する目的値を計算するための式（出力目的関数）を保持することがあります。このようなInstanceで`evaluate_samples`を呼ぶと、保持情報も使った評価結果がSampleSetに入ります。
+
+どの制約を実行可能性の判定に使うかや、ソルバー向けの目的値との違いは[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。得られた候補の中で最良であることと、元の問題全体の最適性は、この場合も区別します。

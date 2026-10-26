@@ -6,203 +6,161 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
-  display_name: ommx-update-books (3.9.23)
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
 
-# ommx.Instance
+# Instance：最適化問題と変数の役割
 
-{class}`~ommx.Instance` は最適化問題自体（数理モデル）を記述するためのデータ構造です。次のコンポーネントから構成されます。
+{class}`~ommx.Instance` は、決定変数の定義域（取りうる値の種類と範囲）、目的関数、制約条件、最大化・最小化をまとめた最適化問題です。特定のソルバーの入力ではなく、**どの値の割り当てが実行可能で、どの目的値を持つか**をOMMXで定義します。そのため、求解しなくても候補を評価できます。
 
-- 決定変数 ({attr}`~ommx.Instance.decision_variables`)
-- 目的関数（{attr}`~ommx.Instance.objective`）
-- 制約条件（{attr}`~ommx.Instance.constraints`）
-- 最大化・最小化（{attr}`~ommx.Instance.sense`）
-
-例えば簡単な最適化問題を考えましょう
+例えば、二つの項目を同時には選べない問題を作ります。
 
 $$
 \begin{aligned}
 \max \quad & x + y \\
-\text{subject to} \quad & x y  = 0 \\
-& x, y \in \{0, 1\}
+\text{subject to} \quad & xy = 0 \\
+& x, y \in \{0, 1\}.
 \end{aligned}
 $$
 
-これに対応する `ommx.Instance` は次のようになります。
-
 ```{code-cell} ipython3
-from ommx import Instance, Sense
+from ommx import Instance
 
 instance = Instance.maximize()
 x = instance.new_binary("x")
 y = instance.new_binary("y")
 instance.objective = x + y
-instance.add_constraint(x * y == 0, "exclusive")
+exclusive = instance.add_constraint(x * y == 0, "exclusive")
+
+solution = instance.evaluate({x.id: 1, y.id: 0})
+assert solution.feasible
+assert solution.objective == 1
 ```
 
-`Instance` はモデルの構築時に決定変数と制約条件の数値 ID を自動的に割り当てます。割り当てられた ID は `x.id` や `add_constraint` が返すハンドルから確認できます。明示的な ID を持つコンポーネントを一度に組み立てる場合は、引き続き {meth}`~ommx.Instance.from_components` を使用できます。
+`new_binary` と `add_constraint` はIDを自動的に割り当てます。IDは `x.id` のように参照できます。値の割り当てを表す {class}`~ommx.State` と、評価結果である {class}`~ommx.Solution` の違いは、[StateからSolutionへの評価](./solution.md)で説明します。評価は候補を検査する操作であり、最適解を探索する操作ではありません。
 
-決定変数を作成するすべての `new_*` メソッドと `add_constraint` は、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を受け取れます。後ろの 3 フィールドはキーワード専用です。`new_integer`、`new_continuous`、`new_semi_integer`、`new_semi_continuous` では、`lower` と `upper` もキーワード専用で指定できます。さらに `new_integer` と `new_semi_integer` はキーワード専用の `atol` を受け取り、省略時には {func}`~ommx.get_default_atol` が返す現在の既定値を使います。`add_constraint` では、省略したフィールドについて入力 Constraint が持つ既存ラベルを保持します。
+## 問題を構成する情報
 
-Integer と SemiInteger では、有限なboundの各側を、指定したboundを`atol`のもとで満たす
-最小または最大の整数へ正規化します。無限な側はunboundedのまま保持します。
-Bound membershipは $x \in [l,u]$ を $l-x\leq 0$ と $x-u\leq 0$ という
-2つのresidual constraintとして解釈し、不等式constraintのfeasibilityと同じtolerance規則を
-使います。boundを満たす整数がない場合、`new_integer` は `ValueError` を返し、
-`new_semi_integer` はSemiIntegerのゼロ選択肢を保持するため `[0, 0]` を使います。
-Binaryのbound正規化でも、同じ規則で`0`と`1`のmembershipを判定します。
+| 情報 | 意味 | 参照先 |
+|---|---|---|
+| 決定変数 | 値の種類と取りうる範囲 | {attr}`~ommx.Instance.decision_variables` |
+| 目的関数 | 比較したい数値 | {attr}`~ommx.Instance.objective` |
+| 制約条件 | 満たす必要がある条件 | {attr}`~ommx.Instance.constraints` |
+| 最大化・最小化 | 目的値の大きい方と小さい方のどちらを選ぶか | {attr}`~ommx.Instance.sense` |
 
-各 `new_*` 呼び出しは、IDを割り当てる前に決定変数の定義全体を検証し、正規化します。boundまたはtoleranceが不正な場合や、既存の決定変数IDの最大値が `2**64 - 1` で、それより大きい自動IDを割り当てられない場合、決定変数もModelingLabelも `Instance` には追加されません。
+最小化問題は {meth}`~ommx.Instance.minimize` で作成します。目的関数や通常制約の式は {class}`~ommx.Function` で表されます。関数の組み立て方は[Function](./function.md)、Indicator・OneHot・SOS1の成立条件は[特殊制約](./special_constraints.md)を参照してください。
 
-これらのコンポーネントはそれぞれに対応するプロパティが用意されています。目的関数については前節で説明した {class}`~ommx.Function` の形に変換されます。
+変数と制約は名前ではなくIDで識別します。名前が同じでも、IDが異なれば別の変数・制約です。明示的なIDで既存のコンポーネントを組み立てる場合は {meth}`~ommx.Instance.from_components` を使えます。Instanceは、式や特殊制約が参照する変数が自身に定義されているかを検証します。
 
-```{code-cell} ipython3
-instance.objective
-```
+(decision-variable-domains)=
+## 変数の定義域とメタデータ
 
-最大化問題には {meth}`~ommx.Instance.maximize`、最小化問題には {meth}`~ommx.Instance.minimize` を使用します。作成された Instance の `sense` には、それぞれ `Sense.Maximize` または `Sense.Minimize` が設定されます。
-
-```{code-cell} ipython3
-instance.sense == Sense.Maximize
-```
-
-## 決定変数
-
-決定変数と制約条件については [`pandas.DataFrame`](https://pandas.pydata.org/pandas-docs/stable/reference/frame.html) の形式で取得できます
-
-```{code-cell} ipython3
-instance.decision_variables_df()
-```
-
-まず `kind` と `lower`, `upper` は数理モデルとして必須の情報です。
-
-- `kind` はその決定変数の種類でBinary, Integer, Continuousに加えてSemiInteger, SemiContinuousがあります。
-- `lower` と `upper` はその決定変数の下限と上限です。Binaryの場合は $[0, 1]$ になります。
-
-数値 ID を `Instance` に自動で割り当てさせる場合は、これらすべての種類の決定変数を `Instance` 上で直接作成できます。返された attached 変数は、上の binary 変数と同様に式で利用できます。
+決定変数の定義域（domain）は、値の種類 `kind` と下限・上限 `lower`・`upper` で指定します。下限・上限をboundとも呼びます。次のようにInstance上で作成できます。
 
 ```{code-cell} ipython3
 typed = Instance.minimize()
+flag = typed.new_binary("flag")
 count = typed.new_integer("count", lower=0, upper=10)
 amount = typed.new_continuous("amount", lower=0)
 batch = typed.new_semi_integer("batch", lower=2, upper=10)
 rate = typed.new_semi_continuous("rate", lower=0.5, upper=4)
 ```
 
-加えてOMMXは数理最適化を実務上のデータ分析に統合した時に必要になるようなメタデータを統合的に扱う事を目指して設計されているので、決定変数のメタデータを保持することができます。これらは数理モデル自体には影響を与えないので必須の情報ではありませんがデータ分析や可視化の際に有用です。
+Binaryは0または1、Integerは整数、Continuousは実数を取ります。SemiInteger・SemiContinuousは、指定範囲内の整数・実数に加えて0も取れます。例えば`batch`には2から10までの整数に加えて0も、`rate`には0.5から4までの実数に加えて0も割り当てられます。boundの正規化や許容誤差は、各 `new_*` メソッドのAPI Referenceで確認できます。
 
-- `name` は人間が読める形の決定変数の名前です。OMMXでは決定変数は常にIDで識別されるのこの名前は重複することがあります。後述する `subscripts` と合わせて利用することが想定されています。
-- `description` はその決定変数についてのより詳細な説明です。
-- 多くの数理最適化問題を扱う際、多次元配列として決定変数を扱うことが多いです。例えば $x_i + y_i \leq 1, \forall i \in [1, N]$ のような添字 $i$ を持った制約条件を考えるのが普通でしょう。この時 `x` と `y` はそれぞれの決定変数の名前なので `name` に保存し、$i$ に相当する部分を `subscripts` に保存します。`subscripts` は整数のリストであり、もし添字が整数で表現できない倍は `dict[str, str]` 型として保存できる `parameters` というプロパティが用意されています。
-
-なお直接 {class}`~ommx.DecisionVariable` のリストが欲しい場合は {attr}`~ommx.Instance.decision_variables` プロパティを使うことができます
+`name`、`subscripts`、`parameters`、`description` は、結果の分析や可視化に使うメタデータです。これらは変数の定義域や制約の成立条件を変えません。例えば $x_i$ のような変数の名前を `name="x"`、添字を `subscripts=[i]` として保存できます。
 
 ```{code-cell} ipython3
-for v in instance.decision_variables:
-    print(f"{v.id=}, {v.name=}")
+instance.decision_variables_df()
 ```
 
-決定変数のIDから `ommx.DecisionVariable` を取得するには {meth}`~ommx.Instance.get_decision_variable_by_id` メソッドを使うことができます
+{meth}`~ommx.Instance.decision_variables_df` は、定義やラベルをpandasのDataFrameとして返します。一つの変数をIDから取得する場合は {meth}`~ommx.Instance.get_decision_variable_by_id` を使います。
+
+(retained-and-used-variables)=
+## 保持される変数と、現在使われている変数
+
+通常の定式化では、宣言した変数をすべてソルバーに渡すと考えるかもしれません。しかし、変数を固定したり、別の変数で表現したりすると、ソルバーが値を選ぶ必要のない変数が生まれます。OMMXは、結果を元の変数で読めるよう、その変数の定義も保持します。
+
+先ほどの問題で $x=1$ と固定してみましょう。Pythonの {meth}`~ommx.Instance.partial_evaluate` は、元のInstanceを変更せず、新しいInstanceを返します。
 
 ```{code-cell} ipython3
-x1 = instance.get_decision_variable_by_id(1)
-print(f"{x1.id=}, {x1.name=}")
+fixed = instance.partial_evaluate({x.id: 1})
+
+# xの定義は残るが、現在の式で値を選ぶ必要があるのはyだけ。
+assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
+assert {v.id for v in fixed.used_decision_variables} == {y.id}
+
+# xの値をもう一度渡す必要はない。
+fixed_solution = fixed.evaluate({y.id: 0})
+assert fixed_solution.state.entries == {x.id: 1.0, y.id: 0.0}
+assert fixed_solution.objective == 1
 ```
 
-## 制約条件
-次に制約条件を見てみましょう
+{attr}`~ommx.Instance.decision_variables` は保持されるすべての変数、{attr}`~ommx.Instance.used_decision_variables` は**現在の目的関数とactiveな制約に現れる変数**を返します。activeは現在の問題で課す制約を指し、通常制約だけでなく、Indicator・OneHot・SOS1も含みます。Indicatorを制御するバイナリ変数もusedです。
+
+(instance-variable-roles)=
+### 変数の四つの役割
+
+Instance内の各変数は、次のいずれかの役割を持ちます。これは変数の種類（BinaryやInteger）とは別の分類です。
+
+| 役割 | 意味 | 評価に必要な値 |
+|---|---|---|
+| used | 現在の目的関数やactiveな制約に現れる | 呼び出し側が与える |
+| fixed | Instanceに固定値が記録されている | 記録された値を使う |
+| dependent | 別の変数の関数として表されている | 記録された式から計算する |
+| irrelevant | 上記のどれでもなく、現在の問題では値を選ぶ必要がない | 省略された場合は既定値で補う |
+
+{meth}`~ommx.Instance.decision_variable_role` で一つの変数、{meth}`~ommx.Instance.decision_variable_roles` ですべての変数の役割を確認できます。
+
+### 値の復元と、既定値による補完は違う
+
+fixedとdependentの値は、Instanceが持つ固定値や依存式から決まります。これに対して、irrelevantの値は一意には決まりません。省略されたirrelevant変数には定義域に応じた既定値が入りますが、それはソルバーが選んだ値でも、元の解を一意に復元した値でもありません。
+
+例えば、目的関数にも制約にも使わない変数を宣言できます。
+
+```{code-cell} ipython3
+reporting = Instance.minimize()
+chosen = reporting.new_binary("chosen")
+unused = reporting.new_integer("unused", lower=2, upper=5)
+reporting.objective = chosen
+
+completed = reporting.evaluate({chosen.id: 0})
+assert completed.state.entries[unused.id] == 2.0
+
+# この値を結果の解釈に使いたいなら、明示的に与える。
+explicit = reporting.evaluate({chosen.id: 0, unused.id: 4})
+assert explicit.state.entries[unused.id] == 4.0
+```
+
+Binary・Integer・Continuousの既定値はbound内で0に最も近い値、SemiInteger・SemiContinuousでは0です。報告したい値や、検査したい候補の値が既にあるなら、省略せずに渡してください。
+
+{meth}`~ommx.Instance.populate_state` はこの復元・補完だけを行い、{meth}`~ommx.Instance.evaluate` はその後に目的関数や制約を評価します。usedな変数の不足を既定値で埋めることはありません。数値の丸めや、fixed・dependentの値も入力した場合の整合性検査は、`populate_state` のAPI Referenceを参照してください。
+
+## 通常制約の参照
+
+通常制約は $f(x)=0$ または $f(x)\leq 0$ として保持されます。例えば $f(x)\geq 0$ は $-f(x)\leq 0$ に書き換えられます。{attr}`~ommx.Constraint.equality` が、等式か不等式かを示します。
 
 ```{code-cell} ipython3
 instance.constraints_df()
 ```
 
-OMMXでは制約条件もIDで管理されます。このIDは決定変数のIDとは独立です。制約条件のIDは `Instance` に登録する際に決まります: {meth}`~ommx.Instance.from_components` に渡す `constraints` 辞書のキーがそのまま制約条件のIDになります。
-
-制約条件に必須の情報は `equality` です。`equality` はその制約条件が等式制約 ({attr}`~ommx.Equality.EqualToZero`) か不等式制約 ({attr}`~ommx.Equality.LessThanOrEqualToZero`) かを表します。$f(x) \geq 0$のタイプの制約条件は $-f(x) \leq 0$ として扱われることに注意してください。
-
-制約条件にも決定変数と同様にメタデータを保存することができます。決定変数と同様に `name`, `description`, `subscripts`, `parameters` が利用できます。これらのメタデータ全体を置き換える場合は `set_name`, `set_description`, `set_subscripts`, `set_parameters` を使います。既存の値に追記または merge したい場合は `add_subscripts`, `add_parameter`, `add_parameters` を使います。
-
-```{code-cell} ipython3
-c = (x * y == 0).set_name("prod-zero")
-print(f"{c.name=}")
-```
-
-また {attr}`~ommx.Instance.constraints` プロパティを使うことで制約条件IDをキーとする `dict[int, ommx.Constraint]` を直接取得できます。制約条件のIDから `ommx.Constraint` を取得するには {meth}`~ommx.Instance.get_constraint_by_id` メソッドを使うことができます。
-
-```{code-cell} ipython3
-for cid, c in instance.constraints.items():
-    print(f"id={cid}: {c}")
-```
+{attr}`~ommx.Instance.constraints` は制約IDをキーとする辞書です。制約にも変数と同様のメタデータを付けられます。制約IDの空間は変数IDとは独立し、特殊制約の各種類もそれぞれ独立した制約IDを持ちます。
 
 (simultaneous-bound-tightening)=
-## Bound tightening
+## モデルを変換する場合
 
-すべての有効な通常制約を使う方法と、制約IDの集合を指定する方法で、変数のboundを締められます。
+Instanceは構築後にも変換できます。ただし、**変換結果を評価できることと、元の最適化問題と等価であることは別**です。
 
-```python
-changed_bounds = instance.tighten_bounds_simultaneously_once()  # 変数ID -> 更新後のBound
-# 通常制約のID 100と101だけを使う:
-changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
-# rowごとの変数項数の上限を変更する（既定値: 32）。
-changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
-```
+例えば {meth}`~ommx.Instance.substitute` は、変数を別の式で置き換え、元の変数をdependentとして復元できるようにします。しかし、元の変数の定義域を置換先の式に対する制約へ自動変換するわけではありません。独自の変換を作る場合は、定義域を含めて何を保存するかを確認する必要があります。
 
-どちらのメソッドも、すべての対象制約が呼び出し開始時のboundを使い、導出した更新を
-まとめて1回適用します。同じ呼び出しの途中では新しいboundを再利用しません。
-更新を他の制約へ伝播させるには再度呼び出します。候補をすべて集約してから`atol`で
-更新差分を判定するため、候補の処理順序によって採用されるboundは変わりません。
+また、{meth}`~ommx.Instance.tighten_bounds_simultaneously_once` は通常制約から変数のboundを締める操作です。対象となる式、許容誤差、数値計算上の制約、制約を選ぶ方法はAPI Referenceを参照してください。
 
-{meth}`~ommx.Instance.tighten_bounds_simultaneously_once`はすべての有効な通常制約を使います。
-{meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`は指定したIDの
-制約だけを使います。不明・削除済みのIDは何も変更せずにエラーとし、空集合は更新しません。
-どちらも次数が1以下のcompact polynomial形式の関数を使います。非線形のrowや
-合成式（Expression）はスキップします。合成式は数学的にaffineな場合も対象外です。
-また、変数項が`max_terms`（既定値: 32）を超えるrowは、bound候補を評価する前に
-スキップします。定数項は数えませんが、固定変数・semi変数・従属変数の項は数えます。
-上限を0にすると定数だけのrowを処理し、その矛盾は引き続き検出します。
-スキップしたrowもInstance内には残ります。
+### 結果の確認用に保持する情報
 
-等式は両方向を処理します。許容誤差は代数的に反映し、連続変数のdomainを
-`[lower - atol, upper + atol]`に広げ、制約のresidualを`atol`まで許容します。
-`a*x + r <= 0`で`a > 0`なら、上限は`(atol - min(r)) / a`です。
-連続変数はそこから`atol`を引いて保存用の上界にし、整数・バイナリ変数は切り下げます。
-係数が負の場合は対応する下界を導出します。例えば`2*x <= 6`、`atol=0.125`では
-上限は`3.0625`となり、保存する上界は連続変数なら`2.9375`、整数変数なら`3`です。
+Instanceは、現在の目的関数と制約以外にも、結果を確認するための情報を保持できます。例えば{class}`~ommx.NamedFunction`は、名前を付けて保存し、目的関数や制約とは別に値を確認する式です。
 
-residualの区間は{meth}`~ommx.Function.evaluate_bound`で評価し、候補の計算には通常の
-浮動小数点演算を使います。点評価が許容する境界の探索は行いません。そのため、丸め、
-桁落ち、評価順序により、同じ`atol`でも数値的な境界付近のfeasibilityは変わり得ます。
+また、変換で現在課す条件から外した制約をremoved、ソルバー向けとは別に評価用に保持する目的関数を出力目的関数と呼びます。名前付き関数・removedな制約・出力目的関数だけに現れる変数は、それだけではusedにはなりません。
 
-非有界なdomainの端点は無限のまま扱います。
-各上界・下界候補は対象変数の項を除いて導出します。残りのresidualや境界の計算が非有限に
-なった候補だけを破棄し、同じrowの他の候補は引き続き処理します。
-特殊制約は使いません。semi変数のdomainは他の変数を締める際に0を含めて扱いますが、
-semi変数、固定変数、従属変数自身のboundは変更しません。`atol`以内の変更は無視します。
-処理はatomicであり、実行不可能性を網羅的に検出するものではありません。
-
-## 記号的な代入
-
-`Instance.substitute` は目的関数と有効な制約条件に現れる決定変数を、指定した関数式で置き換えます。これは整数変数を新しいバイナリ変数で表現する binary encoding のような変換で使われます。
-
-この操作は代数的な書き換えです。代入された変数の `kind`, `lower`, `upper` を、置換後の式に対する制約へ自動的には変換しません。例えば `x1` が binary で、`x1` を `x2 + x3` に置き換えても、OMMX は `0 <= x2 + x3` や `x2 + x3 <= 1` を追加しません。`x1` が integer の場合も、置換後の式が整数値を取るという制約は追加されません。
-
-代入された変数は従属変数として記録されるため、解を評価するときに値を復元できます。その bound や kind は `Solution.feasible()` で検証されますが、置換後の式に対するソルバー制約としては渡されません。つまり `substitute` だけでは、最適化モデルとして等価な変換であることは保証されません。
-
-これは意図した仕様です。制約を緩和する操作のように、モデルを意図的に変える変換もあります。一方で log encoding や独自の binary encoding のような変換は、エンコーディング自体が元の変数の domain を保つように構築されるため正当化できます。
-
-一般の代入でモデルの意味を保存したい場合は、必要な制約を明示的に追加してください。保守的な方法は、元の変数を消去せずに linking equality を追加することです。
-
-```python
-instance.add_constraint(x1 - (x2 + x3) == 0)
-```
-
-`substitute` で `x1` を消去する場合は、置換後の式に必要な bound 制約を別途追加します。
-
-```python
-expr = x2 + x3
-instance.substitute({1: expr})
-instance.add_constraint(expr >= 0)
-instance.add_constraint(expr <= 1)
-```
+それらにirrelevant変数が現れる場合、省略した値には先ほどの既定値が使われます。特定の候補を検査したいなら、その値を明示的に渡してください。保持された制約と目的値をどう読むかは[変換後の問題とRemoved constraints](./removed_constraints.md)で説明します。ここまでの変数の役割と候補評価を確認してから、変換後の結果を読む際に参照できます。
