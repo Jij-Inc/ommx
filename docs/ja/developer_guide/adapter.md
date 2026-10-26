@@ -23,10 +23,14 @@ Instanceが保持する変数の一覧は、そのままBackend変数の一覧�
 - 通常の`solve()`と`sample()`は入力のcopyへ{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy`を適用してから厳格な経路を呼びます。Backend固有の引数のためにこれらをoverrideする場合も、このcopy、Preparation、strict methodという順序を保ちます。
 - Adapter constructorもexact inputだけを受け取り、Preparationしません。
 - OMMX由来の独立変数としてBackendへencodeするのは、{attr}`~ommx.Instance.used_decision_variables`に限定する。Backend独自の補助変数を追加することはできます。OMMX IDとBackend変数の対応を保持し、すべてのused IDをdecodeしてください。fixed、dependent、irrelevant、removed-constraint-only、named-function-only、`output_objective`-onlyの変数は独立したBackend入力ではありません。
-- decodeしたstateまたはsamplesは、Backend入力の作成に使ったexact Instanceと数学的に同じ、作成後に変更していないsnapshotで評価する。そのInstanceがdependent variableの復元とremoved constraintの評価を所有します。
+- decodeしたstateまたはsamplesは、Backend入力の作成に使ったexact Instanceと数学的に同じ、作成後に変更していないsnapshotで評価する。Adapter内にprivateなcopyを保持するか、encodeからBackend実行、decode完了まで入力を変更しない契約を設けてください。そのInstanceがdependent variableの復元とremoved constraintの評価を所有します。
+
+Backendが報告した最適性をSolutionへ付与するときは、評価に使ったInstanceの{meth}`~ommx.Instance.map_active_optimality`を通してください。変換後の問題の最適性と、返す目的値に対する最適性の区別は[Removed constraintsと実行可能性](../user_guide/removed_constraints.md)を参照してください。
 
 ## 参照実装
 
-Solver Adapterは [PySCIPOpt Adapterの実装](https://github.com/Jij-Inc/ommx/blob/main/python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py) を参照してください。`INPUT_CLASS`、applicability check、used decision variablesのencode/decode、同じ`Instance`による評価までをまとめて確認できます。
+以下の参照実装は、本ページで確認した基準revision `dc533e65be3520137f202538023ab18cbbe631ce` に固定しています。公開済みSDKに対してAdapterを実装する場合は、対象releaseのソースコードとAPI契約を確認してください。
 
-Sampler Adapterが必要な場合は、[OpenJij Adapterの実装](https://github.com/Jij-Inc/ommx/blob/main/python/ommx-openjij-adapter/ommx_openjij_adapter/adapter.py)と[サンプルのdecode処理](https://github.com/Jij-Inc/ommx/blob/main/python/ommx-openjij-adapter/ommx_openjij_adapter/_decode.py)も参照してください。
+Solver Adapterは [PySCIPOpt Adapterの実装](https://github.com/Jij-Inc/ommx/blob/dc533e65be3520137f202538023ab18cbbe631ce/python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py) を参照してください。`INPUT_CLASS`、applicability check、used decision variablesのencode/decode、同じ`Instance`による評価までをまとめて確認できます。この実装はconstructorへ渡されたInstanceを参照として保持するため、呼び出し側がencodeからdecode完了まで変更しないことを前提にします。
+
+Sampler Adapterが必要な場合は、[OpenJij Adapterの実装](https://github.com/Jij-Inc/ommx/blob/dc533e65be3520137f202538023ab18cbbe631ce/python/ommx-openjij-adapter/ommx_openjij_adapter/adapter.py)と[サンプルのdecode処理](https://github.com/Jij-Inc/ommx/blob/dc533e65be3520137f202538023ab18cbbe631ce/python/ommx-openjij-adapter/ommx_openjij_adapter/_decode.py)も参照してください。

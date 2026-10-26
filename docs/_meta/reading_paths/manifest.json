@@ -1307,7 +1307,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "PR #1159のレビュー修正で、最初のPySCIPOpt実行にHiGHSを要求せず、必要な時点で追加する手順にする。公開b7の3 Tutorial・2 How-to用の環境であり、全Book共通の互換性記録やK-acceptanceの完了ではない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2922,7 +2922,7 @@
     },
     {
       "id": "P1",
-      "title": "Policyを編集して明示的に準備する",
+      "title": "Policyを選んで明示的に準備する",
       "slice": "C",
       "role": "how-to",
       "status": "existing",
@@ -2984,7 +2984,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "PR #1159のレビュー修正では、推奨Policyを部分的に上書きするのではなく、OneHot loweringだけを有効にした新規Policyを作る。「許可する変換を固定する」という説明と実行を一致させる。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3738,7 +3738,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "PR #1159のレビュー修正で、encodeからdecode完了まで入力を不変に保つ契約、最適性情報のmapping、revisionを固定した参照実装を明記する。PySCIPOptの入力参照保持をisolated snapshotの保証と混同しない。変数の詳細の概念所有はInstance/G6側に残す。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [

@@ -37,17 +37,18 @@ source.add_sos1_constraint(Sos1Constraint(variables=optional))
 
 ## Policyを選び、copyへ適用する
 
-推奨Policyを取得しただけでは、Instanceは変わりません。`special_constraints`を設定し直すことで、loweringを許可する制約族をOneHotに限定します。
+この例では、ほかの変換を無効にしたPolicyを作り、`special_constraints`だけを設定します。loweringを許可する制約族もOneHotに限定します。Policyを作るだけでは、Instanceは変わりません。
 
 ```{code-cell} ipython3
 import copy
 
-from ommx import SpecialConstraintKind, SpecialConstraintPreparation
+from ommx import PreparationPolicy, SpecialConstraintKind, SpecialConstraintPreparation
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-policy = OMMXPySCIPOptAdapter.recommended_preparation_policy()
-policy.special_constraints = SpecialConstraintPreparation.lower_special_constraints(
-    kinds={SpecialConstraintKind.OneHot}
+policy = PreparationPolicy(
+    special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+        kinds={SpecialConstraintKind.OneHot}
+    )
 )
 
 prepared = copy.copy(source)
@@ -75,6 +76,6 @@ assert abs(solution.objective - 14.0) < 1e-8
 solution.decision_variables_df()
 ```
 
-この例で`solve(source)`を使えば、編集した`policy`ではなくAdapterから新たに取得した推奨Policyが使われます。独自のPolicyを使う経路では、`prepare()`と`solve_without_preparation()`を組にしてください。
+この例で`solve(source)`を使えば、ここで指定した`policy`ではなくAdapterから新たに取得した推奨Policyが使われます。独自のPolicyを使う経路では、`prepare()`と`solve_without_preparation()`を組にしてください。
 
 Policyの各phaseや到達できない場合の扱いは[Instance PreparationとPreparationPolicy](../user_guide/preparation_policy.md)、各loweringの適用条件や数式は{meth}`~ommx.Instance.lower_special_constraints`からAPI Referenceを参照してください。

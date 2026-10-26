@@ -58,7 +58,7 @@ Adapterを使って解きたい人は、まず[Python SDKとAdapterのインス�
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1の意味を知り、対応ソルバーでそのまま解く。
 3. [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter.md)：特殊制約を直接扱わないHiGHSへ、loweringを経て同じモデルを渡す。
 
-独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。QUBOソルバーへの応用例は[OpenJij AdapterのTutorial](./tutorial/tsp_sampling_with_openjij_adapter)にあります。
+独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。サンプリングの応用例として、[OpenJij AdapterでTSPを扱うTutorial](./tutorial/tsp_sampling_with_openjij_adapter)もあります。これは上記3つのTutorialの必須の続きではありません。
 
 Adapterを実装する人は、利用者向けTutorialの通読ではなく、[Developer Guide](./developer_guide/adapter.md)から共通の入力・変換・評価の契約と参照実装を確認してください。
 

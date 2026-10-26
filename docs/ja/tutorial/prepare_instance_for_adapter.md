@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
-  display_name: ommx-update-books (3.9.23)
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -19,7 +19,7 @@ kernelspec:
 
 ## 実行環境
 
-[Python SDKとAdapterのインストール](../getting_started/install.md)で用意したv3の環境を使います。このページではHiGHS Adapterを使います。
+[Python SDKとAdapterのインストール](../getting_started/install.md)で用意したv3の環境へ、同ページの手順でHiGHS Adapterを追加してください。このページの実行にPySCIPOpt Adapterは不要です。
 
 ## 同じモデルを作る
 
