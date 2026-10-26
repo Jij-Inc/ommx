@@ -20,11 +20,9 @@ OMMXでは、条件付きの制約や変数の組合せに対する制約を「�
 - **Indicator制約**: 指定したBinary変数が1のときだけ有効になる制約
 - **SOS1制約**: 指定した変数のうち、高々1つだけが非ゼロになる制約
 
-## 必要なライブラリのインストール
+## 実行環境
 
-```
-pip install ommx-pyscipopt-adapter
-```
+[Python SDKとAdapterのインストール](../getting_started/install.md)で用意したv3の環境を使います。このページではPySCIPOpt Adapterを使います。
 
 ## 特殊制約を持つInstanceを作る
 

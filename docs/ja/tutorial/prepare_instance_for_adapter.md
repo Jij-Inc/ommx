@@ -17,11 +17,9 @@ kernelspec:
 
 このチュートリアルでは、同じモデルをHiGHS Adapterで解きます。覚えておくことは、**Adapterが直接扱えない表現も、OMMXが変換してから渡せる**ということです。この準備をInstance Preparationと呼びます。
 
-## 必要なライブラリのインストール
+## 実行環境
 
-```
-pip install ommx-highs-adapter
-```
+[Python SDKとAdapterのインストール](../getting_started/install.md)で用意したv3の環境を使います。このページではHiGHS Adapterを使います。
 
 ## 同じモデルを作る
 

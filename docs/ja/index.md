@@ -52,7 +52,7 @@ Tutorialは小さな成功例から操作を学ぶためのものです。User G
 
 ## Adapterを使う・作る
 
-Adapterを使って解きたい人は、次の3つのTutorialで、変換なしの求解からOMMXによるPreparationへ進めます。
+Adapterを使って解きたい人は、まず[Python SDKとAdapterのインストール](./getting_started/install.md)で実行環境を用意してください。次の3つのTutorialで、変換なしの求解からOMMXによるPreparationへ進めます。
 
 1. [PySCIPOpt Adapterで0-1ナップサック問題を解く](./tutorial/solve_with_ommx_adapter)：Instanceを作り、`solve()`を呼び、pandasで結果を読む。
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1の意味を知り、対応ソルバーでそのまま解く。
@@ -83,6 +83,14 @@ Messageのスキーマは[Protocol Buffers](https://protobuf.dev/)で定義さ�
 ```
 
 Artifactには、問題と結果に加えて「何を、どの設定で解いたか」を記録できます。[OCI Artifact](https://opencontainers.org/)を利用しているため、GitHub Container Registryなど既存のregistryで配布することもできます。OMMXはこの仕組みでMIPLIBやQPLIBの問題を公開しています。
+
+```{toctree}
+:caption: Getting Started
+:maxdepth: 1
+:hidden:
+
+getting_started/install
+```
 
 ```{toctree}
 :caption: Tutorial

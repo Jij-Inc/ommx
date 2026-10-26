@@ -14,7 +14,7 @@ kernelspec:
 複数のAdapterで最適化問題を解いて結果を比較する
 =========================================
 
-OMMX Adapterで問題を解けるようになったら、同じInstanceを複数のAdapterへ渡して結果を比較できます。このページでは、HiGHSとPySCIPOptのどちらにも変換なしで渡せる簡単なモデルを使います。`pip install ommx-highs-adapter ommx-pyscipopt-adapter matplotlib`で必要なライブラリを用意してください。
+OMMX Adapterで問題を解けるようになったら、同じInstanceを複数のAdapterへ渡して結果を比較できます。このページでは、HiGHSとPySCIPOptのどちらにも変換なしで渡せる簡単なモデルを使います。[Python SDKとAdapterのインストール](../getting_started/install.md)に従い、v3のSDK・両Adapterとmatplotlibを用意してください。
 
 `solve()`は元のInstanceを変更しないため、1つのInstanceを再利用できます。Adapterによって必要な変換が異なる場合も、それぞれが独立したcopyを準備します。独自のPolicyを使う方法は[Preparationで変換する制約族を選ぶ](./customize_preparation.md)を参照してください。
 

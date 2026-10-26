@@ -19,7 +19,7 @@ kernelspec:
 
 ## モデルを作る
 
-`pip install ommx-pyscipopt-adapter`で用意した環境を使います。OneHotは「ちょうど1つが1」、SOS1は「高々1つが非ゼロ」という制約です。
+[Python SDKとAdapterのインストール](../getting_started/install.md)で用意したv3の環境を使います。OneHotは「ちょうど1つが1」、SOS1は「高々1つが非ゼロ」という制約です。
 
 ```{code-cell} ipython3
 from ommx import Instance, OneHotConstraint, Sos1Constraint
