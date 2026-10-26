@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 from ommx import DecisionVariable, Instance, Linear, Sense
 from ommx.adapter import InfeasibleDetected
@@ -13,9 +14,9 @@ def test_constant_constraint_feasible():
         decision_variables=[x],
         objective=x,
         constraints={
-            0:  # 1 >= 0 is always true
+            ConstraintID(0):  # 1 >= 0 is always true
             Linear(terms={}, constant=1) >= 0,
-            1: x <= 1,
+            ConstraintID(1): x <= 1,
         },
         sense=Sense.Maximize,
     )
@@ -24,7 +25,7 @@ def test_constant_constraint_feasible():
     assert solution.state.entries == {0: 1.0}
     assert solution.objective == 1.0
 
-    assert len(solution.constraints) == 2
+    assert len(solution.get_constraints(kind="regular")) == 2
 
 
 @pytest.mark.skip(
@@ -36,9 +37,9 @@ def test_constant_constraint_infeasible():
         decision_variables=[x],
         objective=x,
         constraints={
-            0:  # -1 >= 0 is always false
+            ConstraintID(0):  # -1 >= 0 is always false
             Linear(terms={}, constant=-1) >= 0,
-            1: x <= 1,
+            ConstraintID(1): x <= 1,
         },
         sense=Sense.Maximize,
     )

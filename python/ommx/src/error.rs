@@ -205,7 +205,7 @@ pyo3_stub_gen::inventory::submit! {
             },
             pyo3_stub_gen::type_info::MemberInfo {
                 name: "rejections",
-                r#type: <std::collections::BTreeMap<u64, String> as pyo3_stub_gen::PyStubType>::type_output,
+                r#type: <std::collections::BTreeMap<crate::ConstraintID, String> as pyo3_stub_gen::PyStubType>::type_output,
                 doc: "Diagnostic messages keyed by rejected cardinality constraint ID.",
                 default: None,
                 deprecated: None,
@@ -500,7 +500,7 @@ fn sos1_big_m_promotion_batch_rejected_to_pyerr(
         value.setattr("request_count", error.request_count())?;
         let rejections = error
             .rejections()
-            .map(|(id, error)| (id.into_inner(), format!("{error:#}")))
+            .map(|(id, error)| (crate::ConstraintID::from(id), format!("{error:#}")))
             .collect::<std::collections::BTreeMap<_, _>>();
         value.setattr("rejections", rejections)
     })
@@ -863,11 +863,14 @@ mod tests {
             let rejections = value
                 .getattr("rejections")
                 .unwrap()
-                .extract::<std::collections::BTreeMap<u64, String>>()
+                .extract::<std::collections::BTreeMap<crate::ConstraintID, String>>()
                 .unwrap();
             assert_eq!(
                 rejections.keys().copied().collect::<Vec<_>>(),
-                vec![0, u64::MAX]
+                vec![
+                    ommx::ConstraintID::from(0).into(),
+                    ommx::ConstraintID::from(u64::MAX).into()
+                ]
             );
             assert!(rejections
                 .values()

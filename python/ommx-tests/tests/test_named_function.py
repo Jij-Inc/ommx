@@ -1,5 +1,7 @@
 """Tests for NamedFunction wrapper and its integration with Instance, Solution, and SampleSet."""
 
+from ommx import ConstraintID
+
 import sys
 
 from ommx import (
@@ -40,7 +42,7 @@ def _make_instance_with_named_functions():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={0: Function(sum(x)) <= 2},
+        constraints={ConstraintID(0): Function(sum(x)) <= 2},
         sense=Sense.Maximize,
         named_functions=[nf0, nf1],
     )

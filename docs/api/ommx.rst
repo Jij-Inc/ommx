@@ -43,6 +43,10 @@ ommx
    _items/ommx.BinaryPowerPreparation
    _items/ommx.FixedPenaltyPreparation
    _items/ommx.PreparationPolicy
+   _items/ommx.ConstraintID
+   _items/ommx.IndicatorConstraintID
+   _items/ommx.OneHotConstraintID
+   _items/ommx.Sos1ConstraintID
    _items/ommx.Constraint
    _items/ommx.AttachedConstraint
    _items/ommx.IndicatorConstraint
@@ -63,9 +67,15 @@ ommx
    _items/ommx.NamedFunction
    _items/ommx.EvaluatedDecisionVariable
    _items/ommx.EvaluatedConstraint
+   _items/ommx.EvaluatedIndicatorConstraint
+   _items/ommx.EvaluatedOneHotConstraint
+   _items/ommx.EvaluatedSos1Constraint
    _items/ommx.EvaluatedNamedFunction
    _items/ommx.SampledDecisionVariable
    _items/ommx.SampledConstraint
+   _items/ommx.SampledIndicatorConstraint
+   _items/ommx.SampledOneHotConstraint
+   _items/ommx.SampledSos1Constraint
    _items/ommx.SampledNamedFunction
    _items/ommx.Instance
    _items/ommx.ParametricInstance

@@ -183,6 +183,7 @@ impl InstanceClass {
     ///
     /// The target accepts unconstrained minimization QUBO formulations and rejects models outside that class.
     ///
+    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> linear = Instance.from_components(
@@ -202,7 +203,7 @@ impl InstanceClass {
     /// ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> constrained = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, constraints={ConstraintID(0): x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> target = InstanceClass.qubo()
     /// >>> assert target.contains(linear)
@@ -223,6 +224,7 @@ impl InstanceClass {
     ///
     /// The target accepts unconstrained minimization Binary HUBO formulations and rejects models outside that class.
     ///
+    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> linear = Instance.from_components(
@@ -239,7 +241,7 @@ impl InstanceClass {
     /// ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> constrained = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, constraints={ConstraintID(0): x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> target = InstanceClass.hubo()
     /// >>> assert target.contains(linear)
@@ -299,40 +301,40 @@ pub enum InstanceClassMismatch {
     ObjectiveFunctionNotPolynomial {},
     RegularConstraintRelationNotAllowed {
         relation: Equality,
-        constraint_ids: BTreeSet<u64>,
+        constraint_ids: BTreeSet<crate::ConstraintID>,
         allowed_relations: BTreeSet<Equality>,
     },
     RegularConstraintDegreeExceedsBound {
         relation: Equality,
-        actual_degrees: BTreeMap<u64, u32>,
+        actual_degrees: BTreeMap<crate::ConstraintID, u32>,
         bound: PolynomialRequirement,
     },
     RegularConstraintFunctionNotPolynomial {
         relation: Equality,
-        constraint_ids: BTreeSet<u64>,
+        constraint_ids: BTreeSet<crate::ConstraintID>,
     },
     IndicatorConstraintsNotAllowed {
-        constraint_ids: BTreeSet<u64>,
+        constraint_ids: BTreeSet<crate::IndicatorConstraintID>,
     },
     IndicatorConstraintRelationNotAllowed {
         relation: Equality,
-        constraint_ids: BTreeSet<u64>,
+        constraint_ids: BTreeSet<crate::IndicatorConstraintID>,
         allowed_relations: BTreeSet<Equality>,
     },
     IndicatorBodyDegreeExceedsBound {
         relation: Equality,
-        actual_degrees: BTreeMap<u64, u32>,
+        actual_degrees: BTreeMap<crate::IndicatorConstraintID, u32>,
         bound: PolynomialRequirement,
     },
     IndicatorBodyFunctionNotPolynomial {
         relation: Equality,
-        constraint_ids: BTreeSet<u64>,
+        constraint_ids: BTreeSet<crate::IndicatorConstraintID>,
     },
     OneHotConstraintsNotAllowed {
-        constraint_ids: BTreeSet<u64>,
+        constraint_ids: BTreeSet<crate::OneHotConstraintID>,
     },
     Sos1ConstraintsNotAllowed {
-        constraint_ids: BTreeSet<u64>,
+        constraint_ids: BTreeSet<crate::Sos1ConstraintID>,
     },
     SenseNotAllowed {
         sense: Sense,
@@ -371,10 +373,7 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                 allowed_relations,
             } => Self::RegularConstraintRelationNotAllowed {
                 relation: relation.into(),
-                constraint_ids: constraint_ids
-                    .into_iter()
-                    .map(|id| id.into_inner())
-                    .collect(),
+                constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
                 allowed_relations: allowed_relations.into_iter().map(Into::into).collect(),
             },
             ommx::InstanceClassMismatch::RegularConstraintDegreeExceedsBound {
@@ -385,7 +384,7 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                 relation: relation.into(),
                 actual_degrees: actual_degrees
                     .into_iter()
-                    .map(|(id, degree)| (id.into_inner(), degree.into_inner()))
+                    .map(|(id, degree)| (id.into(), degree.into_inner()))
                     .collect(),
                 bound: PolynomialRequirement(bound),
             },
@@ -394,17 +393,11 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                 constraint_ids,
             } => Self::RegularConstraintFunctionNotPolynomial {
                 relation: relation.into(),
-                constraint_ids: constraint_ids
-                    .into_iter()
-                    .map(|id| id.into_inner())
-                    .collect(),
+                constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
             },
             ommx::InstanceClassMismatch::IndicatorConstraintsNotAllowed { constraint_ids } => {
                 Self::IndicatorConstraintsNotAllowed {
-                    constraint_ids: constraint_ids
-                        .into_iter()
-                        .map(|id| id.into_inner())
-                        .collect(),
+                    constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
                 }
             }
             ommx::InstanceClassMismatch::IndicatorConstraintRelationNotAllowed {
@@ -413,10 +406,7 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                 allowed_relations,
             } => Self::IndicatorConstraintRelationNotAllowed {
                 relation: relation.into(),
-                constraint_ids: constraint_ids
-                    .into_iter()
-                    .map(|id| id.into_inner())
-                    .collect(),
+                constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
                 allowed_relations: allowed_relations.into_iter().map(Into::into).collect(),
             },
             ommx::InstanceClassMismatch::IndicatorBodyDegreeExceedsBound {
@@ -427,7 +417,7 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                 relation: relation.into(),
                 actual_degrees: actual_degrees
                     .into_iter()
-                    .map(|(id, degree)| (id.into_inner(), degree.into_inner()))
+                    .map(|(id, degree)| (id.into(), degree.into_inner()))
                     .collect(),
                 bound: PolynomialRequirement(bound),
             },
@@ -436,25 +426,16 @@ impl From<ommx::InstanceClassMismatch> for InstanceClassMismatch {
                 constraint_ids,
             } => Self::IndicatorBodyFunctionNotPolynomial {
                 relation: relation.into(),
-                constraint_ids: constraint_ids
-                    .into_iter()
-                    .map(|id| id.into_inner())
-                    .collect(),
+                constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
             },
             ommx::InstanceClassMismatch::OneHotConstraintsNotAllowed { constraint_ids } => {
                 Self::OneHotConstraintsNotAllowed {
-                    constraint_ids: constraint_ids
-                        .into_iter()
-                        .map(|id| id.into_inner())
-                        .collect(),
+                    constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
                 }
             }
             ommx::InstanceClassMismatch::Sos1ConstraintsNotAllowed { constraint_ids } => {
                 Self::Sos1ConstraintsNotAllowed {
-                    constraint_ids: constraint_ids
-                        .into_iter()
-                        .map(|id| id.into_inner())
-                        .collect(),
+                    constraint_ids: constraint_ids.into_iter().map(Into::into).collect(),
                 }
             }
             ommx::InstanceClassMismatch::SenseNotAllowed {

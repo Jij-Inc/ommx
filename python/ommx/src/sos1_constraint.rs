@@ -287,8 +287,8 @@ fn lookup_sos1_parametric(
 #[pymethods]
 impl AttachedSos1Constraint {
     #[getter]
-    pub fn constraint_id(&self) -> u64 {
-        self.id.into_inner()
+    pub fn constraint_id(&self) -> crate::Sos1ConstraintID {
+        self.id.into()
     }
 
     #[getter]

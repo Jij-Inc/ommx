@@ -1,5 +1,6 @@
 """Tests for AttachedConstraint write-through against a ParametricInstance host."""
 
+from ommx import ConstraintID
 import copy
 
 import pytest
@@ -119,7 +120,7 @@ def test_attached_constraint_id_and_parametric_instance_handle():
     parametric = _empty_parametric_instance()
     attached = parametric.add_constraint(_make_constraint(name="balance"))
 
-    assert isinstance(attached.constraint_id, int)
+    assert isinstance(attached.constraint_id, ConstraintID)
     assert attached.instance is parametric
 
 

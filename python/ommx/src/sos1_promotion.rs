@@ -33,7 +33,11 @@ impl Sos1BigMSelectorClaim {
     /// {class}`Instance` owner.
     #[staticmethod]
     #[pyo3(signature = (selector, *, upper_link=None, lower_link=None))]
-    pub fn fresh(selector: u64, upper_link: Option<u64>, lower_link: Option<u64>) -> Self {
+    pub fn fresh(
+        selector: u64,
+        upper_link: Option<crate::ConstraintID>,
+        lower_link: Option<crate::ConstraintID>,
+    ) -> Self {
         Self {
             inner: ommx::Sos1BigMSelectorClaim::Fresh {
                 selector: selector.into(),
@@ -60,23 +64,19 @@ impl Sos1BigMSelectorClaim {
 
     /// Claimed upper-link constraint ID, if supplied.
     #[getter]
-    pub fn upper_link(&self) -> Option<u64> {
+    pub fn upper_link(&self) -> Option<crate::ConstraintID> {
         match self.inner {
             ommx::Sos1BigMSelectorClaim::Reused => None,
-            ommx::Sos1BigMSelectorClaim::Fresh { upper_link, .. } => {
-                upper_link.map(|id| id.into_inner())
-            }
+            ommx::Sos1BigMSelectorClaim::Fresh { upper_link, .. } => upper_link.map(Into::into),
         }
     }
 
     /// Claimed lower-link constraint ID, if supplied.
     #[getter]
-    pub fn lower_link(&self) -> Option<u64> {
+    pub fn lower_link(&self) -> Option<crate::ConstraintID> {
         match self.inner {
             ommx::Sos1BigMSelectorClaim::Reused => None,
-            ommx::Sos1BigMSelectorClaim::Fresh { lower_link, .. } => {
-                lower_link.map(|id| id.into_inner())
-            }
+            ommx::Sos1BigMSelectorClaim::Fresh { lower_link, .. } => lower_link.map(Into::into),
         }
     }
 }
@@ -104,7 +104,9 @@ pub struct Sos1BigMPromotionRequest {
 #[pymethods]
 impl Sos1BigMPromotionRequest {
     #[new]
-    pub fn new(selector_claims: BTreeMap<u64, BTreeMap<u64, Sos1BigMSelectorClaim>>) -> Self {
+    pub fn new(
+        selector_claims: BTreeMap<crate::ConstraintID, BTreeMap<u64, Sos1BigMSelectorClaim>>,
+    ) -> Self {
         Self {
             inner: selector_claims
                 .into_iter()
@@ -123,12 +125,14 @@ impl Sos1BigMPromotionRequest {
 
     /// Formulation claims keyed by cardinality constraint ID, then member ID.
     #[getter]
-    pub fn selector_claims(&self) -> BTreeMap<u64, BTreeMap<u64, Sos1BigMSelectorClaim>> {
+    pub fn selector_claims(
+        &self,
+    ) -> BTreeMap<crate::ConstraintID, BTreeMap<u64, Sos1BigMSelectorClaim>> {
         self.inner
             .iter()
             .map(|(&cardinality, claims)| {
                 (
-                    cardinality.into_inner(),
+                    cardinality.into(),
                     claims
                         .iter()
                         .map(|(&member, &claim)| (member.into_inner(), claim.into()))
@@ -175,14 +179,14 @@ impl Sos1BigMPromotion {
 
     /// Applied promotions: cardinality constraint ID to allocated SOS1 ID.
     #[getter]
-    pub fn promoted(&self) -> BTreeMap<u64, u64> {
+    pub fn promoted(&self) -> BTreeMap<crate::ConstraintID, crate::Sos1ConstraintID> {
         self.inner
             .iter()
             .filter_map(|(&cardinality, outcome)| {
                 outcome
                     .as_ref()
                     .ok()
-                    .map(|id| (cardinality.into_inner(), id.into_inner()))
+                    .map(|id| (cardinality.into(), (*id).into()))
             })
             .collect()
     }
@@ -192,14 +196,14 @@ impl Sos1BigMPromotion {
     /// These are diagnostic strings, not exception objects. Rejected
     /// formulations were not applied.
     #[getter]
-    pub fn rejections(&self) -> BTreeMap<u64, String> {
+    pub fn rejections(&self) -> BTreeMap<crate::ConstraintID, String> {
         self.inner
             .iter()
             .filter_map(|(&cardinality, outcome)| {
                 outcome
                     .as_ref()
                     .err()
-                    .map(|error| (cardinality.into_inner(), format!("{error:#}")))
+                    .map(|error| (cardinality.into(), format!("{error:#}")))
             })
             .collect()
     }

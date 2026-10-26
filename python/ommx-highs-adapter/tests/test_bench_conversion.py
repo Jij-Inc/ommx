@@ -17,7 +17,7 @@ with no optimization or external data.
 """
 
 import pytest
-from ommx import DecisionVariable, Instance, Linear, Sense
+from ommx import ConstraintID, DecisionVariable, Instance, Linear, Sense
 
 from ommx_highs_adapter import OMMXHighsAdapter
 
@@ -36,7 +36,7 @@ def conversion_instance(request, num_terms):
     return Instance.from_components(
         decision_variables=variables,
         objective=expression if request.param == "objective" else 0,
-        constraints={0: expression <= num_terms}
+        constraints={ConstraintID(0): expression <= num_terms}
         if request.param == "constraint"
         else {},
         sense=Sense.Minimize,

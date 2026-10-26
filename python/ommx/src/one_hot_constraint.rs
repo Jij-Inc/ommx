@@ -289,8 +289,8 @@ fn lookup_one_hot_parametric(
 impl AttachedOneHotConstraint {
     /// The id this handle points at.
     #[getter]
-    pub fn constraint_id(&self) -> u64 {
-        self.id.into_inner()
+    pub fn constraint_id(&self) -> crate::OneHotConstraintID {
+        self.id.into()
     }
 
     /// The parent host this constraint lives in.

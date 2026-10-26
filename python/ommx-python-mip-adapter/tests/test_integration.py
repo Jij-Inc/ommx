@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 import pytest
 
 from ommx import DecisionVariable, Instance, Optimality, Sense, Solution
@@ -48,7 +49,10 @@ def test_integration_milp():
     ommx_instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
+        constraints={
+            ConstraintID(0): 3 * x1 - x2 <= 6,
+            ConstraintID(1): -x1 + 3 * x2 <= 6,
+        },
         sense=Sense.Minimize,
     )
 
@@ -80,7 +84,7 @@ def test_solution_optimality_is_not_transported_through_fixed_penalty():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={7: x == 1},
+        constraints={ConstraintID(7): x == 1},
         sense=Sense.Minimize,
     )
     instance.to_qubo(uniform_penalty_weight=0.0)
@@ -96,7 +100,7 @@ def test_output_objective_omits_active_formulation_dual_values():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: x <= 1},
+        constraints={ConstraintID(0): x <= 1},
         sense=Sense.Maximize,
     )
     assert instance.convert_active_objective(Sense.Minimize)
@@ -106,7 +110,7 @@ def test_output_objective_omits_active_formulation_dual_values():
     model.optimize()
     solution = adapter.decode(model)
 
-    assert solution.get_dual_variable(0) is None
+    assert solution.get_dual_variable(ConstraintID(0)) is None
 
 
 def test_partial_evaluate():
@@ -114,7 +118,7 @@ def test_partial_evaluate():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
-        constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
+        constraints={ConstraintID(0): x[0] + x[1] + x[2] <= 1},  # one-hot constraint
         sense=Sense.Minimize,
     )
     assert instance.used_decision_variables == x
@@ -140,12 +144,15 @@ def test_relax_constraint():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
+        constraints={
+            ConstraintID(0): x[0] + 2 * x[1] <= 1,
+            ConstraintID(1): x[1] + x[2] <= 1,
+        },
         sense=Sense.Minimize,
     )
 
     assert instance.used_decision_variables == x
-    instance.relax_constraint(1, "relax")
+    instance.relax_constraint(ConstraintID(1), "relax")
     # id for x[2] is listed as irrelevant
     assert instance.irrelevant_decision_variable_ids() == {x[2].id}
 
@@ -181,7 +188,7 @@ def test_integration_timelimit():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(v[i] * x[i] for i in range(n)),
-        constraints={0: constraint},
+        constraints={ConstraintID(0): constraint},
         sense=Sense.Maximize,
     )
     adapter = OMMXPythonMIPAdapter(instance)
@@ -203,7 +210,7 @@ def test_infeasible_problem():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: x >= 4},
+        constraints={ConstraintID(0): x >= 4},
         sense=Sense.Maximize,
     )
     adapter = OMMXPythonMIPAdapter(instance)

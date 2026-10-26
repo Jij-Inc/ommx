@@ -1,5 +1,7 @@
 """Tests for AttachedIndicatorConstraint write-through wrapper."""
 
+from ommx import IndicatorConstraintID
+
 import copy
 
 import pytest
@@ -292,13 +294,13 @@ def test_parametric_from_components_preserves_indicator_id():
         constraints={},
         parameters=[Parameter(id=100, name="alpha")],
         indicator_constraints={
-            5: IndicatorConstraint(
+            IndicatorConstraintID(5): IndicatorConstraint(
                 indicator_variable=DecisionVariable.binary(1),
                 function=Function.from_linear(Linear({0: 1.0}, 0.0)),
                 equality=Equality.EqualToZero,
                 name="ic_at_5",
             ),
-            10: IndicatorConstraint(
+            IndicatorConstraintID(10): IndicatorConstraint(
                 indicator_variable=DecisionVariable.binary(1),
                 function=Function.from_linear(Linear({0: 1.0}, -0.5)),
                 equality=Equality.EqualToZero,
@@ -307,9 +309,14 @@ def test_parametric_from_components_preserves_indicator_id():
         },
     )
 
-    assert set(parametric.indicator_constraints.keys()) == {5, 10}
-    assert parametric.indicator_constraints[5].name == "ic_at_5"
-    assert parametric.indicator_constraints[10].name == "ic_at_10"
+    assert set(parametric.indicator_constraints.keys()) == {
+        IndicatorConstraintID(5),
+        IndicatorConstraintID(10),
+    }
+    assert parametric.indicator_constraints[IndicatorConstraintID(5)].name == "ic_at_5"
+    assert (
+        parametric.indicator_constraints[IndicatorConstraintID(10)].name == "ic_at_10"
+    )
 
 
 def test_add_indicator_rejects_non_binary_indicator_variable():

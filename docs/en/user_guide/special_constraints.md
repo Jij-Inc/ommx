@@ -54,11 +54,12 @@ assert ic.equality == Equality.LessThanOrEqualToZero
 Add it to an instance by passing a `dict[int, IndicatorConstraint]` to the `indicator_constraints=` argument of {meth}`Instance.from_components <ommx.Instance.from_components>`.
 
 ```{code-cell} ipython3
+from ommx import ConstraintID, IndicatorConstraintID
 instance = Instance.from_components(
     decision_variables=[z, x],
     objective=x,
-    constraints={0: z == 1},       # fix z = 1
-    indicator_constraints={0: ic}, # z = 1 => x <= 5
+    constraints={ConstraintID(0): z == 1},       # fix z = 1
+    indicator_constraints={IndicatorConstraintID(0): ic}, # z = 1 => x <= 5
     sense=Sense.Maximize,
 )
 assert set(instance.indicator_constraints.keys()) == {0}
@@ -89,12 +90,13 @@ assert oh.variables == [0, 1, 2]
 Each entry passed to `variables` may be a variable ID, a standalone {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`. This input is exposed as the `VariableIDLike` type alias because only the variable identity is consumed. When the constraint is inserted, the enclosing instance validates the referenced IDs and any constraint-specific requirement against its own decision variables. For OneHot, the referenced variables must exist and be binary. The constraint stores their IDs, which are available through `oh.variables`. Mathematically the constraint is equivalent to the linear equality $x_0 + x_1 + x_2 - 1 = 0$, but holding it as a first-class constraint lets supporting solvers (many MIP solvers accept one-hot natively) handle it efficiently.
 
 ```{code-cell} ipython3
+from ommx import OneHotConstraintID
 values = [5.0, 10.0, 3.0]
 instance_oh = Instance.from_components(
     decision_variables=xs,
     objective=sum(v * x for v, x in zip(values, xs)),
     constraints={},
-    one_hot_constraints={0: oh},
+    one_hot_constraints={OneHotConstraintID(0): oh},
     sense=Sense.Maximize,
 )
 assert set(instance_oh.one_hot_constraints.keys()) == {0}
@@ -143,11 +145,12 @@ assert s1.variables == [3, 4, 5]
 As with `OneHotConstraint`, each `variables` entry accepts `VariableIDLike`: a variable ID, a standalone decision variable, or an attached decision variable. The SOS1 constraint stores their IDs, which are available through `s1.variables`.
 
 ```{code-cell} ipython3
+from ommx import Sos1ConstraintID
 instance_s1 = Instance.from_components(
     decision_variables=ys,
     objective=sum(ys),
     constraints={},
-    sos1_constraints={0: s1},
+    sos1_constraints={Sos1ConstraintID(0): s1},
     sense=Sense.Maximize,
 )
 assert set(instance_s1.sos1_constraints.keys()) == {0}
@@ -209,14 +212,15 @@ cardinality constraint ID to the member-to-selector claims for that formulation.
 For example, given matching existing formulation rows:
 
 ```python
+from ommx import ConstraintID
 from ommx import Sos1BigMPromotionRequest, Sos1BigMSelectorClaim
 
 request = Sos1BigMPromotionRequest({
-    102: {
+    ConstraintID(102): {
         0: Sos1BigMSelectorClaim.reused(),
-        1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
+        1: Sos1BigMSelectorClaim.fresh(10, upper_link=ConstraintID(100), lower_link=ConstraintID(101)),
     },
-    202: {
+    ConstraintID(202): {
         2: Sos1BigMSelectorClaim.reused(),
         3: Sos1BigMSelectorClaim.reused(),
     },
@@ -268,16 +272,17 @@ In OMMX, each of the four constraint collections — regular / Indicator / OneHo
 For example, "regular constraint ID=1" and "Indicator constraint ID=1" coexist as distinct constraints.
 
 ```{code-cell} ipython3
+from ommx import ConstraintID, IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID
 z2 = DecisionVariable.binary(10, name="z2")
 x2 = DecisionVariable.continuous(11, lower=0, upper=10, name="x2")
 
 instance_mix = Instance.from_components(
     decision_variables=[z2, x2] + xs + ys,
     objective=x2,
-    constraints={1: z2 == 1},                                        # regular ID=1
-    indicator_constraints={1: (x2 <= 5).with_indicator(z2)},         # Indicator ID=1
-    one_hot_constraints={1: OneHotConstraint(variables=xs)},         # OneHot ID=1
-    sos1_constraints={1: Sos1Constraint(variables=ys)},              # SOS1 ID=1
+    constraints={ConstraintID(1): z2 == 1},                                        # regular ID=1
+    indicator_constraints={IndicatorConstraintID(1): (x2 <= 5).with_indicator(z2)},         # Indicator ID=1
+    one_hot_constraints={OneHotConstraintID(1): OneHotConstraint(variables=xs)},         # OneHot ID=1
+    sos1_constraints={Sos1ConstraintID(1): Sos1Constraint(variables=ys)},              # SOS1 ID=1
     sense=Sense.Maximize,
 )
 
@@ -302,7 +307,7 @@ The {class}`~ommx.Solution` or {class}`~ommx.SampleSet` obtained after solving e
 | SOS1 | `"sos1"` |
 
 ```python
-solution.constraints_df()                  # regular (default)
+solution.constraints_df(kind="regular")                  # regular
 solution.constraints_df(kind="indicator")  # indicator
 sample_set.constraints_df(kind="one_hot")  # one-hot
 ```
@@ -316,7 +321,7 @@ The Indicator DataFrame includes an `indicator_active` column that disambiguates
 `removed_reason` is no longer a default column of {meth}`~ommx.Solution.constraints_df`. Pass `"removed_reason"` in `include=` to fold the reason name and the `removed_reason.{key}` parameter columns back in (rows whose constraint was not removed before evaluation get NA in those columns):
 
 ```python
-df = solution.constraints_df(
+df = solution.constraints_df(kind="regular",
     include=("label", "parameters", "removed_reason"),
 )
 ```

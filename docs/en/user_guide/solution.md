@@ -35,6 +35,7 @@ $$
 It is clear that this has a feasible solution $x = 1, y = 0$.
 
 ```{code-cell} ipython3
+from ommx import ConstraintID
 from ommx import DecisionVariable, Instance, Sense
 
 # Create a simple instance
@@ -44,7 +45,7 @@ y = DecisionVariable.binary(2, name='y')
 instance = Instance.from_components(
     decision_variables=[x, y],
     objective=x + y,
-    constraints={0: x * y == 0},
+    constraints={ConstraintID(0): x * y == 0},
     sense=Sense.Maximize
 )
 
@@ -61,7 +62,7 @@ solution.decision_variables_df()
 In addition to the required attributes—ID, `kind`, `lower`, and `upper`—it also inherits metadata such as `name`. Additionally, the `value` assigned in `evaluate` is stored. Similarly, the evaluation value is added to the constraints as `value`.
 
 ```{code-cell} ipython3
-solution.constraints_df()
+solution.constraints_df(kind="regular")
 ```
 
 The `objective` property contains the value of the objective function, and the `feasible` property contains whether the constraints are satisfied.
@@ -80,3 +81,38 @@ print(f"{solution11.objective=}, {solution11.feasible=}")
 ```
 
 `feasible = False` indicates that it is an infeasible solution.
+
+## Query constraints without pandas
+
+`Solution.get_constraints(kind=...)` and `SampleSet.get_constraints(kind=...)`
+return dictionaries of owned result snapshots. `kind` is a required keyword for
+both `get_constraints` and `constraints_df` on these result objects.
+
+```{code-cell} ipython3
+from ommx import ConstraintID
+
+rows = solution.get_constraints(kind="regular")
+rows[ConstraintID(0)].violation()
+```
+
+The dictionary keys preserve the constraint family:
+
+| `kind` | ID type | Solution value | SampleSet value |
+| --- | --- | --- | --- |
+| `"regular"` | `ConstraintID` | `EvaluatedConstraint` | `SampledConstraint` |
+| `"indicator"` | `IndicatorConstraintID` | `EvaluatedIndicatorConstraint` | `SampledIndicatorConstraint` |
+| `"one_hot"` | `OneHotConstraintID` | `EvaluatedOneHotConstraint` | `SampledOneHotConstraint` |
+| `"sos1"` | `Sos1ConstraintID` | `EvaluatedSos1Constraint` | `SampledSos1Constraint` |
+
+Results include both active and retained removed constraints. Each row exposes
+labels, `provenance`, `removed_reason`, and `removed_reason_parameters`. Sampled
+rows expose `violations` and `feasible(atol=...)`, keyed by sample ID. Editing a
+returned dictionary or snapshot does not update its owning result.
+
+The same typed IDs appear in DataFrame indexes and context tables. For example,
+`ConstraintID(1)` and `Sos1ConstraintID(1)` are different keys, and neither equals
+`1`. Constraint lookup and mutation APIs reject bare integers and IDs from other
+families. Construct an ID explicitly when specifying one in `from_components`,
+or retain the ID returned by an attached constraint's `constraint_id` property.
+IDs do not support `int()` or integer indexing conversion. Decision-variable
+and sample IDs remain integers.

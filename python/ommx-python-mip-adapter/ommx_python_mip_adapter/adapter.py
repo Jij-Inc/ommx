@@ -14,6 +14,7 @@ from ommx.adapter import (
     NoSolutionReturned,
 )
 from ommx import (
+    ConstraintID,
     Equality,
     Function,
     Instance,
@@ -147,6 +148,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         .. doctest::
 
+            >>> from ommx import ConstraintID
             >>> from ommx import Instance, DecisionVariable
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
@@ -156,7 +158,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
+            ...     constraints={ConstraintID(0): sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Sense.Maximize,
             ... )
 
@@ -177,7 +179,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             >>> solution.objective
             42.0
-            >>> solution.get_constraint_value(0)
+            >>> solution.get_constraint_value(ConstraintID(0))
             -1.0
 
         Infeasible Problem
@@ -191,7 +193,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints={0: x >= 4},
+                ...     constraints={ConstraintID(0): x >= 4},
                 ...     sense=Sense.Maximize,
                 ... )
 
@@ -232,12 +234,12 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x, y],
                 ...     objective=x + y,
-                ...     constraints={0: x + y <= 1},
+                ...     constraints={ConstraintID(0): x + y <= 1},
                 ...     sense=Sense.Maximize,
                 ... )
 
                 >>> solution = OMMXPythonMIPAdapter.solve(instance)
-                >>> solution.get_dual_variable(0)
+                >>> solution.get_dual_variable(ConstraintID(0))
                 1.0
 
         """
@@ -303,6 +305,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         .. doctest::
 
+            >>> from ommx import ConstraintID
             >>> from ommx import Instance, DecisionVariable
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
@@ -312,7 +315,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
+            ...     constraints={ConstraintID(0): sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Sense.Maximize,
             ... )
 
@@ -334,14 +337,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             # Duals certify the active formulation and need an explicit mapping
             # before they can be attached to projected output semantics.
             if self.instance.output_objective is None:
-                dual_variables = {}
-                for constraint in data.constrs:
-                    pi = constraint.pi
-                    if pi is not None:
-                        id = int(constraint.name)
-                        dual_variables[id] = pi
-                for constraint_id, dual_value in dual_variables.items():
-                    solution.set_dual_variable(constraint_id, dual_value)
+                for constraint_id, name in self._constraint_names.items():
+                    constraint = data.constr_by_name(name)
+                    if constraint is not None and constraint.pi is not None:
+                        solution.set_dual_variable(constraint_id, float(constraint.pi))
 
             if data.status == mip.OptimizationStatus.OPTIMAL:
                 solution.optimality = self.instance.map_active_optimality(
@@ -473,6 +472,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         self.model.objective = self._as_lin_expr(self.instance.objective)
 
     def _set_constraints(self):
+        self._constraint_names: dict[ConstraintID, str] = {}
         for cid, constraint in self.instance.constraints.items():
             lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Equality.EqualToZero:
@@ -484,4 +484,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                     f"Not supported constraint equality: "
                     f"id: {cid}, equality: {constraint.equality}"
                 )
-            self.model.add_constr(constr_expr, name=str(cid))
+            name = str(cid)
+            self.model.add_constr(constr_expr, name=name)
+            self._constraint_names[cid] = name

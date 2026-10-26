@@ -1,5 +1,7 @@
 """Test PySCIPOpt adapter behavior with partial_evaluate and SOS1 constraints."""
 
+from ommx import ConstraintID, Sos1ConstraintID
+
 import pytest
 from ommx import DecisionVariable, Instance, Sense, Sos1Constraint, State
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -33,13 +35,13 @@ def sos1_instance_setup():
         decision_variables=x + y + [z],
         objective=objective,
         constraints={
-            1: binary_constraint,
-            2: big_m1,
-            3: big_m2,
-            4: big_m3,
-            5: independent_constraint,
+            ConstraintID(1): binary_constraint,
+            ConstraintID(2): big_m1,
+            ConstraintID(3): big_m2,
+            ConstraintID(4): big_m3,
+            ConstraintID(5): independent_constraint,
         },
-        sos1_constraints={0: sos1},
+        sos1_constraints={Sos1ConstraintID(0): sos1},
         sense=Sense.Minimize,
     )
 

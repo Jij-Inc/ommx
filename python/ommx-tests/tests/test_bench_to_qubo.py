@@ -10,6 +10,8 @@ profile that dominated the CodSpeed workflow. The defensive copy is included
 because the driver consumes mutable instance state.
 """
 
+from ommx import ConstraintID
+
 import pytest
 import random
 from copy import deepcopy
@@ -28,7 +30,7 @@ def small():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={0: x[0] + 2 * x[1] <= 3},
+        constraints={ConstraintID(0): x[0] + 2 * x[1] <= 3},
         sense=Sense.Maximize,
     )
     return instance
@@ -44,7 +46,7 @@ def pseudo_boolean_inequality(request):
     instance = Instance.from_components(
         decision_variables=x,
         objective=0,
-        constraints={0: expr <= threshold},  # type: ignore
+        constraints={ConstraintID(0): expr <= threshold},  # type: ignore
         sense=Sense.Maximize,
     )
     return instance

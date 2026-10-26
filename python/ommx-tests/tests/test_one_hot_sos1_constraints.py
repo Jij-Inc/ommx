@@ -1,5 +1,7 @@
 """Tests for OneHotConstraint and Sos1Constraint as first-class constraint types."""
 
+from ommx import OneHotConstraintID, Sos1ConstraintID
+
 from typing import cast, get_args
 
 import pandas as pd
@@ -40,13 +42,13 @@ def test_one_hot_constraint_from_components():
         decision_variables=x,
         objective=objective,
         constraints={},
-        one_hot_constraints={10: oh},
+        one_hot_constraints={OneHotConstraintID(10): oh},
         sense=Sense.Minimize,
     )
 
     assert len(instance.one_hot_constraints) == 1
-    assert 10 in instance.one_hot_constraints
-    assert instance.one_hot_constraints[10].variables == [1, 2, 3]
+    assert OneHotConstraintID(10) in instance.one_hot_constraints
+    assert instance.one_hot_constraints[OneHotConstraintID(10)].variables == [1, 2, 3]
 
 
 def test_one_hot_constraint_accepts_variable_ids():
@@ -84,13 +86,13 @@ def test_sos1_constraint_from_components():
         decision_variables=x,
         objective=objective,
         constraints={},
-        sos1_constraints={20: sos1},
+        sos1_constraints={Sos1ConstraintID(20): sos1},
         sense=Sense.Minimize,
     )
 
     assert len(instance.sos1_constraints) == 1
-    assert 20 in instance.sos1_constraints
-    assert instance.sos1_constraints[20].variables == [1, 2, 3]
+    assert Sos1ConstraintID(20) in instance.sos1_constraints
+    assert instance.sos1_constraints[Sos1ConstraintID(20)].variables == [1, 2, 3]
 
 
 def test_sos1_constraint_accepts_variable_ids():
@@ -124,7 +126,7 @@ def test_one_hot_variable_not_defined():
             decision_variables=x,
             objective=objective,
             constraints={},
-            one_hot_constraints={10: oh},
+            one_hot_constraints={OneHotConstraintID(10): oh},
             sense=Sense.Minimize,
         )
 
@@ -143,7 +145,7 @@ def test_sos1_variable_not_defined():
             decision_variables=x,
             objective=objective,
             constraints={},
-            sos1_constraints={20: sos1},
+            sos1_constraints={Sos1ConstraintID(20): sos1},
             sense=Sense.Minimize,
         )
 
@@ -165,7 +167,7 @@ def test_one_hot_variable_not_binary():
             decision_variables=x,
             objective=objective,
             constraints={},
-            one_hot_constraints={10: oh},
+            one_hot_constraints={OneHotConstraintID(10): oh},
             sense=Sense.Minimize,
         )
 
@@ -179,11 +181,13 @@ def test_one_hot_uses_enclosing_instance_variable_kind():
         decision_variables=[x],
         objective=x,
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=[reference])},
+        one_hot_constraints={
+            OneHotConstraintID(10): OneHotConstraint(variables=[reference])
+        },
         sense=Sense.Minimize,
     )
 
-    assert instance.one_hot_constraints[10].variables == [1]
+    assert instance.one_hot_constraints[OneHotConstraintID(10)].variables == [1]
 
 
 def test_serialize_not_yet_supported():
@@ -195,7 +199,7 @@ def test_serialize_not_yet_supported():
         decision_variables=x,
         objective=objective,
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        one_hot_constraints={OneHotConstraintID(10): OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
 
@@ -215,8 +219,8 @@ def test_both_one_hot_and_sos1():
         decision_variables=x,
         objective=objective,
         constraints={},
-        one_hot_constraints={10: oh},
-        sos1_constraints={20: sos1},
+        one_hot_constraints={OneHotConstraintID(10): oh},
+        sos1_constraints={Sos1ConstraintID(20): sos1},
         sense=Sense.Minimize,
     )
 
@@ -237,7 +241,7 @@ def test_evaluate_with_one_hot_feasible():
         decision_variables=x,
         objective=objective,
         constraints={},
-        one_hot_constraints={10: oh},
+        one_hot_constraints={OneHotConstraintID(10): oh},
         sense=Sense.Minimize,
     )
 
@@ -260,7 +264,7 @@ def test_evaluate_with_one_hot_infeasible():
         decision_variables=x,
         objective=objective,
         constraints={},
-        one_hot_constraints={10: oh},
+        one_hot_constraints={OneHotConstraintID(10): oh},
         sense=Sense.Minimize,
     )
 
@@ -283,7 +287,7 @@ def test_evaluate_with_sos1_feasible():
         decision_variables=x,
         objective=objective,
         constraints={},
-        sos1_constraints={20: sos1},
+        sos1_constraints={Sos1ConstraintID(20): sos1},
         sense=Sense.Minimize,
     )
 
@@ -305,12 +309,12 @@ def test_convert_sos1_with_integer_variables_emits_bigm_pair():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={10: Sos1Constraint(variables=x)},
+        sos1_constraints={Sos1ConstraintID(10): Sos1Constraint(variables=x)},
         sense=Sense.Minimize,
     )
 
     before_var_ids = {dv.id for dv in instance.decision_variables}
-    new_ids = instance.convert_sos1_to_constraints(10)
+    new_ids = instance.convert_sos1_to_constraints(Sos1ConstraintID(10))
 
     # Two integer vars with [-2, 3]: upper + lower per var, plus cardinality = 5 constraints.
     assert len(new_ids) == 5
@@ -321,12 +325,10 @@ def test_convert_sos1_with_integer_variables_emits_bigm_pair():
     for v_id in new_var_ids:
         assert after_vars[v_id].name == "ommx.sos1_indicator"
     # Original SOS1 is retained on the removed side with our reason string.
-    removed = instance.removed_sos1_constraints[10]
+    removed = instance.removed_sos1_constraints[Sos1ConstraintID(10)]
     assert removed.removed_reason == "ommx.Instance.convert_sos1_to_constraints"
     # `constraint_ids` parameter lists all 5 new IDs in insertion order.
-    assert removed.removed_reason_parameters["constraint_ids"] == ",".join(
-        str(i) for i in new_ids
-    )
+    assert removed.removed_reason_parameters["constraint_ids"] == "0,1,2,3,4"
 
 
 def test_convert_sos1_rejects_domain_excluding_zero():
@@ -336,17 +338,17 @@ def test_convert_sos1_rejects_domain_excluding_zero():
         decision_variables=x,
         objective=x[0],
         constraints={},
-        sos1_constraints={10: Sos1Constraint(variables=x)},
+        sos1_constraints={Sos1ConstraintID(10): Sos1Constraint(variables=x)},
         sense=Sense.Minimize,
     )
     before_var_ids = {dv.id for dv in instance.decision_variables}
 
     with pytest.raises(RuntimeError, match="excludes 0"):
-        instance.convert_sos1_to_constraints(10)
+        instance.convert_sos1_to_constraints(Sos1ConstraintID(10))
 
     # Instance unchanged on error.
     assert {dv.id for dv in instance.decision_variables} == before_var_ids
-    assert 10 in instance.sos1_constraints
+    assert Sos1ConstraintID(10) in instance.sos1_constraints
 
 
 def test_sos1_constraints_df_roundtrips_removed_context(snapshot):
@@ -357,10 +359,10 @@ def test_sos1_constraints_df_roundtrips_removed_context(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={7: Sos1Constraint(variables=x)},
+        sos1_constraints={Sos1ConstraintID(7): Sos1Constraint(variables=x)},
         sense=Sense.Minimize,
     )
-    instance.convert_sos1_to_constraints(7)
+    instance.convert_sos1_to_constraints(Sos1ConstraintID(7))
 
     assert instance.constraints_df(kind="sos1").empty
     assert _df_snap(instance.constraints_df(kind="sos1", removed=True)) == snapshot
@@ -379,7 +381,7 @@ def test_evaluate_with_sos1_infeasible():
         decision_variables=x,
         objective=objective,
         constraints={},
-        sos1_constraints={20: sos1},
+        sos1_constraints={Sos1ConstraintID(20): sos1},
         sense=Sense.Minimize,
     )
 
@@ -397,7 +399,7 @@ def _solution_one_hot_feasible():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        one_hot_constraints={OneHotConstraintID(10): OneHotConstraint(variables=x)},
         sense=Sense.Maximize,
     )
     return instance.evaluate({1: 0.0, 2: 1.0, 3: 0.0})
@@ -411,7 +413,7 @@ def _solution_one_hot_infeasible():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        one_hot_constraints={OneHotConstraintID(10): OneHotConstraint(variables=x)},
         sense=Sense.Maximize,
     )
     return instance.evaluate({1: 1.0, 2: 1.0, 3: 0.0})
@@ -444,7 +446,7 @@ def _solution_sos1_one_active():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={20: Sos1Constraint(variables=x)},
+        sos1_constraints={Sos1ConstraintID(20): Sos1Constraint(variables=x)},
         sense=Sense.Minimize,
     )
     return instance.evaluate({1: 0.0, 2: 5.0, 3: 0.0})
@@ -458,7 +460,7 @@ def _solution_sos1_all_zero():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={20: Sos1Constraint(variables=x)},
+        sos1_constraints={Sos1ConstraintID(20): Sos1Constraint(variables=x)},
         sense=Sense.Minimize,
     )
     return instance.evaluate({1: 0.0, 2: 0.0, 3: 0.0})
@@ -484,10 +486,10 @@ def test_solution_one_hot_removed_reasons_df_after_conversion(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=x)},
+        one_hot_constraints={OneHotConstraintID(7): OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
-    instance.convert_one_hot_to_constraint(7)
+    instance.convert_one_hot_to_constraint(OneHotConstraintID(7))
     sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
     assert (
         _df_snap(
@@ -506,10 +508,10 @@ def test_solution_sos1_removed_reasons_df_after_conversion(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={7: Sos1Constraint(variables=x)},
+        sos1_constraints={Sos1ConstraintID(7): Sos1Constraint(variables=x)},
         sense=Sense.Minimize,
     )
-    instance.convert_sos1_to_constraints(7)
+    instance.convert_sos1_to_constraints(Sos1ConstraintID(7))
     sol = instance.evaluate({0: 1.0, 1: 0.0, 2: 0.0})
     assert (
         _df_snap(sol.constraints_df(kind="sos1", include=["label", "removed_reason"]))
@@ -525,7 +527,7 @@ def _sample_set_one_hot():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        one_hot_constraints={OneHotConstraintID(10): OneHotConstraint(variables=x)},
         sense=Sense.Maximize,
     )
     return instance.evaluate_samples(
@@ -552,7 +554,7 @@ def _sample_set_sos1():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        sos1_constraints={20: Sos1Constraint(variables=x)},
+        sos1_constraints={Sos1ConstraintID(20): Sos1Constraint(variables=x)},
         sense=Sense.Minimize,
     )
     return instance.evaluate_samples(
@@ -578,10 +580,10 @@ def test_sample_set_one_hot_removed_reasons_df_after_conversion(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={7: OneHotConstraint(variables=x)},
+        one_hot_constraints={OneHotConstraintID(7): OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
-    instance.convert_one_hot_to_constraint(7)
+    instance.convert_one_hot_to_constraint(OneHotConstraintID(7))
     ss = instance.evaluate_samples({0: {0: 1.0, 1: 0.0, 2: 0.0}})
     assert (
         _df_snap(ss.constraints_df(kind="one_hot", include=["label", "removed_reason"]))

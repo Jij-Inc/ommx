@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 import math
 
 from ommx import Bound, DecisionVariable, Instance, State, Sense
@@ -41,7 +42,7 @@ def test_default_atol_constraint_evaluation():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,  # minimize x
-        constraints={1: constraint},
+        constraints={ConstraintID(1): constraint},
         sense=Sense.Minimize,
     )
 
@@ -84,7 +85,7 @@ def test_constraint_boundary_matches_scalar_sample_and_v2_validation():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={1: x == 0, 2: x <= 0},
+        constraints={ConstraintID(1): x == 0, ConstraintID(2): x <= 0},
         sense=Sense.Minimize,
     )
     atol = 0.125
@@ -92,31 +93,75 @@ def test_constraint_boundary_matches_scalar_sample_and_v2_validation():
 
     boundary_solution = instance.evaluate({1: atol}, atol=atol)
     outside_solution = instance.evaluate({1: outside}, atol=atol)
-    assert boundary_solution.constraints[1].is_feasible(atol=atol)
-    assert boundary_solution.constraints[2].is_feasible(atol=atol)
-    assert not outside_solution.constraints[1].is_feasible(atol=atol)
-    assert not outside_solution.constraints[2].is_feasible(atol=atol)
+    assert boundary_solution.get_constraints(kind="regular")[
+        ConstraintID(1)
+    ].is_feasible(atol=atol)
+    assert boundary_solution.get_constraints(kind="regular")[
+        ConstraintID(2)
+    ].is_feasible(atol=atol)
+    assert not outside_solution.get_constraints(kind="regular")[
+        ConstraintID(1)
+    ].is_feasible(atol=atol)
+    assert not outside_solution.get_constraints(kind="regular")[
+        ConstraintID(2)
+    ].is_feasible(atol=atol)
 
     restored_solution = type(boundary_solution).from_v2_bytes(
         boundary_solution.to_v2_bytes()
     )
-    assert restored_solution.constraints[1].is_feasible(atol=atol)
-    assert restored_solution.constraints[2].is_feasible(atol=atol)
+    assert restored_solution.get_constraints(kind="regular")[
+        ConstraintID(1)
+    ].is_feasible(atol=atol)
+    assert restored_solution.get_constraints(kind="regular")[
+        ConstraintID(2)
+    ].is_feasible(atol=atol)
 
     sample_set = instance.evaluate_samples(
         {7: {1: atol}, 8: {1: outside}},
         atol=atol,
     )
-    assert sample_set.get(7).constraints[1].is_feasible(atol=atol)
-    assert sample_set.get(7).constraints[2].is_feasible(atol=atol)
-    assert not sample_set.get(8).constraints[1].is_feasible(atol=atol)
-    assert not sample_set.get(8).constraints[2].is_feasible(atol=atol)
+    assert (
+        sample_set.get(7)
+        .get_constraints(kind="regular")[ConstraintID(1)]
+        .is_feasible(atol=atol)
+    )
+    assert (
+        sample_set.get(7)
+        .get_constraints(kind="regular")[ConstraintID(2)]
+        .is_feasible(atol=atol)
+    )
+    assert (
+        not sample_set.get(8)
+        .get_constraints(kind="regular")[ConstraintID(1)]
+        .is_feasible(atol=atol)
+    )
+    assert (
+        not sample_set.get(8)
+        .get_constraints(kind="regular")[ConstraintID(2)]
+        .is_feasible(atol=atol)
+    )
 
     restored_sample_set = type(sample_set).from_v2_bytes(sample_set.to_v2_bytes())
-    assert restored_sample_set.get(7).constraints[1].is_feasible(atol=atol)
-    assert restored_sample_set.get(7).constraints[2].is_feasible(atol=atol)
-    assert not restored_sample_set.get(8).constraints[1].is_feasible(atol=atol)
-    assert not restored_sample_set.get(8).constraints[2].is_feasible(atol=atol)
+    assert (
+        restored_sample_set.get(7)
+        .get_constraints(kind="regular")[ConstraintID(1)]
+        .is_feasible(atol=atol)
+    )
+    assert (
+        restored_sample_set.get(7)
+        .get_constraints(kind="regular")[ConstraintID(2)]
+        .is_feasible(atol=atol)
+    )
+    assert (
+        not restored_sample_set.get(8)
+        .get_constraints(kind="regular")[ConstraintID(1)]
+        .is_feasible(atol=atol)
+    )
+    assert (
+        not restored_sample_set.get(8)
+        .get_constraints(kind="regular")[ConstraintID(2)]
+        .is_feasible(atol=atol)
+    )
 
 
 def test_bound_membership_matches_inequality_residual_feasibility():
@@ -127,20 +172,24 @@ def test_bound_membership_matches_inequality_residual_feasibility():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={1: x <= upper, 2: x >= lower},
+        constraints={ConstraintID(1): x <= upper, ConstraintID(2): x >= lower},
         sense=Sense.Minimize,
     )
 
     above = upper + atol
     upper_feasible = (
-        instance.evaluate({1: above}, atol=atol).constraints[1].is_feasible(atol=atol)
+        instance.evaluate({1: above}, atol=atol)
+        .get_constraints(kind="regular")[ConstraintID(1)]
+        .is_feasible(atol=atol)
     )
     assert Bound(float("-inf"), upper).contains(above, atol) == upper_feasible
     assert not upper_feasible
 
     below = 2.0
     lower_feasible = (
-        instance.evaluate({1: below}, atol=atol).constraints[2].is_feasible(atol=atol)
+        instance.evaluate({1: below}, atol=atol)
+        .get_constraints(kind="regular")[ConstraintID(2)]
+        .is_feasible(atol=atol)
     )
     assert Bound(lower, float("inf")).contains(below, atol) == lower_feasible
     assert not lower_feasible
@@ -198,7 +247,7 @@ def test_instance_evaluate_with_custom_atol():
     instance = Instance.from_components(
         decision_variables=[x1],
         objective=x1,
-        constraints={1: constraint},
+        constraints={ConstraintID(1): constraint},
         sense=Sense.Minimize,
     )
 

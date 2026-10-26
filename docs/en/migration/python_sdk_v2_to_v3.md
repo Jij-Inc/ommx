@@ -112,6 +112,7 @@ s1 = Sos1Constraint(id=11, variables=[0, 1])
 
 **After (v3)**:
 ```python
+from ommx import ConstraintID, OneHotConstraintID, Sos1ConstraintID
 c  = Constraint(function=x + y, equality=Equality.EqualToZero, name="cap")
 xs = [DecisionVariable.binary(i) for i in range(3)]
 oh = OneHotConstraint(variables=xs)
@@ -122,9 +123,9 @@ instance = Instance.from_components(
     sense=Sense.Minimize,
     objective=...,
     decision_variables=[...],
-    constraints={5: c},
-    one_hot_constraints={10: oh},
-    sos1_constraints={11: s1},
+    constraints={ConstraintID(5): c},
+    one_hot_constraints={OneHotConstraintID(10): oh},
+    sos1_constraints={Sos1ConstraintID(11): s1},
 )
 ```
 
@@ -177,14 +178,15 @@ Instance.from_components(
 
 **After (v3)**:
 ```python
+from ommx import ConstraintID, IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID
 Instance.from_components(
     sense=Sense.Minimize,
     objective=obj,
     decision_variables=[x0, x1],
-    constraints={0: c0, 1: c1},           # dict keyed by constraint ID
-    indicator_constraints={10: ic},       # all structural-constraint args are dicts
-    one_hot_constraints={20: oh},
-    sos1_constraints={30: sc},
+    constraints={ConstraintID(0): c0, ConstraintID(1): c1},           # dict keyed by constraint ID
+    indicator_constraints={IndicatorConstraintID(10): ic},       # all structural-constraint args are dicts
+    one_hot_constraints={OneHotConstraintID(20): oh},
+    sos1_constraints={Sos1ConstraintID(30): sc},
 )
 ```
 
@@ -211,13 +213,13 @@ for oh in hints.one_hot_constraints:
 
 **After (v3)**:
 ```python
-for cid, c in instance.constraints.items():              # dict[int, AttachedConstraint]
+for cid, c in instance.constraints.items():              # dict[ConstraintID, AttachedConstraint]
     print(cid, c.function)
 
-for cid, rc in instance.removed_constraints.items():     # dict[int, RemovedConstraint]
+for cid, rc in instance.removed_constraints.items():     # dict[ConstraintID, RemovedConstraint]
     ...
 
-for cid, ec in solution.constraints.items():             # dict[int, EvaluatedConstraint]
+for cid, ec in solution.get_constraints(kind="regular").items():             # dict[ConstraintID, EvaluatedConstraint]
     print(cid, ec.evaluated_value)
 
 # First-class constraint dicts replace constraint_hints:
@@ -226,9 +228,9 @@ for hid, sc in instance.sos1_constraints.items():    ...
 for hid, ic in instance.indicator_constraints.items(): ...
 ```
 
-The dict shape itself landed in 3.0.0a2 with snapshot `Constraint` values. In 3.0.0a3 the constraint dicts on `Instance` / `ParametricInstance` switched to write-through `AttachedX` handles — see §11 for the read / write semantics. `Solution.constraints` keeps a snapshot value type (`EvaluatedConstraint`) since it has no edit lifecycle. `Instance.removed_constraints` still surfaces `RemovedConstraint` snapshots; relax/restore go through `Instance.relax_constraint` / `Instance.restore_constraint` rather than mutating values inside this dict.
+The dict shape itself landed in 3.0.0a2 with snapshot `Constraint` values. In 3.0.0a3 the constraint dicts on `Instance` / `ParametricInstance` switched to write-through `AttachedX` handles — see §11 for the read / write semantics. `Solution.get_constraints(kind="regular")` returns `dict[ConstraintID, EvaluatedConstraint]` snapshots since it has no edit lifecycle. `Instance.removed_constraints` still surfaces `RemovedConstraint` snapshots; relax/restore go through `Instance.relax_constraint` / `Instance.restore_constraint` rather than mutating values inside this dict.
 
-`SampleSet.constraints` / `.decision_variables` / `.named_functions` remain `list`.
+`SampleSet.get_constraints(kind=...)` returns a dictionary keyed by family-specific IDs. Its `.decision_variables` and `.named_functions` remain lists.
 
 ## 5. Renames, signature changes, and behavior changes
 
@@ -369,8 +371,9 @@ per constraint, including removed constraints and all special constraint kinds.
 Regular equality and inequality violations retain their existing definitions.
 
 ```python
+from ommx import OneHotConstraintID
 solution.total_violation()
-solution.constraint_violation(30, kind="one_hot")
+solution.constraint_violation(OneHotConstraintID(30))
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
 ```
 
@@ -402,7 +405,8 @@ Solution/SampleSet keep their existing feasibility properties and expose
 `feasibility_atol` so extracted constraints can use the same threshold:
 
 ```python
-evaluated = solution.constraints[1]
+from ommx import ConstraintID
+evaluated = solution.get_constraints(kind="regular")[ConstraintID(1)]
 evaluated.is_feasible(atol=solution.feasibility_atol)
 evaluated.is_feasible(atol=1e-8)  # A separate query on the same stored violation
 ```
@@ -669,7 +673,7 @@ df = instance.constraints_df()           # method; default kind="regular"
 df = instance.constraints_df(kind="indicator")
 df = instance.constraints_df(kind="regular", removed=True)
                                          # active + removed merged in id order
-df = solution.constraints_df()           # no removed= (no active/removed
+df = solution.constraints_df(kind="regular")           # no removed= (no active/removed
                                          # distinction at the evaluated stage)
 ```
 
@@ -697,7 +701,7 @@ df = instance.decision_variables_df(include=[])
 
 `"removed_reason"` is a unit flag — it gates both the `removed_reason` column and the `removed_reason.{key}` parameter columns together. The `removed_reason` column is **schema-stable**: when the flag is on it always appears in the resulting DataFrame, NA-filled if no row carries a reason, so downstream code that branches on schema doesn't need to special-case empty data.
 
-The wide `constraints_df()` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`). `decision_variables_df()` keeps `id` as its index name (only one variable ID space, so disambiguation isn't load-bearing); the long-format variable sidecars in §10 do use `variable_id`. The kind-qualified constraint names make cross-ID-space joins (which would silently produce wrong-but-shaped output when `int64` indexes line up) visible in `df.head()` / `df.info()` and IDE inspection.
+The wide `constraints_df()` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`). `decision_variables_df()` keeps `id` as its index name (only one variable ID space, so disambiguation isn't load-bearing); the long-format variable sidecars in §10 do use `variable_id`. Constraint indexes now contain family-specific ID objects. Equal numeric values from different constraint families do not join as equal IDs.
 
 ## 10. Long-format sidecar DataFrames (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846))
 
@@ -738,19 +742,19 @@ c.add_name("balance")                              # mutated the local snapshot
 print(instance.get_constraint_by_id(5).name)       # still None — fresh snapshot
 
 # v3 — dict accessor returns a write-through handle
-c = instance.constraints[5]                        # AttachedConstraint (live)
+c = instance.constraints[ConstraintID(5)]                        # AttachedConstraint (live)
 c.set_name("balance")                              # writes through to the SoA store
-print(instance.constraints[5].name)                # "balance"
+print(instance.constraints[ConstraintID(5)].name)                # "balance"
 ```
 
 Affected return types (the column for `3.0.0a2` reflects the post-§4.2 state with snapshot value types; this section's change is the wrap into `AttachedX`):
 
 | Accessor | v2.5.1 | 3.0.0a2 | v3 final (3.0.0a3) |
 |---|---|---|---|
-| `instance.constraints` | `list[Constraint]` | `dict[int, Constraint]` | `dict[int, AttachedConstraint]` |
-| `instance.indicator_constraints` | — (no indicator type) | `dict[int, IndicatorConstraint]` | `dict[int, AttachedIndicatorConstraint]` |
-| `instance.one_hot_constraints` | via `constraint_hints` (legacy `OneHot`) | `dict[int, OneHotConstraint]` | `dict[int, AttachedOneHotConstraint]` |
-| `instance.sos1_constraints` | via `constraint_hints` (legacy `Sos1`) | `dict[int, Sos1Constraint]` | `dict[int, AttachedSos1Constraint]` |
+| `instance.constraints` | `list[Constraint]` | `dict[int, Constraint]` | `dict[ConstraintID, AttachedConstraint]` |
+| `instance.indicator_constraints` | — (no indicator type) | `dict[int, IndicatorConstraint]` | `dict[IndicatorConstraintID, AttachedIndicatorConstraint]` |
+| `instance.one_hot_constraints` | via `constraint_hints` (legacy `OneHot`) | `dict[int, OneHotConstraint]` | `dict[OneHotConstraintID, AttachedOneHotConstraint]` |
+| `instance.sos1_constraints` | via `constraint_hints` (legacy `Sos1`) | `dict[int, Sos1Constraint]` | `dict[Sos1ConstraintID, AttachedSos1Constraint]` |
 | `instance.decision_variables` | `list[DecisionVariable]` | `list[DecisionVariable]` | `list[AttachedDecisionVariable]` |
 
 The list → dict shape change happened in 3.0.0a2 ([§4.2](#42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)); the 3.0.0a3 wave wraps each value in an `AttachedX` write-through handle. The same change applies on `ParametricInstance`. Solution / SampleSet evaluated / sampled wrappers stay as snapshots — those collections have no edit lifecycle.
@@ -1052,7 +1056,7 @@ expr = 2 * p + 3  # Linear
 - [ ] Replace per-kind `instance.indicator_constraints_df` / `one_hot_constraints_df` / `sos1_constraints_df` and `removed_*_constraints_df` / `*_removed_reasons_df` calls with `constraints_df(kind=..., removed=...)` on the same host.
 - [ ] If you depended on the unqualified `id` index column on a wide constraint `*_df`, switch to the kind-qualified `{kind}_constraint_id` name. `decision_variables_df()` keeps `id` (only one variable ID space); long-format variable sidecars use `variable_id`.
 - [ ] Drop the in-place `c.add_name(...)` mutation pattern on snapshot wrappers retrieved from an instance — those calls return a new object and don't write through to the host. Use the live handle returned by `instance.constraints[id]` (an `AttachedConstraint`) and call its `set_*` / `add_*` methods, or re-add via `from_components`.
-- [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[int, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
+- [ ] Update return-type annotations / static analysis for `instance.constraints` etc. to expect `AttachedX` (`dict[ConstraintID, AttachedConstraint]`, `list[AttachedDecisionVariable]`, …). Call `.detach()` if you need an independent snapshot.
 - [ ] Replace detached `DecisionVariable.substituted_value` reads with owner-side queries: `Instance.fixed_decision_variables()`, `instance.attached_decision_variable(id).substituted_value`, or `instance.decision_variables_df()["substituted_value"]`.
 - [ ] Replace `decision_variable_analysis()` reads with `decision_variable_roles()`, `decision_variable_role(id)`, `fixed_decision_variables()`, `dependent_decision_variable_ids()`, `irrelevant_decision_variable_ids()`, or `decision_variables_df()["state_role"]`.
 - [ ] Replace element-level `to_bytes()` / `from_bytes()` calls on `Function` / `Linear` / `Quadratic` / `Polynomial` / `Parameter` / the `NamedFunction` family / the `DecisionVariable` family with whole-`Instance` / `Solution` / `SampleSet` round-trips. Use `to_v2_bytes()` for newly serialized top-level payloads; keep `to_v1_bytes()` only for legacy v1 interop or the `State` / `Samples` / `Parameters` DTOs used by evaluate plumbing. See §12.
@@ -1061,3 +1065,21 @@ expr = 2 * p + 3  # Linear
 - [ ] Replace `Artifact.load_archive(file)` with `Artifact.import_archive(file)` (registry-write semantics, returns a full handle) for code that wants to use the archive's contents. Use `Artifact.inspect_archive(file)` for the side-effect-free read of the manifest / layer descriptors (returns an `ArchiveManifest`). The v3 `load_archive` raises a migration error pointing at both. See §13.3.
 - [ ] Update any `ommx push <archive-file>` invocation to the two-step `ommx load <file>` + `ommx push <image_name>` flow. See §13.4.
 - [ ] Add periodic `ommx artifact prune-anonymous` to clean accumulated entries if your workflow makes heavy use of `ArtifactDraft.new_anonymous`. See §13.5.
+
+## Typed constraint IDs and native result queries
+
+Replace `solution.constraints`, `sample_set.constraints`, result
+`get_constraint_by_id(id)`, and `solution.constraint_ids` with
+`result.get_constraints(kind="regular")`, dictionary lookup, and dictionary
+keys, respectively. Special constraints use `kind="indicator"`, `"one_hot"`,
+or `"sos1"`. Both result `get_constraints` and `constraints_df` require `kind`
+as a keyword argument.
+
+Constraint IDs are `ConstraintID`, `IndicatorConstraintID`, `OneHotConstraintID`,
+and `Sos1ConstraintID`, including in Instance/ParametricInstance collections,
+transformation results, provenance, and DataFrames. Construct explicit IDs for
+`from_components` keys; use attached handles' `constraint_id` for allocated IDs.
+Lookup and mutation APIs reject integers and the wrong family. IDs cannot be
+converted with `int()` or used as numeric positions. Solver row numbers need a
+separate mapping. `solution.constraint_violation(id)` now infers the family from
+the ID type and has no `kind` argument. Variable and sample IDs remain integers.

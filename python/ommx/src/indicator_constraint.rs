@@ -286,8 +286,8 @@ fn lookup_indicator_parametric(
 impl AttachedIndicatorConstraint {
     /// The id this handle points at.
     #[getter]
-    pub fn constraint_id(&self) -> u64 {
-        self.id.into_inner()
+    pub fn constraint_id(&self) -> crate::IndicatorConstraintID {
+        self.id.into()
     }
 
     /// The parent host this constraint lives in.

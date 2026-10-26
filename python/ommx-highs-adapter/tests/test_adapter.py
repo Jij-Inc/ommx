@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 import highspy
 import pytest
 
@@ -93,10 +94,12 @@ def test_constructor_preserves_model_without_solving(
         decision_variables=[x, y],
         objective=objective,
         constraints={
-            10: x + y == 3,
-            20: x - 2 * y <= 0,
-            30: Constraint(function=0, equality=Equality.EqualToZero),
-            40: Constraint(function=-2, equality=Equality.LessThanOrEqualToZero),
+            ConstraintID(10): x + y == 3,
+            ConstraintID(20): x - 2 * y <= 0,
+            ConstraintID(30): Constraint(function=0, equality=Equality.EqualToZero),
+            ConstraintID(40): Constraint(
+                function=-2, equality=Equality.LessThanOrEqualToZero
+            ),
         },
         sense=sense,
     )
@@ -149,7 +152,7 @@ def test_integration_lp():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=x1 + 2 * x2,
-        constraints={0: x1 + x2 <= 5},
+        constraints={ConstraintID(0): x1 + x2 <= 5},
         sense=Sense.Minimize,
     )
     adapter = OMMXHighsAdapter(instance)
@@ -170,7 +173,10 @@ def test_integration_milp():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
+        constraints={
+            ConstraintID(0): 3 * x1 - x2 <= 6,
+            ConstraintID(1): -x1 + 3 * x2 <= 6,
+        },
         sense=Sense.Minimize,
     )
 
@@ -203,7 +209,7 @@ def test_solution_optimality_is_not_transported_through_fixed_penalty():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={7: x == 1},
+        constraints={ConstraintID(7): x == 1},
         sense=Sense.Minimize,
     )
     instance.to_qubo(uniform_penalty_weight=0.0)
@@ -219,7 +225,7 @@ def test_output_objective_omits_active_formulation_dual_values():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: x <= 1},
+        constraints={ConstraintID(0): x <= 1},
         sense=Sense.Maximize,
     )
     assert instance.convert_active_objective(Sense.Minimize)
@@ -229,7 +235,7 @@ def test_output_objective_omits_active_formulation_dual_values():
     model.run()
     solution = adapter.decode(model)
 
-    assert solution.get_dual_variable(0) is None
+    assert solution.get_dual_variable(ConstraintID(0)) is None
 
 
 @pytest.mark.parametrize(
@@ -257,7 +263,7 @@ def test_partial_evaluate():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
-        constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
+        constraints={ConstraintID(0): x[0] + x[1] + x[2] <= 1},  # one-hot constraint
         sense=Sense.Minimize,
     )
     assert instance.used_decision_variables == x
@@ -282,15 +288,38 @@ def test_relax_constraint():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
+        constraints={
+            ConstraintID(0): x[0] + 2 * x[1] <= 1,
+            ConstraintID(1): x[1] + x[2] <= 1,
+        },
         sense=Sense.Minimize,
     )
 
     assert instance.used_decision_variables == x
-    instance.relax_constraint(1, "relax")
+    instance.relax_constraint(ConstraintID(1), "relax")
     # id for x[2] is listed as irrelevant
     assert instance.irrelevant_decision_variable_ids() == {x[2].id}
 
     solution = OMMXHighsAdapter.solve(instance)
     # x[2] is still present as part of the evaluate/decoding process but has a value of 0
     assert [var.value for var in solution.decision_variables] == [0, 0, 0]
+
+
+def test_dual_mapping_uses_solver_rows_with_sparse_constraint_ids():
+    x = DecisionVariable.continuous(0, lower=0, upper=10)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        sense=Sense.Maximize,
+        constraints={
+            ConstraintID(7): Constraint(function=0, equality=Equality.EqualToZero),
+            ConstraintID(42): x <= 2,
+        },
+    )
+    adapter = OMMXHighsAdapter(instance)
+    model = adapter.solver_input
+    model.run()
+    solution = adapter.decode(model)
+    assert model.getNumRow() == 1
+    assert solution.get_dual_variable(ConstraintID(7)) is None
+    assert solution.get_dual_variable(ConstraintID(42)) == pytest.approx(1)

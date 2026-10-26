@@ -8,6 +8,10 @@ mod bound;
 #[cfg(feature = "cli")]
 mod cli;
 mod constraint;
+mod constraint_id;
+mod constraint_kind;
+#[macro_use]
+mod constraint_results;
 #[cfg(feature = "remote-artifact")]
 mod dataset;
 mod decision_variable;
@@ -55,6 +59,13 @@ pub use artifact::*;
 pub use attached::ConstraintHost;
 pub use bound::*;
 pub use constraint::*;
+pub use constraint_id::{
+    ConstraintID, IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID,
+};
+pub use constraint_results::{
+    EvaluatedIndicatorConstraint, EvaluatedOneHotConstraint, EvaluatedSos1Constraint,
+    SampledIndicatorConstraint, SampledOneHotConstraint, SampledSos1Constraint,
+};
 #[cfg(feature = "remote-artifact")]
 pub use dataset::*;
 pub use decision_variable::*;
@@ -239,6 +250,16 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Parameters>()?;
     m.add_class::<Solution>()?;
     m.add_class::<SampleSet>()?;
+    m.add_class::<ConstraintID>()?;
+    m.add_class::<IndicatorConstraintID>()?;
+    m.add_class::<OneHotConstraintID>()?;
+    m.add_class::<Sos1ConstraintID>()?;
+    m.add_class::<EvaluatedIndicatorConstraint>()?;
+    m.add_class::<EvaluatedOneHotConstraint>()?;
+    m.add_class::<EvaluatedSos1Constraint>()?;
+    m.add_class::<SampledIndicatorConstraint>()?;
+    m.add_class::<SampledOneHotConstraint>()?;
+    m.add_class::<SampledSos1Constraint>()?;
     m.add_class::<Samples>()?;
     m.add_class::<State>()?;
     m.add_type_alias::<ToState>()?;
@@ -332,6 +353,10 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "FixedPenaltyPreparation",
     "PreparationPolicy",
     // Constraint and named function
+    "ConstraintID",
+    "IndicatorConstraintID",
+    "OneHotConstraintID",
+    "Sos1ConstraintID",
     "Constraint",
     "AttachedConstraint",
     "IndicatorConstraint",
@@ -353,9 +378,15 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     // Evaluated types
     "EvaluatedDecisionVariable",
     "EvaluatedConstraint",
+    "EvaluatedIndicatorConstraint",
+    "EvaluatedOneHotConstraint",
+    "EvaluatedSos1Constraint",
     "EvaluatedNamedFunction",
     "SampledDecisionVariable",
     "SampledConstraint",
+    "SampledIndicatorConstraint",
+    "SampledOneHotConstraint",
+    "SampledSos1Constraint",
     "SampledNamedFunction",
     // Top-level types
     "Instance",

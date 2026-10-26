@@ -1,3 +1,9 @@
+from ommx import (
+    ConstraintID,
+    IndicatorConstraintID,
+    OneHotConstraintID,
+    Sos1ConstraintID,
+)
 import sys
 
 import pytest
@@ -10,10 +16,10 @@ def _attached_constraint_with_missing_state():
     instance = ommx.Instance.from_components(
         decision_variables=[variable],
         objective=0,
-        constraints={0: variable == 0},
+        constraints={ConstraintID(0): variable == 0},
         sense=ommx.Sense.Minimize,
     )
-    return instance.constraints[0].evaluate({})
+    return instance.constraints[ConstraintID(0)].evaluate({})
 
 
 def _instance_with_required_variable() -> ommx.Instance:
@@ -32,7 +38,9 @@ def _instance_with_one_hot_constraint() -> ommx.Instance:
         decision_variables=variables,
         objective=0,
         constraints={},
-        one_hot_constraints={0: ommx.OneHotConstraint(variables=variables)},
+        one_hot_constraints={
+            OneHotConstraintID(0): ommx.OneHotConstraint(variables=variables)
+        },
         sense=ommx.Sense.Minimize,
     )
 
@@ -59,7 +67,9 @@ def _instance_with_sos1_derived_bound_conflict() -> ommx.Instance:
         decision_variables=variables,
         objective=0,
         constraints={},
-        sos1_constraints={0: ommx.Sos1Constraint(variables=variables)},
+        sos1_constraints={
+            Sos1ConstraintID(0): ommx.Sos1Constraint(variables=variables)
+        },
         sense=ommx.Sense.Minimize,
     )
 
@@ -72,7 +82,7 @@ def _instance_with_indicator_constraint() -> ommx.Instance:
         objective=0,
         constraints={},
         indicator_constraints={
-            0: ommx.IndicatorConstraint(
+            IndicatorConstraintID(0): ommx.IndicatorConstraint(
                 indicator_variable=indicator,
                 function=variable,
                 equality=ommx.Equality.LessThanOrEqualToZero,
@@ -174,17 +184,17 @@ def test_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
     instance = ommx.Instance.from_components(
         decision_variables=[variable],
         objective=0,
-        constraints={0: sys.float_info.max * variable <= 0},
+        constraints={ConstraintID(0): sys.float_info.max * variable <= 0},
         sense=ommx.Sense.Minimize,
     )
-    instance.relax_constraint(0, "test")
+    instance.relax_constraint(ConstraintID(0), "test")
     instance = instance.partial_evaluate({1: sys.float_info.max})
 
     with pytest.raises(RuntimeError, match="failed to normalize removed constraint"):
-        instance.restore_constraint(0)
+        instance.restore_constraint(ConstraintID(0))
 
     assert instance.constraints == {}
-    assert set(instance.removed_constraints) == {0}
+    assert set(instance.removed_constraints) == {ConstraintID(0)}
 
 
 def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
@@ -195,7 +205,7 @@ def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> 
         objective=0,
         constraints={},
         indicator_constraints={
-            0: ommx.IndicatorConstraint(
+            IndicatorConstraintID(0): ommx.IndicatorConstraint(
                 indicator_variable=indicator,
                 function=sys.float_info.max * variable,
                 equality=ommx.Equality.LessThanOrEqualToZero,
@@ -203,16 +213,16 @@ def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> 
         },
         sense=ommx.Sense.Minimize,
     )
-    instance.relax_indicator_constraint(0, "test")
+    instance.relax_indicator_constraint(IndicatorConstraintID(0), "test")
     instance = instance.partial_evaluate({1: sys.float_info.max})
 
     with pytest.raises(
         RuntimeError, match="failed to normalize removed indicator constraint"
     ):
-        instance.restore_indicator_constraint(0)
+        instance.restore_indicator_constraint(IndicatorConstraintID(0))
 
     assert instance.indicator_constraints == {}
-    assert set(instance.removed_indicator_constraints) == {0}
+    assert set(instance.removed_indicator_constraints) == {IndicatorConstraintID(0)}
 
 
 @pytest.mark.parametrize("value", [float("nan"), 0.5])

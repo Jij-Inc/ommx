@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from dataclasses import asdict
 from typing import cast
 
@@ -34,7 +35,9 @@ def _knapsack_instance() -> Instance:
         decision_variables=x,
         objective=sum(values[i] * x[i] for i in range(30)),
         constraints={
-            0: cast(Constraint, sum(weights[i] * x[i] for i in range(30)) <= 60)
+            ConstraintID(0): cast(
+                Constraint, sum(weights[i] * x[i] for i in range(30)) <= 60
+            )
         },
         sense=Sense.Maximize,
     )
@@ -45,7 +48,7 @@ def _infeasible_instance() -> Instance:
     return Instance.from_components(
         decision_variables=[x],
         objective=0,
-        constraints={0: x == 0, 1: x == 1},
+        constraints={ConstraintID(0): x == 0, ConstraintID(1): x == 1},
         sense=Sense.Minimize,
     )
 

@@ -5,6 +5,7 @@ import mip
 
 from mip.exceptions import ParameterNotAvailable
 from ommx import (
+    ConstraintID,
     Constraint,
     DecisionVariable,
     Equality,
@@ -80,8 +81,8 @@ class OMMXInstanceBuilder:
 
         return self.as_ommx_function(objective)
 
-    def constraints(self) -> dict[int, Constraint]:
-        constraints: dict[int, Constraint] = {}
+    def constraints(self) -> dict[ConstraintID, Constraint]:
+        constraints: dict[ConstraintID, Constraint] = {}
 
         for constr in self.model.constrs:
             id = constr.idx
@@ -114,7 +115,7 @@ class OMMXInstanceBuilder:
                     f"name: {constr.name}, sense: {lin_expr.sense}"
                 )
 
-            constraints[id] = constraint
+            constraints[ConstraintID(id)] = constraint
 
         return constraints
 

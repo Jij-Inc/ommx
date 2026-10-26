@@ -80,6 +80,7 @@ N = len(v)  # Total number of items
 Based on this mathematical model and data, the code for describing the problem instance using the OMMX Python SDK is as follows:
 
 ```{code-cell} ipython3
+from ommx import ConstraintID
 from ommx import DecisionVariable, Instance, Sense
 
 # Define decision variables
@@ -110,7 +111,7 @@ instance = Instance.from_components(
     # Register the objective function
     objective=objective,
     # Register all constraints (keys are constraint IDs)
-    constraints={0: constraint},
+    constraints={ConstraintID(0): constraint},
     # Specify that it is a maximization problem
     sense=Sense.Maximize,
 )
@@ -181,7 +182,7 @@ assert np.isclose(solution.objective, expected)
 The `constraints_df()` method returns a `pandas.DataFrame` object that includes details about each constraint's equality or inequality, its left-hand-side value (`"value"`), name, and more:
 
 ```{code-cell} ipython3
-solution.constraints_df()
+solution.constraints_df(kind="regular")
 ```
 
 Specifically, the `"value"` is helpful for understanding how much slack remains in each constraint. In this case, item 0 has weight $w_0 = 11$, item 3 has weight $w_3 = 35$, and the knapsack's capacity $W$ is $47$. Therefore, for the weight constraint 

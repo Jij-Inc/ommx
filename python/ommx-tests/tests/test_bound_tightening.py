@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from ommx import Bound, DecisionVariable, Function, Instance, Sense
 import pytest
 
@@ -9,7 +10,7 @@ def bound_tightening_instance() -> Instance:
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[x, z],
-        constraints={0: x - 3 * z <= 0, 1: -x - 2 * z <= 0},
+        constraints={ConstraintID(0): x - 3 * z <= 0, ConstraintID(1): -x - 2 * z <= 0},
     )
 
 
@@ -18,7 +19,7 @@ def test_tighten_bounds_simultaneously_once_returns_changed_domains() -> None:
     assert instance.tighten_bounds_simultaneously_once(atol=0.125) == {0: Bound(-2, 3)}
     assert instance.get_decision_variable_by_id(0).bound == Bound(-2, 3)
     assert instance.tighten_bounds_simultaneously_once(atol=0.125) == {}
-    assert set(instance.constraints) == {0, 1}
+    assert set(instance.constraints) == {ConstraintID(0), ConstraintID(1)}
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -43,7 +44,7 @@ def test_candidate_aggregation_is_independent_of_constraint_ids(
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[x],
-        constraints=dict(enumerate(rows)),
+        constraints={ConstraintID(i): row for i, row in enumerate(rows)},
     )
     if expected is None:
         before = instance.to_v2_bytes()
@@ -67,10 +68,12 @@ def test_default_term_limit_and_explicit_override(
         sense=Sense.Minimize,
         objective=0,
         decision_variables=variables,
-        constraints={0: sum(variables, Function(0)) <= 2},
+        constraints={ConstraintID(0): sum(variables, Function(0)) <= 2},
     )
     if selected:
-        changed = instance.tighten_bounds_simultaneously_once_using_constraints({0})
+        changed = instance.tighten_bounds_simultaneously_once_using_constraints(
+            {ConstraintID(0)}
+        )
     else:
         changed = instance.tighten_bounds_simultaneously_once()
     assert changed == (
@@ -79,7 +82,7 @@ def test_default_term_limit_and_explicit_override(
     if num_terms == 33:
         if selected:
             changed = instance.tighten_bounds_simultaneously_once_using_constraints(
-                {0}, max_terms=33
+                {ConstraintID(0)}, max_terms=33
             )
         else:
             changed = instance.tighten_bounds_simultaneously_once(max_terms=33)
@@ -93,13 +96,13 @@ def test_zero_and_negative_term_limits(selected: bool) -> None:
     if selected:
         assert (
             instance.tighten_bounds_simultaneously_once_using_constraints(
-                {0, 1}, max_terms=0
+                {ConstraintID(0), ConstraintID(1)}, max_terms=0
             )
             == {}
         )
         with pytest.raises(OverflowError):
             instance.tighten_bounds_simultaneously_once_using_constraints(
-                {0, 1}, max_terms=-1
+                {ConstraintID(0), ConstraintID(1)}, max_terms=-1
             )
     else:
         assert instance.tighten_bounds_simultaneously_once(max_terms=0) == {}
@@ -115,11 +118,11 @@ def test_unbounded_target_can_be_tightened_from_a_scaled_row(selected: bool) -> 
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[x],
-        constraints={0: 2 * x <= 6},
+        constraints={ConstraintID(0): 2 * x <= 6},
     )
     if selected:
         changed = instance.tighten_bounds_simultaneously_once_using_constraints(
-            {0}, atol=0.125
+            {ConstraintID(0)}, atol=0.125
         )
     else:
         changed = instance.tighten_bounds_simultaneously_once(atol=0.125)
@@ -137,7 +140,7 @@ def test_nonfinite_candidates_do_not_discard_a_finite_candidate_in_the_same_row(
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[x, y],
-        constraints={0: x + y == 6},
+        constraints={ConstraintID(0): x + y == 6},
     )
     assert instance.tighten_bounds_simultaneously_once(atol=0.125) == {
         0: Bound(float("-inf"), 5.125)
@@ -152,7 +155,7 @@ def test_cancellation_uses_algebraic_bound_without_point_boundary_search() -> No
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[x, y],
-        constraints={0: x - y + 1e16 <= 0},
+        constraints={ConstraintID(0): x - y + 1e16 <= 0},
     )
     assert instance.tighten_bounds_simultaneously_once(atol=0.125) == {
         0: Bound(float("-inf"), 0)
@@ -176,7 +179,7 @@ def test_binary_rounding_with_row_tolerance(
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[x],
-        constraints={0: coefficient * x + constant <= 0},
+        constraints={ConstraintID(0): coefficient * x + constant <= 0},
     )
     instance.tighten_bounds_simultaneously_once(atol=0.125)
     assert instance.get_decision_variable_by_id(0).bound == expected
@@ -196,20 +199,20 @@ def test_selected_constraints_determine_bound_updates(
 ) -> None:
     instance = bound_tightening_instance()
     changed = instance.tighten_bounds_simultaneously_once_using_constraints(
-        constraint_ids, atol=0.125
+        {ConstraintID(i) for i in constraint_ids}, atol=0.125
     )
     assert changed == expected
     assert instance.get_decision_variable_by_id(0).bound == expected.get(
         0, Bound(-100, 100)
     )
-    assert set(instance.constraints) == {0, 1}
+    assert set(instance.constraints) == {ConstraintID(0), ConstraintID(1)}
 
 
 def test_explicit_all_constraints_matches_all_constraints_api() -> None:
     selected = bound_tightening_instance()
     all_constraints = bound_tightening_instance()
     assert selected.tighten_bounds_simultaneously_once_using_constraints(
-        {0, 1}, atol=0.125
+        {ConstraintID(0), ConstraintID(1)}, atol=0.125
     ) == all_constraints.tighten_bounds_simultaneously_once(atol=0.125)
     assert selected.to_v2_bytes() == all_constraints.to_v2_bytes()
 
@@ -217,10 +220,12 @@ def test_explicit_all_constraints_matches_all_constraints_api() -> None:
 @pytest.mark.parametrize("invalid", [1, 999])
 def test_unknown_and_removed_selected_constraints_are_atomic(invalid: int) -> None:
     instance = bound_tightening_instance()
-    instance.relax_constraint(1, "test")
+    instance.relax_constraint(ConstraintID(1), "test")
     before = instance.to_v2_bytes()
     with pytest.raises(RuntimeError, match="is not active"):
-        instance.tighten_bounds_simultaneously_once_using_constraints({0, invalid})
+        instance.tighten_bounds_simultaneously_once_using_constraints(
+            {ConstraintID(0), ConstraintID(invalid)}
+        )
     assert instance.to_v2_bytes() == before
 
 
@@ -230,7 +235,7 @@ def test_tighten_bounds_simultaneously_once_is_atomic() -> None:
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[x],
-        constraints={0: x <= 2, 1: x >= 20},
+        constraints={ConstraintID(0): x <= 2, ConstraintID(1): x >= 20},
     )
     before = instance.to_v2_bytes()
     with pytest.raises(RuntimeError, match="infeasible"):

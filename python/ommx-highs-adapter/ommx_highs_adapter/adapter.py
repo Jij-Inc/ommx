@@ -11,6 +11,7 @@ from highspy.highs import highs_linear_expression, highs_var
 from opentelemetry import trace
 
 from ommx import (
+    ConstraintID,
     Equality,
     Function,
     Instance,
@@ -562,6 +563,7 @@ class OMMXHighsAdapter(SolverAdapter):
 
     Examples
     --------
+    >>> from ommx import ConstraintID
     >>> from ommx_highs_adapter import OMMXHighsAdapter
     >>> from ommx import DecisionVariable, Instance, Sense
     >>>
@@ -571,7 +573,7 @@ class OMMXHighsAdapter(SolverAdapter):
     >>> instance = Instance.from_components(
     ...     decision_variables=[x, y],
     ...     objective=2*x + 3*y,
-    ...     constraints={0: x + y <= 5},
+    ...     constraints={ConstraintID(0): x + y <= 5},
     ...     sense=Sense.Maximize,
     ... )
     >>>
@@ -681,7 +683,7 @@ class OMMXHighsAdapter(SolverAdapter):
             The solution containing:
             - Variable values in solution.state.entries
             - Objective value in solution.objective
-            - Constraint evaluations in solution.constraints
+            - Constraint evaluations in solution.get_constraints(kind="regular")
             - Optimality status in solution.optimality
             - Dual variables when the active and output objectives coincide
 
@@ -700,6 +702,7 @@ class OMMXHighsAdapter(SolverAdapter):
         --------
         **Knapsack Problem**
 
+        >>> from ommx import ConstraintID
         >>> from ommx import Instance, DecisionVariable, Solution
         >>> from ommx_highs_adapter import OMMXHighsAdapter
         >>>
@@ -709,7 +712,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(p[i] * x[i] for i in range(6)),
-        ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
+        ...     constraints={ConstraintID(0): sum(w[i] * x[i] for i in range(6)) <= 47},
         ...     sense=Sense.Maximize,
         ... )
         >>>
@@ -728,7 +731,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=[x],
         ...     objective=x,
-        ...     constraints={0: x >= 4},  # Impossible: x ≤ 3 and x ≥ 4
+        ...     constraints={ConstraintID(0): x >= 4},  # Impossible: x ≤ 3 and x ≥ 4
         ...     sense=Sense.Maximize,
         ... )
         >>> OMMXHighsAdapter.solve(instance)  # doctest: +IGNORE_EXCEPTION_DETAIL
@@ -896,13 +899,8 @@ class OMMXHighsAdapter(SolverAdapter):
             if self.instance.output_objective is None:
                 solution_info = data.getSolution()
                 row_dual = solution_info.row_dual
-                row_dual_len = len(row_dual)
-
-                for constraint_id in solution.constraint_ids:
-                    if constraint_id < row_dual_len:
-                        solution.set_dual_variable(
-                            constraint_id, row_dual[constraint_id]
-                        )
+                for constraint_id, row_index in self._constraint_rows.items():
+                    solution.set_dual_variable(constraint_id, row_dual[row_index])
 
             return solution
 
@@ -1060,6 +1058,7 @@ class OMMXHighsAdapter(SolverAdapter):
         self.model.changeObjectiveSense(sense)
 
     def _set_constraints(self):
+        self._constraint_rows: dict[ConstraintID, int] = {}
         for cid, constr in self.instance.constraints.items():
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
@@ -1077,11 +1076,14 @@ class OMMXHighsAdapter(SolverAdapter):
                         )
                     continue
             else:
+                row_index = self.model.getNumRow()
                 const_expr = highs_linear_expression(const_expr)
                 if constr.equality == Equality.EqualToZero:
                     self.model.addConstr(const_expr == 0, str(cid))
+                    self._constraint_rows[cid] = row_index
                 elif constr.equality == Equality.LessThanOrEqualToZero:
                     self.model.addConstr(const_expr <= 0, str(cid))
+                    self._constraint_rows[cid] = row_index
                 else:
                     raise OMMXHighsAdapterError(
                         f"Unsupported constraint equality kind: {constr.equality}"

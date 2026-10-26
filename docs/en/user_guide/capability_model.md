@@ -63,6 +63,7 @@ Applicability and solver-input construction are separate boundaries. Membership 
 {attr}`Instance.active_special_constraint_kinds <ommx.Instance.active_special_constraint_kinds>` returns the set of `SpecialConstraintKind` values corresponding to the **active special constraints the instance currently holds**. When the instance uses only regular constraints the set is empty.
 
 ```{code-cell} ipython3
+from ommx import OneHotConstraintID
 from ommx import (
     DecisionVariable,
     Instance,
@@ -77,7 +78,7 @@ instance = Instance.from_components(
     decision_variables=xs,
     objective=sum(xs),
     constraints={},
-    one_hot_constraints={0: OneHotConstraint(variables=xs)},
+    one_hot_constraints={OneHotConstraintID(0): OneHotConstraint(variables=xs)},
     sense=Sense.Maximize,
 )
 assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
@@ -112,14 +113,15 @@ The OneHot constraint has been removed and a regular equality $x_0 + x_1 + x_2 -
 {meth}`Instance.convert_one_hot_to_constraint(one_hot_id) <ommx.Instance.convert_one_hot_to_constraint>` rewrites a OneHot constraint as the mathematically equivalent linear equality $x_1 + \ldots + x_n - 1 = 0$.
 
 ```{code-cell} ipython3
+from ommx import OneHotConstraintID
 instance2 = Instance.from_components(
     decision_variables=xs,
     objective=sum(xs),
     constraints={},
-    one_hot_constraints={1: OneHotConstraint(variables=xs)},
+    one_hot_constraints={OneHotConstraintID(1): OneHotConstraint(variables=xs)},
     sense=Sense.Maximize,
 )
-new_id = instance2.convert_one_hot_to_constraint(1)
+new_id = instance2.convert_one_hot_to_constraint(OneHotConstraintID(1))
 assert isinstance(new_id, int)
 assert set(instance2.constraints.keys()) == {new_id}
 assert instance2.one_hot_constraints == {}
@@ -136,6 +138,7 @@ Use {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` to convert every 
 3. Finally, the cardinality constraint $\sum_i y_i - 1 \leq 0$ is added.
 
 ```{code-cell} ipython3
+from ommx import Sos1ConstraintID
 from ommx import Sos1Constraint
 
 ys = [DecisionVariable.binary(i, name="y", subscripts=[i]) for i in range(3)]
@@ -143,10 +146,10 @@ instance3 = Instance.from_components(
     decision_variables=ys,
     objective=sum(ys),
     constraints={},
-    sos1_constraints={1: Sos1Constraint(variables=ys)},
+    sos1_constraints={Sos1ConstraintID(1): Sos1Constraint(variables=ys)},
     sense=Sense.Maximize,
 )
-new_ids = instance3.convert_sos1_to_constraints(1)
+new_ids = instance3.convert_sos1_to_constraints(Sos1ConstraintID(1))
 # An all-binary SOS1 collapses to a single cardinality constraint sum(x_i) - 1 <= 0
 assert len(new_ids) == 1
 assert set(instance3.constraints.keys()) == set(new_ids)

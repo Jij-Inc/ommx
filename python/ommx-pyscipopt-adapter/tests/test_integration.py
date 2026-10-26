@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 import pytest
 
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -59,7 +60,10 @@ def test_integration_milp():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 - x2,
-        constraints={0: 3 * x1 - x2 <= 6, 1: -x1 + 3 * x2 <= 6},
+        constraints={
+            ConstraintID(0): 3 * x1 - x2 <= 6,
+            ConstraintID(1): -x1 + 3 * x2 <= 6,
+        },
         sense=Sense.Minimize,
     )
 
@@ -133,7 +137,7 @@ def test_integration_constant_objective():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=0,
-        constraints={0: x1 + x2 - 5 == 0},
+        constraints={ConstraintID(0): x1 + x2 - 5 == 0},
         sense=Sense.Minimize,
     )
 
@@ -167,7 +171,7 @@ def test_integration_quadratic_objective():
             columns=[1, 2],
             values=[1, 1],
         ),
-        constraints={0: x1 + x2 == 4},
+        constraints={ConstraintID(0): x1 + x2 == 4},
     )
 
     adapter = OMMXPySCIPOptAdapter(instance)
@@ -196,7 +200,7 @@ def test_integration_quadratic_constraint():
         decision_variables=[x1, x2],
         objective=-x1 - x2,
         constraints={
-            0: Constraint(
+            ConstraintID(0): Constraint(
                 function=Quadratic(
                     columns=[1, 2],
                     rows=[1, 2],
@@ -235,9 +239,9 @@ def test_integration_feasible_constant_constraint():
         decision_variables=[x1, x2],
         objective=-x1 - x2,
         constraints={
-            0: 3 * x1 - x2 <= 6,
-            1: -x1 + 3 * x2 <= 6,
-            2: Constraint(
+            ConstraintID(0): 3 * x1 - x2 <= 6,
+            ConstraintID(1): -x1 + 3 * x2 <= 6,
+            ConstraintID(2): Constraint(
                 function=-1,
                 equality=Equality.LessThanOrEqualToZero,
             ),
@@ -282,7 +286,7 @@ def test_integration_timelimit():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(v[i] * x[i] for i in range(n)),
-        constraints={0: constraint},
+        constraints={ConstraintID(0): constraint},
         sense=Sense.Maximize,
     )
     adapter = OMMXPySCIPOptAdapter(instance)
@@ -303,7 +307,7 @@ def test_partial_evaluate():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
-        constraints={0: x[0] + x[1] + x[2] <= 1},  # one-hot constraint
+        constraints={ConstraintID(0): x[0] + x[1] + x[2] <= 1},  # one-hot constraint
         sense=Sense.Minimize,
     )
     assert instance.used_decision_variables == x
@@ -328,12 +332,15 @@ def test_relax_constraint():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={0: x[0] + 2 * x[1] <= 1, 1: x[1] + x[2] <= 1},
+        constraints={
+            ConstraintID(0): x[0] + 2 * x[1] <= 1,
+            ConstraintID(1): x[1] + x[2] <= 1,
+        },
         sense=Sense.Minimize,
     )
 
     assert instance.used_decision_variables == x
-    instance.relax_constraint(1, "relax")
+    instance.relax_constraint(ConstraintID(1), "relax")
     # id for x[2] is listed as irrelevant
     assert instance.irrelevant_decision_variable_ids() == {x[2].id}
 
@@ -348,7 +355,7 @@ def test_infeasible_problem():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={0: x >= 4},
+        constraints={ConstraintID(0): x >= 4},
         sense=Sense.Maximize,
     )
     adapter = OMMXPySCIPOptAdapter(instance)

@@ -1,4 +1,10 @@
 from __future__ import annotations
+from ommx import (
+    ConstraintID,
+    IndicatorConstraintID,
+    OneHotConstraintID,
+    Sos1ConstraintID,
+)
 
 import pytest
 
@@ -169,7 +175,7 @@ def test_direct_rejects_regular_constraints_without_mutation() -> None:
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={7: x <= 0},
+        constraints={ConstraintID(7): x <= 0},
         sense=Sense.Minimize,
     )
 
@@ -180,7 +186,7 @@ def test_direct_rejects_regular_constraints_without_mutation() -> None:
         InstanceClassMismatch.RegularConstraintRelationNotAllowed,
     )
     assert mismatch.relation == Equality.LessThanOrEqualToZero
-    assert mismatch.constraint_ids == {7}
+    assert mismatch.constraint_ids == {ConstraintID(7)}
     assert mismatch.allowed_relations == set()
 
 
@@ -192,14 +198,16 @@ def test_direct_rejects_all_special_constraint_families_without_mutation() -> No
         objective=x + y,
         constraints={},
         indicator_constraints={
-            10: IndicatorConstraint(
+            IndicatorConstraintID(10): IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={20: OneHotConstraint(variables=[x, y])},
-        sos1_constraints={30: Sos1Constraint(variables=[x, y])},
+        one_hot_constraints={
+            OneHotConstraintID(20): OneHotConstraint(variables=[x, y])
+        },
+        sos1_constraints={Sos1ConstraintID(30): Sos1Constraint(variables=[x, y])},
         sense=Sense.Minimize,
     )
 
@@ -208,13 +216,13 @@ def test_direct_rejects_all_special_constraint_families_without_mutation() -> No
 
     indicator = by_type[InstanceClassMismatch.IndicatorConstraintsNotAllowed]
     assert isinstance(indicator, InstanceClassMismatch.IndicatorConstraintsNotAllowed)
-    assert indicator.constraint_ids == {10}
+    assert indicator.constraint_ids == {IndicatorConstraintID(10)}
     one_hot = by_type[InstanceClassMismatch.OneHotConstraintsNotAllowed]
     assert isinstance(one_hot, InstanceClassMismatch.OneHotConstraintsNotAllowed)
-    assert one_hot.constraint_ids == {20}
+    assert one_hot.constraint_ids == {OneHotConstraintID(20)}
     sos1 = by_type[InstanceClassMismatch.Sos1ConstraintsNotAllowed]
     assert isinstance(sos1, InstanceClassMismatch.Sos1ConstraintsNotAllowed)
-    assert sos1.constraint_ids == {30}
+    assert sos1.constraint_ids == {Sos1ConstraintID(30)}
 
 
 def test_recommended_policy_keeps_fixed_penalty_caller_owned() -> None:
@@ -222,7 +230,7 @@ def test_recommended_policy_keeps_fixed_penalty_caller_owned() -> None:
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={7: x == 0},
+        constraints={ConstraintID(7): x == 0},
         sense=Sense.Minimize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
@@ -248,16 +256,18 @@ def test_recommended_preparation_reaches_the_openjij_input_class() -> None:
     instance = Instance.from_components(
         decision_variables=[integer, indicator, x, y],
         objective=integer + indicator + x + y,
-        constraints={40: integer <= 50},
+        constraints={ConstraintID(40): integer <= 50},
         indicator_constraints={
-            10: IndicatorConstraint(
+            IndicatorConstraintID(10): IndicatorConstraint(
                 indicator_variable=indicator,
                 function=x - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={20: OneHotConstraint(variables=[indicator, x])},
-        sos1_constraints={30: Sos1Constraint(variables=[x, y])},
+        one_hot_constraints={
+            OneHotConstraintID(20): OneHotConstraint(variables=[indicator, x])
+        },
+        sos1_constraints={Sos1ConstraintID(30): Sos1Constraint(variables=[x, y])},
         sense=Sense.Maximize,
     )
     alias = instance

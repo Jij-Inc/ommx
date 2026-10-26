@@ -1,6 +1,8 @@
 """Test SOS1 functionality with valid constraints."""
 
-from ommx import DecisionVariable, Instance, Sense, Sos1Constraint
+from ommx import ConstraintID, Sos1ConstraintID
+
+from ommx import Function, DecisionVariable, Instance, Sense, Sos1Constraint
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
@@ -14,7 +16,7 @@ def test_sos1_constraint_functionality():
 
     # Create a constraint that the SOS1 will reference
     # This constraint ensures the problem has a meaningful solution space
-    dummy_constraint = sum(x) <= 2  # type: ignore
+    dummy_constraint = Function(sum(x)) <= 2
 
     # Create additional constraints for the SOS1 big-M
     bigm1 = x[0] <= 1
@@ -26,8 +28,12 @@ def test_sos1_constraint_functionality():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={1: dummy_constraint, 2: bigm1, 3: bigm2},  # type: ignore
-        sos1_constraints={0: sos1},
+        constraints={
+            ConstraintID(1): dummy_constraint,
+            ConstraintID(2): bigm1,
+            ConstraintID(3): bigm2,
+        },  # type: ignore
+        sos1_constraints={Sos1ConstraintID(0): sos1},
         sense=Sense.Minimize,
     )
 
@@ -64,8 +70,8 @@ def test_sos1_constraint_naming():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={10: constraint1},  # type: ignore
-        sos1_constraints={42: sos1},
+        constraints={ConstraintID(10): constraint1},  # type: ignore
+        sos1_constraints={Sos1ConstraintID(42): sos1},
         sense=Sense.Minimize,
     )
 
@@ -78,7 +84,7 @@ def test_sos1_constraint_naming():
 
     assert len(sos1_names) == 1
     # The name should include the SOS1 constraint ID
-    expected_name = "sos1_42"
+    expected_name = f"sos1_{Sos1ConstraintID(42)}"
     assert sos1_names[0] == expected_name, (
         f"Expected {expected_name}, got {sos1_names[0]}"
     )
@@ -100,8 +106,8 @@ def test_sos1_constraint_naming_no_bigm():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={5: constraint1},  # type: ignore
-        sos1_constraints={7: sos1},
+        constraints={ConstraintID(5): constraint1},  # type: ignore
+        sos1_constraints={Sos1ConstraintID(7): sos1},
         sense=Sense.Minimize,
     )
 
@@ -113,7 +119,7 @@ def test_sos1_constraint_naming_no_bigm():
     sos1_names = [name for name in constraint_names if name.startswith("sos1_")]
 
     assert len(sos1_names) == 1
-    expected_name = "sos1_7"
+    expected_name = f"sos1_{Sos1ConstraintID(7)}"
     assert sos1_names[0] == expected_name, (
         f"Expected {expected_name}, got {sos1_names[0]}"
     )

@@ -43,6 +43,7 @@ In this tutorial, we solve a simple knapsack problem twice under different condi
 First, create the source data for a knapsack problem and a {py:class}`~ommx.ParametricInstance` whose capacity is a parameter. Like {py:class}`~ommx.Instance`, an OMMX {py:class}`~ommx.ParametricInstance` can define an objective function and constraints, but it can place parameters where constants would otherwise appear. This is useful when you need to prepare multiple models that differ only in constants.
 
 ```{code-cell} ipython3
+from ommx import ConstraintID
 from ommx import DecisionVariable, Instance, Parameter, ParametricInstance, Sense
 
 v = [10, 13, 18, 31, 7, 15]  # value of each item
@@ -65,7 +66,7 @@ pi = ParametricInstance.from_components(
     parameters=[capacity],
     objective=sum(v[i] * x[i] for i in range(N)),
     constraints={
-        0: (sum(w[i] * x[i] for i in range(N)) <= capacity).set_name("weight limit")
+        ConstraintID(0): (sum(w[i] * x[i] for i in range(N)) <= capacity).set_name("weight limit")
     },
     sense=Sense.Maximize,
 )

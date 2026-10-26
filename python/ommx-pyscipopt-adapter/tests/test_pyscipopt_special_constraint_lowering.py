@@ -1,3 +1,4 @@
+from ommx import IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID
 import copy
 
 import pytest
@@ -23,9 +24,11 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
         decision_variables=[indicator, *x, value],
         objective=value,
         constraints={},
-        indicator_constraints={30: (value <= 1).with_indicator(indicator)},
-        one_hot_constraints={10: OneHotConstraint(variables=x)},
-        sos1_constraints={20: Sos1Constraint(variables=x)},
+        indicator_constraints={
+            IndicatorConstraintID(30): (value <= 1).with_indicator(indicator)
+        },
+        one_hot_constraints={OneHotConstraintID(10): OneHotConstraint(variables=x)},
+        sos1_constraints={Sos1ConstraintID(20): Sos1Constraint(variables=x)},
         sense=Sense.Maximize,
     )
     before = instance.to_v2_bytes()
@@ -45,14 +48,14 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
         OMMXPySCIPOptAdapter.recommended_preparation_policy(),
     )
 
-    assert set(instance.one_hot_constraints) == {10}
+    assert set(instance.one_hot_constraints) == {OneHotConstraintID(10)}
     assert prepared.active_special_constraint_kinds == {
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.Sos1,
     }
     assert prepared.one_hot_constraints == {}
-    assert set(prepared.indicator_constraints) == {30}
-    assert set(prepared.sos1_constraints) == {20}
+    assert set(prepared.indicator_constraints) == {IndicatorConstraintID(30)}
+    assert set(prepared.sos1_constraints) == {Sos1ConstraintID(20)}
 
     lowered = [
         constraint
@@ -61,7 +64,7 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
         and constraint.provenance[-1].kind == ProvenanceKind.OneHotConstraint
     ]
     assert len(lowered) == 1
-    assert lowered[0].provenance[-1].original_id == 10
+    assert lowered[0].provenance[-1].original_id == OneHotConstraintID(10)
 
     assert input_class.contains(prepared)
     report = OMMXPySCIPOptAdapter.check_applicability(prepared)
@@ -70,5 +73,5 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
     assert adapter.instance is prepared
 
     constraint_names = {constraint.name for constraint in adapter.model.getConss()}
-    assert "ind_30" in constraint_names
-    assert "sos1_20" in constraint_names
+    assert f"ind_{IndicatorConstraintID(30)}" in constraint_names
+    assert f"sos1_{Sos1ConstraintID(20)}" in constraint_names

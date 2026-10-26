@@ -590,6 +590,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         .. doctest::
 
+            >>> from ommx import ConstraintID
             >>> from ommx import Instance, DecisionVariable
             >>> from ommx import Solution
             >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -600,7 +601,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
+            ...     constraints={ConstraintID(0): sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Sense.Maximize,
             ... )
 
@@ -621,7 +622,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             >>> solution.objective
             42.0
-            >>> solution.get_constraint_value(0)
+            >>> solution.get_constraint_value(ConstraintID(0))
             -1.0
 
         Infeasible Problem
@@ -635,7 +636,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints={0: x >= 4},
+                ...     constraints={ConstraintID(0): x >= 4},
                 ...     sense=Sense.Maximize,
                 ... )
 
@@ -728,6 +729,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         .. doctest::
 
+            >>> from ommx import ConstraintID
             >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
             >>> from ommx import Instance, DecisionVariable
 
@@ -737,7 +739,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
+            ...     constraints={ConstraintID(0): sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Sense.Maximize,
             ... )
 

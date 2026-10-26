@@ -70,7 +70,7 @@ infeasible.decision_variables_df()
 決定変数のDataFrameでは、値の種類 `kind`・下限 `lower`・上限 `upper` に加えて、割り当てた値 `value` を確認できます。制約のDataFrameでは、式を評価した `value` と実行可能性を確認できます。
 
 ```{code-cell} ipython3
-infeasible.constraints_df()
+infeasible.constraints_df(kind="regular")
 ```
 
 通常制約では、この値は制約の左辺 $f(x)$ の値です。等式なら0、不等式なら0以下であることが条件なので、`value` が常に違反量を表すわけではありません。Indicator・OneHot・SOS1の結果は `constraints_df(kind=...)` で選びます。各種類の意味と評価方法は[特殊制約](./special_constraints.md)を参照してください。
@@ -91,3 +91,38 @@ infeasible.constraints_df()
 現在の問題で課す制約をactive、そこから外して評価のために保持する制約をremovedと呼びます。removedな制約を含む {attr}`~ommx.Solution.feasible` と、activeな制約だけを使う {attr}`~ommx.Solution.feasible_relaxed`、および出力目的関数との関係は[変換後の問題とRemoved constraints](./removed_constraints.md)で説明します。
 
 複数の候補を同じ規則で評価する場合は[SampleSet](./sample_set.md)を使います。「得られた候補の中で最良」であることも、問題全体の最適性とは別です。
+
+## pandasを使わずに制約を取得する
+
+`Solution.get_constraints(kind=...)` と `SampleSet.get_constraints(kind=...)`
+は、結果のスナップショットを辞書として返します。これらの結果オブジェクトでは、
+`get_constraints` と `constraints_df` のどちらもキーワード引数 `kind` が必須です。
+
+```{code-cell} ipython3
+from ommx import ConstraintID
+
+rows = solution.get_constraints(kind="regular")
+rows[ConstraintID(0)].violation()
+```
+
+辞書のキーは制約の種類を保持します。
+
+| `kind` | IDの型 | Solutionの値 | SampleSetの値 |
+| --- | --- | --- | --- |
+| `"regular"` | `ConstraintID` | `EvaluatedConstraint` | `SampledConstraint` |
+| `"indicator"` | `IndicatorConstraintID` | `EvaluatedIndicatorConstraint` | `SampledIndicatorConstraint` |
+| `"one_hot"` | `OneHotConstraintID` | `EvaluatedOneHotConstraint` | `SampledOneHotConstraint` |
+| `"sos1"` | `Sos1ConstraintID` | `EvaluatedSos1Constraint` | `SampledSos1Constraint` |
+
+結果には有効な制約と保持されている削除済み制約の両方が含まれます。各行からラベル、
+`provenance`、`removed_reason`、`removed_reason_parameters` を取得できます。
+SampleSetの行は、サンプルIDをキーにした `violations` と `feasible(atol=...)` を
+提供します。返された辞書やスナップショットを変更しても、元の結果は変わりません。
+
+DataFrameのインデックスや付随するメタデータ表も同じ型付きIDを使います。
+`ConstraintID(1)` と `Sos1ConstraintID(1)` は別のキーであり、どちらも `1` とは
+等しくありません。制約の取得・更新APIは、整数や別種類のIDを拒否します。
+`from_components` で指定するIDは明示的に構築するか、Attached制約の
+`constraint_id` プロパティから取得したIDを使います。
+IDには `int()` や整数インデックスへの変換機能はありません。
+決定変数IDとサンプルIDは引き続き整数です。

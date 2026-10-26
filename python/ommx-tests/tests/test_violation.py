@@ -1,5 +1,12 @@
 """Tests for constraint violation calculation methods."""
 
+from ommx import (
+    ConstraintID,
+    IndicatorConstraintID,
+    OneHotConstraintID,
+    Sos1ConstraintID,
+)
+
 from typing import Literal
 
 import pytest
@@ -25,24 +32,28 @@ def test_explicit_feasibility_queries_preserve_evaluation_and_saved_conditions()
     instance = Instance.from_components(
         decision_variables=[x],
         objective=0,
-        constraints={1: constraint},
+        constraints={ConstraintID(1): constraint},
         sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: 0.0625}, atol=0.125)
     wire = solution.to_v2_bytes()
     for result in [solution, Solution.from_v2_bytes(wire)]:
         assert result.feasibility_atol == 0.125
-        assert not result.constraints[1].is_feasible(atol=0.03125)
-        assert result.constraints[1].is_feasible(atol=result.feasibility_atol)
+        assert not result.get_constraints(kind="regular")[ConstraintID(1)].is_feasible(
+            atol=0.03125
+        )
+        assert result.get_constraints(kind="regular")[ConstraintID(1)].is_feasible(
+            atol=result.feasibility_atol
+        )
         assert result.feasible
-        assert result.constraints_df().loc[1, "feasible"]
+        assert result.constraints_df(kind="regular").loc[ConstraintID(1), "feasible"]
         assert result.to_v2_bytes() == wire
 
     samples = instance.evaluate_samples({7: {0: 0.0625}, 8: {0: 0.25}}, atol=0.125)
     wire = samples.to_v2_bytes()
     for result in [samples, SampleSet.from_v2_bytes(wire)]:
         assert result.feasibility_atol == 0.125
-        sampled_constraint = result.constraints[0]
+        sampled_constraint = result.get_constraints(kind="regular")[ConstraintID(1)]
         assert sampled_constraint.feasible(atol=0.03125) == {7: False, 8: False}
         assert sampled_constraint.feasible(atol=result.feasibility_atol) == {
             7: True,
@@ -62,7 +73,7 @@ def test_v1_roundtrip_uses_default_feasibility_tolerance(atol, value, expected):
     instance = Instance.from_components(
         decision_variables=[x],
         objective=0,
-        constraints={0: x == 0},
+        constraints={ConstraintID(0): x == 0},
         sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: value}, atol=atol)
@@ -74,14 +85,16 @@ def test_v1_roundtrip_uses_default_feasibility_tolerance(atol, value, expected):
     restored_samples = SampleSet.from_v1_bytes(samples.to_v1_bytes())
     assert restored_samples.feasible == {7: expected, 8: True}
     assert restored_samples.feasible_relaxed == {7: expected, 8: True}
-    assert restored_samples.constraints[0].feasible(
+    assert restored_samples.get_constraints(kind="regular")[ConstraintID(0)].feasible(
         atol=restored_samples.feasibility_atol
     ) == {7: expected, 8: True}
     for result in [restored, restored_samples.get(7)]:
         assert result.feasibility_atol == 1e-6
         assert result.feasible is expected
         assert result.feasible_relaxed is expected
-        assert result.constraints[0].violation() == value
+        assert (
+            result.get_constraints(kind="regular")[ConstraintID(0)].violation() == value
+        )
 
     restored_v2 = Solution.from_v2_bytes(solution.to_v2_bytes())
     restored_samples_v2 = SampleSet.from_v2_bytes(samples.to_v2_bytes())
@@ -101,13 +114,13 @@ def test_evaluated_constraint_violation_equality():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={1: constraint},
+        constraints={ConstraintID(1): constraint},
         sense=Sense.Minimize,
     )
 
     # Evaluate at x=0, so constraint becomes 0 = 2.5, f(x) = -2.5
     solution = instance.evaluate({1: 0.0})
-    evaluated_constraint = solution.constraints[1]
+    evaluated_constraint = solution.get_constraints(kind="regular")[ConstraintID(1)]
 
     # For equality constraint f(x) = 0, violation = |f(x)| = |-2.5| = 2.5
     assert evaluated_constraint.violation() == pytest.approx(2.5)
@@ -123,13 +136,13 @@ def test_evaluated_constraint_violation_inequality_violated():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={1: constraint},
+        constraints={ConstraintID(1): constraint},
         sense=Sense.Minimize,
     )
 
     # Evaluate at x=3, so constraint becomes 3 <= 1.5, f(x) = 1.5
     solution = instance.evaluate({1: 3.0})
-    evaluated_constraint = solution.constraints[1]
+    evaluated_constraint = solution.get_constraints(kind="regular")[ConstraintID(1)]
 
     # For inequality constraint f(x) ≤ 0, violation = max(0, f(x)) = max(0, 1.5) = 1.5
     assert evaluated_constraint.violation() == pytest.approx(1.5)
@@ -145,13 +158,13 @@ def test_evaluated_constraint_violation_inequality_satisfied():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={1: constraint},
+        constraints={ConstraintID(1): constraint},
         sense=Sense.Minimize,
     )
 
     # Evaluate at x=2, so constraint becomes 2 <= 5, f(x) = -3
     solution = instance.evaluate({1: 2.0})
-    evaluated_constraint = solution.constraints[1]
+    evaluated_constraint = solution.get_constraints(kind="regular")[ConstraintID(1)]
 
     # For inequality constraint f(x) ≤ 0, violation = max(0, f(x)) = max(0, -3) = 0.0
     assert evaluated_constraint.violation() == pytest.approx(0.0)
@@ -165,8 +178,10 @@ def test_solution_total_violation():
         decision_variables=[x],
         objective=x,
         constraints={
-            0: x == 2.5,  # Equality: x = 2.5, evaluated at x=0 gives f(x) = -2.5
-            1: x <= 1.5,  # Inequality: x <= 1.5, evaluated at x=3 gives f(x) = 1.5
+            ConstraintID(0): x
+            == 2.5,  # Equality: x = 2.5, evaluated at x=0 gives f(x) = -2.5
+            ConstraintID(1): x
+            <= 1.5,  # Inequality: x <= 1.5, evaluated at x=3 gives f(x) = 1.5
         },
         sense=Sense.Minimize,
     )
@@ -188,8 +203,9 @@ def test_solution_total_violation_with_satisfied_constraints():
         decision_variables=[x],
         objective=x,
         constraints={
-            0: x == 2.0,  # Violated equality: x = 2.0, evaluated at x=5 gives |5-2| = 3
-            1: x
+            ConstraintID(0): x
+            == 2.0,  # Violated equality: x = 2.0, evaluated at x=5 gives |5-2| = 3
+            ConstraintID(1): x
             <= 10.0,  # Satisfied inequality: x <= 10, evaluated at x=5 gives max(0, 5-10) = 0
         },
         sense=Sense.Minimize,
@@ -229,19 +245,19 @@ def test_total_violation_indicator(active, equality, removed, value):
         decision_variables=[z, x],
         objective=0,
         constraints={},
-        indicator_constraints={0: constraint.with_indicator(z)},
+        indicator_constraints={IndicatorConstraintID(0): constraint.with_indicator(z)},
         sense=Sense.Minimize,
     )
     if removed:
-        instance.relax_indicator_constraint(0, "test relaxation")
+        instance.relax_indicator_constraint(IndicatorConstraintID(0), "test relaxation")
     solution = instance.evaluate({0: float(active), 1: value})
     violation = (abs(value) if equality else max(0, value)) if active else 0
-    assert solution.constraint_violation(0, kind="indicator") == pytest.approx(
+    assert solution.constraint_violation(IndicatorConstraintID(0)) == pytest.approx(
         violation
     )
     assert solution.total_violation() == pytest.approx(violation)
     assert solution.constraints_df(kind="indicator").loc[
-        0, "violation"
+        IndicatorConstraintID(0), "violation"
     ] == pytest.approx(violation)
 
 
@@ -263,7 +279,7 @@ def test_one_hot_violation(values, violation):
         decision_variables=xs,
         objective=0,
         constraints={},
-        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        one_hot_constraints={OneHotConstraintID(0): OneHotConstraint(variables=xs)},
         sense=Sense.Minimize,
     )
     state = dict(enumerate(values))
@@ -276,14 +292,14 @@ def test_one_hot_violation(values, violation):
         Solution.from_v2_bytes(solution.to_v2_bytes()),
         SampleSet.from_v2_bytes(samples.to_v2_bytes()).get(7),
     ]:
-        assert result.constraint_violation(0, kind="one_hot") == pytest.approx(
+        assert result.constraint_violation(OneHotConstraintID(0)) == pytest.approx(
             violation
         )
         assert result.total_violation() == pytest.approx(violation)
         frame = result.constraints_df(kind="one_hot")
-        assert frame.loc[0, "violation"] == pytest.approx(violation)
+        assert frame.loc[OneHotConstraintID(0), "violation"] == pytest.approx(violation)
         if violation == 0:
-            assert frame.loc[0, "feasible"]
+            assert frame.loc[OneHotConstraintID(0), "feasible"]
 
 
 @pytest.mark.parametrize(
@@ -305,7 +321,7 @@ def test_sos1_violation(values, violation):
         decision_variables=xs,
         objective=0,
         constraints={},
-        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        sos1_constraints={Sos1ConstraintID(0): Sos1Constraint(variables=xs)},
         sense=Sense.Minimize,
     )
     state = dict(enumerate(values))
@@ -317,12 +333,14 @@ def test_sos1_violation(values, violation):
         Solution.from_v2_bytes(solution.to_v2_bytes()),
         SampleSet.from_v2_bytes(samples.to_v2_bytes()).get(7),
     ]:
-        assert result.constraint_violation(0, kind="sos1") == pytest.approx(violation)
+        assert result.constraint_violation(Sos1ConstraintID(0)) == pytest.approx(
+            violation
+        )
         assert result.total_violation() == pytest.approx(violation)
         frame = result.constraints_df(kind="sos1")
-        assert frame.loc[0, "violation"] == pytest.approx(violation)
+        assert frame.loc[Sos1ConstraintID(0), "violation"] == pytest.approx(violation)
         if violation == 0:
-            assert frame.loc[0, "feasible"]
+            assert frame.loc[Sos1ConstraintID(0), "feasible"]
 
 
 def test_violation_uses_evaluated_discrete_values():
@@ -331,7 +349,7 @@ def test_violation_uses_evaluated_discrete_values():
         decision_variables=xs,
         objective=0,
         constraints={},
-        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        one_hot_constraints={OneHotConstraintID(0): OneHotConstraint(variables=xs)},
         sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: 0.125, 1: 0.875}, atol=0.125)
@@ -346,7 +364,7 @@ def test_zero_violation_implies_one_hot_feasibility_with_large_tolerance(atol):
         decision_variables=xs,
         objective=0,
         constraints={},
-        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        one_hot_constraints={OneHotConstraintID(0): OneHotConstraint(variables=xs)},
         sense=Sense.Minimize,
     )
     state = {0: 0, 1: 1, 2: 0}
@@ -367,15 +385,17 @@ def test_total_is_sum_of_individual_and_dataframe_violations():
     instance = Instance.from_components(
         decision_variables=xs,
         objective=0,
-        constraints={0: xs[0] == 3},
-        indicator_constraints={0: (xs[1] <= 0).with_indicator(xs[0])},
-        one_hot_constraints={0: OneHotConstraint(variables=xs)},
-        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        constraints={ConstraintID(0): xs[0] == 3},
+        indicator_constraints={
+            IndicatorConstraintID(0): (xs[1] <= 0).with_indicator(xs[0])
+        },
+        one_hot_constraints={OneHotConstraintID(0): OneHotConstraint(variables=xs)},
+        sos1_constraints={Sos1ConstraintID(0): Sos1Constraint(variables=xs)},
         sense=Sense.Minimize,
     )
-    instance.relax_constraint(0, "test relaxation")
-    one_hot_row = instance.convert_one_hot_to_constraint(0)
-    sos1_rows = instance.convert_sos1_to_constraints(0)
+    instance.relax_constraint(ConstraintID(0), "test relaxation")
+    one_hot_row = instance.convert_one_hot_to_constraint(OneHotConstraintID(0))
+    sos1_rows = instance.convert_sos1_to_constraints(Sos1ConstraintID(0))
     solution = instance.evaluate({0: 1, 1: 1, 2: 1})
     kinds: list[Literal["regular", "indicator", "one_hot", "sos1"]] = [
         "regular",
@@ -383,7 +403,13 @@ def test_total_is_sum_of_individual_and_dataframe_violations():
         "one_hot",
         "sos1",
     ]
-    assert [solution.constraint_violation(0, kind=kind) for kind in kinds] == [
+    id_types = [
+        ConstraintID,
+        IndicatorConstraintID,
+        OneHotConstraintID,
+        Sos1ConstraintID,
+    ]
+    assert [solution.constraint_violation(id_type(0)) for id_type in id_types] == [
         2,
         1,
         2,
@@ -397,10 +423,12 @@ def test_total_is_sum_of_individual_and_dataframe_violations():
         sum(solution.constraints_df(kind=kind)["violation"].sum() for kind in kinds)
         == 11
     )
-    assert solution.constraints[0].violation() == solution.constraint_violation(0)
-    for kind in kinds:
+    assert solution.get_constraints(kind="regular")[
+        ConstraintID(0)
+    ].violation() == solution.constraint_violation(ConstraintID(0))
+    for id_type in id_types:
         with pytest.raises(KeyError, match="42"):
-            solution.constraint_violation(42, kind=kind)
+            solution.constraint_violation(id_type(42))
     assert not hasattr(solution, "total_violation_l1")
     assert not hasattr(solution, "total_violation_l2")
 
@@ -411,15 +439,15 @@ def test_lowering_may_change_total_violation():
         decision_variables=xs,
         objective=0,
         constraints={},
-        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        one_hot_constraints={OneHotConstraintID(0): OneHotConstraint(variables=xs)},
         sense=Sense.Minimize,
     )
     state = {0: 0.5, 1: 0.5}
     assert instance.evaluate(state).total_violation() == 1
-    row = instance.convert_one_hot_to_constraint(0)
+    row = instance.convert_one_hot_to_constraint(OneHotConstraintID(0))
     lowered = instance.evaluate(state)
     assert lowered.constraint_violation(row) == 0
-    assert lowered.constraint_violation(0, kind="one_hot") == 1
+    assert lowered.constraint_violation(OneHotConstraintID(0)) == 1
     # Removed native constraints and generated regular constraints both contribute.
     assert instance.evaluate({0: 1, 1: 1}).total_violation() == 2
 
@@ -430,12 +458,12 @@ def test_zero_constraint_violation_does_not_validate_variable_bounds():
         decision_variables=[x],
         objective=0,
         constraints={},
-        sos1_constraints={0: Sos1Constraint(variables=[x])},
+        sos1_constraints={Sos1ConstraintID(0): Sos1Constraint(variables=[x])},
         sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: 10})
     assert solution.total_violation() == 0
-    assert solution.constraints_df(kind="sos1").loc[0, "feasible"]
+    assert solution.constraints_df(kind="sos1").loc[Sos1ConstraintID(0), "feasible"]
     assert not solution.feasible
 
 
@@ -445,7 +473,7 @@ def test_feasible_sos1_can_have_positive_violation_within_tolerance():
         decision_variables=xs,
         objective=0,
         constraints={},
-        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        sos1_constraints={Sos1ConstraintID(0): Sos1Constraint(variables=xs)},
         sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: 3, 1: 0.125}, atol=0.125)
@@ -463,11 +491,11 @@ def test_sos1_feasibility_uses_total_member_error_across_evaluation_paths(
         decision_variables=xs,
         objective=0,
         constraints={},
-        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        sos1_constraints={Sos1ConstraintID(0): Sos1Constraint(variables=xs)},
         sense=Sense.Minimize,
     )
     if lowered:
-        instance.convert_sos1_to_constraints(0)
+        instance.convert_sos1_to_constraints(Sos1ConstraintID(0))
     state = {0: 1, 1: 0.75 * atol, 2: 0.75 * atol}
     if lowered:
         # The generated selectors correspond to x0, x1, and x2 in order.
@@ -480,11 +508,13 @@ def test_sos1_feasibility_uses_total_member_error_across_evaluation_paths(
         Solution.from_v2_bytes(solution.to_v2_bytes()),
         SampleSet.from_v2_bytes(samples.to_v2_bytes()).get(7),
     ]:
-        violation = result.constraint_violation(0, kind="sos1")
+        violation = result.constraint_violation(Sos1ConstraintID(0))
         assert violation == pytest.approx(1.5 * atol)
-        regular_total = sum(c.violation() for c in result.constraints.values())
+        regular_total = sum(
+            c.violation() for c in result.get_constraints(kind="regular").values()
+        )
         assert result.total_violation() == pytest.approx(violation + regular_total)
-        row = result.constraints_df(kind="sos1").loc[0]
+        row = result.constraints_df(kind="sos1").loc[Sos1ConstraintID(0)]
         assert row["violation"] == violation
         assert not row["feasible"]
         assert not result.feasible
@@ -498,7 +528,7 @@ def test_partial_evaluation_cannot_discard_small_sos1_member_contributions(atol)
         decision_variables=xs,
         objective=0,
         constraints={},
-        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        sos1_constraints={Sos1ConstraintID(0): Sos1Constraint(variables=xs)},
         sense=Sense.Minimize,
     )
     fixed = {1: 0.75 * atol, 2: 0.75 * atol}
@@ -526,7 +556,7 @@ def test_constraint_thresholds_do_not_apply_to_total_violation():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=0,
-        constraints={0: x == 0, 1: x <= 0},
+        constraints={ConstraintID(0): x == 0, ConstraintID(1): x <= 0},
         sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: 0.000075}, atol=0.0001)
@@ -550,7 +580,7 @@ def test_sampleset_feasibility_and_best_sample_include_variable_domains(
         decision_variables=[variable],
         objective=variable,
         constraints={},
-        sos1_constraints={0: Sos1Constraint(variables=[variable])},
+        sos1_constraints={Sos1ConstraintID(0): Sos1Constraint(variables=[variable])},
         sense=Sense.Minimize,
     )
     samples = instance.evaluate_samples({0: {0: invalid}, 1: {0: valid}}, atol=atol)
@@ -573,10 +603,10 @@ def test_binary_canonicalization_precedes_constraint_violation():
         decision_variables=xs,
         objective=0,
         constraints={},
-        one_hot_constraints={0: OneHotConstraint(variables=xs)},
+        one_hot_constraints={OneHotConstraintID(0): OneHotConstraint(variables=xs)},
         sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: 1, 1: 0.000075, 2: 0.000075}, atol=0.0001)
     assert solution.state.entries == {0: 1, 1: 0, 2: 0}
-    assert solution.constraint_violation(0, kind="one_hot") == 0
+    assert solution.constraint_violation(OneHotConstraintID(0)) == 0
     assert solution.feasible

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ommx import ConstraintID, Sos1ConstraintID
 
 from typing import Literal
 
@@ -29,16 +30,18 @@ def mixed_formulation(
         objective=0,
         decision_variables=[binary_member, integer_member, selector],
         constraints={
-            100: integer_member - 3 * selector <= 0,
-            101: -integer_member - 2 * selector <= 0,
-            102: binary_member + selector - 1 <= 0,
+            ConstraintID(100): integer_member - 3 * selector <= 0,
+            ConstraintID(101): -integer_member - 2 * selector <= 0,
+            ConstraintID(102): binary_member + selector - 1 <= 0,
         },
     )
     request = Sos1BigMPromotionRequest(
         selector_claims={
-            102: {
+            ConstraintID(102): {
                 0: Sos1BigMSelectorClaim.reused(),
-                1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
+                1: Sos1BigMSelectorClaim.fresh(
+                    10, upper_link=ConstraintID(100), lower_link=ConstraintID(101)
+                ),
             }
         },
     )
@@ -56,13 +59,13 @@ def test_promotion_commits_link_tightening_with_promotion(mode: Mode) -> None:
 def test_strict_rejection_leaves_pending_tightening_unapplied() -> None:
     instance, valid = mixed_formulation(lower=-100, upper=100)
     before = instance.to_v2_bytes()
-    request = Sos1BigMPromotionRequest({**valid.selector_claims, 999: {}})
+    request = Sos1BigMPromotionRequest({**valid.selector_claims, ConstraintID(999): {}})
     with pytest.raises(Sos1BigMPromotionBatchRejectedError):
         instance.promote_sos1_big_m(request, mode="strict")
     assert instance.to_v2_bytes() == before
     report = instance.promote_sos1_big_m(request)
-    assert set(report.promoted) == {102}
-    assert set(report.rejections) == {999}
+    assert set(report.promoted) == {ConstraintID(102)}
+    assert set(report.rejections) == {ConstraintID(999)}
     assert instance.get_decision_variable_by_id(1).bound == Bound(-2, 3)
 
 
@@ -83,13 +86,19 @@ def test_scaled_links_tighten_continuous_bounds_mathematically(scale: float) -> 
         objective=member,
         decision_variables=[member, selector],
         constraints={
-            100: scale * member - (3 * scale) * selector <= 0,
-            101: -scale * member - (2 * scale) * selector <= 0,
-            102: selector - 1 <= 0,
+            ConstraintID(100): scale * member - (3 * scale) * selector <= 0,
+            ConstraintID(101): -scale * member - (2 * scale) * selector <= 0,
+            ConstraintID(102): selector - 1 <= 0,
         },
     )
     request = Sos1BigMPromotionRequest(
-        {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101)}}
+        {
+            ConstraintID(102): {
+                1: Sos1BigMSelectorClaim.fresh(
+                    10, upper_link=ConstraintID(100), lower_link=ConstraintID(101)
+                )
+            }
+        }
     )
     report = instance.promote_sos1_big_m(request, mode="strict")
     assert report.rejections == {}
@@ -101,7 +110,7 @@ def test_infeasible_links_reject_without_mutation() -> None:
     before = instance.to_v2_bytes()
     report = instance.promote_sos1_big_m(request)
     assert not report.promoted
-    assert "infeasible" in report.rejections[102]
+    assert "infeasible" in report.rejections[ConstraintID(102)]
     assert instance.to_v2_bytes() == before
 
 
@@ -118,24 +127,28 @@ def assert_report_keys(
 def test_promote_sos1_big_m_exposes_batch_report(mode: Mode) -> None:
     instance, request = mixed_formulation()
 
-    claims = request.selector_claims[102]
+    claims = request.selector_claims[ConstraintID(102)]
     assert claims[0].is_reused
     assert claims[0].selector is None
     fresh = claims[1]
     assert not fresh.is_reused
     assert fresh.selector == 10
-    assert fresh.upper_link == 100
-    assert fresh.lower_link == 101
+    assert fresh.upper_link == ConstraintID(100)
+    assert fresh.lower_link == ConstraintID(101)
 
     report = instance.promote_sos1_big_m(request, mode=mode)
 
     assert_report_keys(report, request)
-    assert report.promoted == {102: 0}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
     assert report.rejections == {}
-    assert set(instance.sos1_constraints[0].variables) == {0, 1}
+    assert set(instance.sos1_constraints[Sos1ConstraintID(0)].variables) == {0, 1}
     assert instance.constraints == {}
-    assert set(instance.removed_constraints) == {100, 101, 102}
-    assert set(instance.sos1_constraints) == {0}
+    assert set(instance.removed_constraints) == {
+        ConstraintID(100),
+        ConstraintID(101),
+        ConstraintID(102),
+    }
+    assert set(instance.sos1_constraints) == {Sos1ConstraintID(0)}
     assert instance.populate_state({0: 0, 1: 2}).entries[10] == 1
 
 
@@ -147,22 +160,26 @@ def test_promote_sos1_big_m_accepts_tight_continuous_links() -> None:
         objective=0,
         decision_variables=[member, selector],
         constraints={
-            100: member - 2 * selector <= 0,
-            101: -member - 2 * selector <= 0,
-            102: selector - 1 <= 0,
+            ConstraintID(100): member - 2 * selector <= 0,
+            ConstraintID(101): -member - 2 * selector <= 0,
+            ConstraintID(102): selector - 1 <= 0,
         },
     )
     request = Sos1BigMPromotionRequest(
         selector_claims={
-            102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101)}
+            ConstraintID(102): {
+                1: Sos1BigMSelectorClaim.fresh(
+                    10, upper_link=ConstraintID(100), lower_link=ConstraintID(101)
+                )
+            }
         },
     )
 
     report = instance.promote_sos1_big_m(request)
 
     assert_report_keys(report, request)
-    assert report.promoted == {102: 0}
-    assert set(instance.sos1_constraints[0].variables) == {1}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
+    assert set(instance.sos1_constraints[Sos1ConstraintID(0)].variables) == {1}
 
 
 @pytest.mark.parametrize("mode", ["best_effort", "strict"])
@@ -175,28 +192,37 @@ def test_promote_sos1_big_m_keys_shared_member_formulations_by_cardinality(
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[first, second],
-        constraints={0: first - 1 <= 0, 2**64 - 1: first + second - 1 <= 0},
+        constraints={
+            ConstraintID(0): first - 1 <= 0,
+            ConstraintID(2**64 - 1): first + second - 1 <= 0,
+        },
     )
     # Reverse insertion order and boundary IDs distinguish keys from positions.
     request = Sos1BigMPromotionRequest(
         selector_claims={
-            2**64 - 1: {
+            ConstraintID(2**64 - 1): {
                 0: Sos1BigMSelectorClaim.reused(),
                 1: Sos1BigMSelectorClaim.reused(),
             },
-            0: {0: Sos1BigMSelectorClaim.reused()},
+            ConstraintID(0): {0: Sos1BigMSelectorClaim.reused()},
         },
     )
 
     report = instance.promote_sos1_big_m(request, mode=mode)
 
     assert_report_keys(report, request)
-    assert report.promoted == {0: 0, 2**64 - 1: 1}
+    assert report.promoted == {
+        ConstraintID(0): Sos1ConstraintID(0),
+        ConstraintID(2**64 - 1): Sos1ConstraintID(1),
+    }
     assert report.rejections == {}
-    assert set(instance.sos1_constraints[0].variables) == {0}
-    assert set(instance.sos1_constraints[1].variables) == {0, 1}
-    assert set(instance.removed_constraints) == {0, 2**64 - 1}
-    assert set(instance.sos1_constraints) == {0, 1}
+    assert set(instance.sos1_constraints[Sos1ConstraintID(0)].variables) == {0}
+    assert set(instance.sos1_constraints[Sos1ConstraintID(1)].variables) == {0, 1}
+    assert set(instance.removed_constraints) == {
+        ConstraintID(0),
+        ConstraintID(2**64 - 1),
+    }
+    assert set(instance.sos1_constraints) == {Sos1ConstraintID(0), Sos1ConstraintID(1)}
 
 
 def test_promote_sos1_big_m_defaults_to_best_effort_and_retains_all_rejections() -> (
@@ -204,27 +230,31 @@ def test_promote_sos1_big_m_defaults_to_best_effort_and_retains_all_rejections()
 ):
     instance, valid_request = mixed_formulation()
     claims = valid_request.selector_claims
-    claims[999] = claims[102]
-    claims[2**64 - 1] = {}
+    claims[ConstraintID(999)] = claims[ConstraintID(102)]
+    claims[ConstraintID(2**64 - 1)] = {}
     request = Sos1BigMPromotionRequest(claims)
 
     report = instance.promote_sos1_big_m(request)
 
     assert_report_keys(report, request)
-    assert report.promoted == {102: 0}
-    assert set(report.rejections) == {999, 2**64 - 1}
-    assert "is not active" in report.rejections[999]
-    assert "at least one member" in report.rejections[2**64 - 1]
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
+    assert set(report.rejections) == {ConstraintID(999), ConstraintID(2**64 - 1)}
+    assert "is not active" in report.rejections[ConstraintID(999)]
+    assert "at least one member" in report.rejections[ConstraintID(2**64 - 1)]
     assert instance.constraints == {}
-    assert set(instance.removed_constraints) == {100, 101, 102}
-    assert set(instance.sos1_constraints) == {0}
+    assert set(instance.removed_constraints) == {
+        ConstraintID(100),
+        ConstraintID(101),
+        ConstraintID(102),
+    }
+    assert set(instance.sos1_constraints) == {Sos1ConstraintID(0)}
     assert instance.populate_state({0: 0, 1: 2}).entries[10] == 1
 
     # Derived snapshots cannot change the report's exclusive per-key outcomes.
     report.promoted.clear()
     report.rejections.clear()
     assert_report_keys(report, request)
-    assert report.promoted == {102: 0}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
     assert len(report.rejections) == 2
 
 
@@ -238,15 +268,19 @@ def test_promote_sos1_big_m_rejects_overlapping_links(mode: Mode) -> None:
         objective=0,
         decision_variables=[member, selector, independent_member],
         constraints={
-            100: member - 3 * selector <= 0,
-            102: selector - 1 <= 0,
-            103: selector - 1 <= 0,
-            202: independent_member - 1 <= 0,
+            ConstraintID(100): member - 3 * selector <= 0,
+            ConstraintID(102): selector - 1 <= 0,
+            ConstraintID(103): selector - 1 <= 0,
+            ConstraintID(202): independent_member - 1 <= 0,
         },
     )
-    overlapping = {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100)}
+    overlapping = {1: Sos1BigMSelectorClaim.fresh(10, upper_link=ConstraintID(100))}
     request = Sos1BigMPromotionRequest(
-        {102: overlapping, 103: overlapping, 202: {2: Sos1BigMSelectorClaim.reused()}}
+        {
+            ConstraintID(102): overlapping,
+            ConstraintID(103): overlapping,
+            ConstraintID(202): {2: Sos1BigMSelectorClaim.reused()},
+        }
     )
     before = instance.to_v2_bytes()
 
@@ -254,27 +288,31 @@ def test_promote_sos1_big_m_rejects_overlapping_links(mode: Mode) -> None:
         with pytest.raises(Sos1BigMPromotionBatchRejectedError) as exc_info:
             instance.promote_sos1_big_m(request, mode=mode)
         assert exc_info.value.request_count == 3
-        assert set(exc_info.value.rejections) == {102, 103}
+        assert set(exc_info.value.rejections) == {ConstraintID(102), ConstraintID(103)}
         assert instance.to_v2_bytes() == before
     else:
         report = instance.promote_sos1_big_m(request, mode=mode)
         assert_report_keys(report, request)
-        assert report.promoted == {202: 0}
-        assert set(report.rejections) == {102, 103}
+        assert report.promoted == {ConstraintID(202): Sos1ConstraintID(0)}
+        assert set(report.rejections) == {ConstraintID(102), ConstraintID(103)}
         assert all(
             "outside the claimed formulation" in reason
             for reason in report.rejections.values()
         )
-        assert set(instance.constraints) == {100, 102, 103}
-        assert set(instance.removed_constraints) == {202}
-        assert set(instance.sos1_constraints) == {0}
+        assert set(instance.constraints) == {
+            ConstraintID(100),
+            ConstraintID(102),
+            ConstraintID(103),
+        }
+        assert set(instance.removed_constraints) == {ConstraintID(202)}
+        assert set(instance.sos1_constraints) == {Sos1ConstraintID(0)}
 
 
 def test_promote_sos1_big_m_strict_rejects_the_full_batch_atomically() -> None:
     instance, valid_request = mixed_formulation()
     claims = valid_request.selector_claims
-    claims[999] = claims[102]
-    claims[2**64 - 1] = {}
+    claims[ConstraintID(999)] = claims[ConstraintID(102)]
+    claims[ConstraintID(2**64 - 1)] = {}
     request = Sos1BigMPromotionRequest(claims)
     before = instance.to_v2_bytes()
 
@@ -283,14 +321,17 @@ def test_promote_sos1_big_m_strict_rejects_the_full_batch_atomically() -> None:
 
     assert isinstance(exc_info.value, RuntimeError)
     assert exc_info.value.request_count == 3
-    assert set(exc_info.value.rejections) == {999, 2**64 - 1}
-    assert "is not active" in exc_info.value.rejections[999]
-    assert "at least one member" in exc_info.value.rejections[2**64 - 1]
+    assert set(exc_info.value.rejections) == {
+        ConstraintID(999),
+        ConstraintID(2**64 - 1),
+    }
+    assert "is not active" in exc_info.value.rejections[ConstraintID(999)]
+    assert "at least one member" in exc_info.value.rejections[ConstraintID(2**64 - 1)]
     assert instance.to_v2_bytes() == before
 
     report = instance.promote_sos1_big_m(valid_request, mode="strict")
     assert_report_keys(report, valid_request)
-    assert report.promoted == {102: 0}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
     assert report.rejections == {}
 
 
@@ -322,16 +363,21 @@ def test_promote_sos1_big_m_checks_mathematical_coverage(
         objective=member,
         decision_variables=[member, selector],
         constraints={
-            100: scale * member - (scale * (3 - shortfall)) * selector <= 0,
-            102: selector - 1 <= 0,
+            ConstraintID(100): scale * member - (scale * (3 - shortfall)) * selector
+            <= 0,
+            ConstraintID(102): selector - 1 <= 0,
         },
     )
     request = Sos1BigMPromotionRequest(
-        {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100)}}
+        {
+            ConstraintID(102): {
+                1: Sos1BigMSelectorClaim.fresh(10, upper_link=ConstraintID(100))
+            }
+        }
     )
     report = instance.promote_sos1_big_m(request, mode=mode)
     assert_report_keys(report, request)
-    assert report.promoted == {102: 0}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
     assert report.rejections == {}
     assert instance.get_decision_variable_by_id(1).bound.upper == 3 - shortfall
 
@@ -366,7 +412,9 @@ def test_strict_rejection_preserves_python_attribute_errors(
         raising=False,
     )
     with pytest.raises(AttributeError) as exc_info:
-        instance.promote_sos1_big_m(Sos1BigMPromotionRequest({999: {}}), mode="strict")
+        instance.promote_sos1_big_m(
+            Sos1BigMPromotionRequest({ConstraintID(999): {}}), mode="strict"
+        )
 
     assert exc_info.value is failure
     assert instance.to_v2_bytes() == before

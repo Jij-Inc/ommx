@@ -1,8 +1,9 @@
 use crate::{
+    constraint_kind::ConstraintKind,
     error::OmmxPyResult,
     pandas::{
-        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
-        PyDataFrame, ToPandasEntry,
+        constraint_id_col, constraint_kind_collection, entries_to_dataframe, PyDataFrame,
+        ToPandasEntry,
     },
 };
 use pyo3::{
@@ -26,6 +27,54 @@ pub struct Solution {
 }
 
 impl_solution_annotations!(Solution);
+
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! {
+        r#"
+        class Solution:
+            @overload
+            def get_constraints(self, *, kind: typing.Literal["regular"]) -> dict[ConstraintID, EvaluatedConstraint]:
+                """Return owned regular results keyed by ID, including removed constraints.
+
+                Rows retain labels, provenance, and removal reasons. Modifying the
+                returned dictionary or rows does not change this result. The same
+                kind selects the same typed IDs in constraints_df; pandas is not required.
+                Use result[id] for a single constraint.
+                """
+                ...
+            @overload
+            def get_constraints(self, *, kind: typing.Literal["indicator"]) -> dict[IndicatorConstraintID, EvaluatedIndicatorConstraint]:
+                """Return owned indicator results keyed by ID, including removed constraints.
+
+                Rows retain labels, provenance, and removal reasons. Modifying the
+                returned dictionary or rows does not change this result. The same
+                kind selects the same typed IDs in constraints_df; pandas is not required.
+                Use result[id] for a single constraint.
+                """
+                ...
+            @overload
+            def get_constraints(self, *, kind: typing.Literal["one_hot"]) -> dict[OneHotConstraintID, EvaluatedOneHotConstraint]:
+                """Return owned one_hot results keyed by ID, including removed constraints.
+
+                Rows retain labels, provenance, and removal reasons. Modifying the
+                returned dictionary or rows does not change this result. The same
+                kind selects the same typed IDs in constraints_df; pandas is not required.
+                Use result[id] for a single constraint.
+                """
+                ...
+            @overload
+            def get_constraints(self, *, kind: typing.Literal["sos1"]) -> dict[Sos1ConstraintID, EvaluatedSos1Constraint]:
+                """Return owned sos1 results keyed by ID, including removed constraints.
+
+                Rows retain labels, provenance, and removal reasons. Modifying the
+                returned dictionary or rows does not change this result. The same
+                kind selects the same typed IDs in constraints_df; pandas is not required.
+                Use result[id] for a single constraint.
+                """
+                ...
+        "#
+    }
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -178,20 +227,20 @@ impl Solution {
             .collect()
     }
 
-    /// Get evaluated constraints as a dict keyed by constraint ID
-    #[getter]
-    pub fn constraints(&self) -> std::collections::BTreeMap<u64, crate::EvaluatedConstraint> {
-        let context = self.inner.evaluated_constraints().context();
-        self.inner
-            .evaluated_constraints()
-            .iter()
-            .map(|(id, ec)| {
-                (
-                    id.into_inner(),
-                    crate::EvaluatedConstraint::from_parts(ec.clone(), context.collect_for(*id)),
-                )
-            })
-            .collect()
+    /// Return owned constraint results keyed by ID for the selected family.
+    ///
+    /// Includes constraints removed before evaluation and their removal metadata.
+    /// The returned dictionary and rows are snapshots; modifying them does not
+    /// change this result. No pandas import is required. The same kind selects
+    /// the same typed IDs in constraints_df. Use the dictionary's keys for enumeration
+    /// and dictionary indexing for a single constraint.
+    #[gen_stub(skip)]
+    #[pyo3(signature = (*, kind))]
+    pub fn get_constraints(
+        &self,
+        kind: ConstraintKind,
+    ) -> crate::constraint_results::EvaluatedConstraints {
+        crate::constraint_results::EvaluatedConstraints::from_result(&self.inner, kind)
     }
 
     /// Get evaluated named functions as a list sorted by ID
@@ -209,15 +258,6 @@ impl Solution {
     pub fn decision_variable_ids(&self) -> BTreeSet<u64> {
         self.inner
             .decision_variable_ids()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    #[getter]
-    pub fn constraint_ids(&self) -> BTreeSet<u64> {
-        self.inner
-            .constraint_ids()
             .iter()
             .map(|id| id.into_inner())
             .collect()
@@ -268,12 +308,13 @@ impl Solution {
     ///
     /// # Examples
     ///
+    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={0: sum(x) == 1},
+    /// ...     constraints={ConstraintID(0): sum(x) == 1},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({i: 1 for i in range(3)})
@@ -344,6 +385,7 @@ impl Solution {
     ///
     /// # Examples
     ///
+    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
@@ -351,7 +393,7 @@ impl Solution {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={0: c0, 1: c1},
+    /// ...     constraints={ConstraintID(0): c0, ConstraintID(1): c1},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
@@ -415,7 +457,7 @@ impl Solution {
     /// Raises KeyError if the constraint ID does not exist.
     pub fn set_dual_variable(
         &mut self,
-        constraint_id: u64,
+        constraint_id: crate::ConstraintID,
         value: Option<f64>,
     ) -> OmmxPyResult<()> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
@@ -446,36 +488,18 @@ impl Solution {
     }
 
     /// Get the evaluated value of a specific constraint by ID
-    pub fn get_constraint_value(&self, constraint_id: u64) -> OmmxPyResult<f64> {
+    pub fn get_constraint_value(&self, constraint_id: crate::ConstraintID) -> OmmxPyResult<f64> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
         Ok(self.inner.get_constraint_value(constraint_id)?)
     }
 
     /// Get the dual variable value for a specific constraint by ID
-    pub fn get_dual_variable(&self, constraint_id: u64) -> OmmxPyResult<Option<f64>> {
+    pub fn get_dual_variable(
+        &self,
+        constraint_id: crate::ConstraintID,
+    ) -> OmmxPyResult<Option<f64>> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
         Ok(self.inner.get_dual_variable(constraint_id)?)
-    }
-
-    /// Get a specific evaluated constraint by ID
-    pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::EvaluatedConstraint> {
-        let constraint_id = ommx::ConstraintID::from(constraint_id);
-        let context = self.inner.evaluated_constraints().context();
-        self.inner
-            .evaluated_constraints()
-            .get(&constraint_id)
-            .map(|ec| {
-                crate::EvaluatedConstraint::from_parts(
-                    ec.clone(),
-                    context.collect_for(constraint_id),
-                )
-            })
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {}",
-                    constraint_id.into_inner()
-                ))
-            })
     }
 
     /// Get a specific evaluated named function by ID
@@ -545,7 +569,7 @@ impl Solution {
     /// `"removed_reason"` in `include=`. When the flag is on, rows for
     /// constraints removed before evaluation get `removed_reason` /
     /// `removed_reason.{key}` columns populated; other rows have NA.
-    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None))]
+    #[pyo3(signature = (*, kind, include = None))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
@@ -574,10 +598,7 @@ impl Solution {
                         &m,
                     )
                     .to_pandas_entry(py)?;
-                    dict.set_item(
-                        "violation",
-                        self.constraint_violation(id.into_inner(), kind)?,
-                    )?;
+                    dict.set_item("violation", self.constraint_violation((*id).into())?)?;
                     if flags.removed_reason {
                         // Always emit the `removed_reason` column when
                         // requested so its existence in the resulting
@@ -797,25 +818,20 @@ impl Solution {
     /// Get one constraint's nonnegative scalar violation.
     ///
     /// Uses the definitions in {meth}`total_violation`, including for removed
-    /// constraints. IDs are independent for each `kind`. Raises `KeyError` when
+    /// constraints. The ID type selects its family. Raises `KeyError` when
     /// the ID is absent from that constraint family.
-    #[pyo3(signature = (constraint_id, *, kind = ConstraintKind::Regular))]
-    pub fn constraint_violation(&self, constraint_id: u64, kind: ConstraintKind) -> PyResult<f64> {
-        let violation = match kind {
-            ConstraintKind::Regular => self.inner.constraint_violation(constraint_id.into()),
-            ConstraintKind::Indicator => self
-                .inner
-                .indicator_constraint_violation(constraint_id.into()),
-            ConstraintKind::OneHot => self
-                .inner
-                .one_hot_constraint_violation(constraint_id.into()),
-            ConstraintKind::Sos1 => self.inner.sos1_constraint_violation(constraint_id.into()),
+    pub fn constraint_violation(
+        &self,
+        constraint_id: crate::constraint_id::AnyConstraintID,
+    ) -> PyResult<f64> {
+        use crate::constraint_id::AnyConstraintID;
+        let violation = match constraint_id {
+            AnyConstraintID::Regular(id) => self.inner.constraint_violation(id.into()),
+            AnyConstraintID::Indicator(id) => self.inner.indicator_constraint_violation(id.into()),
+            AnyConstraintID::OneHot(id) => self.inner.one_hot_constraint_violation(id.into()),
+            AnyConstraintID::Sos1(id) => self.inner.sos1_constraint_violation(id.into()),
         };
-        violation.ok_or_else(|| {
-            PyKeyError::new_err(format!(
-                "Unknown {} constraint ID: {constraint_id}",
-                kind.as_str()
-            ))
-        })
+        violation
+            .ok_or_else(|| PyKeyError::new_err(format!("Unknown constraint ID: {constraint_id:?}")))
     }
 }

@@ -1,3 +1,4 @@
+from ommx import OneHotConstraintID
 import pytest
 
 from ommx import (
@@ -17,7 +18,9 @@ def _special_instance() -> Instance:
         objective=sum(variables),
         decision_variables=variables,
         constraints={},
-        one_hot_constraints={10: OneHotConstraint(variables=variables)},
+        one_hot_constraints={
+            OneHotConstraintID(10): OneHotConstraint(variables=variables)
+        },
     )
 
 
@@ -29,7 +32,7 @@ def test_instance_v2_bytes_roundtrip_special_constraints():
 
     restored = Instance.from_v2_bytes(instance.to_v2_bytes())
 
-    assert restored.one_hot_constraints[10].variables == [0, 1, 2]
+    assert restored.one_hot_constraints[OneHotConstraintID(10)].variables == [0, 1, 2]
     assert restored.to_v2_bytes() == instance.to_v2_bytes()
 
 

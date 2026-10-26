@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from ommx import Instance, DecisionVariable, Sense
 
 
@@ -9,7 +10,7 @@ def test_evaluate_samples_type_check():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + 2 * x[1] + 3 * x[2],
-        constraints={0: x[1] + x[2] <= 1},
+        constraints={ConstraintID(0): x[1] + x[2] <= 1},
         sense=Sense.Maximize,
     )
 

@@ -1,3 +1,9 @@
+from ommx import (
+    ConstraintID,
+    IndicatorConstraintID,
+    OneHotConstraintID,
+    Sos1ConstraintID,
+)
 import pytest
 import pyscipopt
 
@@ -54,12 +60,12 @@ def test_input_class_accepts_complete_quadratic_mip_boundary(sense):
     instance = Instance.from_components(
         decision_variables=[b, x, y],
         objective=x * x + y * y,
-        constraints={0: x * x <= 9, 1: y * y == 1},
+        constraints={ConstraintID(0): x * x <= 9, ConstraintID(1): y * y == 1},
         indicator_constraints={
-            10: (y <= 2).with_indicator(b),
-            11: (y == 1).with_indicator(b),
+            IndicatorConstraintID(10): (y <= 2).with_indicator(b),
+            IndicatorConstraintID(11): (y == 1).with_indicator(b),
         },
-        sos1_constraints={20: Sos1Constraint(variables=[x, y])},
+        sos1_constraints={Sos1ConstraintID(20): Sos1Constraint(variables=[x, y])},
         sense=sense,
     )
     before = instance.to_v2_bytes()
@@ -130,7 +136,7 @@ def test_error_nonlinear_constraint():
         decision_variables=[DecisionVariable.continuous(1)],
         objective=0,
         constraints={
-            0: Constraint(
+            ConstraintID(0): Constraint(
                 function=Polynomial(terms={(1, 1, 1): 2.3}),
                 equality=Equality.EqualToZero,
             )
@@ -145,7 +151,7 @@ def test_error_nonlinear_constraint():
     assert isinstance(
         mismatch, InstanceClassMismatch.RegularConstraintDegreeExceedsBound
     )
-    assert mismatch.actual_degrees == {0: 3}
+    assert mismatch.actual_degrees == {ConstraintID(0): 3}
     assert mismatch.bound == PolynomialRequirement.at_most(2)
 
 
@@ -156,7 +162,9 @@ def test_rejects_quadratic_indicator_body_without_mutating_input():
         decision_variables=[b, x],
         objective=x,
         constraints={},
-        indicator_constraints={0: (x * x <= 1).with_indicator(b)},
+        indicator_constraints={
+            IndicatorConstraintID(0): (x * x <= 1).with_indicator(b)
+        },
         sense=Sense.Minimize,
     )
     before = instance.to_v2_bytes()
@@ -168,7 +176,7 @@ def test_rejects_quadratic_indicator_body_without_mutating_input():
     assert len(mismatches) == 1
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.IndicatorBodyDegreeExceedsBound)
-    assert mismatch.actual_degrees == {0: 2}
+    assert mismatch.actual_degrees == {IndicatorConstraintID(0): 2}
     assert mismatch.bound == PolynomialRequirement.at_most(1)
     assert instance.to_v2_bytes() == before
 
@@ -225,7 +233,7 @@ def test_rejects_one_hot_without_implicit_lowering():
         decision_variables=[x, y],
         objective=x + y,
         constraints={},
-        one_hot_constraints={0: OneHotConstraint(variables=[x, y])},
+        one_hot_constraints={OneHotConstraintID(0): OneHotConstraint(variables=[x, y])},
         sense=Sense.Minimize,
     )
     before = instance.to_v2_bytes()
@@ -237,7 +245,7 @@ def test_rejects_one_hot_without_implicit_lowering():
     assert len(mismatches) == 1
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.OneHotConstraintsNotAllowed)
-    assert mismatch.constraint_ids == {0}
+    assert mismatch.constraint_ids == {OneHotConstraintID(0)}
     assert instance.to_v2_bytes() == before
 
 
@@ -286,11 +294,11 @@ def test_error_infeasible_model():
         decision_variables=[x],
         objective=0,
         constraints={
-            0: Constraint(
+            ConstraintID(0): Constraint(
                 function=x,
                 equality=Equality.EqualToZero,
             ),
-            1: Constraint(
+            ConstraintID(1): Constraint(
                 function=x - 1,
                 equality=Equality.EqualToZero,
             ),
@@ -306,7 +314,7 @@ def test_error_infeasible_constant_equality_constraint():
         decision_variables=[],
         objective=0,
         constraints={
-            0: Constraint(
+            ConstraintID(0): Constraint(
                 function=-1,
                 equality=Equality.EqualToZero,
             )
@@ -323,7 +331,7 @@ def test_error_infeasible_constant_inequality_constraint():
         decision_variables=[],
         objective=0,
         constraints={
-            0: Constraint(
+            ConstraintID(0): Constraint(
                 function=1,
                 equality=Equality.LessThanOrEqualToZero,
             )

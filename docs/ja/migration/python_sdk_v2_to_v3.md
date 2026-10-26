@@ -173,7 +173,7 @@ for cid, c in instance.constraints.items():
     print(cid, c.function)
 ```
 
-`Instance` / `ParametricInstance` の制約 dict は、v3 final では `AttachedX` handle を返します。`Solution.constraints` は評価結果の snapshot なので `EvaluatedConstraint` のままです。`SampleSet.constraints` / `.decision_variables` / `.named_functions` は `list` のままです。
+`Instance` / `ParametricInstance` の制約 dict は、v3 final では `AttachedX` handle を返します。`Solution.get_constraints(kind=...)` と `SampleSet.get_constraints(kind=...)` は、種類別の型付きIDをキーとする評価結果のsnapshot辞書を返します。`SampleSet.decision_variables` と `.named_functions` は `list` のままです。
 
 ## 5. rename、signature、挙動の変更
 
@@ -261,8 +261,9 @@ preparation-free methodだけに公開できます。Adapter inputに
 removed 制約とすべての特殊制約を含めます。通常の等式・不等式の違反量の定義は変わりません。
 
 ```python
+from ommx import OneHotConstraintID
 solution.total_violation()
-solution.constraint_violation(30, kind="one_hot")
+solution.constraint_violation(OneHotConstraintID(30))
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
 ```
 
@@ -291,7 +292,8 @@ Solution/SampleSet の feasibility プロパティは引き続き利用できま
 `feasibility_atol` プロパティから、取り出した制約にも同じ判定条件を渡せます。
 
 ```python
-evaluated = solution.constraints[1]
+from ommx import ConstraintID
+evaluated = solution.get_constraints(kind="regular")[ConstraintID(1)]
 evaluated.is_feasible(atol=solution.feasibility_atol)
 evaluated.is_feasible(atol=1e-8)  # 保存済みの同じ違反量に対する別の問い合わせ
 ```
@@ -491,15 +493,17 @@ instance.replace_annotations({"team": "optimization"})
 `instance.constraints[id]` や `instance.decision_variables` は、host に書き戻す `AttachedX` handle を返します。
 
 ```python
-c = instance.constraints[5]
+from ommx import ConstraintID
+c = instance.constraints[ConstraintID(5)]
 c.set_name("balance")
-assert instance.constraints[5].name == "balance"
+assert instance.constraints[ConstraintID(5)].name == "balance"
 ```
 
 detached snapshot が必要な場合は `detach()` を使います。
 
 ```python
-snapshot = instance.constraints[5].detach()
+from ommx import ConstraintID
+snapshot = instance.constraints[ConstraintID(5)].detach()
 ```
 
 ### 10.1 fixed decision-variable values
@@ -634,3 +638,21 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] `decision_variable_analysis()` を `decision_variable_roles()` / `decision_variable_role(id)` / `fixed_decision_variables()` / `dependent_decision_variable_ids()` / `irrelevant_decision_variable_ids()` / `decision_variables_df()["state_role"]` に置き換える。
 - [ ] element-level `to_bytes()` / `from_bytes()` を、所有者全体の round-trip に置き換える。新規 payload は `to_v2_bytes()`、legacy v1 互換または evaluate 用 DTO では `to_v1_bytes()` を使う。
 - [ ] Artifact archive API を `ArtifactDraft` / `Artifact.save` / `Artifact.import_archive` / `Artifact.inspect_archive` に移行する。
+
+## 型付き制約IDとnativeな結果取得
+
+`solution.constraints`、`sample_set.constraints`、結果オブジェクトの
+`get_constraint_by_id(id)`、`solution.constraint_ids` は、それぞれ
+`result.get_constraints(kind="regular")` とその辞書へのアクセス・キー取得に
+置き換えてください。特殊制約には `kind="indicator"`、`"one_hot"`、`"sos1"` を
+指定します。結果の `get_constraints` と `constraints_df` は、どちらも
+キーワード引数 `kind` が必須です。
+
+制約IDは `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
+`Sos1ConstraintID` です。Instance/ParametricInstanceの辞書、変換結果、
+provenance、DataFrameもこの型を保持します。`from_components` のキーは明示的に
+構築し、自動採番されたIDはAttached制約の `constraint_id` から取得してください。
+取得・更新APIは整数と別種類のIDを拒否します。`int()` 変換や数値インデックスとしての
+使用はできません。ソルバーの行番号には別の対応表を使ってください。
+`solution.constraint_violation(id)` はIDの型から種類を判断するため、`kind` 引数を
+取りません。決定変数IDとサンプルIDは引き続き整数です。

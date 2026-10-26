@@ -115,7 +115,14 @@ from math import ceil, sqrt
 import random
 from typing import Dict, List, Tuple
 
-from ommx import DecisionVariable, Instance, Sos1Constraint, Sense
+from ommx import (
+    ConstraintID,
+    Sos1ConstraintID,
+    DecisionVariable,
+    Instance,
+    Sos1Constraint,
+    Sense,
+)
 
 
 @dataclass
@@ -262,10 +269,12 @@ def _common_constraints(
     constraints: dict = {}
     cid = 0
     for i in range(N):
-        constraints[cid] = sum(s[(i, j)] for j in range(M)) - c[i] == 0  # type: ignore[assignment]
+        constraints[ConstraintID(cid)] = sum(s[(i, j)] for j in range(M)) - c[i] == 0  # type: ignore[assignment]
         cid += 1
     for j in range(M):
-        constraints[cid] = sum(s[(i, j)] for i in range(N)) == input.clients[j].demand  # type: ignore[assignment]
+        constraints[ConstraintID(cid)] = (
+            sum(s[(i, j)] for i in range(N)) == input.clients[j].demand
+        )  # type: ignore[assignment]
         cid += 1
     return constraints
 
@@ -298,7 +307,9 @@ def build_sos1(input: Input) -> Instance:
     sid = 0
     for group in (_west_indices(input), _east_indices(input)):
         if len(group) >= 2:
-            sos1_constraints[sid] = Sos1Constraint(variables=[c[i] for i in group])
+            sos1_constraints[Sos1ConstraintID(sid)] = Sos1Constraint(
+                variables=[c[i] for i in group]
+            )
             sid += 1
 
     return Instance.from_components(
@@ -333,16 +344,18 @@ def _build_with_delta(
     }
 
     constraints = _common_constraints(input, s, c)
-    cid = max(constraints) + 1 if constraints else 0
+    cid = len(constraints)
 
     for i in range(N):
-        constraints[cid] = c[i] - input.plants[i].max_capacity * delta[i] <= 0  # type: ignore[assignment]
+        constraints[ConstraintID(cid)] = (
+            c[i] - input.plants[i].max_capacity * delta[i] <= 0
+        )  # type: ignore[assignment]
         cid += 1
 
     if with_cardinality:
         for group in (_west_indices(input), _east_indices(input)):
             if group:
-                constraints[cid] = sum(delta[i] for i in group) <= 1  # type: ignore[assignment]
+                constraints[ConstraintID(cid)] = sum(delta[i] for i in group) <= 1  # type: ignore[assignment]
                 cid += 1
 
     sos1_constraints: dict = {}
@@ -350,12 +363,14 @@ def _build_with_delta(
     if with_sos1_on_c:
         for group in (_west_indices(input), _east_indices(input)):
             if len(group) >= 2:
-                sos1_constraints[sid] = Sos1Constraint(variables=[c[i] for i in group])
+                sos1_constraints[Sos1ConstraintID(sid)] = Sos1Constraint(
+                    variables=[c[i] for i in group]
+                )
                 sid += 1
     if with_sos1_on_delta:
         for group in (_west_indices(input), _east_indices(input)):
             if len(group) >= 2:
-                sos1_constraints[sid] = Sos1Constraint(
+                sos1_constraints[Sos1ConstraintID(sid)] = Sos1Constraint(
                     variables=[delta[i] for i in group]
                 )
                 sid += 1

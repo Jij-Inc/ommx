@@ -116,7 +116,7 @@ instance.constraints_df(removed=True)
 Solutionでは両方の制約が評価済みです。`include=("removed_reason",)` を指定すると、removedの行に理由を追加して確認できます。
 
 ```{code-cell} ipython3
-solution.constraints_df(include=("removed_reason",))
+solution.constraints_df(kind="regular", include=("removed_reason",))
 ```
 
 特殊制約は `kind="indicator"`、`kind="one_hot"`、`kind="sos1"` で選びます。複数の候補を評価する {class}`~ommx.SampleSet` でも同じ区別があり、`feasible` と `feasible_relaxed` はサンプルIDごとの判定を返します。

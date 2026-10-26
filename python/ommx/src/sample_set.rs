@@ -1,8 +1,9 @@
 use crate::{
+    constraint_kind::ConstraintKind,
     error::OmmxPyResult,
     pandas::{
         constraint_id_col, constraint_kind_collection, entries_to_dataframe,
-        sorted_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry, WithSampleIds,
+        sorted_entries_to_dataframe, PyDataFrame, ToPandasEntry, WithSampleIds,
     },
     Solution,
 };
@@ -29,12 +30,13 @@ use std::collections::{BTreeMap, BTreeSet};
 /// subject to x_1 + x_2 + x_3 = 1
 /// x_1, x_2, x_3 in {0, 1}
 ///
+/// >>> from ommx import ConstraintID
 /// >>> from ommx import DecisionVariable, Instance, Sense
 /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
 /// >>> instance = Instance.from_components(
 /// ...     decision_variables=x,
 /// ...     objective=x[0] + 2*x[1] + 3*x[2],
-/// ...     constraints={0: sum(x) == 1},
+/// ...     constraints={ConstraintID(0): sum(x) == 1},
 /// ...     sense=Sense.Maximize,
 /// ... )
 ///
@@ -80,6 +82,54 @@ pub struct SampleSet {
 }
 
 impl_solution_annotations!(SampleSet);
+
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! {
+        r#"
+        class SampleSet:
+            @overload
+            def get_constraints(self, *, kind: typing.Literal["regular"]) -> dict[ConstraintID, SampledConstraint]:
+                """Return owned regular results keyed by ID, including removed constraints.
+
+                Rows retain labels, provenance, and removal reasons. Modifying the
+                returned dictionary or rows does not change this result. The same
+                kind selects the same typed IDs in constraints_df; pandas is not required.
+                Use result[id] for a single constraint.
+                """
+                ...
+            @overload
+            def get_constraints(self, *, kind: typing.Literal["indicator"]) -> dict[IndicatorConstraintID, SampledIndicatorConstraint]:
+                """Return owned indicator results keyed by ID, including removed constraints.
+
+                Rows retain labels, provenance, and removal reasons. Modifying the
+                returned dictionary or rows does not change this result. The same
+                kind selects the same typed IDs in constraints_df; pandas is not required.
+                Use result[id] for a single constraint.
+                """
+                ...
+            @overload
+            def get_constraints(self, *, kind: typing.Literal["one_hot"]) -> dict[OneHotConstraintID, SampledOneHotConstraint]:
+                """Return owned one_hot results keyed by ID, including removed constraints.
+
+                Rows retain labels, provenance, and removal reasons. Modifying the
+                returned dictionary or rows does not change this result. The same
+                kind selects the same typed IDs in constraints_df; pandas is not required.
+                Use result[id] for a single constraint.
+                """
+                ...
+            @overload
+            def get_constraints(self, *, kind: typing.Literal["sos1"]) -> dict[Sos1ConstraintID, SampledSos1Constraint]:
+                """Return owned sos1 results keyed by ID, including removed constraints.
+
+                Rows retain labels, provenance, and removal reasons. Modifying the
+                returned dictionary or rows does not change this result. The same
+                kind selects the same typed IDs in constraints_df; pandas is not required.
+                Use result[id] for a single constraint.
+                """
+                ...
+        "#
+    }
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -268,17 +318,20 @@ impl SampleSet {
             .collect()
     }
 
-    /// Get constraints for compatibility with existing Python code
-    #[getter]
-    pub fn constraints(&self) -> Vec<crate::SampledConstraint> {
-        let context = self.inner.constraints().context();
-        self.inner
-            .constraints()
-            .iter()
-            .map(|(id, constraint)| {
-                crate::SampledConstraint::from_parts(constraint.clone(), context.collect_for(*id))
-            })
-            .collect()
+    /// Return owned constraint results keyed by ID for the selected family.
+    ///
+    /// Includes constraints removed before evaluation and their removal metadata.
+    /// The returned dictionary and rows are snapshots; modifying them does not
+    /// change this result. No pandas import is required. The same kind selects
+    /// the same typed IDs in constraints_df. Use the dictionary's keys for enumeration
+    /// and dictionary indexing for a single constraint.
+    #[gen_stub(skip)]
+    #[pyo3(signature = (*, kind))]
+    pub fn get_constraints(
+        &self,
+        kind: ConstraintKind,
+    ) -> crate::constraint_results::SampledConstraints {
+        crate::constraint_results::SampledConstraints::from_result(&self.inner, kind)
     }
 
     /// Get decision variables for compatibility with existing Python code
@@ -491,23 +544,6 @@ impl SampleSet {
             })
     }
 
-    /// Get a specific sampled constraint by ID
-    pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::SampledConstraint> {
-        let constraint_id = ommx::ConstraintID::from(constraint_id);
-        let context = self.inner.constraints().context();
-        self.inner
-            .constraints()
-            .get(&constraint_id)
-            .map(|sc| {
-                crate::SampledConstraint::from_parts(sc.clone(), context.collect_for(constraint_id))
-            })
-            .ok_or_else(|| {
-                pyo3::exceptions::PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {constraint_id}"
-                ))
-            })
-    }
-
     /// Get a specific sampled named function by ID
     pub fn get_named_function_by_id(
         &self,
@@ -681,7 +717,7 @@ impl SampleSet {
     /// `SampleSet` has no `removed=` parameter (no active/removed
     /// distinction at the sampled stage); reason data is gated by
     /// `"removed_reason"` in `include=`.
-    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None))]
+    #[pyo3(signature = (*, kind, include = None))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
