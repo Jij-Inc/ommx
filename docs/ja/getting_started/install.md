@@ -28,7 +28,19 @@ WindowsのPowerShellでは、代わりに次を実行します。
 .\.venv\Scripts\Activate.ps1
 ```
 
-以降のインストールとサンプルコードの実行には、この仮想環境を使ってください。Notebookを使う場合も、この仮想環境のPythonを実行カーネルに指定します。
+以降のインストールとサンプルコードの実行には、この仮想環境を使ってください。
+
+Notebookを使う場合は、この仮想環境に実行カーネルも追加します。
+
+```sh
+python -m pip install ipykernel
+```
+
+お使いのJupyter対応エディターで、この仮想環境のPythonを実行カーネルに指定してください。既存のJupyter環境へカーネルを登録する場合は、有効化した仮想環境で次を実行し、Notebook側で「OMMX Book」を選びます。
+
+```sh
+python -m ipykernel install --user --name ommx-book --display-name "OMMX Book"
+```
 
 (install-python-sdk)=
 ## 2. Python SDKをインストールする

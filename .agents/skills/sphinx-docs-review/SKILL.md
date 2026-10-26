@@ -1,12 +1,23 @@
 ---
 name: sphinx-docs-review
-description: Use when reviewing OMMX Sphinx documentation, API reference wiring, pyo3-stub-gen output, AutoAPI output, migration docs, or PR diffs that touch generated docs/stubs under docs/api or python/ommx.
+description: "Review OMMX documentation publication correctness: Sphinx/docutils build and rendering failures, unresolved references, generated API wiring, and consistency of PyO3 docstrings, exports, stubs, and API pages. Use for those technical concerns, not for Book prose structure, reader prerequisites, or learning-path design alone."
 ---
 
 # Sphinx Docs Review
 
-Use this skill to review OMMX documentation changes without getting lost in
-generated Sphinx/API-reference diffs.
+Check whether handwritten documentation and public API declarations are
+faithfully exposed in generated references and rendered output. This is a
+technical publication workflow, not a general Book-content review.
+
+Select it for a build/render/link failure or a change to the documentation
+generation pipeline. A file being under `docs/` is not sufficient by itself.
+For example, a PyO3 docstring parse failure needs this workflow; reordering a
+Tutorial's explanation of feasibility does not.
+
+Reader prerequisites, concept order, cognitive load, and independent reading
+paths belong to `book-reading-review`. Use both only when the request actually
+includes both concerns; neither skill requires loading the other or running
+its checks merely because documentation changed.
 
 Treat generated files as evidence of the handwritten source/configuration, not
 as the first review surface. Start from the owner of the documentation behavior,
@@ -14,9 +25,9 @@ then sample generated artifacts to confirm the behavior is reflected correctly.
 
 ## Review Order
 
-1. Identify the documentation surface affected.
-   - User docs: `docs/en`, `docs/ja`, migration guides, tutorials, user guides,
-     release notes.
+1. Identify the technical publication surface affected.
+   - Rendered Book source: the relevant files under `docs/en` or `docs/ja`
+     when inspecting directives, API roles, toctrees, links, or rendering.
    - API reference: `docs/api`, `docs/conf_base.py`,
      `docs/api/pyo3_stub_gen_ext.py`, AutoAPI configuration, and generated API
      item pages.
@@ -26,7 +37,7 @@ then sample generated artifacts to confirm the behavior is reflected correctly.
      and generated `__init__.py` files.
 
 2. Review handwritten sources before generated artifacts.
-   - Check Sphinx entrypoints and toctrees first:
+   - For wiring or reference problems, check the relevant entrypoints/toctrees:
      `docs/api/index.rst`, `docs/conf_base.py`, `docs/en/index.md`,
      `docs/ja/index.md`.
    - For PyO3-backed API changes, check `pyo3_stub_gen::reexport_module_members!`
@@ -36,7 +47,8 @@ then sample generated artifacts to confirm the behavior is reflected correctly.
      generated stubs and `docs/api/api_reference.json`.
 
 3. Verify generated artifacts for consistency, not prose quality.
-   - Confirm the expected generated files changed together:
+   - For API/docstring generation changes, confirm the applicable generated
+     files changed together:
      `python/ommx/ommx/_ommx_rust/__init__.pyi`,
      generated package `__init__.py` files, `docs/api/api_reference.json`,
      `docs/api/*.rst`, and `docs/api/_items/*.rst`.
@@ -95,7 +107,7 @@ sentinel package is intentionally import-failing for migration guidance.
 
 ## Findings
 
-Lead review findings with user-visible documentation risk:
+Lead review findings with user-visible publication risk:
 
 - Missing or stale API reference entry.
 - Generated artifacts not refreshed from the handwritten source.
@@ -106,3 +118,5 @@ Lead review findings with user-visible documentation risk:
 
 Keep generated-diff summaries secondary. A large generated diff is acceptable
 when the owner configuration and regeneration path are correct.
+Successful generation or a warning-free build does not establish that a reader
+can understand the page; report only the technical properties checked here.

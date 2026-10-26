@@ -21,7 +21,7 @@ ommx.SampleSet
 | {class}`~ommx.Samples` | 変数IDから値への対応を、候補ごとに保持したもの |
 | {class}`~ommx.SampleSet` | 決定変数の値に加えて、目的関数や制約条件の評価を行ったもの |
 
-`Samples`が`State`に相当し、`SampleSet`が`Solution`に相当します。実行可能性や目的値の意味もSolutionと同じです。変換済みの問題では、[removedな制約と出力目的関数](./removed_constraints.md)を含めて評価します。
+`Samples`が`State`に相当し、`SampleSet`が`Solution`に相当します。実行可能性や目的値の意味もSolutionと同じです。
 
 SampleSetの作成
 --------------
@@ -133,3 +133,12 @@ except ValueError as e:
 ```{note}
 実行可能でない解のうちどれが最善かは非常に多彩な基準が考えられるため、OMMXでは提供していません。必要に応じて自分で実装してください。
 ```
+
+変換済みの問題を評価する場合
+-------------------------
+
+ここまでの例では、作成した問題をそのまま評価しました。Instanceを変換した場合は、変換済みのInstanceで候補を評価します。
+
+現在解く問題から外した制約を、結果の検査のために残したものをremoved constraintsと呼びます。また、現在の目的関数とは別に、報告する目的値を計算するための式（出力目的関数）を保持することがあります。このようなInstanceで`evaluate_samples`を呼ぶと、保持情報も使った評価結果がSampleSetに入ります。
+
+どの制約を実行可能性の判定に使うかや、ソルバー向けの目的値との違いは[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。得られた候補の中で最良であることと、元の問題全体の最適性は、この場合も区別します。

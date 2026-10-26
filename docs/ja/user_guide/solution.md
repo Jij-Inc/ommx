@@ -35,13 +35,13 @@ assert solution.objective == 1
 assert solution.optimality == Optimality.Unspecified
 ```
 
-`State` の代わりに `{x.id: 1, y.id: 0}` のような辞書を直接渡すこともできます。評価時には、固定値・依存式からの復元と、省略されたirrelevant変数の補完が行われます。{ref}`Instanceの変数の役割 <instance-variable-roles>`で、その違いを説明しています。
+`State` の代わりに `{x.id: 1, y.id: 0}` のような辞書を直接渡すこともできます。
 
 ## 実行可能性・目的値・最適性を分けて読む
 
 | 情報 | 分かること | それだけでは分からないこと |
 |---|---|---|
-| {attr}`~ommx.Solution.feasible` | 変数のdomainと制約を満たすか | 他にもっと良い候補があるか |
+| {attr}`~ommx.Solution.feasible` | 変数の取りうる値と制約を満たすか | 他にもっと良い候補があるか |
 | {attr}`~ommx.Solution.objective` | この候補の目的値 | この候補が実行可能か、最適か |
 | {attr}`~ommx.Solution.optimality` | 記録された最適性の状態 | `evaluate` 自体は最適性を証明しない |
 
@@ -55,7 +55,7 @@ assert infeasible.objective == 2
 assert not infeasible.feasible
 ```
 
-最大化問題だからといって、この目的値2の候補を実行可能な目的値1の候補より良い解として選ぶことはできません。また、制約だけでなく、変数のkindやboundも実行可能性の判定に含まれます。
+最大化問題だからといって、この目的値2の候補を実行可能な目的値1の候補より良い解として選ぶことはできません。また、制約だけでなく、変数の値の種類（kind）や下限・上限（bound）も実行可能性の判定に含まれます。
 
 浮動小数点による評価では許容誤差を使います。`evaluate(..., atol=...)` で指定でき、結果に用いた値は {attr}`~ommx.Solution.feasibility_atol` から取得できます。数値の正規化と検査の正確な規則は {meth}`~ommx.Instance.populate_state` のAPI Referenceを参照してください。
 
@@ -67,7 +67,7 @@ Solutionは、Instanceの変数・制約の定義やメタデータに、評価�
 infeasible.decision_variables_df()
 ```
 
-決定変数のDataFrameでは、`kind`・`lower`・`upper` に加えて `value` を確認できます。制約のDataFrameでは、式を評価した `value` と実行可能性を確認できます。
+決定変数のDataFrameでは、値の種類 `kind`・下限 `lower`・上限 `upper` に加えて、割り当てた値 `value` を確認できます。制約のDataFrameでは、式を評価した `value` と実行可能性を確認できます。
 
 ```{code-cell} ipython3
 infeasible.constraints_df()
@@ -80,12 +80,14 @@ infeasible.constraints_df()
 
 ソルバーに渡すためにInstanceを変換した場合は、**その変換済みInstanceで、返されたStateを評価します。** 変換済みInstanceは、元の変数の値を復元する情報や、確認すべき制約、出力する目的関数を持ちます。元のInstanceにソルバーのStateをそのまま渡しても、補助変数や依存関係を解釈できるとは限りません。
 
+評価時には、Instanceに記録された固定値や、別の変数から値を計算する式（依存式）を使って、変数の値を復元します。それらがなく現在の問題にも使われない変数（irrelevant）は、省略すると既定値で補います。復元と補完の違いは{ref}`Instanceの変数の役割 <instance-variable-roles>`で説明しています。
+
 この場合は、次の三つを区別してください。
 
 - 値の復元・補完ができるか。
 - 元の制約も含めて実行可能か。
 - ソルバー側の目的値・最適性を、出力する問題の目的値・最適性として使えるか。
 
-removedな制約を含む {attr}`~ommx.Solution.feasible` と、activeな制約だけを使う {attr}`~ommx.Solution.feasible_relaxed`、および出力目的関数との関係は[変換後の問題とRemoved constraints](./removed_constraints.md)で説明します。
+現在の問題で課す制約をactive、そこから外して評価のために保持する制約をremovedと呼びます。removedな制約を含む {attr}`~ommx.Solution.feasible` と、activeな制約だけを使う {attr}`~ommx.Solution.feasible_relaxed`、および出力目的関数との関係は[変換後の問題とRemoved constraints](./removed_constraints.md)で説明します。
 
 複数の候補を同じ規則で評価する場合は[SampleSet](./sample_set.md)を使います。「得られた候補の中で最良」であることも、問題全体の最適性とは別です。

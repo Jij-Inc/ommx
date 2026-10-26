@@ -2,7 +2,7 @@
 
 OMMX（Open Mathematical prograMming eXchange; オミキス）は、**ソルバーから独立して、最適化問題とその候補解の意味を定義する**オープンなプロジェクトです。問題を記述するデータ形式と、それを構築・評価・変換・保存するSDK、ソルバーにつなぐAdapterを提供します。
 
-最適化の結果を理解するには、「変数にどの値が入ったか」だけでは不十分です。どのdomainと制約を満たす必要があるか、何を目的値として比較するか、変換後の結果を元の問題でどう解釈するかが必要です。OMMXは、その基準を特定のソルバーの内部表現に委ねずに扱います。
+最適化の結果を理解するには、「変数にどの値が入ったか」だけでは不十分です。変数が取りうる値と満たすべき制約、比較する目的値、変換後の結果を元の問題でどう解釈するかが必要です。OMMXは、その基準を特定のソルバーの内部表現に委ねずに扱います。
 
 ## ソルバーを呼ばなくても、候補を評価できる
 
@@ -28,11 +28,11 @@ assert solution.objective == 1
 
 ソルバーごとに、直接扱える目的関数や制約は異なります。OMMXは、問題を最初から一つのソルバーの表現に固定するのではなく、必要に応じて別の表現へ変換します。
 
-例えば、Indicator・OneHot・SOS1はOMMX自身が成立条件を定義する制約です。対応するソルバーには直接渡し、対応しないソルバーには通常制約へ変換して渡せる場合があります。Big-Mによるloweringは、その一例です。変換に補助変数を使っても、結果を元の変数や制約で確認するための情報を保持できます。
+例えば「いくつかの変数のうち、ちょうど一つを選ぶ」という条件を、対応するソルバーにはそのまま渡し、必要なら通常の等式へ変換して渡せます。この条件そのものの意味はOMMXが定義します。変換後も、元の変数や制約で結果を確認するための情報を保持できます。
 
-ただし、変換が何を保存するかは操作ごとに異なります。等価な表現への変換、意図的な制約の緩和、重みの選択を伴うpenalty化を、すべて同じ保証として扱うことはできません。OMMXでは、値の復元・補完、実行可能性、目的値、最適性を区別して結果を読みます。
+ただし、変換が何を保存するかは操作ごとに異なります。同じ条件を別の式で表す場合もあれば、課す条件や比較する目的値を変える場合もあります。変換前後の実行可能性・目的値・最適性を、すべて同じ保証として扱うことはできません。具体的な条件の例は[特殊制約](./user_guide/special_constraints.md)、変換した問題の結果の読み方は[変換後の問題とRemoved constraints](./user_guide/removed_constraints.md)で説明します。
 
-このソルバーに依存しない問題記述は、将来、勤務パターンのようなドメイン固有の条件や、意味の保存を検証するPresolveへ表現を広げる土台にもなります。これらは将来の方向性であり、現在の対応機能については各GuideとAPI Referenceを参照してください。
+このソルバーに依存しない問題記述は、将来、勤務パターンのような業務上の条件を直接記述したり、意味が変わらないことを確かめながら問題を単純化したりする土台にもなります。これらは将来の方向性であり、現在の対応機能を示すものではありません。
 
 ## 目的に合わせて読み始める
 
@@ -59,7 +59,7 @@ Adapterを使って解きたい人は、まず[Python SDKとAdapterのインス�
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1の意味を知り、対応ソルバーでそのまま解く。
 3. [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter.md)：特殊制約を直接扱わないHiGHSへ、loweringを経て同じモデルを渡す。
 
-独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。[OpenJij AdapterによるTSPのサンプリング](./tutorial/tsp_sampling_with_openjij_adapter)は、Sampler Adapterを使う任意の応用例です。上のTutorialに続けて読む必須の課程ではありません。
+独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。サンプリングの応用例として、[OpenJij AdapterでTSPを扱うTutorial](./tutorial/tsp_sampling_with_openjij_adapter)もあります。これは上記3つのTutorialの必須の続きではありません。
 
 Adapterを実装する人は、利用者向けTutorialの通読ではなく、[Developer Guide](./developer_guide/adapter.md)から共通の入力・変換・評価の契約と参照実装を確認してください。
 

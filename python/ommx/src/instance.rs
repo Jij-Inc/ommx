@@ -1261,7 +1261,7 @@ impl Instance {
 
     /// The kinds of active special constraints this instance currently uses.
     ///
-    /// Returns the set of :class:`SpecialConstraintKind` values corresponding
+    /// Returns the set of {class}`~ommx.SpecialConstraintKind` values corresponding
     /// to non-empty active (non-removed) special constraint collections. An
     /// empty set means the instance has no active special constraints.
     #[getter]
@@ -1279,14 +1279,14 @@ impl Instance {
     ///
     /// For every kind in ``kinds_to_lower``, the corresponding bulk conversion
     /// is invoked
-    /// (:meth:`convert_all_indicators_to_constraints`,
-    /// :meth:`convert_all_one_hots_to_constraints`, or
-    /// :meth:`convert_all_sos1_to_constraints`) when that kind is active. The
+    /// ({meth}`~ommx.Instance.convert_all_indicators_to_constraints`,
+    /// {meth}`~ommx.Instance.convert_all_one_hots_to_constraints`, or
+    /// {meth}`~ommx.Instance.convert_all_sos1_to_constraints`) when that kind is active. The
     /// instance is mutated in place. Kinds omitted from ``kinds_to_lower``
     /// remain active, and an empty set is a no-op. This does not establish
-    /// :class:`InstanceClass` membership; check the resulting input separately.
+    /// {class}`~ommx.InstanceClass` membership; check the resulting input separately.
     ///
-    /// Returns the set of :class:`SpecialConstraintKind` values that were
+    /// Returns the set of {class}`~ommx.SpecialConstraintKind` values that were
     /// requested and active, and therefore actually lowered. Empty when no
     /// requested kind was active.
     ///
@@ -1295,12 +1295,16 @@ impl Instance {
     /// aligns zero-sensitive Function body evaluation; lowering itself assumes
     /// exact discrete variable values.
     ///
-    /// Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. Each
-    /// individual family conversion is atomic, but the whole operation is not:
-    /// an error in a later family does not roll back families already lowered.
+    /// Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. The
+    /// Indicator and SOS1 bulk conversions validate their complete families
+    /// before mutation, including generated-ID capacity. OneHot checks ID
+    /// capacity for the whole family before converting in ascending original
+    /// ID order; other conversion failures may leave earlier OneHot conversions
+    /// committed. The whole operation is not transactional across
+    /// families: an error does not roll back earlier completed families.
     ///
-    /// Raises if any underlying Big-M conversion fails (e.g. a SOS1 variable
-    /// with a non-finite bound).
+    /// Raises if an underlying conversion fails, including insufficient fresh
+    /// IDs or a required non-finite Big-M bound.
     #[pyo3(signature = (kinds_to_lower, *, atol=None))]
     pub fn lower_special_constraints(
         &mut self,
@@ -1355,6 +1359,16 @@ impl Instance {
         self.inner.description.clone().map(InstanceDescription)
     }
 
+    /// Decision variables used by the mathematical solver input.
+    ///
+    /// This list contains the variables referenced by the objective or by an
+    /// active regular, Indicator, OneHot, or SOS1 constraint. Variables
+    /// referenced only by the output objective, named functions, removed
+    /// constraints, or the right-hand side of a decision-variable dependency
+    /// are excluded. Fixed, dependent, and irrelevant variables are also
+    /// excluded; {meth}`~ommx.Instance.evaluate` and
+    /// {meth}`~ommx.Instance.evaluate_samples` populate their output values from
+    /// stored values, dependencies, or defaults respectively.
     #[getter]
     pub fn used_decision_variables(&self) -> Vec<DecisionVariable> {
         let labels = self.inner.variable_labels();
@@ -2138,8 +2152,15 @@ impl Instance {
     /// {attr}`~ommx.Instance.removed_one_hot_constraints` with
     /// ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
     /// ``constraint_id`` parameter pointing to the new regular constraint.
+    /// The generated regular constraint preserves the original one-hot context
+    /// and appends a {class}`~ommx.Provenance` entry identifying the original
+    /// one-hot constraint.
     ///
     /// Returns the ID of the newly created regular constraint.
+    ///
+    /// Raises if the ID does not identify an active one-hot constraint, the
+    /// equality cannot be constructed, or no fresh constraint ID is available.
+    /// The instance is unchanged on error.
     ///
     /// # Examples
     ///
@@ -2169,7 +2190,13 @@ impl Instance {
     /// Convert every active one-hot constraint to a regular equality constraint.
     ///
     /// See {meth}`~ommx.Instance.convert_one_hot_to_constraint` for the conversion rule.
-    /// Returns the IDs of the newly created regular constraints.
+    /// Returns the IDs of the newly created regular constraints in ascending
+    /// order of the original one-hot IDs.
+    ///
+    /// Fresh constraint-ID capacity is checked for the entire family before
+    /// mutation; insufficient capacity leaves the instance unchanged.
+    /// Conversions are then applied one at a time in that order. Other failures
+    /// do not provide family-wide rollback: earlier completed conversions remain.
     ///
     /// # Examples
     ///
@@ -2223,8 +2250,17 @@ impl Instance {
     /// Raises if any $x_i$ has a non-binary bound that is not finite, if its domain
     /// excludes $0$, or if its kind is semi-continuous / semi-integer (the split
     /// domain $\{0\} \cup [l, u]$ is not uniformly implemented across the codebase
-    /// yet, so Big-M conversion of these kinds is not supported).
-    /// The instance is not mutated on error.
+    /// yet, so Big-M conversion of these kinds is not supported), or if there
+    /// is insufficient decision-variable or regular-constraint ID capacity.
+    /// All preconditions, including generated-ID capacity, are validated before
+    /// mutation. Any error leaves the Instance unchanged.
+    ///
+    /// On success, the original SOS1 constraint is moved to
+    /// {attr}`~ommx.Instance.removed_sos1_constraints` with
+    /// ``reason="ommx.Instance.convert_sos1_to_constraints"`` and a
+    /// comma-separated ``constraint_ids`` parameter in returned order. Every
+    /// generated regular constraint records a {class}`~ommx.Provenance` entry
+    /// identifying the original SOS1 constraint.
     ///
     /// # Examples
     ///
@@ -2258,10 +2294,9 @@ impl Instance {
     /// rule. Returns a dict mapping each original SOS1 ID to the list of regular
     /// constraint IDs it produced.
     ///
-    /// Atomic: every active SOS1 is validated up front, and only if every one is
-    /// convertible are the conversions applied. If any SOS1 fails validation
-    /// (unsupported kind, non-finite bound, domain excludes 0, etc.), no mutation
-    /// happens and the instance is left untouched.
+    /// Atomic: every active SOS1 and the total generated-ID capacity are
+    /// validated before mutation. If validation fails, including because IDs
+    /// are exhausted, the Instance is left unchanged.
     ///
     /// # Examples
     ///
@@ -2330,13 +2365,23 @@ impl Instance {
     /// Raises if the bound needed for an emitted side is non-finite, or if $f(x)$
     /// references a semi-continuous / semi-integer variable (the split domain
     /// $\{0\} \cup [l, u]$ is not uniformly implemented, so Big-M conversion could
-    /// silently drop the upper side when $0 \notin [l, u]$). The instance is not
-    /// mutated on error.
+    /// silently drop the upper side when $0 \notin [l, u]$). Also raises if the
+    /// ID is not active or there are insufficient fresh constraint IDs for the
+    /// emitted sides. A conversion emitting no sides needs no fresh IDs.
+    /// The instance is not mutated on error.
     ///
     /// ``atol`` controls which Function-body values the bound evaluator treats
     /// as zero. If omitted, :attr:`DEFAULT_ATOL` is used. Big-M algebra assumes
     /// the indicator variable is exactly binary; this does not canonicalize an
     /// approximate solver value near 0 or 1.
+    ///
+    /// On success, the original indicator constraint is moved to
+    /// {attr}`~ommx.Instance.removed_indicator_constraints` with
+    /// ``reason="ommx.Instance.convert_indicator_to_constraint"`` and a
+    /// comma-separated ``constraint_ids`` parameter in returned order (empty
+    /// when no side is emitted). Every generated regular constraint records a
+    /// {class}`~ommx.Provenance` entry identifying the original indicator
+    /// constraint.
     ///
     /// # Examples
     ///
@@ -2389,8 +2434,8 @@ impl Instance {
     ///
     /// Atomic: every active indicator is validated up front, and only if every
     /// one is convertible are the conversions applied. If any indicator fails
-    /// validation (non-finite bound on a required side), no mutation happens and
-    /// the instance is left untouched.
+    /// validation, or there are insufficient fresh constraint IDs for all
+    /// emitted sides, no mutation happens and the instance is left untouched.
     ///
     /// ``atol`` has the same Function-body meaning as in the single-constraint
     /// conversion. If omitted, :attr:`DEFAULT_ATOL` is used.
