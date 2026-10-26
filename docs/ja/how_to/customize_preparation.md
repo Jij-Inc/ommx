@@ -24,24 +24,22 @@ kernelspec:
 ```{code-cell} ipython3
 from ommx import Instance, OneHotConstraint, Sos1Constraint
 
-source = Instance.maximize()
-primary = [source.new_binary("primary", subscripts=[i]) for i in range(2)]
-optional = [source.new_binary("optional", subscripts=[i]) for i in range(2)]
-source.objective = (
+instance = Instance.maximize()
+primary = [instance.new_binary("primary", subscripts=[i]) for i in range(2)]
+optional = [instance.new_binary("optional", subscripts=[i]) for i in range(2)]
+instance.objective = (
     10 * primary[0] + 8 * primary[1]
     + 4 * optional[0] + 3 * optional[1]
 )
-source.add_one_hot_constraint(OneHotConstraint(variables=primary))
-source.add_sos1_constraint(Sos1Constraint(variables=optional))
+instance.add_one_hot_constraint(OneHotConstraint(variables=primary))
+instance.add_sos1_constraint(Sos1Constraint(variables=optional))
 ```
 
-## Policyを選び、copyへ適用する
+## Policyを選び、Instanceへ適用する
 
 この例では、ほかの変換を無効にしたPolicyを作り、`special_constraints`だけを設定します。loweringを許可する制約族もOneHotに限定します。Policyを作るだけでは、Instanceは変わりません。
 
 ```{code-cell} ipython3
-import copy
-
 from ommx import PreparationPolicy, SpecialConstraintKind, SpecialConstraintPreparation
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
@@ -51,16 +49,14 @@ policy = PreparationPolicy(
     )
 )
 
-prepared = copy.copy(source)
-prepared.prepare(OMMXPySCIPOptAdapter.INPUT_CLASS, policy)
+instance.prepare(OMMXPySCIPOptAdapter.INPUT_CLASS, policy)
 
-assert OMMXPySCIPOptAdapter.INPUT_CLASS.contains(prepared)
-assert not prepared.one_hot_constraints
-assert prepared.sos1_constraints
-assert source.one_hot_constraints  # 元のモデルは変えていない
+assert OMMXPySCIPOptAdapter.INPUT_CLASS.contains(instance)
+assert not instance.one_hot_constraints
+assert instance.sos1_constraints
 ```
 
-OneHotは通常の線形等式に変わり、SOS1はそのまま残っています。変換元のOneHotは[removed constraint](../user_guide/removed_constraints.md)として保持されます。
+`prepare()`はこのInstanceを直接変更します。OneHotは通常の線形等式に変わり、SOS1はそのまま残っています。変換元のOneHotは[removed constraint](../user_guide/removed_constraints.md)として保持されます。
 
 Policyは「必ず実行する操作の一覧」ではありません。targetの`INPUT_CLASS`へ入るとPreparationは停止します。このモデルにはOneHotがあるためloweringが必要ですが、最初からtargetに入るモデルでは、設定した変換も実行されません。
 
@@ -69,13 +65,13 @@ Policyは「必ず実行する操作の一覧」ではありません。target�
 `solve_without_preparation()`は追加のPreparationを行いません。先ほど設定したPolicyの結果を、そのままソルバーへ渡せます。
 
 ```{code-cell} ipython3
-solution = OMMXPySCIPOptAdapter.solve_without_preparation(prepared)
+solution = OMMXPySCIPOptAdapter.solve_without_preparation(instance)
 
 assert solution.feasible
 assert abs(solution.objective - 14.0) < 1e-8
 solution.decision_variables_df()
 ```
 
-この例で`solve(source)`を使えば、ここで指定した`policy`ではなくAdapterから新たに取得した推奨Policyが使われます。独自のPolicyを使う経路では、`prepare()`と`solve_without_preparation()`を組にしてください。
+通常の`solve()`は、ここで指定した`policy`ではなくAdapterから新たに取得した推奨Policyを使います。独自のPolicyを使う経路では、`prepare()`と`solve_without_preparation()`を組にしてください。
 
 Policyの各phaseや到達できない場合の扱いは[Instance PreparationとPreparationPolicy](../user_guide/preparation_policy.md)、各loweringの適用条件や数式は{meth}`~ommx.Instance.lower_special_constraints`からAPI Referenceを参照してください。

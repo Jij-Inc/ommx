@@ -553,7 +553,7 @@ Converter 固有の表現検査や backend の上限検査は solver input の�
 その失敗は `AdapterNotApplicableError` ではなく conversion または backend の error です。
 特に OpenJij の signed ID と finite coefficient の検査は sampler input の構築時に
 行われるようになりました。責務境界の詳細は
-[Adapterのexact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)と
+[Adapterのexact input（INPUT_CLASS）](../user_guide/instance_class.md)と
 [Developer Guide: OMMX Adapterを実装する](../developer_guide/adapter.md)を参照してください。
 
 ### Adapter の input class 宣言を必須化 ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
@@ -623,7 +623,7 @@ HiGHS、Python-MIP、PySCIPOpt、OpenJijはいずれもこのフローを利用�
 preparation stepが失敗した場合、それより前に完了した変更はinstanceに残ります。v2または
 Beta 2から移行する場合は、OpenJijのモデル変換optionとpre-release版の
 `OpenJijPreparation*` APIを、この共通フローに置き換えてください。exact inputの意味は
-[Adapter の exact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)、Policyと実行の責任境界は
+[Adapter の exact input（INPUT_CLASS）](../user_guide/instance_class.md)、Policyと実行の責任境界は
 [Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md)、完全な利用例は
 [OpenJijによるサンプリング](../tutorial/tsp_sampling_with_openjij_adapter)、対応するAPIの
 置き換えは[Python SDK v2からv3へのマイグレーションガイド](../migration/python_sdk_v2_to_v3.md)
@@ -682,7 +682,7 @@ source_samples = preparation.evaluate_source(prepared_samples)
 有限penaltyとapproximate integer slackは明示的なopt-inが必要です。prepare後の値は
 別の {class}`~ommx.Instance` なので、sourceから推論せず `preparation.input` 自体の
 applicabilityを確認してください。受け入れるmodel classとpreparationの詳細は
-[Adapter の exact input（INPUT_CLASS）](../user_guide/adapter_input_class.md) と
+[Adapter の exact input（INPUT_CLASS）](../user_guide/instance_class.md) と
 [Instance Preparation と PreparationPolicy](../user_guide/preparation_policy.md) および
 [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) を参照してください。
 
