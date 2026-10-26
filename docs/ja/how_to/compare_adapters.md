@@ -6,7 +6,7 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
-  display_name: ommx-update-books (3.9.23)
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
@@ -14,37 +14,34 @@ kernelspec:
 複数のAdapterで最適化問題を解いて結果を比較する
 =========================================
 
-OMMX Adapterは共通化されたAPIを持っているので、複数のソルバーを使って同じ問題を解いて結果を比較することができます。まず例として簡単なナップザック問題を考えましょう：
+OMMX Adapterで問題を解けるようになったら、同じInstanceを複数のAdapterへ渡して結果を比較できます。このページでは、HiGHSとPySCIPOptのどちらにも変換なしで渡せる簡単なモデルを使います。[Python SDKとAdapterのインストール](../getting_started/install.md)に従い、v3のSDK・両Adapterとmatplotlibを用意してください。
+
+`solve()`は元のInstanceを変更しないため、1つのInstanceを再利用できます。Adapterによって必要な変換が異なる場合も、それぞれが独立したcopyを準備します。独自のPolicyを使う方法は[Preparationで変換する制約族を選ぶ](./customize_preparation.md)を参照してください。
+
+ここでは、HiGHSとSCIPのどちらも直接受け取れる簡単なナップザック問題を考えましょう：
 
 $$
 \begin{aligned}
 \mathrm{maximize} \quad & \sum_{i=0}^{N-1} v_i x_i \\
-\mathrm{s.t.} \quad & \sum_{i=0}^{n-1} w_i x_i - W \leq 0, \\
+\mathrm{s.t.} \quad & \sum_{i=0}^{N-1} w_i x_i - W \leq 0, \\
 & x_{i} \in \{ 0, 1\} 
 \end{aligned}
 $$
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Instance, Sense
+from ommx import Instance
 
 v = [10, 13, 18, 31, 7, 15]
 w = [11, 25, 20, 35, 10, 33]
 W = 47
 N = len(v)
 
-x = [
-    DecisionVariable.binary(
-        id=i,
-        name="x",
-        subscripts=[i],
-    )
-    for i in range(N)
-]
-instance = Instance.from_components(
-    decision_variables=x,
-    objective=sum(v[i] * x[i] for i in range(N)),
-    constraints={0: sum(w[i] * x[i] for i in range(N)) - W <= 0},
-    sense=Sense.Maximize,
+instance = Instance.maximize()
+x = [instance.new_binary("x", subscripts=[i]) for i in range(N)]
+instance.objective = sum(v[i] * x[i] for i in range(N))
+instance.add_constraint(
+    sum(w[i] * x[i] for i in range(N)) <= W,
+    "重量制限",
 )
 ```
 
@@ -56,7 +53,7 @@ OSSでないソルバーについてもAdapterが存在し、同じインター�
 
 
 
-ここではOSSのHighs, SCIPのAdapterを使ってナップザック問題を解いてみましょう。
+ここではOSSのHiGHSとSCIPのAdapterを使ってナップザック問題を解いてみましょう。
 
 ```{code-cell} ipython3
 from ommx_highs_adapter import OMMXHighsAdapter
