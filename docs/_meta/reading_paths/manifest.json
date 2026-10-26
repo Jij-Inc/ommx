@@ -98,7 +98,7 @@
         "Kind.Continuous",
         "決定変数"
       ],
-      "scope": ""
+      "scope": "基本的なID・種類・定義域の知識。個々の型の詳細は使用箇所までに本文で導入する。Binaryの例だけからSemiInteger・SemiContinuousの知識を付与しない。"
     },
     {
       "id": "variables.metadata",
@@ -1808,7 +1808,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "現物の変数役割詳細はG6へ分離する設計。G1訪問だけでG6の知識を付与しない。",
+      "notes": "現物の変数役割詳細はG6へ分離する設計。G1訪問だけでG6の知識を付与しない。 PR #1280の読者レビュー修正では、型・定義域を復元/既定値の規則より前に置き、名前付き関数・removed・出力目的関数の除外条件を局所説明付きで後段へ移す。G6分離の完了ではない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2109,15 +2109,25 @@
             "optimality.limit"
           ],
           "mentions": [
-            "numeric.tolerance",
+            "numeric.tolerance"
+          ]
+        },
+        {
+          "id": "transformed-preview",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "variables.recovery",
+            "variables.defaults",
             "constraints.lifecycle",
-            "objective.views"
+            "objective.views",
+            "evaluation.snapshot"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "基本の候補評価・結果読解を先に完結させ、PR #1280の読者レビュー修正で復元/補完と変換済み問題への参照を後段へ置く。短い局所説明はG6/G8の全能力の習得を意味しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2223,11 +2233,22 @@
             "sampleset.read"
           ],
           "mentions": []
+        },
+        {
+          "id": "transformed-preview",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "constraints.lifecycle",
+            "objective.views",
+            "feasibility.views",
+            "evaluation.snapshot"
+          ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "PR #1280の読者レビュー修正で、通常の複数候補評価と候補選択の後に、変換済み問題だけに必要な局所説明とG8への参照を置く。G8全体の習得は付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4531,18 +4552,18 @@
     },
     {
       "topic": "semi_variable_domains",
-      "status": "open",
-      "note": "variable.basics does not prove that a Binary example taught SemiInteger/SemiContinuous. The observed default-rule-before-domain explanation needs a narrower capability or an explicit source reorder during the relevant Book edit."
+      "status": "addressed_in_B",
+      "note": "PR #1280's reader-order correction introduces variable kinds/domains before type-specific default rules. This resolves that source-order defect by reordering, not by treating a Binary example as proof of semi-domain knowledge. The historical baseline URLs are unchanged."
     },
     {
       "topic": "direct_entries",
       "status": "open",
-      "note": "The 21 initial routes are representative, not exhaustive: audit homepage-to-Guide entries as well as the declared routes. Homepage cognitive load is not covered by the set-based checker."
+      "note": "The 21 initial routes are representative, not exhaustive: audit homepage-to-Guide entries as well as the declared routes. Homepage cognitive load is not covered by the set-based checker. PR #1280 reduces the homepage's unexplained transformation-name catalogue; the remaining whole-Book entry/route audit is still open."
     },
     {
       "topic": "transformed_evaluation",
       "status": "open",
-      "note": "Recheck early removed/output-objective references, named-function prerequisites, and source-observation omissions against the reviewed revision rather than treating mention annotations as accepted judgments."
+      "note": "Recheck early removed/output-objective references, named-function prerequisites, and source-observation omissions against the reviewed revision rather than treating mention annotations as accepted judgments. PR #1280 postpones and locally glosses these details in Instance/Solution/SampleSet; other Guides and the historical observation inventory remain unverified."
     }
   ]
 }

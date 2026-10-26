@@ -13,7 +13,7 @@ kernelspec:
 
 # Instance：最適化問題と変数の役割
 
-{class}`~ommx.Instance` は、決定変数のdomain、目的関数、制約条件、最大化・最小化をまとめた最適化問題です。特定のソルバーの入力ではなく、**どの値の割り当てが実行可能で、どの目的値を持つか**をOMMXで定義します。そのため、求解しなくても候補を評価できます。
+{class}`~ommx.Instance` は、決定変数の定義域（取りうる値の種類と範囲）、目的関数、制約条件、最大化・最小化をまとめた最適化問題です。特定のソルバーの入力ではなく、**どの値の割り当てが実行可能で、どの目的値を持つか**をOMMXで定義します。そのため、求解しなくても候補を評価できます。
 
 例えば、二つの項目を同時には選べない問題を作ります。
 
@@ -54,6 +54,30 @@ assert solution.objective == 1
 
 変数と制約は名前ではなくIDで識別します。名前が同じでも、IDが異なれば別の変数・制約です。明示的なIDで既存のコンポーネントを組み立てる場合は {meth}`~ommx.Instance.from_components` を使えます。Instanceは、式や特殊制約が参照する変数が自身に定義されているかを検証します。
 
+(decision-variable-domains)=
+## 変数の定義域とメタデータ
+
+決定変数の定義域（domain）は、値の種類 `kind` と下限・上限 `lower`・`upper` で指定します。下限・上限をboundとも呼びます。次のようにInstance上で作成できます。
+
+```{code-cell} ipython3
+typed = Instance.minimize()
+flag = typed.new_binary("flag")
+count = typed.new_integer("count", lower=0, upper=10)
+amount = typed.new_continuous("amount", lower=0)
+batch = typed.new_semi_integer("batch", lower=2, upper=10)
+rate = typed.new_semi_continuous("rate", lower=0.5, upper=4)
+```
+
+Binaryは0または1、Integerは整数、Continuousは実数を取ります。SemiInteger・SemiContinuousは、指定範囲内の整数・実数に加えて0も取れます。例えば`batch`には2から10までの整数に加えて0も、`rate`には0.5から4までの実数に加えて0も割り当てられます。boundの正規化や許容誤差は、各 `new_*` メソッドのAPI Referenceで確認できます。
+
+`name`、`subscripts`、`parameters`、`description` は、結果の分析や可視化に使うメタデータです。これらは変数の定義域や制約の成立条件を変えません。例えば $x_i$ のような変数の名前を `name="x"`、添字を `subscripts=[i]` として保存できます。
+
+```{code-cell} ipython3
+instance.decision_variables_df()
+```
+
+{meth}`~ommx.Instance.decision_variables_df` は、定義やラベルをpandasのDataFrameとして返します。一つの変数をIDから取得する場合は {meth}`~ommx.Instance.get_decision_variable_by_id` を使います。
+
 (retained-and-used-variables)=
 ## 保持される変数と、現在使われている変数
 
@@ -76,8 +100,6 @@ assert fixed_solution.objective == 1
 
 {attr}`~ommx.Instance.decision_variables` は保持されるすべての変数、{attr}`~ommx.Instance.used_decision_variables` は**現在の目的関数とactiveな制約に現れる変数**を返します。activeは現在の問題で課す制約を指し、通常制約だけでなく、Indicator・OneHot・SOS1も含みます。Indicatorを制御するバイナリ変数もusedです。
 
-一方、名前付き関数、removedな制約、評価用に保持された出力目的関数だけに現れる変数は、それだけではusedにはなりません。これらの情報を保持する理由は[変換後の問題とRemoved constraints](./removed_constraints.md)で説明します。
-
 (instance-variable-roles)=
 ### 変数の四つの役割
 
@@ -94,7 +116,7 @@ Instance内の各変数は、次のいずれかの役割を持ちます。これ
 
 ### 値の復元と、既定値による補完は違う
 
-fixedとdependentの値は、Instanceが持つ固定値や依存式から決まります。これに対して、irrelevantの値は一意には決まりません。省略されたirrelevant変数にはdomainに応じた既定値が入りますが、それはソルバーが選んだ値でも、元の解を一意に復元した値でもありません。
+fixedとdependentの値は、Instanceが持つ固定値や依存式から決まります。これに対して、irrelevantの値は一意には決まりません。省略されたirrelevant変数には定義域に応じた既定値が入りますが、それはソルバーが選んだ値でも、元の解を一意に復元した値でもありません。
 
 例えば、目的関数にも制約にも使わない変数を宣言できます。
 
@@ -112,32 +134,9 @@ explicit = reporting.evaluate({chosen.id: 0, unused.id: 4})
 assert explicit.state.entries[unused.id] == 4.0
 ```
 
-Binary・Integer・Continuousの既定値はbound内で0に最も近い値、SemiInteger・SemiContinuousでは0です。removedな制約や出力目的関数にirrelevant変数が現れる場合、その補完値が評価結果にも使われます。報告したい値や、検査したい候補の値が既にあるなら、省略せずに渡してください。
+Binary・Integer・Continuousの既定値はbound内で0に最も近い値、SemiInteger・SemiContinuousでは0です。報告したい値や、検査したい候補の値が既にあるなら、省略せずに渡してください。
 
 {meth}`~ommx.Instance.populate_state` はこの復元・補完だけを行い、{meth}`~ommx.Instance.evaluate` はその後に目的関数や制約を評価します。usedな変数の不足を既定値で埋めることはありません。数値の丸めや、fixed・dependentの値も入力した場合の整合性検査は、`populate_state` のAPI Referenceを参照してください。
-
-## 変数のdomainとメタデータ
-
-決定変数には値の種類 `kind` と、下限・上限 `lower`・`upper` があります。次のようにInstance上で作成できます。
-
-```{code-cell} ipython3
-typed = Instance.minimize()
-flag = typed.new_binary("flag")
-count = typed.new_integer("count", lower=0, upper=10)
-amount = typed.new_continuous("amount", lower=0)
-batch = typed.new_semi_integer("batch", lower=2, upper=10)
-rate = typed.new_semi_continuous("rate", lower=0.5, upper=4)
-```
-
-Binaryは0または1、Integerは整数、Continuousは実数を取ります。SemiInteger・SemiContinuousは、指定範囲内の整数・実数に加えて0も取れます。boundの正規化や許容誤差は、各 `new_*` メソッドのAPI Referenceで確認できます。
-
-`name`、`subscripts`、`parameters`、`description` は、結果の分析や可視化に使うメタデータです。これらは変数のdomainや制約の成立条件を変えません。例えば $x_i$ のような変数の名前を `name="x"`、添字を `subscripts=[i]` として保存できます。
-
-```{code-cell} ipython3
-instance.decision_variables_df()
-```
-
-{meth}`~ommx.Instance.decision_variables_df` は、定義やラベルをpandasのDataFrameとして返します。一つの変数をIDから取得する場合は {meth}`~ommx.Instance.get_decision_variable_by_id` を使います。
 
 ## 通常制約の参照
 
@@ -154,8 +153,14 @@ instance.constraints_df()
 
 Instanceは構築後にも変換できます。ただし、**変換結果を評価できることと、元の最適化問題と等価であることは別**です。
 
-例えば {meth}`~ommx.Instance.substitute` は、変数を別の式で置き換え、元の変数をdependentとして復元できるようにします。しかし、元の変数のdomainを置換先の式に対する制約へ自動変換するわけではありません。独自の変換を作る場合は、domainを含めて何を保存するかを確認する必要があります。
+例えば {meth}`~ommx.Instance.substitute` は、変数を別の式で置き換え、元の変数をdependentとして復元できるようにします。しかし、元の変数の定義域を置換先の式に対する制約へ自動変換するわけではありません。独自の変換を作る場合は、定義域を含めて何を保存するかを確認する必要があります。
 
 また、{meth}`~ommx.Instance.tighten_bounds_simultaneously_once` は通常制約から変数のboundを締める操作です。対象となる式、許容誤差、数値計算上の制約、制約を選ぶ方法はAPI Referenceを参照してください。
 
-変換後のactiveな問題、保持される制約、出力目的値の関係は[変換後の問題とRemoved constraints](./removed_constraints.md)で説明します。
+### 結果の確認用に保持する情報
+
+Instanceは、現在の目的関数と制約以外にも、結果を確認するための情報を保持できます。例えば{class}`~ommx.NamedFunction`は、名前を付けて保存し、目的関数や制約とは別に値を確認する式です。
+
+また、変換で現在課す条件から外した制約をremoved、ソルバー向けとは別に評価用に保持する目的関数を出力目的関数と呼びます。名前付き関数・removedな制約・出力目的関数だけに現れる変数は、それだけではusedにはなりません。
+
+それらにirrelevant変数が現れる場合、省略した値には先ほどの既定値が使われます。特定の候補を検査したいなら、その値を明示的に渡してください。保持された制約と目的値をどう読むかは[変換後の問題とRemoved constraints](./removed_constraints.md)で説明します。ここまでの変数の役割と候補評価を確認してから、変換後の結果を読む際に参照できます。
