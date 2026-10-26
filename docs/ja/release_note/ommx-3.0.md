@@ -6,6 +6,11 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 🛠 HiGHSの双対値を制約IDへ正しく対応付ける ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
+
+HiGHSの各行とOMMX制約IDの対応を保持します。IDが飛び番の場合や、実行可能な定数制約を
+ソルバーのモデルから省略した場合も、双対値を正しい制約へ戻せます。
+
 ### 🛠 制約IDの枯渇をpanicではなくエラーとして報告 ([#1269](https://github.com/Jij-Inc/ommx/pull/1269))
 
 OneHot・Indicatorの単体変換と一括変換は、生成する通常制約のIDが足りない場合、
@@ -30,6 +35,31 @@ SCIP の目的関数用補助変数にも、指定した初期値から計算し
 penaltyによって除去される制約には、エンコード後の式が保存されます。
 制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
 詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
+
+### ⚠ 型付き制約IDとnativeな結果取得 ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
+
+`Solution` と `SampleSet` から、pandasを使わず全種類の制約結果を取得できます。
+
+```python
+from ommx import ConstraintID
+
+rows = solution.get_constraints(kind="regular")
+row = rows[ConstraintID(7)]
+frame = solution.constraints_df(kind="regular")
+```
+
+どちらもキーワード引数 `kind` が必須です。nativeの辞書には、保持された削除済み
+制約、メタデータ、評価結果も含まれます。通常制約専用だった結果の `constraints`、
+`constraint_ids`、`get_constraint_by_id` は、この辞書へのアクセスに置き換わります。
+
+モデル・結果のAPI、変換、診断、provenance、DataFrameで制約IDの種類を保持します。
+整数の代わりに `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
+`Sos1ConstraintID` を使ってください。別種類のIDは等しくならず、`int()` や整数
+インデックスへの変換機能もありません。`constraint_violation(id)` は型から種類を
+判断します。決定変数IDとサンプルIDは整数のままで、保存形式も変わりません。
+
+詳しくは[Solutionのガイド](../user_guide/solution.md)と
+[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
 
 ### 🆕 変数の名前と添字から State を作成 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 

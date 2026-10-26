@@ -6,6 +6,12 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### 🛠 Map HiGHS dual values to constraint IDs ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
+
+HiGHS now records each generated solver row's OMMX constraint ID. Dual values
+remain associated with the correct constraints when IDs are sparse or feasible
+constant constraints are omitted from the solver model.
+
 ### 🛠 Report generated constraint ID exhaustion as an error ([#1269](https://github.com/Jij-Inc/ommx/pull/1269))
 
 Single and bulk OneHot/Indicator lowering now raises `RuntimeError` instead of
@@ -31,6 +37,33 @@ resolves assignment dependencies and visits each polynomial's terms once.
 Constraints removed by the penalty phase now store their encoded expressions.
 Their evaluated values and the original output objective are preserved through
 decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
+
+### ⚠ Typed constraint IDs and native result queries ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
+
+`Solution` and `SampleSet` now expose all constraint families without pandas:
+
+```python
+from ommx import ConstraintID
+
+rows = solution.get_constraints(kind="regular")
+row = rows[ConstraintID(7)]
+frame = solution.constraints_df(kind="regular")
+```
+
+Both methods require keyword-only `kind`. Native dictionaries include retained
+removed constraints, context, and evaluation diagnostics. They replace the
+regular-only result `constraints`, `constraint_ids`, and `get_constraint_by_id`
+accessors.
+
+Constraint IDs now retain their family throughout model and result APIs,
+transformations, diagnostics, provenance, and DataFrames. Use `ConstraintID`,
+`IndicatorConstraintID`, `OneHotConstraintID`, or `Sos1ConstraintID` instead of
+bare integers. Different families never compare equal, and IDs have no `int()`
+or integer-index conversion. `constraint_violation(id)` selects the family from
+the typed ID. Variable and sample IDs remain integers; wire formats are unchanged.
+
+See [native result queries](../user_guide/solution.md)
+and the [migration guide](../migration/python_sdk_v2_to_v3.md).
 
 ### 🆕 Create states from variable names and subscripts ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 

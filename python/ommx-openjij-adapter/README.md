@@ -40,14 +40,20 @@ example, prepare the Instance with a selected fixed penalty weight and use the
 preparation-free API for a constrained model:
 
 ```python markdown-code-runner
-from ommx import DecisionVariable, FixedPenaltyPreparation, Instance, Sense
+from ommx import (
+    ConstraintID,
+    DecisionVariable,
+    FixedPenaltyPreparation,
+    Instance,
+    Sense,
+)
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 x = DecisionVariable.binary(0, name="x")
 instance = Instance.from_components(
     decision_variables=[x],
     objective=x,
-    constraints={0: x == 1},
+    constraints={ConstraintID(0): x == 1},
     sense=Sense.Minimize,
 )
 

@@ -143,8 +143,9 @@ Instance.from_components(..., constraints=[c], ...)
 
 **After (v3)**:
 ```python
+from ommx import ConstraintID
 c = x + y <= 5
-Instance.from_components(..., constraints={0: c}, ...)
+Instance.from_components(..., constraints={ConstraintID(0): c}, ...)
 ```
 
 ### 3.3 Global ID-counter helpers removed (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
