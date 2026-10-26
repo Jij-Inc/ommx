@@ -42,6 +42,7 @@ assert solution.objective == 1
 | 独自のAdapterを実装する | [Adapter Developer Guide](./developer_guide/adapter.md) | 入力・変換・評価の契約と参照実装 |
 | 問題や候補解の意味を理解する | [Instance](./user_guide/instance.md) → [StateからSolutionへの評価](./user_guide/solution.md) | 変数の役割、実行可能性、目的値、最適性の違い |
 | 特殊制約を使う | [特殊制約の意味と評価](./user_guide/special_constraints.md) | Indicator・OneHot・SOS1の成立条件 |
+| ソルバーを呼ばずに問題を変換・検査する | [Instanceを変換するHow-to](./how_to/transform_instance_without_solver.md) | target classとPolicyを指定し、変換結果と手元の候補を検査する |
 | 変換後の結果を解釈する | [変換後の問題とRemoved constraints](./user_guide/removed_constraints.md) | activeな問題と、元の条件を使った評価の違い |
 | 複数の候補を比較する | [SampleSet](./user_guide/sample_set.md) | サンプルごとの評価と、得られた候補の中からの選択 |
 | 既存の問題を入手する | [MIPLIB](./tutorial/download_miplib_instance.md) / [QPLIB](./tutorial/download_qplib_instance.md) | 公開された最適化問題の取得 |
@@ -58,7 +59,7 @@ Adapterを使って解きたい人は、まず[Python SDKとAdapterのインス�
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1の意味を知り、対応ソルバーでそのまま解く。
 3. [Adapter向けにInstanceを準備する](./tutorial/prepare_instance_for_adapter.md)：特殊制約を直接扱わないHiGHSへ、loweringを経て同じモデルを渡す。
 
-独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。QUBOソルバーへの応用例は[OpenJij AdapterのTutorial](./tutorial/tsp_sampling_with_openjij_adapter)にあります。
+独自の変換方針が必要なら[Preparationで変換する制約族を選ぶ](./how_to/customize_preparation.md)、同じ問題を複数ソルバーで解きたいなら[複数のAdapterで結果を比較する](./how_to/compare_adapters.md)へ進んでください。[OpenJij AdapterによるTSPのサンプリング](./tutorial/tsp_sampling_with_openjij_adapter)は、Sampler Adapterを使う任意の応用例です。上のTutorialに続けて読む必須の課程ではありません。
 
 Adapterを実装する人は、利用者向けTutorialの通読ではなく、[Developer Guide](./developer_guide/adapter.md)から共通の入力・変換・評価の契約と参照実装を確認してください。
 
@@ -114,6 +115,7 @@ tutorial/download_qplib_instance
 
 how_to/customize_preparation
 how_to/compare_adapters
+how_to/transform_instance_without_solver
 ```
 
 ```{toctree}
@@ -131,13 +133,13 @@ user_guide/removed_constraints
 ```
 
 ```{toctree}
-:caption: User Guide：Adapter
+:caption: User Guide：変換とソルバー接続
 :maxdepth: 1
 :hidden:
 
-user_guide/supported_ommx_adapters
-user_guide/adapter_input_class
+user_guide/instance_class
 user_guide/preparation_policy
+user_guide/supported_ommx_adapters
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
 ```

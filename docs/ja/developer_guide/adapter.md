@@ -2,7 +2,7 @@
 
 このページは、独自のBackendをOMMXへ接続するAdapter実装者向けの入口です。まず、Adapter利用者にも共通する次のモデルを確認してください。
 
-1. [Adapterのexact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)
+1. [InstanceClassとAdapterの入力条件](../user_guide/instance_class.md)
 2. [Instance PreparationとPreparationPolicy](../user_guide/preparation_policy.md)
 3. [Removed constraintsと実行可能性](../user_guide/removed_constraints.md)
 

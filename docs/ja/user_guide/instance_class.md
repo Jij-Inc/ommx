@@ -11,17 +11,15 @@ kernelspec:
   name: python3
 ---
 
-# Adapter の exact input（INPUT_CLASS）
+# InstanceClassとAdapterの入力条件
 
-各 OMMX Adapter は、変換せずに直接受け取れる {class}`~ommx.Instance` の集合を、必須の `INPUT_CLASS` として宣言します。`INPUT_CLASS` は「変換すれば扱える問題」まで含めた capability ではなく、**Adapter の厳格な実行経路へ今から渡す値そのもの**についての exact な条件です。
+{class}`~ommx.InstanceClass` は、指定した表現の条件を満たす {class}`~ommx.Instance` の集合です。例えば「Binary変数と線形等式だけを使う最大化問題」を表せます。**いまのInstanceがその条件を満たすかを調べるもので、Instanceを変換するものではありません。**
 
-```{important}
-`INPUT_CLASS`の判定はInstanceを変換しません。easy APIの`solve()`と`sample()`は先にcopyをPreparationするため、class外のsource Instanceも受け取れる場合があります。preparation-free APIへ渡す値は、呼び出し前からmemberでなければなりません。
-```
+InstanceClassはソルバーを使わない変換・検査にも使えます。Adapterの`INPUT_CLASS`は、その用途の一つです。このページの前半はSDKだけで実行でき、後半でAdapterへの適用を説明します。
 
 ## InstanceClass が表す集合
 
-`INPUT_CLASS` の型である {class}`~ommx.InstanceClass` は、複数の {class}`~ommx.InstanceClassClause` の有限合併、つまりいずれか1つの clause を満たす Instance の集合です。1つの clause の中では、次の条件をすべて同時に満たす必要があります。
+InstanceClassは、複数の {class}`~ommx.InstanceClassClause` の有限合併、つまりいずれか1つのclauseを満たすInstanceの集合です。1つのclauseの中では、次の条件をすべて同時に満たす必要があります。
 
 - 使用中の決定変数の kind
 - 目的関数の多項式表現と次数
@@ -32,32 +30,53 @@ kernelspec:
 
 例えば「連続変数だけを使う二次計画」と「整数変数を使える線形計画」を別々の clause で宣言しても、その条件を clause 間で組み合わせた混合整数二次計画が自動的に含まれるわけではありません。
 
-`Function` の表現形式も判定対象です。`Function` として保持した線形式 `g` の `g ** 2` は自動展開されないため、数学的には二次式でも、多項式表現を要求する `INPUT_CLASS` には入りません。展開済みの多項式として構築する `g * g` との違いは、[Functionの説明](./function.md)を参照してください。
+`Function`の表現形式も判定対象です。`Function`として保持した線形式`g`の`g ** 2`は自動展開されないため、数学的には二次式でも、多項式表現を要求するclassには入りません。展開済みの多項式として構築する`g * g`との違いは、[Functionの説明](./function.md)を参照してください。
 
 ## Membership を調べる
 
 {meth}`~ommx.InstanceClass.contains` は membership を `bool` で返します。含まれない理由も必要なら、{meth}`~ommx.InstanceClass.check_membership` が clause ごとの {class}`~ommx.InstanceClassMembershipReport` を返します。どちらも副作用を持ちません。
 
-次の Instance には active な OneHot 制約があるため、OneHot を exact input として受け取らない PySCIPOpt Adapter の `INPUT_CLASS` には入りません。
+{ref}`SDKの導入手順 <install-python-sdk>`で用意した環境を使います。次はBinary変数、線形目的関数、通常の線形等式を許すclassです。OneHotなどの特殊制約は許しません。
+
+```{code-cell} ipython3
+from ommx import (
+    Equality, InstanceClass, InstanceClassClause, Kind,
+    PolynomialRequirement, Sense,
+)
+
+linear = PolynomialRequirement.at_most(1)
+target = InstanceClass([
+    InstanceClassClause(
+        label="binary-linear-equality",
+        allowed_variable_kinds={Kind.Binary},
+        objective_polynomial_requirement=linear,
+        regular_constraint_polynomial_requirements={Equality.EqualToZero: linear},
+        allowed_senses={Sense.Maximize},
+    )
+])
+```
+
+OneHotを持つInstanceは、このclassには入りません。membershipを調べてもOneHotは変換されません。
 
 ```{code-cell} ipython3
 from ommx import Instance, OneHotConstraint
-from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 instance = Instance.maximize()
-xs = [instance.new_binary("x", subscripts=[i]) for i in range(3)]
-instance.objective = sum(xs)
+xs = [instance.new_binary("x", subscripts=[i]) for i in range(2)]
+instance.objective = 3 * xs[0] + 2 * xs[1]
 instance.add_one_hot_constraint(OneHotConstraint(variables=xs))
 
-input_class = OMMXPySCIPOptAdapter.INPUT_CLASS
-assert not input_class.contains(instance)
+assert not target.contains(instance)
 
-report = input_class.check_membership(instance)
+report = target.check_membership(instance)
 assert not report.is_member
+assert instance.one_hot_constraints
 print(report)
 ```
 
 `check_membership()` の mismatch の型や属性は、{class}`~ommx.InstanceClassMismatch` と {class}`~ommx.InstanceClassClauseReport` の API Reference を参照してください。
+
+このInstanceを通常の等式へ変換する操作は、[ソルバーなしの変換How-to](../how_to/transform_instance_without_solver.md)で実行できます。変換先のclassと、使ってよい変換を指定するPolicyの関係は[Instance PreparationとPreparationPolicy](./preparation_policy.md)で説明します。
 
 ## 判定対象は active な数学的内容
 
@@ -70,9 +89,13 @@ Membership は、目的関数と active な4種類の制約族（通常制約、
 
 Instanceが保持する変数と、現在の問題で使う変数の区別は[Instanceの基本モデル](./instance.md)を参照してください。
 
-同様に、removed constraint は relation、次数、特殊制約の有無の判定対象ではありません。したがって、特殊制約を通常制約へ lowering した Instance は、変換元を removed constraint として保持したまま、特殊制約を許さない `INPUT_CLASS` に入れます。active と removed の意味は [Removed constraints と実行可能性](./removed_constraints.md) を参照してください。
+同様に、removed constraintはrelation、次数、特殊制約の有無の判定対象ではありません。特殊制約を通常制約へloweringしたInstanceは、変換元をremovedとして保持したまま、特殊制約を許さないclassに入れます。activeとremovedの意味は[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。
 
-## INPUT_CLASS と Adapter applicability
+Membershipは要求した表現への適合であり、変換前後の数学的な等価性や最適性を証明するものではありません。それらは、選んだ変換操作とその適用条件によって決まります。
+
+## Adapterへの適用：INPUT_CLASSとapplicability
+
+各OMMX Adapterは、Preparationなしで直接受け取れるInstanceの集合を、必須の`INPUT_CLASS`として宣言します。`INPUT_CLASS`の型もInstanceClassです。これは「変換すれば扱える問題」まで含めたcapabilityではなく、厳格な実行経路へ渡すInstanceそのものの条件です。
 
 `INPUT_CLASS` membershipがAdapter applicabilityの完全な条件です。
 

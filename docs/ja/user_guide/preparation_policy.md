@@ -1,49 +1,54 @@
 # Instance Preparation と PreparationPolicy
 
-Instance Preparationは、{class}`~ommx.Instance`に既存の変換操作を適用し、targetの{class}`~ommx.InstanceClass`に属する入力へ近づける仕組みです。通常のAdapter APIは入力のcopyに推奨Policyを自動適用し、明示的な{meth}`~ommx.Instance.prepare`は渡されたInstanceをin-placeに変更します。
+Instance Preparationは、{class}`~ommx.Instance`に既存の変換操作を適用し、targetの{class}`~ommx.InstanceClass`に属する表現へ近づける仕組みです。**変換先を表すclass、許可する操作を選ぶPolicy、実際に変換する`Instance.prepare()`を分けて考えます。** ソルバーやAdapterがなくても利用できます。
 
-```{important}
-まず`solve()`または`sample()`へ元のInstanceを渡します。Policyをapplication固有に編集する必要がある場合だけ、呼び出し側がcopyを作って明示的にPreparationし、`*_without_preparation()`へ渡します。
-```
+| 要素 | 役割 |
+|---|---|
+| targetのInstanceClass | 満たしたい表現の条件 |
+| PreparationPolicy | 使ってよい変換操作と設定の選択 |
+| Instance.prepare | そのInstanceへ変換を適用し、target membershipを検査する |
 
-`INPUT_CLASS`が表すexactな集合とAdapter applicabilityは[Adapterのexact input（INPUT_CLASS）](./adapter_input_class.md)を参照してください。本ページでは、その集合へ向けたPreparationの責任境界を説明します。
+classの意味は[InstanceClassとAdapterの入力条件](./instance_class.md)、SDKだけで一連の操作を実行する例は[ソルバーなしの変換How-to](../how_to/transform_instance_without_solver.md)を参照してください。後半では、この共通の仕組みをAdapterに適用します。
 
-## Adapter の推奨と呼び出し側の実行
+## Policyを作ることと、変換することは別
 
-{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy` は、Adapter の exact input へ到達する際に一般的に有用な {class}`~ommx.PreparationPolicy` を返します。
+{class}`~ommx.PreparationPolicy`は、変換操作の選択を保持する値です。Policyを作成・編集しただけではInstanceは変わりません。
 
-このメソッドは次の契約を持ちます。
-
-- 呼び出すたびに、呼び出し側が編集できる新しい Policy を返す
-- 特定の Instance を参照または変更しない
-- Preparation を実行しない
-- target membershipへの到達を保証しない
-
-`INPUT_CLASS`と推奨Policyは独立した値です。標準のeasy APIは、次の処理をAdapter側で行います。
-
-```python
-# sourceは変更されない。内部のcopyだけがPreparationされる。
-result = Adapter.solve(source)
-```
-
-これは概念的には「`source`のcopyを作る、推奨Policyでprepareする、厳格なmethodへ渡す」という流れです。固定penaltyの大きさなど、Adapterが安全な値を推奨できないapplication固有の選択がある場合は、呼び出し側が次の明示的な経路を使います。
+例えば、OneHotを通常の制約へloweringするPolicyは次のように作ります。ここでは変換元の`source`と、変換先の`target`が用意されているとします。
 
 ```python
 import copy
 
-input_class = Adapter.INPUT_CLASS
-policy = Adapter.recommended_preparation_policy()
+from ommx import (
+    PreparationPolicy, SpecialConstraintKind, SpecialConstraintPreparation,
+)
 
-# 必要なら、application 固有の判断で policy を編集します。
+policy = PreparationPolicy(
+    special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+        kinds={SpecialConstraintKind.OneHot}
+    )
+)
+
 prepared = copy.copy(source)
-prepared.prepare(input_class, policy)
-
-# prepare()の成功によりapplicability、つまりmembershipが成立します。
-assert input_class.contains(prepared)
-result = Adapter.solve_without_preparation(prepared)
+prepared.prepare(target, policy)
+assert target.contains(prepared)
 ```
 
-`prepare()`は渡されたInstanceをin-placeに変更します。通常の`solve()`と`sample()`が作るcopyはこの変更を呼び出し元から隔離します。明示的な経路でsource modelを別のAdapterにも使う場合や変換前後を比較する場合は、自分でcopyしてください。実行可能な例は[Preparationで変換する制約族を選ぶ](../how_to/customize_preparation.md)を参照してください。
+{meth}`~ommx.Instance.prepare`は呼び出したInstanceをin-placeに変更します。sourceを残して変換前後を比較する場合は、上のようにcopyへ適用します。sourceとtargetの構築も含む実行例は[変換How-to](../how_to/transform_instance_without_solver.md)にあります。
+
+## Targetに入った時点で止まる
+
+PreparationはPolicyのすべての操作を必ず最後まで実行するbatch recipeではありません。実行前と各selected phaseの完了後にInstance全体のmembershipを調べ、targetに入った時点で停止します。最初からmemberならInstanceは変更されません。
+
+成功時に成立する条件は、指定したtargetへのmembershipです。
+
+```python
+assert target.contains(prepared)
+```
+
+この条件だけでは、元の問題との数学的な等価性や最適性は保証されません。変換元の条件、使う操作、その操作が保存するものを個別に確認します。Preparationは求解ではなく、ここで作業を終えることもできます。
+
+変換後の候補は、そのInstanceが保持する変数・制約・目的の情報を使って解釈します。{ref}`Instanceの変数の役割 <instance-variable-roles>`と[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。
 
 ## PreparationPolicy が選ぶ phase
 
@@ -62,23 +67,46 @@ result = Adapter.solve_without_preparation(prepared)
 
 各fieldに設定する型とfactoryの全引数は、{class}`~ommx.SpecialConstraintPreparation`、{class}`~ommx.ObjectivePreparation`、{class}`~ommx.IntegerSlackPreparation`、{class}`~ommx.FixedPenaltyPreparation`、{class}`~ommx.IntegerEncodingPreparation`、{class}`~ommx.BinaryPowerPreparation`のAPI Referenceを参照してください。特殊制約loweringの数式と成立条件も、各変換メソッドのAPI Referenceが所有します。特殊制約そのものの意味は[特殊制約型](./special_constraints.md)を参照してください。
 
-固定 penalty の大きさのように、問題の scale や求める解の性質に依存して安全な共通値を決められない選択があります。その値は Adapter の推奨に任せず、application が明示的に決めます。
+固定penaltyの大きさのように、問題のscaleや求める解の性質に依存する選択があります。どの変換を許し、どの値を使うかはapplicationが判断します。
 
-## Target-directed な実行
+## Adapterへの適用：推奨Policyと自動Preparation
 
-Preparation は Policy の全 phase を必ず最後まで実行する batch recipe ではありません。`prepare()` は実行前と各 selected phase の完了後に、Instance 全体について target membership を調べます。target に入った時点で停止するため、それより後の phase は選択されていても実行されません。最初から member なら Instance は変更されません。
+Adapterは、直接受け取れるInstanceの集合を`INPUT_CLASS`として宣言します。このInstanceClassをtargetとして使うのがAdapter向けのPreparationです。
 
-成功時のpostcondition、つまりAdapter applicabilityは次の1点です。
+通常の求解・samplingには、まず`solve()`または`sample()`を使えます。標準のeasy APIは、入力のcopyを作り、Adapterの推奨Policyでprepareしてから厳格なmethodを呼びます。
 
 ```python
-assert input_class.contains(instance)
+# sourceは変更されない。内部のcopyだけがPreparationされる。
+result = Adapter.solve(source)
 ```
 
-converterやBackendは、その後のsolver input構築や実行で別のerrorを返すことがあります。それらは追加のapplicability条件ではありません。
+{meth}`~ommx.adapter.SolverAdapter.recommended_preparation_policy`は、Adapterのexact inputへ到達する際に一般的に有用なPolicyを返します。この呼び出しは次の性質を持ちます。
+
+- 呼び出すたびに、呼び出し側が編集できる新しいPolicyを返す
+- 特定のInstanceを参照または変更せず、Preparationもしない
+- target membershipへの到達を保証しない
+
+`INPUT_CLASS`と推奨Policyは独立した値です。固定penaltyの大きさなど、Adapterが安全な値を推奨できないapplication固有の選択がある場合は、自分でPolicyを編集し、明示的な経路を使います。
+
+```python
+input_class = Adapter.INPUT_CLASS
+policy = Adapter.recommended_preparation_policy()
+
+# 必要なら、application固有の判断でpolicyを編集する。
+prepared = copy.copy(source)
+prepared.prepare(input_class, policy)
+
+assert input_class.contains(prepared)
+result = Adapter.solve_without_preparation(prepared)
+```
+
+`*_without_preparation()`とAdapter constructorはPreparationしません。上の経路では、編集したPolicyを自分で適用してから渡します。一連の実行例は[Preparationで変換する制約族を選ぶ](../how_to/customize_preparation.md)を参照してください。
+
+Adapterでは`INPUT_CLASS` membershipがapplicabilityです。converterやBackendは、その後のsolver input構築や実行で別のerrorを返すことがあります。それらは追加のapplicability条件ではありません。
 
 Solverの出力を{class}`~ommx.Solution`や{class}`~ommx.SampleSet`に戻すときも、Adapterへ渡した同じprepared Instanceで評価します。そのInstanceが保持する変数間のdependencyとremoved constraintにより、encoding前の変数値や変換前の制約も評価できます。値の復元は[Instanceの基本モデル](./instance.md)、制約の評価規則は[Removed constraintsと実行可能性](./removed_constraints.md)を参照してください。
 
-## 到達できない場合と部分的な変更
+## 詳細：到達できない場合と部分的な変更
 
 すべての configured phase を適用しても target に到達しない場合、{class}`~ommx.PreparationTargetNotReachedError` が送出されます。`report` 属性には、最終状態に対する {class}`~ommx.InstanceClassMembershipReport` が入ります。呼び出し側は report を見て Policy を追加・変更するか、異なる target を選べます。
 

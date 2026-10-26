@@ -90,4 +90,4 @@ assert not OMMXHighsAdapter.INPUT_CLASS.contains(source)
 - `solve()`は入力のcopyに推奨Policyを適用するため、元のInstanceを変更しません。
 - `INPUT_CLASS`は直接受け取れる範囲、`PreparationPolicy`はそこへ向かう変換の選択です。
 
-自分で変換を選ぶ必要が生じたら、操作ガイド[Preparationで変換する制約族を選ぶ](../how_to/customize_preparation.md)へ進んでください。仕組みを理解するには[Adapterのexact input（INPUT_CLASS）](../user_guide/adapter_input_class.md)と[Instance PreparationとPreparationPolicy](../user_guide/preparation_policy.md)を参照してください。
+自分で変換を選ぶ必要が生じたら、操作ガイド[Preparationで変換する制約族を選ぶ](../how_to/customize_preparation.md)へ進んでください。仕組みを理解するには[InstanceClassとAdapterの入力条件](../user_guide/instance_class.md)と[Instance PreparationとPreparationPolicy](../user_guide/preparation_policy.md)を参照してください。
