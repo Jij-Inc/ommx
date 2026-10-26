@@ -10,6 +10,12 @@ prose is technically correct. OMMX defines problem and candidate semantics
 independently of a solver. Keep that common model separate from an Adapter's
 execution contract and the guarantees of an individual transformation.
 
+This workflow can stand alone for a reader-comprehension question. A change
+limited to API generation, directives, or Sphinx build/render/link correctness
+belongs to `sphinx-docs-review` and does not require this skill or its ledger.
+Apply both only when the request includes both concerns; do not load the other
+skill merely because a Book file changed.
+
 ## Establish the reader and source
 
 - Resolve the requested PR/revision and read its actual files. A local checkout

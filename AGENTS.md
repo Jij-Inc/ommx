@@ -115,8 +115,10 @@ Run `task -l` to see all available commands.
 
 ## Review Perspectives
 
-### Book Reader Paths
+### Documentation Reviews
+
 - When planning, writing, or reviewing Book changes that affect reader prerequisites, concept introduction order, or navigation between learning tasks, use `.agents/skills/book-reading-review/SKILL.md`.
+- For technical documentation publication concerns such as Sphinx build/render/link failures or generated API/docstring/stub consistency, use `.agents/skills/sphinx-docs-review/SKILL.md`. Select either or both by the requested work, not merely by a file being under `docs/`.
 
 ### Domain Responsibility Analysis
 - At the start of every review, use `.agents/skills/domain-responsibility-review/SKILL.md`.
