@@ -1,6 +1,6 @@
 # Functionの表現と数値評価の契約
 
-このReferenceは、Python SDK **3.0.0b7** のFunctionを対象に、[Function Guide](../user_guide/function.md)から分離した表現・数値条件をまとめます。操作の引数・戻り値は {class}`~ommx.Function` のAPI Referenceも参照してください。wire表現は[同じリリースのFunction Message](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/proto/ommx/v1/function.proto)、評価の参照実装は[同リリースのRust実装](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/src/function/evaluate.rs)です。
+このReferenceは、[導入手順](../getting_started/install.md)のSDKを対象に、[Function Guide](../user_guide/function.md)から分離した表現・数値条件をまとめます。操作の引数・戻り値は {class}`~ommx.Function` のAPI Referenceも参照してください。wire表現は[対応するFunction Message](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/proto/ommx/v1/function.proto)、評価の参照実装は[同リリースのRust実装](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/src/function/evaluate.rs)です。
 
 ## 多項式と複合式
 

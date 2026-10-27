@@ -96,7 +96,6 @@ instance.constraints_df()
 
 {attr}`~ommx.Instance.constraints` は制約IDをキーとする辞書です。制約にも変数と同様のメタデータを付けられます。制約IDの空間は変数IDとは独立し、特殊制約の各種類もそれぞれ独立した制約IDを持ちます。
 
-(simultaneous-bound-tightening)=
 ## モデルを変換する場合
 
 Instanceは構築後にも変換できます。ただし、**変換結果を評価できることと、元の最適化問題と等価であることは別**です。

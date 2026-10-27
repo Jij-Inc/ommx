@@ -608,7 +608,7 @@
         "QUBO",
         "qubo"
       ],
-      "scope": ""
+      "scope": "QUBOをInstanceClassの一例として読み、classへの適合・Preparationと、Backend向けの係数整形を区別する。係数と定数項だけでは、Instanceが持つ変数の復元規則やremoved制約の評価情報を運べない。"
     },
     {
       "id": "adapter.basic",
@@ -806,8 +806,7 @@
       "label": "式の表現形と対応範囲を区別する",
       "owner": "G2.support",
       "requires": [
-        "expression.form",
-        "class.membership"
+        "expression.form"
       ],
       "external": false,
       "aliases": [
@@ -815,7 +814,7 @@
         "非多項式",
         "polynomial"
       ],
-      "scope": ""
+      "scope": "Functionとして構築・評価できる式と、ソルバー入力で要求される多項式表現の範囲を区別する。InstanceClassへの所属判定の方法はG9で学び、この区別だけからmembership操作の習得を付与しない。"
     },
     {
       "id": "function.representation",
@@ -1875,7 +1874,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "現物の変数役割詳細はG6へ分離する設計。G1訪問だけでG6の知識を付与しない。 PR #1280の読者レビュー修正では、型・定義域を復元/既定値の規則より前に置き、名前付き関数・removed・出力目的関数の除外条件を局所説明付きで後段へ移す。G6分離の完了ではない。",
+      "notes": "変数の四役割と復元・既定値の詳細は、実在するG6へ分離した。G1は保持変数と現在使う変数の区別を短く説明するが、G1訪問だけでG6の知識は付与しない。型・定義域を先に導入し、名前付き関数・removed・出力目的関数の除外条件は局所説明付きで後段へ置く。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1994,22 +1993,24 @@
         {
           "id": "limits",
           "introduces": [
-            "class.membership",
             "function.support"
           ],
           "uses": [
             "function.support"
           ],
-          "mentions": []
+          "mentions": [
+            "class.membership"
+          ]
         }
       ],
       "deferred": [],
       "parent_page": "G2",
-      "notes": "",
+      "notes": "Function Guideの「数学的な次数と、保持する表現形式は別」で表現条件と入力対応範囲を説明し、数値・演算順序の詳細はFunctionの契約Referenceへ分離する。InstanceClassへのmembership判定はG9への参照であり、本節の局所導入とはしない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/function.md"
+        "docs/ja/user_guide/function.md",
+        "docs/ja/reference/function_contract.md"
       ]
     },
     {
@@ -2375,7 +2376,8 @@
       "requires": [
         "instance.model",
         "variable.basics",
-        "state.values"
+        "state.values",
+        "evaluation.basic"
       ],
       "sections": [
         {
@@ -2403,10 +2405,12 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "Instanceと候補評価を前提に、固定した小さな問題から保持変数・used変数を区別し、四役割、依存式による復元、irrelevantの既定値、復元・補完後の評価対象へ進む。復元できることと問題の等価性は分け、後者はG7へ送る。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/variable_roles.md"
+      ]
     },
     {
       "id": "G7",
@@ -2442,18 +2446,22 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "候補評価・実行可能性・最適性の区別を前提に、操作の目的と七つの問い、複数操作の接続、評価対象の選択を説明する。固定と不等式penaltyの実在する反例節はG7.conditioningとG7.penaltyで個別に追跡し、子節の知識を親から暗黙に継承させない。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
     },
     {
       "id": "G7.penalty",
       "title": "ペナルティ化の対応と保証",
       "slice": "I",
       "role": "guide-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
       "source_urls": [],
       "requires": [
         "transformation.guarantees",
@@ -2476,10 +2484,12 @@
       ],
       "deferred": [],
       "parent_page": "G7",
-      "notes": "",
+      "notes": "実在する「不等式の本体を二乗すると、実行可能候補の順序も変わり得る」節。不等式本体の二乗と違反量の二乗を区別し、重みだけでは不適切なpenaltyを補えない反例から、slack・個別操作の条件を確認する必要を説明する。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
     },
     {
       "id": "G7.encoding",
@@ -2522,8 +2532,10 @@
       "title": "変数固定と部分問題",
       "slice": "I",
       "role": "guide-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
       "source_urls": [],
       "requires": [
         "transformation.guarantees",
@@ -2543,10 +2555,12 @@
       ],
       "deferred": [],
       "parent_page": "G7",
-      "notes": "",
+      "notes": "実在する「固定した部分問題と、元の問題全体を分ける」節。Binaryの二候補から部分問題の最適値と元の最適値を区別し、候補を評価したこと自体は最適性判定でないと説明する。元の制約から導ける固定との違いも扱う。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
     },
     {
       "id": "G8",
@@ -2708,7 +2722,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "class.quboの局所導入は設計案。現#1284本文への実装は未完了。 I1の読者レビュー修正ではmembership例の後にFunctionの表現形式の詳細を置き、OneHotの数学的な条件と専用表現を局所的に区別する。active/usedの詳細やAdapter適用は基本のmembership例の後に置く。",
+      "notes": "membership例の後にFunctionの表現形式の詳細を置き、OneHotの数学的な条件と専用表現を局所的に区別する。QUBOをclassの一例として局所導入し、Preparationによるclass適合とBackend向け係数整形、および係数だけではInstanceの復元・removed情報を運べないことを区別する。active/usedの詳細やAdapter適用は基本のmembership例の後に置く。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2804,7 +2818,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "I1ではtarget・Policy・prepareの共通モデルをAdapter適用より先に置く。直入読者向けにOneHot/loweringとphaseを局所説明する。個別操作の数式・適用条件はAPI Reference、G7の一般的な変換保証は後続作業のまま。 明示的なprepareの基本例はin-placeとし、変換前のInstance本体を後で使う必要がある場合のみcopyを説明する。Adapter easy API内部のcopy契約とは区別する。",
+      "notes": "target・Policy・prepareの共通モデルをAdapter適用より先に置き、直入読者向けにOneHot/loweringとphaseを局所説明する。個別操作の数式・適用条件はAPI Reference、候補・実行可能性・目的・最適性の保証は実在するG7へ送る。QUBO向けPolicyの作成、明示的Preparation、係数整形を分ける。明示的なprepareの基本例はin-placeとし、変換前のInstance本体を後で使う必要がある場合のみcopyを説明する。Adapter easy API内部のcopy契約とは区別する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4633,6 +4647,38 @@
         "G4S",
         "R_WIRE",
         "DEV_X"
+      ]
+    },
+    {
+      "id": "variable_recovery_guarantees",
+      "title": "候補評価から変数の復元と変換の保証へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G4S",
+        "G6",
+        "G7",
+        "G7.conditioning",
+        "G7.penalty"
+      ]
+    },
+    {
+      "id": "function_parametric",
+      "title": "問題モデルからFunctionと固定構造の問題族へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G2",
+        "G2.support",
+        "G5"
       ]
     },
     {

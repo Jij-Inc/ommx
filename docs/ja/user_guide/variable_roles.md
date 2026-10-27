@@ -46,8 +46,6 @@ assert fixed_solution.objective == 1
 
 {attr}`~ommx.Instance.decision_variables` は保持されるすべての変数、{attr}`~ommx.Instance.used_decision_variables` は現在の目的関数とactiveな制約に現れる変数です。activeとは現在課している制約で、通常制約に加えてIndicator・OneHot・SOS1も含みます。Indicatorを制御するBinary変数もusedです。
 
-開発版には、同じ集合のIDだけを返す {attr}`~ommx.Instance.used_decision_variable_ids` もあります。このBookの実行環境で使う公開SDK 3.0.0b7では未提供なので、上の例では`used_decision_variables`からIDを取り出しています。
-
 (instance-variable-roles)=
 ## 四つの役割
 
