@@ -115,7 +115,7 @@ QPLIB の二次目的関数と二次制約を、元の問題どおりに読み�
 {meth}`~ommx.Instance.load_qplib` で作成して保存したモデルは、元の `.qplib`
 ファイルから読み込み直してください。`ommx.dataset.qplib` は OMMX 2.8.0 向けに
 公開した修正済みの配布を読み込むようになりました。旧配布がキャッシュされていても、
-修正済みの配布を使います。詳細は [QPLIB チュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
+修正済みの配布を使います。詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
 
 ### 🛠 MPS・MIPLIB 読み込み時にバイナリ変数を保持 ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 
@@ -128,7 +128,7 @@ MPS ファイルには、変数を整数として指定し、上下限を省略�
 影響を受ける保存済みモデルは、元の MPS ファイルから読み込み直してください。
 `ommx.dataset.miplib2017` は OMMX 2.7.0 向けに公開した修正済みの MIPLIB 配布を
 読み込むようになりました。旧配布がキャッシュされていても、修正済みの配布を使います。
-詳細は [MIPLIB チュートリアル](../tutorial/download_miplib_instance.md)を参照してください。
+詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
 
 ### 🛠 変数の上下限と制約で許容誤差の判定を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
@@ -271,7 +271,7 @@ solution = instance.evaluate(state, atol=1e-8)
 解ファイルで省略された変数には 0 を設定します。記載された目的関数値 `objvar` は
 変数として扱わず、モデルの評価によって目的関数値を計算します。
 `ommx.qplib.load_solution` も利用できます。
-対応するファイルは [QPLIB チュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
+対応するファイルは [既存の問題と候補解を評価するTutorial](../tutorial/evaluate_existing_candidate)を参照してください。
 
 ### 🆕 Rust 拡張からのデータ受け渡しに共通の例外を導入 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 

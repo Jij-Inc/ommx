@@ -1563,8 +1563,10 @@
       "title": "既存の問題と候補を評価する",
       "slice": "E",
       "role": "tutorial",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/tutorial/evaluate_existing_candidate.ipynb"
+      ],
       "source_urls": [],
       "requires": [
         "ext.math",
@@ -1594,12 +1596,35 @@
             "evaluation.basic",
             "solution.read",
             "feasibility.basic",
-            "optimality.limit"
+            "numeric.tolerance"
           ],
           "uses": [
             "evaluation.basic",
             "solution.read",
             "feasibility.basic",
+            "numeric.tolerance"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "inspect",
+          "introduces": [],
+          "uses": [
+            "variable.basics",
+            "state.values",
+            "solution.read",
+            "evaluation.basic",
+            "feasibility.basic",
+            "numeric.tolerance"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "limits",
+          "introduces": [
+            "optimality.limit"
+          ],
+          "uses": [
             "optimality.limit"
           ],
           "mentions": []
@@ -1612,10 +1637,12 @@
         "artifact.format"
       ],
       "parent_page": null,
-      "notes": "",
+      "notes": "E/T4の独立Notebookは公式QPLIB_0018の問題と公開候補を読み、evaluateと変数/制約の表を示す。全変数0の別候補でFalseの制約行を抽出する。初回は公式サイトへの接続が必要だが、モデル自作・Adapter・Artifact/Experiment・別Tutorialの実行状態は不要。表だけの判定と候補全体のfeasible、許容誤差、最適性の限界を局所説明する。歴史的baselineとproposed statusは保持する。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/tutorial/evaluate_existing_candidate.ipynb"
+      ]
     },
     {
       "id": "T5",
@@ -3082,10 +3109,9 @@
       "title": "モデルとデータセットを取り込む",
       "slice": "E",
       "role": "how-to",
-      "status": "planned",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/tutorial/download_miplib_instance.md",
-        "docs/ja/tutorial/download_qplib_instance.md"
+        "docs/ja/how_to/load_existing_instance.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/download_miplib_instance.md",
@@ -3114,12 +3140,11 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "E/P3はMIPLIBとQPLIBの入手を統合し、求解を必須にしない。手元MPS/QPLIB/Artifactとモデラーからの入口を分ける。配布名前空間・SDK版・wire schemaを後段で区別し、Artifact取り込みの永続副作用を明示。入手の選択肢を説明するが、Artifact作成/共有やモデラー互換性の習得・完了は主張しない。source_urlsは統合前の歴史的baselineを指す。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/tutorial/download_miplib_instance.md",
-        "docs/ja/tutorial/download_qplib_instance.md"
+        "docs/ja/how_to/load_existing_instance.md"
       ]
     },
     {

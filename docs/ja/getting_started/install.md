@@ -51,6 +51,8 @@ python -m pip install "ommx==3.0.0b7"
 
 [Instanceを変換して結果を確認する](../how_to/transform_instance_without_solver.md)場合は、ここまでで準備が完了です。[InstanceClassの説明](../user_guide/instance_class.md)のmembership例もSDKだけで実行できます。
 
+[既存の問題と候補解を評価する](../tutorial/evaluate_existing_candidate)場合も、ここまでで準備が完了です。[既存の問題の入手](../how_to/load_existing_instance.md)と候補評価にAdapterは使いません。それぞれのページに記載した公開データの初回取得には、ネットワーク接続が必要です。
+
 (install-adapters)=
 ## 3. ソルバーを使う場合だけAdapterを追加する
 
@@ -97,5 +99,5 @@ python -m pip install matplotlib
 ```
 
 ```{note}
-このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するInstance変換How-toとmembership例、3つのAdapter Tutorialと2つのAdapter How-to、およびOpenJijの小さなサンプリングHow-toとTSPのNotebookです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
+このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するInstance変換How-toとmembership例、既存問題の入手How-toと候補評価Tutorial、3つのAdapter Tutorialと2つのAdapter How-to、およびOpenJijの小さなサンプリングHow-toとTSPのNotebookです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
 ```
