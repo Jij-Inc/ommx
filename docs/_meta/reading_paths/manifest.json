@@ -1649,9 +1649,9 @@
       "title": "二つの試行を記録し保存後に読み直す",
       "slice": "F",
       "role": "tutorial",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/tutorial/experiment_management.md"
+        "docs/ja/tutorial/experiment_management.ipynb"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/experiment_management.md"
@@ -2830,7 +2830,7 @@
       "title": "Experimentの記録モデル",
       "slice": "F",
       "role": "guide",
-      "status": "planned",
+      "status": "existing",
       "source_paths": [
         "docs/ja/user_guide/experiment.md"
       ],
@@ -3306,9 +3306,9 @@
       "title": "実験を再開・継続・forkする",
       "slice": "F",
       "role": "how-to",
-      "status": "planned",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/experiment.md"
+        "docs/ja/how_to/continue_experiment.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/experiment.md"
@@ -3428,8 +3428,10 @@
       "title": "標準の添付データを扱う",
       "slice": "F",
       "role": "how-to",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/attach_experiment_data.md"
+      ],
       "source_urls": [],
       "requires": [
         "ext.python",
@@ -3463,8 +3465,10 @@
       "title": "独自データのCodecを使う",
       "slice": "F",
       "role": "how-to-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/attach_experiment_data.md"
+      ],
       "source_urls": [],
       "requires": [
         "ext.python",
