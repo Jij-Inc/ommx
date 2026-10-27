@@ -1,8 +1,8 @@
 # Experimentにデータを添付する
 
-入力JSON、モデル、評価結果、ログや画像を、Experiment全体または特定のRunに添付できます。まず標準の型付きメソッドかファイル添付を選び、独自型のCodecは必要になったときだけ使います。
+入力JSON、モデル、評価結果、ログや画像を、Experiment全体または特定のRun（一回の試行）に添付できます。まず標準の型付きメソッドかファイル添付を使います。基本的な記録と保存の流れは[二つの試行を記録するTutorial](../tutorial/experiment_management)を参照してください。
 
-[SDKのインストール](../getting_started/install.md)の手順1・2で用意した`ommx==3.0.0b7`を使います。この例にはAdapterやソルバーは不要です。
+[SDKのインストール](../getting_started/install.md)に従って実行環境を用意してください。この例にはAdapterやソルバーは不要です。
 
 (experiment-management-attachable-data-formats)=
 ## 標準のデータとファイルを保存する
@@ -38,7 +38,7 @@ experiment.save(data_dir / "attachments.ommx")
 
 ## 名前を確認して取り出す
 
-型が分かっているときは型付きgetterを使います。間違った種類のデータを指定した場合、暗黙に別の型へ変換せずエラーになります。
+型が分かっているときは型別の取得メソッドを使います。間違った種類のデータを指定した場合、暗黙に別の型へ変換せずエラーになります。
 
 ```python
 from ommx.experiment import Experiment
@@ -71,7 +71,7 @@ assert destination.read_text(encoding="utf-8") == "candidate evaluated locally\n
 
 比較表の列にしたいスカラー値は`run.log_parameter`に記録します。添付JSON内の数値やAdapterに渡したオプションが、自動的にRun parameterへ展開されるわけではありません。
 
-大きなJSONやファイルなどは`compression="zstd"`を指定できます。getterは展開された内容を返すので、読み手の操作は変わりません。対応するメソッドと厳密な制限は{py:class}`~ommx.experiment.Experiment`と{py:class}`~ommx.experiment.Run`を参照してください。
+大きなJSONやファイルなどは`compression="zstd"`を指定できます。取得メソッドは展開された内容を返すので、読み手の操作は変わりません。対応するメソッドと厳密な制限は{py:class}`~ommx.experiment.Experiment`と{py:class}`~ommx.experiment.Run`を参照してください。
 
 ## 独自型を保存する場合だけCodecを使う
 

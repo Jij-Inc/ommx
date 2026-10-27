@@ -1044,9 +1044,7 @@
       "id": "attachment.standard",
       "label": "標準の添付データを記録して読む",
       "owner": "P10",
-      "requires": [
-        "artifact.roundtrip"
-      ],
+      "requires": [],
       "external": false,
       "aliases": [
         "Attachment",
@@ -1054,7 +1052,7 @@
         "add_json",
         "add_file"
       ],
-      "scope": ""
+      "scope": "名前を付けて標準型やファイルを保存し、同じスコープから取り出す共通操作。ExperimentとArtifactのどちらからも導入でき、一方の往復操作を他方の必須前提にしない。"
     },
     {
       "id": "attachment.codec",
@@ -1074,7 +1072,7 @@
     },
     {
       "id": "experiment.record",
-      "label": "Experiment・Run・Solve/Samplingを関連付ける",
+      "label": "ExperimentとRunで試行の条件・データをまとめる",
       "owner": "G12",
       "requires": [
         "instance.model",
@@ -1083,12 +1081,9 @@
       "external": false,
       "aliases": [
         "Experiment",
-        "Run",
-        "log_solve",
-        "log_sample",
-        "Sampling"
+        "Run"
       ],
-      "scope": ""
+      "scope": "ExperimentとRunの基本的な記録単位と、共有データ・試行ごとのデータの対応。Solve/SamplingによるAdapter呼び出しの記録はG12の発展的な説明であり、最初の記録Tutorialの前提ではない。"
     },
     {
       "id": "experiment.conditions",
@@ -1137,11 +1132,10 @@
     },
     {
       "id": "experiment.reproduce",
-      "label": "保存済み結果と計算再現の条件を区別する",
+      "label": "保存結果の読出しと計算の再実行を区別する",
       "owner": "G12.reproducibility",
       "requires": [
-        "experiment.persist",
-        "mutation.copy"
+        "experiment.persist"
       ],
       "external": false,
       "aliases": [
@@ -1149,7 +1143,7 @@
         "再現性",
         "再現"
       ],
-      "scope": ""
+      "scope": "保存した入力・結果を読み直せることは、同じ計算を再実行できることの保証ではないという境界。再実行には目的に応じたコード・設定・環境情報が別途必要であり、コピー操作や再現性方法論の習得は前提にしない。"
     },
     {
       "id": "cli.operations",
@@ -1680,12 +1674,18 @@
         {
           "id": "run",
           "introduces": [
-            "adapter.basic",
-            "solution.read"
+            "state.values",
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
           ],
           "uses": [
-            "adapter.basic",
-            "solution.read"
+            "state.values",
+            "evaluation.basic",
+            "solution.read",
+            "feasibility.basic",
+            "optimality.limit"
           ],
           "mentions": []
         },
@@ -1704,13 +1704,14 @@
         {
           "id": "reopen",
           "introduces": [
-            "experiment.persist"
+            "experiment.persist",
+            "experiment.reproduce"
           ],
           "uses": [
-            "experiment.persist"
+            "experiment.persist",
+            "experiment.reproduce"
           ],
           "mentions": [
-            "experiment.reproduce",
             "attachment.standard"
           ]
         }
@@ -1723,11 +1724,11 @@
         "class.qubo"
       ],
       "parent_page": null,
-      "notes": "具体例が使う一つのbackend依存は環境欄に明記。独自Codecを初回成功の前提にしない。",
+      "notes": "F/T5は小さなInstanceと二つの候補を局所的に用意し、評価した条件・入力・結果をExperiment/Runに記録する。Adapter、外部データ、独自Codec、別Tutorialの実行状態は不要。ファイル保存後は新しいプロセス/kernelでRun・入力・結果を取り出し、保存結果の読出しと計算再実行の違いを短く説明する。source_urlsは統合前の歴史的baselineを指す。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/tutorial/experiment_management.md"
+        "docs/ja/tutorial/experiment_management.ipynb"
       ]
     },
     {
@@ -2827,7 +2828,7 @@
     },
     {
       "id": "G12",
-      "title": "Experimentの記録モデル",
+      "title": "Experimentの記録とライフサイクル",
       "slice": "F",
       "role": "guide",
       "status": "existing",
@@ -2862,7 +2863,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "現在のexperiment.mdは主に検索・復帰・整理。新しい概念説明の完成とは数えない。",
+      "notes": "F/G12はExperiment/RunとSolve/Samplingの関係、明示的な記録と自動記録の範囲、処理状態と数学的な結果の違いを説明する。編集中・確定・checkpoint・forkを概念として整理し、実際の継続/復帰と添付操作はP7/P10へ分ける。読出しと再実行の境界は同じページの該当節にあり、G12.reproducibilityで別に追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2874,18 +2875,18 @@
       "title": "記録と計算再現の境界",
       "slice": "F",
       "role": "guide-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/experiment.md"
+      ],
       "source_urls": [],
       "requires": [
-        "experiment.persist",
-        "instance.model"
+        "experiment.persist"
       ],
       "sections": [
         {
           "id": "reproduce",
           "introduces": [
-            "mutation.copy",
             "experiment.reproduce"
           ],
           "uses": [
@@ -2896,10 +2897,12 @@
       ],
       "deferred": [],
       "parent_page": "G12",
-      "notes": "",
+      "notes": "「ファイルを読むことと、計算をやり直すこと」の短い境界説明。コピー操作、実験計画、性能評価方法論は要求しない。親ページとの概念の重複追跡を避けるため、この節を独立した契約として扱う。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/experiment.md"
+      ]
     },
     {
       "id": "G13",
@@ -3314,6 +3317,8 @@
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/experiment.md"
       ],
       "requires": [
+        "ext.python",
+        "sdk.environment",
         "experiment.persist"
       ],
       "sections": [
@@ -3330,11 +3335,11 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "F/P7はExperimentの保存済み記録を知る読者向け。閉じたRunのcheckpointからの復帰、確定済み記録からのfork、自動保存頻度の選択を自己完結した例で扱う。checkpoint復帰には同じLocal Registryが必要で、ソルバー内部の探索状態の再開とは区別する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/experiment.md"
+        "docs/ja/how_to/continue_experiment.md"
       ]
     },
     {
@@ -3435,7 +3440,8 @@
       "source_urls": [],
       "requires": [
         "ext.python",
-        "artifact.roundtrip"
+        "sdk.environment",
+        "experiment.record"
       ],
       "sections": [
         {
@@ -3444,7 +3450,8 @@
             "attachment.standard"
           ],
           "uses": [
-            "attachment.standard"
+            "attachment.standard",
+            "experiment.record"
           ],
           "mentions": [
             "attachment.codec"
@@ -3455,10 +3462,12 @@
         "attachment.codec"
       ],
       "parent_page": null,
-      "notes": "",
+      "notes": "F/P10はExperiment/Runの基本記録を前提に、共通入力と試行ごとの結果へJSON・Instance・Solution・ファイルを添付して取り出す。Artifact Tutorial、Adapter、独自Codecは不要。Codecは任意のP10.codec節として分離し、標準添付の理解に含めない。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/how_to/attach_experiment_data.md"
+      ]
     },
     {
       "id": "P10.codec",
@@ -3492,7 +3501,9 @@
       "notes": "",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/how_to/attach_experiment_data.md"
+      ]
     },
     {
       "id": "P11",
@@ -4428,7 +4439,7 @@
       ],
       "steps": [
         "SETUP",
-        "T6",
+        "T5",
         "P10",
         "R_WIRE",
         "P10.codec"

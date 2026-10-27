@@ -1,8 +1,8 @@
 # Experimentを継続・復帰する
 
-編集中のExperimentにはRunを追加できます。中断した編集はcheckpointから復帰し、確定済みの記録を変えずに続きを作るときはforkします。どちらもソルバー内部の探索状態を再開する操作ではありません。
+編集中のExperimentにはRunを追加できます。中断した編集はcheckpoint（復帰用の保存地点）から復帰し、確定済みの記録を変えずに続きを作るときはforkします。どちらもソルバー内部の探索状態を再開する操作ではありません。
 
-[SDKのインストール](../getting_started/install.md)の手順1・2で用意した`ommx==3.0.0b7`を使います。以下の小さな例にはAdapterも外部データも不要です。名前はこの例専用のものです。自分のデータでは別の名前に置き換えてください。
+[SDKのインストール](../getting_started/install.md)に従って実行環境を用意してください。以下の小さな例にはAdapterも外部データも不要です。名前はこの例専用のものです。自分のデータでは別の名前に置き換えてください。
 
 ## 閉じたRunのcheckpointから復帰する
 
@@ -17,7 +17,7 @@ with experiment.run() as run:
     run.log_json("result", {"value": 3})
 ```
 
-ここでPythonプロセスやNotebook kernelを終了しても、次のコードから復帰できます。同じLocal Registryを使ってください。`OMMX_LOCAL_REGISTRY_ROOT`を指定していた場合は、新しいプロセスにも同じ値を設定します。
+ここでPythonプロセスやNotebook kernelを終了しても、次のコードから復帰できます。同じLocal Registry（OMMXのローカル保存領域）を使ってください。`OMMX_LOCAL_REGISTRY_ROOT`を指定していた場合は、新しいプロセスにも同じ値を設定します。
 
 ```python
 from ommx.experiment import Experiment, list_experiment_checkpoints
@@ -59,7 +59,7 @@ assert len(parent.runs) == 1
 assert len(child.runs) == 2
 ```
 
-子は親の添付データ、Run、Solve、Samplingを引き継ぎ、追加したRunとともに保存されます。親の内容は変わりません。未変更のpayloadはLocal Registryで共有されるため、forkするたびに同じ問題や結果のbytesを複製するわけではありません。
+子は親の添付データ、Run、Solve、Samplingを引き継ぎ、追加したRunとともに保存されます。親の内容は変わりません。変更していない添付データはLocal Registryで共有されます。
 
 親を後から開くなら`Experiment.load("example.com/book/fork:parent")`、ファイルで受け取るなら`Experiment.import_archive(path)`を使い、その戻り値からforkできます。新しい名前はローカルでの識別にも使えるので、ここでネットワークへpushする必要はありません。
 

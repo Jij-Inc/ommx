@@ -6,8 +6,8 @@ Experimentは、複数の試行で使った条件とデータをまとめて残�
 
 | 単位 | 記録するもの | 読み出し口 |
 |---|---|---|
-| Experiment | 一連の試行で共有する入力や説明、Runの集合 | `attachment_names`、型付きgetter、`runs` |
-| Run | 一回の試行のスカラー条件、添付データ、必要ならSolve・Sampling | `run_parameters_df()`、Runのgetter、`solves`、`samplings` |
+| Experiment | 一連の試行で共有する入力や説明、Runの集合 | `attachment_names`、型別の取得メソッド、`runs` |
+| Run | 一回の試行のスカラー条件、添付データ、必要ならSolve・Sampling | `run_parameters_df()`、Runの取得メソッド、`solves`、`samplings` |
 | Solve | 一回のSolverAdapter呼び出しの入力Instance、Adapter名・オプション、得られたSolution | `run.solves`の各要素の`input`、`output` |
 | Sampling | 一回のSamplerAdapter呼び出しの入力Instance、Adapter名・オプション、得られたSampleSet全体 | `run.samplings`の各要素の`input`、`output` |
 
@@ -53,7 +53,7 @@ forkは既存のRunと添付データを引き継ぎ、親を変更しません�
 
 ## 保存される地点
 
-データをlogするたびに、そのデータはLocal Registryに書かれます。ただし、payloadが書かれたことと、後で取り出せるExperimentの保存地点ができたことは同じではありません。
+データをlogするたびに、そのデータはLocal Registry（OMMXのローカル保存領域）に書かれます。ただし、データ本体が保存されたことと、後で取り出せるExperimentの保存地点ができたことは同じではありません。
 
 通常はRunを閉じるごとに、そこまでの閉じたRunを含むdraft checkpointが自動保存されます。これはbest-effortの復帰地点です。`AutosavePolicy`で間隔を変えたり無効化したりできますが、その場合は最後のcheckpoint以降の試行が復帰対象に含まれないことがあります。開いたままのRunの途中状態は復帰可能なRunとして保存されません。
 
