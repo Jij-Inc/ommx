@@ -12,8 +12,8 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）は、**ソルバ�
 | やりたいこと | 最初の入口と、ここまででできること |
 |---|---|
 | 問題を用意して解く・サンプリングする | [小さな問題を作って解く](tutorial/solve_with_ommx_adapter)、[既存問題を読み込む](how_to/load_existing_instance.md)、または[使うAdapterを選ぶ](user_guide/supported_ommx_adapters.md)。既知のAdapterの手順へ直接進めます |
-| 手元の問題と候補解を評価する | [既存の問題と候補を評価する](tutorial/evaluate_existing_candidate)。ファイルから読み、目的値・実行可能性・満たさない条件を調べます |
-| 問題を変換・検査する | [Instanceを変換し、結果を確認する](how_to/transform_instance_without_solver.md)。表現条件とPolicyを指定し、実行backendを呼ばずに変換・評価できます |
+| 手元の問題と候補解を評価する | [既存の問題と候補を評価する](tutorial/evaluate_existing_candidate)。目的値・実行可能性を調べ、[名前と添字で値を取り出す](how_to/extract_named_values.md)ことや、[目的関数以外の指標を評価する](how_to/evaluate_named_functions.md)こともできます |
+| 問題を変換・検査する | [Instanceを変換し、結果を確認する](how_to/transform_instance_without_solver.md)。表現条件に合わせた変換のほか、[制約からboundを絞る](how_to/tighten_bounds.md)、{ref}`式を変数名で読む <function-labels>`手順へ進めます |
 | 実験を記録する・データを受け渡す | [Experimentで試行を記録する](tutorial/experiment_management)、または[Artifactでファイルを受け渡す](tutorial/share_in_ommx_artifact.md)。目的に合う方だけ選べます |
 | ソルバーや別のツール・言語を接続する | [Adapterを実装する](developer_guide/adapter.md)、または[別ツール・言語を接続する](developer_guide/integration.md)。共通概念からRust APIや形式の仕様へ進めます |
 
@@ -143,7 +143,17 @@ user_guide/artifact
 
 how_to/load_existing_instance
 how_to/transform_instance_without_solver
+how_to/tighten_bounds
 how_to/customize_preparation
+```
+
+```{toctree}
+:caption: How-to：候補の評価と後処理
+:maxdepth: 1
+:hidden:
+
+how_to/evaluate_named_functions
+how_to/extract_named_values
 ```
 
 ```{toctree}

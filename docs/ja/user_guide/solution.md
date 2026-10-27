@@ -75,6 +75,12 @@ infeasible.constraints_df()
 
 通常制約では、この値は制約の左辺 $f(x)$ の値です。等式なら0、不等式なら0以下であることが条件なので、`value` が常に違反量を表すわけではありません。Indicator・OneHot・SOS1の結果は `constraints_df(kind=...)` で選びます。各種類の意味と評価方法は[特殊制約](./special_constraints.md)を参照してください。
 
+## 結果を後処理に使う
+
+変数に名前と添字を付けている場合は、[結果を名前と添字で取り出す](../how_to/extract_named_values.md)手順で、商品・拠点・時点などに対応する値の辞書を得られます。変数IDを後処理に書き並べる必要はありません。
+
+目的関数以外の指標をInstanceに名前付きの式として登録しておくと、Solutionからその評価値も読めます。[目的関数以外の指標を評価する](../how_to/evaluate_named_functions.md)では、登録から`named_functions_df()`や`extract_named_functions()`による取得までを説明します。これは候補に対する指標の値であり、新しい目的関数や実行可能性の判定条件を追加するものではありません。
+
 (evaluating-transformed-instances)=
 ## 変換した問題の結果を読む
 

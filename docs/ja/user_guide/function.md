@@ -37,6 +37,41 @@ assert not instance.evaluate(candidate).feasible
 
 Function単体は変数の名前・種類・上下限を保持せず、IDを参照します。{meth}`~ommx.Function.evaluate`は式の数値を計算しますが、別に課した制約や変数の定義域までは検査しません。問題全体に対する候補の検査には{meth}`~ommx.Instance.evaluate`を使います。評価結果の読み方は[StateからSolutionへの評価](./solution.md)を参照してください。
 
+(function-labels)=
+## 式を変数名で確認する
+
+式をモデル上の名前で読みたいときは、ラベルを持つInstanceを通して表示します。次の例では、同じ名前`x`に添字`0`、`1`を付け、$x_0, x_1$を区別します。
+
+```{code-cell} ipython3
+from ommx import Instance
+
+labeled = Instance.minimize()
+x0 = labeled.new_binary("x", subscripts=[0])
+x1 = labeled.new_binary("x", subscripts=[1])
+labeled.objective = x0 + 2 * x1
+
+text = labeled.format_function(labeled.objective)
+print(text)
+assert text == "x[0] + 2*x[1]"
+```
+
+表示は`x[0] + 2*x[1]`です。Function単体の`str()`や`repr()`はIDを使いますが、{meth}`~ommx.Instance.format_function`はそのInstanceの変数名・添字を使います。どちらも式の値や意味を変える操作ではありません。
+
+Notebookでは{meth}`~ommx.Instance.display_function`で式のプレビューを表示できます。
+
+```{code-cell} ipython3
+labeled.display_function(labeled.objective)
+```
+
+表示上限や省略情報などは各API Referenceを参照してください。{meth}`~ommx.ParametricInstance.format_function`と{meth}`~ommx.ParametricInstance.display_function`では、パラメータのラベルも使えます。
+
+(named-evaluation-expressions)=
+## 目的関数以外にも、候補の指標を持てる
+
+費用を最小化しながら距離や稼働時間も確認したい場合は、評価用の式を{class}`~ommx.NamedFunction`としてInstanceに登録できます。名前付きの評価式は、最小化・最大化する目的関数でも、満たすべき制約でもありません。`evaluate()`の結果から指標を読みます。
+
+登録から値の取得までの小さな例は[目的関数以外の指標を評価する](../how_to/evaluate_named_functions.md)で説明します。
+
 ## 評価できる式が、そのまま求解に使えるとは限らない
 
 Functionで式を構築・評価できることと、Adapterがその表現を直接受け取れることも別です。ソルバーへ渡す問題の表現条件は[InstanceClass](./instance_class.md)、条件に合わせた変換の選択は[PreparationPolicy](./preparation_policy.md)で説明します。
