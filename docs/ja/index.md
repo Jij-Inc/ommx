@@ -132,6 +132,7 @@ how_to/sample_with_openjij_adapter
 how_to/load_existing_instance
 how_to/continue_experiment
 how_to/attach_experiment_data
+how_to/share_artifact_registry
 ```
 
 ```{toctree}
@@ -166,6 +167,7 @@ user_guide/adapter_initial_state
 :hidden:
 
 user_guide/experiment
+user_guide/artifact
 user_guide/tracing
 user_guide/cli
 user_guide/agent_skills

@@ -1736,7 +1736,7 @@
       "title": "Artifactで問題と結果を受け渡す",
       "slice": "G",
       "role": "tutorial",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
         "docs/ja/tutorial/share_in_ommx_artifact.md"
       ],
@@ -2909,8 +2909,10 @@
       "title": "Artifactの保存と受け渡しモデル",
       "slice": "G",
       "role": "guide",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/artifact.md"
+      ],
       "source_urls": [],
       "requires": [
         "instance.model"
@@ -3347,9 +3349,9 @@
       "title": "registryでArtifactを共有する",
       "slice": "G",
       "role": "how-to",
-      "status": "planned",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/tutorial/share_in_ommx_artifact.md"
+        "docs/ja/how_to/share_artifact_registry.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/share_in_ommx_artifact.md"
@@ -4602,7 +4604,7 @@
     },
     {
       "page": "T6",
-      "observed": "現物のhidden preparationにはSCIPがある。概念前提と実行依存を別検査する。"
+      "observed": "SDK b7のみ。送受信を別プロセス、受信を空のLocal Registryで実行。hidden solver preparationは削除。"
     }
   ],
   "review_notes": [
