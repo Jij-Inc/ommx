@@ -23,6 +23,8 @@ parts:
       - file: tutorial/implement_adapter
   - caption: "User Guide"
     chapters:
+      - file: user_guide/cli
+      - file: user_guide/agent_skills
       - file: user_guide/supported_ommx_adapters
       - file: user_guide/adapter_initial_state
       - file: user_guide/named_initial_state

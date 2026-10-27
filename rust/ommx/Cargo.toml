@@ -15,9 +15,10 @@ keywords = ["optimization", "ommx"]
 categories = ["data-structures", "mathematics", "science"]
 
 [features]
-default = ["remote-artifact"]
+default = ["remote-artifact", "cli"]
 remote-artifact = ["ocipkg/remote", "built"]
 built = ["dep:built"]
+cli = ["remote-artifact", "dep:sha2", "dep:tempfile"]
 
 [dependencies]
 anyhow.workspace = true
@@ -46,8 +47,10 @@ proptest.workspace = true
 prost.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2 = { workspace = true, optional = true }
 similar.workspace = true
 smallvec.workspace = true
+tempfile = { workspace = true, optional = true }
 thiserror.workspace = true
 url.workspace = true
 uuid.workspace = true
@@ -64,7 +67,7 @@ built = { workspace = true, optional = true }
 [[bin]]
 name = "ommx"
 path = "src/bin/ommx.rs"
-required-features = ["remote-artifact", "built"]
+required-features = ["cli"]
 
 [[example]]
 name = "create_artifact"

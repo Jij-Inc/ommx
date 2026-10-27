@@ -254,6 +254,9 @@ pub use ocipkg;
 pub use prost::Message;
 
 // Public modules
+#[cfg(feature = "cli")]
+pub mod cli;
+
 pub mod artifact;
 #[cfg(feature = "remote-artifact")]
 pub mod dataset;
