@@ -9,6 +9,19 @@ See the GitHub Releases above for full details. The following summarizes the mai
 
 ## New Features
 
+### Bundled agent plugin and skill discovery (2.9.4, unreleased; backport of [#1264](https://github.com/Jij-Inc/ommx/pull/1264))
+
+The Python package now includes the v2 `ommx` CLI. `uv run ommx plugin path`
+and `uv run ommx plugin marketplace path` print the bundled plugin and local
+marketplace directories. `uv run ommx skill path` prints the skills parent;
+`uv run ommx skill path ommx` selects the individual skill.
+The Rust executable and Python wheel embed the same assets and restore them
+in a cache keyed by contents and Rust CLI version. Discovery does not use the
+Artifact Local Registry. The current skill is a distribution placeholder.
+See [Install and Run the OMMX CLI](../user_guide/cli.md) and
+[Install OMMX Agent Plugins and Skills](../user_guide/agent_skills.md).
+
+
 ### Named states for SCIP initial solutions (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
 
 `NamedState` groups values by variable name and tuple subscripts. SCIP accepts

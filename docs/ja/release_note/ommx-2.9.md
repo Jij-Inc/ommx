@@ -9,6 +9,20 @@
 
 ## 新機能
 
+### 同梱のエージェントプラグインとスキルを取得（2.9.4、未公開；[#1264](https://github.com/Jij-Inc/ommx/pull/1264) のバックポート）
+
+Python パッケージに v2 の `ommx` CLI が含まれるようになります。
+`uv run ommx plugin path` と `uv run ommx plugin marketplace path` は、同梱プラグインと
+ローカルマーケットプレイスのディレクトリを表示します。`uv run ommx skill path` は
+スキルの親ディレクトリ、`uv run ommx skill path ommx` は個別のスキルを返します。
+Rust 実行ファイルと Python wheel は同じ内容を埋め込み、内容と Rust CLI バージョンに
+対応するキャッシュに復元します。取得時に Artifact Local Registry は使いません。
+現在のスキルは配布確認用のプレースホルダーです。
+[OMMX CLI のインストールと実行](../user_guide/cli.md) と
+[OMMX のエージェントプラグインとスキルを取得・導入する](../user_guide/agent_skills.md)
+を参照してください。
+
+
 ### 名前と添字による SCIP 初期解の指定 (2.9.3, [#1274](https://github.com/Jij-Inc/ommx/pull/1274))
 
 `NamedState` で変数の名前と添字をキーとする初期値を指定できます。

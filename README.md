@@ -59,7 +59,22 @@ OMMX Python SDK consists of the main package `ommx` and several adapters for OSS
 
 See [Supported Adapters](https://jij-inc.github.io/ommx/en/user_guide/supported_ommx_adapters.html) about a complete list of supported adapters for each solver/sampler.
 
+## CLI and coding-agent setup
+
+The Python SDK includes the `ommx` command starting with 2.9.4 (under development):
+
+```bash
+uv run ommx plugin path
+uv run ommx plugin marketplace path
+uv run ommx skill path ommx
+```
+
+See [Install and Run the OMMX CLI](docs/en/user_guide/cli.md) for v2 installation
+options, then [Install OMMX Agent Plugins and Skills](docs/en/user_guide/agent_skills.md)
+for setup and updates. The bundled skill is currently a distribution placeholder.
+
 # License
+
 © 2024 Jij Inc.
 
 This project is licensed under either of
