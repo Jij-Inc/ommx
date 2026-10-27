@@ -896,13 +896,8 @@ class OMMXHighsAdapter(SolverAdapter):
             if self.instance.output_objective is None:
                 solution_info = data.getSolution()
                 row_dual = solution_info.row_dual
-                row_dual_len = len(row_dual)
-
-                for constraint_id in solution.constraint_ids:
-                    if constraint_id < row_dual_len:
-                        solution.set_dual_variable(
-                            constraint_id, row_dual[constraint_id]
-                        )
+                for constraint_id, row_index in self._constraint_rows.items():
+                    solution.set_dual_variable(constraint_id, row_dual[row_index])
 
             return solution
 
@@ -1060,6 +1055,7 @@ class OMMXHighsAdapter(SolverAdapter):
         self.model.changeObjectiveSense(sense)
 
     def _set_constraints(self):
+        self._constraint_rows: dict[int, int] = {}
         for cid, constr in self.instance.constraints.items():
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
@@ -1077,11 +1073,14 @@ class OMMXHighsAdapter(SolverAdapter):
                         )
                     continue
             else:
+                row_index = self.model.getNumRow()
                 const_expr = highs_linear_expression(const_expr)
                 if constr.equality == Equality.EqualToZero:
                     self.model.addConstr(const_expr == 0, str(cid))
+                    self._constraint_rows[cid] = row_index
                 elif constr.equality == Equality.LessThanOrEqualToZero:
                     self.model.addConstr(const_expr <= 0, str(cid))
+                    self._constraint_rows[cid] = row_index
                 else:
                     raise OMMXHighsAdapterError(
                         f"Unsupported constraint equality kind: {constr.equality}"
