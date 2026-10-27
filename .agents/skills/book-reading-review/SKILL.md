@@ -67,6 +67,35 @@ The replacement must be available in the reviewed PR/revision, not only in a
 later stacked PR. Report an unmet route rather than recommending Ready while
 its replacement is still planned.
 
+## Surface API friction separately
+
+Do not absorb an awkward public API into increasingly elaborate explanations.
+When an ordinary reader task needs raw metadata keys, repeated low-level
+selection, or surprising call semantics, distinguish:
+
+- a missing introduction or poor explanation, which belongs in the Book;
+- a necessary domain distinction, which must be taught rather than hidden;
+- API friction, where the supported operation itself makes the task needlessly
+  difficult or its effects hard to discover.
+
+Verify an API candidate against the current implementation and a minimal user
+example, not only the length of its explanation. Respect accepted design
+tradeoffs and explicit exclusions; do not reopen them without new evidence.
+Search existing issues and PRs first, linking relevant work rather than
+creating duplicates.
+
+For a confirmed new API problem, file a separate follow-up issue when the task
+authorizes issue creation, using `ommx-issue-triage`. In a read-only review,
+report the candidate and request authority before posting. Include the reader's
+goal, expected versus actual behavior, minimal code, source revision, affected
+Book passage, and current workaround. Describe the missing capability and
+domain constraints without treating a proposed API signature as decided.
+
+Link the follow-up from the review record. Keep the Book's current workaround
+accurate and runnable; do not silently redesign the SDK in a Book PR. An
+ergonomic follow-up need not block the Book when the documented workflow is
+correct, but filing an issue does not excuse an incorrect example or promise.
+
 ## Reconcile changed explanations with the ledger
 
 The Book-owned data is `docs/_meta/reading_paths/manifest.json`, not part of the
