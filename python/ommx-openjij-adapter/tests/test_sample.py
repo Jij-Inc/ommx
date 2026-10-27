@@ -1,4 +1,3 @@
-from ommx import ConstraintID, Sos1ConstraintID
 from types import SimpleNamespace
 from typing import cast
 
@@ -48,7 +47,7 @@ def binary_equality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2,
-        constraints={ConstraintID(0): x1 * x2 == 0},
+        constraints={0: x1 * x2 == 0},
         sense=Sense.Maximize,
     )
 
@@ -65,7 +64,7 @@ def binary_inequality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2,
-        constraints={ConstraintID(0): x0 + x1 + x2 <= 2},
+        constraints={0: x0 + x1 + x2 <= 2},
         sense=Sense.Maximize,
     )
 
@@ -81,7 +80,7 @@ def integer_equality():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + 2 * x1,
-        constraints={ConstraintID(0): x0 + x1 == 0},
+        constraints={0: x0 + x1 == 0},
         sense=Sense.Maximize,
     )
 
@@ -97,7 +96,7 @@ def integer_inequality():
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0 + 2 * x1,
-        constraints={ConstraintID(0): x0 + x1 <= 0},
+        constraints={0: x0 + x1 <= 0},
         sense=Sense.Maximize,
     )
 
@@ -142,7 +141,7 @@ def hubo_binary_equality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2 + x0 * x1 * x2,
-        constraints={ConstraintID(0): x1 * x2 == 0},
+        constraints={0: x1 * x2 == 0},
         sense=Sense.Maximize,
     )
 
@@ -159,7 +158,7 @@ def hubo_binary_inequality():
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
         objective=x0 + 2 * x1 + 3 * x2 + x0 * x1 * x2,
-        constraints={ConstraintID(0): x0 + x1 + x2 <= 2},
+        constraints={0: x0 + x1 + x2 <= 2},
         sense=Sense.Maximize,
     )
 
@@ -367,7 +366,7 @@ def test_prepared_instance_evaluation_populates_variable_removed_with_trivial_in
     instance = Instance.from_components(
         decision_variables=[variable],
         objective=0,
-        constraints={ConstraintID(7): constraint(variable)},
+        constraints={7: constraint(variable)},
         sense=Sense.Minimize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
@@ -377,11 +376,7 @@ def test_prepared_instance_evaluation_populates_variable_removed_with_trivial_in
     )
     assert instance.used_decision_variables == []
 
-    sample_set = OMMXOpenJijSAAdapter.sample(
-        instance,
-        num_reads=1,
-        seed=999,
-    )
+    sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=1, seed=999)
     solution = sample_set.get(0)
     assert solution.state.get(0) == expected_value
     assert solution.feasible
@@ -394,9 +389,7 @@ def test_prepared_instance_evaluation_restores_integer_sos1():
         decision_variables=[integer, binary],
         objective=integer + binary,
         constraints={},
-        sos1_constraints={
-            Sos1ConstraintID(30): Sos1Constraint(variables=[integer, binary])
-        },
+        sos1_constraints={30: Sos1Constraint(variables=[integer, binary])},
         sense=Sense.Minimize,
     )
 
@@ -407,9 +400,5 @@ def test_prepared_instance_evaluation_restores_integer_sos1():
     )
     instance.prepare(input_class, policy)
 
-    sample_set = OMMXOpenJijSAAdapter.sample(
-        instance,
-        num_reads=4,
-        seed=999,
-    )
+    sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=4, seed=999)
     assert len(sample_set.constraints_df(kind="sos1")) == 1

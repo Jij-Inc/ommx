@@ -48,12 +48,11 @@ constraint = sum(w[i] * x[i] for i in range(N)) <= W
 これらを組み合わせてナップザック問題を表現する `ommx.ParametricInstance` を作りましょう。
 
 ```{code-cell} ipython3
-from ommx import ConstraintID
 parametric_instance = ParametricInstance.from_components(
     decision_variables=x,
     parameters=p + w + [W],
     objective=objective,
-    constraints={ConstraintID(0): constraint},
+    constraints={0: constraint},
     sense=Sense.Maximize,
 )
 ```

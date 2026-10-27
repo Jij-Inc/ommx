@@ -1,7 +1,5 @@
 """Tests for Instance description property."""
 
-from ommx import OneHotConstraintID
-
 import pytest
 
 from ommx import (
@@ -121,7 +119,7 @@ def test_instance_annotations_do_not_serialize_structural_constraints():
         decision_variables=x,
         objective=x[0],
         constraints={},
-        one_hot_constraints={OneHotConstraintID(10): OneHotConstraint(variables=x)},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Sense.Minimize,
     )
 
@@ -219,7 +217,7 @@ def test_solution_annotations_preserve_structural_constraint_evaluations():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={OneHotConstraintID(10): OneHotConstraint(variables=x)},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Sense.Maximize,
     )
     solution = instance.evaluate({1: 0.0, 2: 1.0, 3: 0.0})
@@ -329,7 +327,7 @@ def test_sample_set_annotations_preserve_structural_constraint_samples():
         decision_variables=x,
         objective=sum(x),
         constraints={},
-        one_hot_constraints={OneHotConstraintID(10): OneHotConstraint(variables=x)},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
         sense=Sense.Maximize,
     )
     sample_set = instance.evaluate_samples(

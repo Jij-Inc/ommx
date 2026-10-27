@@ -1,4 +1,3 @@
-from ommx import ConstraintID
 import math
 import warnings
 from typing import Any, cast
@@ -26,9 +25,7 @@ def _knapsack_instance() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(p[i] * x[i] for i in range(6)),
-        constraints={
-            ConstraintID(0): cast(Constraint, sum(w[i] * x[i] for i in range(6)) <= 47)
-        },
+        constraints={0: cast(Constraint, sum(w[i] * x[i] for i in range(6)) <= 47)},
         sense=Sense.Maximize,
     )
 
@@ -171,7 +168,7 @@ def test_solution_optimality_is_not_transported_through_fixed_penalty():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={ConstraintID(7): x == 1},
+        constraints={7: x == 1},
         sense=Sense.Minimize,
     )
     instance.to_qubo(uniform_penalty_weight=0.0)

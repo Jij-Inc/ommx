@@ -1,9 +1,3 @@
-from ommx import (
-    ConstraintID,
-    IndicatorConstraintID,
-    OneHotConstraintID,
-    Sos1ConstraintID,
-)
 import pytest
 
 from ommx import (
@@ -53,7 +47,7 @@ def test_input_class_accepts_complete_linear_mip_boundary(sense):
     instance = Instance.from_components(
         decision_variables=[x, y, z],
         objective=x + y + z,
-        constraints={ConstraintID(0): x + y == 1, ConstraintID(1): z <= 1},
+        constraints={0: x + y == 1, 1: z <= 1},
         sense=sense,
     )
 
@@ -105,7 +99,7 @@ def test_error_nonlinear_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0,  # constant 0
-        constraints={ConstraintID(0): 2.3 * x * x == 0},
+        constraints={0: 2.3 * x * x == 0},
         sense=Sense.Minimize,
     )
 
@@ -174,14 +168,14 @@ def test_rejects_special_constraints_without_mutating_input():
         constraints={},
         sense=Sense.Minimize,
         indicator_constraints={
-            IndicatorConstraintID(10): IndicatorConstraint(
+            10: IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={OneHotConstraintID(20): OneHotConstraint(variables=[x])},
-        sos1_constraints={Sos1ConstraintID(30): Sos1Constraint(variables=[y])},
+        one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     before = instance.to_v2_bytes()
 
@@ -214,14 +208,14 @@ def test_recommended_preparation_reaches_the_highs_input_class():
         constraints={},
         sense=Sense.Minimize,
         indicator_constraints={
-            IndicatorConstraintID(10): IndicatorConstraint(
+            10: IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={OneHotConstraintID(20): OneHotConstraint(variables=[x])},
-        sos1_constraints={Sos1ConstraintID(30): Sos1Constraint(variables=[y])},
+        one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     input_class = OMMXHighsAdapter.INPUT_CLASS
     assert not input_class.contains(instance)
@@ -243,7 +237,7 @@ def test_error_infeasible_constant_equality_constraint():
         decision_variables=[],
         objective=0,
         constraints={
-            ConstraintID(0): Constraint(
+            0: Constraint(
                 function=-1,
                 equality=Equality.EqualToZero,
             )
@@ -260,7 +254,7 @@ def test_error_infeasible_constant_inequality_constraint():
         decision_variables=[],
         objective=0,
         constraints={
-            ConstraintID(0): Constraint(
+            0: Constraint(
                 function=1,
                 equality=Equality.LessThanOrEqualToZero,
             )
@@ -278,11 +272,11 @@ def test_error_infeasible_model():
         decision_variables=[x],
         objective=0,
         constraints={
-            ConstraintID(0): Constraint(
+            0: Constraint(
                 function=x,
                 equality=Equality.EqualToZero,
             ),
-            ConstraintID(1): Constraint(
+            1: Constraint(
                 function=x - 1,
                 equality=Equality.EqualToZero,
             ),

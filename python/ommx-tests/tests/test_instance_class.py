@@ -207,21 +207,21 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
         sense=Sense.Maximize,
         objective=x * y,
         decision_variables=[x, y],
-        constraints={ConstraintID(10): y * y == 0, ConstraintID(11): y <= 0},
+        constraints={10: y * y == 0, 11: y <= 0},
         indicator_constraints={
-            IndicatorConstraintID(20): IndicatorConstraint(
+            20: IndicatorConstraint(
                 indicator_variable=x,
                 function=y * y,
                 equality=Equality.EqualToZero,
             ),
-            IndicatorConstraintID(21): IndicatorConstraint(
+            21: IndicatorConstraint(
                 indicator_variable=x,
                 function=y,
                 equality=Equality.LessThanOrEqualToZero,
             ),
         },
-        one_hot_constraints={OneHotConstraintID(30): OneHotConstraint(variables=[x])},
-        sos1_constraints={Sos1ConstraintID(40): Sos1Constraint(variables=[y])},
+        one_hot_constraints={30: OneHotConstraint(variables=[x])},
+        sos1_constraints={40: Sos1Constraint(variables=[y])},
     )
     limited = clause(
         "limited",
@@ -323,9 +323,9 @@ def test_non_polynomial_mismatches_preserve_function_location() -> None:
         sense=Sense.Minimize,
         objective=absolute_x,
         decision_variables=[x],
-        constraints={ConstraintID(10): absolute_x == 0},
+        constraints={10: absolute_x == 0},
         indicator_constraints={
-            IndicatorConstraintID(20): IndicatorConstraint(
+            20: IndicatorConstraint(
                 indicator_variable=x,
                 function=absolute_x,
                 equality=Equality.EqualToZero,
@@ -374,7 +374,7 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
         objective=x,
         decision_variables=[x],
         constraints={},
-        one_hot_constraints={OneHotConstraintID(30): OneHotConstraint(variables=[x])},
+        one_hot_constraints={30: OneHotConstraint(variables=[x])},
     )
     prepared_input_class = InstanceClass(
         [

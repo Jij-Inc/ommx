@@ -112,7 +112,6 @@ s1 = Sos1Constraint(id=11, variables=[0, 1])
 
 **After (v3)**:
 ```python
-from ommx import ConstraintID, OneHotConstraintID, Sos1ConstraintID
 c  = Constraint(function=x + y, equality=Equality.EqualToZero, name="cap")
 xs = [DecisionVariable.binary(i) for i in range(3)]
 oh = OneHotConstraint(variables=xs)
@@ -123,9 +122,9 @@ instance = Instance.from_components(
     sense=Sense.Minimize,
     objective=...,
     decision_variables=[...],
-    constraints={ConstraintID(5): c},
-    one_hot_constraints={OneHotConstraintID(10): oh},
-    sos1_constraints={Sos1ConstraintID(11): s1},
+    constraints={5: c},
+    one_hot_constraints={10: oh},
+    sos1_constraints={11: s1},
 )
 ```
 
@@ -143,9 +142,8 @@ Instance.from_components(..., constraints=[c], ...)
 
 **After (v3)**:
 ```python
-from ommx import ConstraintID
 c = x + y <= 5
-Instance.from_components(..., constraints={ConstraintID(0): c}, ...)
+Instance.from_components(..., constraints={0: c}, ...)
 ```
 
 ### 3.3 Global ID-counter helpers removed (`3.0.0a2`, [#806](https://github.com/Jij-Inc/ommx/pull/806))
@@ -179,15 +177,14 @@ Instance.from_components(
 
 **After (v3)**:
 ```python
-from ommx import ConstraintID, IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID
 Instance.from_components(
     sense=Sense.Minimize,
     objective=obj,
     decision_variables=[x0, x1],
-    constraints={ConstraintID(0): c0, ConstraintID(1): c1},           # dict keyed by constraint ID
-    indicator_constraints={IndicatorConstraintID(10): ic},       # all structural-constraint args are dicts
-    one_hot_constraints={OneHotConstraintID(20): oh},
-    sos1_constraints={Sos1ConstraintID(30): sc},
+    constraints={0: c0, 1: c1},           # dict keyed by constraint ID
+    indicator_constraints={10: ic},       # all structural-constraint args are dicts
+    one_hot_constraints={20: oh},
+    sos1_constraints={30: sc},
 )
 ```
 

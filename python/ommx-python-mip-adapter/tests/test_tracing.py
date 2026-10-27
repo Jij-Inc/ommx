@@ -1,4 +1,3 @@
-from ommx import ConstraintID
 from ommx.tracing import capture_trace
 from ommx import DecisionVariable, Instance, Sense
 
@@ -10,7 +9,7 @@ def test_solve_emits_convert_solve_decode_spans():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
-        constraints={ConstraintID(0): x[0] + x[1] + x[2] <= 2},
+        constraints={0: x[0] + x[1] + x[2] <= 2},
         sense=Sense.Minimize,
     )
 
@@ -29,7 +28,7 @@ def test_manual_flow_emits_convert_and_decode_spans():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],
-        constraints={ConstraintID(0): x[0] + x[1] + x[2] <= 2},
+        constraints={0: x[0] + x[1] + x[2] <= 2},
         sense=Sense.Minimize,
     )
 

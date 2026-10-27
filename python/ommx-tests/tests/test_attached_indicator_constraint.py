@@ -294,13 +294,13 @@ def test_parametric_from_components_preserves_indicator_id():
         constraints={},
         parameters=[Parameter(id=100, name="alpha")],
         indicator_constraints={
-            IndicatorConstraintID(5): IndicatorConstraint(
+            5: IndicatorConstraint(
                 indicator_variable=DecisionVariable.binary(1),
                 function=Function.from_linear(Linear({0: 1.0}, 0.0)),
                 equality=Equality.EqualToZero,
                 name="ic_at_5",
             ),
-            IndicatorConstraintID(10): IndicatorConstraint(
+            10: IndicatorConstraint(
                 indicator_variable=DecisionVariable.binary(1),
                 function=Function.from_linear(Linear({0: 1.0}, -0.5)),
                 equality=Equality.EqualToZero,

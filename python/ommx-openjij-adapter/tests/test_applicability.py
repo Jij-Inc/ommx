@@ -175,7 +175,7 @@ def test_direct_rejects_regular_constraints_without_mutation() -> None:
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={ConstraintID(7): x <= 0},
+        constraints={7: x <= 0},
         sense=Sense.Minimize,
     )
 
@@ -198,16 +198,14 @@ def test_direct_rejects_all_special_constraint_families_without_mutation() -> No
         objective=x + y,
         constraints={},
         indicator_constraints={
-            IndicatorConstraintID(10): IndicatorConstraint(
+            10: IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={
-            OneHotConstraintID(20): OneHotConstraint(variables=[x, y])
-        },
-        sos1_constraints={Sos1ConstraintID(30): Sos1Constraint(variables=[x, y])},
+        one_hot_constraints={20: OneHotConstraint(variables=[x, y])},
+        sos1_constraints={30: Sos1Constraint(variables=[x, y])},
         sense=Sense.Minimize,
     )
 
@@ -230,7 +228,7 @@ def test_recommended_policy_keeps_fixed_penalty_caller_owned() -> None:
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={ConstraintID(7): x == 0},
+        constraints={7: x == 0},
         sense=Sense.Minimize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS
@@ -256,18 +254,16 @@ def test_recommended_preparation_reaches_the_openjij_input_class() -> None:
     instance = Instance.from_components(
         decision_variables=[integer, indicator, x, y],
         objective=integer + indicator + x + y,
-        constraints={ConstraintID(40): integer <= 50},
+        constraints={40: integer <= 50},
         indicator_constraints={
-            IndicatorConstraintID(10): IndicatorConstraint(
+            10: IndicatorConstraint(
                 indicator_variable=indicator,
                 function=x - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={
-            OneHotConstraintID(20): OneHotConstraint(variables=[indicator, x])
-        },
-        sos1_constraints={Sos1ConstraintID(30): Sos1Constraint(variables=[x, y])},
+        one_hot_constraints={20: OneHotConstraint(variables=[indicator, x])},
+        sos1_constraints={30: Sos1Constraint(variables=[x, y])},
         sense=Sense.Maximize,
     )
     alias = instance

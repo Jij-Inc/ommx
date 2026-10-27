@@ -1,4 +1,3 @@
-from ommx import ConstraintID
 import math
 import uuid
 from dataclasses import dataclass
@@ -1011,7 +1010,7 @@ def test_log_sample_records_finished_sample_set_without_feasible_samples():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={ConstraintID(0): x == 1},
+        constraints={0: x == 1},
         sense=Sense.Minimize,
     )
     experiment = Experiment.with_temp_local_registry()

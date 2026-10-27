@@ -718,11 +718,10 @@ impl Instance {
     /// Selected owner operations establish their own output semantics, and
     /// successful composition reaches the target class.
     ///
-    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Maximize
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
     /// ... )
     /// >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
     /// >>> assert instance.prepare(InstanceClass.qubo(), policy) is None

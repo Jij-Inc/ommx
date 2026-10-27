@@ -1,4 +1,3 @@
-from ommx import ConstraintID
 import pytest
 from ommx import Instance, DecisionVariable, Rng, Sense
 
@@ -20,7 +19,7 @@ def test_random_samples_basic():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={ConstraintID(0): sum(x) <= 3},  # type: ignore
+        constraints={0: sum(x) <= 3},  # type: ignore
         sense=Sense.Maximize,
     )
 
@@ -52,7 +51,7 @@ def test_random_samples_only_used_variables():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1] + x[2],  # Only use first 3 variables
-        constraints={ConstraintID(0): x[1] + x[3] <= 1},  # Also use x[3]
+        constraints={0: x[1] + x[3] <= 1},  # Also use x[3]
         sense=Sense.Maximize,
     )
 

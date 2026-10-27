@@ -1,9 +1,3 @@
-from ommx import (
-    ConstraintID,
-    IndicatorConstraintID,
-    OneHotConstraintID,
-    Sos1ConstraintID,
-)
 import pytest
 
 from ommx import (
@@ -52,7 +46,7 @@ def test_input_class_accepts_complete_linear_mip_boundary(sense: Sense) -> None:
     instance = Instance.from_components(
         decision_variables=[x, y, z],
         objective=x + y + z,
-        constraints={ConstraintID(0): x + y == 1, ConstraintID(1): z <= 1},
+        constraints={0: x + y == 1, 1: z <= 1},
         sense=sense,
     )
 
@@ -103,7 +97,7 @@ def test_error_nonlinear_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0.0,
-        constraints={ConstraintID(0): 2.3 * x * x == 0},
+        constraints={0: 2.3 * x * x == 0},
         sense=Sense.Minimize,
     )
 
@@ -171,14 +165,14 @@ def test_rejects_special_constraints_without_mutating_input() -> None:
         constraints={},
         sense=Sense.Minimize,
         indicator_constraints={
-            IndicatorConstraintID(10): IndicatorConstraint(
+            10: IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={OneHotConstraintID(20): OneHotConstraint(variables=[x])},
-        sos1_constraints={Sos1ConstraintID(30): Sos1Constraint(variables=[y])},
+        one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     before = instance.to_v2_bytes()
 
@@ -210,14 +204,14 @@ def test_recommended_preparation_reaches_the_python_mip_input_class() -> None:
         constraints={},
         sense=Sense.Minimize,
         indicator_constraints={
-            IndicatorConstraintID(10): IndicatorConstraint(
+            10: IndicatorConstraint(
                 indicator_variable=x,
                 function=y - 1,
                 equality=Equality.LessThanOrEqualToZero,
             )
         },
-        one_hot_constraints={OneHotConstraintID(20): OneHotConstraint(variables=[x])},
-        sos1_constraints={Sos1ConstraintID(30): Sos1Constraint(variables=[y])},
+        one_hot_constraints={20: OneHotConstraint(variables=[x])},
+        sos1_constraints={30: Sos1Constraint(variables=[y])},
     )
     input_class = OMMXPythonMIPAdapter.INPUT_CLASS
     assert not input_class.contains(instance)
@@ -240,10 +234,10 @@ def test_dual_mapping_preserves_typed_sparse_constraint_ids():
         decision_variables=[x],
         objective=x,
         sense=Sense.Maximize,
-        constraints={ConstraintID(42): x <= 2},
+        constraints={42: x <= 2},
     )
     adapter = OMMXPythonMIPAdapter(instance)
     model = adapter.solver_input
     model.optimize()
     solution = adapter.decode(model)
-    assert solution.get_dual_variable(ConstraintID(42)) == pytest.approx(1)
+    assert solution.get_dual_variable(42) == pytest.approx(1)

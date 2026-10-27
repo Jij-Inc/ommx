@@ -7,8 +7,6 @@ in the manual diagnostic suite for end-to-end profiling. Instance-level
 algorithmic scaling is measured in ``rust/ommx/benches/evaluate.rs``.
 """
 
-from ommx import ConstraintID
-
 import pytest
 from ommx import DecisionVariable, Instance, Rng, Sense
 from ommx.dataset import miplib2017
@@ -22,7 +20,7 @@ def boundary_instance():
     return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={ConstraintID(i): x[i] <= 1 for i in range(size)},
+        constraints={i: x[i] <= 1 for i in range(size)},
         sense=Sense.Minimize,
     )
 

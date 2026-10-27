@@ -187,7 +187,6 @@ impl InstanceClass {
     ///
     /// The target accepts unconstrained minimization QUBO formulations and rejects models outside that class.
     ///
-    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> linear = Instance.from_components(
@@ -207,7 +206,7 @@ impl InstanceClass {
     /// ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> constrained = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={ConstraintID(0): x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> target = InstanceClass.qubo()
     /// >>> assert target.contains(linear)
@@ -228,7 +227,6 @@ impl InstanceClass {
     ///
     /// The target accepts unconstrained minimization Binary HUBO formulations and rejects models outside that class.
     ///
-    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> linear = Instance.from_components(
@@ -245,7 +243,7 @@ impl InstanceClass {
     /// ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
     /// ... )
     /// >>> constrained = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={ConstraintID(0): x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> target = InstanceClass.hubo()
     /// >>> assert target.contains(linear)

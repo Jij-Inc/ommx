@@ -35,7 +35,6 @@ $$
 It is clear that this has a feasible solution $x = 1, y = 0$.
 
 ```{code-cell} ipython3
-from ommx import ConstraintID
 from ommx import DecisionVariable, Instance, Sense
 
 # Create a simple instance
@@ -45,7 +44,7 @@ y = DecisionVariable.binary(2, name='y')
 instance = Instance.from_components(
     decision_variables=[x, y],
     objective=x + y,
-    constraints={ConstraintID(0): x * y == 0},
+    constraints={0: x * y == 0},
     sense=Sense.Maximize
 )
 

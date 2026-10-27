@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ommx import ConstraintID, OneHotConstraintID
 
 import pytest
 
@@ -51,8 +50,8 @@ def test_prepare_mutates_in_place_and_establishes_target_membership() -> None:
         sense=Sense.Maximize,
         objective=x + y,
         decision_variables=[x, y],
-        constraints={ConstraintID(10): x <= 2},
-        one_hot_constraints={OneHotConstraintID(20): OneHotConstraint(variables=[y])},
+        constraints={10: x <= 2},
+        one_hot_constraints={20: OneHotConstraint(variables=[y])},
     )
     target = unconstrained_class(
         allowed_variable_kinds={Kind.Binary},
@@ -99,7 +98,7 @@ def test_prepare_preserves_owner_signal_and_earlier_commits() -> None:
         sense=Sense.Maximize,
         objective=x,
         decision_variables=[x],
-        constraints={ConstraintID(10): x <= 2},
+        constraints={10: x <= 2},
     )
     target = unconstrained_class(
         allowed_variable_kinds={Kind.Integer},
@@ -122,7 +121,7 @@ def test_prepare_exposes_final_report_when_policy_is_exhausted() -> None:
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x],
-        constraints={ConstraintID(10): x == 1},
+        constraints={10: x == 1},
     )
     target = unconstrained_class(
         allowed_variable_kinds={Kind.Binary},
@@ -157,7 +156,7 @@ def test_fixed_penalty_weight_tolerance_reaches_the_owner_boundary(keyed: bool) 
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x],
-        constraints={ConstraintID(10): x == 1},
+        constraints={10: x == 1},
     )
     accepted.prepare(
         target,
@@ -169,7 +168,7 @@ def test_fixed_penalty_weight_tolerance_reaches_the_owner_boundary(keyed: bool) 
         sense=Sense.Minimize,
         objective=x,
         decision_variables=[x],
-        constraints={ConstraintID(10): x == 1},
+        constraints={10: x == 1},
     )
     before = rejected.to_v2_bytes()
     with pytest.raises(ValueError, match="Fixed penalty weight"):

@@ -9,12 +9,7 @@ kind × include / removed combination — update via
 """
 
 from __future__ import annotations
-from ommx import (
-    ConstraintID,
-    IndicatorConstraintID,
-    OneHotConstraintID,
-    Sos1ConstraintID,
-)
+from ommx import ConstraintID, OneHotConstraintID
 
 import pandas as pd
 import pytest
@@ -61,16 +56,16 @@ def _instance_all_kinds() -> Instance:
     return Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={ConstraintID(10): c},
+        constraints={10: c},
         indicator_constraints={
-            IndicatorConstraintID(20): IndicatorConstraint(
+            20: IndicatorConstraint(
                 indicator_variable=x[0],
                 function=x[1] + x[2] - 1,
                 equality=Equality.EqualToZero,
             )
         },
-        one_hot_constraints={OneHotConstraintID(30): OneHotConstraint(variables=x)},
-        sos1_constraints={Sos1ConstraintID(40): Sos1Constraint(variables=x)},
+        one_hot_constraints={30: OneHotConstraint(variables=x)},
+        sos1_constraints={40: Sos1Constraint(variables=x)},
         sense=Sense.Maximize,
     )
 
@@ -78,7 +73,7 @@ def _instance_all_kinds() -> Instance:
 def _instance_with_removed() -> Instance:
     """Instance whose regular constraint at id=10 has been relaxed."""
     inst = _instance_all_kinds()
-    inst.relax_constraint(ConstraintID(10), "manual_relax", phase="warm-up")
+    inst.relax_constraint(10, "manual_relax", phase="warm-up")
     return inst
 
 
@@ -92,7 +87,7 @@ def _parametric_instance() -> ParametricInstance:
         sense=Sense.Maximize,
         objective=sum(x),
         decision_variables=x,
-        constraints={ConstraintID(10): c},
+        constraints={10: c},
         parameters=[p],
     )
 
@@ -147,7 +142,7 @@ def test_instance_constraints_df_reports_composed_function_type():
     instance = Instance.from_components(
         decision_variables=[variable],
         objective=variable,
-        constraints={ConstraintID(10): constraint},
+        constraints={10: constraint},
         sense=Sense.Minimize,
     )
 
@@ -219,13 +214,13 @@ def test_instance_constraints_df_removed_true_id_sorted(snapshot):
         decision_variables=x,
         objective=sum(x),
         constraints={
-            ConstraintID(5): x[0] + x[1] == 1,
-            ConstraintID(30): x[1] + x[2] == 1,
-            ConstraintID(20): x[0] + x[2] == 1,
+            5: x[0] + x[1] == 1,
+            30: x[1] + x[2] == 1,
+            20: x[0] + x[2] == 1,
         },
         sense=Sense.Maximize,
     )
-    inst.relax_constraint(ConstraintID(20), "relax_middle")
+    inst.relax_constraint(20, "relax_middle")
     df = inst.constraints_df(kind="regular", removed=True)
     assert list(df.index) == [ConstraintID(5), ConstraintID(20), ConstraintID(30)]
     assert _df_snap(df) == snapshot
@@ -258,12 +253,12 @@ def test_instance_constraints_df_one_hot_removed_true(snapshot):
         objective=sum(x),
         constraints={},
         one_hot_constraints={
-            OneHotConstraintID(5): OneHotConstraint(variables=x[:2]),
-            OneHotConstraintID(7): OneHotConstraint(variables=x[1:]),
+            5: OneHotConstraint(variables=x[:2]),
+            7: OneHotConstraint(variables=x[1:]),
         },
         sense=Sense.Maximize,
     )
-    instance.convert_one_hot_to_constraint(OneHotConstraintID(7))
+    instance.convert_one_hot_to_constraint(7)
     df = instance.constraints_df(kind="one_hot", removed=True)
     # Globally id-sorted: active id 5, then removed id 7.
     assert list(df.index) == [OneHotConstraintID(5), OneHotConstraintID(7)]

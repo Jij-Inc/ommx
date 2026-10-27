@@ -553,7 +553,6 @@ class MyAdapter(SolverAdapter):
 For verification, let's solve a knapsack problem using this.
 
 ```{code-cell} ipython3
-from ommx import ConstraintID
 v = [10, 13, 18, 31, 7, 15]
 w = [11, 25, 20, 35, 10, 33]
 W = 47
@@ -570,7 +569,7 @@ x = [
 instance = Instance.from_components(
     decision_variables=x,
     objective=sum(v[i] * x[i] for i in range(N)),
-    constraints={ConstraintID(0): sum(w[i] * x[i] for i in range(N)) - W <= 0},
+    constraints={0: sum(w[i] * x[i] for i in range(N)) - W <= 0},
     sense=Sense.Maximize,
 )
 

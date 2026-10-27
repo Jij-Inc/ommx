@@ -148,7 +148,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         .. doctest::
 
-            >>> from ommx import ConstraintID
             >>> from ommx import Instance, DecisionVariable
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
@@ -158,7 +157,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={ConstraintID(0): sum(w[i] * x[i] for i in range(6)) <= 47},
+            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Sense.Maximize,
             ... )
 
@@ -179,7 +178,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             >>> solution.objective
             42.0
-            >>> solution.get_constraint_value(ConstraintID(0))
+            >>> solution.get_constraint_value(0)
             -1.0
 
         Infeasible Problem
@@ -193,7 +192,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x],
                 ...     objective=x,
-                ...     constraints={ConstraintID(0): x >= 4},
+                ...     constraints={0: x >= 4},
                 ...     sense=Sense.Maximize,
                 ... )
 
@@ -234,12 +233,12 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x, y],
                 ...     objective=x + y,
-                ...     constraints={ConstraintID(0): x + y <= 1},
+                ...     constraints={0: x + y <= 1},
                 ...     sense=Sense.Maximize,
                 ... )
 
                 >>> solution = OMMXPythonMIPAdapter.solve(instance)
-                >>> solution.get_dual_variable(ConstraintID(0))
+                >>> solution.get_dual_variable(0)
                 1.0
 
         """
@@ -305,7 +304,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         .. doctest::
 
-            >>> from ommx import ConstraintID
             >>> from ommx import Instance, DecisionVariable
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
@@ -315,7 +313,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints={ConstraintID(0): sum(w[i] * x[i] for i in range(6)) <= 47},
+            ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
             ...     sense=Sense.Maximize,
             ... )
 

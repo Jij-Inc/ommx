@@ -3,7 +3,6 @@ import enum
 import numpy as np
 
 from ommx import (
-    ConstraintID,
     Instance,
     DecisionVariable,
     Function,
@@ -116,7 +115,7 @@ class SingleFeasibleLPGenerator:
             ]
 
         # define constraints using Rust types
-        constraints: dict[ConstraintID, Constraint] = {}
+        constraints: dict[int, Constraint] = {}
         for i in range(len(self._b)):
             # Build linear function: sum(A[i][j] * x[j]) - b[i] == 0
             terms = {int(j): float(value) for j, value in enumerate(self._A[i])}
@@ -125,7 +124,7 @@ class SingleFeasibleLPGenerator:
                 equality=Equality.EqualToZero,
                 function=Function(linear),
             )
-            constraints[ConstraintID(i)] = constraint
+            constraints[i] = constraint
 
         return Instance.from_components(
             description=Instance.Description(name="LPTest"),

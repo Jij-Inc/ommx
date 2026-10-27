@@ -30,18 +30,16 @@ def mixed_formulation(
         objective=0,
         decision_variables=[binary_member, integer_member, selector],
         constraints={
-            ConstraintID(100): integer_member - 3 * selector <= 0,
-            ConstraintID(101): -integer_member - 2 * selector <= 0,
-            ConstraintID(102): binary_member + selector - 1 <= 0,
+            100: integer_member - 3 * selector <= 0,
+            101: -integer_member - 2 * selector <= 0,
+            102: binary_member + selector - 1 <= 0,
         },
     )
     request = Sos1BigMPromotionRequest(
         selector_claims={
-            ConstraintID(102): {
+            102: {
                 0: Sos1BigMSelectorClaim.reused(),
-                1: Sos1BigMSelectorClaim.fresh(
-                    10, upper_link=ConstraintID(100), lower_link=ConstraintID(101)
-                ),
+                1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
             }
         },
     )
@@ -59,7 +57,7 @@ def test_promotion_commits_link_tightening_with_promotion(mode: Mode) -> None:
 def test_strict_rejection_leaves_pending_tightening_unapplied() -> None:
     instance, valid = mixed_formulation(lower=-100, upper=100)
     before = instance.to_v2_bytes()
-    request = Sos1BigMPromotionRequest({**valid.selector_claims, ConstraintID(999): {}})
+    request = Sos1BigMPromotionRequest({**valid.selector_claims, 999: {}})
     with pytest.raises(Sos1BigMPromotionBatchRejectedError):
         instance.promote_sos1_big_m(request, mode="strict")
     assert instance.to_v2_bytes() == before
@@ -86,19 +84,13 @@ def test_scaled_links_tighten_continuous_bounds_mathematically(scale: float) -> 
         objective=member,
         decision_variables=[member, selector],
         constraints={
-            ConstraintID(100): scale * member - (3 * scale) * selector <= 0,
-            ConstraintID(101): -scale * member - (2 * scale) * selector <= 0,
-            ConstraintID(102): selector - 1 <= 0,
+            100: scale * member - (3 * scale) * selector <= 0,
+            101: -scale * member - (2 * scale) * selector <= 0,
+            102: selector - 1 <= 0,
         },
     )
     request = Sos1BigMPromotionRequest(
-        {
-            ConstraintID(102): {
-                1: Sos1BigMSelectorClaim.fresh(
-                    10, upper_link=ConstraintID(100), lower_link=ConstraintID(101)
-                )
-            }
-        }
+        {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101)}}
     )
     report = instance.promote_sos1_big_m(request, mode="strict")
     assert report.rejections == {}
@@ -160,18 +152,14 @@ def test_promote_sos1_big_m_accepts_tight_continuous_links() -> None:
         objective=0,
         decision_variables=[member, selector],
         constraints={
-            ConstraintID(100): member - 2 * selector <= 0,
-            ConstraintID(101): -member - 2 * selector <= 0,
-            ConstraintID(102): selector - 1 <= 0,
+            100: member - 2 * selector <= 0,
+            101: -member - 2 * selector <= 0,
+            102: selector - 1 <= 0,
         },
     )
     request = Sos1BigMPromotionRequest(
         selector_claims={
-            ConstraintID(102): {
-                1: Sos1BigMSelectorClaim.fresh(
-                    10, upper_link=ConstraintID(100), lower_link=ConstraintID(101)
-                )
-            }
+            102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101)}
         },
     )
 
@@ -192,19 +180,16 @@ def test_promote_sos1_big_m_keys_shared_member_formulations_by_cardinality(
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[first, second],
-        constraints={
-            ConstraintID(0): first - 1 <= 0,
-            ConstraintID(2**64 - 1): first + second - 1 <= 0,
-        },
+        constraints={0: first - 1 <= 0, 2**64 - 1: first + second - 1 <= 0},
     )
     # Reverse insertion order and boundary IDs distinguish keys from positions.
     request = Sos1BigMPromotionRequest(
         selector_claims={
-            ConstraintID(2**64 - 1): {
+            2**64 - 1: {
                 0: Sos1BigMSelectorClaim.reused(),
                 1: Sos1BigMSelectorClaim.reused(),
             },
-            ConstraintID(0): {0: Sos1BigMSelectorClaim.reused()},
+            0: {0: Sos1BigMSelectorClaim.reused()},
         },
     )
 
@@ -268,19 +253,15 @@ def test_promote_sos1_big_m_rejects_overlapping_links(mode: Mode) -> None:
         objective=0,
         decision_variables=[member, selector, independent_member],
         constraints={
-            ConstraintID(100): member - 3 * selector <= 0,
-            ConstraintID(102): selector - 1 <= 0,
-            ConstraintID(103): selector - 1 <= 0,
-            ConstraintID(202): independent_member - 1 <= 0,
+            100: member - 3 * selector <= 0,
+            102: selector - 1 <= 0,
+            103: selector - 1 <= 0,
+            202: independent_member - 1 <= 0,
         },
     )
-    overlapping = {1: Sos1BigMSelectorClaim.fresh(10, upper_link=ConstraintID(100))}
+    overlapping = {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100)}
     request = Sos1BigMPromotionRequest(
-        {
-            ConstraintID(102): overlapping,
-            ConstraintID(103): overlapping,
-            ConstraintID(202): {2: Sos1BigMSelectorClaim.reused()},
-        }
+        {102: overlapping, 103: overlapping, 202: {2: Sos1BigMSelectorClaim.reused()}}
     )
     before = instance.to_v2_bytes()
 
@@ -363,17 +344,12 @@ def test_promote_sos1_big_m_checks_mathematical_coverage(
         objective=member,
         decision_variables=[member, selector],
         constraints={
-            ConstraintID(100): scale * member - (scale * (3 - shortfall)) * selector
-            <= 0,
-            ConstraintID(102): selector - 1 <= 0,
+            100: scale * member - (scale * (3 - shortfall)) * selector <= 0,
+            102: selector - 1 <= 0,
         },
     )
     request = Sos1BigMPromotionRequest(
-        {
-            ConstraintID(102): {
-                1: Sos1BigMSelectorClaim.fresh(10, upper_link=ConstraintID(100))
-            }
-        }
+        {102: {1: Sos1BigMSelectorClaim.fresh(10, upper_link=100)}}
     )
     report = instance.promote_sos1_big_m(request, mode=mode)
     assert_report_keys(report, request)
@@ -412,9 +388,7 @@ def test_strict_rejection_preserves_python_attribute_errors(
         raising=False,
     )
     with pytest.raises(AttributeError) as exc_info:
-        instance.promote_sos1_big_m(
-            Sos1BigMPromotionRequest({ConstraintID(999): {}}), mode="strict"
-        )
+        instance.promote_sos1_big_m(Sos1BigMPromotionRequest({999: {}}), mode="strict")
 
     assert exc_info.value is failure
     assert instance.to_v2_bytes() == before

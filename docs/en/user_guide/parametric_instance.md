@@ -48,12 +48,11 @@ constraint = sum(w[i] * x[i] for i in range(N)) <= W
 Now let’s combine these elements into an `ommx.ParametricInstance` that represents the knapsack problem.
 
 ```{code-cell} ipython3
-from ommx import ConstraintID
 parametric_instance = ParametricInstance.from_components(
     decision_variables=x,
     parameters=p + w + [W],
     objective=objective,
-    constraints={ConstraintID(0): constraint},
+    constraints={0: constraint},
     sense=Sense.Maximize,
 )
 ```

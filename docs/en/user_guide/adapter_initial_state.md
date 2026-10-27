@@ -23,7 +23,6 @@ The initial solution (`initial_state`) that can be provided is of type `ToState`
 We'll demonstrate how to provide an initial solution using the following instance:
 
 ```{code-cell} ipython3
-from ommx import ConstraintID
 from ommx import DecisionVariable, Instance, Sense, State
 
 x = DecisionVariable.integer(1, lower=0, upper=5, name="x", subscripts=[0])
@@ -32,7 +31,7 @@ y = DecisionVariable.integer(2, lower=0, upper=5, name="x", subscripts=[1])
 ommx_instance = Instance.from_components(
     decision_variables=[x, y],
     objective=x - y,
-    constraints={ConstraintID(0): x + y <= 5},
+    constraints={0: x + y <= 5},
     sense=Sense.Maximize,
 )
 ```

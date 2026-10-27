@@ -4229,12 +4229,11 @@ class Instance:
 
         The driver is equivalent to QUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.
 
-        >>> from ommx import ConstraintID
         >>> import copy
         >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
         ... )
         >>> explicit = copy.copy(instance)
         >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
@@ -4253,7 +4252,7 @@ class Instance:
         Mutually exclusive penalty options raise ``ValueError`` before mutating the instance.
 
         >>> unchanged = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
         ... )
         >>> before = unchanged.to_v2_bytes()
         >>> try:
@@ -4280,12 +4279,11 @@ class Instance:
 
         The driver is equivalent to HUBO Preparation followed by active-objective formatting and preserves the output semantics present on entry.
 
-        >>> from ommx import ConstraintID
         >>> import copy
         >>> from ommx import DecisionVariable, Instance, InstanceClass, PreparationPolicy, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
         ... )
         >>> explicit = copy.copy(instance)
         >>> policy = PreparationPolicy.for_hubo(uniform_penalty_weight=2.0)
@@ -4304,7 +4302,7 @@ class Instance:
         Mutually exclusive penalty options raise ``ValueError`` before mutating the instance.
 
         >>> unchanged = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
         ... )
         >>> before = unchanged.to_v2_bytes()
         >>> try:
@@ -4364,7 +4362,7 @@ class Instance:
         >>> from ommx import DecisionVariable, Instance, Optimality, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
         ... )
         >>> parametric = instance.penalty_method()
         >>> parameters = {parameter.id: 2.0 for parameter in parametric.parameters}
@@ -4404,7 +4402,7 @@ class Instance:
         >>> from ommx import DecisionVariable, Instance, Optimality, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
         ... )
         >>> parametric = instance.uniform_penalty_method()
         >>> parameter_id = parametric.parameters[0].id
@@ -4634,13 +4632,12 @@ class Instance:
 
         Generate samples for a simple instance:
 
-        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, Rng, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={ConstraintID(0): sum(x) <= 2},
+        ...     constraints={0: sum(x) <= 2},
         ...     sense=Sense.Maximize,
         ... )
 
@@ -4675,16 +4672,16 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={ConstraintID(1): sum(x) == 3},
+        ...     constraints={1: sum(x) == 3},
         ...     sense=Sense.Maximize,
         ... )
         >>> assert set(instance.constraints) == {ConstraintID(1)}
 
-        >>> instance.relax_constraint(ConstraintID(1), "manual relaxation")
+        >>> instance.relax_constraint(1, "manual relaxation")
         >>> assert not instance.constraints
         >>> assert set(instance.removed_constraints) == {ConstraintID(1)}
 
-        >>> instance.restore_constraint(ConstraintID(1))
+        >>> instance.restore_constraint(1)
         >>> assert set(instance.constraints) == {ConstraintID(1)}
         >>> assert not instance.removed_constraints
         """
@@ -4730,17 +4727,16 @@ class Instance:
 
         # Examples
 
-        >>> from ommx import OneHotConstraintID
         >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
-        ...     one_hot_constraints={OneHotConstraintID(1): OneHotConstraint(variables=x)},
+        ...     one_hot_constraints={1: OneHotConstraint(variables=x)},
         ...     sense=Sense.Minimize,
         ... )
-        >>> new_id = instance.convert_one_hot_to_constraint(OneHotConstraintID(1))
+        >>> new_id = instance.convert_one_hot_to_constraint(1)
         >>> instance.one_hot_constraints
         {}
         >>> instance.constraints
@@ -4763,7 +4759,6 @@ class Instance:
 
         # Examples
 
-        >>> from ommx import OneHotConstraintID
         >>> from ommx import Instance, DecisionVariable, OneHotConstraint, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
@@ -4771,8 +4766,8 @@ class Instance:
         ...     objective=sum(x),
         ...     constraints={},
         ...     one_hot_constraints={
-        ...         OneHotConstraintID(1): OneHotConstraint(variables=x[:2]),
-        ...         OneHotConstraintID(2): OneHotConstraint(variables=x[2:]),
+        ...         1: OneHotConstraint(variables=x[:2]),
+        ...         2: OneHotConstraint(variables=x[2:]),
         ...     },
         ...     sense=Sense.Minimize,
         ... )
@@ -4830,17 +4825,16 @@ class Instance:
 
         All-binary SOS1 reduces to ``sum(x_i) - 1 <= 0`` without extra variables:
 
-        >>> from ommx import Sos1ConstraintID
         >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints={},
-        ...     sos1_constraints={Sos1ConstraintID(1): Sos1Constraint(variables=x)},
+        ...     sos1_constraints={1: Sos1Constraint(variables=x)},
         ...     sense=Sense.Minimize,
         ... )
-        >>> instance.convert_sos1_to_constraints(Sos1ConstraintID(1))
+        >>> instance.convert_sos1_to_constraints(1)
         [ConstraintID(0)]
         >>> instance.sos1_constraints
         {}
@@ -4865,7 +4859,6 @@ class Instance:
 
         # Examples
 
-        >>> from ommx import Sos1ConstraintID
         >>> from ommx import Instance, DecisionVariable, Sense, Sos1Constraint
         >>> x = [DecisionVariable.binary(i) for i in range(4)]
         >>> instance = Instance.from_components(
@@ -4873,8 +4866,8 @@ class Instance:
         ...     objective=sum(x),
         ...     constraints={},
         ...     sos1_constraints={
-        ...         Sos1ConstraintID(1): Sos1Constraint(variables=x[:2]),
-        ...         Sos1ConstraintID(2): Sos1Constraint(variables=x[2:]),
+        ...         1: Sos1Constraint(variables=x[:2]),
+        ...         2: Sos1Constraint(variables=x[2:]),
         ...     },
         ...     sense=Sense.Minimize,
         ... )
@@ -4948,7 +4941,6 @@ class Instance:
 
         Convert an inequality indicator where the upper side is active:
 
-        >>> from ommx import IndicatorConstraintID
         >>> from ommx import (
         ...     Instance, DecisionVariable, IndicatorConstraint, Equality, Sense,
         ... )
@@ -4963,10 +4955,10 @@ class Instance:
         ...     decision_variables=[x, y],
         ...     objective=x,
         ...     constraints={},
-        ...     indicator_constraints={IndicatorConstraintID(1): ic},
+        ...     indicator_constraints={1: ic},
         ...     sense=Sense.Minimize,
         ... )
-        >>> instance.convert_indicator_to_constraint(IndicatorConstraintID(1))
+        >>> instance.convert_indicator_to_constraint(1)
         [ConstraintID(0)]
         >>> instance.indicator_constraints
         {}
@@ -5163,14 +5155,14 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={ConstraintID(0): x[0] + 2*x[1] <= 5},
+        ...     constraints={0: x[0] + 2*x[1] <= 5},
         ...     sense=Sense.Maximize,
         ... )
 
         Introduce an integer slack variable
 
         >>> instance.convert_inequality_to_equality_with_integer_slack(
-        ...     constraint_id=ConstraintID(0),
+        ...     constraint_id=0,
         ...     max_integer_range=32
         ... )
         >>> assert instance.constraints[ConstraintID(0)].function.terms == {
@@ -5227,14 +5219,14 @@ class Instance:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={ConstraintID(0): x[0] + 2*x[1] <= 4},
+        ...     constraints={0: x[0] + 2*x[1] <= 4},
         ...     sense=Sense.Maximize,
         ... )
 
         Introduce an integer slack variable s in [0, 2]
 
         >>> b = instance.add_integer_slack_to_inequality(
-        ...     constraint_id=ConstraintID(0),
+        ...     constraint_id=0,
         ...     slack_upper_bound=2
         ... )
         >>> assert b == 2.0
@@ -5517,7 +5509,6 @@ class Instance:
 
         Optimality is preserved for equivalent objective conversion and discarded after penalty preparation.
 
-        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, Optimality, Sense
         >>> x = DecisionVariable.binary(0)
         >>> equivalent = Instance.from_components(
@@ -5528,7 +5519,7 @@ class Instance:
         >>> for status in statuses:
         ...     assert equivalent.map_active_optimality(status) == status
         >>> penalized = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
         ... )
         >>> _ = penalized.to_qubo(uniform_penalty_weight=1.0)
         >>> for status in statuses:
@@ -5665,11 +5656,10 @@ class Instance:
         Selected owner operations establish their own output semantics, and
         successful composition reaches the target class.
 
-        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Maximize
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
         ... )
         >>> policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
         >>> assert instance.prepare(InstanceClass.qubo(), policy) is None
@@ -5745,7 +5735,6 @@ class InstanceClass:
 
         The target accepts unconstrained minimization QUBO formulations and rejects models outside that class.
 
-        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
         >>> x = DecisionVariable.binary(0)
         >>> linear = Instance.from_components(
@@ -5765,7 +5754,7 @@ class InstanceClass:
         ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
         ... )
         >>> constrained = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(0): x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
         ... )
         >>> target = InstanceClass.qubo()
         >>> assert target.contains(linear)
@@ -5785,7 +5774,6 @@ class InstanceClass:
 
         The target accepts unconstrained minimization Binary HUBO formulations and rejects models outside that class.
 
-        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, InstanceClass, Sense
         >>> x = DecisionVariable.binary(0)
         >>> linear = Instance.from_components(
@@ -5802,7 +5790,7 @@ class InstanceClass:
         ...     decision_variables=[continuous], objective=continuous, constraints={}, sense=Sense.Minimize
         ... )
         >>> constrained = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(0): x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, constraints={0: x == 1}, sense=Sense.Minimize
         ... )
         >>> target = InstanceClass.hubo()
         >>> assert target.contains(linear)
@@ -7056,11 +7044,10 @@ class ParametricInstance:
 
         A v2 round-trip preserves both active and output objective semantics through materialization.
 
-        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> source = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
         ... )
         >>> parametric = source.uniform_penalty_method()
         >>> parameter_id = parametric.parameters[0].id
@@ -7129,11 +7116,10 @@ class ParametricInstance:
 
         Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists. Materialization substitutes parameters in the active energy, and an existing output objective remains explicit even if specialization makes it structurally equal to the active objective.
 
-        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> source = Instance.from_components(
-        ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Minimize
+        ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
         ... )
         >>> parametric = source.uniform_penalty_method()
         >>> parameter_id = parametric.parameters[0].id
@@ -8310,13 +8296,12 @@ class SampleSet:
     subject to x_1 + x_2 + x_3 = 1
     x_1, x_2, x_3 in {0, 1}
 
-    >>> from ommx import ConstraintID
     >>> from ommx import DecisionVariable, Instance, Sense
     >>> x = [DecisionVariable.binary(i) for i in range(3)]
     >>> instance = Instance.from_components(
     ...     decision_variables=x,
     ...     objective=x[0] + 2*x[1] + 3*x[2],
-    ...     constraints={ConstraintID(0): sum(x) == 1},
+    ...     constraints={0: sum(x) == 1},
     ...     sense=Sense.Maximize,
     ... )
 
@@ -9589,13 +9574,12 @@ class Solution:
 
         # Examples
 
-        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={ConstraintID(0): sum(x) == 1},
+        ...     constraints={0: sum(x) == 1},
         ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({i: 1 for i in range(3)})
@@ -9641,7 +9625,6 @@ class Solution:
 
         # Examples
 
-        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
@@ -9649,7 +9632,7 @@ class Solution:
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints={ConstraintID(0): c0, ConstraintID(1): c1},
+        ...     constraints={0: c0, 1: c1},
         ...     sense=Sense.Maximize,
         ... )
         >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})

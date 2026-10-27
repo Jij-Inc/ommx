@@ -164,10 +164,9 @@ Tighten variable bounds using all active regular constraints or a selected set
 of constraint IDs:
 
 ```python
-from ommx import ConstraintID
 changed_bounds = instance.tighten_bounds_simultaneously_once()  # variable ID -> updated Bound
 # Use only the regular constraints with IDs 100 and 101:
-changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({ConstraintID(100), ConstraintID(101)})
+changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
 # Override the per-row variable-term limit (default: 32).
 changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
 ```

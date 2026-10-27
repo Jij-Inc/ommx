@@ -71,7 +71,7 @@ def test_public_model_properties_return_typed_enum_members() -> None:
     instance = Instance.from_components(
         decision_variables=[variable],
         objective=variable,
-        constraints={ConstraintID(0): constraint},
+        constraints={0: constraint},
         sense=Sense.Minimize,
     )
     attached_variable = instance.decision_variables[0]

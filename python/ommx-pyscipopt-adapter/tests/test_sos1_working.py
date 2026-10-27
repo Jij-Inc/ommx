@@ -1,6 +1,6 @@
 """Test SOS1 functionality with valid constraints."""
 
-from ommx import ConstraintID, Sos1ConstraintID
+from ommx import Sos1ConstraintID
 
 from ommx import Function, DecisionVariable, Instance, Sense, Sos1Constraint
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
@@ -28,12 +28,8 @@ def test_sos1_constraint_functionality():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={
-            ConstraintID(1): dummy_constraint,
-            ConstraintID(2): bigm1,
-            ConstraintID(3): bigm2,
-        },  # type: ignore
-        sos1_constraints={Sos1ConstraintID(0): sos1},
+        constraints={1: dummy_constraint, 2: bigm1, 3: bigm2},  # type: ignore
+        sos1_constraints={0: sos1},
         sense=Sense.Minimize,
     )
 
@@ -70,8 +66,8 @@ def test_sos1_constraint_naming():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={ConstraintID(10): constraint1},  # type: ignore
-        sos1_constraints={Sos1ConstraintID(42): sos1},
+        constraints={10: constraint1},  # type: ignore
+        sos1_constraints={42: sos1},
         sense=Sense.Minimize,
     )
 
@@ -106,8 +102,8 @@ def test_sos1_constraint_naming_no_bigm():
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints={ConstraintID(5): constraint1},  # type: ignore
-        sos1_constraints={Sos1ConstraintID(7): sos1},
+        constraints={5: constraint1},  # type: ignore
+        sos1_constraints={7: sos1},
         sense=Sense.Minimize,
     )
 

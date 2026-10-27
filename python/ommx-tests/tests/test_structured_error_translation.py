@@ -1,4 +1,3 @@
-from ommx import ConstraintID
 import pytest
 
 import ommx
@@ -11,7 +10,7 @@ def _evaluated_results() -> tuple[ommx.Solution, ommx.SampleSet]:
     instance = ommx.Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={ConstraintID(0): constraint},
+        constraints={0: constraint},
         sense=ommx.Sense.Minimize,
         named_functions=[named_function],
     )
@@ -24,11 +23,9 @@ def _evaluated_results() -> tuple[ommx.Solution, ommx.SampleSet]:
         lambda solution, _sample_set: solution.extract_decision_variables("missing"),
         lambda solution, _sample_set: solution.extract_constraints("missing"),
         lambda solution, _sample_set: solution.extract_named_functions("missing"),
-        lambda solution, _sample_set: solution.get_constraint_value(ConstraintID(999)),
-        lambda solution, _sample_set: solution.get_dual_variable(ConstraintID(999)),
-        lambda solution, _sample_set: solution.set_dual_variable(
-            ConstraintID(999), None
-        ),
+        lambda solution, _sample_set: solution.get_constraint_value(999),
+        lambda solution, _sample_set: solution.get_dual_variable(999),
+        lambda solution, _sample_set: solution.set_dual_variable(999, None),
         lambda _solution, sample_set: sample_set.get(999),
         lambda _solution, sample_set: sample_set.get_sample_by_id(999),
         lambda _solution, sample_set: sample_set.extract_decision_variables(
@@ -164,7 +161,7 @@ def test_parameterized_constraints_raise_value_error() -> None:
     instance = ommx.Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={ConstraintID(0): constraint},
+        constraints={0: constraint},
         sense=ommx.Sense.Minimize,
     )
     solution = instance.evaluate({0: 1})
@@ -181,7 +178,7 @@ def test_missing_feasible_sample_raises_value_error_for_all_aliases() -> None:
     instance = ommx.Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={ConstraintID(0): x == 1},
+        constraints={0: x == 1},
         sense=ommx.Sense.Minimize,
     )
     sample_set = instance.evaluate_samples({7: {0: 0}})

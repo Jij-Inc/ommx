@@ -26,7 +26,7 @@ OMMXは、これらの多様なデータを効率的かつシンプルに管理�
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-from ommx import ConstraintID, Constraint, DecisionVariable, Equality, Instance, Sense
+from ommx import Constraint, DecisionVariable, Equality, Instance, Sense
 from ommx_pyscipopt_adapter.adapter import OMMXPySCIPOptAdapter
 import pandas as pd
 
@@ -77,7 +77,7 @@ instance = Instance.from_components(
     # 目的関数を登録する
     objective=objective,
     # 全ての制約条件を登録する (キーは制約ID)
-    constraints={ConstraintID(0): constraint},
+    constraints={0: constraint},
     # 最大化問題であることを指定する
     sense=Sense.Maximize,
 )

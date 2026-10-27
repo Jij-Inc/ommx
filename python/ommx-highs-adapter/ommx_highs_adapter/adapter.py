@@ -563,7 +563,6 @@ class OMMXHighsAdapter(SolverAdapter):
 
     Examples
     --------
-    >>> from ommx import ConstraintID
     >>> from ommx_highs_adapter import OMMXHighsAdapter
     >>> from ommx import DecisionVariable, Instance, Sense
     >>>
@@ -573,7 +572,7 @@ class OMMXHighsAdapter(SolverAdapter):
     >>> instance = Instance.from_components(
     ...     decision_variables=[x, y],
     ...     objective=2*x + 3*y,
-    ...     constraints={ConstraintID(0): x + y <= 5},
+    ...     constraints={0: x + y <= 5},
     ...     sense=Sense.Maximize,
     ... )
     >>>
@@ -702,7 +701,6 @@ class OMMXHighsAdapter(SolverAdapter):
         --------
         **Knapsack Problem**
 
-        >>> from ommx import ConstraintID
         >>> from ommx import Instance, DecisionVariable, Solution
         >>> from ommx_highs_adapter import OMMXHighsAdapter
         >>>
@@ -712,7 +710,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(p[i] * x[i] for i in range(6)),
-        ...     constraints={ConstraintID(0): sum(w[i] * x[i] for i in range(6)) <= 47},
+        ...     constraints={0: sum(w[i] * x[i] for i in range(6)) <= 47},
         ...     sense=Sense.Maximize,
         ... )
         >>>
@@ -731,7 +729,7 @@ class OMMXHighsAdapter(SolverAdapter):
         >>> instance = Instance.from_components(
         ...     decision_variables=[x],
         ...     objective=x,
-        ...     constraints={ConstraintID(0): x >= 4},  # Impossible: x ≤ 3 and x ≥ 4
+        ...     constraints={0: x >= 4},  # Impossible: x ≤ 3 and x ≥ 4
         ...     sense=Sense.Maximize,
         ... )
         >>> OMMXHighsAdapter.solve(instance)  # doctest: +IGNORE_EXCEPTION_DETAIL

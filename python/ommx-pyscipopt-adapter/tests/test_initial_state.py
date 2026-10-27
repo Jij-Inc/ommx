@@ -1,4 +1,3 @@
-from ommx import ConstraintID
 import pytest
 
 from ommx import DecisionVariable, Instance, NamedState, Sense, State
@@ -55,7 +54,7 @@ def test_named_initial_state_is_stored_before_optimization(
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=2 * x + y,
-        constraints={ConstraintID(0): x + y <= 5},
+        constraints={0: x + y <= 5},
         sense=Sense.Maximize,
     )
     # The same user input works even when IDs and their ordering change.
@@ -117,7 +116,7 @@ def test_adapter_class_with_initial_state():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints={ConstraintID(0): x + y <= 5},
+        constraints={0: x + y <= 5},
         sense=Sense.Maximize,
     )
     initial_state = State(
@@ -149,7 +148,7 @@ def test_solve_with_initial_state():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints={ConstraintID(0): x + y <= 5},
+        constraints={0: x + y <= 5},
         sense=Sense.Maximize,
     )
     initial_state = State(
@@ -177,7 +176,7 @@ def test_adapter_class_with_initial_state_from_mapping():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints={ConstraintID(0): x + y <= 5},
+        constraints={0: x + y <= 5},
         sense=Sense.Maximize,
     )
     initial_mapping = {
@@ -206,7 +205,7 @@ def test_solve_with_initial_state_from_mapping():
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x - y,
-        constraints={ConstraintID(0): x + y <= 5},
+        constraints={0: x + y <= 5},
         sense=Sense.Maximize,
     )
     initial_mapping = {

@@ -1,7 +1,5 @@
 """Test decision-variable role and used-variable APIs."""
 
-from ommx import ConstraintID
-
 import math
 
 import pytest
@@ -16,7 +14,7 @@ def test_decision_variable_roles_basic():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={ConstraintID(0): x[1] + x[2] == 1},
+        constraints={0: x[1] + x[2] == 1},
         sense=Sense.Maximize,
     )
 

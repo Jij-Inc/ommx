@@ -30,13 +30,12 @@ use std::collections::{BTreeMap, BTreeSet};
 /// subject to x_1 + x_2 + x_3 = 1
 /// x_1, x_2, x_3 in {0, 1}
 ///
-/// >>> from ommx import ConstraintID
 /// >>> from ommx import DecisionVariable, Instance, Sense
 /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
 /// >>> instance = Instance.from_components(
 /// ...     decision_variables=x,
 /// ...     objective=x[0] + 2*x[1] + 3*x[2],
-/// ...     constraints={ConstraintID(0): sum(x) == 1},
+/// ...     constraints={0: sum(x) == 1},
 /// ...     sense=Sense.Maximize,
 /// ... )
 ///

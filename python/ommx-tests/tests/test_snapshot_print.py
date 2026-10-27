@@ -1,7 +1,5 @@
 """Snapshot tests for print output of OMMX v1 classes."""
 
-from ommx import ConstraintID, IndicatorConstraintID, OneHotConstraintID
-
 from ommx import (
     Sense,
     Equality,
@@ -118,10 +116,7 @@ def test_instance_stats_print(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={
-            ConstraintID(0): x[0] + x[1] <= 1,
-            ConstraintID(1): x[1] + x[2] >= 1,
-        },
+        constraints={0: x[0] + x[1] <= 1, 1: x[1] + x[2] >= 1},
         sense=Sense.Minimize,
     )
     stats = instance.stats()
@@ -152,9 +147,9 @@ def test_instance_print_uses_modeling_labels(snapshot):
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0] + x[1],
-        constraints={ConstraintID(10): capacity},
-        indicator_constraints={IndicatorConstraintID(20): indicator},
-        one_hot_constraints={OneHotConstraintID(30): one_hot},
+        constraints={10: capacity},
+        indicator_constraints={20: indicator},
+        one_hot_constraints={30: one_hot},
         named_functions=[score],
         sense=Sense.Maximize,
     )
@@ -191,7 +186,7 @@ def test_instance_print_disambiguates_duplicate_labels_across_sections(snapshot)
     instance = Instance.from_components(
         decision_variables=[x0, x1],
         objective=x0,
-        constraints={ConstraintID(1): constraint},
+        constraints={1: constraint},
         sense=Sense.Minimize,
     )
 
@@ -211,7 +206,7 @@ def test_parametric_instance_print_disambiguates_parameter_and_structural_variab
         objective=p,
         constraints={},
         parameters=[p],
-        one_hot_constraints={OneHotConstraintID(7): one_hot},
+        one_hot_constraints={7: one_hot},
         sense=Sense.Minimize,
     )
 
@@ -225,7 +220,7 @@ def test_instance_print_limits_section_rows(snapshot):
         DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(25)
     ]
     constraints = {
-        ConstraintID(i): Constraint(
+        i: Constraint(
             function=variables[i] - 1,
             equality=Equality.LessThanOrEqualToZero,
             name="row",
@@ -254,7 +249,7 @@ def test_instance_print_limits_structural_variable_sets(snapshot):
         decision_variables=variables,
         objective=variables[0],
         constraints={},
-        one_hot_constraints={OneHotConstraintID(3): one_hot},
+        one_hot_constraints={3: one_hot},
         sense=Sense.Minimize,
     )
 

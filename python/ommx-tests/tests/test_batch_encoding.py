@@ -14,7 +14,7 @@ def test_encoding_precedes_penalty_and_preserves_output_semantics(format_name, k
     instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
-        constraints={ConstraintID(7): x + y == 2},
+        constraints={7: x + y == 2},
         sense=Sense.Minimize,
     )
     parametric = (

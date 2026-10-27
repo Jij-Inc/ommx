@@ -1,4 +1,3 @@
-from ommx import ConstraintID
 from pathlib import Path
 
 import pytest
@@ -86,9 +85,7 @@ def test_output():
 
     objective = sum(obj_coeff[i] * x[i] for i in range(6)) + 10
     constraints = {
-        ConstraintID(0): (
-            sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500
-        ).set_name(  # type: ignore[reportAttributeAccessIssue]
+        0: (sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500).set_name(  # type: ignore[reportAttributeAccessIssue]
             f"constr{c}"
         )
         for c in range(5)

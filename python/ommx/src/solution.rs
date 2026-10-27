@@ -309,13 +309,12 @@ impl Solution {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={ConstraintID(0): sum(x) == 1},
+    /// ...     constraints={0: sum(x) == 1},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({i: 1 for i in range(3)})
@@ -386,7 +385,6 @@ impl Solution {
     ///
     /// # Examples
     ///
-    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> c0 = (x[0] + x[1] == 1).set_name("c").add_subscripts([0])
@@ -394,7 +392,7 @@ impl Solution {
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),
-    /// ...     constraints={ConstraintID(0): c0, ConstraintID(1): c1},
+    /// ...     constraints={0: c0, 1: c1},
     /// ...     sense=Sense.Maximize,
     /// ... )
     /// >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})

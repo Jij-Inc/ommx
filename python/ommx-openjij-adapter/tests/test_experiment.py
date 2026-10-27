@@ -1,4 +1,3 @@
-from ommx import ConstraintID
 from ommx import DecisionVariable, FixedPenaltyPreparation, Instance, SampleSet, Sense
 from ommx.experiment import Experiment
 
@@ -10,7 +9,7 @@ def test_log_sample_records_the_exact_prepared_adapter_input() -> None:
     source = Instance.from_components(
         decision_variables=[x],
         objective=x,
-        constraints={ConstraintID(7): x == 1},
+        constraints={7: x == 1},
         sense=Sense.Maximize,
     )
     input_class = OMMXOpenJijSAAdapter.INPUT_CLASS

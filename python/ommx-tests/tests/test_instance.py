@@ -394,11 +394,11 @@ def test_convert_inequality_to_equality_with_integer_slack_limit():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={ConstraintID(0): math.pi * x[0] + math.e * x[1] >= 1},
+        constraints={0: math.pi * x[0] + math.e * x[1] >= 1},
         sense=Sense.Maximize,
     )
     with pytest.raises(ExactIntegerSlackError) as e:
-        instance.convert_inequality_to_equality_with_integer_slack(ConstraintID(0), 32)
+        instance.convert_inequality_to_equality_with_integer_slack(0, 32)
     message = str(e.value)
     prefix = "The range of the slack variable exceeds the limit: evaluated("
     suffix = ") > limit(32)"
@@ -412,11 +412,11 @@ def test_convert_inequality_to_equality_with_integer_slack_continuous():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={ConstraintID(0): x[0] + x[1] >= 7.89},
+        constraints={0: x[0] + x[1] >= 7.89},
         sense=Sense.Maximize,
     )
     with pytest.raises(RuntimeError) as e:
-        instance.convert_inequality_to_equality_with_integer_slack(ConstraintID(0), 32)
+        instance.convert_inequality_to_equality_with_integer_slack(0, 32)
     assert (
         str(e.value)
         == "The constraint contains continuous decision variables: ID=VariableID(0)"
@@ -433,12 +433,12 @@ def test_convert_inequality_to_equality_with_integer_slack_infeasible():
         objective=sum(x),
         constraints={
             # Never satisfied since both x0 and x1 are non-negative
-            ConstraintID(0): (x[0] + 2 * x[1] <= -1),
+            0: (x[0] + 2 * x[1] <= -1),
         },
         sense=Sense.Maximize,
     )
     with pytest.raises(InfeasibleDetected) as e:
-        instance.convert_inequality_to_equality_with_integer_slack(ConstraintID(0), 32)
+        instance.convert_inequality_to_equality_with_integer_slack(0, 32)
     assert (
         str(e.value)
         == "The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound[1, 10]"
@@ -453,11 +453,11 @@ def test_convert_inequality_to_equality_with_integer_slack_trivial():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={ConstraintID(0): x[0] + 2 * x[1] >= 0},  # Trivially satisfied
+        constraints={0: x[0] + 2 * x[1] >= 0},  # Trivially satisfied
         sense=Sense.Maximize,
     )
     instance.convert_inequality_to_equality_with_integer_slack(
-        constraint_id=ConstraintID(0), max_integer_range=32
+        constraint_id=0, max_integer_range=32
     )
     assert instance.constraints == {}
     assert ConstraintID(0) in instance.removed_constraints
@@ -468,12 +468,12 @@ def test_convert_inequality_to_equality_with_integer_slack_uses_atol():
     instance = Instance.from_components(
         decision_variables=[x],
         objective=0,
-        constraints={ConstraintID(0): x + 0.25 <= 0},
+        constraints={0: x + 0.25 <= 0},
         sense=Sense.Minimize,
     )
 
     instance.convert_inequality_to_equality_with_integer_slack(
-        constraint_id=ConstraintID(0), max_integer_range=1, atol=0.4
+        constraint_id=0, max_integer_range=1, atol=0.4
     )
 
     constraint = instance.constraints[ConstraintID(0)]
@@ -494,12 +494,12 @@ def test_add_integer_slack_to_inequality_infeasible():
         objective=sum(x),
         constraints={
             # Never satisfied since both x0 and x1 are non-negative
-            ConstraintID(0): (x[0] + 2 * x[1] <= -1),
+            0: (x[0] + 2 * x[1] <= -1),
         },
         sense=Sense.Maximize,
     )
     with pytest.raises(InfeasibleDetected) as e:
-        instance.add_integer_slack_to_inequality(ConstraintID(0), 4)
+        instance.add_integer_slack_to_inequality(0, 4)
     assert (
         str(e.value)
         == "The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound[1, 10]"
@@ -514,10 +514,10 @@ def test_add_integer_slack_to_inequality_trivial():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={ConstraintID(0): x[0] + 2 * x[1] >= 0},  # Trivially satisfied
+        constraints={0: x[0] + 2 * x[1] >= 0},  # Trivially satisfied
         sense=Sense.Maximize,
     )
-    b = instance.add_integer_slack_to_inequality(ConstraintID(0), 4)
+    b = instance.add_integer_slack_to_inequality(0, 4)
     assert b is None
 
     # Check that the constraint is removed
@@ -530,11 +530,11 @@ def test_add_integer_slack_to_inequality_continuous():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={ConstraintID(0): x[0] + x[1] >= 7.89},
+        constraints={0: x[0] + x[1] >= 7.89},
         sense=Sense.Maximize,
     )
     with pytest.raises(RuntimeError) as e:
-        instance.add_integer_slack_to_inequality(ConstraintID(0), 4)
+        instance.add_integer_slack_to_inequality(0, 4)
     assert (
         str(e.value)
         == "The constraint contains continuous decision variables: ID=VariableID(0)"
@@ -546,7 +546,7 @@ def test_to_qubo_penalty_weight():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints={ConstraintID(123): x[0] == 0, ConstraintID(456): x[1] == 1},
+        constraints={123: x[0] == 0, 456: x[1] == 1},
         sense=Sense.Minimize,
     )
     # QUBO = x0 + 1 * (x0)^2 + 2 * (x1 - 1)^2 = 2*x0 - 2*x1 + 1
@@ -583,7 +583,7 @@ def test_qubo_hubo_driver_matches_explicit_preparation_and_preserves_output(
     source = Instance.from_components(
         decision_variables=[x],
         objective=3 * x + 5,
-        constraints={ConstraintID(7): x <= 2},
+        constraints={7: x <= 2},
         sense=Sense.Maximize,
     )
     driver = Instance.from_v2_bytes(source.to_v2_bytes())
@@ -642,7 +642,7 @@ def test_qubo_hubo_continuous_partial_failure(method_name: str) -> None:
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints={ConstraintID(0): x[0] + x[1] >= 7.89},
+        constraints={0: x[0] + x[1] >= 7.89},
         sense=Sense.Maximize,
     )
     with pytest.raises(
@@ -673,7 +673,7 @@ def test_to_hubo_penalty_weight():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints={ConstraintID(123): x[0] == 0, ConstraintID(456): x[1] == 1},
+        constraints={123: x[0] == 0, 456: x[1] == 1},
         sense=Sense.Minimize,
     )
     # QUBO = x0 + 1 * (x0)^2 + 2 * (x1 - 1)^2 = 2*x0 - 2*x1 + 1
@@ -687,7 +687,7 @@ def test_evaluate_irrelevant_binary_variable():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints={ConstraintID(0): x[1] == 1},
+        constraints={0: x[1] == 1},
         sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: 1, 1: 0})
@@ -713,7 +713,7 @@ def test_evaluate_irrelevant_integer_variables():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints={ConstraintID(0): x[1] == 1},
+        constraints={0: x[1] == 1},
         sense=Sense.Minimize,
     )
     solution = instance.evaluate({0: 1, 1: 0})
@@ -783,15 +783,12 @@ def test_stats_with_constraints():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints={
-            ConstraintID(0): x[0] + x[1] == 1,
-            ConstraintID(1): x[1] + x[2] == 1,
-        },
+        constraints={0: x[0] + x[1] == 1, 1: x[1] + x[2] == 1},
         sense=Sense.Minimize,
     )
 
     # Remove one constraint
-    instance.relax_constraint(ConstraintID(1), reason="test removal")
+    instance.relax_constraint(1, reason="test removal")
 
     stats = instance.stats()
 
@@ -811,10 +808,7 @@ def test_multiple_log_encodes():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints={
-            ConstraintID(0): x[0] + x[1] <= 5,
-            ConstraintID(1): x[1] + x[2] <= 5,
-        },
+        constraints={0: x[0] + x[1] <= 5, 1: x[1] + x[2] <= 5},
         sense=Sense.Maximize,
     )
 
@@ -1031,10 +1025,7 @@ def test_multiple_unary_encodes():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints={
-            ConstraintID(0): x[0] + x[1] <= 5,
-            ConstraintID(1): x[1] + x[2] <= 5,
-        },
+        constraints={0: x[0] + x[1] <= 5, 1: x[1] + x[2] <= 5},
         sense=Sense.Maximize,
     )
 
@@ -1149,7 +1140,7 @@ def test_parametric_instance_substitute_with_parameterized_rhs():
         decision_variables=[x, y],
         parameters=[p],
         objective=x + p * y,
-        constraints={ConstraintID(0): x <= p + 1},
+        constraints={0: x <= p + 1},
         sense=Sense.Maximize,
     )
 

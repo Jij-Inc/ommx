@@ -88,11 +88,10 @@ impl ParametricInstance {
     ///
     /// A v2 round-trip preserves both active and output objective semantics through materialization.
     ///
-    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, ParametricInstance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> source = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> parametric = source.uniform_penalty_method()
     /// >>> parameter_id = parametric.parameters[0].id
@@ -286,11 +285,10 @@ impl ParametricInstance {
     ///
     /// Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists. Materialization substitutes parameters in the active energy, and an existing output objective remains explicit even if specialization makes it structurally equal to the active objective.
     ///
-    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> source = Instance.from_components(
-    /// ...     decision_variables=[x], objective=x, constraints={ConstraintID(7): x == 1}, sense=Sense.Minimize
+    /// ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Minimize
     /// ... )
     /// >>> parametric = source.uniform_penalty_method()
     /// >>> parameter_id = parametric.parameters[0].id

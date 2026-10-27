@@ -18,9 +18,7 @@ def _special_instance() -> Instance:
         objective=sum(variables),
         decision_variables=variables,
         constraints={},
-        one_hot_constraints={
-            OneHotConstraintID(10): OneHotConstraint(variables=variables)
-        },
+        one_hot_constraints={10: OneHotConstraint(variables=variables)},
     )
 
 

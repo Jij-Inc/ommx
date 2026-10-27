@@ -1,4 +1,3 @@
-from ommx import ConstraintID
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 from ommx import DecisionVariable, Instance, Linear, Sense
 from ommx.adapter import InfeasibleDetected
@@ -14,9 +13,9 @@ def test_constant_constraint_feasible():
         decision_variables=[x],
         objective=x,
         constraints={
-            ConstraintID(0):  # 1 >= 0 is always true
+            0:  # 1 >= 0 is always true
             Linear(terms={}, constant=1) >= 0,
-            ConstraintID(1): x <= 1,
+            1: x <= 1,
         },
         sense=Sense.Maximize,
     )
@@ -37,9 +36,9 @@ def test_constant_constraint_infeasible():
         decision_variables=[x],
         objective=x,
         constraints={
-            ConstraintID(0):  # -1 >= 0 is always false
+            0:  # -1 >= 0 is always false
             Linear(terms={}, constant=-1) >= 0,
-            ConstraintID(1): x <= 1,
+            1: x <= 1,
         },
         sense=Sense.Maximize,
     )

@@ -13,7 +13,6 @@ The session-scoped OTel provider is set up in :mod:`conftest`.
 """
 
 from __future__ import annotations
-from ommx import IndicatorConstraintID
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import ReadableSpan
@@ -44,7 +43,7 @@ def _instance_with_indicator() -> Instance:
         decision_variables=[x, y],
         objective=x,
         constraints={},
-        indicator_constraints={IndicatorConstraintID(7): ic},
+        indicator_constraints={7: ic},
         sense=Sense.Minimize,
     )
 

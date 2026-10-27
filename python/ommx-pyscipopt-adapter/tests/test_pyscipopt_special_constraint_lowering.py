@@ -24,11 +24,9 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
         decision_variables=[indicator, *x, value],
         objective=value,
         constraints={},
-        indicator_constraints={
-            IndicatorConstraintID(30): (value <= 1).with_indicator(indicator)
-        },
-        one_hot_constraints={OneHotConstraintID(10): OneHotConstraint(variables=x)},
-        sos1_constraints={Sos1ConstraintID(20): Sos1Constraint(variables=x)},
+        indicator_constraints={30: (value <= 1).with_indicator(indicator)},
+        one_hot_constraints={10: OneHotConstraint(variables=x)},
+        sos1_constraints={20: Sos1Constraint(variables=x)},
         sense=Sense.Maximize,
     )
     before = instance.to_v2_bytes()

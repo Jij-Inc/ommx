@@ -26,7 +26,7 @@ First, let's prepare the data we want to share. We will create an `ommx.Instance
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-from ommx import ConstraintID, Constraint, DecisionVariable, Equality, Instance, Sense
+from ommx import Constraint, DecisionVariable, Equality, Instance, Sense
 from ommx_pyscipopt_adapter.adapter import OMMXPySCIPOptAdapter
 import pandas as pd
 
@@ -77,7 +77,7 @@ instance = Instance.from_components(
     # Register the objective function
     objective=objective,
     # Register all constraints (keys are constraint IDs)
-    constraints={ConstraintID(0): constraint},
+    constraints={0: constraint},
     # Specify that it is a maximization problem
     sense=Sense.Maximize,
 )

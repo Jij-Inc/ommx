@@ -1,4 +1,3 @@
-from ommx import ConstraintID
 import pytest
 
 from ommx import (
@@ -60,7 +59,7 @@ def test_to_qubo_rejects_missing_penalty_weight():
     instance = Instance.from_components(
         decision_variables=x,
         objective=x[0],
-        constraints={ConstraintID(123): x[0] == 0, ConstraintID(456): x[1] == 1},
+        constraints={123: x[0] == 0, 456: x[1] == 1},
         sense=Sense.Minimize,
     )
 

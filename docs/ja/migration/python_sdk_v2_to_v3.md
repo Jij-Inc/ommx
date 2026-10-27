@@ -94,14 +94,13 @@ c = Constraint(
 c.set_id(6)
 
 # v3
-from ommx import ConstraintID
 c = Constraint(function=x + y, equality=Equality.EqualToZero, name="cap")
 
 instance = Instance.from_components(
     sense=Sense.Minimize,
     objective=objective,
     decision_variables=decision_variables,
-    constraints={ConstraintID(5): c},
+    constraints={5: c},
 )
 ```
 
@@ -124,7 +123,7 @@ Instance.from_components(..., constraints=[c], ...)
 
 # v3
 c = x + y <= 5
-Instance.from_components(..., constraints={ConstraintID(0): c}, ...)
+Instance.from_components(..., constraints={0: c}, ...)
 ```
 
 ### 3.3 グローバルIDカウンタは削除
@@ -148,15 +147,14 @@ Instance.from_components(
 )
 
 # v3
-from ommx import ConstraintID, IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID
 Instance.from_components(
     sense=Sense.Minimize,
     objective=obj,
     decision_variables=[x0, x1],
-    constraints={ConstraintID(0): c0, ConstraintID(1): c1},
-    indicator_constraints={IndicatorConstraintID(10): ic},
-    one_hot_constraints={OneHotConstraintID(20): oh},
-    sos1_constraints={Sos1ConstraintID(30): sc},
+    constraints={0: c0, 1: c1},
+    indicator_constraints={10: ic},
+    one_hot_constraints={20: oh},
+    sos1_constraints={30: sc},
 )
 ```
 
