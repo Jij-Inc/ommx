@@ -81,7 +81,7 @@
       "aliases": [
         "Instance"
       ],
-      "scope": ""
+      "scope": "変数の定義域、目的関数、通常制約と特殊制約、最大化・最小化をまとめる共通の問題モデル。特殊制約もソルバー固有の指示でなくOMMXが意味を定める条件であり、その種類は今後も拡張していく前提を含む。個々の特殊制約の成立条件や追加・評価操作の習得までは付与しない。"
     },
     {
       "id": "variable.basics",
@@ -1880,7 +1880,11 @@
             "instance.model",
             "instance.build"
           ],
-          "mentions": []
+          "mentions": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1"
+          ]
         },
         {
           "id": "preview",
@@ -1897,7 +1901,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "変数の四役割と復元・既定値の詳細は、実在するG6へ分離した。G1は保持変数と現在使う変数の区別を短く説明するが、G1訪問だけでG6の知識は付与しない。型・定義域を先に導入し、名前付き関数・removed・出力目的関数の除外条件は局所説明付きで後段へ置く。",
+      "notes": "Instanceの構成要素として通常制約と特殊制約の両方を明示し、現在のIndicator・OneHot・SOS1だけで種類を固定しない。初例は通常制約の一例とし、constraints辞書は通常制約だけで特殊制約は別集合だと説明する。特殊制約の個別の意味・操作はG3へ送る。変数の四役割と復元・既定値の詳細はG6へ分離し、G1訪問だけでは付与しない。型・定義域を先に導入し、名前付き関数・removed・出力目的関数の除外条件は後段で局所説明する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
