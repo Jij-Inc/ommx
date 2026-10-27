@@ -67,7 +67,7 @@ forkは既存のRunと添付データを引き継ぎ、親を変更しません�
 
 一方、同じ計算を再実行できるかは、明示的に残した入力・コード・設定や利用可能な実行環境に依存します。ファイルの読出し確認だけで再実行まで保証したことにはなりません。Tutorialでは前者を確認します。
 
-試行の階層を使わないデータ交換は[ArtifactのTutorial](../tutorial/share_in_ommx_artifact.md)、検索や整理は[CLIのGuide](./cli.md)を参照してください。Local Registryの内部cacheやGC実装は、Experimentの最初の利用で理解する必要はありません。
+試行の階層を使わないデータ交換は[Artifactの保存と識別](./artifact.md)、検索や整理は[Local RegistryのHow-to](../how_to/manage_local_registry.md)を参照してください。Local Registryの内部cacheやGC実装は、Experimentの最初の利用で理解する必要はありません。
 
 ## Local Registryの管理
 

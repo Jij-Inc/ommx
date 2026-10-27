@@ -74,7 +74,49 @@ solutions = {
 
 ## 結果の比較
 
-今回のナップザック問題は簡単なのでどれも最適解が得られます。
+まず、同じInstanceに対して報告された目的値と実行可能性を比べます。最大化と最小化で
+良い目的値の向きが異なるため、`instance.sense`も一緒に確認します。
+
+```{code-cell} ipython3
+import pandas
+
+comparison = pandas.DataFrame([
+    {
+        "adapter": name,
+        "sense": str(instance.sense),
+        "objective": solution.objective,
+        "feasible": solution.feasible,
+        "optimality": str(solution.optimality),
+    }
+    for name, solution in solutions.items()
+]).set_index("adapter")
+comparison
+```
+
+目的値はOMMXが報告する値です。実行可能性は変数の範囲・種類と制約を含みます。
+実行可能な候補が得られたこと、目的値が一致したこと、最適性が確定したことは別々に読みます。
+この例は同じ入力の比較手順を示すもので、どちらのソルバーが一般に優れるかを示しません。
+
+### 比較してよい情報を分ける
+
+| 情報 | 比較するときの基準 |
+|---|---|
+| 報告目的値・sense | 同じ問題、同じ目的関数の意味であること |
+| 元の問題に対する実行可能性 | 同じ評価対象と許容誤差であること |
+| optimality | 対象の問題とAdapterが表す保証を確認する |
+| backendのbound・gap・終了理由 | 実際に解いた定式化・目的関数・backend固有の定義を確認する |
+| 実行時間 | データ、設定、環境、繰り返し方を定めて別途測定する |
+
+別の変換済みInstanceを明示的に解く場合は、必要に応じて候補を元のInstanceでも評価します。
+値の復元や変換後のclass membershipだけでは、元の問題の実行可能性や大域的最適性は
+保証されません。[変換の保証](../user_guide/transformation_guarantees.md)と
+[変換後の結果](../user_guide/removed_constraints.md)で評価対象を確認してください。
+
+boundやgapを調べる場合は[diagnosticsのHow-to](inspect_adapter_diagnostics.md)へ進みます。
+特にペナルティや目的値の符号変更を含む定式化では、backendのboundをそのまま
+元の目的値のboundと扱わないでください。Experimentはこの比較の前提ではありません。
+
+### 候補の変数値を図にする
 
 ```{code-cell} ipython3
 from matplotlib import pyplot as plt

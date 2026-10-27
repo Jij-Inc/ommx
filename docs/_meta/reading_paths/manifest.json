@@ -2826,7 +2826,7 @@
       "title": "Adapterを選ぶ",
       "slice": "J",
       "role": "guide",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
         "docs/ja/user_guide/supported_ommx_adapters.md"
       ],
@@ -3208,9 +3208,9 @@
       "title": "終了理由と進捗を読む",
       "slice": "J",
       "role": "how-to",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/adapter_diagnostics.md"
+        "docs/ja/how_to/inspect_adapter_diagnostics.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/adapter_diagnostics.md"
@@ -3245,9 +3245,9 @@
       "title": "初期候補を渡す",
       "slice": "J",
       "role": "how-to",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/adapter_initial_state.md"
+        "docs/ja/how_to/use_initial_state.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/adapter_initial_state.md"
@@ -3287,7 +3287,7 @@
       "role": "how-to",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/tracing.ipynb"
+        "docs/ja/how_to/trace_execution.ipynb"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/tracing.ipynb"
@@ -3328,7 +3328,7 @@
       "role": "how-to-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/tracing.ipynb"
+        "docs/ja/how_to/trace_execution.ipynb"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/tracing.ipynb"
@@ -3460,9 +3460,9 @@
       "title": "保存したデータをCLIで調査・整理する",
       "slice": "J",
       "role": "how-to",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/cli.md"
+        "docs/ja/how_to/manage_local_registry.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/cli.md"
@@ -4761,7 +4761,7 @@
     },
     {
       "page": "P9",
-      "observed": "現cli.mdはPython同梱CLIを3.0.0b8以降と記載。SETUPとは別に版整合を検査する。"
+      "observed": "公開Rust CLI 3.0.0-beta.7を別導入。公開Python SDKb7を更新する必要なし。Python同梱CLIは開発b8から。"
     },
     {
       "page": "T6",
