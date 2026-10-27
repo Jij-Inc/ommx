@@ -844,7 +844,7 @@ assert isinstance(output, SampleSet)
 
 `Run.log_sample(..., store_diagnostics=True)` では `Run.log_solve` と同じ adapter
 diagnostics channel を利用できます。SolveとSamplingの記録モデルは
-[実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
+[ExperimentのGuide](../user_guide/experiment.md) を参照してください。
 
 ### 🆕 Attachment の透過圧縮と streaming write ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
@@ -1154,7 +1154,7 @@ Artifact と Experiment の solve payload は、これらの top-level root を 
 
 {meth}`~ommx.experiment.Run.open_solve` で、Adapter API ではカバーしていない高度な solver 機能を使うための手動 Solve scope を開けるようになりました。scope 内で `solve.solver_input` から backend solver model を受け取って直接操作し、backend optimizer を実行した後、`solve.decode(...)` を呼ぶと decode された {class}`~ommx.Solution` が Experiment の Solve output として記録されます。手動で設定した adapter option は `solve.log_adapter_option(...)` で記録でき、`store_diagnostics=True` を指定すると `solve.diagnostics` に記録した diagnostics が scope 終了まで収集されます。scope 終了後は {attr}`~ommx.experiment.OpenSolve.terminal_state` から最終 outcome と trace / diagnostics の finalization state を確認できます。
 
-workflow 例は [実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
+手動Solveの操作と利用条件は {meth}`~ommx.experiment.Run.open_solve` を参照してください。
 
 ## 3.0.0 Alpha 6
 
@@ -1335,7 +1335,7 @@ before / after コード例と移行チェックリストは {ref}`Python SDK v2
 
 実験の入力データ、実行条件、Solver/Sampler の結果を 1 つの OMMX Artifact として記録する `ommx.experiment` モジュールを追加しました。{class}`~ommx.experiment.Experiment`、{class}`~ommx.experiment.Run`、{class}`~ommx.experiment.Solve` を使って、Run ごとの比較パラメータ、attachment、solve 入出力を Local Registry に保存できます。
 
-基本的な使い方、Experiment の共有、保存済み Experiment の読み込み、fork による派生実験の作り方は [実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
+基本的な記録と保存済み Experiment の読み込みは [実験管理チュートリアル](../tutorial/experiment_management)、fork による派生実験の作り方は [継続・復帰のHow-to](../how_to/continue_experiment.md) を参照してください。
 
 ### 🆕 `Run.log_solve` で solve 入出力と adapter options を記録 ([#902](https://github.com/Jij-Inc/ommx/pull/902))
 
