@@ -963,15 +963,25 @@
       "scope": ""
     },
     {
+      "id": "artifact.basics",
+      "label": "Artifactを複数型のデータと説明をまとめる単位として理解する",
+      "owner": "G13",
+      "requires": [],
+      "external": false,
+      "aliases": [
+        "Artifact"
+      ],
+      "scope": "問題・結果・JSONなどのデータと説明をまとめる基本理解。InstanceやExperimentの操作、ファイルへの保存・読出しを必須前提にしない。"
+    },
+    {
       "id": "artifact.roundtrip",
       "label": "Artifactにデータをまとめ保存して読む",
       "owner": "G13",
       "requires": [
-        "instance.model"
+        "artifact.basics"
       ],
       "external": false,
       "aliases": [
-        "Artifact",
         "ArtifactDraft",
         "save_archive",
         "load_archive"
@@ -983,7 +993,7 @@
       "label": "draftとcommit後の状態を区別する",
       "owner": "G13",
       "requires": [
-        "artifact.roundtrip"
+        "artifact.basics"
       ],
       "external": false,
       "aliases": [
@@ -997,7 +1007,7 @@
       "label": "name・tag・digestを使い分ける",
       "owner": "G13.identity",
       "requires": [
-        "artifact.roundtrip"
+        "artifact.basics"
       ],
       "external": false,
       "aliases": [
@@ -1012,7 +1022,7 @@
       "label": "registryにpush/pullして共有する",
       "owner": "P8",
       "requires": [
-        "artifact.identity"
+        "artifact.basics"
       ],
       "external": false,
       "aliases": [
@@ -1736,7 +1746,7 @@
       "title": "Artifactで問題と結果を受け渡す",
       "slice": "G",
       "role": "tutorial",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
         "docs/ja/tutorial/share_in_ommx_artifact.md"
       ],
@@ -1749,6 +1759,16 @@
         "sdk.environment"
       ],
       "sections": [
+        {
+          "id": "artifact",
+          "introduces": [
+            "artifact.basics"
+          ],
+          "uses": [
+            "artifact.basics"
+          ],
+          "mentions": []
+        },
         {
           "id": "data",
           "introduces": [
@@ -1770,9 +1790,11 @@
         {
           "id": "save",
           "introduces": [
+            "artifact.lifecycle",
             "artifact.roundtrip"
           ],
           "uses": [
+            "artifact.lifecycle",
             "artifact.roundtrip"
           ],
           "mentions": []
@@ -1799,7 +1821,7 @@
         "attachment.codec"
       ],
       "parent_page": null,
-      "notes": "入力準備もsolver不要にする。hidden cellの実行依存は別途検査。",
+      "notes": "G/T6はArtifactの基本理解を局所導入し、小さなInstanceと候補の評価結果、JSONを一つのファイルで受け渡す。送信・受信は別スクリプトと別Local Registryを使い、受信側では配布ファイルだけから取り出して再評価する。Adapter・Experiment・別Tutorialの実行状態は不要。source_urlsは統合前の歴史的baselineを指す。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2909,13 +2931,23 @@
       "title": "Artifactの保存と受け渡しモデル",
       "slice": "G",
       "role": "guide",
-      "status": "planned",
-      "source_paths": [],
-      "source_urls": [],
-      "requires": [
-        "instance.model"
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/artifact.md"
       ],
+      "source_urls": [],
+      "requires": [],
       "sections": [
+        {
+          "id": "basics",
+          "introduces": [
+            "artifact.basics"
+          ],
+          "uses": [
+            "artifact.basics"
+          ],
+          "mentions": []
+        },
         {
           "id": "storage",
           "introduces": [
@@ -2934,21 +2966,25 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "G/G13は直接入口としてArtifactの基本理解を導入し、データと関係、Draftと確定後、Local Registry・ファイル・remote registryの違いを説明する。InstanceやExperimentの操作を前提にしない。「名前・タグ・内容の識別子」の契約は同じファイルのG13.identityで追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/artifact.md"
+      ]
     },
     {
       "id": "G13.identity",
       "title": "Artifactの名前と同一性",
       "slice": "G",
       "role": "guide-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/artifact.md"
+      ],
       "source_urls": [],
       "requires": [
-        "artifact.roundtrip"
+        "artifact.basics"
       ],
       "sections": [
         {
@@ -2964,10 +3000,12 @@
       ],
       "deferred": [],
       "parent_page": "G13",
-      "notes": "",
+      "notes": "G13の実在する「名前・タグ・内容の識別子」節を指す。人が選ぶ名前・タグと内容のdigest、manifestとlayerの識別子、ローカル優先のloadを区別する。ファイル往復の実行経験は不要。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/artifact.md"
+      ]
     },
     {
       "id": "P1",
@@ -3347,18 +3385,41 @@
       "title": "registryでArtifactを共有する",
       "slice": "G",
       "role": "how-to",
-      "status": "planned",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/tutorial/share_in_ommx_artifact.md"
+        "docs/ja/how_to/share_artifact_registry.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/tutorial/share_in_ommx_artifact.md"
       ],
       "requires": [
+        "ext.python",
         "ext.cli",
-        "artifact.roundtrip"
+        "sdk.environment"
       ],
       "sections": [
+        {
+          "id": "basics",
+          "introduces": [
+            "artifact.basics"
+          ],
+          "uses": [
+            "artifact.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "remote",
+          "introduces": [
+            "artifact.lifecycle",
+            "artifact.registry"
+          ],
+          "uses": [
+            "artifact.lifecycle",
+            "artifact.registry"
+          ],
+          "mentions": []
+        },
         {
           "id": "identity",
           "introduces": [
@@ -3368,25 +3429,15 @@
             "artifact.identity"
           ],
           "mentions": []
-        },
-        {
-          "id": "remote",
-          "introduces": [
-            "artifact.registry"
-          ],
-          "uses": [
-            "artifact.registry"
-          ],
-          "mentions": []
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "G/P8はPython・CLI・SDK環境から直接読めるJSON共有の操作ガイド。送信前に参照名とタグを短く説明し、Artifactの基本理解、commitによるローカル確定とpushによる送信の違いから、認証・送信・別環境での読出しまで扱う。名前・タグ・digest全体の使い分けは受信例の後で導入し、共有操作の前提にしない。T6のファイル往復とInstance・Experimentの操作は任意。source_urlsは統合前の歴史的baselineを指す。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/tutorial/share_in_ommx_artifact.md"
+        "docs/ja/how_to/share_artifact_registry.md"
       ]
     },
     {
@@ -3404,6 +3455,7 @@
       "requires": [
         "ext.cli",
         "sdk.environment",
+        "artifact.basics",
         "artifact.roundtrip"
       ],
       "sections": [
@@ -4461,6 +4513,18 @@
       ]
     },
     {
+      "id": "registry_direct",
+      "title": "SDK導入からregistry共有へ直接進む",
+      "initial": [
+        "ext.python",
+        "ext.cli"
+      ],
+      "steps": [
+        "SETUP",
+        "P8"
+      ]
+    },
+    {
       "id": "cli",
       "title": "ArtifactからCLI操作へ",
       "initial": [
@@ -4602,7 +4666,7 @@
     },
     {
       "page": "T6",
-      "observed": "現物のhidden preparationにはSCIPがある。概念前提と実行依存を別検査する。"
+      "observed": "SDK b7のみ。送受信を別プロセス、受信を空のLocal Registryで実行。hidden solver preparationは削除。"
     }
   ],
   "review_notes": [
