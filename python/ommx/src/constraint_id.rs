@@ -9,7 +9,7 @@ use pyo3::{
     conversion::FromPyObjectOwned,
     exceptions::{PyTypeError, PyValueError},
     prelude::*,
-    types::{PyBool, PyDict, PyInt, PyMapping, PySet},
+    types::{PyBool, PyDict, PyInt, PyMapping, PySet, PyType},
 };
 use pyo3_stub_gen::{PyStubType, TypeInfo};
 use std::collections::{btree_map, btree_set, BTreeMap, BTreeSet};
@@ -234,9 +234,11 @@ constraint_id_input!(Sos1ConstraintIDInput, Sos1ConstraintID);
 
 macro_rules! constraint_id {
     ($name:ident, $doc:literal) => {
+        // Pickle resolves the public module; stubs stay with the extension's
+        // definitions and are re-exported from ommx as before.
         #[doc = $doc]
-        #[pyo3_stub_gen::derive::gen_stub_pyclass]
-        #[pyclass(frozen, eq, ord, hash, extends = ConstraintIDBase)]
+        #[pyo3_stub_gen::derive::gen_stub_pyclass(module = "ommx._ommx_rust")]
+        #[pyclass(module = "ommx", frozen, eq, ord, hash, extends = ConstraintIDBase)]
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name(ommx::$name);
         crate::constraint_base::constraint_subclass!(
@@ -276,6 +278,12 @@ macro_rules! constraint_id {
 
             fn __repr__(&self) -> String {
                 format!("{}({})", stringify!($name), self.0.into_inner())
+            }
+
+            /// Reconstruct the same ID family through its public constructor.
+            /// The numeric payload is used only by the serialization protocol.
+            fn __reduce__<'py>(&self, py: Python<'py>) -> (Bound<'py, PyType>, (u64,)) {
+                (py.get_type::<Self>(), (self.0.into_inner(),))
             }
 
             /// IDs are immutable; copying preserves the same typed identity.

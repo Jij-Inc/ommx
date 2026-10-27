@@ -1657,6 +1657,11 @@ class ConstraintID(ConstraintIDBase):
         family is not accepted. IDs have no integer conversion protocol.
         """
     def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
     def __copy__(self) -> ConstraintID:
         r"""
         IDs are immutable; copying preserves the same typed identity.
@@ -3546,6 +3551,11 @@ class IndicatorConstraintID(ConstraintIDBase):
         family is not accepted. IDs have no integer conversion protocol.
         """
     def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
     def __copy__(self) -> IndicatorConstraintID:
         r"""
         IDs are immutable; copying preserves the same typed identity.
@@ -6779,6 +6789,11 @@ class OneHotConstraintID(ConstraintIDBase):
         family is not accepted. IDs have no integer conversion protocol.
         """
     def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
     def __copy__(self) -> OneHotConstraintID:
         r"""
         IDs are immutable; copying preserves the same typed identity.
@@ -10290,6 +10305,11 @@ class Sos1ConstraintID(ConstraintIDBase):
         family is not accepted. IDs have no integer conversion protocol.
         """
     def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
     def __copy__(self) -> Sos1ConstraintID:
         r"""
         IDs are immutable; copying preserves the same typed identity.

@@ -125,10 +125,11 @@ with `rows.get(id, default)`. Like indexing, it preserves the concrete row type
 for a concrete ID; the return type also includes the default's type.
 
 Collection membership cannot be changed by assignment or deletion. `keys()`,
-`values()`, and `items()` are live views. An iterator snapshots the typed IDs
-in family order (regular, indicator, one-hot, SOS1), then numeric order; values
-are fetched as they are visited. A key removed during iteration raises
-`KeyError` when its value is fetched. Use `dict(rows)` for a materialized mapping.
+`values()`, and `items()` are live views. `iter(rows)` snapshots typed IDs
+immediately; iterators over the standard Python views snapshot them on the first
+`next()`. IDs follow family order (regular, indicator, one-hot, SOS1), then numeric
+order. Values are fetched as they are visited. If a snapshotted key is subsequently
+removed, fetching its value raises `KeyError`. Use `dict(rows)` for a materialized mapping.
 
 `constraints_df(*, kind=...)` materializes one family as a DataFrame and requires
 `kind` on every owner. Its typed index matches that family's collection keys.
@@ -146,6 +147,8 @@ support `int()` or integer-index conversion. Variable and sample IDs remain inte
 
 IDs are immutable: `copy.copy(id)` and `copy.deepcopy(id)` return the ID itself.
 Deep-copying a container with IDs as keys or values preserves their families.
+Pickle round-trips also preserve the ID family and value, including IDs stored
+in DataFrame indexes or columns.
 
 ### Supporting future constraint families
 

@@ -403,7 +403,12 @@
               "doc": "The id this handle points at.",
               "type_": {
                 "display": "ConstraintID",
-                "link_target": null,
+                "link_target": {
+                  "fqn": "ommx.ConstraintID",
+                  "doc_module": "ommx",
+                  "kind": "Class",
+                  "attribute": null
+                },
                 "children": []
               },
               "is_property": true,
@@ -2018,7 +2023,12 @@
               "doc": "The id this handle points at.",
               "type_": {
                 "display": "IndicatorConstraintID",
-                "link_target": null,
+                "link_target": {
+                  "fqn": "ommx.IndicatorConstraintID",
+                  "doc_module": "ommx",
+                  "kind": "Class",
+                  "attribute": null
+                },
                 "children": []
               },
               "is_property": true,
@@ -2515,7 +2525,12 @@
               "doc": "The id this handle points at.",
               "type_": {
                 "display": "OneHotConstraintID",
-                "link_target": null,
+                "link_target": {
+                  "fqn": "ommx.OneHotConstraintID",
+                  "doc_module": "ommx",
+                  "kind": "Class",
+                  "attribute": null
+                },
                 "children": []
               },
               "is_property": true,
@@ -2991,7 +3006,12 @@
               "doc": "",
               "type_": {
                 "display": "Sos1ConstraintID",
-                "link_target": null,
+                "link_target": {
+                  "fqn": "ommx.Sos1ConstraintID",
+                  "doc_module": "ommx",
+                  "kind": "Class",
+                  "attribute": null
+                },
                 "children": []
               },
               "is_property": true,
@@ -4958,7 +4978,12 @@
                   "parameters": [],
                   "return_type": {
                     "display": "ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 }
@@ -4984,7 +5009,12 @@
                   ],
                   "return_type": {
                     "display": "ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 }
@@ -5156,8 +5186,46 @@
                   ],
                   "return_type": {
                     "display": "ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__reduce__",
+              "doc": "Reconstruct the same ID family through its public constructor.\nThe numeric payload is used only by the serialization protocol.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "tuple[type, tuple[int]]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "type",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "tuple[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
                   }
                 }
               ],
@@ -11461,7 +11529,12 @@
                   "parameters": [],
                   "return_type": {
                     "display": "IndicatorConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.IndicatorConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 }
@@ -11487,7 +11560,12 @@
                   ],
                   "return_type": {
                     "display": "IndicatorConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.IndicatorConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 }
@@ -11659,8 +11737,46 @@
                   ],
                   "return_type": {
                     "display": "IndicatorConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.IndicatorConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__reduce__",
+              "doc": "Reconstruct the same ID family through its public constructor.\nThe numeric payload is used only by the serialization protocol.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "tuple[type, tuple[int]]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "type",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "tuple[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
                   }
                 }
               ],
@@ -11958,12 +12074,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -12630,21 +12751,31 @@
                     }
                   ],
                   "return_type": {
-                    "display": "dict[IndicatorConstraintID, list[ConstraintID]]",
+                    "display": "dict[_ommx_rust.IndicatorConstraintID, list[_ommx_rust.ConstraintID]]",
                     "link_target": null,
                     "children": [
                       {
                         "display": "IndicatorConstraintID",
-                        "link_target": null,
+                        "link_target": {
+                          "fqn": "ommx.IndicatorConstraintID",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       },
                       {
-                        "display": "list[ConstraintID]",
+                        "display": "list[_ommx_rust.ConstraintID]",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           }
                         ]
@@ -12663,12 +12794,17 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "list[ConstraintID]",
+                    "display": "list[_ommx_rust.ConstraintID]",
                     "link_target": null,
                     "children": [
                       {
                         "display": "ConstraintID",
-                        "link_target": null,
+                        "link_target": {
+                          "fqn": "ommx.ConstraintID",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       }
                     ]
@@ -12685,21 +12821,31 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "dict[Sos1ConstraintID, list[ConstraintID]]",
+                    "display": "dict[_ommx_rust.Sos1ConstraintID, list[_ommx_rust.ConstraintID]]",
                     "link_target": null,
                     "children": [
                       {
                         "display": "Sos1ConstraintID",
-                        "link_target": null,
+                        "link_target": {
+                          "fqn": "ommx.Sos1ConstraintID",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       },
                       {
-                        "display": "list[ConstraintID]",
+                        "display": "list[_ommx_rust.ConstraintID]",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           }
                         ]
@@ -12720,12 +12866,17 @@
                     {
                       "name": "indicator_id",
                       "type_": {
-                        "display": "IndicatorConstraintID | int",
+                        "display": "_ommx_rust.IndicatorConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "IndicatorConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.IndicatorConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -12757,12 +12908,17 @@
                     }
                   ],
                   "return_type": {
-                    "display": "list[ConstraintID]",
+                    "display": "list[_ommx_rust.ConstraintID]",
                     "link_target": null,
                     "children": [
                       {
                         "display": "ConstraintID",
-                        "link_target": null,
+                        "link_target": {
+                          "fqn": "ommx.ConstraintID",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       }
                     ]
@@ -12781,12 +12937,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -12845,12 +13006,17 @@
                     {
                       "name": "one_hot_id",
                       "type_": {
-                        "display": "OneHotConstraintID | int",
+                        "display": "_ommx_rust.OneHotConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "OneHotConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.OneHotConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -12865,7 +13031,12 @@
                   ],
                   "return_type": {
                     "display": "ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 }
@@ -12882,12 +13053,17 @@
                     {
                       "name": "sos1_id",
                       "type_": {
-                        "display": "Sos1ConstraintID | int",
+                        "display": "_ommx_rust.Sos1ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "Sos1ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.Sos1ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -12901,12 +13077,17 @@
                     }
                   ],
                   "return_type": {
-                    "display": "list[ConstraintID]",
+                    "display": "list[_ommx_rust.ConstraintID]",
                     "link_target": null,
                     "children": [
                       {
                         "display": "ConstraintID",
-                        "link_target": null,
+                        "link_target": {
+                          "fqn": "ommx.ConstraintID",
+                          "doc_module": "ommx",
+                          "kind": "Class",
+                          "attribute": null
+                        },
                         "children": []
                       }
                     ]
@@ -13363,16 +13544,21 @@
                     {
                       "name": "constraints",
                       "type_": {
-                        "display": "Mapping[ConstraintID, Constraint] | Mapping[int, Constraint] | Mapping[ConstraintID | int, Constraint]",
+                        "display": "Mapping[_ommx_rust.ConstraintID, Constraint] | Mapping[int, Constraint] | Mapping[_ommx_rust.ConstraintID | int, Constraint]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[ConstraintID, Constraint]",
+                            "display": "Mapping[_ommx_rust.ConstraintID, Constraint]",
                             "link_target": null,
                             "children": [
                               {
                                 "display": "ConstraintID",
-                                "link_target": null,
+                                "link_target": {
+                                  "fqn": "ommx.ConstraintID",
+                                  "doc_module": "ommx",
+                                  "kind": "Class",
+                                  "attribute": null
+                                },
                                 "children": []
                               },
                               {
@@ -13399,16 +13585,21 @@
                             ]
                           },
                           {
-                            "display": "Mapping[ConstraintID | int, Constraint]",
+                            "display": "Mapping[_ommx_rust.ConstraintID | int, Constraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "ConstraintID | int",
+                                "display": "_ommx_rust.ConstraintID | int",
                                 "link_target": null,
                                 "children": [
                                   {
                                     "display": "ConstraintID",
-                                    "link_target": null,
+                                    "link_target": {
+                                      "fqn": "ommx.ConstraintID",
+                                      "doc_module": "ommx",
+                                      "kind": "Class",
+                                      "attribute": null
+                                    },
                                     "children": []
                                   },
                                   {
@@ -13432,20 +13623,25 @@
                     {
                       "name": "indicator_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[IndicatorConstraintID | int, IndicatorConstraint]]",
+                        "display": "Optional[Mapping[_ommx_rust.IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[_ommx_rust.IndicatorConstraintID | int, IndicatorConstraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[IndicatorConstraintID | int, IndicatorConstraint]",
+                            "display": "Mapping[_ommx_rust.IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[_ommx_rust.IndicatorConstraintID | int, IndicatorConstraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "Mapping[IndicatorConstraintID, IndicatorConstraint]",
+                                "display": "Mapping[_ommx_rust.IndicatorConstraintID, IndicatorConstraint]",
                                 "link_target": null,
                                 "children": [
                                   {
                                     "display": "IndicatorConstraintID",
-                                    "link_target": null,
+                                    "link_target": {
+                                      "fqn": "ommx.IndicatorConstraintID",
+                                      "doc_module": "ommx",
+                                      "kind": "Class",
+                                      "attribute": null
+                                    },
                                     "children": []
                                   },
                                   {
@@ -13472,16 +13668,21 @@
                                 ]
                               },
                               {
-                                "display": "Mapping[IndicatorConstraintID | int, IndicatorConstraint]",
+                                "display": "Mapping[_ommx_rust.IndicatorConstraintID | int, IndicatorConstraint]",
                                 "link_target": null,
                                 "children": [
                                   {
-                                    "display": "IndicatorConstraintID | int",
+                                    "display": "_ommx_rust.IndicatorConstraintID | int",
                                     "link_target": null,
                                     "children": [
                                       {
                                         "display": "IndicatorConstraintID",
-                                        "link_target": null,
+                                        "link_target": {
+                                          "fqn": "ommx.IndicatorConstraintID",
+                                          "doc_module": "ommx",
+                                          "kind": "Class",
+                                          "attribute": null
+                                        },
                                         "children": []
                                       },
                                       {
@@ -13510,20 +13711,25 @@
                     {
                       "name": "one_hot_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[OneHotConstraintID | int, OneHotConstraint]]",
+                        "display": "Optional[Mapping[_ommx_rust.OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[_ommx_rust.OneHotConstraintID | int, OneHotConstraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[OneHotConstraintID | int, OneHotConstraint]",
+                            "display": "Mapping[_ommx_rust.OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[_ommx_rust.OneHotConstraintID | int, OneHotConstraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "Mapping[OneHotConstraintID, OneHotConstraint]",
+                                "display": "Mapping[_ommx_rust.OneHotConstraintID, OneHotConstraint]",
                                 "link_target": null,
                                 "children": [
                                   {
                                     "display": "OneHotConstraintID",
-                                    "link_target": null,
+                                    "link_target": {
+                                      "fqn": "ommx.OneHotConstraintID",
+                                      "doc_module": "ommx",
+                                      "kind": "Class",
+                                      "attribute": null
+                                    },
                                     "children": []
                                   },
                                   {
@@ -13550,16 +13756,21 @@
                                 ]
                               },
                               {
-                                "display": "Mapping[OneHotConstraintID | int, OneHotConstraint]",
+                                "display": "Mapping[_ommx_rust.OneHotConstraintID | int, OneHotConstraint]",
                                 "link_target": null,
                                 "children": [
                                   {
-                                    "display": "OneHotConstraintID | int",
+                                    "display": "_ommx_rust.OneHotConstraintID | int",
                                     "link_target": null,
                                     "children": [
                                       {
                                         "display": "OneHotConstraintID",
-                                        "link_target": null,
+                                        "link_target": {
+                                          "fqn": "ommx.OneHotConstraintID",
+                                          "doc_module": "ommx",
+                                          "kind": "Class",
+                                          "attribute": null
+                                        },
                                         "children": []
                                       },
                                       {
@@ -13588,20 +13799,25 @@
                     {
                       "name": "sos1_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[Sos1ConstraintID | int, Sos1Constraint]]",
+                        "display": "Optional[Mapping[_ommx_rust.Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[_ommx_rust.Sos1ConstraintID | int, Sos1Constraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[Sos1ConstraintID | int, Sos1Constraint]",
+                            "display": "Mapping[_ommx_rust.Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[_ommx_rust.Sos1ConstraintID | int, Sos1Constraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "Mapping[Sos1ConstraintID, Sos1Constraint]",
+                                "display": "Mapping[_ommx_rust.Sos1ConstraintID, Sos1Constraint]",
                                 "link_target": null,
                                 "children": [
                                   {
                                     "display": "Sos1ConstraintID",
-                                    "link_target": null,
+                                    "link_target": {
+                                      "fqn": "ommx.Sos1ConstraintID",
+                                      "doc_module": "ommx",
+                                      "kind": "Class",
+                                      "attribute": null
+                                    },
                                     "children": []
                                   },
                                   {
@@ -13628,16 +13844,21 @@
                                 ]
                               },
                               {
-                                "display": "Mapping[Sos1ConstraintID | int, Sos1Constraint]",
+                                "display": "Mapping[_ommx_rust.Sos1ConstraintID | int, Sos1Constraint]",
                                 "link_target": null,
                                 "children": [
                                   {
-                                    "display": "Sos1ConstraintID | int",
+                                    "display": "_ommx_rust.Sos1ConstraintID | int",
                                     "link_target": null,
                                     "children": [
                                       {
                                         "display": "Sos1ConstraintID",
-                                        "link_target": null,
+                                        "link_target": {
+                                          "fqn": "ommx.Sos1ConstraintID",
+                                          "doc_module": "ommx",
+                                          "kind": "Class",
+                                          "attribute": null
+                                        },
                                         "children": []
                                       },
                                       {
@@ -13777,12 +13998,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -13866,12 +14092,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -15204,12 +15435,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -15259,12 +15495,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "IndicatorConstraintID | int",
+                        "display": "_ommx_rust.IndicatorConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "IndicatorConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.IndicatorConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -15373,12 +15614,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -15410,12 +15656,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "IndicatorConstraintID | int",
+                        "display": "_ommx_rust.IndicatorConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "IndicatorConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.IndicatorConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -15637,16 +15888,21 @@
                     {
                       "name": "constraint_ids",
                       "type_": {
-                        "display": "AbstractSet[ConstraintID | int]",
+                        "display": "AbstractSet[_ommx_rust.ConstraintID | int]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "ConstraintID | int",
+                            "display": "_ommx_rust.ConstraintID | int",
                             "link_target": null,
                             "children": [
                               {
                                 "display": "ConstraintID",
-                                "link_target": null,
+                                "link_target": {
+                                  "fqn": "ommx.ConstraintID",
+                                  "doc_module": "ommx",
+                                  "kind": "Class",
+                                  "attribute": null
+                                },
                                 "children": []
                               },
                               {
@@ -19876,7 +20132,12 @@
                   "parameters": [],
                   "return_type": {
                     "display": "OneHotConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.OneHotConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 }
@@ -19902,7 +20163,12 @@
                   ],
                   "return_type": {
                     "display": "OneHotConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.OneHotConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 }
@@ -20074,8 +20340,46 @@
                   ],
                   "return_type": {
                     "display": "OneHotConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.OneHotConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__reduce__",
+              "doc": "Reconstruct the same ID family through its public constructor.\nThe numeric payload is used only by the serialization protocol.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "tuple[type, tuple[int]]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "type",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "tuple[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
                   }
                 }
               ],
@@ -21969,16 +22273,21 @@
                     {
                       "name": "constraints",
                       "type_": {
-                        "display": "Mapping[ConstraintID, Constraint] | Mapping[int, Constraint] | Mapping[ConstraintID | int, Constraint]",
+                        "display": "Mapping[_ommx_rust.ConstraintID, Constraint] | Mapping[int, Constraint] | Mapping[_ommx_rust.ConstraintID | int, Constraint]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[ConstraintID, Constraint]",
+                            "display": "Mapping[_ommx_rust.ConstraintID, Constraint]",
                             "link_target": null,
                             "children": [
                               {
                                 "display": "ConstraintID",
-                                "link_target": null,
+                                "link_target": {
+                                  "fqn": "ommx.ConstraintID",
+                                  "doc_module": "ommx",
+                                  "kind": "Class",
+                                  "attribute": null
+                                },
                                 "children": []
                               },
                               {
@@ -22005,16 +22314,21 @@
                             ]
                           },
                           {
-                            "display": "Mapping[ConstraintID | int, Constraint]",
+                            "display": "Mapping[_ommx_rust.ConstraintID | int, Constraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "ConstraintID | int",
+                                "display": "_ommx_rust.ConstraintID | int",
                                 "link_target": null,
                                 "children": [
                                   {
                                     "display": "ConstraintID",
-                                    "link_target": null,
+                                    "link_target": {
+                                      "fqn": "ommx.ConstraintID",
+                                      "doc_module": "ommx",
+                                      "kind": "Class",
+                                      "attribute": null
+                                    },
                                     "children": []
                                   },
                                   {
@@ -22053,20 +22367,25 @@
                     {
                       "name": "indicator_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[IndicatorConstraintID | int, IndicatorConstraint]]",
+                        "display": "Optional[Mapping[_ommx_rust.IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[_ommx_rust.IndicatorConstraintID | int, IndicatorConstraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[IndicatorConstraintID | int, IndicatorConstraint]",
+                            "display": "Mapping[_ommx_rust.IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[_ommx_rust.IndicatorConstraintID | int, IndicatorConstraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "Mapping[IndicatorConstraintID, IndicatorConstraint]",
+                                "display": "Mapping[_ommx_rust.IndicatorConstraintID, IndicatorConstraint]",
                                 "link_target": null,
                                 "children": [
                                   {
                                     "display": "IndicatorConstraintID",
-                                    "link_target": null,
+                                    "link_target": {
+                                      "fqn": "ommx.IndicatorConstraintID",
+                                      "doc_module": "ommx",
+                                      "kind": "Class",
+                                      "attribute": null
+                                    },
                                     "children": []
                                   },
                                   {
@@ -22093,16 +22412,21 @@
                                 ]
                               },
                               {
-                                "display": "Mapping[IndicatorConstraintID | int, IndicatorConstraint]",
+                                "display": "Mapping[_ommx_rust.IndicatorConstraintID | int, IndicatorConstraint]",
                                 "link_target": null,
                                 "children": [
                                   {
-                                    "display": "IndicatorConstraintID | int",
+                                    "display": "_ommx_rust.IndicatorConstraintID | int",
                                     "link_target": null,
                                     "children": [
                                       {
                                         "display": "IndicatorConstraintID",
-                                        "link_target": null,
+                                        "link_target": {
+                                          "fqn": "ommx.IndicatorConstraintID",
+                                          "doc_module": "ommx",
+                                          "kind": "Class",
+                                          "attribute": null
+                                        },
                                         "children": []
                                       },
                                       {
@@ -22131,20 +22455,25 @@
                     {
                       "name": "one_hot_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[OneHotConstraintID | int, OneHotConstraint]]",
+                        "display": "Optional[Mapping[_ommx_rust.OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[_ommx_rust.OneHotConstraintID | int, OneHotConstraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[OneHotConstraintID | int, OneHotConstraint]",
+                            "display": "Mapping[_ommx_rust.OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[_ommx_rust.OneHotConstraintID | int, OneHotConstraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "Mapping[OneHotConstraintID, OneHotConstraint]",
+                                "display": "Mapping[_ommx_rust.OneHotConstraintID, OneHotConstraint]",
                                 "link_target": null,
                                 "children": [
                                   {
                                     "display": "OneHotConstraintID",
-                                    "link_target": null,
+                                    "link_target": {
+                                      "fqn": "ommx.OneHotConstraintID",
+                                      "doc_module": "ommx",
+                                      "kind": "Class",
+                                      "attribute": null
+                                    },
                                     "children": []
                                   },
                                   {
@@ -22171,16 +22500,21 @@
                                 ]
                               },
                               {
-                                "display": "Mapping[OneHotConstraintID | int, OneHotConstraint]",
+                                "display": "Mapping[_ommx_rust.OneHotConstraintID | int, OneHotConstraint]",
                                 "link_target": null,
                                 "children": [
                                   {
-                                    "display": "OneHotConstraintID | int",
+                                    "display": "_ommx_rust.OneHotConstraintID | int",
                                     "link_target": null,
                                     "children": [
                                       {
                                         "display": "OneHotConstraintID",
-                                        "link_target": null,
+                                        "link_target": {
+                                          "fqn": "ommx.OneHotConstraintID",
+                                          "doc_module": "ommx",
+                                          "kind": "Class",
+                                          "attribute": null
+                                        },
                                         "children": []
                                       },
                                       {
@@ -22209,20 +22543,25 @@
                     {
                       "name": "sos1_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[Sos1ConstraintID | int, Sos1Constraint]]",
+                        "display": "Optional[Mapping[_ommx_rust.Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[_ommx_rust.Sos1ConstraintID | int, Sos1Constraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[Sos1ConstraintID | int, Sos1Constraint]",
+                            "display": "Mapping[_ommx_rust.Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[_ommx_rust.Sos1ConstraintID | int, Sos1Constraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "Mapping[Sos1ConstraintID, Sos1Constraint]",
+                                "display": "Mapping[_ommx_rust.Sos1ConstraintID, Sos1Constraint]",
                                 "link_target": null,
                                 "children": [
                                   {
                                     "display": "Sos1ConstraintID",
-                                    "link_target": null,
+                                    "link_target": {
+                                      "fqn": "ommx.Sos1ConstraintID",
+                                      "doc_module": "ommx",
+                                      "kind": "Class",
+                                      "attribute": null
+                                    },
                                     "children": []
                                   },
                                   {
@@ -22249,16 +22588,21 @@
                                 ]
                               },
                               {
-                                "display": "Mapping[Sos1ConstraintID | int, Sos1Constraint]",
+                                "display": "Mapping[_ommx_rust.Sos1ConstraintID | int, Sos1Constraint]",
                                 "link_target": null,
                                 "children": [
                                   {
-                                    "display": "Sos1ConstraintID | int",
+                                    "display": "_ommx_rust.Sos1ConstraintID | int",
                                     "link_target": null,
                                     "children": [
                                       {
                                         "display": "Sos1ConstraintID",
-                                        "link_target": null,
+                                        "link_target": {
+                                          "fqn": "ommx.Sos1ConstraintID",
+                                          "doc_module": "ommx",
+                                          "kind": "Class",
+                                          "attribute": null
+                                        },
                                         "children": []
                                       },
                                       {
@@ -22398,12 +22742,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -22513,12 +22862,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -32646,12 +33000,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -32709,12 +33068,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -32934,12 +33298,17 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | int",
+                        "display": "_ommx_rust.ConstraintID | int",
                         "link_target": null,
                         "children": [
                           {
                             "display": "ConstraintID",
-                            "link_target": null,
+                            "link_target": {
+                              "fqn": "ommx.ConstraintID",
+                              "doc_module": "ommx",
+                              "kind": "Class",
+                              "attribute": null
+                            },
                             "children": []
                           },
                           {
@@ -33470,17 +33839,27 @@
               "name": "promoted",
               "doc": "Applied promotions: cardinality constraint ID to allocated SOS1 ID.",
               "type_": {
-                "display": "dict[ConstraintID, Sos1ConstraintID]",
+                "display": "dict[_ommx_rust.ConstraintID, _ommx_rust.Sos1ConstraintID]",
                 "link_target": null,
                 "children": [
                   {
                     "display": "ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   },
                   {
                     "display": "Sos1ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.Sos1ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 ]
@@ -33492,12 +33871,17 @@
               "name": "rejections",
               "doc": "Rejected formulations: cardinality constraint ID to diagnostic message.\n\nThese are diagnostic strings, not exception objects. Rejected\nformulations were not applied.",
               "type_": {
-                "display": "dict[ConstraintID, str]",
+                "display": "dict[_ommx_rust.ConstraintID, str]",
                 "link_target": null,
                 "children": [
                   {
                     "display": "ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   },
                   {
@@ -33541,7 +33925,7 @@
               "name": "rejections",
               "doc": "Diagnostic messages keyed by rejected cardinality constraint ID.",
               "type_": {
-                "display": "dict[ConstraintID, str]",
+                "display": "dict[_ommx_rust.ConstraintID, str]",
                 "link_target": null,
                 "children": [
                   {
@@ -33619,16 +34003,21 @@
                     {
                       "name": "selector_claims",
                       "type_": {
-                        "display": "Mapping[ConstraintID, Mapping[int, Sos1BigMSelectorClaim]] | Mapping[int, Mapping[int, Sos1BigMSelectorClaim]] | Mapping[ConstraintID | int, Mapping[int, Sos1BigMSelectorClaim]]",
+                        "display": "Mapping[_ommx_rust.ConstraintID, Mapping[int, Sos1BigMSelectorClaim]] | Mapping[int, Mapping[int, Sos1BigMSelectorClaim]] | Mapping[_ommx_rust.ConstraintID | int, Mapping[int, Sos1BigMSelectorClaim]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[ConstraintID, Mapping[int, Sos1BigMSelectorClaim]]",
+                            "display": "Mapping[_ommx_rust.ConstraintID, Mapping[int, Sos1BigMSelectorClaim]]",
                             "link_target": null,
                             "children": [
                               {
                                 "display": "ConstraintID",
-                                "link_target": null,
+                                "link_target": {
+                                  "fqn": "ommx.ConstraintID",
+                                  "doc_module": "ommx",
+                                  "kind": "Class",
+                                  "attribute": null
+                                },
                                 "children": []
                               },
                               {
@@ -33677,16 +34066,21 @@
                             ]
                           },
                           {
-                            "display": "Mapping[ConstraintID | int, Mapping[int, Sos1BigMSelectorClaim]]",
+                            "display": "Mapping[_ommx_rust.ConstraintID | int, Mapping[int, Sos1BigMSelectorClaim]]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "ConstraintID | int",
+                                "display": "_ommx_rust.ConstraintID | int",
                                 "link_target": null,
                                 "children": [
                                   {
                                     "display": "ConstraintID",
-                                    "link_target": null,
+                                    "link_target": {
+                                      "fqn": "ommx.ConstraintID",
+                                      "doc_module": "ommx",
+                                      "kind": "Class",
+                                      "attribute": null
+                                    },
                                     "children": []
                                   },
                                   {
@@ -33735,12 +34129,17 @@
               "name": "selector_claims",
               "doc": "Formulation claims keyed by cardinality constraint ID, then member ID.",
               "type_": {
-                "display": "dict[ConstraintID, dict[int, Sos1BigMSelectorClaim]]",
+                "display": "dict[_ommx_rust.ConstraintID, dict[int, Sos1BigMSelectorClaim]]",
                 "link_target": null,
                 "children": [
                   {
                     "display": "ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   },
                   {
@@ -33817,16 +34216,21 @@
                     {
                       "name": "upper_link",
                       "type_": {
-                        "display": "Optional[ConstraintID | int]",
+                        "display": "Optional[_ommx_rust.ConstraintID | int]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "ConstraintID | int",
+                            "display": "_ommx_rust.ConstraintID | int",
                             "link_target": null,
                             "children": [
                               {
                                 "display": "ConstraintID",
-                                "link_target": null,
+                                "link_target": {
+                                  "fqn": "ommx.ConstraintID",
+                                  "doc_module": "ommx",
+                                  "kind": "Class",
+                                  "attribute": null
+                                },
                                 "children": []
                               },
                               {
@@ -33846,16 +34250,21 @@
                     {
                       "name": "lower_link",
                       "type_": {
-                        "display": "Optional[ConstraintID | int]",
+                        "display": "Optional[_ommx_rust.ConstraintID | int]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "ConstraintID | int",
+                            "display": "_ommx_rust.ConstraintID | int",
                             "link_target": null,
                             "children": [
                               {
                                 "display": "ConstraintID",
-                                "link_target": null,
+                                "link_target": {
+                                  "fqn": "ommx.ConstraintID",
+                                  "doc_module": "ommx",
+                                  "kind": "Class",
+                                  "attribute": null
+                                },
                                 "children": []
                               },
                               {
@@ -33916,12 +34325,17 @@
               "name": "lower_link",
               "doc": "Claimed lower-link constraint ID, if supplied.",
               "type_": {
-                "display": "Optional[ConstraintID]",
+                "display": "Optional[_ommx_rust.ConstraintID]",
                 "link_target": null,
                 "children": [
                   {
                     "display": "ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 ]
@@ -33950,12 +34364,17 @@
               "name": "upper_link",
               "doc": "Claimed upper-link constraint ID, if supplied.",
               "type_": {
-                "display": "Optional[ConstraintID]",
+                "display": "Optional[_ommx_rust.ConstraintID]",
                 "link_target": null,
                 "children": [
                   {
                     "display": "ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 ]
@@ -34385,7 +34804,12 @@
                   "parameters": [],
                   "return_type": {
                     "display": "Sos1ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.Sos1ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 }
@@ -34411,7 +34835,12 @@
                   ],
                   "return_type": {
                     "display": "Sos1ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.Sos1ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
                   }
                 }
@@ -34583,8 +35012,46 @@
                   ],
                   "return_type": {
                     "display": "Sos1ConstraintID",
-                    "link_target": null,
+                    "link_target": {
+                      "fqn": "ommx.Sos1ConstraintID",
+                      "doc_module": "ommx",
+                      "kind": "Class",
+                      "attribute": null
+                    },
                     "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__reduce__",
+              "doc": "Reconstruct the same ID family through its public constructor.\nThe numeric payload is used only by the serialization protocol.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "tuple[type, tuple[int]]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "type",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "tuple[int]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      }
+                    ]
                   }
                 }
               ],
