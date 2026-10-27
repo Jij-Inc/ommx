@@ -15,7 +15,9 @@ kernelspec:
 
 {class}`~ommx.Instance` は、決定変数の定義域（取りうる値の種類と範囲）、目的関数、制約条件、最大化・最小化をまとめた最適化問題です。特定のソルバーの入力ではなく、**どの値の割り当てが実行可能で、どの目的値を持つか**をOMMXで定義します。そのため、求解しなくても候補を評価できます。
 
-例えば、二つの項目を同時には選べない問題を作ります。
+制約条件には、数式の等式・不等式で表す**通常制約**と、「ちょうど一つを選ぶ」などの関係を専用の型で表す**特殊制約**があります。どちらもInstanceが表す問題の一部です。
+
+例えば、通常制約を使って、二つの項目を同時には選べない問題を作ります。
 
 $$
 \begin{aligned}
@@ -47,10 +49,13 @@ assert solution.objective == 1
 |---|---|---|
 | 決定変数 | 値の種類と取りうる範囲 | {attr}`~ommx.Instance.decision_variables` |
 | 目的関数 | 比較したい数値 | {attr}`~ommx.Instance.objective` |
-| 制約条件 | 満たす必要がある条件 | {attr}`~ommx.Instance.constraints` |
+| 通常制約 | 数式の等式・不等式で表す条件 | {attr}`~ommx.Instance.constraints` |
+| 特殊制約 | 条件付きの制約や、変数の組に対する選択条件など | [特殊制約の意味と評価](./special_constraints.md) |
 | 最大化・最小化 | 目的値の大きい方と小さい方のどちらを選ぶか | {attr}`~ommx.Instance.sense` |
 
-最小化問題は {meth}`~ommx.Instance.minimize` で作成します。目的関数や通常制約の式は {class}`~ommx.Function` で表されます。関数の組み立て方は[Function](./function.md)、Indicator・OneHot・SOS1の成立条件は[特殊制約](./special_constraints.md)を参照してください。
+最小化問題は {meth}`~ommx.Instance.minimize` で作成します。目的関数や通常制約の式は {class}`~ommx.Function` で表されます。関数の組み立て方は[Function](./function.md)を参照してください。
+
+現在はIndicator・OneHot・SOS1が用意されており、特殊制約の種類は今後も増やしていくことを想定しています。特殊制約もOMMXが成立条件を定める問題の一部であり、特定のソルバーへの指示ではありません。各種類の意味と、利用できる型・操作への入口は[特殊制約のGuide](./special_constraints.md)にあります。各ソルバーが直接受け取れる種類は異なるため、Adapterの入力条件とは分けて考えます。
 
 変数と制約は名前ではなくIDで識別します。名前が同じでも、IDが異なれば別の変数・制約です。明示的なIDで既存のコンポーネントを組み立てる場合は {meth}`~ommx.Instance.from_components` を使えます。Instanceは、式や特殊制約が参照する変数が自身に定義されているかを検証します。
 
@@ -94,7 +99,7 @@ instance.decision_variables_df()
 instance.constraints_df()
 ```
 
-{attr}`~ommx.Instance.constraints` は制約IDをキーとする辞書です。制約にも変数と同様のメタデータを付けられます。制約IDの空間は変数IDとは独立し、特殊制約の各種類もそれぞれ独立した制約IDを持ちます。
+{attr}`~ommx.Instance.constraints` は、**通常制約だけ**を制約IDで引く辞書です。特殊制約はここには含まれず、{attr}`~ommx.Instance.indicator_constraints`、{attr}`~ommx.Instance.one_hot_constraints`、{attr}`~ommx.Instance.sos1_constraints`という種類ごとの別の集合で保持されます。制約にも変数と同様のメタデータを付けられます。制約IDの空間は変数IDとは独立し、特殊制約の各種類もそれぞれ独立した制約IDを持ちます。
 
 ## モデルを変換する場合
 
