@@ -27,6 +27,17 @@ pub enum ConstraintHost {
     Parametric(Py<ParametricInstance>),
 }
 
+// Attached constraint equality compares the owner object, not its model data.
+impl PartialEq for ConstraintHost {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Instance(a), Self::Instance(b)) => a.is(b),
+            (Self::Parametric(a), Self::Parametric(b)) => a.is(b),
+            _ => false,
+        }
+    }
+}
+
 impl ConstraintHost {
     /// Refcount-bump the inner `Py<...>` handle.
     pub fn clone_ref(&self, py: Python<'_>) -> Self {

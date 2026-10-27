@@ -136,8 +136,8 @@ impl IndicatorConstraint {
 
 /// A removed indicator constraint together with the reason it was removed.
 #[gen_stub_pyclass]
-#[pyclass(extends = ConstraintView)]
-#[derive(Clone)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(Clone, PartialEq)]
 pub struct RemovedIndicatorConstraint {
     pub constraint: ommx::IndicatorConstraint,
     pub context: ommx::ConstraintContext,
@@ -255,7 +255,8 @@ impl RemovedIndicatorConstraint {
 /// `constraints[IndicatorConstraintID(...)]` lookups. Reads pull live data from the parent
 /// host and context setters write through to its SoA context store.
 #[gen_stub_pyclass]
-#[pyclass(extends = ConstraintView)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
 pub struct AttachedIndicatorConstraint {
     pub(crate) host: ConstraintHost,
     pub(crate) id: ommx::IndicatorConstraintID,

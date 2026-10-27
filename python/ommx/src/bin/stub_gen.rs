@@ -2,12 +2,38 @@ use pyo3_stub_gen::Result;
 use std::{fs, path::Path};
 
 fn main() -> Result<()> {
-    let stub = _ommx_rust::stub_info()?;
+    let mut stub = _ommx_rust::stub_info()?;
+    annotate_constraint_get_overrides(&mut stub);
     stub.generate()?;
 
     let root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
     avoid_git_conflict_marker_headings(&root.join("../../docs/api/_items"))?;
     Ok(())
+}
+
+fn annotate_constraint_get_overrides(stub: &mut pyo3_stub_gen::StubInfo) {
+    // Pyright rejects refined overloads even when all Mapping.get signatures
+    // are covered: https://github.com/microsoft/pyright/issues/8007.
+    // Keep the precise caller types and suppress only this declaration-level
+    // diagnostic. test_constraint_collection_typing.py checks every family,
+    // lifecycle, arbitrary defaults, and the open-base fallback without ignores.
+    // gen_methods_from_python currently cannot attach per-method ignore metadata.
+    for module in stub.modules.values_mut() {
+        for class in module.class.values_mut() {
+            if matches!(
+                class.name,
+                "ConstraintCollection"
+                    | "RemovedConstraintCollection"
+                    | "EvaluatedConstraintCollection"
+                    | "SampledConstraintCollection"
+            ) {
+                let method = class.methods.get_mut("get").unwrap().last_mut().unwrap();
+                method.type_ignored = Some(pyo3_stub_gen::type_info::IgnoreTarget::Specified(&[
+                    "reportIncompatibleMethodOverride",
+                ]));
+            }
+        }
+    }
 }
 
 fn avoid_git_conflict_marker_headings(dir: &Path) -> std::io::Result<()> {

@@ -122,6 +122,15 @@ rows[ConstraintID(0)].violation()
 その変更は結果へ反映されませんが、同じIDへの次のアクセスは所有元の現在の状態を取得します。
 結果の更新には `Solution.set_dual_variable` などの所有元のメソッドを使います。
 
+Attachedハンドルは、同一の所有元オブジェクトと型付きIDを参照するときに等しくなります。
+Removedと結果のスナップショットは、メタデータや削除理由を含む保持データを比較します。
+`rows == dict(rows)` や `rows.values()`・`rows.items()` への包含判定も、この行の比較に従います。
+別々のモデルのハンドルは、モデルの内容が同じでも等しくなりません。
+
+`rows.get(id)` は型付きIDが存在しなければ `None` を返します。
+`rows.get(id, default)` では代わりの値を指定できます。添字アクセスと同様に、
+具体的なIDに対応する行の型を保ち、返り値型には代わりの値の型も含まれます。
+
 コレクションへの代入・削除はできません。`keys()`・`values()`・`items()` は所有元の変更を反映するビューです。
 イテレーターは開始時の型付きIDを、種類の順（通常・Indicator・OneHot・SOS1）、次に番号順で保持し、
 値は列挙された時点で取得します。列挙中に削除されたキーの値を取得すると `KeyError` になります。
@@ -137,6 +146,9 @@ rows[ConstraintID(0)].violation()
 整数を自動昇格し、別種類のIDを拒否します。同じ入力辞書に `1` と `ConstraintID(1)` がある場合は、
 同じIDになるため `ValueError` です。コレクション・`constraint_violation(id)`・DataFrameのインデックスには
 型付きIDを使います。IDは `int()` や整数インデックスへ変換できません。変数IDとサンプルIDは整数のままです。
+
+IDは不変で、`copy.copy(id)` と `copy.deepcopy(id)` は自身を返します。
+IDをキーや値に含む辞書などをdeepcopyしても、制約の種類は保持されます。
 
 ### 将来の特殊制約への対応
 

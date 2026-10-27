@@ -129,8 +129,8 @@ impl Sos1Constraint {
 
 /// A removed SOS1 constraint together with the reason it was removed.
 #[gen_stub_pyclass]
-#[pyclass(extends = ConstraintView)]
-#[derive(Clone)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(Clone, PartialEq)]
 pub struct RemovedSos1Constraint {
     pub constraint: ommx::Sos1Constraint,
     pub context: ommx::ConstraintContext,
@@ -240,7 +240,8 @@ impl RemovedSos1Constraint {
 /// `ParametricInstance.add_sos1_constraint` and by their
 /// `constraints[Sos1ConstraintID(...)]` lookups.
 #[gen_stub_pyclass]
-#[pyclass(extends = ConstraintView)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
 pub struct AttachedSos1Constraint {
     pub(crate) host: ConstraintHost,
     pub(crate) id: ommx::Sos1ConstraintID,

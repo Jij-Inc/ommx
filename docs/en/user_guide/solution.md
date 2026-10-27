@@ -114,6 +114,16 @@ Changing that snapshot does not update the result; accessing the same ID again
 reads the current owner. Use owner methods such as `Solution.set_dual_variable`
 to update the result.
 
+Attached handles compare equal when they refer to the same owner object and
+typed ID. Removed and result snapshots compare their stored data, including
+metadata and removal reasons. Thus `rows == dict(rows)` and membership in
+`rows.values()` or `rows.items()` use the same row equality. Handles from two
+different model owners are unequal even when their models contain identical data.
+
+`rows.get(id)` returns `None` for a missing typed ID, or the supplied default
+with `rows.get(id, default)`. Like indexing, it preserves the concrete row type
+for a concrete ID; the return type also includes the default's type.
+
 Collection membership cannot be changed by assignment or deletion. `keys()`,
 `values()`, and `items()` are live views. An iterator snapshots the typed IDs
 in family order (regular, indicator, one-hot, SOS1), then numeric order; values
@@ -133,6 +143,9 @@ IDs of another family. An input mapping containing both `1` and `ConstraintID(1)
 raises `ValueError` because the keys normalize to the same identity. Collections,
 `constraint_violation(id)`, and DataFrame indexes require typed IDs. IDs do not
 support `int()` or integer-index conversion. Variable and sample IDs remain integers.
+
+IDs are immutable: `copy.copy(id)` and `copy.deepcopy(id)` return the ID itself.
+Deep-copying a container with IDs as keys or values preserves their families.
 
 ### Supporting future constraint families
 

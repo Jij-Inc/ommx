@@ -84,7 +84,8 @@ macro_rules! result_class {
     ($name:ident, $inner:ty, $doc:literal) => {
         #[doc = $doc]
         #[pyo3_stub_gen::derive::gen_stub_pyclass]
-        #[pyclass(extends = ConstraintView)]
+        #[pyclass(eq, extends = ConstraintView)]
+        #[derive(PartialEq)]
         pub struct $name($inner, ommx::ConstraintContext, Option<ommx::RemovedReason>);
         crate::constraint_base::constraint_subclass!($name, crate::constraint_base::ConstraintView);
 

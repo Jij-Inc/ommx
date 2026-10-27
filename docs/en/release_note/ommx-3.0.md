@@ -77,6 +77,12 @@ return types. Concrete-ID indexing keeps precise overloads. Solver consumers
 explicitly reject unsupported families instead of silently omitting constraints.
 This extension principle is also recorded in the development and review guidance.
 
+Attached rows compare by owner identity and typed ID; removed and result rows
+compare their snapshot data and metadata. Collections and their views use that
+row equality. Typed IDs support `copy` and `deepcopy`, and `.get()` preserves
+both the concrete row type and the default value's type. Invalid lookup keys
+report the required typed-ID input without exposing internal enum extraction.
+
 ### 🆕 Create states from variable names and subscripts ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 `Instance.state_from_named_values()` resolves a `NamedState` against the target

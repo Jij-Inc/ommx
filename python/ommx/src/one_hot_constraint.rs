@@ -129,8 +129,8 @@ impl OneHotConstraint {
 
 /// A removed one-hot constraint together with the reason it was removed.
 #[gen_stub_pyclass]
-#[pyclass(extends = ConstraintView)]
-#[derive(Clone)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(Clone, PartialEq)]
 pub struct RemovedOneHotConstraint {
     pub constraint: ommx::OneHotConstraint,
     pub context: ommx::ConstraintContext,
@@ -241,7 +241,8 @@ impl RemovedOneHotConstraint {
 /// `constraints[OneHotConstraintID(...)]` lookups. Reads pull live data from the parent
 /// host and context setters write through to its SoA context store.
 #[gen_stub_pyclass]
-#[pyclass(extends = ConstraintView)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
 pub struct AttachedOneHotConstraint {
     pub(crate) host: ConstraintHost,
     pub(crate) id: ommx::OneHotConstraintID,

@@ -65,6 +65,32 @@
               "deprecated": null
             },
             {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__repr__",
               "doc": "",
               "signatures": [
@@ -1703,6 +1729,32 @@
               "deprecated": null
             },
             {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__repr__",
               "doc": "",
               "signatures": [
@@ -2174,6 +2226,32 @@
               "deprecated": null
             },
             {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__repr__",
               "doc": "",
               "signatures": [
@@ -2615,6 +2693,32 @@
                   ],
                   "return_type": {
                     "display": "AttachedSos1Constraint",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
                     "link_target": null,
                     "children": []
                   }
@@ -4325,6 +4429,436 @@
               "deprecated": null
             },
             {
+              "name": "get",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AttachedConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AttachedConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedIndicatorConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AttachedIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedIndicatorConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AttachedIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedOneHotConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AttachedOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedOneHotConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AttachedOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedSos1Constraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AttachedSos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "AttachedSos1Constraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "AttachedSos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "items",
               "doc": "Live item view; each row is fetched when visited.",
               "signatures": [
@@ -4416,6 +4950,48 @@
             }
           ],
           "methods": [
+            {
+              "name": "__copy__",
+              "doc": "IDs are immutable; copying preserves the same typed identity.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "ConstraintID",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__deepcopy__",
+              "doc": "IDs are immutable, including when nested in copied containers.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_memo",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintID",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
             {
               "name": "__eq__",
               "doc": "",
@@ -6465,6 +7041,32 @@
           ],
           "methods": [
             {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "is_feasible",
               "doc": "Check feasibility using the supplied absolute tolerance.\n\nThe query compares the stored violation with ``atol``. It does not\nre-evaluate the function or canonicalize the input state.",
               "signatures": [
@@ -6933,6 +7535,436 @@
               "deprecated": null
             },
             {
+              "name": "get",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "EvaluatedConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "EvaluatedConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "EvaluatedConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "EvaluatedConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "EvaluatedIndicatorConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "EvaluatedIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "EvaluatedIndicatorConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "EvaluatedIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "EvaluatedOneHotConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "EvaluatedOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "EvaluatedOneHotConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "EvaluatedOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "EvaluatedSos1Constraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "EvaluatedSos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "EvaluatedSos1Constraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "EvaluatedSos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "items",
               "doc": "Live item view; each row is fetched when visited.",
               "signatures": [
@@ -7162,6 +8194,32 @@
             }
           ],
           "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
             {
               "name": "is_feasible",
               "doc": "Compare the stored violation with atol without changing activation diagnostics.",
@@ -7609,6 +8667,32 @@
           ],
           "methods": [
             {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "is_feasible",
               "doc": "Compare the stored violation with atol without changing activation diagnostics.",
               "signatures": [
@@ -7863,6 +8947,32 @@
             }
           ],
           "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
             {
               "name": "is_feasible",
               "doc": "Compare the stored violation with atol without changing activation diagnostics.",
@@ -10343,6 +11453,48 @@
             }
           ],
           "methods": [
+            {
+              "name": "__copy__",
+              "doc": "IDs are immutable; copying preserves the same typed identity.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "IndicatorConstraintID",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__deepcopy__",
+              "doc": "IDs are immutable, including when nested in copied containers.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_memo",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "IndicatorConstraintID",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
             {
               "name": "__eq__",
               "doc": "",
@@ -18717,6 +19869,48 @@
           ],
           "methods": [
             {
+              "name": "__copy__",
+              "doc": "IDs are immutable; copying preserves the same typed identity.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "OneHotConstraintID",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__deepcopy__",
+              "doc": "IDs are immutable, including when nested in copied containers.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_memo",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "OneHotConstraintID",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__eq__",
               "doc": "",
               "signatures": [
@@ -25024,6 +26218,32 @@
               "deprecated": null
             },
             {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__new__",
               "doc": "",
               "signatures": [
@@ -25507,6 +26727,436 @@
               "deprecated": null
             },
             {
+              "name": "get",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "RemovedConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "RemovedConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "RemovedConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "RemovedConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "RemovedIndicatorConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "RemovedIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "RemovedIndicatorConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "RemovedIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "RemovedOneHotConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "RemovedOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "RemovedOneHotConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "RemovedOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "RemovedSos1Constraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "RemovedSos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "RemovedSos1Constraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "RemovedSos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "items",
               "doc": "Live item view; each row is fetched when visited.",
               "signatures": [
@@ -25598,6 +27248,32 @@
             }
           ],
           "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
             {
               "name": "__repr__",
               "doc": "",
@@ -25809,6 +27485,32 @@
           ],
           "methods": [
             {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "__repr__",
               "doc": "",
               "signatures": [
@@ -25997,6 +27699,32 @@
             }
           ],
           "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
             {
               "name": "__repr__",
               "doc": "",
@@ -27749,6 +29477,32 @@
           ],
           "methods": [
             {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "feasible",
               "doc": "Compute feasibility for every sample using the supplied tolerance.\n\nThis query does not re-evaluate the functions or change stored values.",
               "signatures": [
@@ -28229,6 +29983,436 @@
               "deprecated": null
             },
             {
+              "name": "get",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampledConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SampledConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampledConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SampledConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampledIndicatorConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SampledIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampledIndicatorConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SampledIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampledOneHotConstraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SampledOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampledOneHotConstraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SampledOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampledSos1Constraint | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SampledSos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampledSos1Constraint | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "SampledSos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView",
+                    "link_target": null,
+                    "children": []
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintView | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "items",
               "doc": "Live item view; each row is fetched when visited.",
               "signatures": [
@@ -28458,6 +30642,32 @@
             }
           ],
           "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
             {
               "name": "feasible",
               "doc": "Compare each stored violation with atol without changing activation diagnostics.",
@@ -28955,6 +31165,32 @@
           ],
           "methods": [
             {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "feasible",
               "doc": "Compare each stored violation with atol without changing activation diagnostics.",
               "signatures": [
@@ -29237,6 +31473,32 @@
             }
           ],
           "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
             {
               "name": "feasible",
               "doc": "Compare each stored violation with atol without changing activation diagnostics.",
@@ -32115,6 +34377,48 @@
             }
           ],
           "methods": [
+            {
+              "name": "__copy__",
+              "doc": "IDs are immutable; copying preserves the same typed identity.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Sos1ConstraintID",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__deepcopy__",
+              "doc": "IDs are immutable, including when nested in copied containers.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "_memo",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Sos1ConstraintID",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
             {
               "name": "__eq__",
               "doc": "",

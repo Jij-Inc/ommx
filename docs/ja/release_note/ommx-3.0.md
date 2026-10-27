@@ -70,6 +70,12 @@ IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
 具体型を返します。ソルバー側は未対応種類を黙って除外せず、明示的に拒否します。
 この拡張原則は開発・レビュー指針にも記載しています。
 
+Attachedの行は所有元の同一性と型付きIDで比較し、Removedと結果の行は
+スナップショットのデータとメタデータで比較します。コレクションとそのビューも
+この比較に従います。型付きIDは `copy`・`deepcopy` に対応し、`.get()` は
+具体的な行の型と代わりの値の型を保持します。不正な検索キーへのエラーは、
+内部enumの抽出失敗を列挙せず、必要な型付きIDの指定方法を示します。
+
 ### 🆕 変数の名前と添字から State を作成 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 `Instance.state_from_named_values()` で `NamedState` を対象インスタンスの

@@ -82,7 +82,7 @@ pub struct EvaluatedData {
 /// Sample IDs in dual values, when present, must match evaluated values.
 /// Feasibility queries receive their own absolute tolerance; the numeric results
 /// do not retain a feasibility decision or its tolerance.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SampledData {
     pub evaluated_values: crate::Sampled<f64>,
     pub used_decision_variable_ids: VariableIDSet,

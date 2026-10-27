@@ -275,8 +275,8 @@ impl Constraint {
 /// reason. As with [`Constraint`], the context snapshot does not propagate
 /// back to the originating instance — it is read-only context for inspection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(extends = ConstraintView)]
-#[derive(Clone)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(Clone, PartialEq)]
 pub struct RemovedConstraint {
     pub constraint: ommx::Constraint,
     pub context: ommx::ConstraintContext,
@@ -435,7 +435,8 @@ impl RemovedConstraint {
 /// The handle keeps the parent host alive through a refcount; drop the
 /// wrapper to release the back-reference.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(extends = ConstraintView)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
 pub struct AttachedConstraint {
     pub(crate) host: ConstraintHost,
     pub(crate) id: ommx::ConstraintID,

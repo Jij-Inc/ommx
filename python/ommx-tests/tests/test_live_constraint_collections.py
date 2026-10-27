@@ -1,6 +1,7 @@
 """Constraint mappings retain owners and resolve typed identities on demand."""
 
 from collections.abc import Mapping
+from copy import copy, deepcopy
 from typing import Any, overload
 
 import pytest
@@ -112,7 +113,7 @@ def test_removal_restoration_and_lowering_update_retained_views():
     assert_type(removed, RemovedConstraintCollection)
     assert_type(
         active.get(ConstraintID(5)),
-        ConstraintView | None,
+        AttachedConstraint | None,
     )
     model.relax_constraint(5, "manual")
     assert ConstraintID(5) not in active
@@ -219,6 +220,152 @@ def test_all_collections_require_typed_keys_and_reject_structural_mutation():
 
 class FutureConstraintID(ConstraintIDBase):
     """Simulate a family introduced after this consumer was written."""
+
+
+@pytest.mark.parametrize("host", [Instance, ParametricInstance])
+def test_attached_equality_uses_owner_and_typed_id(host):
+    model, other = make_model(host), make_model(host)
+    rows = model.constraints
+    assert rows == model.constraints
+    assert rows == dict(rows)
+    assert dict(rows) == rows
+    assert rows != other.constraints
+    for _, id_type, _ in FAMILIES:
+        key = id_type(5)
+        row = rows[key]
+        assert row == rows[key]
+        assert row != other.constraints[key]
+        assert row != object()
+        assert row in rows.values()
+        assert (key, row) in rows.items()
+        row.set_name("changed through another handle")
+        assert row == model.constraints[key]
+    assert rows[ConstraintID(5)] != rows[OneHotConstraintID(5)]
+    added = model.add_constraint(DecisionVariable.binary(0) <= 1)
+    assert rows[ConstraintID(5)] != added
+
+
+def test_result_equality_compares_snapshot_data_and_context():
+    model = make_model(Instance)
+    other = make_model(Instance)
+    state = {0: 1, 1: 0}
+    solution = model.evaluate(state)
+    sampled = model.evaluate_samples({9: state})
+    for left, right, changed in [
+        (
+            solution.constraints,
+            other.evaluate(state).constraints,
+            model.evaluate({0: 1, 1: 1}).constraints,
+        ),
+        (
+            sampled.constraints,
+            other.evaluate_samples({9: state}).constraints,
+            model.evaluate_samples({9: {0: 1, 1: 1}}).constraints,
+        ),
+    ]:
+        assert left == right
+        assert left == dict(left)
+        for key in left:
+            assert left[key] == right[key]
+            assert left[key] != changed[key]
+            assert left[key] in left.values()
+            assert (key, left[key]) in left.items()
+    before = solution.constraints[ConstraintID(5)]
+    solution.set_dual_variable(5, 2)
+    assert before != solution.constraints[ConstraintID(5)]
+    for row in other.constraints.values():
+        assert isinstance(
+            row,
+            (
+                AttachedConstraint,
+                AttachedIndicatorConstraint,
+                AttachedOneHotConstraint,
+                AttachedSos1Constraint,
+            ),
+        )
+        row.set_name("different context")
+    for key in model.constraints:
+        assert (
+            model.evaluate(state).constraints[key]
+            != other.evaluate(state).constraints[key]
+        )
+        assert (
+            sampled.constraints[key]
+            != other.evaluate_samples({9: state}).constraints[key]
+        )
+
+
+def remove_all(model: Instance) -> RemovedConstraintCollection:
+    model.relax_constraint(5, "manual")
+    model.relax_indicator_constraint(5, "manual")
+    model.convert_one_hot_to_constraint(5)
+    model.convert_sos1_to_constraints(5)
+    return model.removed_constraints
+
+
+def test_removed_equality_compares_snapshot_context_and_reason():
+    model, other = make_model(Instance), make_model(Instance)
+    rows, equivalent = remove_all(model), remove_all(other)
+    assert rows == equivalent
+    assert rows == dict(rows)
+    for key in rows:
+        assert rows[key] == equivalent[key]
+        assert rows[key] in rows.values()
+        assert (key, rows[key]) in rows.items()
+    old = rows[ConstraintID(5)]
+    model.restore_constraint(5)
+    model.relax_constraint(5, "different reason")
+    assert old != rows[ConstraintID(5)]
+    # Result snapshots must also include retained lifecycle metadata.
+    state = {0: 1, 1: 0}
+    assert (
+        model.evaluate(state).constraints[ConstraintID(5)]
+        != other.evaluate(state).constraints[ConstraintID(5)]
+    )
+    assert (
+        model.evaluate_samples({9: state}).constraints[ConstraintID(5)]
+        != other.evaluate_samples({9: state}).constraints[ConstraintID(5)]
+    )
+
+
+@pytest.mark.parametrize("id_type", [family[1] for family in FAMILIES])
+def test_typed_ids_copy_without_losing_the_family(id_type):
+    key = id_type(5)
+    assert copy(key) is key
+    assert deepcopy(key) is key
+    nested = {key: [key]}
+    cloned = deepcopy(nested)
+    assert cloned == nested
+    assert cloned is not nested
+    assert next(iter(cloned)) is key
+    assert cloned[key][0] is key
+    assert key != 5
+    with pytest.raises(TypeError):
+        int(key)
+
+
+def test_mixed_lookup_errors_explain_typed_ids():
+    model = make_model(Instance)
+    for rows in [
+        model.constraints,
+        model.removed_constraints,
+        model.evaluate({0: 1, 1: 0}).constraints,
+        model.evaluate_samples({9: {0: 1, 1: 0}}).constraints,
+    ]:
+        for lookup in [
+            lambda key: rows[key],
+            lambda key: rows.get(key),
+            lambda key: key in rows,
+        ]:
+            with pytest.raises(
+                TypeError,
+                match=r"Expected a typed constraint ID, got int\. Use ConstraintID\(n\)",
+            ):
+                lookup(5)
+            with pytest.raises(
+                TypeError, match="Unsupported constraint ID type: FutureConstraintID"
+            ):
+                lookup(FutureConstraintID())
 
 
 def accept_current_families(key: ConstraintIDBase) -> None:

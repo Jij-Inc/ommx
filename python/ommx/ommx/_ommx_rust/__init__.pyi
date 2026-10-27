@@ -16,6 +16,7 @@ import pathlib
 import types
 import typing
 import typing_extensions
+from ommx._typing import _T
 from typing import TypeAlias
 
 __all__ = [
@@ -879,6 +880,7 @@ class AttachedConstraint(ConstraintView):
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> Constraint:
         r"""
         Return a {class}`~ommx.Constraint` snapshot of the current
@@ -1106,6 +1108,7 @@ class AttachedIndicatorConstraint(ConstraintView):
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> IndicatorConstraint:
         r"""
         Return an {class}`~ommx.IndicatorConstraint` snapshot of the
@@ -1183,6 +1186,7 @@ class AttachedOneHotConstraint(ConstraintView):
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> OneHotConstraint:
         r"""
         Return a {class}`~ommx.OneHotConstraint` snapshot of the current
@@ -1253,6 +1257,7 @@ class AttachedSos1Constraint(ConstraintView):
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> Sos1Constraint:
         r"""
         Return a {class}`~ommx.Sos1Constraint` snapshot of the current
@@ -1594,6 +1599,44 @@ class ConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
         """
     @typing.overload
     def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> AttachedConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> AttachedConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> AttachedIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> AttachedIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> AttachedOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> AttachedOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> AttachedSos1Constraint | None: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: _T
+    ) -> AttachedSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
 
 @typing.final
 class ConstraintID(ConstraintIDBase):
@@ -1614,6 +1657,14 @@ class ConstraintID(ConstraintIDBase):
         family is not accepted. IDs have no integer conversion protocol.
         """
     def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> ConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> ConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
 
 class ConstraintIDBase:
     r"""
@@ -1938,6 +1989,7 @@ class EvaluatedConstraint(ConstraintView):
         r"""
         Parameters of the removal reason; empty for an active constraint.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
         r"""
         Check feasibility using the supplied absolute tolerance.
@@ -2007,6 +2059,44 @@ class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintV
         """
     @typing.overload
     def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> EvaluatedConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> EvaluatedConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> EvaluatedIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> EvaluatedIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> EvaluatedOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> EvaluatedOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> EvaluatedSos1Constraint | None: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: _T
+    ) -> EvaluatedSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
 
 @typing.final
 class EvaluatedDecisionVariable:
@@ -2126,6 +2216,7 @@ class EvaluatedIndicatorConstraint(ConstraintView):
         r"""
         Whether the indicator was active at evaluation time.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def violation(self) -> builtins.float:
         r"""
         Nonnegative violation retained by the evaluation.
@@ -2221,6 +2312,7 @@ class EvaluatedOneHotConstraint(ConstraintView):
         r"""
         Retained selected-variable diagnostic, using activation_atol.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def violation(self) -> builtins.float:
         r"""
         Nonnegative violation retained by the evaluation.
@@ -2290,6 +2382,7 @@ class EvaluatedSos1Constraint(ConstraintView):
         r"""
         Retained selected-variable diagnostic, using activation_atol.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def violation(self) -> builtins.float:
         r"""
         Nonnegative violation retained by the evaluation.
@@ -3453,6 +3546,14 @@ class IndicatorConstraintID(ConstraintIDBase):
         family is not accepted. IDs have no integer conversion protocol.
         """
     def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> IndicatorConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> IndicatorConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
 
 class InfeasibleDetected(builtins.RuntimeError):
     r"""
@@ -6678,6 +6779,14 @@ class OneHotConstraintID(ConstraintIDBase):
         family is not accepted. IDs have no integer conversion protocol.
         """
     def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> OneHotConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> OneHotConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
 
 @typing.final
 class OpenSolve:
@@ -7973,6 +8082,7 @@ class RemovedConstraint(ConstraintView):
 
         See {attr}`~ommx.Constraint.provenance` for semantics.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __new__(
         cls,
         constraint: Constraint,
@@ -8035,6 +8145,42 @@ class RemovedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVie
         """
     @typing.overload
     def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> RemovedConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> RemovedConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> RemovedIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> RemovedIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> RemovedOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> RemovedOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> RemovedSos1Constraint | None: ...
+    @typing.overload
+    def get(self, key: Sos1ConstraintID, default: _T) -> RemovedSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
 
 @typing.final
 class RemovedIndicatorConstraint(ConstraintView):
@@ -8065,6 +8211,7 @@ class RemovedIndicatorConstraint(ConstraintView):
     def removed_reason_parameters(
         self,
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -8092,6 +8239,7 @@ class RemovedOneHotConstraint(ConstraintView):
     def removed_reason_parameters(
         self,
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -8119,6 +8267,7 @@ class RemovedSos1Constraint(ConstraintView):
     def removed_reason_parameters(
         self,
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -8830,6 +8979,7 @@ class SampledConstraint(ConstraintView):
         r"""
         Parameters of the removal reason; empty for an active constraint.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def feasible(
         self, *, atol: builtins.float
     ) -> builtins.dict[builtins.int, builtins.bool]:
@@ -8889,6 +9039,42 @@ class SampledConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVie
         """
     @typing.overload
     def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> SampledConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> SampledConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> SampledIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> SampledIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> SampledOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> SampledOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> SampledSos1Constraint | None: ...
+    @typing.overload
+    def get(self, key: Sos1ConstraintID, default: _T) -> SampledSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
 
 @typing.final
 class SampledDecisionVariable:
@@ -9008,6 +9194,7 @@ class SampledIndicatorConstraint(ConstraintView):
         r"""
         Activation diagnostics keyed by sample ID.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def feasible(
         self, *, atol: builtins.float
     ) -> builtins.dict[builtins.int, builtins.bool]:
@@ -9126,6 +9313,7 @@ class SampledOneHotConstraint(ConstraintView):
         r"""
         Retained selected-variable diagnostics keyed by sample ID, using activation_atol.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def feasible(
         self, *, atol: builtins.float
     ) -> builtins.dict[builtins.int, builtins.bool]:
@@ -9200,6 +9388,7 @@ class SampledSos1Constraint(ConstraintView):
         r"""
         Retained selected-variable diagnostics keyed by sample ID, using activation_atol.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def feasible(
         self, *, atol: builtins.float
     ) -> builtins.dict[builtins.int, builtins.bool]:
@@ -10101,6 +10290,14 @@ class Sos1ConstraintID(ConstraintIDBase):
         family is not accepted. IDs have no integer conversion protocol.
         """
     def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> Sos1ConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> Sos1ConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
 
 @typing.final
 class SpecialConstraintPreparation:

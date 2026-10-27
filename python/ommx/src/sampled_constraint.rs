@@ -4,7 +4,8 @@ use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass(extends = ConstraintView)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
 pub struct SampledConstraint(
     pub ommx::SampledConstraint,
     pub ommx::ConstraintContext,

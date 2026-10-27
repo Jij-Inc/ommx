@@ -277,6 +277,19 @@ macro_rules! constraint_id {
             fn __repr__(&self) -> String {
                 format!("{}({})", stringify!($name), self.0.into_inner())
             }
+
+            /// IDs are immutable; copying preserves the same typed identity.
+            fn __copy__(slf: Bound<'_, Self>) -> Bound<'_, Self> {
+                slf
+            }
+
+            /// IDs are immutable, including when nested in copied containers.
+            fn __deepcopy__<'py>(
+                slf: Bound<'py, Self>,
+                _memo: &Bound<'py, PyAny>,
+            ) -> Bound<'py, Self> {
+                slf
+            }
         }
     };
 }
@@ -299,12 +312,41 @@ constraint_id!(
 );
 
 /// An identity whose concrete Python type determines its constraint family.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, FromPyObject, IntoPyObject)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, IntoPyObject)]
 pub enum AnyConstraintID {
     Regular(ConstraintID),
     Indicator(IndicatorConstraintID),
     OneHot(OneHotConstraintID),
     Sos1(Sos1ConstraintID),
+}
+
+impl<'py> FromPyObject<'_, 'py> for AnyConstraintID {
+    type Error = PyErr;
+
+    fn extract(value: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        macro_rules! try_id {
+            ($id:ident, $variant:ident) => {
+                if let Ok(id) = value.extract::<PyRef<$id>>() {
+                    return Ok(Self::$variant(*id));
+                }
+            };
+        }
+        try_id!(ConstraintID, Regular);
+        try_id!(IndicatorConstraintID, Indicator);
+        try_id!(OneHotConstraintID, OneHot);
+        try_id!(Sos1ConstraintID, Sos1);
+
+        let name = value.get_type().name()?;
+        if value.is_instance_of::<ConstraintIDBase>() {
+            Err(PyTypeError::new_err(format!(
+                "Unsupported constraint ID type: {name}"
+            )))
+        } else {
+            Err(PyTypeError::new_err(format!(
+                "Expected a typed constraint ID, got {name}. Use ConstraintID(n) for a regular constraint."
+            )))
+        }
+    }
 }
 
 impl pyo3_stub_gen::PyStubType for AnyConstraintID {

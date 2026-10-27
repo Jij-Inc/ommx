@@ -7,6 +7,26 @@ use pyo3::{exceptions::PyKeyError, prelude::*};
 use pyo3_stub_gen::{PyStubType, TypeInfo};
 use std::marker::PhantomData;
 
+// Imported by name so generic get signatures remain compact in generated stubs.
+// This marker describes the caller's default type, not a runtime Python value.
+struct GetDefault;
+impl PyStubType for GetDefault {
+    fn type_output() -> TypeInfo {
+        // TypeRef is not re-exported by pyo3-stub-gen; infer it via ImportRef.
+        let mut import = pyo3_stub_gen::ImportRef::Type(Default::default());
+        if let pyo3_stub_gen::ImportRef::Type(reference) = &mut import {
+            reference.module = "ommx._typing".into();
+            reference.name = "_T".into();
+        }
+        TypeInfo {
+            name: "_T".into(),
+            source_module: None,
+            import: [import].into(),
+            type_refs: Default::default(),
+        }
+    }
+}
+
 fn missing(id: AnyConstraintID, py: Python<'_>) -> PyErr {
     match id.into_pyobject(py) {
         Ok(value) => PyKeyError::new_err(value.unbind()),
@@ -143,8 +163,8 @@ macro_rules! mapping_methods {
             fn items(slf: Bound<'_, Self>) -> ItemsView<$row> {
                 ItemsView(slf.into_any().unbind(), PhantomData)
             }
-            // The generated class inherits Mapping.get, including its generic
-            // default-value typing. __getitem__ adds family-specific overloads.
+            // Family-specific overloads below preserve both the row type and
+            // the caller's default type, with an open common-base fallback.
             #[gen_stub(skip)]
             #[pyo3(signature = (key, default=None))]
             fn get(
@@ -174,8 +194,8 @@ macro_rules! mapping_methods {
             }
             fn __eq__(slf: Bound<'_, Self>, other: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
                 let py = slf.py();
-                // Access creates fresh row handles, so comparing materialized
-                // values alone would make even a view unequal to itself.
+                // Preserve reflexivity even for snapshots containing non-reflexive
+                // numeric values (for example NaN). Row equality handles fresh views.
                 if slf.is(other) {
                     return Ok(pyo3::types::PyBool::new(py, true)
                         .to_owned()
@@ -349,6 +369,40 @@ class ConstraintCollection:
         ...
     @overload
     def __getitem__(self, key: ConstraintIDBase) -> ConstraintView:
+        ...
+
+    @overload
+    def get(self, key: ConstraintID, default: None = None) -> AttachedConstraint | None:
+        ...
+    @overload
+    def get(self, key: ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> AttachedConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: IndicatorConstraintID, default: None = None) -> AttachedIndicatorConstraint | None:
+        ...
+    @overload
+    def get(self, key: IndicatorConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> AttachedIndicatorConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: OneHotConstraintID, default: None = None) -> AttachedOneHotConstraint | None:
+        ...
+    @overload
+    def get(self, key: OneHotConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> AttachedOneHotConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: Sos1ConstraintID, default: None = None) -> AttachedSos1Constraint | None:
+        ...
+    @overload
+    def get(self, key: Sos1ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> AttachedSos1Constraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: None = None) -> ConstraintView | None:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: pyo3_stub_gen.RustType["GetDefault"]) -> ConstraintView | pyo3_stub_gen.RustType["GetDefault"]:
         ...
 
 "# }
@@ -544,6 +598,40 @@ class RemovedConstraintCollection:
     def __getitem__(self, key: ConstraintIDBase) -> ConstraintView:
         ...
 
+    @overload
+    def get(self, key: ConstraintID, default: None = None) -> RemovedConstraint | None:
+        ...
+    @overload
+    def get(self, key: ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> RemovedConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: IndicatorConstraintID, default: None = None) -> RemovedIndicatorConstraint | None:
+        ...
+    @overload
+    def get(self, key: IndicatorConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> RemovedIndicatorConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: OneHotConstraintID, default: None = None) -> RemovedOneHotConstraint | None:
+        ...
+    @overload
+    def get(self, key: OneHotConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> RemovedOneHotConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: Sos1ConstraintID, default: None = None) -> RemovedSos1Constraint | None:
+        ...
+    @overload
+    def get(self, key: Sos1ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> RemovedSos1Constraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: None = None) -> ConstraintView | None:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: pyo3_stub_gen.RustType["GetDefault"]) -> ConstraintView | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+
 "# }
 }
 
@@ -719,6 +807,40 @@ class EvaluatedConstraintCollection:
     def __getitem__(self, key: ConstraintIDBase) -> ConstraintView:
         ...
 
+    @overload
+    def get(self, key: ConstraintID, default: None = None) -> EvaluatedConstraint | None:
+        ...
+    @overload
+    def get(self, key: ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> EvaluatedConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: IndicatorConstraintID, default: None = None) -> EvaluatedIndicatorConstraint | None:
+        ...
+    @overload
+    def get(self, key: IndicatorConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> EvaluatedIndicatorConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: OneHotConstraintID, default: None = None) -> EvaluatedOneHotConstraint | None:
+        ...
+    @overload
+    def get(self, key: OneHotConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> EvaluatedOneHotConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: Sos1ConstraintID, default: None = None) -> EvaluatedSos1Constraint | None:
+        ...
+    @overload
+    def get(self, key: Sos1ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> EvaluatedSos1Constraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: None = None) -> ConstraintView | None:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: pyo3_stub_gen.RustType["GetDefault"]) -> ConstraintView | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+
 "# }
 }
 
@@ -888,6 +1010,40 @@ class SampledConstraintCollection:
         ...
     @overload
     def __getitem__(self, key: ConstraintIDBase) -> ConstraintView:
+        ...
+
+    @overload
+    def get(self, key: ConstraintID, default: None = None) -> SampledConstraint | None:
+        ...
+    @overload
+    def get(self, key: ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> SampledConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: IndicatorConstraintID, default: None = None) -> SampledIndicatorConstraint | None:
+        ...
+    @overload
+    def get(self, key: IndicatorConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> SampledIndicatorConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: OneHotConstraintID, default: None = None) -> SampledOneHotConstraint | None:
+        ...
+    @overload
+    def get(self, key: OneHotConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> SampledOneHotConstraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: Sos1ConstraintID, default: None = None) -> SampledSos1Constraint | None:
+        ...
+    @overload
+    def get(self, key: Sos1ConstraintID, default: pyo3_stub_gen.RustType["GetDefault"]) -> SampledSos1Constraint | pyo3_stub_gen.RustType["GetDefault"]:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: None = None) -> ConstraintView | None:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView:
+        ...
+    @overload
+    def get(self, key: ConstraintIDBase, default: pyo3_stub_gen.RustType["GetDefault"]) -> ConstraintView | pyo3_stub_gen.RustType["GetDefault"]:
         ...
 
 "# }
