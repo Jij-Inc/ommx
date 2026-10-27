@@ -14,7 +14,7 @@ kernelspec:
 
 公開ベンチマークや手元のファイルを読み込み、問題を表す`Instance`を取得します。**入手と求解は別の操作です。** 読み込んだ問題は、手元の候補の評価や、必要に応じた変換・求解へ使えます。
 
-[インストール手順](../getting_started/install.md)の1・2でPython SDKの`3.0.0b7`を用意してください。以下の取得・読み込みにAdapterは使いません。
+[インストール手順](../getting_started/install.md)に従ってPython SDKを用意してください。以下の取得・読み込みにAdapterは使いません。
 
 ## 公開ベンチマークから取得する
 
@@ -74,7 +74,7 @@ instance = Instance.load_qplib("QPLIB_0018.qplib")
 
 ## モデラーやOMMX Artifactから受け取る
 
-モデラーがOMMXの`Instance`を出力する場合は、そのオブジェクトを以降の評価・変換・Adapter呼び出しへ使います。出力手順と対応するOMMX SDKのバージョンは、例えば[JijModelingの公式ドキュメント](https://jij-inc-jijmodeling-tutorials-ja.readthedocs-hosted.com/ja/latest/introduction.html)など、モデラー側で確認してください。リンク先とこのBookでは対象APIが異なる場合があります。SDKのバージョンを変更する必要がある場合は、異なるバージョン向けの手順をこの`3.0.0b7`の環境にそのまま混ぜないようにします。
+モデラーがOMMXの`Instance`を出力する場合は、そのオブジェクトを以降の評価・変換・Adapter呼び出しへ使います。出力手順とSDKの互換性は、例えば[JijModelingの公式ドキュメント](https://jij-inc-jijmodeling-tutorials-ja.readthedocs-hosted.com/ja/latest/introduction.html)など、モデラー側で確認し、[インストール手順](../getting_started/install.md)で用意した環境と合わせてください。
 
 OMMX Artifactは、問題・候補・結果などをまとめて受け渡す形式です。`Instance`を含む`.ommx`ファイルを受け取った場合は、次のように読み込みます。
 
@@ -96,12 +96,12 @@ instance = artifact.instance
 | `dataset.miplib2017(name)` | `ghcr.io/jij-inc/ommx/v2.7/miplib2017:{name}` | MPSの整数変数の境界を修正した配布。[v2.7の配布記録](https://github.com/Jij-Inc/ommx/blob/1ec99bbe3c36696e5fce3cac2cd87616e457af49/rust/dataset/distributions/v2.7/README.md) |
 | `dataset.qplib(tag)` | `ghcr.io/jij-inc/ommx/v2.8/qplib:{tag}` | 二次係数を修正した配布。[v2.8の配布記録](https://github.com/Jij-Inc/ommx/blob/b4cffe9f1ce5323c15de67eca55b05d9f87285a0/rust/dataset/distributions/v2.8/README.md) |
 
-ここでの`v2.7`や`v2.8`は**採用したデータセット配布**の名前です。インストールするSDKは`3.0.0b7`のままで、古いバージョンなしの配布へはフォールバックしません。どのデータを使ったかを記録するときは、問題名だけでなくこの配布先も残してください。配布記録には元データ、公開対象、モデルの内容を識別するダイジェストが記載されています。
+ここでの`v2.7`や`v2.8`は**データセット配布の識別子**であり、SDKの版を指定しているのではありません。ローダーは表の配布を使い、バージョンなしの旧配布は使いません。どのデータを使ったかを記録するときは、問題名だけでなくこの配布先も残してください。配布記録には元データ、公開対象、モデルの内容を識別するダイジェストが記載されています。
 
 次のバージョンは別々のものです。
 
-- **SDKのバージョン**：Pythonから呼ぶAPIを定めます。このページでは`ommx==3.0.0b7`です。
-- **Messageのwire schema**：問題や解をシリアライズしたデータの形式です。配布済みデータにある`application/org.ommx.v1.instance`の`v1`は、SDKのメジャーバージョンではありません。公開b7に対応するスキーマは[Message定義](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/proto)で確認できます。
+- **SDKのバージョン**：Pythonから呼ぶAPIを定めます。使用する版は[インストール手順](../getting_started/install.md)で確認してください。
+- **Messageのwire schema**：問題や解をシリアライズしたデータの形式です。配布済みデータにある`application/org.ommx.v1.instance`の`v1`は、SDKのメジャーバージョンではありません。対応するスキーマは[Message定義](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/proto)で確認できます。
 - **Artifactの形式**：Messageなどをまとめて受け渡すパッケージの形式です。Python APIとは独立した[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md)が定めています。
 
 ## 入手後に進む先
