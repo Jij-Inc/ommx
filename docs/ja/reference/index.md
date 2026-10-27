@@ -8,7 +8,7 @@
 - [生成Python API Reference](../api/index)：Bookと同じ開発リビジョンのAPIです。
 - [公開b7のSDK・Adapter実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python)：
   公開`3.0.0b7`で実行する場合の版を固定した参照先です。
-- [Functionの評価と表現の契約](function_contract.md)：数値境界と表現の詳細。
+- {class}`FunctionのAPI Reference <ommx.Function>`：演算・表現・数値評価の契約。
 - [Adapterの実装契約](../developer_guide/adapter.md)：exact input、encode/decode、評価対象。
 - [Attachment Codecの公開b7 Protocol](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/python/ommx/ommx/experiment/attachments.py)：
   外部型をbytesへ変換し、同じMedia Typeで復元するための呼び出し契約です。
@@ -39,10 +39,3 @@ wire schemaの`v1`や`v2`は、Python SDKのimport namespaceやパッケージ�
 またArtifactのMedia Typeにある版番号と、収録されたInstance/Solution payloadの版も別です。
 別言語でファイルを扱う場合は、Pythonのチュートリアルコードを形式定義の代用にせず、
 対象Media Typeと上記仕様に従ってください。
-
-```{toctree}
-:maxdepth: 1
-:hidden:
-
-function_contract
-```
