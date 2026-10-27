@@ -148,7 +148,7 @@
     {
       "id": "expression.form",
       "label": "数学的な式と格納表現の違いを読む",
-      "owner": "G2.support",
+      "owner": "R_API.function",
       "requires": [
         "expression.basics"
       ],
@@ -803,18 +803,18 @@
     },
     {
       "id": "function.support",
-      "label": "式の表現形と対応範囲を区別する",
+      "label": "式を評価できることとAdapterの入力対応を区別する",
       "owner": "G2.support",
       "requires": [
-        "expression.form"
+        "expression.basics",
+        "instance.model"
       ],
       "external": false,
       "aliases": [
-        "PolynomialRequirement",
-        "非多項式",
-        "polynomial"
+        "入力対応",
+        "対応範囲"
       ],
-      "scope": "Functionとして構築・評価できる式と、ソルバー入力で要求される多項式表現の範囲を区別する。InstanceClassへの所属判定の方法はG9で学び、この区別だけからmembership操作の習得を付与しない。"
+      "scope": "Functionとして式を構築・評価できることと、Adapterがその表現を直接受け取れることは別だと理解する。格納表現・対応演算の詳細はFunctionのAPI Reference、membership判定はG9、変換の選択はG10へ送り、参照リンクだけからそれらの能力を付与しない。"
     },
     {
       "id": "function.representation",
@@ -1913,7 +1913,7 @@
     },
     {
       "id": "G2",
-      "title": "Functionによる式の構築と評価",
+      "title": "Functionの式評価とInstanceの候補評価",
       "slice": "I",
       "role": "guide",
       "status": "existing",
@@ -1925,7 +1925,9 @@
       ],
       "requires": [
         "ext.math",
-        "variable.basics"
+        "instance.model",
+        "variable.basics",
+        "constraint.basics"
       ],
       "sections": [
         {
@@ -1942,20 +1944,24 @@
           "id": "evaluate",
           "introduces": [
             "state.values",
-            "expression.evaluate"
+            "expression.evaluate",
+            "evaluation.basic",
+            "feasibility.basic"
           ],
           "uses": [
-            "expression.evaluate"
+            "expression.evaluate",
+            "evaluation.basic",
+            "feasibility.basic"
           ],
           "mentions": [
             "function.support",
-            "function.representation"
+            "expression.form"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "Instanceの変数・目的関数・制約を前提に、一つの最小例でFunction単体の数値評価と問題全体の候補評価を区別する。ここで扱うのは手元の未変換の問題と候補の実行可能性であり、変換後の結果やfeasibility viewの読み分けは教えない。演算カタログや格納表現・数値契約は必要な操作のAPI Referenceへ案内し、具体的な表現条件はR_API.functionを訪問した場合だけ追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1964,13 +1970,12 @@
     },
     {
       "id": "G2.support",
-      "title": "式の対応範囲と表現条件",
+      "title": "式の評価可能性とAdapterの入力対応",
       "slice": "I",
       "role": "guide-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/function.md",
-        "docs/ja/reference/function_contract.md"
+        "docs/ja/user_guide/function.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/function.md"
@@ -1981,16 +1986,6 @@
       ],
       "sections": [
         {
-          "id": "form",
-          "introduces": [
-            "expression.form"
-          ],
-          "uses": [
-            "expression.form"
-          ],
-          "mentions": []
-        },
-        {
           "id": "limits",
           "introduces": [
             "function.support"
@@ -1999,18 +1994,19 @@
             "function.support"
           ],
           "mentions": [
-            "class.membership"
+            "expression.form",
+            "class.membership",
+            "preparation.target"
           ]
         }
       ],
       "deferred": [],
       "parent_page": "G2",
-      "notes": "Function Guideの「数学的な次数と、保持する表現形式は別」で表現条件と入力対応範囲を説明し、数値・演算順序の詳細はFunctionの契約Referenceへ分離する。InstanceClassへのmembership判定はG9への参照であり、本節の局所導入とはしない。",
+      "notes": "実在する「評価できる式が、そのまま求解に使えるとは限らない」節。評価可能性と入力対応の違いだけを説明し、表現の詳細はAPI Reference、classへの判定や変換の選択はG9/G10へ送る。構築方法を一通り学ぶことはモデラー・ファイルから受け取った問題を使う前提ではない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/function.md",
-        "docs/ja/reference/function_contract.md"
+        "docs/ja/user_guide/function.md"
       ]
     },
     {
@@ -3946,6 +3942,44 @@
       ]
     },
     {
+      "id": "R_API.function",
+      "title": "Function APIの演算・表現と数値評価の契約",
+      "slice": "I",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/function.rs",
+        "python/ommx/src/function.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "expression.basics"
+      ],
+      "sections": [
+        {
+          "id": "representation",
+          "introduces": [
+            "expression.form"
+          ],
+          "uses": [
+            "expression.form"
+          ],
+          "mentions": [
+            "function.representation"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "Functionの生成API Referenceに掲載するbinding docstringと隣接Markdownが、構築・演算・多項式と複合式・数値評価の契約を所有する。G2のリンクやAPI一覧の訪問だけではこの節を既習としない。RPNの符号化そのものは別のR_WIRE.functionが所有し、本節の外部仕様リンクだけからwire契約の習得を付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/function.rs",
+        "python/ommx/src/function.md"
+      ]
+    },
+    {
       "id": "R_API.transform",
       "title": "変換APIの厳密な条件",
       "slice": "A",
@@ -4677,8 +4711,22 @@
         "SETUP",
         "G1",
         "G2",
-        "G2.support",
         "G5"
+      ]
+    },
+    {
+      "id": "function_api_contract",
+      "title": "Functionの概念から必要なAPIの表現・数値契約へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G2",
+        "G2.support",
+        "R_API.function"
       ]
     },
     {

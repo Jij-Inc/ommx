@@ -189,7 +189,6 @@ developer_guide/adapter
 :hidden:
 
 api/index
-reference/function_contract
 ```
 
 ```{toctree}

@@ -6426,7 +6426,7 @@
         {
           "kind": "Class",
           "name": "Function",
-          "doc": "General mathematical function of decision variables.",
+          "doc": "A scalar expression used in optimization objectives and constraint bodies.\n\nFunction refers to variables by ID, without owning their names, kinds, or bounds.\nIt can be evaluated independently of a solver. Use\n{meth}`~ommx.Instance.evaluate` when variable domains and constraints must also be\nchecked, and {class}`~ommx.InstanceClass` to inspect a solver-input representation.\nBeing evaluable as a Function does not imply that an Adapter accepts it.\n\n**Construction and polynomial forms**\n\nConstruct a Function from numbers, decision variables, parameters, polynomial\nobjects, or another Function. {class}`~ommx.Linear` stores a linear polynomial,\n{class}`~ommx.Quadratic` a polynomial of degree at most two, and\n{class}`~ommx.Polynomial` an arbitrary-degree polynomial. Function is the common\nwrapper for these forms and for composed scalar expressions.\n\n>>> from ommx import DecisionVariable, Function, Linear\n>>> x = DecisionVariable.continuous(0)\n>>> y = DecisionVariable.continuous(1)\n>>> constant = Function(3)\n>>> f = Function(x + 2 * y + 3)\n>>> by_coefficients = Function(Linear(terms={0: 1, 1: 2}, constant=3))\n>>> assert f.almost_equal(by_coefficients)\n>>> assert f.evaluate({0: 1, 1: 0}) == 4.0\n\nAddition, subtraction, multiplication, and negation of stored polynomials are\nnormalized into polynomial form. Terms that become exactly zero through\ncancellation or floating-point underflow are removed. Finite nonzero coefficients\nare retained regardless of magnitude; the evaluation tolerance does not prune\nthem. This describes Function arithmetic, not the numerical behavior of a\ndownstream coefficient-format conversion.\n\nUse {meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` for polynomial\nmetadata, and {attr}`~ommx.Function.terms`, {attr}`~ommx.Function.linear_terms`,\n{attr}`~ommx.Function.quadratic_terms`, and {attr}`~ommx.Function.constant_term`\nfor coefficients. Composed expressions return ``None``\nfor degree/term count and raise ``TypeError`` for coefficient properties; these\naccessors do not expand an expression. {meth}`~ommx.Function.almost_equal` compares coefficients\nor expression structure, not global mathematical equivalence.\n\n**Composed scalar operations**\n\nUse Python arithmetic and ``abs(f)`` to construct expressions, together with\n{meth}`~ommx.Function.signum`, {meth}`~ommx.Function.minimum`,\n{meth}`~ommx.Function.maximum`, and {meth}`~ommx.Function.powi`. These calls\nconstruct expressions rather than supplying variable values. For pointwise\nminimum and maximum, use the methods rather than Python's built-in ``min`` and\n``max``.\n\n>>> fx, fy = Function(x), Function(y)\n>>> assert abs(fx - 3).evaluate({0: 1}) == 2.0\n>>> assert fx.minimum(fy).evaluate({0: 1, 1: 0}) == 0.0\n>>> assert (fx / (fy + 1)).evaluate({0: 1, 1: 1}) == 0.5\n>>> assert (fx ** 2).evaluate({0: 1}) == 1.0\n\nDivision remains a composed expression even with a constant divisor. Except for\nidentity operations and finite constant folding, integer powers also remain\ncomposed, including nonnegative powers. To construct an expanded polynomial\nsquare, use ``g * g`` rather than ``g ** 2``. See {meth}`~ommx.Function.powi` for the supported\nexponent types and domain rules.\n\n**Evaluation, substitution, and stored order**\n\n{meth}`~ommx.Function.evaluate` supplies the point-evaluation contract, including tolerance-based\nzero tests, undefined operations, and non-finite values. {meth}`~ommx.Function.partial_evaluate`\nreturns an expression with selected values substituted and does not fix the\ntolerance for a later evaluation. {meth}`~ommx.Function.evaluate_bound` returns an enclosing\ninterval, which need not be the tightest possible range.\n\nComposed expressions retain parentheses and operand order. They evaluate left\nto right, combining two values per operator application rather than automatically\nreassociating expressions such as ``(abs(a) + abs(b)) + abs(c)`` and\n``abs(a) + (abs(b) + abs(c))``. A domain or overflow error can depend on that\norder.\n\nThe wire representation uses a flat reverse-Polish-notation (RPN) instruction\nsequence rather than a recursively nested tree. Its encoding belongs to the\n[OMMX Message specification](https://github.com/Jij-Inc/ommx/tree/main/proto);\nconstructing a Python Function does not require creating RPN instructions.",
           "bases": [],
           "methods": [
             {
@@ -6986,7 +6986,7 @@
             },
             {
               "name": "__truediv__",
-              "doc": "Division",
+              "doc": "Construct division by another function, retaining a composed expression.\n\nThis also applies to a constant divisor. The zero-domain check is made\nby {meth}`~ommx.Function.evaluate` with its ``atol``; constructing the\nexpression does not establish that all inputs lie in its domain.",
               "signatures": [
                 {
                   "parameters": [
@@ -7177,7 +7177,7 @@
             },
             {
               "name": "almost_equal",
-              "doc": "",
+              "doc": "Compare polynomial coefficients or composed-expression structure within ``atol``.\n\nFor two stored polynomials, compares the coefficient of each monomial;\nan absent monomial has coefficient zero. Different polynomial storage\nvariants may compare equal. For two composed expressions, operators and\nevaluation order must match, and polynomial operands are compared with\nthe same coefficient tolerance. A polynomial and a composed expression\ndo not compare equal merely because they evaluate to the same values.\nThis is not a test of global mathematical equivalence.\n\n- ``other``: Function to compare with.\n- ``atol``: Positive absolute coefficient tolerance.\n\n>>> from ommx import DecisionVariable, Function\n>>> x = Function(DecisionVariable.continuous(0))\n>>> assert (x * x).almost_equal(x * x)\n>>> assert not (x ** 2).almost_equal(x * x)",
               "signatures": [
                 {
                   "parameters": [
@@ -7280,7 +7280,7 @@
             },
             {
               "name": "degree",
-              "doc": "Get the degree of this function.\n\nReturns the highest degree of any term in a polynomial function.\nZero function has degree 0, constant function has degree 0,\nlinear function has degree 1, quadratic function has degree 2, etc.\nReturns None for non-polynomial expression functions.",
+              "doc": "Return the degree of the stored polynomial, or ``None`` for a composed expression.\n\nReturns the highest degree of any term in a polynomial function.\nZero function has degree 0, constant function has degree 0,\nlinear function has degree 1, quadratic function has degree 2, etc.\nThis inspects the representation; it does not expand an expression to\ndetermine its mathematical degree. For the variable expression\n``g = Function(DecisionVariable.continuous(0))``, ``g ** 2`` returns\n``None`` while the explicitly multiplied ``g * g`` has degree 2.",
               "signatures": [
                 {
                   "parameters": [],
@@ -7302,7 +7302,7 @@
             },
             {
               "name": "evaluate",
-              "doc": "",
+              "doc": "Evaluate this expression at the supplied variable values.\n\n- ``state``: A {class}`~ommx.State` or mapping from variable IDs to values.\n    All IDs required by the expression must be supplied.\n- ``atol``: Positive absolute tolerance for zero-sensitive operations.\n    If omitted, {func}`~ommx.get_default_atol` supplies it.\n\nReturns the scalar value of the expression.\n\nA Function references IDs but does not own variable kinds, bounds, or\nconstraints. This method does not test candidate feasibility or round\ndiscrete-variable values; use {meth}`~ommx.Instance.evaluate` for that.\n\n``abs(v) <= atol`` is treated as zero, including the boundary. This gives\n``signum(v) == 0`` and makes a denominator or a negative-power base in\nthat interval undefined. ``0 ** 0`` is 1, and integer powers of negative\nbases are supported. Polynomial coefficients are not pruned using this\ntolerance.\n\nComposed expressions evaluate operands from left to right and combine\ntwo values at each operator application. Parentheses and operation order\nare retained rather than reassociated. Overflow and domain failures can\ntherefore depend on the represented order. Simplification does not\nerase the domain of a partial function: ``0 * (1 / f)`` remains undefined\nwhere ``f`` is treated as zero.\n\nRaises ``ValueError`` for a missing required variable value, undefined\npoint operation, or non-finite operand/intermediate result.\n\n>>> from ommx import Function, Linear\n>>> f = Function(Linear(terms={0: 1, 1: 2}, constant=3))\n>>> assert f.evaluate({0: 1, 1: 0}) == 4.0",
               "signatures": [
                 {
                   "parameters": [
@@ -7351,7 +7351,7 @@
             },
             {
               "name": "evaluate_bound",
-              "doc": "Compute an interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.\n- `atol`: Absolute tolerance used by operations whose semantics depend on\n  whether a value is zero. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used.\n  Use the same tolerance when point-evaluating this function.\n\n**Returns:** A {class}`~ommx.Bound` that contains $[\\inf f, \\sup f]$ over the given variable bounds.\n\n**Tightness:** Polynomial leaves are bounded **term by term**\n(monomial-wise), and composed expression operations combine their operand\nbounds with interval arithmetic. The result is a **sound\nover-approximation** of the true range $[\\inf f, \\sup f]$ but is **not\nguaranteed to be tight**, because it ignores dependencies between terms\nor operands that share variables. For example, $f = x^2 - x$ with\n$x \\in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but\nterm-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.\n\n**Raises:** `RuntimeError` when an interval contains a value treated as\nzero by `atol` in a denominator or as the base of a negative integer\npower.\nRaises `ValueError` if valid bound endpoints cannot be constructed after\nnumeric overflow.\n\n# Examples\n\n>>> from ommx import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> b.lower <= 3.0 and b.upper >= 7.0\nTrue",
+              "doc": "Compute an interval bound of this function given variable bounds.\n\nMissing IDs in `bounds` are treated as unbounded (`Bound.unbounded()`).\n\n**Args:**\n\n- `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.\n- `atol`: Absolute tolerance used by operations whose semantics depend on\n  whether a value is zero. If omitted, {func}`~ommx.get_default_atol` supplies it.\n  Use the same tolerance when point-evaluating this function.\n\n**Returns:** A {class}`~ommx.Bound` that contains $[\\inf f, \\sup f]$ over the given variable bounds.\n\n**Tightness:** Polynomial leaves are bounded **term by term**\n(monomial-wise), and composed expression operations combine their operand\nbounds with interval arithmetic. The result is a **sound\nover-approximation** of the true range $[\\inf f, \\sup f]$ but is **not\nguaranteed to be tight**, because it ignores dependencies between terms\nor operands that share variables. For example, $f = x^2 - x$ with\n$x \\in [0, 1]$ has true range $[-1/4, 0]$ (minimum at $x = 1/2$), but\nterm-wise evaluation yields $[0, 1] + (-[0, 1]) = [-1, 1]$.\n\n**Raises:** `RuntimeError` when an interval contains a value treated as\nzero by `atol` in a denominator or as the base of a negative integer\npower.\nRaises `ValueError` if valid bound endpoints cannot be constructed after\nnumeric overflow.\n\n# Examples\n\n>>> from ommx import Function, Linear, Bound\n>>> f = Function(Linear(terms={1: 2}, constant=3))  # 2*x1 + 3\n>>> b = f.evaluate_bound({1: Bound(0.0, 2.0)})\n>>> b.lower <= 3.0 and b.upper >= 7.0\nTrue",
               "signatures": [
                 {
                   "parameters": [
@@ -7530,7 +7530,7 @@
             },
             {
               "name": "maximum",
-              "doc": "Pointwise maximum",
+              "doc": "Construct the pointwise maximum of two functions.\n\nUse this method instead of Python's built-in ``max``.",
               "signatures": [
                 {
                   "parameters": [
@@ -7566,7 +7566,7 @@
             },
             {
               "name": "minimum",
-              "doc": "Pointwise minimum",
+              "doc": "Construct the pointwise minimum of two functions.\n\nUse this method instead of Python's built-in ``min``, which compares\nobjects rather than constructing an optimization expression.",
               "signatures": [
                 {
                   "parameters": [
@@ -7726,7 +7726,7 @@
             },
             {
               "name": "num_terms",
-              "doc": "Get the number of terms in this function.\n\nZero function has 0 terms, constant function has 1 term,\nand polynomial functions have the number of non-zero coefficient terms.\nReturns None for non-polynomial expression functions.",
+              "doc": "Get the number of terms in this function.\n\nZero function has 0 terms, constant function has 1 term,\nand polynomial functions have the number of non-zero coefficient terms.\nReturns ``None`` for composed expressions, even when their mathematical\nvalue could be represented by a polynomial. No expansion is performed.",
               "signatures": [
                 {
                   "parameters": [],
@@ -7748,7 +7748,7 @@
             },
             {
               "name": "partial_evaluate",
-              "doc": "",
+              "doc": "Substitute supplied variable values and return the remaining Function.\n\nThe original Function is unchanged. Values may cover only some of the\nrequired IDs; unresolved variables remain in the returned expression.\nThe concrete {class}`~ommx.Linear`, {class}`~ommx.Quadratic`, and\n{class}`~ommx.Polynomial` partial-evaluation methods preserve their\nrespective Python types; this method returns a Function.\n\nClosed subexpressions are folded only when the result is independent of\nthe later evaluation tolerance. ``signum``, division, and negative\ninteger powers remain composed operations even after all their variables\nare replaced. Construction, substitution, and partial evaluation do not\ncapture a default or supplied ``atol`` for these zero-domain decisions;\nthe subsequent {meth}`~ommx.Function.evaluate` call determines their\nvalue or domain.\n\n- ``state``: Variable-ID/value mapping or {class}`~ommx.State` to substitute.\n- ``atol``: A positive tolerance; zero-sensitive composed\n    operations are retained rather than resolved with this value.\n\n>>> from ommx import Function, Linear\n>>> f = Function(Linear(terms={0: 1, 1: 2}, constant=3))\n>>> remaining = f.partial_evaluate({0: 1})\n>>> assert remaining.evaluate({1: 0}) == 4.0\n>>> x = Function(Linear(terms={0: 1}))\n>>> sign = x.signum().partial_evaluate({0: 1e-8}, atol=1e-6)\n>>> assert sign.evaluate({}, atol=1e-6) == 0.0\n>>> assert sign.evaluate({}, atol=1e-9) == 1.0",
               "signatures": [
                 {
                   "parameters": [
@@ -7802,7 +7802,7 @@
             },
             {
               "name": "powi",
-              "doc": "Raise this function to a signed 32-bit integer power.",
+              "doc": "Raise this function to a signed 32-bit integer power.\n\n``f.powi(n)`` and ``f ** n`` construct the same operation. Floating-point\nor function-valued exponents, reversed exponentiation such as ``2 ** f``,\nand modular exponentiation are not supported.\n\nExcept for identity operations and finite constant folding, powers\nremain composed expressions, including nonnegative powers. They are not\nautomatically expanded into polynomial coefficients. Use explicit\nmultiplication, such as ``g * g``, when an expanded polynomial square is\nrequired by an input format.\n\nDuring {meth}`~ommx.Function.evaluate`, a negative power is undefined when\nthe base has absolute value at most ``atol``. Negative bases are supported because the\nexponent is integral; zero to the zero power is 1. The operand is still\nevaluated, so raising an undefined expression to zero does not erase its\ndomain restriction.\n\n>>> from ommx import DecisionVariable, Function\n>>> g = Function(DecisionVariable.continuous(0))\n>>> assert (g ** 2).degree() is None\n>>> assert (g * g).degree() == 2\n>>> assert (g ** 0).evaluate({0: 0}) == 1.0",
               "signatures": [
                 {
                   "parameters": [
@@ -7954,7 +7954,7 @@
             },
             {
               "name": "signum",
-              "doc": "Sign of the function value",
+              "doc": "Construct the pointwise sign of this function.\n\nEvaluation returns 0 when ``abs(value) <= atol``, -1 below that interval,\nand 1 above it. The tolerance is supplied to {meth}`~ommx.Function.evaluate`,\nnot fixed when this expression is constructed or partially evaluated.",
               "signatures": [
                 {
                   "parameters": [],
@@ -8043,7 +8043,7 @@
             },
             {
               "name": "terms",
-              "doc": "Get all polynomial terms as a dictionary mapping monomial tuples to coefficients.\n\nRaises TypeError if this is a non-polynomial expression function.",
+              "doc": "Get all polynomial terms as a dictionary mapping monomial tuples to coefficients.\n\nThe empty tuple denotes the constant term. Repeated IDs denote powers,\nfor example ``(0, 0)`` for the square of variable 0. The dictionary is a\nsnapshot and does not change the Function when edited.\nFinite nonzero coefficients are not discarded because of their size or\nthe evaluation tolerance; exact cancellation or floating-point underflow\nmay produce zeros during polynomial arithmetic.\nRaises ``TypeError`` for a composed expression. This property does not\nexpand the expression, including a retained integer power.",
               "type_": {
                 "display": "dict",
                 "link_target": null,

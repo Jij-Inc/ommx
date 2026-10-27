@@ -79,6 +79,8 @@ separate-items = true
 cache-keys = [
   { file = "pyproject.toml" },
   { file = "src/**/*.rs" },
+  # Shared doc includes also affect the extension's runtime docstrings.
+  { file = "src/**/*.md" },
   # Python SDK should be rebuilt when Rust SDK is updated.
   { file = "../../Cargo.lock" },
   { file = "../../rust/ommx/src/**/*.rs" },
