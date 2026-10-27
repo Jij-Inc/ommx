@@ -39,6 +39,7 @@ assert solution.objective == 1
 | やりたいこと | 最初に読むページ | この段階で学ぶこと |
 |---|---|---|
 | ソルバーで問題を解く | [Adapterで解くTutorial](./tutorial/solve_with_ommx_adapter) | Instanceを作り、求解して結果を読む |
+| 手元の問題と候補解を評価する | [既存の問題と候補解を評価するTutorial](./tutorial/evaluate_existing_candidate) | ファイルを読み、目的値・実行可能性・満たさない条件を調べる |
 | OpenJijでサンプリングする | [小さな問題をサンプリングするHow-to](./how_to/sample_with_openjij_adapter) | 重みを設定して問題を準備し、候補を目的値と実行可能性で読む |
 | 独自のAdapterを実装する | [Adapter Developer Guide](./developer_guide/adapter.md) | 入力・変換・評価の契約と参照実装 |
 | 問題や候補解の意味を理解する | [Instance](./user_guide/instance.md) → [StateからSolutionへの評価](./user_guide/solution.md) | 変数の役割、実行可能性、目的値、最適性の違い |
@@ -46,11 +47,13 @@ assert solution.objective == 1
 | 問題を変換し、結果を確認する | [Instanceを変換するHow-to](./how_to/transform_instance_without_solver.md) | target classとPolicyを指定し、変換結果と手元の候補を検査する |
 | 変換後の結果を解釈する | [変換後の問題とRemoved constraints](./user_guide/removed_constraints.md) | activeな問題と、元の条件を使った評価の違い |
 | 複数の候補を比較する | [SampleSet](./user_guide/sample_set.md) | サンプルごとの評価と、得られた候補の中からの選択 |
-| 既存の問題を入手する | [MIPLIB](./tutorial/download_miplib_instance.md) / [QPLIB](./tutorial/download_qplib_instance.md) | 公開された最適化問題の取得 |
-| 実験を記録・比較する | [実験管理Tutorial](./tutorial/experiment_management.md) | 条件と結果を対応づけた記録 |
+| 既存の問題を入手する | [既存の問題をInstanceとして読み込む](./how_to/load_existing_instance.md) | MIPLIB/QPLIBや手元のファイルから問題を読み込む |
+| 実験を記録・比較する | [実験管理Tutorial](./tutorial/experiment_management) | 条件と結果を対応づけた記録 |
 | 問題や結果を保存・共有する | [Artifact共有Tutorial](./tutorial/share_in_ommx_artifact.md) | メタデータとともに受け渡す |
 
 Tutorialは小さな成功例から操作を学ぶためのものです。User Guideは仕組みや意味を理解するために、API Referenceは個々の操作の引数・前提条件・保証を確認するために使います。全ページを順に読む必要はありません。
+
+問題と候補の値がすでにある人は、[候補評価のTutorial](./tutorial/evaluate_existing_candidate)から始められます。問題の構築や、以下のAdapter Tutorialの実行は前提ではありません。
 
 ## Adapterを使う・作る
 
@@ -107,8 +110,14 @@ tutorial/prepare_instance_for_adapter
 tutorial/tsp_sampling_with_openjij_adapter
 tutorial/experiment_management
 tutorial/share_in_ommx_artifact
-tutorial/download_miplib_instance
-tutorial/download_qplib_instance
+```
+
+```{toctree}
+:caption: Tutorial：候補を評価する
+:maxdepth: 1
+:hidden:
+
+tutorial/evaluate_existing_candidate
 ```
 
 ```{toctree}
@@ -120,6 +129,10 @@ how_to/customize_preparation
 how_to/compare_adapters
 how_to/transform_instance_without_solver
 how_to/sample_with_openjij_adapter
+how_to/load_existing_instance
+how_to/continue_experiment
+how_to/attach_experiment_data
+how_to/share_artifact_registry
 ```
 
 ```{toctree}
@@ -154,6 +167,7 @@ user_guide/adapter_initial_state
 :hidden:
 
 user_guide/experiment
+user_guide/artifact
 user_guide/tracing
 user_guide/cli
 user_guide/agent_skills

@@ -29,15 +29,16 @@ Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers
 | PySCIPOpt Adapterで0-1ナップサック問題を解く | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/solve_with_ommx_adapter.html) |
 | PySCIPOpt Adapterで特殊制約をそのまま解く | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/solve_special_constraints_with_pyscipopt_adapter.html) |
 | Adapter向けにInstanceを準備する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/prepare_instance_for_adapter.html) |
+| 既存の問題と候補解を評価する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/evaluate_existing_candidate.html) |
 | OMMX AdapterでQUBOからサンプリングする | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/tsp_sampling_with_openjij_adapter.html) |
 | 実験を記録し共有する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/experiment_management.html) |
 | 様々なデータをOMMX Artifact形式で共有する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/share_in_ommx_artifact.html) |
-| MIPLIBインスタンスをダウンロードする | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/download_miplib_instance.html) |
 
 ### 操作ガイド・開発者向け
 
 | タイトル | Docs |
 |:------|:-----|
+| 既存の問題をInstanceとして読み込む | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/how_to/load_existing_instance.html) |
 | Preparationで変換する制約族を選ぶ | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/how_to/customize_preparation.html) |
 | 複数のAdapterで結果を比較する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/how_to/compare_adapters.html) |
 | OMMX Adapterを実装する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/developer_guide/adapter.html) |
