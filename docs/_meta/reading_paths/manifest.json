@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "日本語Bookの主要概念とページ/節の編集契約。Qamomileは後続。API全項目の網羅ではない。",
+  "scope": "日本語Bookの主要概念とページ/節の編集契約。Qamomileは後続。API全項目の網羅ではない。英語版は同一のページ役割と読書経路を対応させる。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -1080,8 +1080,8 @@
       "scope": ""
     },
     {
-      "id": "experiment.record",
-      "label": "ExperimentとRunで試行の条件・データをまとめる",
+      "id": "experiment.trials",
+      "label": "ExperimentとRunに試行の条件とデータを記録する",
       "owner": "G12",
       "requires": [
         "instance.model",
@@ -1090,16 +1090,36 @@
       "external": false,
       "aliases": [
         "Experiment",
-        "Run"
+        "Run",
+        "log_parameter",
+        "log_solution"
       ],
-      "scope": "ExperimentとRunの基本的な記録単位と、共有データ・試行ごとのデータの対応。Solve/SamplingによるAdapter呼び出しの記録はG12の発展的な説明であり、最初の記録Tutorialの前提ではない。"
+      "scope": "ExperimentとRunの基本的な記録単位と、共有データ・試行ごとのデータの対応。手動評価などの記録だけでも使える。Solve/SamplingによるAdapter呼び出しの関係はexperiment.recordで扱い、最初の記録Tutorialの前提にしない。"
+    },
+    {
+      "id": "experiment.record",
+      "label": "Experiment・Run・Solve/Samplingを関連付ける",
+      "owner": "G12",
+      "requires": [
+        "experiment.trials",
+        "adapter.basic"
+      ],
+      "external": false,
+      "aliases": [
+        "Experiment",
+        "Run",
+        "log_solve",
+        "log_sample",
+        "Sampling"
+      ],
+      "scope": "Experiment/Runに属するSolve/Samplingと、Adapter呼び出しの入力・オプション・結果の関係。手動の試行記録だけを学ぶexperiment.trialsとは区別する。"
     },
     {
       "id": "experiment.conditions",
       "label": "試行条件としてparameterを記録する",
       "owner": "G12",
       "requires": [
-        "experiment.record"
+        "experiment.trials"
       ],
       "external": false,
       "aliases": [
@@ -1112,7 +1132,7 @@
       "label": "実験を保存し別プロセスで読み直す",
       "owner": "G12",
       "requires": [
-        "experiment.record"
+        "experiment.trials"
       ],
       "external": false,
       "aliases": [
@@ -1261,9 +1281,10 @@
       "title": "Bookの入口と目的別案内",
       "slice": "K",
       "role": "orientation",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/index.md"
+        "docs/ja/index.md",
+        "docs/ja/getting_started/overview.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/index.md"
@@ -1283,9 +1304,7 @@
             "class.membership",
             "preparation.target",
             "artifact.roundtrip",
-            "experiment.record",
-            "class.qubo",
-            "bigm.contract"
+            "experiment.record"
           ]
         }
       ],
@@ -1339,8 +1358,10 @@
       "title": "言語共通のバージョン対応",
       "slice": "K",
       "role": "setup-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/getting_started/compatibility.md"
+      ],
       "source_urls": [],
       "requires": [],
       "sections": [
@@ -1681,43 +1702,44 @@
           "mentions": []
         },
         {
-          "id": "run",
+          "id": "record-evaluation",
           "introduces": [
             "state.values",
             "evaluation.basic",
             "solution.read",
+            "experiment.trials",
+            "experiment.conditions"
+          ],
+          "uses": [
+            "evaluation.basic",
+            "experiment.trials",
+            "experiment.conditions"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "read-results",
+          "introduces": [
             "feasibility.basic",
             "optimality.limit"
           ],
           "uses": [
-            "state.values",
-            "evaluation.basic",
             "solution.read",
+            "experiment.conditions",
             "feasibility.basic",
             "optimality.limit"
           ],
           "mentions": []
         },
         {
-          "id": "record",
-          "introduces": [
-            "experiment.record",
-            "experiment.conditions"
-          ],
-          "uses": [
-            "experiment.record",
-            "experiment.conditions"
-          ],
-          "mentions": []
-        },
-        {
-          "id": "reopen",
+          "id": "save-reopen",
           "introduces": [
             "experiment.persist",
             "experiment.reproduce"
           ],
           "uses": [
             "experiment.persist",
+            "solution.read",
             "experiment.reproduce"
           ],
           "mentions": [
@@ -1730,7 +1752,8 @@
         "attachment.codec",
         "artifact.format",
         "artifact.registry",
-        "class.qubo"
+        "class.qubo",
+        "adapter.basic"
       ],
       "parent_page": null,
       "notes": "F/T5は小さなInstanceと二つの候補を局所的に用意し、評価した条件・入力・結果をExperiment/Runに記録する。Adapter、外部データ、独自Codec、別Tutorialの実行状態は不要。ファイル保存後は新しいプロセス/kernelでRun・入力・結果を取り出し、保存結果の読出しと計算再実行の違いを短く説明する。source_urlsは統合前の歴史的baselineを指す。",
@@ -2881,19 +2904,39 @@
       ],
       "sections": [
         {
-          "id": "records",
+          "id": "trial-records",
           "introduces": [
-            "experiment.record",
-            "experiment.conditions",
-            "experiment.persist"
+            "experiment.trials",
+            "experiment.conditions"
           ],
           "uses": [
-            "experiment.record",
-            "experiment.conditions",
-            "experiment.persist"
+            "experiment.trials",
+            "experiment.conditions"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "adapter-calls",
+          "introduces": [
+            "adapter.basic",
+            "experiment.record"
+          ],
+          "uses": [
+            "experiment.record"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "lifecycle",
+          "introduces": [
+            "experiment.persist",
+            "experiment.resume"
+          ],
+          "uses": [
+            "experiment.persist",
+            "experiment.resume"
           ],
           "mentions": [
-            "experiment.resume",
             "experiment.reproduce"
           ]
         }
@@ -3335,7 +3378,7 @@
       ],
       "requires": [
         "trace.events",
-        "experiment.record"
+        "experiment.trials"
       ],
       "sections": [
         {
@@ -3343,14 +3386,16 @@
           "introduces": [],
           "uses": [
             "trace.events",
-            "experiment.record"
+            "experiment.trials"
           ],
-          "mentions": []
+          "mentions": [
+            "experiment.record"
+          ]
         }
       ],
       "deferred": [],
       "parent_page": "P6",
-      "notes": "",
+      "notes": "log_solveの役割を局所説明。完全なSolve/Sampling関係の習得とは数えない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3508,7 +3553,7 @@
       "requires": [
         "ext.python",
         "sdk.environment",
-        "experiment.record"
+        "experiment.trials"
       ],
       "sections": [
         {
@@ -3518,7 +3563,7 @@
           ],
           "uses": [
             "attachment.standard",
-            "experiment.record"
+            "experiment.trials"
           ],
           "mentions": [
             "attachment.codec"
@@ -3878,8 +3923,10 @@
       "title": "別のツールと言語を接続する",
       "slice": "K",
       "role": "developer",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/developer_guide/integration.md"
+      ],
       "source_urls": [],
       "requires": [
         "instance.model",
@@ -4022,8 +4069,10 @@
       "title": "Rust API Referenceへの入口",
       "slice": "K",
       "role": "reference",
-      "status": "external",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/reference/index.md"
+      ],
       "source_urls": [],
       "requires": [
         "ext.rust",
@@ -4051,9 +4100,9 @@
       "title": "Messageのwire仕様",
       "slice": "K",
       "role": "reference",
-      "status": "external",
+      "status": "existing",
       "source_paths": [
-        "proto/ommx/v1/instance.proto"
+        "docs/ja/reference/index.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/proto/ommx/v1/instance.proto"
@@ -4090,8 +4139,10 @@
       "title": "Functionのwire表現",
       "slice": "I/K",
       "role": "reference-section",
-      "status": "external",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/reference/function_contract.md"
+      ],
       "source_urls": [],
       "requires": [
         "expression.basics"
@@ -4157,8 +4208,10 @@
       "title": "Codecの契約",
       "slice": "F/K",
       "role": "reference",
-      "status": "external",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/reference/index.md"
+      ],
       "source_urls": [],
       "requires": [
         "attachment.standard",

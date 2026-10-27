@@ -4,6 +4,10 @@
 
 バージョンを指定せずにインストールすると、安定版のv2が選ばれるため、Tutorialのv3 APIを使えません。ここでは、公開済みの`3.0.0b7`で実行を確認した手順を示します。
 
+目的別の追加依存、共通の版の対応、Rust・CLIの入口は[バージョンと実行環境](compatibility.md)に
+まとめています。Artifactの受け渡しやExperimentの最小例も、以下の手順1・2のSDKだけで
+実行できます。Adapterは使いたい場合だけ追加します。
+
 ## 1. 仮想環境を作る
 
 Python 3.12を用意し、作業用のディレクトリで次を実行します。動作確認環境はmacOS（Apple Silicon）・Python 3.12.12です。
@@ -67,6 +71,7 @@ python -m pip install "ommx-pyscipopt-adapter==3.0.0b7"
 1. [PySCIPOpt Adapterで0-1ナップサック問題を解く](../tutorial/solve_with_ommx_adapter)：変換せずに求解し、結果を読む。
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1を使う。
 
+(highs-adapter)=
 ### HiGHS Adapter
 
 ```sh
@@ -99,5 +104,8 @@ python -m pip install matplotlib
 ```
 
 ```{note}
-このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するInstance変換How-toとmembership例、既存問題の入手How-toと候補評価Tutorial、3つのAdapter Tutorialと2つのAdapter How-to、およびOpenJijの小さなサンプリングHow-toとTSPのNotebookです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
+このBookはv3の開発版に対応しており、生成API Referenceには公開b7にない機能もあります。
+目的別の実行条件と版を固定した参照先は[バージョンと実行環境](compatibility.md)と
+[Reference](../reference/index.md)で確認してください。外部ツール・レジストリ認証などの
+追加条件は、それらを使う各How-toに記載しています。
 ```

@@ -79,4 +79,4 @@ assert destination.read_bytes() == b"candidate evaluated locally\n"
 
 OMMXは外部型の意味やバージョン互換性を自動的に決めません。外部パッケージの公開Codecやシリアライズ仕様を確認してください。Protocolの呼び出し方とMedia Typeの検証は{py:meth}`~ommx.experiment.Run.log_with_codec`と{py:meth}`~ommx.experiment.SealedRun.get_with_codec`を参照してください。
 
-記録の確定・再開は[ExperimentのGuide](../user_guide/experiment.md)、階層を使わないデータ交換は[ArtifactのTutorial](../tutorial/share_in_ommx_artifact.md)に分けています。
+記録の確定・再開は[ExperimentのGuide](../user_guide/experiment.md)、階層を使わないデータ交換は[Artifactの保存と識別](../user_guide/artifact.md)に分けています。

@@ -17,6 +17,10 @@ Experimentは、複数の試行で使った条件とデータをまとめて残�
 
 ## Adapterを呼ぶと何が残るか
 
+AdapterはOMMXと実行backendの入出力を接続します。SolverAdapterは一つのSolutionを、
+SamplerAdapterは複数候補のSampleSetを返します。記録するだけのRunにAdapterは不要ですが、
+呼び出しもまとめて記録したい場合に次のメソッドを使います。
+
 `run.log_solve(Adapter, instance, **options)`はAdapterの`solve()`を実行してSolveを記録し、`run.log_sample(...)`は`sample()`を実行してSamplingを記録します。入力Instance、Adapter名、渡したキーワード引数、返された結果が対応付けられます。渡したオプションは各呼び出しの記録であり、Run parameterの列には自動的にはなりません。
 
 入力として残るのは、**loggingメソッドに渡したInstance**です。Adapterのeasy APIが内部で別のコピーをPreparationする場合、その変換後Instanceが自動的に保存されるわけではありません。また、選んだPolicy、適用した重み、バックエンドModelへの直接設定、Python変数、パッケージやOSの情報を網羅的に収集するものでもありません。

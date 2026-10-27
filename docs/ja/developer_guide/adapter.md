@@ -13,7 +13,7 @@
 - Backendへ渡す決定変数: {attr}`~ommx.Instance.used_decision_variables`
 - Backendの出力を評価するAPI: {meth}`~ommx.Instance.evaluate` / {meth}`~ommx.Instance.evaluate_samples`
 
-Instanceが保持する変数の一覧は、そのままBackend変数の一覧にはなりません。変換前の表現や評価のために保持している変数もあります。この区別が初見なら、[Instanceの基本モデル](../user_guide/instance.md)を先に確認してください。
+Instanceが保持する変数の一覧は、そのままBackend変数の一覧にはなりません。変換前の表現や評価のために保持している変数もあります。この区別が初見なら、[変数の役割と値の復元・補完](../user_guide/variable_roles.md)を確認してください。
 
 ## Adapterが実装する契約
 
