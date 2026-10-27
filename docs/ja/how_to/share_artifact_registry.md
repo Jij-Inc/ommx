@@ -2,11 +2,11 @@
 
 **共有先の名前でArtifactを作り、認証後に`push()`します。** ファイルで渡す場合と違い、配布先へのアクセス権とネットワーク接続が必要です。
 
-ここではGitHub Container Registry（`ghcr.io`）を例に、JSONの小さなメモを共有先へ保存し、受信側で取得します。問題や評価結果も同じArtifactに追加できます。ローカルのファイルだけで十分なら、[ファイル受け渡しTutorial](../tutorial/share_in_ommx_artifact.md)を使ってください。Experimentはこの操作の前提ではありません。
+Artifactは、複数のデータとその説明をまとめる入れ物です。ここではGitHub Container Registry（`ghcr.io`）を例に、JSONの小さなメモを共有先へ保存し、受信側で取得します。問題や評価結果も同じArtifactに追加できます。ローカルのファイルだけで十分なら、[ファイル受け渡しTutorial](../tutorial/share_in_ommx_artifact.md)を使ってください。Experimentはこの操作の前提ではありません。
 
 ## 必要な環境と権限
 
-- [インストール手順](../getting_started/install.md)の1・2のPython SDK `3.0.0b7`
+- [インストール手順](../getting_started/install.md)で用意したPython SDK
 - 自分がアップロードを許可されたGitHubのアカウントまたはorganizationとリポジトリ
 - ログインに使うDocker CLIと、`ghcr.io`への接続
 
@@ -22,7 +22,7 @@ OMMXはDockerの認証設定を利用します。環境に`OMMX_BASIC_AUTH_*`に
 
 ## 共有先の名前で作成して送信する
 
-以下の`my-team`、`my-project`、タグ`trial-1`を、自分が書き込める対象に置き換えます。例の名前をそのまま実行してもOMMXプロジェクトの配布先には保存できません。既存の配布物を上書きしない、新しいタグを使ってください。
+`ghcr.io/my-team/my-project/candidate-notes:trial-1`は配布物を指す参照で、末尾の`trial-1`がタグです。以下の`my-team`、`my-project`、タグ`trial-1`を、自分が書き込める対象に置き換えます。例の名前をそのまま実行してもOMMXプロジェクトの配布先には保存できません。既存の配布物を上書きしない、新しいタグを使ってください。
 
 ```python
 from ommx.artifact import ArtifactDraft
@@ -39,13 +39,13 @@ print(artifact.image_name)
 artifact.push()
 ```
 
-この場合の名前は`ghcr.io/my-team/my-project/candidate-notes:trial-1`です。`commit()`まではLocal Registryへの保存で、`push()`で初めてリモートに送信します。問題や評価結果があれば、`commit()`の前に`draft.add_instance(instance)`や`draft.add_solution(solution)`を追加します。
+`commit()`まではLocal Registry（SDKのローカル保存場所）への保存で、`push()`で初めてリモートに送信します。問題や評価結果があれば、`commit()`の前に`draft.add_instance(instance)`や`draft.add_solution(solution)`を追加します。
 
 {meth}`~ommx.artifact.ArtifactDraft.for_github`はGitHubのソースリポジトリ情報も設定しますが、リポジトリや権限そのものを作成するAPIではありません。また、ローカル用の`new_anonymous()`で生成した名前はリモートの共有先にはなりません。
 
 ## 受信側で取得して読む
 
-別のマシン、またはその参照がまだないLocal Registryを使うプロセスで実行します。非公開のデータなら、受信側にも読み取り権限とログインが必要です。
+別のマシン、またはその参照がまだないLocal Registryを使うプロセスで実行します。非公開のデータなら、受信側にも読み取り権限とログインが必要です。保存時に付けたタイトル`summary`を手がかりに、JSONメモを選びます。
 
 ```python
 from ommx.artifact import Artifact
@@ -62,10 +62,10 @@ summary = artifact.get_json(layer)
 assert summary == {"trial": 1, "note": "shared record"}
 ```
 
-`load()`はLocal Registryにある参照を優先し、なければリモートから取得して保存します。同じタグの更新を毎回取得する処理ではありません。特定の内容を共有・記録する場合は、配布側が確認したマニフェストのdigestを使う`ghcr.io/.../candidate-notes@sha256:...`形式の参照を渡します。名前・タグ・digestの違いは[Artifactの保存と識別](../user_guide/artifact.md)を参照してください。
+`load()`はLocal Registryにある参照を優先し、なければリモートから取得して保存します。同じタグの更新を毎回取得する処理ではありません。特定の内容を共有・記録する場合は、マニフェスト（収録データの目録）の内容から計算する識別子digestを使い、配布側が確認した`ghcr.io/.../candidate-notes@sha256:...`形式の参照を渡します。使い分けの詳細は{ref}`名前・タグと内容の識別子 <artifact-identity>`を参照してください。
 
 ## 取得できない場合
 
 まず、共有された完全な参照、読み書きそれぞれの権限、ログイン先のホスト、ネットワーク接続を確認します。受信側で読むには、ローカルで`commit()`するだけでなく、送信側で`push()`が成功している必要があります。
 
-認証失敗、アクセス拒否、存在しない参照、通信失敗の区別と例外の正確な条件は{meth}`~ommx.artifact.Artifact.load`を参照してください。名前の付け替えやLocal Registryの管理のために、既存データを削除して再取得する必要はありません。管理操作は[CLIの案内](../user_guide/cli.md)へ進んでください。
+認証失敗、アクセス拒否、存在しない参照、通信失敗の区別と例外の正確な条件は{meth}`~ommx.artifact.Artifact.load`を参照してください。Local Registryの管理操作は[CLIの案内](../user_guide/cli.md)へ進んでください。

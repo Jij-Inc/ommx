@@ -14,7 +14,7 @@ Artifactは、データ本体と、その種類や説明をまとめた目録を
 
 ## Draftと確定したArtifact
 
-{class}`~ommx.artifact.ArtifactDraft`は、追加するレイヤーや説明を組み立てるためのオブジェクトです。`commit()`すると一覧が確定し、{class}`~ommx.artifact.Artifact`としてLocal Registryから参照できるようになります。確定した内容に後からレイヤーを付け足す操作ではありません。違う内容を作る場合は、新しいDraftを作ります。
+{class}`~ommx.artifact.ArtifactDraft`は、追加するレイヤーや説明を組み立てるためのオブジェクトです。`commit()`すると一覧が確定し、{class}`~ommx.artifact.Artifact`としてLocal Registry（SDKのローカル保存場所）から参照できるようになります。確定した内容に後からレイヤーを付け足す操作ではありません。違う内容を作る場合は、新しいDraftを作ります。
 
 `commit()`はファイルの書き出しやリモートへの送信ではありません。確定したArtifactに対して、必要なら`save()`や`push()`を呼びます。Draftの操作でもデータがローカルに保存されるため、`commit()`前ならディスクに何も残らない、という意味でもありません。
 
@@ -32,6 +32,7 @@ Artifactは、データ本体と、その種類や説明をまとめた目録を
 
 リモートレジストリはOCI形式のデータを配布するサーバーです。認証や公開範囲はそのサービスに従います。Artifactは計算を実行するコンテナではなく、データを入れたパッケージです。Dockerなどの実行環境を使って最適化プログラムを起動するという意味ではありません。具体的な操作は[レジストリでArtifactを共有する](../how_to/share_artifact_registry.md)で説明します。
 
+(artifact-identity)=
 ## 名前・タグと内容の識別子
 
 `ghcr.io/my-team/my-project/candidates:trial-1`のような参照は、保存先、名前、タグからなります。`trial-1`がタグです。名前やタグは人がデータを探す手がかりですが、同じタグが将来も同じ内容を指すとは限りません。
@@ -50,6 +51,6 @@ Artifactはデータをまとめる汎用の保存形式です。試行のまと
 
 ## SDKと形式のバージョン
 
-Python SDKの`3.0.0b7`は呼び出すAPIのバージョンです。レイヤー内のOMMX Messageのwire schemaや、Artifactそのものの形式・種別とは別です。このSDKが保存する問題・評価結果は`ommx.v2`のMessageで、汎用Artifactの種別は`application/org.ommx.v1.artifact`です。これらの`v1`や`v2`を、インストールすべきPython SDKのメジャーバージョンと読み替えないでください。
+Python SDKのバージョンは、呼び出すAPIの版です。使用する版は[インストール手順](../getting_started/install.md)で確認してください。問題や評価結果の保存形式（OMMX Messageのwire schema）、Artifactそのものの形式・種別とは別です。例えば、汎用Artifactの種別`application/org.ommx.v1.artifact`にある`v1`は、SDKのメジャーバージョンではありません。
 
-言語をまたぐ読み書きでは、[公開b7に対応するArtifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md)と[Message定義](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/proto)を基準にします。開発版では形式も更新されるため、別のSDKの仕様やAPIを混ぜず、対象バージョンの資料を確認します。Python APIの正確な条件は{mod}`ommx.artifact`を参照してください。
+言語をまたぐ読み書きでは、[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md)と[Message定義](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/proto)を基準にします。開発版では形式も更新されるため、別のSDKの仕様やAPIを混ぜず、対象バージョンの資料を確認します。Python APIの正確な条件は{mod}`ommx.artifact`を参照してください。

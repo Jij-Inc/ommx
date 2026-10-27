@@ -2,17 +2,17 @@
 
 **共有したいデータをArtifactに追加し、`commit()`してから`.ommx`ファイルに保存します。** 受け取る側は、そのファイルだけから問題・評価結果・分析メモを取り出せます。
 
-ここでは二つの項目から一つまで選べる問題と、手元の候補の評価結果を渡します。候補を探すソルバーは使いません。`Instance`が問題、`State`が変数への値の割り当て、`Solution`がその候補を問題で評価した結果です。
+Artifactは、複数のデータとその説明をまとめる入れ物です。ここでは二つの項目から一つまで選べる問題と、手元の候補の評価結果を渡します。`Instance`が問題、`State`が変数への値の割り当て、`Solution`がその候補を問題で評価した結果です。
 
 ## 準備
 
-[インストール手順](../getting_started/install.md)の1・2で、Python SDKの`3.0.0b7`を用意してください。Adapter、Experiment、レジストリへのログインは不要です。
+[インストール手順](../getting_started/install.md)に従ってPython SDKを用意してください。Adapter、Experiment、リモートレジストリへのログインは不要です。
 
 空の作業フォルダで、以下を二つのPythonファイルとして保存します。二つのスクリプトは**別々に実行**してください。送信側と受信側で保存場所を分け、受信側が送信側のメモリや保存済みデータに頼っていないことを確かめます。
 
 ## 送信側：三つのデータを一つのファイルに保存する
 
-次を`send_artifact.py`として保存します。
+次を`send_artifact.py`として保存します。追加するデータの内容を識別する値をdigestと呼びます。この例では、問題と評価結果のdigestを分析メモにも残して、どのデータについてのメモかを示します。
 
 ```python
 import os
@@ -116,4 +116,4 @@ python receive_artifact.py
 - ファイルではなくレジストリで配布したい場合：[レジストリでArtifactを共有する](../how_to/share_artifact_registry.md)
 - 複数の試行の条件・結果を整理したい場合：[Experiment Tutorial](experiment_management)。このファイル受け渡しにExperimentは必要ありません。
 
-データ形式を別の言語やツールで扱う場合は、Pythonの手順ではなく[公開b7に対応するArtifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md)を参照してください。
+データ形式を別の言語やツールで扱う場合は、Pythonの手順ではなく[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md)を参照してください。
