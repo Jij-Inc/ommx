@@ -112,7 +112,7 @@ callback 由来の progress snapshot は callback 時点の観測値です。SCI
 
 ## HiGHS で diagnostics を記録する
 
-HiGHSを使う場合だけ[HiGHS Adapterを追加](../getting_started/install.md#highs-adapter)します。
+HiGHSを使う場合だけ{ref}`HiGHS Adapterを追加 <highs-adapter>`します。
 以下は最初の小さなモデルの`instance`に対しても実行できます。
 
 HiGHS Adapter は、`solve()` に {class}`~ommx.adapter.DiagnosticCollector` を渡すと
