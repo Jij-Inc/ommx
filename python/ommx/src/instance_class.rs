@@ -1,3 +1,7 @@
+use crate::constraint_id::{
+    ConstraintIDInput, ConstraintMapInput, ConstraintSetInput, IndicatorConstraintIDInput,
+    OneHotConstraintIDInput, Sos1ConstraintIDInput,
+};
 use crate::{Equality, Instance, Kind, Sense};
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -288,7 +292,7 @@ impl InstanceClass {
 #[pyo3_stub_gen::derive::gen_stub_pyclass_complex_enum]
 #[pyclass(eq, frozen)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InstanceClassMismatch {
+pub(crate) enum InstanceClassMismatch {
     VariableKindNotAllowed {
         kind: Kind,
         variable_ids: BTreeSet<u64>,
@@ -301,40 +305,40 @@ pub enum InstanceClassMismatch {
     ObjectiveFunctionNotPolynomial {},
     RegularConstraintRelationNotAllowed {
         relation: Equality,
-        constraint_ids: BTreeSet<crate::ConstraintID>,
+        constraint_ids: ConstraintSetInput<ConstraintIDInput>,
         allowed_relations: BTreeSet<Equality>,
     },
     RegularConstraintDegreeExceedsBound {
         relation: Equality,
-        actual_degrees: BTreeMap<crate::ConstraintID, u32>,
+        actual_degrees: ConstraintMapInput<ConstraintIDInput, u32>,
         bound: PolynomialRequirement,
     },
     RegularConstraintFunctionNotPolynomial {
         relation: Equality,
-        constraint_ids: BTreeSet<crate::ConstraintID>,
+        constraint_ids: ConstraintSetInput<ConstraintIDInput>,
     },
     IndicatorConstraintsNotAllowed {
-        constraint_ids: BTreeSet<crate::IndicatorConstraintID>,
+        constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
     },
     IndicatorConstraintRelationNotAllowed {
         relation: Equality,
-        constraint_ids: BTreeSet<crate::IndicatorConstraintID>,
+        constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
         allowed_relations: BTreeSet<Equality>,
     },
     IndicatorBodyDegreeExceedsBound {
         relation: Equality,
-        actual_degrees: BTreeMap<crate::IndicatorConstraintID, u32>,
+        actual_degrees: ConstraintMapInput<IndicatorConstraintIDInput, u32>,
         bound: PolynomialRequirement,
     },
     IndicatorBodyFunctionNotPolynomial {
         relation: Equality,
-        constraint_ids: BTreeSet<crate::IndicatorConstraintID>,
+        constraint_ids: ConstraintSetInput<IndicatorConstraintIDInput>,
     },
     OneHotConstraintsNotAllowed {
-        constraint_ids: BTreeSet<crate::OneHotConstraintID>,
+        constraint_ids: ConstraintSetInput<OneHotConstraintIDInput>,
     },
     Sos1ConstraintsNotAllowed {
-        constraint_ids: BTreeSet<crate::Sos1ConstraintID>,
+        constraint_ids: ConstraintSetInput<Sos1ConstraintIDInput>,
     },
     SenseNotAllowed {
         sense: Sense,
@@ -472,7 +476,7 @@ impl InstanceClassClauseReport {
     }
 
     #[getter]
-    pub fn mismatches(&self) -> Vec<InstanceClassMismatch> {
+    pub(crate) fn mismatches(&self) -> Vec<InstanceClassMismatch> {
         self.0
             .mismatches()
             .iter()

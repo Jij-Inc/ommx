@@ -56,11 +56,13 @@ regular-only result `constraints`, `constraint_ids`, and `get_constraint_by_id`
 accessors.
 
 Constraint IDs now retain their family throughout model and result APIs,
-transformations, diagnostics, provenance, and DataFrames. Use `ConstraintID`,
-`IndicatorConstraintID`, `OneHotConstraintID`, or `Sos1ConstraintID` instead of
-bare integers. Different families never compare equal, and IDs have no `int()`
-or integer-index conversion. `constraint_violation(id)` selects the family from
-the typed ID. Variable and sample IDs remain integers; wire formats are unchanged.
+transformations, diagnostics, provenance, and DataFrames: `ConstraintID`,
+`IndicatorConstraintID`, `OneHotConstraintID`, and `Sos1ConstraintID`. Inputs whose
+family is fixed automatically promote integers; IDs from other families are
+rejected. Returned IDs and dictionary keys are always typed. Different families
+never compare equal, and IDs have no `int()` or integer-index conversion.
+`constraint_violation(id)` selects the family from the typed ID and rejects bare
+integers. Variable and sample IDs remain integers; wire formats are unchanged.
 
 See [native result queries](../user_guide/solution.md)
 and the [migration guide](../migration/python_sdk_v2_to_v3.md).

@@ -111,8 +111,16 @@ returned dictionary or snapshot does not update its owning result.
 
 The same typed IDs appear in DataFrame indexes and context tables. For example,
 `ConstraintID(1)` and `Sos1ConstraintID(1)` are different keys, and neither equals
-`1`. Constraint lookup and mutation APIs reject bare integers and IDs from other
-families. Construct an ID explicitly when specifying one in `from_components`,
-or retain the ID returned by an attached constraint's `constraint_id` property.
+`1`. Inputs whose family is fixed accept either an integer or the matching ID:
+`constraints={1: constraint}` promotes the key to `ConstraintID(1)`, and
+`instance.get_constraint_by_id(1)` looks up that regular constraint. An ID of
+another family is rejected, even when it contains the same number. Returned
+IDs, including dictionary keys, are always typed; ordinary Python dictionary
+lookup still requires the typed key. Retain an attached constraint's
+`constraint_id` or construct the appropriate ID when indexing a result.
+Supplying both `1` and `ConstraintID(1)` as keys in the same input mapping raises
+`ValueError`, since they would identify the same regular constraint.
+`solution.constraint_violation(id)` requires a typed ID because its family
+cannot be inferred from an integer alone.
 IDs do not support `int()` or integer indexing conversion. Decision-variable
 and sample IDs remain integers.

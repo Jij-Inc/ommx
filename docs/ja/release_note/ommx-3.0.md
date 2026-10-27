@@ -53,10 +53,11 @@ frame = solution.constraints_df(kind="regular")
 `constraint_ids`、`get_constraint_by_id` は、この辞書へのアクセスに置き換わります。
 
 モデル・結果のAPI、変換、診断、provenance、DataFrameで制約IDの種類を保持します。
-整数の代わりに `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
-`Sos1ConstraintID` を使ってください。別種類のIDは等しくならず、`int()` や整数
+IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
+`Sos1ConstraintID` です。種類が決まる入力では整数を自動昇格し、別種類のIDは拒否します。
+返り値と辞書キーは常に型付きです。別種類のIDは等しくならず、`int()` や整数
 インデックスへの変換機能もありません。`constraint_violation(id)` は型から種類を
-判断します。決定変数IDとサンプルIDは整数のままで、保存形式も変わりません。
+判断するため、整数は拒否します。決定変数IDとサンプルIDは整数のままで、保存形式も変わりません。
 
 詳しくは[Solutionのガイド](../user_guide/solution.md)と
 [移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。

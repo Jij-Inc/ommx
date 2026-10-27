@@ -121,8 +121,14 @@ SampleSetの行は、サンプルIDをキーにした `violations` と `feasible
 
 DataFrameのインデックスや付随するメタデータ表も同じ型付きIDを使います。
 `ConstraintID(1)` と `Sos1ConstraintID(1)` は別のキーであり、どちらも `1` とは
-等しくありません。制約の取得・更新APIは、整数や別種類のIDを拒否します。
-`from_components` で指定するIDは明示的に構築するか、Attached制約の
-`constraint_id` プロパティから取得したIDを使います。
+等しくありません。種類が決まっている入力では、整数または対応する型のIDを受け付けます。
+`constraints={1: constraint}` のキーは `ConstraintID(1)` に昇格し、
+`instance.get_constraint_by_id(1)` は通常制約を取得します。別種類のIDは、番号が同じでも
+拒否します。返されるIDと辞書キーは常に型付きです。通常のPython辞書へのアクセスには
+型付きのキーを使うため、Attached制約の `constraint_id` を保持するか、対応するIDを
+構築してください。同じ入力辞書に `1` と `ConstraintID(1)` の両方を指定すると、同じ通常制約を
+指すことになるため `ValueError` になります。
+`solution.constraint_violation(id)` は整数だけでは種類が決まらない
+ため、型付きIDを要求します。
 IDには `int()` や整数インデックスへの変換機能はありません。
 決定変数IDとサンプルIDは引き続き整数です。

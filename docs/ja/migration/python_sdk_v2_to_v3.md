@@ -652,9 +652,10 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 
 制約IDは `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
 `Sos1ConstraintID` です。Instance/ParametricInstanceの辞書、変換結果、
-provenance、DataFrameもこの型を保持します。`from_components` のキーは明示的に
-構築し、自動採番されたIDはAttached制約の `constraint_id` から取得してください。
-取得・更新APIは整数と別種類のIDを拒否します。`int()` 変換や数値インデックスとしての
-使用はできません。ソルバーの行番号には別の対応表を使ってください。
-`solution.constraint_violation(id)` はIDの型から種類を判断するため、`kind` 引数を
-取りません。決定変数IDとサンプルIDは引き続き整数です。
+provenance、DataFrameもこの型を保持します。`from_components` のキーや通常制約の
+取得・更新など、種類が決まる入力では整数を対応するIDへ自動昇格します。別種類のIDは
+拒否します。返り値と辞書キーは型付きのままなので、辞書にはAttached制約の
+`constraint_id` または明示的に構築したIDでアクセスしてください。
+`int()` 変換や数値インデックスとしての使用はできません。ソルバーの行番号には別の対応表を使ってください。
+`solution.constraint_violation(id)` はIDの型から種類を判断するため、整数は拒否し、
+`kind` 引数も取りません。決定変数IDとサンプルIDは引き続き整数です。

@@ -1078,9 +1078,12 @@ as a keyword argument.
 
 Constraint IDs are `ConstraintID`, `IndicatorConstraintID`, `OneHotConstraintID`,
 and `Sos1ConstraintID`, including in Instance/ParametricInstance collections,
-transformation results, provenance, and DataFrames. Construct explicit IDs for
-`from_components` keys; use attached handles' `constraint_id` for allocated IDs.
-Lookup and mutation APIs reject integers and the wrong family. IDs cannot be
-converted with `int()` or used as numeric positions. Solver row numbers need a
+transformation results, provenance, and DataFrames. Inputs whose family is fixed
+accept integers and automatically promote them, including `from_components` keys
+and regular-constraint lookup/mutation arguments. IDs from other families are
+rejected. Returned IDs and dictionary keys remain typed; use attached handles'
+`constraint_id` for allocated IDs or construct a typed key for dictionary lookup.
+IDs cannot be converted with `int()` or used as numeric positions. Solver row numbers need a
 separate mapping. `solution.constraint_violation(id)` now infers the family from
-the ID type and has no `kind` argument. Variable and sample IDs remain integers.
+the ID type, rejects bare integers, and has no `kind` argument. Variable and
+sample IDs remain integers.

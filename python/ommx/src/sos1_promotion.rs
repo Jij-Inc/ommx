@@ -1,3 +1,4 @@
+use crate::constraint_id::{ConstraintIDInput, ConstraintMapInput};
 use crate::{error::OmmxPyResult, Instance};
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyString};
 use std::collections::BTreeMap;
@@ -33,10 +34,10 @@ impl Sos1BigMSelectorClaim {
     /// {class}`Instance` owner.
     #[staticmethod]
     #[pyo3(signature = (selector, *, upper_link=None, lower_link=None))]
-    pub fn fresh(
+    pub(crate) fn fresh(
         selector: u64,
-        upper_link: Option<crate::ConstraintID>,
-        lower_link: Option<crate::ConstraintID>,
+        upper_link: Option<ConstraintIDInput>,
+        lower_link: Option<ConstraintIDInput>,
     ) -> Self {
         Self {
             inner: ommx::Sos1BigMSelectorClaim::Fresh {
@@ -104,8 +105,11 @@ pub struct Sos1BigMPromotionRequest {
 #[pymethods]
 impl Sos1BigMPromotionRequest {
     #[new]
-    pub fn new(
-        selector_claims: BTreeMap<crate::ConstraintID, BTreeMap<u64, Sos1BigMSelectorClaim>>,
+    pub(crate) fn new(
+        selector_claims: ConstraintMapInput<
+            ConstraintIDInput,
+            BTreeMap<u64, Sos1BigMSelectorClaim>,
+        >,
     ) -> Self {
         Self {
             inner: selector_claims

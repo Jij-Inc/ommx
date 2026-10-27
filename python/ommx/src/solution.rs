@@ -1,3 +1,4 @@
+use crate::constraint_id::ConstraintIDInput;
 use crate::{
     constraint_kind::ConstraintKind,
     error::OmmxPyResult,
@@ -455,9 +456,9 @@ impl Solution {
     /// Set the dual variable value for a specific constraint by ID.
     ///
     /// Raises KeyError if the constraint ID does not exist.
-    pub fn set_dual_variable(
+    pub(crate) fn set_dual_variable(
         &mut self,
-        constraint_id: crate::ConstraintID,
+        constraint_id: ConstraintIDInput,
         value: Option<f64>,
     ) -> OmmxPyResult<()> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
@@ -488,15 +489,18 @@ impl Solution {
     }
 
     /// Get the evaluated value of a specific constraint by ID
-    pub fn get_constraint_value(&self, constraint_id: crate::ConstraintID) -> OmmxPyResult<f64> {
+    pub(crate) fn get_constraint_value(
+        &self,
+        constraint_id: ConstraintIDInput,
+    ) -> OmmxPyResult<f64> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
         Ok(self.inner.get_constraint_value(constraint_id)?)
     }
 
     /// Get the dual variable value for a specific constraint by ID
-    pub fn get_dual_variable(
+    pub(crate) fn get_dual_variable(
         &self,
-        constraint_id: crate::ConstraintID,
+        constraint_id: ConstraintIDInput,
     ) -> OmmxPyResult<Option<f64>> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
         Ok(self.inner.get_dual_variable(constraint_id)?)

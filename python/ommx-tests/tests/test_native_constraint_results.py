@@ -84,11 +84,10 @@ def test_family_identity_and_no_integer_escape():
             constructor(2**64)
 
 
-def test_reject_wrong_family_and_bare_int_before_mutation():
+def test_reject_wrong_family_before_mutation_and_ambiguous_integer():
     instance = model()
     before = instance.to_v2_bytes()
     for wrong in [
-        7,
         IndicatorConstraintID(7),
         OneHotConstraintID(7),
         Sos1ConstraintID(7),

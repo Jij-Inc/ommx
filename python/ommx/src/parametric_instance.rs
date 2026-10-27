@@ -1,3 +1,7 @@
+use crate::constraint_id::{
+    ConstraintIDInput, ConstraintMapInput, IndicatorConstraintIDInput, OneHotConstraintIDInput,
+    Sos1ConstraintIDInput,
+};
 use crate::{
     constraint_kind::ConstraintKind,
     error::OmmxPyResult,
@@ -113,21 +117,28 @@ impl ParametricInstance {
 
     /// Build a parametric instance from its model components.
     ///
+    /// Constraint mappings accept integer keys or IDs of the matching family.
+    /// Integers are promoted to that family's ID. IDs of another family raise
+    /// {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
+    /// Returned collections always use typed IDs.
+    ///
     /// Raises {class}`ValueError` if a decision variable and parameter use the
     /// same ID.
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, indicator_constraints=None, one_hot_constraints=None, sos1_constraints=None, named_functions=None, description=None))]
-    pub fn from_components(
+    pub(crate) fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: Vec<DecisionVariable>,
-        constraints: BTreeMap<crate::ConstraintID, Constraint>,
+        constraints: ConstraintMapInput<ConstraintIDInput, Constraint>,
         parameters: Vec<Parameter>,
         indicator_constraints: Option<
-            BTreeMap<crate::IndicatorConstraintID, crate::IndicatorConstraint>,
+            ConstraintMapInput<IndicatorConstraintIDInput, crate::IndicatorConstraint>,
         >,
-        one_hot_constraints: Option<BTreeMap<crate::OneHotConstraintID, crate::OneHotConstraint>>,
-        sos1_constraints: Option<BTreeMap<crate::Sos1ConstraintID, crate::Sos1Constraint>>,
+        one_hot_constraints: Option<
+            ConstraintMapInput<OneHotConstraintIDInput, crate::OneHotConstraint>,
+        >,
+        sos1_constraints: Option<ConstraintMapInput<Sos1ConstraintIDInput, crate::Sos1Constraint>>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<crate::InstanceDescription>,
     ) -> OmmxPyResult<Self> {
@@ -257,7 +268,7 @@ impl ParametricInstance {
             Sense::Minimize,
             Function(ommx::Function::Zero),
             Vec::new(),
-            BTreeMap::new(),
+            Default::default(),
             Vec::new(),
             None,
             None,
@@ -837,7 +848,10 @@ impl ParametricInstance {
     }
 
     /// Get a specific constraint by ID
-    pub fn get_constraint_by_id(&self, constraint_id: crate::ConstraintID) -> PyResult<Constraint> {
+    pub(crate) fn get_constraint_by_id(
+        &self,
+        constraint_id: ConstraintIDInput,
+    ) -> PyResult<Constraint> {
         let cid = ConstraintID::from(constraint_id);
         let context = self.inner.constraint_collection().context();
         self.inner
@@ -850,9 +864,9 @@ impl ParametricInstance {
     }
 
     /// Get a specific removed constraint by ID
-    pub fn get_removed_constraint_by_id(
+    pub(crate) fn get_removed_constraint_by_id(
         &self,
-        constraint_id: crate::ConstraintID,
+        constraint_id: ConstraintIDInput,
     ) -> PyResult<RemovedConstraint> {
         let cid = ConstraintID::from(constraint_id);
         let context = self.inner.constraint_collection().context();

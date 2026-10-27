@@ -9946,9 +9946,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     },
@@ -10700,9 +10711,20 @@
                     {
                       "name": "indicator_id",
                       "type_": {
-                        "display": "IndicatorConstraintID",
+                        "display": "IndicatorConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "IndicatorConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     },
@@ -10750,9 +10772,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     },
@@ -10803,9 +10836,20 @@
                     {
                       "name": "one_hot_id",
                       "type_": {
-                        "display": "OneHotConstraintID",
+                        "display": "OneHotConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "OneHotConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -10829,9 +10873,20 @@
                     {
                       "name": "sos1_id",
                       "type_": {
-                        "display": "Sos1ConstraintID",
+                        "display": "Sos1ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "Sos1ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -11254,7 +11309,7 @@
             },
             {
               "name": "from_components",
-              "doc": "Create an instance from its components.\n\n**Args:**\n- `sense`: Optimization sense (minimize or maximize)\n- `objective`: Objective function\n- `decision_variables`: List of decision variables\n- `constraints`: List of constraints\n- `named_functions`: Optional list of named functions\n- `description`: Optional instance description\n\n**Returns:**\nA new Instance",
+              "doc": "Create an instance from its components.\n\nConstraint mappings accept integer keys or IDs of the matching family.\nIntegers are promoted to that family's ID. IDs of another family raise\n{class}`TypeError`; keys that become duplicates raise {class}`ValueError`.\nReturned collections always use typed IDs.\n\n**Args:**\n- `sense`: Optimization sense (minimize or maximize)\n- `objective`: Objective function\n- `decision_variables`: List of decision variables\n- `constraints`: Mapping from regular constraint IDs to constraints\n- `named_functions`: Optional list of named functions\n- `description`: Optional instance description\n\n**Returns:**\nA new Instance",
               "signatures": [
                 {
                   "parameters": [
@@ -11299,18 +11354,67 @@
                     {
                       "name": "constraints",
                       "type_": {
-                        "display": "Mapping[ConstraintID, Constraint]",
+                        "display": "Mapping[ConstraintID, Constraint] | Mapping[int, Constraint] | Mapping[ConstraintID | int, Constraint]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "ConstraintID",
+                            "display": "Mapping[ConstraintID, Constraint]",
                             "link_target": null,
-                            "children": []
+                            "children": [
+                              {
+                                "display": "ConstraintID",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "Constraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
                           },
                           {
-                            "display": "Constraint",
+                            "display": "Mapping[int, Constraint]",
                             "link_target": null,
-                            "children": []
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "Constraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "display": "Mapping[ConstraintID | int, Constraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "ConstraintID | int",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "ConstraintID",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "display": "Constraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
                           }
                         ]
                       },
@@ -11319,22 +11423,71 @@
                     {
                       "name": "indicator_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[IndicatorConstraintID, IndicatorConstraint]]",
+                        "display": "Optional[Mapping[IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[IndicatorConstraintID | int, IndicatorConstraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[IndicatorConstraintID, IndicatorConstraint]",
+                            "display": "Mapping[IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[IndicatorConstraintID | int, IndicatorConstraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "IndicatorConstraintID",
+                                "display": "Mapping[IndicatorConstraintID, IndicatorConstraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "IndicatorConstraintID",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "IndicatorConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
-                                "display": "IndicatorConstraint",
+                                "display": "Mapping[int, IndicatorConstraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "IndicatorConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "display": "Mapping[IndicatorConstraintID | int, IndicatorConstraint]",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "IndicatorConstraintID | int",
+                                    "link_target": null,
+                                    "children": [
+                                      {
+                                        "display": "IndicatorConstraintID",
+                                        "link_target": null,
+                                        "children": []
+                                      },
+                                      {
+                                        "display": "int",
+                                        "link_target": null,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "display": "IndicatorConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               }
                             ]
                           }
@@ -11348,22 +11501,71 @@
                     {
                       "name": "one_hot_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[OneHotConstraintID, OneHotConstraint]]",
+                        "display": "Optional[Mapping[OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[OneHotConstraintID | int, OneHotConstraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[OneHotConstraintID, OneHotConstraint]",
+                            "display": "Mapping[OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[OneHotConstraintID | int, OneHotConstraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "OneHotConstraintID",
+                                "display": "Mapping[OneHotConstraintID, OneHotConstraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "OneHotConstraintID",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "OneHotConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
-                                "display": "OneHotConstraint",
+                                "display": "Mapping[int, OneHotConstraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "OneHotConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "display": "Mapping[OneHotConstraintID | int, OneHotConstraint]",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "OneHotConstraintID | int",
+                                    "link_target": null,
+                                    "children": [
+                                      {
+                                        "display": "OneHotConstraintID",
+                                        "link_target": null,
+                                        "children": []
+                                      },
+                                      {
+                                        "display": "int",
+                                        "link_target": null,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "display": "OneHotConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               }
                             ]
                           }
@@ -11377,22 +11579,71 @@
                     {
                       "name": "sos1_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[Sos1ConstraintID, Sos1Constraint]]",
+                        "display": "Optional[Mapping[Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[Sos1ConstraintID | int, Sos1Constraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[Sos1ConstraintID, Sos1Constraint]",
+                            "display": "Mapping[Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[Sos1ConstraintID | int, Sos1Constraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "Sos1ConstraintID",
+                                "display": "Mapping[Sos1ConstraintID, Sos1Constraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "Sos1ConstraintID",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "Sos1Constraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
-                                "display": "Sos1Constraint",
+                                "display": "Mapping[int, Sos1Constraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "Sos1Constraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "display": "Mapping[Sos1ConstraintID | int, Sos1Constraint]",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "Sos1ConstraintID | int",
+                                    "link_target": null,
+                                    "children": [
+                                      {
+                                        "display": "Sos1ConstraintID",
+                                        "link_target": null,
+                                        "children": []
+                                      },
+                                      {
+                                        "display": "int",
+                                        "link_target": null,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "display": "Sos1Constraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               }
                             ]
                           }
@@ -11517,9 +11768,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -11595,9 +11857,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -12922,9 +13195,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     },
@@ -12966,9 +13250,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "IndicatorConstraintID",
+                        "display": "IndicatorConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "IndicatorConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     },
@@ -13069,9 +13364,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -13095,9 +13401,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "IndicatorConstraintID",
+                        "display": "IndicatorConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "IndicatorConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -13311,13 +13628,24 @@
                     {
                       "name": "constraint_ids",
                       "type_": {
-                        "display": "set[ConstraintID]",
+                        "display": "AbstractSet[ConstraintID | int]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "ConstraintID",
+                            "display": "ConstraintID | int",
                             "link_target": null,
-                            "children": []
+                            "children": [
+                              {
+                                "display": "ConstraintID",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
                           }
                         ]
                       },
@@ -19681,7 +20009,7 @@
             },
             {
               "name": "from_components",
-              "doc": "Build a parametric instance from its model components.\n\nRaises {class}`ValueError` if a decision variable and parameter use the\nsame ID.",
+              "doc": "Build a parametric instance from its model components.\n\nConstraint mappings accept integer keys or IDs of the matching family.\nIntegers are promoted to that family's ID. IDs of another family raise\n{class}`TypeError`; keys that become duplicates raise {class}`ValueError`.\nReturned collections always use typed IDs.\n\nRaises {class}`ValueError` if a decision variable and parameter use the\nsame ID.",
               "signatures": [
                 {
                   "parameters": [
@@ -19726,18 +20054,67 @@
                     {
                       "name": "constraints",
                       "type_": {
-                        "display": "Mapping[ConstraintID, Constraint]",
+                        "display": "Mapping[ConstraintID, Constraint] | Mapping[int, Constraint] | Mapping[ConstraintID | int, Constraint]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "ConstraintID",
+                            "display": "Mapping[ConstraintID, Constraint]",
                             "link_target": null,
-                            "children": []
+                            "children": [
+                              {
+                                "display": "ConstraintID",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "Constraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
                           },
                           {
-                            "display": "Constraint",
+                            "display": "Mapping[int, Constraint]",
                             "link_target": null,
-                            "children": []
+                            "children": [
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "Constraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
+                          },
+                          {
+                            "display": "Mapping[ConstraintID | int, Constraint]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "ConstraintID | int",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "ConstraintID",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "display": "Constraint",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
                           }
                         ]
                       },
@@ -19761,22 +20138,71 @@
                     {
                       "name": "indicator_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[IndicatorConstraintID, IndicatorConstraint]]",
+                        "display": "Optional[Mapping[IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[IndicatorConstraintID | int, IndicatorConstraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[IndicatorConstraintID, IndicatorConstraint]",
+                            "display": "Mapping[IndicatorConstraintID, IndicatorConstraint] | Mapping[int, IndicatorConstraint] | Mapping[IndicatorConstraintID | int, IndicatorConstraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "IndicatorConstraintID",
+                                "display": "Mapping[IndicatorConstraintID, IndicatorConstraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "IndicatorConstraintID",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "IndicatorConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
-                                "display": "IndicatorConstraint",
+                                "display": "Mapping[int, IndicatorConstraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "IndicatorConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "display": "Mapping[IndicatorConstraintID | int, IndicatorConstraint]",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "IndicatorConstraintID | int",
+                                    "link_target": null,
+                                    "children": [
+                                      {
+                                        "display": "IndicatorConstraintID",
+                                        "link_target": null,
+                                        "children": []
+                                      },
+                                      {
+                                        "display": "int",
+                                        "link_target": null,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "display": "IndicatorConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               }
                             ]
                           }
@@ -19790,22 +20216,71 @@
                     {
                       "name": "one_hot_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[OneHotConstraintID, OneHotConstraint]]",
+                        "display": "Optional[Mapping[OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[OneHotConstraintID | int, OneHotConstraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[OneHotConstraintID, OneHotConstraint]",
+                            "display": "Mapping[OneHotConstraintID, OneHotConstraint] | Mapping[int, OneHotConstraint] | Mapping[OneHotConstraintID | int, OneHotConstraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "OneHotConstraintID",
+                                "display": "Mapping[OneHotConstraintID, OneHotConstraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "OneHotConstraintID",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "OneHotConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
-                                "display": "OneHotConstraint",
+                                "display": "Mapping[int, OneHotConstraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "OneHotConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "display": "Mapping[OneHotConstraintID | int, OneHotConstraint]",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "OneHotConstraintID | int",
+                                    "link_target": null,
+                                    "children": [
+                                      {
+                                        "display": "OneHotConstraintID",
+                                        "link_target": null,
+                                        "children": []
+                                      },
+                                      {
+                                        "display": "int",
+                                        "link_target": null,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "display": "OneHotConstraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               }
                             ]
                           }
@@ -19819,22 +20294,71 @@
                     {
                       "name": "sos1_constraints",
                       "type_": {
-                        "display": "Optional[Mapping[Sos1ConstraintID, Sos1Constraint]]",
+                        "display": "Optional[Mapping[Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[Sos1ConstraintID | int, Sos1Constraint]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "Mapping[Sos1ConstraintID, Sos1Constraint]",
+                            "display": "Mapping[Sos1ConstraintID, Sos1Constraint] | Mapping[int, Sos1Constraint] | Mapping[Sos1ConstraintID | int, Sos1Constraint]",
                             "link_target": null,
                             "children": [
                               {
-                                "display": "Sos1ConstraintID",
+                                "display": "Mapping[Sos1ConstraintID, Sos1Constraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "Sos1ConstraintID",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "Sos1Constraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               },
                               {
-                                "display": "Sos1Constraint",
+                                "display": "Mapping[int, Sos1Constraint]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "Sos1Constraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "display": "Mapping[Sos1ConstraintID | int, Sos1Constraint]",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "Sos1ConstraintID | int",
+                                    "link_target": null,
+                                    "children": [
+                                      {
+                                        "display": "Sos1ConstraintID",
+                                        "link_target": null,
+                                        "children": []
+                                      },
+                                      {
+                                        "display": "int",
+                                        "link_target": null,
+                                        "children": []
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "display": "Sos1Constraint",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               }
                             ]
                           }
@@ -19959,9 +20483,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -20063,9 +20598,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -28599,9 +29145,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -28799,9 +29356,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     }
@@ -29013,9 +29581,20 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID",
+                        "display": "ConstraintID | int",
                         "link_target": null,
-                        "children": []
+                        "children": [
+                          {
+                            "display": "ConstraintID",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
                       },
                       "default": null
                     },
@@ -29671,16 +30250,38 @@
                     {
                       "name": "selector_claims",
                       "type_": {
-                        "display": "Mapping[ConstraintID, Mapping[int, Sos1BigMSelectorClaim]]",
+                        "display": "Mapping[ConstraintID, Mapping[int, Sos1BigMSelectorClaim]] | Mapping[int, Mapping[int, Sos1BigMSelectorClaim]] | Mapping[ConstraintID | int, Mapping[int, Sos1BigMSelectorClaim]]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "ConstraintID",
+                            "display": "Mapping[ConstraintID, Mapping[int, Sos1BigMSelectorClaim]]",
                             "link_target": null,
-                            "children": []
+                            "children": [
+                              {
+                                "display": "ConstraintID",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "Mapping[int, Sos1BigMSelectorClaim]",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "Sos1BigMSelectorClaim",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
                           },
                           {
-                            "display": "Mapping[int, Sos1BigMSelectorClaim]",
+                            "display": "Mapping[int, Mapping[int, Sos1BigMSelectorClaim]]",
                             "link_target": null,
                             "children": [
                               {
@@ -29689,9 +30290,58 @@
                                 "children": []
                               },
                               {
-                                "display": "Sos1BigMSelectorClaim",
+                                "display": "Mapping[int, Sos1BigMSelectorClaim]",
                                 "link_target": null,
-                                "children": []
+                                "children": [
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "Sos1BigMSelectorClaim",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "display": "Mapping[ConstraintID | int, Mapping[int, Sos1BigMSelectorClaim]]",
+                            "link_target": null,
+                            "children": [
+                              {
+                                "display": "ConstraintID | int",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "ConstraintID",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
+                              },
+                              {
+                                "display": "Mapping[int, Sos1BigMSelectorClaim]",
+                                "link_target": null,
+                                "children": [
+                                  {
+                                    "display": "int",
+                                    "link_target": null,
+                                    "children": []
+                                  },
+                                  {
+                                    "display": "Sos1BigMSelectorClaim",
+                                    "link_target": null,
+                                    "children": []
+                                  }
+                                ]
                               }
                             ]
                           }
@@ -29798,13 +30448,24 @@
                     {
                       "name": "upper_link",
                       "type_": {
-                        "display": "Optional[ConstraintID]",
+                        "display": "Optional[ConstraintID | int]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "ConstraintID",
+                            "display": "ConstraintID | int",
                             "link_target": null,
-                            "children": []
+                            "children": [
+                              {
+                                "display": "ConstraintID",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
                           }
                         ]
                       },
@@ -29816,13 +30477,24 @@
                     {
                       "name": "lower_link",
                       "type_": {
-                        "display": "Optional[ConstraintID]",
+                        "display": "Optional[ConstraintID | int]",
                         "link_target": null,
                         "children": [
                           {
-                            "display": "ConstraintID",
+                            "display": "ConstraintID | int",
                             "link_target": null,
-                            "children": []
+                            "children": [
+                              {
+                                "display": "ConstraintID",
+                                "link_target": null,
+                                "children": []
+                              },
+                              {
+                                "display": "int",
+                                "link_target": null,
+                                "children": []
+                              }
+                            ]
                           }
                         ]
                       },

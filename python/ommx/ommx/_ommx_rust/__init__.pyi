@@ -3631,7 +3631,7 @@ class Instance:
         """
     def tighten_bounds_simultaneously_once_using_constraints(
         self,
-        constraint_ids: builtins.set[ConstraintID],
+        constraint_ids: typing.AbstractSet[ConstraintID | builtins.int],
         *,
         max_terms: builtins.int = 32,
         atol: typing.Optional[builtins.float] = None,
@@ -3705,15 +3705,23 @@ class Instance:
         sense: Sense,
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
-        constraints: typing.Mapping[ConstraintID, Constraint],
+        constraints: typing.Mapping[ConstraintID, Constraint]
+        | typing.Mapping[builtins.int, Constraint]
+        | typing.Mapping[ConstraintID | builtins.int, Constraint],
         indicator_constraints: typing.Optional[
             typing.Mapping[IndicatorConstraintID, IndicatorConstraint]
+            | typing.Mapping[builtins.int, IndicatorConstraint]
+            | typing.Mapping[IndicatorConstraintID | builtins.int, IndicatorConstraint]
         ] = None,
         one_hot_constraints: typing.Optional[
             typing.Mapping[OneHotConstraintID, OneHotConstraint]
+            | typing.Mapping[builtins.int, OneHotConstraint]
+            | typing.Mapping[OneHotConstraintID | builtins.int, OneHotConstraint]
         ] = None,
         sos1_constraints: typing.Optional[
             typing.Mapping[Sos1ConstraintID, Sos1Constraint]
+            | typing.Mapping[builtins.int, Sos1Constraint]
+            | typing.Mapping[Sos1ConstraintID | builtins.int, Sos1Constraint]
         ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
@@ -3721,11 +3729,16 @@ class Instance:
         r"""
         Create an instance from its components.
 
+        Constraint mappings accept integer keys or IDs of the matching family.
+        Integers are promoted to that family's ID. IDs of another family raise
+        {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
+        Returned collections always use typed IDs.
+
         **Args:**
         - `sense`: Optimization sense (minimize or maximize)
         - `objective`: Objective function
         - `decision_variables`: List of decision variables
-        - `constraints`: List of constraints
+        - `constraints`: Mapping from regular constraint IDs to constraints
         - `named_functions`: Optional list of named functions
         - `description`: Optional instance description
 
@@ -4637,7 +4650,10 @@ class Instance:
         5
         """
     def relax_constraint(
-        self, constraint_id: ConstraintID, reason: builtins.str, **parameters: str
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        reason: builtins.str,
+        **parameters: str,
     ) -> None:
         r"""
         Remove a constraint from the instance.
@@ -4672,10 +4688,12 @@ class Instance:
         >>> assert set(instance.constraints) == {ConstraintID(1)}
         >>> assert not instance.removed_constraints
         """
-    def restore_constraint(self, constraint_id: ConstraintID) -> None: ...
+    def restore_constraint(
+        self, constraint_id: ConstraintID | builtins.int
+    ) -> None: ...
     def relax_indicator_constraint(
         self,
-        constraint_id: IndicatorConstraintID,
+        constraint_id: IndicatorConstraintID | builtins.int,
         reason: builtins.str,
         **parameters: str,
     ) -> None:
@@ -4683,13 +4701,13 @@ class Instance:
         Relax an indicator constraint by moving it from active to removed.
         """
     def restore_indicator_constraint(
-        self, constraint_id: IndicatorConstraintID
+        self, constraint_id: IndicatorConstraintID | builtins.int
     ) -> None:
         r"""
         Restore a removed indicator constraint back to active.
         """
     def convert_one_hot_to_constraint(
-        self, one_hot_id: OneHotConstraintID
+        self, one_hot_id: OneHotConstraintID | builtins.int
     ) -> ConstraintID:
         r"""
         Convert a one-hot constraint to a regular equality constraint.
@@ -4766,7 +4784,7 @@ class Instance:
         {ConstraintID(0): Constraint(x0 + x1 - 1 == 0), ConstraintID(1): Constraint(x2 + x3 - 1 == 0)}
         """
     def convert_sos1_to_constraints(
-        self, sos1_id: Sos1ConstraintID
+        self, sos1_id: Sos1ConstraintID | builtins.int
     ) -> builtins.list[ConstraintID]:
         r"""
         Convert a SOS1 constraint to regular constraints using the Big-M method.
@@ -4869,7 +4887,7 @@ class Instance:
         """
     def convert_indicator_to_constraint(
         self,
-        indicator_id: IndicatorConstraintID,
+        indicator_id: IndicatorConstraintID | builtins.int,
         *,
         atol: typing.Optional[builtins.float] = None,
     ) -> builtins.list[ConstraintID]:
@@ -5107,7 +5125,7 @@ class Instance:
         """
     def convert_inequality_to_equality_with_integer_slack(
         self,
-        constraint_id: ConstraintID,
+        constraint_id: ConstraintID | builtins.int,
         max_integer_range: builtins.int,
         *,
         atol: typing.Optional[builtins.float] = None,
@@ -5171,7 +5189,7 @@ class Instance:
         """
     def add_integer_slack_to_inequality(
         self,
-        constraint_id: ConstraintID,
+        constraint_id: ConstraintID | builtins.int,
         slack_upper_bound: builtins.int,
         *,
         atol: typing.Optional[builtins.float] = None,
@@ -5522,12 +5540,14 @@ class Instance:
         r"""
         Get a specific decision variable by ID
         """
-    def get_constraint_by_id(self, constraint_id: ConstraintID) -> Constraint:
+    def get_constraint_by_id(
+        self, constraint_id: ConstraintID | builtins.int
+    ) -> Constraint:
         r"""
         Get a specific constraint by ID
         """
     def get_removed_constraint_by_id(
-        self, constraint_id: ConstraintID
+        self, constraint_id: ConstraintID | builtins.int
     ) -> RemovedConstraint:
         r"""
         Get a specific removed constraint by ID
@@ -5945,7 +5965,7 @@ class InstanceClassMismatch:
         def __new__(
             cls,
             relation: Equality,
-            constraint_ids: builtins.set[ConstraintID],
+            constraint_ids: typing.AbstractSet[ConstraintID | builtins.int],
             allowed_relations: builtins.set[Equality],
         ) -> InstanceClassMismatch.RegularConstraintRelationNotAllowed: ...
 
@@ -5965,7 +5985,9 @@ class InstanceClassMismatch:
         def __new__(
             cls,
             relation: Equality,
-            actual_degrees: typing.Mapping[ConstraintID, builtins.int],
+            actual_degrees: typing.Mapping[ConstraintID, builtins.int]
+            | typing.Mapping[builtins.int, builtins.int]
+            | typing.Mapping[ConstraintID | builtins.int, builtins.int],
             bound: PolynomialRequirement,
         ) -> InstanceClassMismatch.RegularConstraintDegreeExceedsBound: ...
 
@@ -5980,7 +6002,9 @@ class InstanceClassMismatch:
         @property
         def constraint_ids(self) -> builtins.set[ConstraintID]: ...
         def __new__(
-            cls, relation: Equality, constraint_ids: builtins.set[ConstraintID]
+            cls,
+            relation: Equality,
+            constraint_ids: typing.AbstractSet[ConstraintID | builtins.int],
         ) -> InstanceClassMismatch.RegularConstraintFunctionNotPolynomial: ...
 
     @typing.final
@@ -5989,7 +6013,8 @@ class InstanceClassMismatch:
         @property
         def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
         def __new__(
-            cls, constraint_ids: builtins.set[IndicatorConstraintID]
+            cls,
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
         ) -> InstanceClassMismatch.IndicatorConstraintsNotAllowed: ...
 
     @typing.final
@@ -6008,7 +6033,7 @@ class InstanceClassMismatch:
         def __new__(
             cls,
             relation: Equality,
-            constraint_ids: builtins.set[IndicatorConstraintID],
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
             allowed_relations: builtins.set[Equality],
         ) -> InstanceClassMismatch.IndicatorConstraintRelationNotAllowed: ...
 
@@ -6030,7 +6055,9 @@ class InstanceClassMismatch:
         def __new__(
             cls,
             relation: Equality,
-            actual_degrees: typing.Mapping[IndicatorConstraintID, builtins.int],
+            actual_degrees: typing.Mapping[IndicatorConstraintID, builtins.int]
+            | typing.Mapping[builtins.int, builtins.int]
+            | typing.Mapping[IndicatorConstraintID | builtins.int, builtins.int],
             bound: PolynomialRequirement,
         ) -> InstanceClassMismatch.IndicatorBodyDegreeExceedsBound: ...
 
@@ -6045,7 +6072,9 @@ class InstanceClassMismatch:
         @property
         def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
         def __new__(
-            cls, relation: Equality, constraint_ids: builtins.set[IndicatorConstraintID]
+            cls,
+            relation: Equality,
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
         ) -> InstanceClassMismatch.IndicatorBodyFunctionNotPolynomial: ...
 
     @typing.final
@@ -6054,7 +6083,7 @@ class InstanceClassMismatch:
         @property
         def constraint_ids(self) -> builtins.set[OneHotConstraintID]: ...
         def __new__(
-            cls, constraint_ids: builtins.set[OneHotConstraintID]
+            cls, constraint_ids: typing.AbstractSet[OneHotConstraintID | builtins.int]
         ) -> InstanceClassMismatch.OneHotConstraintsNotAllowed: ...
 
     @typing.final
@@ -6063,7 +6092,7 @@ class InstanceClassMismatch:
         @property
         def constraint_ids(self) -> builtins.set[Sos1ConstraintID]: ...
         def __new__(
-            cls, constraint_ids: builtins.set[Sos1ConstraintID]
+            cls, constraint_ids: typing.AbstractSet[Sos1ConstraintID | builtins.int]
         ) -> InstanceClassMismatch.Sos1ConstraintsNotAllowed: ...
 
     @typing.final
@@ -7050,22 +7079,35 @@ class ParametricInstance:
         sense: Sense,
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
-        constraints: typing.Mapping[ConstraintID, Constraint],
+        constraints: typing.Mapping[ConstraintID, Constraint]
+        | typing.Mapping[builtins.int, Constraint]
+        | typing.Mapping[ConstraintID | builtins.int, Constraint],
         parameters: typing.Sequence[Parameter],
         indicator_constraints: typing.Optional[
             typing.Mapping[IndicatorConstraintID, IndicatorConstraint]
+            | typing.Mapping[builtins.int, IndicatorConstraint]
+            | typing.Mapping[IndicatorConstraintID | builtins.int, IndicatorConstraint]
         ] = None,
         one_hot_constraints: typing.Optional[
             typing.Mapping[OneHotConstraintID, OneHotConstraint]
+            | typing.Mapping[builtins.int, OneHotConstraint]
+            | typing.Mapping[OneHotConstraintID | builtins.int, OneHotConstraint]
         ] = None,
         sos1_constraints: typing.Optional[
             typing.Mapping[Sos1ConstraintID, Sos1Constraint]
+            | typing.Mapping[builtins.int, Sos1Constraint]
+            | typing.Mapping[Sos1ConstraintID | builtins.int, Sos1Constraint]
         ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
     ) -> ParametricInstance:
         r"""
         Build a parametric instance from its model components.
+
+        Constraint mappings accept integer keys or IDs of the matching family.
+        Integers are promoted to that family's ID. IDs of another family raise
+        {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
+        Returned collections always use typed IDs.
 
         Raises {class}`ValueError` if a decision variable and parameter use the
         same ID.
@@ -7239,12 +7281,14 @@ class ParametricInstance:
         r"""
         Get a specific decision variable by ID
         """
-    def get_constraint_by_id(self, constraint_id: ConstraintID) -> Constraint:
+    def get_constraint_by_id(
+        self, constraint_id: ConstraintID | builtins.int
+    ) -> Constraint:
         r"""
         Get a specific constraint by ID
         """
     def get_removed_constraint_by_id(
-        self, constraint_id: ConstraintID
+        self, constraint_id: ConstraintID | builtins.int
     ) -> RemovedConstraint:
         r"""
         Get a specific removed constraint by ID
@@ -9627,7 +9671,9 @@ class Solution:
         multiple times.
         """
     def set_dual_variable(
-        self, constraint_id: ConstraintID, value: typing.Optional[builtins.float]
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        value: typing.Optional[builtins.float],
     ) -> None:
         r"""
         Set the dual variable value for a specific constraint by ID.
@@ -9640,12 +9686,14 @@ class Solution:
         r"""
         Get a specific evaluated decision variable by ID
         """
-    def get_constraint_value(self, constraint_id: ConstraintID) -> builtins.float:
+    def get_constraint_value(
+        self, constraint_id: ConstraintID | builtins.int
+    ) -> builtins.float:
         r"""
         Get the evaluated value of a specific constraint by ID
         """
     def get_dual_variable(
-        self, constraint_id: ConstraintID
+        self, constraint_id: ConstraintID | builtins.int
     ) -> typing.Optional[builtins.float]:
         r"""
         Get the dual variable value for a specific constraint by ID
@@ -9892,6 +9940,13 @@ class Sos1BigMPromotionRequest:
         cls,
         selector_claims: typing.Mapping[
             ConstraintID, typing.Mapping[builtins.int, Sos1BigMSelectorClaim]
+        ]
+        | typing.Mapping[
+            builtins.int, typing.Mapping[builtins.int, Sos1BigMSelectorClaim]
+        ]
+        | typing.Mapping[
+            ConstraintID | builtins.int,
+            typing.Mapping[builtins.int, Sos1BigMSelectorClaim],
         ],
     ) -> Sos1BigMPromotionRequest: ...
 
@@ -9935,8 +9990,8 @@ class Sos1BigMSelectorClaim:
     def fresh(
         selector: builtins.int,
         *,
-        upper_link: typing.Optional[ConstraintID] = None,
-        lower_link: typing.Optional[ConstraintID] = None,
+        upper_link: typing.Optional[ConstraintID | builtins.int] = None,
+        lower_link: typing.Optional[ConstraintID | builtins.int] = None,
     ) -> Sos1BigMSelectorClaim:
         r"""
         Claim a separate private Binary selector and its optional Big-M links.
