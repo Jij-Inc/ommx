@@ -29,7 +29,7 @@ OMMXでは、条件付きの制約や変数の組合せに対する制約を「�
 次のモデルには4つのBinary変数があります。`enabled = 1` のときだけ `option_a + option_b <= 1` を課し、さらに `option_b` と `option_c` のうち高々1つだけを選べるようにします。
 
 ```{code-cell} ipython3
-from ommx import Instance, Sos1Constraint
+from ommx import IndicatorConstraintID, Instance, Sos1Constraint, Sos1ConstraintID
 
 source = Instance.maximize()
 enabled = source.new_binary("enabled")
@@ -57,8 +57,7 @@ source.add_sos1_constraint(
     )
 )
 
-assert len(source.constraints) == 1
-assert len(source.constraints) == 1
+assert set(source.constraints) == {IndicatorConstraintID(0), Sos1ConstraintID(0)}
 source
 ```
 

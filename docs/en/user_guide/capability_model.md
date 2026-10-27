@@ -64,9 +64,11 @@ Applicability and solver-input construction are separate boundaries. Membership 
 
 ```{code-cell} ipython3
 from ommx import (
+    ConstraintID,
     DecisionVariable,
     Instance,
     OneHotConstraint,
+    OneHotConstraintID,
     Sense,
     SpecialConstraintKind,
 )
@@ -97,7 +99,7 @@ assert lowered == {SpecialConstraintKind.OneHot}
 
 ```{code-cell} ipython3
 assert instance.active_special_constraint_kinds == set()
-assert instance.constraints == {}
+assert OneHotConstraintID(0) not in instance.constraints
 assert len(instance.constraints) == 1
 ```
 
@@ -120,9 +122,9 @@ instance2 = Instance.from_components(
     sense=Sense.Maximize,
 )
 new_id = instance2.convert_one_hot_to_constraint(1)
-assert isinstance(new_id, int)
+assert isinstance(new_id, ConstraintID)
 assert set(instance2.constraints.keys()) == {new_id}
-assert instance2.constraints == {}
+assert OneHotConstraintID(1) not in instance2.constraints
 ```
 
 Use {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` to convert every active OneHot constraint in one call.
@@ -136,7 +138,7 @@ Use {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` to convert every 
 3. Finally, the cardinality constraint $\sum_i y_i - 1 \leq 0$ is added.
 
 ```{code-cell} ipython3
-from ommx import Sos1Constraint
+from ommx import Sos1Constraint, Sos1ConstraintID
 
 ys = [DecisionVariable.binary(i, name="y", subscripts=[i]) for i in range(3)]
 instance3 = Instance.from_components(
@@ -150,7 +152,7 @@ new_ids = instance3.convert_sos1_to_constraints(1)
 # An all-binary SOS1 collapses to a single cardinality constraint sum(x_i) - 1 <= 0
 assert len(new_ids) == 1
 assert set(instance3.constraints.keys()) == set(new_ids)
-assert instance3.constraints == {}
+assert Sos1ConstraintID(1) not in instance3.constraints
 ```
 
 Use {meth}`~ommx.Instance.convert_all_sos1_to_constraints` to convert every SOS1 constraint in one call. If a variable has a non-finite bound or a domain that excludes 0, conversion fails before any mutation occurs and the instance is left unchanged.
@@ -174,9 +176,9 @@ Both Indicator conversion methods accept `atol=`. This tolerance is passed to th
 
 ## Auditing conversion results
 
-The original special constraints are not discarded; they are kept as "removed" entries in the following `removed_*_constraints` dicts.
+The original special constraints are not discarded; they are kept in the unified `removed_constraints` collection, keyed by typed IDs.
 
-| Original type | Removed dict | DataFrame |
+| Original type | Removed collection | DataFrame |
 |---|---|---|
 | OneHotConstraint | {attr}`~ommx.Instance.removed_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
 | Sos1Constraint | {attr}`~ommx.Instance.removed_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
@@ -192,7 +194,7 @@ Each entry ({class}`~ommx.RemovedOneHotConstraint` / {class}`~ommx.RemovedSos1Co
 
 ```{code-cell} ipython3
 removed = instance2.removed_constraints
-assert set(removed.keys()) == {1}
+assert set(removed.keys()) == {OneHotConstraintID(1)}
 ```
 
 In addition, each generated regular constraint retains a reference back to its origin via the {attr}`Constraint.provenance <ommx.Constraint.provenance>` property. Each {class}`~ommx.Provenance` entry records the origin kind ({attr}`~ommx.Provenance.kind`, a {class}`~ommx.ProvenanceKind`) and the original ID ({attr}`~ommx.Provenance.original_id`), letting you trace which regular constraint was generated from which specific special constraint.
@@ -204,7 +206,7 @@ from ommx import ProvenanceKind
 for cid, c in instance2.constraints.items():
     for p in c.provenance:
         assert p.kind == ProvenanceKind.OneHotConstraint
-        assert p.original_id == 1
+        assert p.original_id == OneHotConstraintID(1)
 ```
 
 ## Summary

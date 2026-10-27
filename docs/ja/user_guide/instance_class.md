@@ -57,7 +57,7 @@ target = InstanceClass([
 OneHotは「ちょうど一つを選ぶ」という条件です。数学的には線形等式でも表せますが、OneHotという専用の特殊制約として保持している間は、通常の等式だけを許すこのclassには入りません。membershipを調べてもOneHotは変換されません。
 
 ```{code-cell} ipython3
-from ommx import Instance, OneHotConstraint
+from ommx import Instance, OneHotConstraint, OneHotConstraintID
 
 instance = Instance.maximize()
 xs = [instance.new_binary("x", subscripts=[i]) for i in range(2)]
@@ -68,7 +68,7 @@ assert not target.contains(instance)
 
 report = target.check_membership(instance)
 assert not report.is_member
-assert instance.constraints
+assert set(instance.constraints) == {OneHotConstraintID(0)}
 print(report)
 ```
 
