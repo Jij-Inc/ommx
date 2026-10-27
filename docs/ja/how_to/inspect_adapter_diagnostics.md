@@ -1,34 +1,68 @@
-# Adapter 固有 diagnostics
+# Adapterの終了理由・bound・gapを調べる
 
 Adapter diagnostics は、portable な {class}`~ommx.Solution` には入らない
 solver 側の情報を残すための仕組みです。decode 済みの OMMX 結果を見るときは
 {class}`~ommx.Solution` を使います。backend solver が何を観測し、何を報告し、
 どこまで証明したかを確認したい場合に diagnostics を使います。
 
-## PySCIPOpt で diagnostics を記録する
+このページは、求解結果の目的値や実行可能性を読めるユーザー向けです。
+[インストール手順](../getting_started/install.md)のSDKとPySCIPOpt Adapterを用意してください。
+最初の例は小さなモデルをこの場で作るため、データのダウンロードやExperimentは不要です。
+
+## 小さな問題で終了理由を読む
 
 PySCIPOpt Adapter は、`solve()` に {class}`~ommx.adapter.DiagnosticCollector` を渡すと
 SCIP の progress と termination 情報を記録します。通常は
 {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` を通して読みます。
 
 ```python
-from ommx import adapter, dataset
+from ommx import Instance, adapter
 from ommx_pyscipopt_adapter import (
     OMMXPySCIPOptAdapter as Adapter,
     SCIPDiagnosticsAnalyzer,
 )
 
-instance = dataset.miplib2017("air05")
+instance = Instance.maximize()
+x = instance.new_binary("x")
+y = instance.new_binary("y")
+instance.objective = 3 * x + 2 * y
+instance.add_constraint(x + y <= 1)
 
 diag = adapter.DiagnosticCollector()
 solution = Adapter.solve(instance, diagnostics=diag)
 
 analyze = SCIPDiagnosticsAnalyzer(diag.diagnostics)
 
+print(solution.objective, solution.feasible)
+print(analyze.termination_result)
+```
+
+`Solution`はOMMXの問題に対する候補の評価です。`termination_result`はbackendが
+どのように終了したかの報告で、同じ情報ではありません。時間制限で終了しても候補は
+実行可能な場合があり、候補が実行可能でも最適性が確定したとは限りません。
+
+boundやgapはbackendが実際に解いた定式化に関する値です。変換で目的関数の符号や
+スケール、ペナルティが変わる場合、OMMXの報告目的値とそのまま比較しないでください。
+比較の軸は[Adapterの比較](compare_adapters.md)、対応関係の判断は
+[変換の保証](../user_guide/transformation_guarantees.md)を参照してください。
+
+## 進捗を図にする
+
+小さな問題はすぐ終了するため、進捗の途中点がほとんどないことがあります。
+次は任意の発展例です。公開MIPLIBデータを取得するネットワーク接続と、図を描く
+matplotlibが必要です。記録の仕組みは先ほどと同じです。
+
+```python
+from ommx import dataset
+
+instance = dataset.miplib2017("air05")
+diag = adapter.DiagnosticCollector()
+solution = Adapter.solve(instance, diagnostics=diag)
+analyze = SCIPDiagnosticsAnalyzer(diag.diagnostics)
 analyze.progress_history_df[["primal_bound", "dual_bound"]].loc[5:].plot()
 ```
 
-```{figure} ./assets/adapter_diagnostics_bounds.png
+```{figure} ../user_guide/assets/adapter_diagnostics_bounds.png
 :alt: SCIP の primal bound と dual bound の推移
 
 {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` で読み出した
@@ -77,6 +111,9 @@ callback 由来の progress snapshot は callback 時点の観測値です。SCI
 {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` を参照してください。
 
 ## HiGHS で diagnostics を記録する
+
+HiGHSを使う場合だけ[HiGHS Adapterを追加](../getting_started/install.md#highs-adapter)します。
+以下は最初の小さなモデルの`instance`に対しても実行できます。
 
 HiGHS Adapter は、`solve()` に {class}`~ommx.adapter.DiagnosticCollector` を渡すと
 MIP progress と termination 情報を記録します。通常は
@@ -130,7 +167,10 @@ except UnboundedDetected:
     print(analysis.termination_result)
 ```
 
-## Experiment 連携
+## 任意：Experimentに記録する
+
+ここまでの調査にはExperimentは必要ありません。記録も残したい場合は
+[Experiment Tutorial](../tutorial/experiment_management)で記録先の作り方を確認してください。
 
 {py:meth}`~ommx.experiment.Run.log_solve` または
 {py:meth}`~ommx.experiment.Run.log_sample` を使う場合、ユーザー側から `diagnostics` keyword を

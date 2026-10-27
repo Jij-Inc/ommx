@@ -159,8 +159,8 @@ user_guide/instance_class
 user_guide/preparation_policy
 user_guide/transformation_guarantees
 user_guide/supported_ommx_adapters
-user_guide/adapter_diagnostics
-user_guide/adapter_initial_state
+how_to/inspect_adapter_diagnostics
+how_to/use_initial_state
 ```
 
 ```{toctree}
@@ -170,8 +170,8 @@ user_guide/adapter_initial_state
 
 user_guide/experiment
 user_guide/artifact
-user_guide/tracing
-user_guide/cli
+how_to/trace_execution
+how_to/manage_local_registry
 user_guide/agent_skills
 ```
 
