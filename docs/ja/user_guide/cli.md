@@ -63,5 +63,71 @@ Python 経由で起動した場合も、`ommx --version` は Rust CLI のバー�
 
 同梱プラグインや個別のスキルを取得して導入する手順は、
 [OMMX のエージェントプラグインとスキルを取得・導入する](agent_skills.md) を
-参照してください。ref の削除・復元・ガベージコレクションは
-{ref}`Local Registry の cleanup <experiment-cleanup-workflow>` を参照してください。
+参照してください。
+
+(experiment-cleanup-workflow)=
+## 保存した記録を削除・復元し、保存領域を整理する
+
+Local Registry はOMMXのローカル保存領域です。ArtifactやExperimentには、
+`example.com/team/experiment:obsolete`のような名前（ref）を付けられます。
+**名前を削除する操作と、データ本体を回収して容量を空ける操作は別です。**
+
+以下の`./local-registry`は、実際に使っている保存領域のパスに置き換えてください。
+各コマンドの`--root`で対象を明示します。省略すると`OMMX_LOCAL_REGISTRY_ROOT`、
+それも未設定ならOS既定の保存先を使います。
+
+### まず対象を確認する
+
+```bash
+uv run ommx prune-anonymous --root ./local-registry --experiments --older-than 7d
+uv run ommx gc --root ./local-registry
+```
+
+どちらも既定では報告のみで、名前やデータを削除しません。
+`prune-anonymous`は名前を自動生成した匿名Artifactを対象にし、`--experiments`で
+匿名Experimentも含めます。`--older-than 7d`は7日以上経過した名前に絞る指定です。
+`gc`（ガベージコレクション）は、どの名前からも参照されなくなったデータ本体の
+回収候補を表示します。
+
+### 一つの名前を削除・復元する
+
+名前を確認し、例示名を実際の削除対象に置き換えてから実行します。
+**`rm`は直ちに名前を削除します。** データ本体はこの操作では削除しません。
+
+```bash
+uv run ommx rm example.com/team/experiment:obsolete --root ./local-registry
+```
+
+出力の`Rollback`行には、削除した名前と、その内容を識別するManifest digestを含む
+`ommx restore-ref ...`コマンドが表示されます。復元するときは、そのコマンドの先頭に
+`uv run`を付けて実行してください。`--root`も出力に含まれるため、同じ保存先へ復元できます。
+同じ名前が既に別の内容を指している場合は、上書きせずエラーになります。
+
+復元には、削除時のデータ本体が残っている必要があります。
+必要な復元は、次のデータ回収より先に行ってください。
+
+### 確認した対象を整理する
+
+匿名の名前を一括削除する場合は、先ほどの報告を確認してから`--delete`を付けます。
+削除した名前ごとに復元用コマンドが表示されます。
+
+```bash
+uv run ommx prune-anonymous --root ./local-registry --experiments --older-than 7d --delete
+```
+
+データ本体の回収は、別途`gc --delete`で行います。
+
+```bash
+uv run ommx gc --root ./local-registry --delete
+```
+
+残る名前やExperimentのcheckpointから参照されているデータは回収しません。
+参照されていないデータのうち、データ本体の最終更新から既定で24時間の
+猶予期間（grace period）が経過したものを回収します。名前を削除してから24時間の
+復元を保証するものではなく、古いデータは削除直後のGCでも回収される可能性があります。
+**回収後は復元できない場合があります。** 書き込み中のデータを保護するため、
+通常は猶予期間を短くせず、`uv run ommx gc --help`で条件を確認してください。
+
+Pythonから同じ操作を行う場合は、{py:func}`~ommx.artifact.remove_image`、
+{py:func}`~ommx.artifact.restore_image`、{py:func}`~ommx.artifact.prune_anonymous`、
+{py:func}`~ommx.artifact.gc`を使えます。引数や戻り値の詳細はAPI Referenceを参照してください。

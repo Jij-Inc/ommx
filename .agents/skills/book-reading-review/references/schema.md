@@ -17,6 +17,32 @@ revision field to make old annotations look current. Planned owners are not
 already-available explanations. The ledger's open review notes are not waived
 by a successful contract check.
 
+## Current-revision review record
+
+Keep scoped review evidence in the existing review response or work notes,
+separate from the historical baseline and generated analyzer output. Use any
+concise format that records:
+
+- **Source:** reviewed commit; for uncommitted work, identify the base commit
+  and changed files/diff rather than claiming that the base contains the edits.
+- **Reader route:** goal, initial knowledge, entry, visited pages/sections, and
+  useful stopping point. Distinguish direct entry from a prerequisite route.
+- **Passages:** file plus heading/paragraph or Notebook cell ID/index, locating
+  each relevant introduction and first understanding-dependent use. Explain
+  briefly why the introduction teaches what the use needs.
+- **Reconciliation:** affected concept/page/route IDs and mismatches or missing
+  contracts. Report analyzer results separately from body review.
+- **Moves:** source and actual destination passage; confirm that the entry
+  reaches the needed explanation/procedure, not merely another reference.
+- **Outcome:** checked scope, unresolved findings, and unreviewed routes. Do
+  not extrapolate a scoped success to the rest of the Book.
+
+Do not replace `baseline.source_revision`, silently certify proposed contracts,
+or commit generated PASS output as review evidence. When prose, introduction
+order, or navigation changes after review, revisit only the affected evidence.
+A history-only rebase of unchanged content does not require re-executing the
+Book. Recording evidence does not itself authorize publishing a PR comment.
+
 ## Schema version 1
 
 Required top-level fields:

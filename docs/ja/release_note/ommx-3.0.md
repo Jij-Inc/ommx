@@ -120,7 +120,7 @@ QPLIB の二次目的関数と二次制約を、元の問題どおりに読み�
 {meth}`~ommx.Instance.load_qplib` で作成して保存したモデルは、元の `.qplib`
 ファイルから読み込み直してください。`ommx.dataset.qplib` は OMMX 2.8.0 向けに
 公開した修正済みの配布を読み込むようになりました。旧配布がキャッシュされていても、
-修正済みの配布を使います。詳細は [QPLIB チュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
+修正済みの配布を使います。詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
 
 ### 🛠 MPS・MIPLIB 読み込み時にバイナリ変数を保持 ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 
@@ -133,7 +133,7 @@ MPS ファイルには、変数を整数として指定し、上下限を省略�
 影響を受ける保存済みモデルは、元の MPS ファイルから読み込み直してください。
 `ommx.dataset.miplib2017` は OMMX 2.7.0 向けに公開した修正済みの MIPLIB 配布を
 読み込むようになりました。旧配布がキャッシュされていても、修正済みの配布を使います。
-詳細は [MIPLIB チュートリアル](../tutorial/download_miplib_instance.md)を参照してください。
+詳細は [既存の問題を読み込むHow-to](../how_to/load_existing_instance.md)を参照してください。
 
 ### 🛠 変数の上下限と制約で許容誤差の判定を統一 ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
@@ -276,7 +276,7 @@ solution = instance.evaluate(state, atol=1e-8)
 解ファイルで省略された変数には 0 を設定します。記載された目的関数値 `objvar` は
 変数として扱わず、モデルの評価によって目的関数値を計算します。
 `ommx.qplib.load_solution` も利用できます。
-対応するファイルは [QPLIB チュートリアル](../tutorial/download_qplib_instance.md)を参照してください。
+対応するファイルは [既存の問題と候補解を評価するTutorial](../tutorial/evaluate_existing_candidate)を参照してください。
 
 ### 🆕 Rust 拡張からのデータ受け渡しに共通の例外を導入 ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
@@ -849,7 +849,7 @@ assert isinstance(output, SampleSet)
 
 `Run.log_sample(..., store_diagnostics=True)` では `Run.log_solve` と同じ adapter
 diagnostics channel を利用できます。SolveとSamplingの記録モデルは
-[実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
+[ExperimentのGuide](../user_guide/experiment.md) を参照してください。
 
 ### 🆕 Attachment の透過圧縮と streaming write ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
@@ -1159,7 +1159,7 @@ Artifact と Experiment の solve payload は、これらの top-level root を 
 
 {meth}`~ommx.experiment.Run.open_solve` で、Adapter API ではカバーしていない高度な solver 機能を使うための手動 Solve scope を開けるようになりました。scope 内で `solve.solver_input` から backend solver model を受け取って直接操作し、backend optimizer を実行した後、`solve.decode(...)` を呼ぶと decode された {class}`~ommx.Solution` が Experiment の Solve output として記録されます。手動で設定した adapter option は `solve.log_adapter_option(...)` で記録でき、`store_diagnostics=True` を指定すると `solve.diagnostics` に記録した diagnostics が scope 終了まで収集されます。scope 終了後は {attr}`~ommx.experiment.OpenSolve.terminal_state` から最終 outcome と trace / diagnostics の finalization state を確認できます。
 
-workflow 例は [実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
+手動Solveの操作と利用条件は {meth}`~ommx.experiment.Run.open_solve` を参照してください。
 
 ## 3.0.0 Alpha 6
 
@@ -1340,7 +1340,7 @@ before / after コード例と移行チェックリストは {ref}`Python SDK v2
 
 実験の入力データ、実行条件、Solver/Sampler の結果を 1 つの OMMX Artifact として記録する `ommx.experiment` モジュールを追加しました。{class}`~ommx.experiment.Experiment`、{class}`~ommx.experiment.Run`、{class}`~ommx.experiment.Solve` を使って、Run ごとの比較パラメータ、attachment、solve 入出力を Local Registry に保存できます。
 
-基本的な使い方、Experiment の共有、保存済み Experiment の読み込み、fork による派生実験の作り方は [実験管理チュートリアル](../tutorial/experiment_management.md) を参照してください。
+基本的な記録と保存済み Experiment の読み込みは [実験管理チュートリアル](../tutorial/experiment_management)、fork による派生実験の作り方は [継続・復帰のHow-to](../how_to/continue_experiment.md) を参照してください。
 
 ### 🆕 `Run.log_solve` で solve 入出力と adapter options を記録 ([#902](https://github.com/Jij-Inc/ommx/pull/902))
 
