@@ -8,6 +8,7 @@ mod bound;
 #[cfg(feature = "cli")]
 mod cli;
 mod constraint;
+mod constraint_collection;
 mod constraint_id;
 mod constraint_kind;
 #[macro_use]
@@ -202,6 +203,8 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(list_experiments, m)?)?;
     m.add_function(wrap_pyfunction!(list_experiment_checkpoints, m)?)?;
 
+    constraint_collection::register(m)?;
+
     // OMMX Message
     m.add_class::<Linear>()?;
     m.add_class::<Quadratic>()?;
@@ -353,6 +356,10 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "FixedPenaltyPreparation",
     "PreparationPolicy",
     // Constraint and named function
+    "ConstraintCollection",
+    "RemovedConstraintCollection",
+    "EvaluatedConstraintCollection",
+    "SampledConstraintCollection",
     "ConstraintID",
     "IndicatorConstraintID",
     "OneHotConstraintID",

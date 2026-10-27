@@ -212,8 +212,16 @@ def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> 
     ):
         instance.restore_indicator_constraint(0)
 
-    assert instance.indicator_constraints == {}
-    assert set(instance.removed_indicator_constraints) == {IndicatorConstraintID(0)}
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+    )
+    assert set(
+        (
+            cid
+            for cid in instance.removed_constraints
+            if isinstance(cid, IndicatorConstraintID)
+        )
+    ) == {IndicatorConstraintID(0)}
 
 
 @pytest.mark.parametrize("value", [float("nan"), 0.5])

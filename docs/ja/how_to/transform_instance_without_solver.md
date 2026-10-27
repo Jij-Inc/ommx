@@ -91,10 +91,10 @@ assert target.contains(instance)
 
 ```{code-cell} ipython3
 assert len(instance.constraints) == 1
-assert not instance.one_hot_constraints
-assert len(instance.removed_one_hot_constraints) == 1
+assert not instance.constraints
+assert len(instance.removed_constraints) == 1
 
-instance.constraints_df()
+instance.constraints_df(kind="regular")
 ```
 
 removedは「もう評価しない」という意味ではありません。現在課す通常制約とは別に、元のOneHotとしても候補を検査できます。詳しくは[変換後の問題とRemoved constraints](../user_guide/removed_constraints.md)を参照してください。

@@ -505,28 +505,13 @@ impl ParametricInstance {
         ))
     }
 
-    /// Dict of all active constraints in the instance keyed by their IDs.
-    ///
-    /// Each value is an {class}`~ommx.AttachedConstraint`: a write-through
-    /// handle whose getters read from this parametric instance's SoA store
-    /// and whose context setters write back through to it. Use
-    /// {meth}`~ommx.AttachedConstraint.detach` to materialize a
-    /// {class}`~ommx.Constraint` snapshot if you need an independent copy.
+    /// Live mapping of all active constraint families, keyed by typed IDs.
+    /// The view retains this owner and fetches each constraint on demand.
     #[getter]
-    pub fn constraints(
-        slf: Bound<'_, Self>,
-    ) -> BTreeMap<crate::ConstraintID, crate::AttachedConstraint> {
-        let py = slf.py();
-        let ids: Vec<ConstraintID> = slf.borrow().inner.constraints().keys().copied().collect();
-        let py_parametric: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.to_owned().into(),
-                    crate::AttachedConstraint::from_parametric(py_parametric.clone_ref(py), id),
-                )
-            })
-            .collect()
+    pub fn constraints(slf: Bound<'_, Self>) -> crate::constraint_collection::ConstraintCollection {
+        crate::constraint_collection::ConstraintCollection::new(crate::ConstraintHost::Parametric(
+            slf.unbind(),
+        ))
     }
 
     /// Add a regular constraint to this parametric instance.
@@ -552,52 +537,15 @@ impl ParametricInstance {
         Ok(crate::AttachedConstraint::from_parametric(slf.unbind(), id))
     }
 
+    /// Live mapping of all removed constraint families, keyed by typed IDs.
+    /// The view retains this owner and fetches each constraint on demand.
     #[getter]
-    pub fn removed_constraints(&self) -> BTreeMap<crate::ConstraintID, RemovedConstraint> {
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .removed_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.to_owned().into(),
-                    RemovedConstraint::from_parts(c.clone(), context.collect_for(*id), r.clone()),
-                )
-            })
-            .collect()
-    }
-
-    /// Dict of all active indicator constraints in the parametric instance
-    /// keyed by their IDs.
-    ///
-    /// Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
-    /// write-through handle whose getters read from this parametric
-    /// instance's SoA store and whose context setters write back through
-    /// to it.
-    #[getter]
-    pub fn indicator_constraints(
+    pub fn removed_constraints(
         slf: Bound<'_, Self>,
-    ) -> BTreeMap<crate::IndicatorConstraintID, crate::AttachedIndicatorConstraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::IndicatorConstraintID> = slf
-            .borrow()
-            .inner
-            .indicator_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_parametric: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.to_owned().into(),
-                    crate::AttachedIndicatorConstraint::from_parametric(
-                        py_parametric.clone_ref(py),
-                        id,
-                    ),
-                )
-            })
-            .collect()
+    ) -> crate::constraint_collection::RemovedConstraintCollection {
+        crate::constraint_collection::RemovedConstraintCollection::new(
+            crate::ConstraintHost::Parametric(slf.unbind()),
+        )
     }
 
     /// Add an indicator constraint to this parametric instance.
@@ -626,58 +574,6 @@ impl ParametricInstance {
         ))
     }
 
-    /// Dict of all removed indicator constraints in the parametric
-    /// instance keyed by their IDs.
-    #[getter]
-    pub fn removed_indicator_constraints(
-        &self,
-    ) -> BTreeMap<crate::IndicatorConstraintID, crate::RemovedIndicatorConstraint> {
-        let context = self.inner.indicator_constraint_context();
-        self.inner
-            .removed_indicator_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.to_owned().into(),
-                    crate::RemovedIndicatorConstraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
-    }
-
-    /// Dict of all active one-hot constraints in the parametric instance
-    /// keyed by their IDs. Each value is an
-    /// {class}`~ommx.AttachedOneHotConstraint`.
-    #[getter]
-    pub fn one_hot_constraints(
-        slf: Bound<'_, Self>,
-    ) -> BTreeMap<crate::OneHotConstraintID, crate::AttachedOneHotConstraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::OneHotConstraintID> = slf
-            .borrow()
-            .inner
-            .one_hot_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_parametric: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.to_owned().into(),
-                    crate::AttachedOneHotConstraint::from_parametric(
-                        py_parametric.clone_ref(py),
-                        id,
-                    ),
-                )
-            })
-            .collect()
-    }
-
     /// Add a one-hot constraint to this parametric instance.
     pub fn add_one_hot_constraint(
         slf: Bound<'_, Self>,
@@ -694,57 +590,6 @@ impl ParametricInstance {
         ))
     }
 
-    /// Dict of all removed one-hot constraints in the parametric instance
-    /// keyed by their IDs. The removed map can become non-empty when an
-    /// `Instance` whose one-hot constraints have been converted (via
-    /// `convert_all_one_hots_to_constraints`) is round-tripped back to a
-    /// `ParametricInstance` via `From<Instance>`.
-    #[getter]
-    pub fn removed_one_hot_constraints(
-        &self,
-    ) -> BTreeMap<crate::OneHotConstraintID, crate::RemovedOneHotConstraint> {
-        let context = self.inner.one_hot_constraint_context();
-        self.inner
-            .removed_one_hot_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.to_owned().into(),
-                    crate::RemovedOneHotConstraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
-    }
-
-    /// Dict of all active SOS1 constraints in the parametric instance keyed
-    /// by their IDs. Each value is an {class}`~ommx.AttachedSos1Constraint`.
-    #[getter]
-    pub fn sos1_constraints(
-        slf: Bound<'_, Self>,
-    ) -> BTreeMap<crate::Sos1ConstraintID, crate::AttachedSos1Constraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::Sos1ConstraintID> = slf
-            .borrow()
-            .inner
-            .sos1_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_parametric: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.to_owned().into(),
-                    crate::AttachedSos1Constraint::from_parametric(py_parametric.clone_ref(py), id),
-                )
-            })
-            .collect()
-    }
-
     /// Add a SOS1 constraint to this parametric instance.
     pub fn add_sos1_constraint(
         slf: Bound<'_, Self>,
@@ -758,30 +603,6 @@ impl ParametricInstance {
             slf.unbind(),
             id,
         ))
-    }
-
-    /// Dict of all removed SOS1 constraints in the parametric instance
-    /// keyed by their IDs. See {meth}`removed_one_hot_constraints` for the
-    /// round-trip rationale.
-    #[getter]
-    pub fn removed_sos1_constraints(
-        &self,
-    ) -> BTreeMap<crate::Sos1ConstraintID, crate::RemovedSos1Constraint> {
-        let context = self.inner.sos1_constraint_context();
-        self.inner
-            .removed_sos1_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.to_owned().into(),
-                    crate::RemovedSos1Constraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
     }
 
     #[getter]
@@ -952,7 +773,7 @@ impl ParametricInstance {
     /// DataFrame of constraints, dispatched on `kind=`. See
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` / `removed=` semantics.
-    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None, removed = false))]
+    #[pyo3(signature = (*, kind, include = None, removed = false))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,

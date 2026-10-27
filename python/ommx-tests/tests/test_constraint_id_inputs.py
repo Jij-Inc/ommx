@@ -11,6 +11,7 @@ from ommx import (
     AttachedOneHotConstraint,
     AttachedSos1Constraint,
     Constraint,
+    ConstraintCollection,
     ConstraintID,
     DecisionVariable,
     Equality,
@@ -58,7 +59,11 @@ def test_integer_and_typed_keys_promote_to_the_same_family(host):
         kwargs["parameters"] = []
     instance = host.from_components(**kwargs)
     for name, id_type in FAMILIES:
-        rows = getattr(instance, name)
+        rows = {
+            key: instance.constraints[key]
+            for key in instance.constraints
+            if isinstance(key, id_type)
+        }
         assert set(rows) == {id_type(7), id_type(42)}
         assert all(type(id_) is id_type for id_ in rows)
         assert rows[id_type(7)].constraint_id == id_type(7)
@@ -103,7 +108,9 @@ def test_regular_integer_lookup_mutation_and_solution_queries():
     assert set(instance.removed_constraints) == {ConstraintID(7)}
     assert instance.get_removed_constraint_by_id(7).removed_reason == "manual"
     instance.restore_constraint(7)
-    assert set(instance.constraints) == {ConstraintID(7)}
+    assert {key for key in instance.constraints if isinstance(key, ConstraintID)} == {
+        ConstraintID(7)
+    }
     instance.tighten_bounds_simultaneously_once_using_constraints({7, ConstraintID(7)})
     solution = instance.evaluate({0: 1, 1: 0})
     assert solution.get_constraint_value(7) == 0
@@ -111,13 +118,15 @@ def test_regular_integer_lookup_mutation_and_solution_queries():
     assert solution.get_dual_variable(ConstraintID(7)) == 3
     solution.set_dual_variable(ConstraintID(7), 5)
     assert solution.get_dual_variable(7) == 5
-    assert set(solution.get_constraints(kind="regular")) == {ConstraintID(7)}
+    assert {key for key in solution.constraints if isinstance(key, ConstraintID)} == {
+        ConstraintID(7)
+    }
 
 
 def test_special_integer_mutations_and_typed_transformation_results():
     instance = Instance.from_components(**components())
     instance.relax_indicator_constraint(7, "manual")
-    assert set(instance.removed_indicator_constraints) == {IndicatorConstraintID(7)}
+    assert set(instance.removed_constraints) == {IndicatorConstraintID(7)}
     instance.restore_indicator_constraint(7)
     regular_id = instance.convert_one_hot_to_constraint(7)
     assert_type(regular_id, ConstraintID)
@@ -199,17 +208,13 @@ def test_static_input_unions_do_not_widen_output_types():
         one_hot_constraints={7: OneHotConstraint(variables=[x])},
         sos1_constraints={7: Sos1Constraint(variables=[x])},
     )
-    assert_type(instance.constraints, dict[ConstraintID, AttachedConstraint])
+    assert_type(instance.constraints, ConstraintCollection)
+    assert_type(instance.constraints[ConstraintID(7)], AttachedConstraint)
     assert_type(
-        instance.indicator_constraints,
-        dict[IndicatorConstraintID, AttachedIndicatorConstraint],
+        instance.constraints[IndicatorConstraintID(7)], AttachedIndicatorConstraint
     )
-    assert_type(
-        instance.one_hot_constraints, dict[OneHotConstraintID, AttachedOneHotConstraint]
-    )
-    assert_type(
-        instance.sos1_constraints, dict[Sos1ConstraintID, AttachedSos1Constraint]
-    )
+    assert_type(instance.constraints[OneHotConstraintID(7)], AttachedOneHotConstraint)
+    assert_type(instance.constraints[Sos1ConstraintID(7)], AttachedSos1Constraint)
 
 
 def test_homogeneous_mapping_variables_are_valid_inputs():
@@ -224,7 +229,7 @@ def test_homogeneous_mapping_variables_are_valid_inputs():
             decision_variables=[x],
             constraints=rows,
         )
-        assert_type(instance.constraints, dict[ConstraintID, AttachedConstraint])
+        assert_type(instance.constraints, ConstraintCollection)
         assert instance.get_constraint_by_id(7).equality == (x == 1).equality
 
 

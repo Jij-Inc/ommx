@@ -217,7 +217,7 @@ impl RemovedIndicatorConstraint {
 /// `AttachedIndicatorConstraint` is returned by
 /// `Instance.add_indicator_constraint` /
 /// `ParametricInstance.add_indicator_constraint` and by their
-/// `indicator_constraints[id]` getters. Reads pull live data from the parent
+/// `constraints[IndicatorConstraintID(...)]` lookups. Reads pull live data from the parent
 /// host and context setters write through to its SoA context store.
 #[gen_stub_pyclass]
 #[pyclass]

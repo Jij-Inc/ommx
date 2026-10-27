@@ -143,10 +143,10 @@ Binary・Integer・Continuousの既定値はbound内で0に最も近い値、Sem
 通常制約は $f(x)=0$ または $f(x)\leq 0$ として保持されます。例えば $f(x)\geq 0$ は $-f(x)\leq 0$ に書き換えられます。{attr}`~ommx.Constraint.equality` が、等式か不等式かを示します。
 
 ```{code-cell} ipython3
-instance.constraints_df()
+instance.constraints_df(kind="regular")
 ```
 
-{attr}`~ommx.Instance.constraints` は制約IDをキーとする辞書です。制約にも変数と同様のメタデータを付けられます。制約IDの空間は変数IDとは独立し、特殊制約の各種類もそれぞれ独立した制約IDを持ちます。
+{attr}`~ommx.Instance.constraints` は、全種類の有効な制約を取得するコレクションです。通常制約なら `instance.constraints[ConstraintID(0)]` のように型付きIDでアクセスします。種類ごとにIDの空間が独立しているため、裸の整数は受け付けません。返されるAttachedハンドルを通じて、所有元の制約を参照・更新できます。コレクションを取得した時点では制約を収集せず、アクセス時に該当する制約を取得します。removedな制約は `instance.removed_constraints` で取得します。
 
 (simultaneous-bound-tightening)=
 ## モデルを変換する場合

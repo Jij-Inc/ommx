@@ -94,41 +94,46 @@ infeasible.constraints_df(kind="regular")
 
 ## pandasを使わずに制約を取得する
 
-`Solution.get_constraints(kind=...)` と `SampleSet.get_constraints(kind=...)`
-は、結果のスナップショットを辞書として返します。これらの結果オブジェクトでは、
-`get_constraints` と `constraints_df` のどちらもキーワード引数 `kind` が必須です。
+型付きIDを使って、所有元の現在の状態を参照するコレクションから制約を取得します。
 
 ```{code-cell} ipython3
 from ommx import ConstraintID
 
-rows = solution.get_constraints(kind="regular")
+rows = solution.constraints
 rows[ConstraintID(0)].violation()
 ```
 
-辞書のキーは制約の種類を保持します。
+`Instance`・`ParametricInstance`・`Solution`・`SampleSet` の `.constraints` は、
+4種類すべての制約を扱います。プロパティは所有元への参照だけを保持し、制約を収集しません。
+添字アクセス時に、指定された制約を所有元の現在の状態から取得します。
+整数キーは種類を判断できないため `TypeError`、存在しない型付きIDは `KeyError` になります。
 
-| `kind` | IDの型 | Solutionの値 | SampleSetの値 |
+| DataFrameの `kind` | IDの型 | Solutionの値 | SampleSetの値 |
 | --- | --- | --- | --- |
 | `"regular"` | `ConstraintID` | `EvaluatedConstraint` | `SampledConstraint` |
 | `"indicator"` | `IndicatorConstraintID` | `EvaluatedIndicatorConstraint` | `SampledIndicatorConstraint` |
 | `"one_hot"` | `OneHotConstraintID` | `EvaluatedOneHotConstraint` | `SampledOneHotConstraint` |
 | `"sos1"` | `Sos1ConstraintID` | `EvaluatedSos1Constraint` | `SampledSos1Constraint` |
 
-結果には有効な制約と保持されている削除済み制約の両方が含まれます。各行からラベル、
-`provenance`、`removed_reason`、`removed_reason_parameters` を取得できます。
-SampleSetの行は、サンプルIDをキーにした `violations` と `feasible(atol=...)` を
-提供します。返された辞書やスナップショットを変更しても、元の結果は変わりません。
+モデルの `.constraints` は有効な制約を含み、`Attached*` ハンドルを返します。
+そのコンテキストのsetterは所有元を更新します。`.removed_constraints` は削除済みの全種類を含み、
+スナップショットを返します。結果のコレクションは有効な制約と保持された削除済み制約の両方を含みます。
+結果への各アクセスは、ラベル・provenance・削除理由・評価情報を含む独立したスナップショットを返します。
+その変更は結果へ反映されませんが、同じIDへの次のアクセスは所有元の現在の状態を取得します。
+結果の更新には `Solution.set_dual_variable` などの所有元のメソッドを使います。
 
-DataFrameのインデックスや付随するメタデータ表も同じ型付きIDを使います。
-`ConstraintID(1)` と `Sos1ConstraintID(1)` は別のキーであり、どちらも `1` とは
-等しくありません。種類が決まっている入力では、整数または対応する型のIDを受け付けます。
-`constraints={1: constraint}` のキーは `ConstraintID(1)` に昇格し、
-`instance.get_constraint_by_id(1)` は通常制約を取得します。別種類のIDは、番号が同じでも
-拒否します。返されるIDと辞書キーは常に型付きです。通常のPython辞書へのアクセスには
-型付きのキーを使うため、Attached制約の `constraint_id` を保持するか、対応するIDを
-構築してください。同じ入力辞書に `1` と `ConstraintID(1)` の両方を指定すると、同じ通常制約を
-指すことになるため `ValueError` になります。
-`solution.constraint_violation(id)` は整数だけでは種類が決まらない
-ため、型付きIDを要求します。
-IDには `int()` や整数インデックスへの変換機能はありません。
-決定変数IDとサンプルIDは引き続き整数です。
+コレクションへの代入・削除はできません。`keys()`・`values()`・`items()` は所有元の変更を反映するビューです。
+イテレーターは開始時の型付きIDを、種類の順（通常・Indicator・OneHot・SOS1）、次に番号順で保持し、
+値は列挙された時点で取得します。列挙中に削除されたキーの値を取得すると `KeyError` になります。
+通常の辞書として収集するには `dict(rows)` を使います。
+
+`constraints_df(*, kind=...)` は1種類をDataFrameとして収集し、すべての所有元で `kind` が必須です。
+型付きインデックスは、その種類のコレクションのキーと一致します。モデルでは有効な制約を選び、
+`removed=True` で `.constraints` と `.removed_constraints` の両方を含めます。
+結果では保持された削除済み制約も常に含めます。SampleSetの行の `violations` と
+`feasible(atol=...)` は、サンプルIDをキーとする辞書を返します。
+
+種類が決まる入力、例えば `constraints={1: constraint}` や `instance.get_constraint_by_id(1)` は、
+整数を自動昇格し、別種類のIDを拒否します。同じ入力辞書に `1` と `ConstraintID(1)` がある場合は、
+同じIDになるため `ValueError` です。コレクション・`constraint_violation(id)`・DataFrameのインデックスには
+型付きIDを使います。IDは `int()` や整数インデックスへ変換できません。変数IDとサンプルIDは整数のままです。

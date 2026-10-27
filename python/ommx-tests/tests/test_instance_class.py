@@ -392,7 +392,9 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
     assert not prepared_input_class.contains(instance)
     assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
     assert instance.lower_special_constraints(set()) == set()
-    assert set(instance.one_hot_constraints) == {OneHotConstraintID(30)}
+    assert set(
+        (cid for cid in instance.constraints if isinstance(cid, OneHotConstraintID))
+    ) == {OneHotConstraintID(30)}
 
     lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
     assert lowered == {SpecialConstraintKind.OneHot}

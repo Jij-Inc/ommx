@@ -70,9 +70,9 @@ assert not solution.feasible
 | 制約の種類 | Active | Removed |
 |---|---|---|
 | 通常制約 | {attr}`~ommx.Instance.constraints` | {attr}`~ommx.Instance.removed_constraints` |
-| Indicator | {attr}`~ommx.Instance.indicator_constraints` | {attr}`~ommx.Instance.removed_indicator_constraints` |
-| OneHot | {attr}`~ommx.Instance.one_hot_constraints` | {attr}`~ommx.Instance.removed_one_hot_constraints` |
-| SOS1 | {attr}`~ommx.Instance.sos1_constraints` | {attr}`~ommx.Instance.removed_sos1_constraints` |
+| Indicator | {attr}`~ommx.Instance.constraints` | {attr}`~ommx.Instance.removed_constraints` |
+| OneHot | {attr}`~ommx.Instance.constraints` | {attr}`~ommx.Instance.removed_constraints` |
+| SOS1 | {attr}`~ommx.Instance.constraints` | {attr}`~ommx.Instance.removed_constraints` |
 
 例えば {meth}`~ommx.Instance.convert_one_hot_to_constraint` はOneHotを通常の等式制約に置き換え、元のOneHotをremovedとして保持します。生成された制約には、変換元を示すprovenanceが付きます。生成物や削除理由の正確な形式は各変換メソッドのAPI Referenceを参照してください。
 
@@ -107,10 +107,10 @@ Penalty法でも、ソルバーが最小化するpenalty込みの値と、Soluti
 
 ## 何が外されたか調べる
 
-Instanceでは、`constraints_df(removed=True)` でactiveとremovedの両方を表示できます。`removed_reason` は、制約を外した操作や、呼び出し側が付けた理由を表します。
+Instanceでは、`constraints_df(kind="regular", removed=True)` でactiveとremovedの両方を表示できます。`removed_reason` は、制約を外した操作や、呼び出し側が付けた理由を表します。
 
 ```{code-cell} ipython3
-instance.constraints_df(removed=True)
+instance.constraints_df(kind="regular", removed=True)
 ```
 
 Solutionでは両方の制約が評価済みです。`include=("removed_reason",)` を指定すると、removedの行に理由を追加して確認できます。

@@ -86,13 +86,7 @@ def test_public_model_properties_return_typed_enum_members() -> None:
     assert type(attached_constraint.equality) is Equality
     assert type(solution.sense) is Sense
     assert type(solution.decision_variables[0].kind) is Kind
-    assert (
-        type(solution.get_constraints(kind="regular")[ConstraintID(0)].equality)
-        is Equality
-    )
+    assert type(solution.constraints[ConstraintID(0)].equality) is Equality
     assert type(sample_set.sense) is Sense
     assert type(sample_set.decision_variables[0].kind) is Kind
-    assert (
-        type(sample_set.get_constraints(kind="regular")[ConstraintID(0)].equality)
-        is Equality
-    )
+    assert type(sample_set.constraints[ConstraintID(0)].equality) is Equality

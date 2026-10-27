@@ -115,28 +115,31 @@ def test_all_families_native_dataframe_and_roundtrip(
     instance = model()
     samples = instance.evaluate_samples({3: {0: 1, 1: 0}, 91: {0: 1, 1: 1}})
     for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
-        rows = result.get_constraints(kind=kind)
-        assert set(rows) == {id_type(7)}
+        rows = result.constraints
+        assert set(rows) == {constructor(7) for _, constructor, _, _ in FAMILIES}
         row = rows[id_type(7)]
         assert isinstance(row, sampled_type)
         assert set(row.violations) == {3, 91}
         assert set(row.feasible(atol=1e-6)) == {3, 91}
         assert row.used_decision_variable_ids == {0, 1}
         frame = result.constraints_df(kind=kind)
-        assert set(frame.index) == set(rows)
+        assert set(frame.index) == {key for key in rows if isinstance(key, id_type)}
         for sample_id in [3, 91]:
             solution = result.get(sample_id)
             for restored in [solution, Solution.from_v2_bytes(solution.to_v2_bytes())]:
-                evaluated = restored.get_constraints(kind=kind)[id_type(7)]
+                evaluated = restored.constraints[id_type(7)]
                 assert isinstance(evaluated, evaluated_type)
                 assert evaluated.violation() == row.violations[sample_id]
                 assert (
                     evaluated.is_feasible(atol=1e-6)
                     == row.feasible(atol=1e-6)[sample_id]
                 )
-                assert set(restored.constraints_df(kind=kind).index) == set(rows)
-        rows.clear()
-        assert set(result.get_constraints(kind=kind)) == {id_type(7)}
+                assert set(restored.constraints_df(kind=kind).index) == {
+                    key for key in rows if isinstance(key, id_type)
+                }
+        with pytest.raises(AttributeError):
+            getattr(rows, "clear")()
+        assert set(rows) == {constructor(7) for _, constructor, _, _ in FAMILIES}
 
 
 def test_removed_context_provenance_and_owned_snapshots():
@@ -145,28 +148,28 @@ def test_removed_context_provenance_and_owned_snapshots():
     instance.relax_constraint(ConstraintID(7), "manual", phase="test")
     samples = instance.evaluate_samples({3: {0: 1, 1: 0}})
     for root in [samples, samples.get(3)]:
-        rows = root.get_constraints(kind="regular")
-        assert set(rows) == {ConstraintID(7), generated}
+        rows = root.constraints
+        assert {key for key in rows if isinstance(key, ConstraintID)} == {
+            ConstraintID(7),
+            generated,
+        }
         removed = rows[ConstraintID(7)]
         assert removed.name == "balance"
         assert removed.parameters == {"group": "a"}
         assert removed.removed_reason == "manual"
         assert removed.removed_reason_parameters == {"phase": "test"}
         assert rows[generated].provenance[0].original_id == OneHotConstraintID(7)
-        assert (
-            root.get_constraints(kind="one_hot")[OneHotConstraintID(7)].removed_reason
-            is not None
-        )
+        assert root.constraints[OneHotConstraintID(7)].removed_reason is not None
         frame = root.constraint_provenance_df(kind="regular")
         assert frame.iloc[0]["source_id"] == OneHotConstraintID(7)
         assert isinstance(frame.iloc[0]["regular_constraint_id"], ConstraintID)
     solution = samples.get(3)
-    snapshot = solution.get_constraints(kind="regular")[generated]
+    snapshot = solution.constraints[generated]
     snapshot.dual_variable = 12
     assert solution.get_dual_variable(generated) is None
     solution.set_dual_variable(generated, 5)
     assert snapshot.dual_variable == 12
-    assert solution.get_constraints(kind="regular")[generated].dual_variable == 5
+    assert solution.constraints[generated].dual_variable == 5
 
 
 def test_kind_required_keyword_only_and_invalid_kind():
@@ -175,7 +178,7 @@ def test_kind_required_keyword_only_and_invalid_kind():
         instance.evaluate({0: 1, 1: 0}),
         instance.evaluate_samples({3: {0: 1, 1: 0}}),
     ]:
-        for method in [root.get_constraints, root.constraints_df]:
+        for method in [root.constraints_df]:
             with pytest.raises(TypeError):
                 method()
             with pytest.raises(TypeError):
@@ -197,9 +200,9 @@ instance = Instance.empty()
 x = instance.new_binary("x")
 c = instance.add_constraint(x == 1)
 solution = instance.evaluate({x.id: 1})
-assert solution.get_constraints(kind='regular')[c.constraint_id].violation() == 0
+assert solution.constraints[c.constraint_id].violation() == 0
 samples = instance.evaluate_samples({4: {x.id: 1}})
-assert samples.get_constraints(kind='regular')[c.constraint_id].violations == {4: 0}
+assert samples.constraints[c.constraint_id].violations == {4: 0}
 """,
         ],
         check=True,
@@ -210,34 +213,15 @@ def test_static_overloads():
     instance = model()
     solution = instance.evaluate({0: 1, 1: 0})
     samples = instance.evaluate_samples({3: {0: 1, 1: 0}})
+    assert_type(solution.constraints[ConstraintID(7)], EvaluatedConstraint)
     assert_type(
-        solution.get_constraints(kind="regular"),
-        dict[ConstraintID, EvaluatedConstraint],
+        solution.constraints[IndicatorConstraintID(7)], EvaluatedIndicatorConstraint
     )
+    assert_type(solution.constraints[OneHotConstraintID(7)], EvaluatedOneHotConstraint)
+    assert_type(solution.constraints[Sos1ConstraintID(7)], EvaluatedSos1Constraint)
+    assert_type(samples.constraints[ConstraintID(7)], SampledConstraint)
     assert_type(
-        solution.get_constraints(kind="indicator"),
-        dict[IndicatorConstraintID, EvaluatedIndicatorConstraint],
+        samples.constraints[IndicatorConstraintID(7)], SampledIndicatorConstraint
     )
-    assert_type(
-        solution.get_constraints(kind="one_hot"),
-        dict[OneHotConstraintID, EvaluatedOneHotConstraint],
-    )
-    assert_type(
-        solution.get_constraints(kind="sos1"),
-        dict[Sos1ConstraintID, EvaluatedSos1Constraint],
-    )
-    assert_type(
-        samples.get_constraints(kind="regular"), dict[ConstraintID, SampledConstraint]
-    )
-    assert_type(
-        samples.get_constraints(kind="indicator"),
-        dict[IndicatorConstraintID, SampledIndicatorConstraint],
-    )
-    assert_type(
-        samples.get_constraints(kind="one_hot"),
-        dict[OneHotConstraintID, SampledOneHotConstraint],
-    )
-    assert_type(
-        samples.get_constraints(kind="sos1"),
-        dict[Sos1ConstraintID, SampledSos1Constraint],
-    )
+    assert_type(samples.constraints[OneHotConstraintID(7)], SampledOneHotConstraint)
+    assert_type(samples.constraints[Sos1ConstraintID(7)], SampledSos1Constraint)

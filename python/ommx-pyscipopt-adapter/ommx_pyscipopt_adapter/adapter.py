@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ommx import ConstraintID, IndicatorConstraintID, Sos1ConstraintID
 
 import copy
 import math
@@ -916,12 +917,19 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     def _set_constraints(self):
         # Handle SOS1 constraints (first-class constraint type)
-        for sos1_id, sos1 in self.instance.sos1_constraints.items():
+        for sos1_id in self.instance.constraints:
+            if not isinstance(sos1_id, Sos1ConstraintID):
+                continue
+            sos1 = self.instance.constraints[sos1_id]
             name = f"sos1_{sos1_id}"
             vars = [self.varname_map[str(v)] for v in sos1.variables]
             self.model.addConsSOS1(vars, name=name)
 
-        for cid, constraint in self.instance.constraints.items():
+        for cid in self.instance.constraints:
+            if not isinstance(cid, ConstraintID):
+                continue
+
+            constraint = self.instance.constraints[cid]
             # Handle constraint function based on its type
             f = constraint.function
             degree = f.degree()
@@ -965,7 +973,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             self.model.addCons(constr_expr, name=str(cid))
 
         # Handle indicator constraints
-        for ind_id, indicator in self.instance.indicator_constraints.items():
+        for ind_id in self.instance.constraints:
+            if not isinstance(ind_id, IndicatorConstraintID):
+                continue
+            indicator = self.instance.constraints[ind_id]
             f = indicator.function
             degree = f.degree()
             if degree == 0:

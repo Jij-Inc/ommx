@@ -43,6 +43,10 @@ ommx
    _items/ommx.BinaryPowerPreparation
    _items/ommx.FixedPenaltyPreparation
    _items/ommx.PreparationPolicy
+   _items/ommx.ConstraintCollection
+   _items/ommx.RemovedConstraintCollection
+   _items/ommx.EvaluatedConstraintCollection
+   _items/ommx.SampledConstraintCollection
    _items/ommx.ConstraintID
    _items/ommx.IndicatorConstraintID
    _items/ommx.OneHotConstraintID

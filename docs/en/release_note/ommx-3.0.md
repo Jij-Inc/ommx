@@ -40,20 +40,24 @@ decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
 
 ### ⚠ Typed constraint IDs and native result queries ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
 
-`Solution` and `SampleSet` now expose all constraint families without pandas:
+`Instance`, `ParametricInstance`, `Solution`, and `SampleSet` expose all
+constraint families through a live `.constraints` collection:
 
 ```python
 from ommx import ConstraintID
 
-rows = solution.get_constraints(kind="regular")
+rows = solution.constraints
 row = rows[ConstraintID(7)]
 frame = solution.constraints_df(kind="regular")
 ```
 
-Both methods require keyword-only `kind`. Native dictionaries include retained
-removed constraints, context, and evaluation diagnostics. They replace the
-regular-only result `constraints`, `constraint_ids`, and `get_constraint_by_id`
-accessors.
+Collections retain their owner and fetch a row only when indexed by a typed ID.
+Integer keys are rejected. Model values are attached handles; result values are
+individual snapshots including retained removed constraints and their metadata.
+The family-specific model properties are consolidated into `.constraints` and
+`.removed_constraints`; result `get_constraint_by_id` and `constraint_ids` are
+replaced by indexing and iteration. `constraints_df` requires keyword-only
+`kind` on every root. There is no `get_constraints` method.
 
 Constraint IDs now retain their family throughout model and result APIs,
 transformations, diagnostics, provenance, and DataFrames: `ConstraintID`,
@@ -1512,7 +1516,7 @@ Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `Sampl
 df = solution.constraints_df
 
 # After
-df = solution.constraints_df()
+df = solution.constraints_df(kind="regular")
 ```
 
 The wide `*_df` methods take an `include` argument that gates the label / parameters column families. The default `include=("label", "parameters")` preserves the v2-equivalent wide shape:
@@ -1544,7 +1548,7 @@ In v2.5.1 {meth}`Solution.constraints_df <ommx.Solution.constraints_df>` carried
 df = solution.constraints_df  # contains a 'removed_reason' column
 
 # After (3.0.0a3 — `*_df` are now methods)
-df = solution.constraints_df()  # no removed_reason column
+df = solution.constraints_df(kind="regular")  # no removed_reason column
 df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 # ↳ adds removed_reason / removed_reason.{key} (NA for active rows)
 ```

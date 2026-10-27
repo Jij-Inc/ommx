@@ -109,7 +109,7 @@ def test_provenance_is_preserved_through_evaluate():
     new_id = instance.convert_one_hot_to_constraint(10)
 
     solution = instance.evaluate(State({1: 0.0, 2: 1.0, 3: 0.0}))
-    evaluated = solution.get_constraints(kind="regular")[new_id]
+    evaluated = solution.constraints[new_id]
 
     assert len(evaluated.provenance) == 1
     assert evaluated.provenance[0].kind == ProvenanceKind.OneHotConstraint
@@ -134,7 +134,7 @@ def test_provenance_is_preserved_through_evaluate_samples():
         }
     )
     sample_set = instance.evaluate_samples(samples)
-    sampled = sample_set.get_constraints(kind="regular")[new_id]
+    sampled = sample_set.constraints[new_id]
 
     assert len(sampled.provenance) == 1
     assert sampled.provenance[0].kind == ProvenanceKind.OneHotConstraint

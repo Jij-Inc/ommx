@@ -48,8 +48,10 @@ def test_convert_inequality_emits_only_upper_big_m():
     new_ids = instance.convert_indicator_to_constraint(7)
     assert len(new_ids) == 1
 
-    assert instance.indicator_constraints == {}
-    removed = instance.removed_indicator_constraints[IndicatorConstraintID(7)]
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+    )
+    removed = instance.removed_constraints[IndicatorConstraintID(7)]
     assert removed.removed_reason == "ommx.Instance.convert_indicator_to_constraint"
     assert removed.removed_reason_parameters["constraint_ids"] == "0"
 
@@ -66,8 +68,10 @@ def test_convert_equality_emits_both_sides():
 
     new_ids = instance.convert_indicator_to_constraint(7)
     assert len(new_ids) == 2
-    assert instance.indicator_constraints == {}
-    removed = instance.removed_indicator_constraints[IndicatorConstraintID(7)]
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+    )
+    removed = instance.removed_constraints[IndicatorConstraintID(7)]
     assert removed.removed_reason_parameters["constraint_ids"] == "0,1"
 
 
@@ -103,7 +107,7 @@ def test_redundant_indicator_emits_no_constraint():
     new_ids = instance.convert_indicator_to_constraint(7)
     assert new_ids == []
     assert instance.constraints == {}
-    removed = instance.removed_indicator_constraints[IndicatorConstraintID(7)]
+    removed = instance.removed_constraints[IndicatorConstraintID(7)]
     assert removed.removed_reason_parameters["constraint_ids"] == ""
 
 
@@ -129,9 +133,13 @@ def test_infinite_bound_is_rejected_without_mutation():
     with pytest.raises(RuntimeError, match="non-finite"):
         instance.convert_indicator_to_constraint(7)
 
-    assert IndicatorConstraintID(7) in instance.indicator_constraints
-    assert instance.constraints == {}
-    assert instance.removed_indicator_constraints == {}
+    assert IndicatorConstraintID(7) in (
+        cid for cid in instance.constraints if isinstance(cid, IndicatorConstraintID)
+    )
+    assert set(instance.constraints) == {IndicatorConstraintID(7)}
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.removed_constraints
+    )
 
 
 def test_convert_all_is_atomic_on_error():
@@ -162,12 +170,19 @@ def test_convert_all_is_atomic_on_error():
         instance.convert_all_indicators_to_constraints()
 
     # Nothing was applied.
-    assert set(instance.indicator_constraints) == {
+    assert set(
+        (cid for cid in instance.constraints if isinstance(cid, IndicatorConstraintID))
+    ) == {
         IndicatorConstraintID(1),
         IndicatorConstraintID(2),
     }
-    assert instance.constraints == {}
-    assert instance.removed_indicator_constraints == {}
+    assert set(instance.constraints) == {
+        IndicatorConstraintID(1),
+        IndicatorConstraintID(2),
+    }
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.removed_constraints
+    )
 
 
 def test_removed_indicator_constraints_df_surfaces_reason_and_ids(snapshot):

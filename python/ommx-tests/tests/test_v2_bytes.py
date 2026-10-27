@@ -30,7 +30,7 @@ def test_instance_v2_bytes_roundtrip_special_constraints():
 
     restored = Instance.from_v2_bytes(instance.to_v2_bytes())
 
-    assert restored.one_hot_constraints[OneHotConstraintID(10)].variables == [0, 1, 2]
+    assert restored.constraints[OneHotConstraintID(10)].variables == [0, 1, 2]
     assert restored.to_v2_bytes() == instance.to_v2_bytes()
 
 

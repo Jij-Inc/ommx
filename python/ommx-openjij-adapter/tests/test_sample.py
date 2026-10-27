@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from types import SimpleNamespace
 from typing import cast
 
@@ -193,9 +194,9 @@ def _assert_sample_set_uses_instance_model(sample_set, instance):
         assert actual.objective == pytest.approx(expected.objective)
         assert actual.sense == expected.sense
         assert actual.feasible == expected.feasible
-        assert len(actual.get_constraints(kind="regular")) == len(
-            expected.get_constraints(kind="regular")
-        )
+        assert len(
+            {cid for cid in actual.constraints if isinstance(cid, ConstraintID)}
+        ) == len({cid for cid in expected.constraints if isinstance(cid, ConstraintID)})
 
 
 def _assert_solution_uses_source_model(solution, instance, ans):
@@ -203,9 +204,9 @@ def _assert_solution_uses_source_model(solution, instance, ans):
     assert solution.sense == expected.sense
     assert solution.objective == pytest.approx(expected.objective)
     assert solution.feasible == expected.feasible
-    assert len(solution.get_constraints(kind="regular")) == len(
-        expected.get_constraints(kind="regular")
-    )
+    assert len(
+        {cid for cid in solution.constraints if isinstance(cid, ConstraintID)}
+    ) == len({cid for cid in expected.constraints if isinstance(cid, ConstraintID)})
 
 
 @pytest.mark.parametrize(

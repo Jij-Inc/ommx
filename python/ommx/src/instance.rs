@@ -997,28 +997,13 @@ impl Instance {
         ))
     }
 
-    /// Dict of all active constraints in the instance keyed by their IDs.
-    ///
-    /// Each value is an {class}`~ommx.AttachedConstraint`: a write-through
-    /// handle whose getters read from this instance's SoA store and whose
-    /// context setters write back through to it. Use
-    /// {meth}`~ommx.AttachedConstraint.detach` to materialize a
-    /// {class}`~ommx.Constraint` snapshot if you need an independent copy.
+    /// Live mapping of all active constraint families, keyed by typed IDs.
+    /// The view retains this owner and fetches each constraint on demand.
     #[getter]
-    pub fn constraints(
-        slf: Bound<'_, Self>,
-    ) -> BTreeMap<crate::ConstraintID, crate::AttachedConstraint> {
-        let py = slf.py();
-        let ids: Vec<ConstraintID> = slf.borrow().inner.constraints().keys().copied().collect();
-        let py_instance: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.to_owned().into(),
-                    crate::AttachedConstraint::from_instance(py_instance.clone_ref(py), id),
-                )
-            })
-            .collect()
+    pub fn constraints(slf: Bound<'_, Self>) -> crate::constraint_collection::ConstraintCollection {
+        crate::constraint_collection::ConstraintCollection::new(crate::ConstraintHost::Instance(
+            slf.unbind(),
+        ))
     }
 
     /// Add a regular constraint to this instance.
@@ -1071,38 +1056,6 @@ impl Instance {
         Ok(crate::AttachedConstraint::from_instance(slf.unbind(), id))
     }
 
-    /// Dict of all active indicator constraints in the instance keyed by
-    /// their IDs.
-    ///
-    /// Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
-    /// write-through handle whose getters read from this instance's SoA
-    /// store and whose context setters write back through to it.
-    #[getter]
-    pub fn indicator_constraints(
-        slf: Bound<'_, Self>,
-    ) -> BTreeMap<crate::IndicatorConstraintID, crate::AttachedIndicatorConstraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::IndicatorConstraintID> = slf
-            .borrow()
-            .inner
-            .indicator_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_instance: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.to_owned().into(),
-                    crate::AttachedIndicatorConstraint::from_instance(
-                        py_instance.clone_ref(py),
-                        id,
-                    ),
-                )
-            })
-            .collect()
-    }
-
     /// Add an indicator constraint to this instance.
     ///
     /// Picks an unused {class}`~ommx.IndicatorConstraintID`, drains the
@@ -1128,56 +1081,6 @@ impl Instance {
         ))
     }
 
-    /// Dict of all removed indicator constraints in the instance keyed by their IDs.
-    #[getter]
-    pub fn removed_indicator_constraints(
-        &self,
-    ) -> BTreeMap<crate::IndicatorConstraintID, crate::RemovedIndicatorConstraint> {
-        let context = self.inner.indicator_constraint_collection().context();
-        self.inner
-            .removed_indicator_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.to_owned().into(),
-                    crate::RemovedIndicatorConstraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
-    }
-
-    /// Dict of all active one-hot constraints in the instance keyed by their IDs.
-    ///
-    /// Each value is an {class}`~ommx.AttachedOneHotConstraint`: a
-    /// write-through handle whose getters read from this instance's SoA
-    /// store and whose context setters write back through to it.
-    #[getter]
-    pub fn one_hot_constraints(
-        slf: Bound<'_, Self>,
-    ) -> BTreeMap<crate::OneHotConstraintID, crate::AttachedOneHotConstraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::OneHotConstraintID> = slf
-            .borrow()
-            .inner
-            .one_hot_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_instance: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.to_owned().into(),
-                    crate::AttachedOneHotConstraint::from_instance(py_instance.clone_ref(py), id),
-                )
-            })
-            .collect()
-    }
-
     /// Add a one-hot constraint to this instance.
     pub fn add_one_hot_constraint(
         slf: Bound<'_, Self>,
@@ -1194,56 +1097,6 @@ impl Instance {
         ))
     }
 
-    /// Dict of all removed one-hot constraints in the instance keyed by their IDs.
-    #[getter]
-    pub fn removed_one_hot_constraints(
-        &self,
-    ) -> BTreeMap<crate::OneHotConstraintID, crate::RemovedOneHotConstraint> {
-        let context = self.inner.one_hot_constraint_context();
-        self.inner
-            .removed_one_hot_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.to_owned().into(),
-                    crate::RemovedOneHotConstraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
-    }
-
-    /// Dict of all active SOS1 constraints in the instance keyed by their IDs.
-    ///
-    /// Each value is an {class}`~ommx.AttachedSos1Constraint`: a
-    /// write-through handle whose getters read from this instance's SoA
-    /// store and whose context setters write back through to it.
-    #[getter]
-    pub fn sos1_constraints(
-        slf: Bound<'_, Self>,
-    ) -> BTreeMap<crate::Sos1ConstraintID, crate::AttachedSos1Constraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::Sos1ConstraintID> = slf
-            .borrow()
-            .inner
-            .sos1_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_instance: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.to_owned().into(),
-                    crate::AttachedSos1Constraint::from_instance(py_instance.clone_ref(py), id),
-                )
-            })
-            .collect()
-    }
-
     /// Add a SOS1 constraint to this instance.
     pub fn add_sos1_constraint(
         slf: Bound<'_, Self>,
@@ -1257,28 +1110,6 @@ impl Instance {
             slf.unbind(),
             id,
         ))
-    }
-
-    /// Dict of all removed SOS1 constraints in the instance keyed by their IDs.
-    #[getter]
-    pub fn removed_sos1_constraints(
-        &self,
-    ) -> BTreeMap<crate::Sos1ConstraintID, crate::RemovedSos1Constraint> {
-        let context = self.inner.sos1_constraint_context();
-        self.inner
-            .removed_sos1_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.to_owned().into(),
-                    crate::RemovedSos1Constraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
     }
 
     /// The kinds of active special constraints this instance currently uses.
@@ -1347,20 +1178,15 @@ impl Instance {
         Ok(lowered.into_iter().map(|kind| kind.into()).collect())
     }
 
-    /// Dict of all removed constraints in the instance keyed by their IDs.
+    /// Live mapping of all removed constraint families, keyed by typed IDs.
+    /// The view retains this owner and fetches each constraint on demand.
     #[getter]
-    pub fn removed_constraints(&self) -> BTreeMap<crate::ConstraintID, RemovedConstraint> {
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .removed_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.to_owned().into(),
-                    RemovedConstraint::from_parts(c.clone(), context.collect_for(*id), r.clone()),
-                )
-            })
-            .collect()
+    pub fn removed_constraints(
+        slf: Bound<'_, Self>,
+    ) -> crate::constraint_collection::RemovedConstraintCollection {
+        crate::constraint_collection::RemovedConstraintCollection::new(
+            crate::ConstraintHost::Instance(slf.unbind()),
+        )
     }
 
     /// List of all named functions in the instance sorted by their IDs.
@@ -2180,7 +2006,7 @@ impl Instance {
     /// A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
     /// linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
     /// as a new regular constraint and moves the one-hot constraint into
-    /// {attr}`~ommx.Instance.removed_one_hot_constraints` with
+    /// {attr}`~ommx.Instance.removed_constraints` with
     /// ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
     /// ``constraint_id`` parameter pointing to the new regular constraint.
     /// The generated regular constraint preserves the original one-hot context
@@ -2205,11 +2031,9 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> new_id = instance.convert_one_hot_to_constraint(1)
-    /// >>> instance.one_hot_constraints
-    /// {}
     /// >>> instance.constraints
     /// {ConstraintID(0): Constraint(x0 + x1 + x2 - 1 == 0)}
-    /// >>> instance.removed_one_hot_constraints
+    /// >>> instance.removed_constraints
     /// {OneHotConstraintID(1): RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
     pub(crate) fn convert_one_hot_to_constraint(
         &mut self,
@@ -2248,8 +2072,6 @@ impl Instance {
     /// ... )
     /// >>> instance.convert_all_one_hots_to_constraints()
     /// [ConstraintID(0), ConstraintID(1)]
-    /// >>> instance.one_hot_constraints
-    /// {}
     /// >>> instance.constraints
     /// {ConstraintID(0): Constraint(x0 + x1 - 1 == 0), ConstraintID(1): Constraint(x2 + x3 - 1 == 0)}
     pub fn convert_all_one_hots_to_constraints(
@@ -2292,7 +2114,7 @@ impl Instance {
     /// mutation. Any error leaves the Instance unchanged.
     ///
     /// On success, the original SOS1 constraint is moved to
-    /// {attr}`~ommx.Instance.removed_sos1_constraints` with
+    /// {attr}`~ommx.Instance.removed_constraints` with
     /// ``reason="ommx.Instance.convert_sos1_to_constraints"`` and a
     /// comma-separated ``constraint_ids`` parameter in returned order. Every
     /// generated regular constraint records a {class}`~ommx.Provenance` entry
@@ -2313,11 +2135,9 @@ impl Instance {
     /// ... )
     /// >>> instance.convert_sos1_to_constraints(1)
     /// [ConstraintID(0)]
-    /// >>> instance.sos1_constraints
-    /// {}
     /// >>> instance.constraints
     /// {ConstraintID(0): Constraint(x0 + x1 + x2 - 1 <= 0)}
-    /// >>> instance.removed_sos1_constraints
+    /// >>> instance.removed_constraints
     /// {Sos1ConstraintID(1): RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
     pub(crate) fn convert_sos1_to_constraints(
         &mut self,
@@ -2353,8 +2173,6 @@ impl Instance {
     /// ... )
     /// >>> instance.convert_all_sos1_to_constraints()
     /// {Sos1ConstraintID(1): [ConstraintID(0)], Sos1ConstraintID(2): [ConstraintID(1)]}
-    /// >>> instance.sos1_constraints
-    /// {}
     /// >>> instance.constraints
     /// {ConstraintID(0): Constraint(x0 + x1 - 1 <= 0), ConstraintID(1): Constraint(x2 + x3 - 1 <= 0)}
     pub fn convert_all_sos1_to_constraints(
@@ -2412,7 +2230,7 @@ impl Instance {
     /// approximate solver value near 0 or 1.
     ///
     /// On success, the original indicator constraint is moved to
-    /// {attr}`~ommx.Instance.removed_indicator_constraints` with
+    /// {attr}`~ommx.Instance.removed_constraints` with
     /// ``reason="ommx.Instance.convert_indicator_to_constraint"`` and a
     /// comma-separated ``constraint_ids`` parameter in returned order (empty
     /// when no side is emitted). Every generated regular constraint records a
@@ -2442,8 +2260,6 @@ impl Instance {
     /// ... )
     /// >>> instance.convert_indicator_to_constraint(1)
     /// [ConstraintID(0)]
-    /// >>> instance.indicator_constraints
-    /// {}
     /// >>> instance.constraints
     /// {ConstraintID(0): Constraint(x0 + 3*x1 - 5 <= 0)}
     #[pyo3(signature = (indicator_id, *, atol=None))]
@@ -2967,7 +2783,7 @@ impl Instance {
     /// `removed=True` returns active + removed rows in the same DataFrame
     /// and auto-sets `"removed_reason"` so removed rows are
     /// distinguishable (active rows have NA in the reason columns).
-    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None, removed = false))]
+    #[pyo3(signature = (*, kind, include = None, removed = false))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,

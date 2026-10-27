@@ -38,19 +38,22 @@ penaltyによって除去される制約には、エンコード後の式が保�
 
 ### ⚠ 型付き制約IDとnativeな結果取得 ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
 
-`Solution` と `SampleSet` から、pandasを使わず全種類の制約結果を取得できます。
+`Instance`・`ParametricInstance`・`Solution`・`SampleSet` は、全種類の制約を
+所有元に追従する `.constraints` コレクションとして公開します。
 
 ```python
 from ommx import ConstraintID
 
-rows = solution.get_constraints(kind="regular")
+rows = solution.constraints
 row = rows[ConstraintID(7)]
 frame = solution.constraints_df(kind="regular")
 ```
 
-どちらもキーワード引数 `kind` が必須です。nativeの辞書には、保持された削除済み
-制約、メタデータ、評価結果も含まれます。通常制約専用だった結果の `constraints`、
-`constraint_ids`、`get_constraint_by_id` は、この辞書へのアクセスに置き換わります。
+コレクションは所有元を保持し、型付きIDで参照された行だけを取得します。整数キーは拒否します。
+モデルの値はAttachedハンドル、結果の値は削除済み制約の情報も含む個別のスナップショットです。
+種類別プロパティは `.constraints` と `.removed_constraints` に統合し、結果の
+`get_constraint_by_id` と `constraint_ids` は添字アクセスと列挙へ置き換えます。
+`constraints_df` は全所有元でキーワード引数 `kind` が必須です。`get_constraints` メソッドはありません。
 
 モデル・結果のAPI、変換、診断、provenance、DataFrameで制約IDの種類を保持します。
 IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
@@ -1448,7 +1451,7 @@ assert str(instance.objective) == "Function(x1 + 2*x2)"
 df = solution.constraints_df
 
 # After
-df = solution.constraints_df()
+df = solution.constraints_df(kind="regular")
 ```
 
 ワイドな `*_df` メソッドには `include` 引数が追加され、ラベル系・パラメータ系のカラムをそれぞれ ON/OFF できます。デフォルトの `include=("label", "parameters")` は v2 互換のワイド形を維持します:
@@ -1480,7 +1483,7 @@ v2.5.1 までは {meth}`Solution.constraints_df <ommx.Solution.constraints_df>` 
 df = solution.constraints_df  # 'removed_reason' カラムを含む
 
 # After (3.0.0a3 — `*_df` はメソッドになりました)
-df = solution.constraints_df()  # removed_reason カラムなし
+df = solution.constraints_df(kind="regular")  # removed_reason カラムなし
 df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 # ↳ removed_reason / removed_reason.{key} が追加（active 行は NA）
 ```

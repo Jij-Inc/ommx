@@ -29,54 +29,6 @@ pub struct Solution {
 
 impl_solution_annotations!(Solution);
 
-pyo3_stub_gen::inventory::submit! {
-    pyo3_stub_gen::derive::gen_methods_from_python! {
-        r#"
-        class Solution:
-            @overload
-            def get_constraints(self, *, kind: typing.Literal["regular"]) -> dict[ConstraintID, EvaluatedConstraint]:
-                """Return owned regular results keyed by ID, including removed constraints.
-
-                Rows retain labels, provenance, and removal reasons. Modifying the
-                returned dictionary or rows does not change this result. The same
-                kind selects the same typed IDs in constraints_df; pandas is not required.
-                Use result[id] for a single constraint.
-                """
-                ...
-            @overload
-            def get_constraints(self, *, kind: typing.Literal["indicator"]) -> dict[IndicatorConstraintID, EvaluatedIndicatorConstraint]:
-                """Return owned indicator results keyed by ID, including removed constraints.
-
-                Rows retain labels, provenance, and removal reasons. Modifying the
-                returned dictionary or rows does not change this result. The same
-                kind selects the same typed IDs in constraints_df; pandas is not required.
-                Use result[id] for a single constraint.
-                """
-                ...
-            @overload
-            def get_constraints(self, *, kind: typing.Literal["one_hot"]) -> dict[OneHotConstraintID, EvaluatedOneHotConstraint]:
-                """Return owned one_hot results keyed by ID, including removed constraints.
-
-                Rows retain labels, provenance, and removal reasons. Modifying the
-                returned dictionary or rows does not change this result. The same
-                kind selects the same typed IDs in constraints_df; pandas is not required.
-                Use result[id] for a single constraint.
-                """
-                ...
-            @overload
-            def get_constraints(self, *, kind: typing.Literal["sos1"]) -> dict[Sos1ConstraintID, EvaluatedSos1Constraint]:
-                """Return owned sos1 results keyed by ID, including removed constraints.
-
-                Rows retain labels, provenance, and removal reasons. Modifying the
-                returned dictionary or rows does not change this result. The same
-                kind selects the same typed IDs in constraints_df; pandas is not required.
-                Use result[id] for a single constraint.
-                """
-                ...
-        "#
-    }
-}
-
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Solution {
@@ -228,20 +180,13 @@ impl Solution {
             .collect()
     }
 
-    /// Return owned constraint results keyed by ID for the selected family.
-    ///
-    /// Includes constraints removed before evaluation and their removal metadata.
-    /// The returned dictionary and rows are snapshots; modifying them does not
-    /// change this result. No pandas import is required. The same kind selects
-    /// the same typed IDs in constraints_df. Use the dictionary's keys for enumeration
-    /// and dictionary indexing for a single constraint.
-    #[gen_stub(skip)]
-    #[pyo3(signature = (*, kind))]
-    pub fn get_constraints(
-        &self,
-        kind: ConstraintKind,
-    ) -> crate::constraint_results::EvaluatedConstraints {
-        crate::constraint_results::EvaluatedConstraints::from_result(&self.inner, kind)
+    /// Live mapping of all constraint families, including removed results.
+    /// Typed IDs select the family. Rows are fetched only when indexed.
+    #[getter]
+    pub fn constraints(
+        slf: Bound<'_, Self>,
+    ) -> crate::constraint_collection::EvaluatedConstraintCollection {
+        crate::constraint_collection::EvaluatedConstraintCollection::new(slf.unbind())
     }
 
     /// Get evaluated named functions as a list sorted by ID

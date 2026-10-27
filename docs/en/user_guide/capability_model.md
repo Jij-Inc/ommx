@@ -97,7 +97,7 @@ assert lowered == {SpecialConstraintKind.OneHot}
 
 ```{code-cell} ipython3
 assert instance.active_special_constraint_kinds == set()
-assert instance.one_hot_constraints == {}
+assert instance.constraints == {}
 assert len(instance.constraints) == 1
 ```
 
@@ -122,7 +122,7 @@ instance2 = Instance.from_components(
 new_id = instance2.convert_one_hot_to_constraint(1)
 assert isinstance(new_id, int)
 assert set(instance2.constraints.keys()) == {new_id}
-assert instance2.one_hot_constraints == {}
+assert instance2.constraints == {}
 ```
 
 Use {meth}`~ommx.Instance.convert_all_one_hots_to_constraints` to convert every active OneHot constraint in one call.
@@ -150,7 +150,7 @@ new_ids = instance3.convert_sos1_to_constraints(1)
 # An all-binary SOS1 collapses to a single cardinality constraint sum(x_i) - 1 <= 0
 assert len(new_ids) == 1
 assert set(instance3.constraints.keys()) == set(new_ids)
-assert instance3.sos1_constraints == {}
+assert instance3.constraints == {}
 ```
 
 Use {meth}`~ommx.Instance.convert_all_sos1_to_constraints` to convert every SOS1 constraint in one call. If a variable has a non-finite bound or a domain that excludes 0, conversion fails before any mutation occurs and the instance is left unchanged.
@@ -178,9 +178,9 @@ The original special constraints are not discarded; they are kept as "removed" e
 
 | Original type | Removed dict | DataFrame |
 |---|---|---|
-| OneHotConstraint | {attr}`~ommx.Instance.removed_one_hot_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
-| Sos1Constraint | {attr}`~ommx.Instance.removed_sos1_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
-| IndicatorConstraint | {attr}`~ommx.Instance.removed_indicator_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
+| OneHotConstraint | {attr}`~ommx.Instance.removed_constraints` | `instance.constraints_df(kind="one_hot", removed=True)` |
+| Sos1Constraint | {attr}`~ommx.Instance.removed_constraints` | `instance.constraints_df(kind="sos1", removed=True)` |
+| IndicatorConstraint | {attr}`~ommx.Instance.removed_constraints` | `instance.constraints_df(kind="indicator", removed=True)` |
 
 `removed=True` returns active + removed rows in the same DataFrame and auto-adds the `removed_reason` / `removed_reason.{key}` columns so removed rows are distinguishable from active ones.
 
@@ -191,7 +191,7 @@ Each entry ({class}`~ommx.RemovedOneHotConstraint` / {class}`~ommx.RemovedSos1Co
 - **Indicator**: a comma-separated list of IDs under the `constraint_ids` key (empty when both Big-M sides are redundant)
 
 ```{code-cell} ipython3
-removed = instance2.removed_one_hot_constraints
+removed = instance2.removed_constraints
 assert set(removed.keys()) == {1}
 ```
 

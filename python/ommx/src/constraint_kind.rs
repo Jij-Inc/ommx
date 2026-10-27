@@ -1,9 +1,9 @@
-//! Shared family selection for native result queries and pandas views.
+//! Family selection for pandas views.
 
 use pyo3::{exceptions::PyValueError, prelude::*};
 
-/// Constraint family selector shared by native result queries and DataFrame
-/// accessors. Selecting a family also selects its independent ID space.
+/// Constraint family selector for DataFrame accessors. Selecting a family
+/// also selects its independent ID space; native collections use typed IDs.
 ///
 /// The Python surface is a string literal (`"regular"`, `"indicator"`,
 /// `"one_hot"`, `"sos1"`); on the Rust side we deal with this enum so
@@ -52,9 +52,7 @@ impl<'py> FromPyObject<'_, 'py> for ConstraintKind {
     }
 }
 
-/// Render back to a Python `str` so default values like
-/// `ConstraintKind::Regular` show up as `'regular'` in the generated
-/// stubs (via `pyo3_stub_gen::util::fmt_py_obj`).
+/// Render the family selector as its Python string literal.
 impl<'py> pyo3::IntoPyObject<'py> for ConstraintKind {
     type Target = pyo3::types::PyString;
     type Output = Bound<'py, Self::Target>;

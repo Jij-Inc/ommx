@@ -133,14 +133,16 @@ def test_promote_sos1_big_m_exposes_batch_report(mode: Mode) -> None:
     assert_report_keys(report, request)
     assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
     assert report.rejections == {}
-    assert set(instance.sos1_constraints[Sos1ConstraintID(0)].variables) == {0, 1}
-    assert instance.constraints == {}
+    assert set(instance.constraints[Sos1ConstraintID(0)].variables) == {0, 1}
+    assert set(instance.constraints) == {Sos1ConstraintID(0)}
     assert set(instance.removed_constraints) == {
         ConstraintID(100),
         ConstraintID(101),
         ConstraintID(102),
     }
-    assert set(instance.sos1_constraints) == {Sos1ConstraintID(0)}
+    assert set(
+        (cid for cid in instance.constraints if isinstance(cid, Sos1ConstraintID))
+    ) == {Sos1ConstraintID(0)}
     assert instance.populate_state({0: 0, 1: 2}).entries[10] == 1
 
 
@@ -167,7 +169,7 @@ def test_promote_sos1_big_m_accepts_tight_continuous_links() -> None:
 
     assert_report_keys(report, request)
     assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
-    assert set(instance.sos1_constraints[Sos1ConstraintID(0)].variables) == {1}
+    assert set(instance.constraints[Sos1ConstraintID(0)].variables) == {1}
 
 
 @pytest.mark.parametrize("mode", ["best_effort", "strict"])
@@ -201,13 +203,15 @@ def test_promote_sos1_big_m_keys_shared_member_formulations_by_cardinality(
         ConstraintID(2**64 - 1): Sos1ConstraintID(1),
     }
     assert report.rejections == {}
-    assert set(instance.sos1_constraints[Sos1ConstraintID(0)].variables) == {0}
-    assert set(instance.sos1_constraints[Sos1ConstraintID(1)].variables) == {0, 1}
+    assert set(instance.constraints[Sos1ConstraintID(0)].variables) == {0}
+    assert set(instance.constraints[Sos1ConstraintID(1)].variables) == {0, 1}
     assert set(instance.removed_constraints) == {
         ConstraintID(0),
         ConstraintID(2**64 - 1),
     }
-    assert set(instance.sos1_constraints) == {Sos1ConstraintID(0), Sos1ConstraintID(1)}
+    assert set(
+        (cid for cid in instance.constraints if isinstance(cid, Sos1ConstraintID))
+    ) == {Sos1ConstraintID(0), Sos1ConstraintID(1)}
 
 
 def test_promote_sos1_big_m_defaults_to_best_effort_and_retains_all_rejections() -> (
@@ -226,13 +230,15 @@ def test_promote_sos1_big_m_defaults_to_best_effort_and_retains_all_rejections()
     assert set(report.rejections) == {ConstraintID(999), ConstraintID(2**64 - 1)}
     assert "is not active" in report.rejections[ConstraintID(999)]
     assert "at least one member" in report.rejections[ConstraintID(2**64 - 1)]
-    assert instance.constraints == {}
+    assert set(instance.constraints) == {Sos1ConstraintID(0)}
     assert set(instance.removed_constraints) == {
         ConstraintID(100),
         ConstraintID(101),
         ConstraintID(102),
     }
-    assert set(instance.sos1_constraints) == {Sos1ConstraintID(0)}
+    assert set(
+        (cid for cid in instance.constraints if isinstance(cid, Sos1ConstraintID))
+    ) == {Sos1ConstraintID(0)}
     assert instance.populate_state({0: 0, 1: 2}).entries[10] == 1
 
     # Derived snapshots cannot change the report's exclusive per-key outcomes.
@@ -284,9 +290,12 @@ def test_promote_sos1_big_m_rejects_overlapping_links(mode: Mode) -> None:
             ConstraintID(100),
             ConstraintID(102),
             ConstraintID(103),
+            Sos1ConstraintID(0),
         }
         assert set(instance.removed_constraints) == {ConstraintID(202)}
-        assert set(instance.sos1_constraints) == {Sos1ConstraintID(0)}
+        assert set(
+            (cid for cid in instance.constraints if isinstance(cid, Sos1ConstraintID))
+        ) == {Sos1ConstraintID(0)}
 
 
 def test_promote_sos1_big_m_strict_rejects_the_full_batch_atomically() -> None:

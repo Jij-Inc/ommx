@@ -68,7 +68,7 @@ assert not target.contains(instance)
 
 report = target.check_membership(instance)
 assert not report.is_member
-assert instance.one_hot_constraints
+assert instance.constraints
 print(report)
 ```
 

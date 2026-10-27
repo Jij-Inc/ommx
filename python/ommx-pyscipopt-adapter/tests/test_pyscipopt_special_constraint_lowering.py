@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from ommx import IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID
 import copy
 
@@ -46,18 +47,28 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
         OMMXPySCIPOptAdapter.recommended_preparation_policy(),
     )
 
-    assert set(instance.one_hot_constraints) == {OneHotConstraintID(10)}
+    assert set(
+        (cid for cid in instance.constraints if isinstance(cid, OneHotConstraintID))
+    ) == {OneHotConstraintID(10)}
     assert prepared.active_special_constraint_kinds == {
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.Sos1,
     }
-    assert prepared.one_hot_constraints == {}
-    assert set(prepared.indicator_constraints) == {IndicatorConstraintID(30)}
-    assert set(prepared.sos1_constraints) == {Sos1ConstraintID(20)}
+    assert not any(isinstance(cid, OneHotConstraintID) for cid in prepared.constraints)
+    assert set(
+        (cid for cid in prepared.constraints if isinstance(cid, IndicatorConstraintID))
+    ) == {IndicatorConstraintID(30)}
+    assert set(
+        (cid for cid in prepared.constraints if isinstance(cid, Sos1ConstraintID))
+    ) == {Sos1ConstraintID(20)}
 
     lowered = [
         constraint
-        for constraint in prepared.constraints.values()
+        for constraint in (
+            prepared.constraints[cid]
+            for cid in prepared.constraints
+            if isinstance(cid, ConstraintID)
+        )
         if constraint.provenance
         and constraint.provenance[-1].kind == ProvenanceKind.OneHotConstraint
     ]

@@ -471,7 +471,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
     def _set_constraints(self):
         self._constraint_names: dict[ConstraintID, str] = {}
-        for cid, constraint in self.instance.constraints.items():
+        for cid in self.instance.constraints:
+            if not isinstance(cid, ConstraintID):
+                continue
+            constraint = self.instance.constraints[cid]
             lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Equality.EqualToZero:
                 constr_expr = lin_expr == 0

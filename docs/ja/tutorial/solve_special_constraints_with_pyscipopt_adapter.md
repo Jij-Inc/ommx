@@ -57,8 +57,8 @@ source.add_sos1_constraint(
     )
 )
 
-assert len(source.indicator_constraints) == 1
-assert len(source.sos1_constraints) == 1
+assert len(source.constraints) == 1
+assert len(source.constraints) == 1
 source
 ```
 

@@ -64,8 +64,8 @@ assert solution.feasible
 assert abs(solution.objective - 20.0) < 1e-8
 
 # 呼び出し元のInstanceは変更されない
-assert source.indicator_constraints
-assert source.sos1_constraints
+assert source.constraints
+assert source.constraints
 
 solution.decision_variables_df()
 ```

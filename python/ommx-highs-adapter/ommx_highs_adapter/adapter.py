@@ -682,7 +682,7 @@ class OMMXHighsAdapter(SolverAdapter):
             The solution containing:
             - Variable values in solution.state.entries
             - Objective value in solution.objective
-            - Constraint evaluations in solution.get_constraints(kind="regular")
+            - Constraint evaluations in solution.constraints
             - Optimality status in solution.optimality
             - Dual variables when the active and output objectives coincide
 
@@ -1057,7 +1057,10 @@ class OMMXHighsAdapter(SolverAdapter):
 
     def _set_constraints(self):
         self._constraint_rows: dict[ConstraintID, int] = {}
-        for cid, constr in self.instance.constraints.items():
+        for cid in self.instance.constraints:
+            if not isinstance(cid, ConstraintID):
+                continue
+            constr = self.instance.constraints[cid]
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
                 val = const_expr

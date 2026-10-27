@@ -83,43 +83,53 @@ print(f"{solution11.objective=}, {solution11.feasible=}")
 
 ## Query constraints without pandas
 
-`Solution.get_constraints(kind=...)` and `SampleSet.get_constraints(kind=...)`
-return dictionaries of owned result snapshots. `kind` is a required keyword for
-both `get_constraints` and `constraints_df` on these result objects.
+Use a typed ID to select one constraint from the live collection:
 
 ```{code-cell} ipython3
 from ommx import ConstraintID
 
-rows = solution.get_constraints(kind="regular")
+rows = solution.constraints
 rows[ConstraintID(0)].violation()
 ```
 
-The dictionary keys preserve the constraint family:
+`Instance`, `ParametricInstance`, `Solution`, and `SampleSet` expose all four
+families through `.constraints`. The property keeps a reference to its owner;
+it does not collect constraint rows. Indexing fetches the selected constraint
+from the owner's current state. Integer keys raise `TypeError` because the
+family cannot be inferred. A missing typed ID raises `KeyError`.
 
-| `kind` | ID type | Solution value | SampleSet value |
+| DataFrame `kind` | ID type | Solution value | SampleSet value |
 | --- | --- | --- | --- |
 | `"regular"` | `ConstraintID` | `EvaluatedConstraint` | `SampledConstraint` |
 | `"indicator"` | `IndicatorConstraintID` | `EvaluatedIndicatorConstraint` | `SampledIndicatorConstraint` |
 | `"one_hot"` | `OneHotConstraintID` | `EvaluatedOneHotConstraint` | `SampledOneHotConstraint` |
 | `"sos1"` | `Sos1ConstraintID` | `EvaluatedSos1Constraint` | `SampledSos1Constraint` |
 
-Results include both active and retained removed constraints. Each row exposes
-labels, `provenance`, `removed_reason`, and `removed_reason_parameters`. Sampled
-rows expose `violations` and `feasible(atol=...)`, keyed by sample ID. Editing a
-returned dictionary or snapshot does not update its owning result.
+Model collections contain active constraints and return `Attached*` handles;
+their context setters update the owner. `.removed_constraints` contains all
+removed model families and returns snapshots. Result collections include both
+active and retained removed constraints. Each result access returns an owned
+snapshot with labels, provenance, removal reasons, and evaluation diagnostics.
+Changing that snapshot does not update the result; accessing the same ID again
+reads the current owner. Use owner methods such as `Solution.set_dual_variable`
+to update the result.
 
-The same typed IDs appear in DataFrame indexes and context tables. For example,
-`ConstraintID(1)` and `Sos1ConstraintID(1)` are different keys, and neither equals
-`1`. Inputs whose family is fixed accept either an integer or the matching ID:
-`constraints={1: constraint}` promotes the key to `ConstraintID(1)`, and
-`instance.get_constraint_by_id(1)` looks up that regular constraint. An ID of
-another family is rejected, even when it contains the same number. Returned
-IDs, including dictionary keys, are always typed; ordinary Python dictionary
-lookup still requires the typed key. Retain an attached constraint's
-`constraint_id` or construct the appropriate ID when indexing a result.
-Supplying both `1` and `ConstraintID(1)` as keys in the same input mapping raises
-`ValueError`, since they would identify the same regular constraint.
-`solution.constraint_violation(id)` requires a typed ID because its family
-cannot be inferred from an integer alone.
-IDs do not support `int()` or integer indexing conversion. Decision-variable
-and sample IDs remain integers.
+Collection membership cannot be changed by assignment or deletion. `keys()`,
+`values()`, and `items()` are live views. An iterator snapshots the typed IDs
+in family order (regular, indicator, one-hot, SOS1), then numeric order; values
+are fetched as they are visited. A key removed during iteration raises
+`KeyError` when its value is fetched. Use `dict(rows)` for a materialized mapping.
+
+`constraints_df(*, kind=...)` materializes one family as a DataFrame and requires
+`kind` on every owner. Its typed index matches that family's collection keys.
+On models it selects active rows by default; `removed=True` includes both
+`.constraints` and `.removed_constraints`. Results always include retained
+removed rows. Sampled rows expose `violations` and `feasible(atol=...)` keyed by
+sample ID.
+
+Inputs that already identify a family still promote integers: for example,
+`constraints={1: constraint}` and `instance.get_constraint_by_id(1)`. They reject
+IDs of another family. An input mapping containing both `1` and `ConstraintID(1)`
+raises `ValueError` because the keys normalize to the same identity. Collections,
+`constraint_violation(id)`, and DataFrame indexes require typed IDs. IDs do not
+support `int()` or integer-index conversion. Variable and sample IDs remain integers.

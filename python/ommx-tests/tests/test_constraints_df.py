@@ -146,13 +146,16 @@ def test_instance_constraints_df_reports_composed_function_type():
         sense=Sense.Minimize,
     )
 
-    assert instance.constraints_df().loc[ConstraintID(10), "type"] == "Expression"
+    assert (
+        instance.constraints_df(kind="regular").loc[ConstraintID(10), "type"]
+        == "Expression"
+    )
 
 
 def test_instance_constraints_df_unknown_include_flag():
     """Unknown `include=` flag raises ValueError."""
     with pytest.raises(ValueError, match="unknown include flag"):
-        _instance_all_kinds().constraints_df(include=["bogus"])
+        _instance_all_kinds().constraints_df(kind="regular", include=["bogus"])
 
 
 # ---------------------------------------------------------------------------
@@ -162,18 +165,28 @@ def test_instance_constraints_df_unknown_include_flag():
 
 def test_instance_constraints_df_include_empty(snapshot):
     """`include=[]` strips label + parameters columns; only core columns remain."""
-    assert _df_snap(_instance_all_kinds().constraints_df(include=[])) == snapshot
+    assert (
+        _df_snap(_instance_all_kinds().constraints_df(kind="regular", include=[]))
+        == snapshot
+    )
 
 
 def test_instance_constraints_df_include_label_only(snapshot):
     """`include=("label",)` keeps name/subscripts/description, drops parameters."""
-    assert _df_snap(_instance_all_kinds().constraints_df(include=["label"])) == snapshot
+    assert (
+        _df_snap(
+            _instance_all_kinds().constraints_df(kind="regular", include=["label"])
+        )
+        == snapshot
+    )
 
 
 def test_instance_constraints_df_include_parameters_only(snapshot):
     """`include=("parameters",)` keeps parameters.{key}, drops name/subscripts/description."""
     assert (
-        _df_snap(_instance_all_kinds().constraints_df(include=["parameters"]))
+        _df_snap(
+            _instance_all_kinds().constraints_df(kind="regular", include=["parameters"])
+        )
         == snapshot
     )
 
@@ -185,19 +198,26 @@ def test_instance_constraints_df_include_parameters_only(snapshot):
 
 def test_instance_constraints_df_removed_default_excludes_removed(snapshot):
     """Default `removed=False` returns active rows only — relaxed id=10 omitted."""
-    assert _df_snap(_instance_with_removed().constraints_df()) == snapshot
+    assert _df_snap(_instance_with_removed().constraints_df(kind="regular")) == snapshot
 
 
 def test_instance_constraints_df_removed_true_includes_both(snapshot):
     """`removed=True` returns active + removed; auto-sets `removed_reason` columns."""
-    assert _df_snap(_instance_with_removed().constraints_df(removed=True)) == snapshot
+    assert (
+        _df_snap(_instance_with_removed().constraints_df(kind="regular", removed=True))
+        == snapshot
+    )
 
 
 def test_instance_constraints_df_removed_true_no_label(snapshot):
     """`removed=True` together with `include=[]` keeps removed_reason columns
     (the `removed=True` flag overrides include= for `removed_reason`)."""
     assert (
-        _df_snap(_instance_with_removed().constraints_df(include=[], removed=True))
+        _df_snap(
+            _instance_with_removed().constraints_df(
+                kind="regular", include=[], removed=True
+            )
+        )
         == snapshot
     )
 
@@ -272,7 +292,7 @@ def test_instance_constraints_df_one_hot_removed_true(snapshot):
 
 def test_parametric_instance_constraints_df_default(snapshot):
     """`ParametricInstance.constraints_df()` uses the same wide shape as Instance."""
-    assert _df_snap(_parametric_instance().constraints_df()) == snapshot
+    assert _df_snap(_parametric_instance().constraints_df(kind="regular")) == snapshot
 
 
 @pytest.mark.parametrize(

@@ -3,27 +3,8 @@
 //! Root objects retain identity and lifecycle ownership. These wrappers copy
 //! validated rows and their context; they cannot mutate the enclosing result.
 
-impl pyo3_stub_gen::PyStubType for EvaluatedConstraints {
-    fn type_output() -> pyo3_stub_gen::TypeInfo {
-        <BTreeMap<crate::ConstraintID, crate::EvaluatedConstraint> as pyo3_stub_gen::PyStubType>::type_output()
-            | <BTreeMap<crate::IndicatorConstraintID, EvaluatedIndicatorConstraint> as pyo3_stub_gen::PyStubType>::type_output()
-            | <BTreeMap<crate::OneHotConstraintID, EvaluatedOneHotConstraint> as pyo3_stub_gen::PyStubType>::type_output()
-            | <BTreeMap<crate::Sos1ConstraintID, EvaluatedSos1Constraint> as pyo3_stub_gen::PyStubType>::type_output()
-    }
-}
-
-impl pyo3_stub_gen::PyStubType for SampledConstraints {
-    fn type_output() -> pyo3_stub_gen::TypeInfo {
-        <BTreeMap<crate::ConstraintID, crate::SampledConstraint> as pyo3_stub_gen::PyStubType>::type_output()
-            | <BTreeMap<crate::IndicatorConstraintID, SampledIndicatorConstraint> as pyo3_stub_gen::PyStubType>::type_output()
-            | <BTreeMap<crate::OneHotConstraintID, SampledOneHotConstraint> as pyo3_stub_gen::PyStubType>::type_output()
-            | <BTreeMap<crate::Sos1ConstraintID, SampledSos1Constraint> as pyo3_stub_gen::PyStubType>::type_output()
-    }
-}
-
-use crate::constraint_kind::ConstraintKind;
 use ommx::{EvaluatedConstraintBehavior, EvaluatedConstraintData, SampledConstraintData};
-use pyo3::{prelude::*, types::PyDict};
+use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Shared context for all result rows. IDs remain in the enclosing dictionary.
@@ -106,7 +87,8 @@ macro_rules! result_class {
         pub struct $name($inner, ommx::ConstraintContext, Option<ommx::RemovedReason>);
 
         impl $name {
-            fn from_parts(inner: $inner, context: ommx::ConstraintContext) -> Self {
+            /// The result collection builds one owned row with its owner-held context.
+            pub(crate) fn from_parts(inner: $inner, context: ommx::ConstraintContext) -> Self {
                 Self(inner, context, None)
             }
         }
@@ -114,12 +96,12 @@ macro_rules! result_class {
     };
 }
 
-result_class!(EvaluatedIndicatorConstraint, ommx::EvaluatedIndicatorConstraint, "An owned evaluated indicator result. Created by get_constraints(kind=...), with identity in the dictionary key.");
-result_class!(SampledIndicatorConstraint, ommx::SampledIndicatorConstraint, "An owned sampled indicator result. Created by get_constraints(kind=...), with identity in the dictionary key.");
-result_class!(EvaluatedOneHotConstraint, ommx::EvaluatedOneHotConstraint, "An owned evaluated one-hot result. Created by get_constraints(kind=...), with identity in the dictionary key.");
-result_class!(SampledOneHotConstraint, ommx::SampledOneHotConstraint, "An owned sampled one-hot result. Created by get_constraints(kind=...), with identity in the dictionary key.");
-result_class!(EvaluatedSos1Constraint, ommx::EvaluatedSos1Constraint, "An owned evaluated SOS1 result. Created by get_constraints(kind=...), with identity in the dictionary key.");
-result_class!(SampledSos1Constraint, ommx::SampledSos1Constraint, "An owned sampled SOS1 result. Created by get_constraints(kind=...), with identity in the dictionary key.");
+result_class!(EvaluatedIndicatorConstraint, ommx::EvaluatedIndicatorConstraint, "An owned evaluated indicator result. Fetched by typed ID from the owning result's constraints collection.");
+result_class!(SampledIndicatorConstraint, ommx::SampledIndicatorConstraint, "An owned sampled indicator result. Fetched by typed ID from the owning result's constraints collection.");
+result_class!(EvaluatedOneHotConstraint, ommx::EvaluatedOneHotConstraint, "An owned evaluated one-hot result. Fetched by typed ID from the owning result's constraints collection.");
+result_class!(SampledOneHotConstraint, ommx::SampledOneHotConstraint, "An owned sampled one-hot result. Fetched by typed ID from the owning result's constraints collection.");
+result_class!(EvaluatedSos1Constraint, ommx::EvaluatedSos1Constraint, "An owned evaluated SOS1 result. Fetched by typed ID from the owning result's constraints collection.");
+result_class!(SampledSos1Constraint, ommx::SampledSos1Constraint, "An owned sampled SOS1 result. Fetched by typed ID from the owning result's constraints collection.");
 
 macro_rules! evaluated_methods {
     ($name:ident) => {
@@ -361,116 +343,5 @@ impl SampledSos1Constraint {
             .iter()
             .map(|(id, active)| (id.into_inner(), active.map(|v| v.into_inner())))
             .collect()
-    }
-}
-
-// Both access paths copy the row together with sidecars from its owning collection.
-macro_rules! collect_results {
-    ($collection:expr, $row:ty) => {{
-        let collection = $collection;
-        collection
-            .iter()
-            .map(|(id, row)| {
-                (
-                    (*id).into(),
-                    <$row>::from_parts(row.clone(), collection.context().collect_for(*id))
-                        .with_removed_reason(collection.removed_reasons().get(id).cloned()),
-                )
-            })
-            .collect()
-    }};
-}
-
-/// Typed conversion of one family's native result dictionary into Python.
-/// Used across the binding boundary by Solution; this is not a Python class.
-pub enum EvaluatedConstraints {
-    Regular(BTreeMap<crate::ConstraintID, crate::EvaluatedConstraint>),
-    Indicator(BTreeMap<crate::IndicatorConstraintID, EvaluatedIndicatorConstraint>),
-    OneHot(BTreeMap<crate::OneHotConstraintID, EvaluatedOneHotConstraint>),
-    Sos1(BTreeMap<crate::Sos1ConstraintID, EvaluatedSos1Constraint>),
-}
-
-impl EvaluatedConstraints {
-    pub fn from_result(result: &ommx::Solution, kind: ConstraintKind) -> Self {
-        match kind {
-            ConstraintKind::Regular => Self::Regular(collect_results!(
-                result.evaluated_constraints(),
-                crate::EvaluatedConstraint
-            )),
-            ConstraintKind::Indicator => Self::Indicator(collect_results!(
-                result.evaluated_indicator_constraints(),
-                EvaluatedIndicatorConstraint
-            )),
-            ConstraintKind::OneHot => Self::OneHot(collect_results!(
-                result.evaluated_one_hot_constraints(),
-                EvaluatedOneHotConstraint
-            )),
-            ConstraintKind::Sos1 => Self::Sos1(collect_results!(
-                result.evaluated_sos1_constraints(),
-                EvaluatedSos1Constraint
-            )),
-        }
-    }
-}
-
-impl<'py> IntoPyObject<'py> for EvaluatedConstraints {
-    type Target = PyDict;
-    type Output = Bound<'py, PyDict>;
-    type Error = PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        match self {
-            Self::Regular(rows) => rows.into_pyobject(py),
-            Self::Indicator(rows) => rows.into_pyobject(py),
-            Self::OneHot(rows) => rows.into_pyobject(py),
-            Self::Sos1(rows) => rows.into_pyobject(py),
-        }
-    }
-}
-
-/// Typed conversion of one family's native result dictionary into Python.
-/// Used across the binding boundary by SampleSet; this is not a Python class.
-pub enum SampledConstraints {
-    Regular(BTreeMap<crate::ConstraintID, crate::SampledConstraint>),
-    Indicator(BTreeMap<crate::IndicatorConstraintID, SampledIndicatorConstraint>),
-    OneHot(BTreeMap<crate::OneHotConstraintID, SampledOneHotConstraint>),
-    Sos1(BTreeMap<crate::Sos1ConstraintID, SampledSos1Constraint>),
-}
-
-impl SampledConstraints {
-    pub fn from_result(result: &ommx::SampleSet, kind: ConstraintKind) -> Self {
-        match kind {
-            ConstraintKind::Regular => Self::Regular(collect_results!(
-                result.constraints(),
-                crate::SampledConstraint
-            )),
-            ConstraintKind::Indicator => Self::Indicator(collect_results!(
-                result.indicator_constraints(),
-                SampledIndicatorConstraint
-            )),
-            ConstraintKind::OneHot => Self::OneHot(collect_results!(
-                result.one_hot_constraints(),
-                SampledOneHotConstraint
-            )),
-            ConstraintKind::Sos1 => Self::Sos1(collect_results!(
-                result.sos1_constraints(),
-                SampledSos1Constraint
-            )),
-        }
-    }
-}
-
-impl<'py> IntoPyObject<'py> for SampledConstraints {
-    type Target = PyDict;
-    type Output = Bound<'py, PyDict>;
-    type Error = PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> PyResult<Self::Output> {
-        match self {
-            Self::Regular(rows) => rows.into_pyobject(py),
-            Self::Indicator(rows) => rows.into_pyobject(py),
-            Self::OneHot(rows) => rows.into_pyobject(py),
-            Self::Sos1(rows) => rows.into_pyobject(py),
-        }
     }
 }

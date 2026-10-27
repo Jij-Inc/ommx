@@ -57,7 +57,7 @@ parametric_instance = ParametricInstance.from_components(
 )
 ```
 
-Like `ommx.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables_df()` and `constraints_df()` methods. In addition, `ommx.ParametricInstance` has a `parameters_df()` method for viewing parameter information in a DataFrame.
+Like `ommx.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables_df()` and `constraints_df(kind="regular")` methods. Select another constraint family with `kind`. In addition, `ommx.ParametricInstance` has a `parameters_df()` method for viewing parameter information in a DataFrame.
 
 ```{code-cell} ipython3
 parametric_instance.parameters_df()

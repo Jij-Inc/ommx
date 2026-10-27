@@ -57,7 +57,7 @@ parametric_instance = ParametricInstance.from_components(
 )
 ```
 
-`ommx.Instance`と同様に `decision_variables_df()` 及び `constraints_df()` メソッドで決定変数と制約条件をDataFrameとして取得できますが、加えて `ommx.ParametricInstance` には `parameters_df()` メソッドがあります。これはパラメータの情報をDataFrameとして取得できます。
+`ommx.Instance`と同様に `decision_variables_df()` 及び `constraints_df(kind="regular")` メソッドで決定変数と制約条件をDataFrameとして取得できます。別種類の制約は `kind` で選択します。加えて `ommx.ParametricInstance` には `parameters_df()` メソッドがあります。これはパラメータの情報をDataFrameとして取得できます。
 
 ```{code-cell} ipython3
 parametric_instance.parameters_df()

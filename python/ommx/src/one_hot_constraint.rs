@@ -228,7 +228,7 @@ impl RemovedOneHotConstraint {
 ///
 /// Returned by `Instance.add_one_hot_constraint` /
 /// `ParametricInstance.add_one_hot_constraint` and by their
-/// `one_hot_constraints[id]` getters. Reads pull live data from the parent
+/// `constraints[OneHotConstraintID(...)]` lookups. Reads pull live data from the parent
 /// host and context setters write through to its SoA context store.
 #[gen_stub_pyclass]
 #[pyclass]

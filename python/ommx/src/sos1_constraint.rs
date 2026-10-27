@@ -228,7 +228,7 @@ impl RemovedSos1Constraint {
 ///
 /// Returned by `Instance.add_sos1_constraint` /
 /// `ParametricInstance.add_sos1_constraint` and by their
-/// `sos1_constraints[id]` getters.
+/// `constraints[Sos1ConstraintID(...)]` lookups.
 #[gen_stub_pyclass]
 #[pyclass]
 pub struct AttachedSos1Constraint {
