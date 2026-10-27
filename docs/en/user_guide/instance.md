@@ -6,231 +6,109 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
-  display_name: ommx-update-books (3.9.23)
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
 
-# ommx.Instance
+# Instance: the basic optimization-problem model
 
-{class}`~ommx.Instance` is a data structure for describing the optimization problem itself (mathematical model). It consists of the following components:
+An {class}`~ommx.Instance` combines decision-variable domains (allowed kinds and ranges of values), an objective, constraints, and the optimization sense. Rather than being the input format of one solver, it defines in OMMX **which assignments are feasible and what objective values they have**. Candidates can therefore be evaluated without solving the problem.
 
-- Decision variables ({attr}`~ommx.Instance.decision_variables`)
-- Objective function ({attr}`~ommx.Instance.objective`)
-- Constraints ({attr}`~ommx.Instance.constraints`)
-- Maximization/Minimization ({attr}`~ommx.Instance.sense`)
-
-For example, let's consider a simple optimization problem:
+For example, create a problem in which two items cannot be selected together.
 
 $$
 \begin{aligned}
 \max \quad & x + y \\
-\text{subject to} \quad & x y  = 0 \\
-& x, y \in \{0, 1\}
+\text{subject to} \quad & xy = 0 \\
+& x, y \in \{0, 1\}.
 \end{aligned}
 $$
 
-The corresponding `ommx.Instance` is as follows.
-
 ```{code-cell} ipython3
-from ommx import Instance, Sense
+from ommx import Instance
 
 instance = Instance.maximize()
 x = instance.new_binary("x")
 y = instance.new_binary("y")
 instance.objective = x + y
-instance.add_constraint(x * y == 0, "exclusive")
+exclusive = instance.add_constraint(x * y == 0, "exclusive")
+
+solution = instance.evaluate({x.id: 1, y.id: 0})
+assert solution.feasible
+assert solution.objective == 1
 ```
 
-`Instance` assigns the numeric decision-variable and constraint IDs as the
-model is built. These IDs remain available through `x.id` and the handle
-returned by `add_constraint`. Use {meth}`~ommx.Instance.from_components` when
-you already have components with explicit IDs and want to assemble them in one
-operation.
+`new_binary` and `add_constraint` assign IDs automatically. Access them through attributes such as `x.id`. [Evaluating a State to obtain a Solution](./solution.md) distinguishes a {class}`~ommx.State` assignment from its {class}`~ommx.Solution` evaluation result. Evaluation checks a candidate; it does not search for an optimal one.
 
-All `new_*` decision-variable methods and `add_constraint` accept the complete
-modeling label: `name`, `subscripts`, `parameters`, and `description`. The last
-three fields are keyword-only. `new_integer`, `new_continuous`,
-`new_semi_integer`, and `new_semi_continuous` also accept keyword-only `lower`
-and `upper` bounds. `new_integer` and `new_semi_integer` additionally accept a
-keyword-only `atol`; when it is omitted, they use the current default returned
-by {func}`~ommx.get_default_atol`. For `add_constraint`, omitted fields preserve
-labels already stored on the input constraint.
+## Information defining a problem
 
-For Integer and SemiInteger variables, OMMX replaces each finite bound side by
-the least or greatest integer value satisfying the requested bound under
-`atol`; an infinite side remains unbounded. Bound membership interprets
-$x \in [l,u]$ as the two residual constraints $l-x\leq 0$ and $x-u\leq 0$,
-using the same tolerance rule as inequality-constraint feasibility. If no
-integer satisfies the bound, `new_integer` raises `ValueError`, while
-`new_semi_integer` uses `[0, 0]` to preserve the semi-integer zero alternative.
-Binary bound normalization checks membership of `0` and `1` with this same
-rule.
+| Information | Meaning | Reference |
+|---|---|---|
+| Decision variables | Allowed kinds and ranges of values | {attr}`~ommx.Instance.decision_variables` |
+| Objective | The quantity to compare | {attr}`~ommx.Instance.objective` |
+| Constraints | Conditions to satisfy | {attr}`~ommx.Instance.constraints` |
+| Optimization sense | Whether larger or smaller objective values are preferred | {attr}`~ommx.Instance.sense` |
 
-Each `new_*` call validates and normalizes its complete variable definition
-before assigning the ID. If a bound or tolerance is invalid, or if the maximum
-existing decision-variable ID is `2**64 - 1` so that no larger automatic ID can
-be assigned, neither the variable nor its modeling label is added to the
-`Instance`.
+Create a minimization problem with {meth}`~ommx.Instance.minimize`. Objectives and ordinary-constraint expressions are represented by {class}`~ommx.Function`. See [Function](./function.md) for expression construction, and [Special constraints](./special_constraints.md) for Indicator, OneHot, and SOS1 semantics.
 
-Each of these components has a corresponding property. The objective function is converted into the form of {class}`~ommx.Function`, as explained in the previous section.
+Variables and constraints are identified by IDs, not names. Different IDs identify different objects even if names match. Use {meth}`~ommx.Instance.from_components` to assemble existing components with explicit IDs. An Instance validates that variables referenced by its expressions and special constraints are defined within it.
 
-```{code-cell} ipython3
-instance.objective
-```
+(decision-variable-domains)=
+## Variable domains and metadata
 
-Use {meth}`~ommx.Instance.maximize` for maximization problems and
-{meth}`~ommx.Instance.minimize` for minimization problems. The resulting
-`sense` is `Sense.Maximize` or `Sense.Minimize`, respectively.
-
-```{code-cell} ipython3
-instance.sense == Sense.Maximize
-```
-
-## Decision Variables
-
-Decision variables and constraints can be obtained in the form of [`pandas.DataFrame`](https://pandas.pydata.org/pandas-docs/stable/reference/frame.html).
-
-```{code-cell} ipython3
-instance.decision_variables_df()
-```
-
-First, `kind`, `lower`, and `upper` are essential information for the mathematical model.
-
-- `kind` specifies the type of decision variable, which can be Binary, Integer, Continuous, SemiInteger, or SemiContinuous.
-- `lower` and `upper` are the lower and upper bounds of the decision variable. For Binary variables, this range is $[0, 1]$.
-
-Create any of these kinds directly on an `Instance` when you want it to assign
-numeric IDs automatically. The returned attached variables can be used in
-expressions just like the binary variables above.
+A decision variable's domain is specified by `kind` and its `lower` and `upper` bounds. Create variables on an Instance as follows.
 
 ```{code-cell} ipython3
 typed = Instance.minimize()
+flag = typed.new_binary("flag")
 count = typed.new_integer("count", lower=0, upper=10)
 amount = typed.new_continuous("amount", lower=0)
 batch = typed.new_semi_integer("batch", lower=2, upper=10)
 rate = typed.new_semi_continuous("rate", lower=0.5, upper=4)
 ```
 
-Additionally, OMMX is designed to handle metadata that may be needed when integrating mathematical optimization into practical data analysis. While this metadata does not affect the mathematical model itself, it is useful for data analysis and visualization.
+Binary takes 0 or 1, Integer takes integers, and Continuous takes real values. SemiInteger and SemiContinuous also allow zero in addition to integers or real values within the specified range. For example, `batch` allows zero or integers from 2 to 10; `rate` allows zero or real values from 0.5 to 4. See each `new_*` method's API Reference for bound normalization and tolerances.
 
-- `name` is a human-readable name for the decision variable. In OMMX, decision variables are always identified by ID, so this `name` may be duplicated. It is intended to be used in combination with `subscripts`, which is described later.
-- `description` is a more detailed explanation of the decision variable.
-- When dealing with many mathematical optimization problems, decision variables are often handled as multidimensional arrays. For example, it is common to consider constraints with subscripts like $x_i + y_i \leq 1, \forall i \in [1, N]$. In this case, `x` and `y` are the names of the decision variables, so they are stored in `name`, and the part corresponding to $i$ is stored in `subscripts`. `subscripts` is a list of integers, but if the subscript cannot be represented as an integer, there is a `parameters` property that allows storage in the form of `dict[str, str]`.
-
-If you need a list of {class}`~ommx.DecisionVariable` directly, you can use the {attr}`~ommx.Instance.decision_variables` property.
+`name`, `subscripts`, `parameters`, and `description` are metadata for analysis and visualization. They do not change variable domains or constraint satisfaction conditions. For example, store a variable $x_i$ with `name="x"` and `subscripts=[i]`.
 
 ```{code-cell} ipython3
-for v in instance.decision_variables:
-    print(f"{v.id=}, {v.name=}")
+instance.decision_variables_df()
 ```
 
-To obtain `ommx.DecisionVariable` from the ID of the decision variable, you can use the {meth}`~ommx.Instance.get_decision_variable_by_id` method.
+{meth}`~ommx.Instance.decision_variables_df` returns definitions and labels as a pandas DataFrame. Retrieve a single variable by ID with {meth}`~ommx.Instance.get_decision_variable_by_id`.
 
-```{code-cell} ipython3
-x1 = instance.get_decision_variable_by_id(1)
-print(f"{x1.id=}, {x1.name=}")
-```
+## Retained variables and currently used variables
 
-## Constraints
-Next, let's look at the constraints.
+In an ordinary formulation, you might expect every declared variable to be passed to the solver. Fixing a variable or expressing it through other variables can make it unnecessary for the solver to choose its value. OMMX retains its definition so that results can still be read in terms of original variables.
+
+{attr}`~ommx.Instance.decision_variables` returns all retained variables; {attr}`~ommx.Instance.used_decision_variables` returns **variables appearing in the current objective and currently imposed constraints**.
+
+[Variable roles, reconstruction, and defaulting](./variable_roles.md) explains why these collections differ, and how fixed values, dependencies, and defaults are used during evaluation. For a first solve or candidate evaluation, begin by supplying values for variables used in the problem and reading the result.
+
+## Inspect ordinary constraints
+
+Ordinary constraints are stored as $f(x)=0$ or $f(x)\leq0$. For example, $f(x)\geq0$ is rewritten as $-f(x)\leq0$. {attr}`~ommx.Constraint.equality` distinguishes equalities from inequalities.
 
 ```{code-cell} ipython3
 instance.constraints_df()
 ```
 
-In OMMX, constraints are also managed by ID, and this ID is independent of the decision variable ID. The ID is assigned when a constraint is attached to an `Instance`: the key you use in the `constraints` dictionary passed to {meth}`~ommx.Instance.from_components` becomes the constraint ID.
-
-The essential information for constraints is `equality`. `equality` indicates whether the constraint is an equality constraint ({attr}`~ommx.Equality.EqualToZero`) or an inequality constraint ({attr}`~ommx.Equality.LessThanOrEqualToZero`). Note that constraints of the type $f(x) \geq 0$ are treated as $-f(x) \leq 0$.
-
-Constraints can also store metadata similar to decision variables. You can use `name`, `description`, `subscripts`, and `parameters`. Use `set_name`, `set_description`, `set_subscripts`, and `set_parameters` to replace those metadata fields. Use `add_subscripts`, `add_parameter`, and `add_parameters` when you want to append or merge entries instead.
-
-```{code-cell} ipython3
-c = (x * y == 0).set_name("prod-zero")
-print(f"{c.name=}")
-```
-
-You can also use the {attr}`~ommx.Instance.constraints` property to directly obtain a `dict[int, ommx.Constraint]` keyed by constraint ID. To obtain an `ommx.Constraint` by its ID, use the {meth}`~ommx.Instance.get_constraint_by_id` method.
-
-```{code-cell} ipython3
-for cid, c in instance.constraints.items():
-    print(f"id={cid}: {c}")
-```
+{attr}`~ommx.Instance.constraints` is a dictionary keyed by constraint ID. Constraints support metadata similar to variables. Their ID space is independent of variable IDs, and each special-constraint family has its own constraint-ID space.
 
 (simultaneous-bound-tightening)=
-## Bound tightening
+## Transforming a model
 
-Tighten variable bounds using all active regular constraints or a selected set
-of constraint IDs:
+An Instance can be transformed after construction. However, **being able to evaluate the result is different from equivalence with the original optimization problem**.
 
-```python
-changed_bounds = instance.tighten_bounds_simultaneously_once()  # variable ID -> updated Bound
-# Use only the regular constraints with IDs 100 and 101:
-changed_bounds = instance.tighten_bounds_simultaneously_once_using_constraints({100, 101})
-# Override the per-row variable-term limit (default: 32).
-changed_bounds = instance.tighten_bounds_simultaneously_once(max_terms=64)
-```
+For operations such as fixing variables, substituting expressions, or rewriting constraints, check what is preserved. [What transformations preserve](./transformation_guarantees.md) separates feasibility, objective values, and optimality. To try a complete procedure, see [Transform an Instance and inspect results](../how_to/transform_instance_without_solver.md).
 
-Both methods make one simultaneous pass: every constraint reads the bounds at
-entry, and the updates are applied together. New bounds are not reused during
-the call; call it again to propagate updates through other constraints. Candidates
-are combined before comparing changes with `atol`, so their processing order does
-not determine which candidate is retained.
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once` tightens variable bounds from ordinary constraints. See its API Reference for supported expressions, tolerances, numerical restrictions, and constraint selection.
 
-{meth}`~ommx.Instance.tighten_bounds_simultaneously_once` uses every active regular
-constraint. {meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`
-uses only the supplied IDs; unknown or removed IDs fail without applying changes,
-and an empty set applies no updates. Both methods use compact polynomial functions
-of degree at most one. Non-affine rows and composed expressions are skipped,
-even when an expression is mathematically affine.
-They also skip rows with more than `max_terms` variable terms (default: 32),
-before evaluating any bound candidates. The constant term does not count;
-terms of fixed, semi and dependent variables do count. A limit of zero processes
-only constant rows, including detection of their contradictions. Skipped rows
-remain in the instance.
+### Information retained for interpreting results
 
-Both sides of equalities are processed. Tolerance is accounted for algebraically:
-continuous domains expand to `[lower - atol, upper + atol]`, and row residuals
-may be at most `atol`. For `a*x + r <= 0` with `a > 0`, the limit is
-`(atol - min(r)) / a`. Subtract `atol` to store a continuous upper bound, or round
-down for an integer/binary upper bound. Negative coefficients give the corresponding
-lower bound. For example, `2*x <= 6` with `atol=0.125` yields a limit of `3.0625`
-and a stored continuous upper bound of `2.9375` (or an integer upper bound of `3`).
+An Instance can retain information beyond its current objective and constraints. For example, a {class}`~ommx.NamedFunction` is a named expression whose value can be inspected independently of objectives and constraints.
 
-Residual intervals use {meth}`~ommx.Function.evaluate_bound`; candidate arithmetic
-uses ordinary floating-point operations. The algorithm does not search the boundary
-accepted by point evaluation. Rounding, cancellation and evaluation order can
-therefore change feasibility near numerical boundaries even with the same `atol`.
+Constraints excluded by a transformation but retained for checking results are called removed. A reporting objective separate from the solver-facing one is called the output objective. Appearing only in named functions, removed constraints, or the output objective does not itself make a variable used.
 
-Unbounded domains remain infinite. Each upper/lower candidate is derived after excluding
-its own variable's term. A non-finite residual or boundary calculation skips only
-that candidate; other candidates in the same row are still processed.
-Special constraints are not used.
-Semi-variable domains include zero when tightening other variables, but semi,
-fixed and dependent variables are not changed. Changes within `atol` are ignored.
-The operation is atomic and is not a complete infeasibility detector.
-
-## Symbolic substitution
-
-`Instance.substitute` replaces decision variables with function expressions in the objective and active constraints. This is useful for transformations such as binary encodings, where an integer variable is removed and represented by newly introduced binary variables.
-
-This operation is an algebraic rewrite. It does not automatically translate the substituted variable's `kind`, `lower`, or `upper` into constraints on the replacement expression. For example, if `x1` is binary and you substitute `x1` with `x2 + x3`, OMMX does not add the constraints `0 <= x2 + x3` and `x2 + x3 <= 1`. If `x1` is integer, OMMX also does not add a constraint that the replacement expression must be integral.
-
-The substituted variable is recorded as a dependent variable, so its value can be reconstructed when evaluating a solution. Its bound and kind are checked by `Solution.feasible()`, but they are not passed to solvers as constraints on the replacement expression. In other words, `substitute` does not by itself guarantee an equivalent optimization model.
-
-This is intentional. Some transformations, such as relaxing a constraint, deliberately change the model. Other transformations, such as log encoding or a custom binary encoding, are valid because the encoding itself is constructed to preserve the original variable's domain.
-
-If a general substitution must preserve the model, add the necessary constraints explicitly. A common conservative pattern is to keep the original variable and add a linking equality instead of eliminating it:
-
-```python
-instance.add_constraint(x1 - (x2 + x3) == 0)
-```
-
-If you do eliminate `x1` with `substitute`, add any required bound constraints on the replacement expression yourself:
-
-```python
-expr = x2 + x3
-instance.substitute({1: expr})
-instance.add_constraint(expr >= 0)
-instance.add_constraint(expr <= 1)
-```
+If such values are omitted, evaluation uses reconstructed or defaulted values. Supply explicit values to inspect a particular candidate. [Variable roles](./variable_roles.md) explains where values come from; [Transformed problems and removed constraints](./removed_constraints.md) explains retained constraints and objective values.

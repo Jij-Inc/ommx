@@ -1,231 +1,119 @@
----
-jupytext:
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.19.1
-kernelspec:
-  display_name: ommx-update-books (3.9.23)
-  language: python
-  name: python3
----
+# Exchange a problem and evaluation results in a file
 
-# Sharing Various Types of Data in an OMMX Artifact
+**Add the data to an Artifact, commit it, and save a `.ommx` file.** The receiver can retrieve the problem, evaluation result and analysis note from that file alone.
 
-In mathematical optimization workflows, it is important to generate and manage a variety of data. Properly handling these data ensures reproducible computational results and allows teams to share information efficiently.
+This example transfers a problem that selects at most one of two items, together with an existing candidate's evaluation. No solver searches for candidates. An `Instance` describes the problem, a `State` assigns variable values, and a `Solution` records evaluation of that candidate against the problem.
 
-OMMX provides a straightforward and efficient way to manage different data types. Specifically, it defines a data format called an OMMX Artifact, which lets you store, organize, and share various optimization data through the OMMX SDK.
+## Setup
 
-+++
+Install Python SDK `3.0.0b7` using steps 1–2 of [the installation instructions](../getting_started/install.md). No Adapter, Experiment or registry login is needed.
 
-## Preparation: Data to Share
+In an empty working directory, save the following two Python files and **run them separately**. Separate sender and receiver storage confirms that the receiver does not depend on sender memory or cached data.
 
-First, let's prepare the data we want to share. We will create an `ommx.Instance` representing the 0-1 knapsack problem and solve it using SCIP. We will also share the results of our optimization analysis. Details are omitted for brevity.
+## Sender: save three pieces of data in one file
 
-```{code-cell} ipython3
-:tags: [hide-input]
+Save this as `send_artifact.py`.
 
-from ommx import Constraint, DecisionVariable, Equality, Instance, Sense
-from ommx_pyscipopt_adapter.adapter import OMMXPySCIPOptAdapter
-import pandas as pd
-
-# Prepare data for the 0-1 knapsack problem
-data = {
-    # Values of each item
-    "v": [10, 13, 18, 31, 7, 15],
-    # Weights of each item
-    "w": [11, 15, 20, 35, 10, 33],
-    # Knapsack capacity
-    "W": 47,
-    # Total number of items
-    "N": 6,
-}
-
-# Define decision variables
-x = [
-    # Define binary variable x_i
-    DecisionVariable.binary(
-        # Specify the ID of the decision variable
-        id=i,
-        # Specify the name of the decision variable
-        name="x",
-        # Specify the subscript of the decision variable
-        subscripts=[i],
-    )
-    # Prepare num_items binary variables
-    for i in range(data["N"])
-]
-
-# Define the objective function
-objective = sum(data["v"][i] * x[i] for i in range(data["N"]))
-
-# Define constraints
-constraint = Constraint(
-    # Name of the constraint
-    name = "Weight Limit",
-    # Specify the left-hand side of the constraint
-    function=sum(data["w"][i] * x[i] for i in range(data["N"])) - data["W"],
-    # Specify equality constraint (==0) or inequality constraint (<=0)
-    equality=Equality.LessThanOrEqualToZero,
-)
-
-# Create an instance
-instance = Instance.from_components(
-    # Register all decision variables included in the instance
-    decision_variables=x,
-    # Register the objective function
-    objective=objective,
-    # Register all constraints (keys are constraint IDs)
-    constraints={0: constraint},
-    # Specify that it is a maximization problem
-    sense=Sense.Maximize,
-)
-
-# Solve with SCIP
-solution = OMMXPySCIPOptAdapter.solve(instance)
-
-# Analyze the optimal solution
-df_vars = solution.decision_variables_df()
-df = pd.DataFrame.from_dict(
-    {
-        "Item Number": df_vars.index,
-        "Put in Knapsack?": df_vars["value"].apply(lambda x: "Yes" if x == 1.0 else "No"),
-    }
-)
-```
-
-```{list-table}
-:header-rows: 1
-
-* - Variable Name
-  - Description
-* - `instance`
-  - `ommx.Instance` object representing the 0-1 knapsack problem
-* - `solution`
-  - `ommx.Solution` object containing the results of solving the 0-1 knapsack problem with SCIP
-* - `data`
-  - Input data for the 0-1 knapsack problem
-* - `df`
-  - `pandas.DataFrame` object representing the optimal solution of the 0-1 knapsack problem
-```
-
-+++
-
-## Creating an OMMX Artifact as a File
-
-OMMX Artifacts can be managed as files or by assigning them container-like names. Here, we'll show how to save the data as a file. Using the OMMX SDK, we'll store the data in a new file called `my_instance.ommx`. First, we need an `ArtifactDraft`.
-
-```{code-cell} ipython3
-:tags: [remove-output]
-
+```python
 import os
+from pathlib import Path
+
+# この例専用の保存場所。初回に存在しないフォルダを指定する。
+registry = Path("artifact-sender-registry").resolve()
+registry.mkdir()
+os.environ["OMMX_LOCAL_REGISTRY_ROOT"] = str(registry)
+
+from ommx import Instance, State
 from ommx.artifact import ArtifactDraft
 
-# Specify the name of the OMMX Artifact file
-filename = "my_instance.ommx"
+instance = Instance.maximize()
+x = instance.new_binary("x")
+y = instance.new_binary("y")
+instance.objective = 3 * x + 2 * y
+instance.add_constraint(x + y <= 1)
 
-# If the file already exists, remove it
-if os.path.exists(filename):
-    os.remove(filename)
+solution = instance.evaluate(State({x.id: 1, y.id: 0}))
+assert solution.feasible
+assert solution.objective == 3
 
-# 1. Create a draft; v3 publishes every artifact into the SQLite
-#    Local Registry, so the draft takes (or synthesizes) an image
-#    name. Use `new_anonymous()` if you don't want to invent one.
 draft = ArtifactDraft.new_anonymous()
-```
-
-[`ArtifactDraft`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft) has three primary constructors. v3 always publishes into the SQLite Local Registry, so a commit produces a registry entry; if you also want a `.ommx` file for sharing, call `Artifact.save(path)` afterward.
-
-| Constructor | Description |
-| --- | --- |
-| [`ArtifactDraft.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.new) | Caller-supplied image name |
-| [`ArtifactDraft.new_anonymous`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.new_anonymous) | Synthesized name `<registry-id8>.ommx.local/anonymous:<local-timestamp>-<nonce>` for share-and-discard archives |
-| [`ArtifactDraft.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactDraft.for_github) | Convenience for GitHub Container Registry naming |
-
-`new_anonymous` uses the `.local` mDNS link-local TLD so an accidental push won't leak to a real remote registry. The registry-id prefix is generated once per `LocalRegistry` (a random UUID stored in the registry's SQLite metadata) — anonymous artifacts from the same registry share a prefix, so when an archive is shared you can tell artifacts apart by their source registry. Report accumulated anonymous entries with `ommx prune-anonymous`, then remove them with `ommx prune-anonymous --delete` (which removes entries from every registry-id prefix, not just the current host's).
-
-**Caveat on the timestamp**: the synthesized tag is the **draft's local time** without a timezone marker. If an anonymous archive is shared with someone in a different timezone, the recipient will read the same digits as their own local time, so the time component is not absolute across machines. Pick an explicit name via `ArtifactDraft.new(...)` if you need a stable, timezone-unambiguous tag.
-
-Regardless of the initialization method, you can save `ommx.Instance` and other data in the same way. Let's add the data prepared above.
-
-```{code-cell} ipython3
-# Add ommx.Instance object
-desc_instance = draft.add_instance(instance)
-
-# Add ommx.Solution object
-desc_solution = draft.add_solution(solution)
-
-# Add pandas.DataFrame object
-desc_df = draft.add_dataframe(df, title="Optimal Solution of Knapsack Problem")
-
-# Add an object that can be converted to JSON
-desc_json = draft.add_json(data, title="Data of Knapsack Problem")
-```
-
-In OMMX Artifacts, data is stored in layers, each with a dedicated media type. Functions like `add_instance` automatically set these media types and add layers. These functions return a `Description` object with information about each created layer.
-
-```{code-cell} ipython3
-desc_json.to_dict()
-```
-
-The part added as `title="..."` in `add_json` is saved as an annotation of the layer. OMMX Artifact is a data format for humans, so this is basically information for humans to read. The `ArtifactDraft.add_*` functions all accept optional keyword arguments and automatically convert them to the `org.ommx.user.` namespace.
-
-Finally, call `commit` to publish the artifact into the SQLite Local Registry, then `save` to export it as a `.ommx` file.
-
-```{code-cell} ipython3
-# 3. Publish into the local registry
+instance_layer = draft.add_instance(instance)
+solution_layer = draft.add_solution(solution)
+_ = draft.add_json(
+    {
+        "instance_digest": instance_layer.digest,
+        "solution_digest": solution_layer.digest,
+        "selected": ["x"],
+        "note": "手元の候補を評価した結果。最適性の証明ではない。",
+    },
+    title="analysis",
+)
 artifact = draft.commit()
-
-# 4. Export to a .ommx archive for sharing
-artifact.save(filename)
+artifact.save("candidate.ommx")
+print("candidate.ommxに保存しました")
 ```
 
-Let's check if the file has been created:
+Run it in the environment where you installed the SDK.
 
-```{code-cell} ipython3
+```bash
+python send_artifact.py
+```
+
+Share `candidate.ommx` alone. The `artifact-sender-registry` directory is the sender's **Local Registry**, the SDK's local storage, and need not be transferred.
+
+Methods such as `add_instance()` add data as **layers**, the components of an Artifact. `commit()` finalizes their inventory in the Local Registry, while `save()` writes the exchange file. These are separate operations.
+
+## Receiver: read only the file in a new process
+
+Save the following as `receive_artifact.py` beside `candidate.ommx`. It uses no sender variables or returned objects.
+
+```python
 import os
-print(os.path.exists(filename))
-```
+from pathlib import Path
 
-Now you can share this `my_instance.ommx` with others using the usual file sharing methods.
+# 空のLocal Registryから始める。送信側とは別の場所を指定する。
+registry = Path("artifact-receiver-registry").resolve()
+registry.mkdir()
+os.environ["OMMX_LOCAL_REGISTRY_ROOT"] = str(registry)
 
-+++
-
-## Read OMMX Artifact file
-
-Next, let's read the OMMX Artifact we saved. v3 splits archive reading into two methods: [`Artifact.import_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.import_archive) imports the archive into the SQLite Local Registry and returns a full handle (so you can read every layer); [`Artifact.inspect_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.inspect_archive) reads only the manifest / layer descriptors without writing into the registry.
-
-```{code-cell} ipython3
 from ommx.artifact import Artifact
 
-# Load the OMMX Artifact file locally
-artifact = Artifact.import_archive(filename)
-```
+received = Artifact.import_archive("candidate.ommx")
+instance = received.instance
+solution = received.solution
 
-OMMX Artifacts store data in layers, with a manifest (catalog) that details their contents. You can check the `Descriptor` of each layer, including its Media Type and annotations, without reading the entire archive.
-
-```{code-cell} ipython3
-import pandas as pd
-
-# Convert to pandas.DataFrame for better readability
-pd.DataFrame({
-    "Media Type": desc.media_type,
-    "Size (Bytes)": desc.size
-  } | desc.annotations
-  for desc in artifact.layers
+analysis_layer = next(
+    layer
+    for layer in received.layers
+    if layer.annotations.get("org.ommx.user.title") == "analysis"
 )
+analysis = received.get_json(analysis_layer)
+
+checked = instance.evaluate(solution.state)
+assert checked.feasible == solution.feasible
+assert checked.objective == solution.objective
+print(solution.feasible, solution.objective)
+print(analysis["selected"])
 ```
 
-For instance, to retrieve the JSON in layer 3, use [`Artifact.get_json`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.get_json). This function confirms that the Media Type is `application/json` and reinstates the bytes into a Python object.
+Run this in a new Python process.
 
-```{code-cell} ipython3
-artifact.get_json(artifact.layers[3])
+```bash
+python receive_artifact.py
 ```
 
-```{code-cell} ipython3
-:tags: [remove-cell]
+The output is `True 3.0` and `['x']`. You retrieved the problem, candidate evaluation and JSON analysis note from the file. `import_archive()` persistently imports the contents into the receiver's Local Registry; it does not merely read the archive in place.
 
-# Remove the created OMMX Artifact file to clean up
-os.remove(filename)
-```
+This example stores one object of each type, so `.instance` and `.solution` retrieve the first problem and evaluation result. The JSON layer is selected by its saved `title="analysis"`. The note explicitly records the content identifiers of the referenced layers as `instance_digest` and `solution_digest`. With several problems or results, use {meth}`~ommx.artifact.Artifact.get_layer_descriptor` and typed getters to select the required objects.
+
+When repeating the scripts, choose a new working directory or storage paths instead of deleting existing data. A failing `mkdir()` indicates that a previous storage directory already exists.
+
+## Stop here, or continue when needed
+
+You transferred an evaluation of the supplied candidate. Saving, loading and candidate feasibility do not establish optimality. The file also contains none of the source code or environment information that you did not explicitly add.
+
+- Understand storage and names: [Artifact storage and identity](../user_guide/artifact.md).
+- Distribute through a registry instead of a file: [Share an Artifact through a registry](../how_to/share_artifact_registry.md).
+- Organize conditions and results from several trials: [Experiment Tutorial](experiment_management). Experiment is not needed for this file exchange.
+
+For another language or tool, use [the Artifact specification matching public b7](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md), not this Python procedure as the format definition.

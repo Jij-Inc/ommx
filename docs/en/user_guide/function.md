@@ -6,168 +6,111 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
-  display_name: ommx-update-books (3.9.23)
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
 
-# ommx.Function
+# Function: objective and constraint expressions
 
-In mathematical optimization, functions are used to express objective functions and constraints. OMMX stores polynomials compactly and can compose them with scalar operations such as absolute value, minimum, division, and integer power.
+A {class}`~ommx.Function` is an expression mapping variable values to a number. It is used for objectives and ordinary-constraint bodies. **Constructing an expression, evaluating it, and having a solver accept a problem containing it are different things.** This page covers construction, evaluation, and representation choices.
 
-| Data Structure | Description |
-| --- | --- |
-| {class}`~ommx.Linear` | Linear function. Holds pairs of variable IDs and their coefficients |
-| {class}`~ommx.Quadratic` | Quadratic function. Holds pairs of variable ID pairs and their coefficients |
-| {class}`~ommx.Polynomial` | Polynomial. Holds pairs of variable ID combinations and their coefficients |
-| {class}`~ommx.Function` | A polynomial or a composed scalar expression |
+## Build an expression and evaluate it
 
+Apply arithmetic operations to decision variables to build expressions. Here, $f(x,y)=x+2y+3$.
 
-## Creating ommx.Function
-In the Python SDK, there are two main approaches to create these data structures. The first approach is to directly call the constructors of each data structure. For example, you can create `ommx.Linear` as follows.
+```{code-cell} ipython3
+from ommx import Function, Instance
+
+instance = Instance.minimize()
+x = instance.new_binary("x")
+y = instance.new_binary("y")
+f = Function(x + 2 * y + 3)
+
+assert f.evaluate({x.id: 1, y.id: 0}) == 4.0
+instance.objective = f
+instance.add_constraint(x + y <= 1)
+```
+
+{meth}`~ommx.Function.evaluate` accepts a dictionary of variable IDs and values, or a {class}`~ommx.State`. Evaluation requires values for every ID needed by the expression. A standalone Function references IDs, without storing variable names, kinds, or bounds. To check domains and constraints as well, use {meth}`~ommx.Instance.evaluate` rather than Function evaluation.
+
+Use {meth}`~ommx.Function.partial_evaluate` to assign only some variables. It returns an expression in the remaining variables without changing the original.
+
+```{code-cell} ipython3
+remaining = f.partial_evaluate({x.id: 1})
+assert remaining.evaluate({y.id: 0}) == 4.0
+assert remaining.evaluate({y.id: 1}) == 6.0
+```
+
+## Construct polynomials
+
+Addition, subtraction, and multiplication can build quadratic and higher-degree polynomials. There are also types for construction directly from variable IDs and coefficients.
+
+| Type | Expression |
+|---|---|
+| {class}`~ommx.Linear` | Linear expression |
+| {class}`~ommx.Quadratic` | Polynomial of degree at most two |
+| {class}`~ommx.Polynomial` | Polynomial of arbitrary degree |
+| {class}`~ommx.Function` | These polynomials or expressions composed using the scalar operations below |
 
 ```{code-cell} ipython3
 from ommx import Linear
 
-linear = Linear(terms={1: 1.0, 2: 2.0}, constant=3.0)
-print(linear)
+by_coefficients = Linear(terms={x.id: 1, y.id: 2}, constant=3)
+assert Function(by_coefficients).almost_equal(f)
+
+quadratic = Function(x * x + 2 * x * y + y * y)
+assert quadratic.degree() == 2
+assert quadratic.evaluate({x.id: 1, y.id: 1}) == 4.0
 ```
 
-In this way, decision variables are identified by IDs and coefficients are represented by real numbers. To access coefficients and constant values, use the `terms`, `linear_terms` and `constant_term` properties.
+Inspect degree and coefficients with `degree()`, `terms`, `linear_terms`, `quadratic_terms`, `constant_term`, and related attributes. See each type's API Reference for the attributes it provides.
 
-```{code-cell} ipython3
-print(f"{linear.terms=}")
-print(f"{linear.linear_terms=}")
-print(f"{linear.constant_term=}")
-```
+For polynomials, {meth}`~ommx.Function.almost_equal` compares coefficients within a tolerance. For general expressions, it compares expression structure; it does not determine whether arbitrary expressions agree at every point.
 
-Another approach is to create from `ommx.DecisionVariable`. `ommx.DecisionVariable` is a data structure that only holds the ID of the decision variable. When creating polynomials such as `ommx.Linear`, you can first create decision variables using `ommx.DecisionVariable` and then use them to create polynomials.
+## Combine scalar operations
 
-```{code-cell} ipython3
-from ommx import DecisionVariable
-
-x = DecisionVariable.binary(1, name="x")
-y = DecisionVariable.binary(2, name="y")
-
-linear = x + 2.0 * y + 3.0
-print(linear)
-```
-
-Note that the polynomial data type retains only the ID of the decision variable and does not store additional information. In the above example, information passed to `DecisionVariable.binary` such as `x` and `y` is not carried over to `Linear`. This second method can create polynomials of any degree.
-
-```{code-cell} ipython3
-q = x * x + x * y + y * y
-print(q)
-```
-
-```{code-cell} ipython3
-p = x * x * x + y * y
-print(p)
-```
-
-`Linear`, `Quadratic`, and `Polynomial` each have their own unique data storage methods, so they are separate Messages. Since any of them can be used as objective functions or constraints, `Function` provides one common representation and also owns composed scalar expressions.
-
-```{code-cell} ipython3
-from ommx import Function
-
-# Constant
-print(Function(1.0))
-# Linear
-print(Function(linear))
-# Quadratic
-print(Function(q))
-# Polynomial
-print(Function(p))
-```
-
-## Composing Scalar Functions
-
-Convert an arithmetic expression to `Function` before applying the composed operations. Python's `abs` and arithmetic operators build composed expressions; pointwise minimum and maximum use the named `minimum` and `maximum` methods.
+Function also supports absolute value, sign, pointwise minimum/maximum, division, and integer powers. These operations construct expressions; they do not assign variable values.
 
 ```{code-cell} ipython3
 fx = Function(x)
 fy = Function(y)
 
 absolute = abs(fx - 3)
-sign = (fx - 1).signum()
 minimum = fx.minimum(fy)
-maximum = fx.maximum(fy)
 quotient = fx / (fy + 1)
 power = fx**2
-same_power = fx.powi(2)
 
-print(absolute)
-print(minimum)
-print(quotient)
-print(power)
-print(same_power)
+assert absolute.evaluate({x.id: 1}) == 2.0
+assert minimum.evaluate({x.id: 1, y.id: 0}) == 0.0
+assert quotient.evaluate({x.id: 1, y.id: 1}) == 0.5
+assert power.evaluate({x.id: 1}) == 1.0
 ```
 
-The built-in Python functions `min(fx, fy)` and `max(fx, fy)` perform comparisons and therefore do not construct pointwise expressions. Use `fx.minimum(fy)` and `fx.maximum(fy)` instead.
+Use `minimum()` and `maximum()` for pointwise minimum and maximum. Python's built-in `min()` and `max()` are not substitutes. Use `**` or `powi()` for integer powers.
 
-`fx**n` and `fx.powi(n)` are equivalent, and `n` must fit in a signed 32-bit integer. Floating-point or function-valued exponents and reverse exponentiation such as `2**fx` are not supported.
+Division and negative integer powers may be undefined for some inputs. Evaluation's `atol` also determines when a denominator or similar value counts as zero, so changing the tolerance can change the result. See [Function contracts](../reference/function_contract.md) for operation domains, numerical conditions, and errors.
 
-Within a composed expression, operands are encountered from left to right and every associative application still combines exactly two values. Both `(abs(a) + abs(b)) + abs(c)` and `abs(a) + (abs(b) + abs(c))` therefore retain their grouping and operation order. Overflow and undefined-operation errors occur in that represented order. The protobuf wire format stores the composition as a flat reverse Polish notation (RPN) instruction sequence rather than a recursively nested tree. Exact addition, subtraction, multiplication, and negation containing only polynomials continue to normalize to the compact polynomial representation. Division of a `Function` remains a composed expression even when the divisor is a constant or coefficient, because whether that divisor is treated as zero depends on the evaluation tolerance.
+## Mathematical degree and retained representation differ
 
-Composed functions follow real-valued evaluation semantics. At an explicit evaluation entry point, the `atol` argument defines zero as $|v| \leq \mathtt{atol}$ (including the boundary):
-
-- `signum(v)` is `0` when $|v| \leq \mathtt{atol}$, `-1` below that interval, and `1` above it.
-- Division is undefined when the absolute value of the denominator is at most `atol`.
-- Raising a value with absolute value at most `atol` to a negative integer power is undefined; `0**0` is defined as `1`.
-- Negative bases are supported because every exponent is an integer.
-- Undefined operations and non-finite intermediate results raise `ValueError` in Python.
-
-If `atol` is omitted, that evaluation call uses the configured default tolerance. Expression construction, substitution, and partial evaluation do not use a default tolerance to decide these zero-sensitive operations. Their `Signum`, `Div`, and negative `Powi` nodes remain in the RPN expression so a later evaluation call can apply its own `atol`.
-
-`evaluate_bound(bounds, atol=...)` uses the same zero classification for interval evaluation. Transformations that derive constraints or coefficients from this bound accept the tolerance so their Function-body semantics are explicit; this is separate from canonicalizing approximate discrete solver values.
-
-Division and negative integer powers can make a `Function` partial. Algebraic simplification preserves that domain: for example, `0 * (1 / fx)` is still undefined wherever $|\mathtt{fx}| \leq \mathtt{atol}$.
+For solver use, check not only the mathematical expression but also the representation retained by Function. For example, `g ** 2` on a Function does not automatically become an expanded polynomial. Use `g * g` when you need a polynomial square.
 
 ```{code-cell} ipython3
-try:
-    (1 / fx).evaluate({1: 0}, atol=1e-6)
-except ValueError as e:
-    print(f"Error: {e}")
+g = Function(x + y)
+composed_square = g**2
+polynomial_square = g * g
+
+assert composed_square.degree() is None
+assert polynomial_square.degree() == 2
+assert polynomial_square.almost_equal(quadratic)
 ```
 
-Polynomial metadata is available only when the `Function` uses the compact polynomial representation. `degree()` and `num_terms()` return `None` for composed expressions, while coefficient properties such as `terms` raise `TypeError`. Apart from identity and constant folding, an integer-power expression remains composed even when its exponent is non-negative; use explicit multiplication when you need a compact expanded polynomial. Every current `InstanceClassClause` requires polynomial objective and constraint-body functions. Consequently, all bundled solver adapters reject composed objectives and constraint bodies; reformulate those solver-input functions as supported polynomials before invoking an adapter.
+These expressions can calculate the same values but differ in membership of a class requiring polynomial representation. A composed expression has `degree() is None`, and its coefficient attributes cannot be used as for a polynomial.
 
-Compact polynomial normalization is exact: it removes an actual zero produced by cancellation or floating-point underflow, but retains every finite nonzero coefficient regardless of magnitude. It does not use `atol` to prune small terms. OMMX does not currently perform approximate cleanup implicitly; such cleanup would require a separate, explicit API rather than being part of expression construction or evaluation.
+The SDK's InstanceClass in this Book requires polynomial representation for objectives and constraint bodies. An evaluable Function is therefore not necessarily accepted as input by the documented Adapters. [InstanceClass and input conditions](./instance_class.md) explains membership in the required representation. Preparation does not automatically expand arbitrary composed expressions into polynomials.
 
-## Substitution and Partial Evaluation of Decision Variables
+## Further references
 
-`Function` and the polynomial types have an `evaluate` method that substitutes values for decision variables. For example, substituting $x_1 = 1$ and $x_2 = 0$ into the linear function $x_1 + 2x_2 + 3$ created above results in $1 + 2 \times 0 + 3 = 4$.
+[Function contracts](../reference/function_contract.md) covers numerical zero tests, operation order, operations retained during partial evaluation, and coefficient normalization. Use {meth}`~ommx.Function.evaluate_bound` for interval evaluation, but its interval need not equal the exact minimum and maximum. See each method's API Reference for arguments, return values, and interval-evaluation conditions.
 
-```{code-cell} ipython3
-value= linear.evaluate({1: 1, 2: 0})
-print(f"{value=}")
-```
-
-The argument supports the format `dict[int, float]` and `ommx.State`. `evaluate` returns an error if the necessary decision variable IDs are missing.
-
-```{code-cell} ipython3
-try:
-    linear.evaluate({1: 1})
-except ValueError as e:
-    print(f"Error: {e}")
-```
-
-If you want to substitute values for only some of the decision variables, use the `partial_evaluate` method.
-
-```{code-cell} ipython3
-linear2= linear.partial_evaluate({1: 1})
-print(f"{linear2=}")
-```
-
-`Linear`, `Quadratic`, and `Polynomial` partial evaluation keeps the original Python type. For a composed `Function`, the expression structure that still depends on unassigned variables is preserved. A closed subexpression may be folded only when its result is independent of `atol`. Zero-sensitive `Signum`, `Div`, and negative `Powi` subexpressions remain composed even after all their variables have been assigned, so the `atol` of a later `evaluate` call still determines their result or domain error.
-
-+++
-
-## Comparison of Coefficients
-
-`Function` and the polynomial types have an `almost_equal` function. For polynomial functions, it determines whether the coefficients match within a specified error. For composed functions, it compares matching expression structures; it is not a proof of global mathematical equivalence. For example, to confirm that $ (x + 1)^2 = x^2 + 2x + 1 $, write as follows
-
-```{code-cell} ipython3
-xx = (x + 1) * (x + 1)
-xx.almost_equal(x * x + 2 * x + 1)
-```
+For cross-language storage and exchange, see the [Message specification](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/proto) for wire representations such as RPN instructions. These representation details are not prerequisites for building an objective and evaluating a candidate in Python.

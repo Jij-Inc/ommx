@@ -6,73 +6,60 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
-  display_name: .venv
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
 
-# ommx.ParametricInstance
+# ParametricInstance: reuse a fixed problem structure
 
-{class}`~ommx.ParametricInstance` is a class that represents mathematical models similar to {class}`~ommx.Instance`. It also supports parameters (via {class}`~ommx.Parameter`) in addition to decision variables. By assigning values to these parameters, you can create an `ommx.Instance`. Because the resulting `ommx.Instance` keeps the IDs of decision variables and constraints from `ommx.ParametricInstance`, it is helpful when you need to handle a series of models where only some coefficients of the objective function or constraints change.
+A {class}`~ommx.ParametricInstance` leaves some coefficients or constants as parameters. Use it to **create Instances with different numerical values while keeping variable and constraint structure fixed**. This page explains problem families versus concrete problems for readers familiar with Instance variables, objectives, and constraints.
 
-Consider the following knapsack problem.
+## Set parameters to create an Instance
 
-$$
-\begin{aligned}
-\text{maximize} \quad & \sum_{i=1}^{N} p_i x_i \\
-\text{subject to} \quad & \sum_{i=1}^{N} w_i x_i \leq W \\
-& x_i \in \{0, 1\} \quad (i=1, 2, \ldots, N)
-\end{aligned}
-$$
-
-Here, $N$ is the number of items, $p_i$ is the value of item i, $w_i$ is the weight of item i, and $W$ is the knapsack's capacity. The variable $x_i$ is binary and indicates whether item i is included in the knapsack. In `ommx.Instance`, fixed values were used for $p_i$ and $w_i$, but here they are treated as parameters.
+Consider selecting from two items to maximize a score, varying only the maximum number selected. `capacity` is a parameter supplied by the problem's creator, not a decision variable chosen by the solver.
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Instance, Parameter, ParametricInstance, Sense
+from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
 
-N = 6
-x = [DecisionVariable.binary(id=i, name="x", subscripts=[i]) for i in range(N)]
+xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
+capacity = Parameter(2, name="capacity")
 
-p = [Parameter(i +   N, name="Profit", subscripts=[i]) for i in range(N)]
-w = [Parameter(i + 2*N, name="Weight", subscripts=[i]) for i in range(N)]
-W =  Parameter(    3*N, name="Capacity")
-```
-
-`ommx.Parameter` also has an ID and uses the same numbering as `ommx.DecisionVariable`, so please ensure there are no duplicates. Like decision variables, parameters can have names and subscripts. They can also be used with operators such as `+` and `<=` to create `ommx.Function` or `ommx.Constraint` objects.
-
-```{code-cell} ipython3
-objective = sum(p[i] * x[i] for i in range(N))
-constraint = sum(w[i] * x[i] for i in range(N)) <= W
-```
-
-Now let’s combine these elements into an `ommx.ParametricInstance` that represents the knapsack problem.
-
-```{code-cell} ipython3
-parametric_instance = ParametricInstance.from_components(
-    decision_variables=x,
-    parameters=p + w + [W],
-    objective=objective,
-    constraints={0: constraint},
+family = ParametricInstance.from_components(
+    decision_variables=xs,
+    parameters=[capacity],
+    objective=3 * xs[0] + 2 * xs[1],
+    constraints={0: xs[0] + xs[1] <= capacity},
     sense=Sense.Maximize,
 )
+
+one_item = family.with_parameters({capacity.id: 1})
+two_items = family.with_parameters({capacity.id: 2})
 ```
 
-Like `ommx.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables_df()` and `constraints_df()` methods. In addition, `ommx.ParametricInstance` has a `parameters_df()` method for viewing parameter information in a DataFrame.
+The dictionary passed to {meth}`~ommx.ParametricInstance.with_parameters` maps parameter IDs to concrete values. The result is an ordinary {class}`~ommx.Instance`, usable for evaluation, Preparation, and Adapter execution. The original ParametricInstance remains available for reuse with other values.
 
 ```{code-cell} ipython3
-parametric_instance.parameters_df()
+candidate = {xs[0].id: 1, xs[1].id: 1}
+assert not one_item.evaluate(candidate).feasible
+assert two_items.evaluate(candidate).feasible
+assert two_items.evaluate(candidate).objective == 5.0
+
+assert {v.id for v in one_item.decision_variables} == {
+    v.id for v in two_items.decision_variables
+}
 ```
 
-Next, let’s assign specific values to the parameters. Use `ParametricInstance.with_parameters`, which takes a dictionary mapping each `ommx.Parameter` ID to its corresponding value.
+The same candidate's feasibility changes with the limit. Shared variable and constraint IDs let you associate results under different numerical conditions with the same items and conditions. Matching IDs do not imply matching feasibility or optima.
 
-```{code-cell} ipython3
-p_values = { x.id: value for x, value in zip(p, [10, 13, 18, 31, 7, 15]) }
-w_values = { x.id: value for x, value in zip(w, [11, 15, 20, 35, 10, 33]) }
-W_value = { W.id: 47 }
+## Parameters are identified by IDs too
 
-instance = parametric_instance.with_parameters({**p_values, **w_values, **W_value})
-```
+Parameters and decision variables can appear in the same expressions but have different roles. Parameters are supplied before creating an Instance; decision variables receive values in a candidate. They share an ID space, so their IDs must not overlap. Above, decision-variable IDs are 0 and 1, and the parameter ID is 2.
 
-````{note}
-`ommx.ParametricInstance` cannot handle parameters that change the number of decision variables or parameters (for example, a variable $N$). If you need this functionality, please use a more advanced modeler such as [JijModeling](https://jij-inc.github.io/JijModeling-Tutorials/ja/introduction.html).
-````
+Inspect names, subscripts, and related metadata with {meth}`~ommx.ParametricInstance.parameters_df`. See `with_parameters()` in the API Reference for required parameters and value validation.
+
+## The boundary with a modeler
+
+This example fixes the number of items at two. Parameters cannot generate structure itself, such as increasing or decreasing variables and constraints when the item count changes. Rebuild the model in Python or use a modeler that generates that structure. See [Load an existing problem as an Instance](../how_to/load_existing_instance.md) for receiving models from external tools.
+
+Experiment is not required to use ParametricInstance. Continue to [Recording trials](../tutorial/experiment_management) only if you want to organize problem conditions and results for later inspection.

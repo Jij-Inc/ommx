@@ -14,19 +14,19 @@ kernelspec:
 ommx.SampleSet
 =================
 
-{class}`~ommx.Solution` represents a single solution returned by a solver. However, some solvers, often called samplers, can return multiple solutions. To accommodate this, OMMX provides two data structures for representing multiple solutions:
+[Evaluating a State to obtain a Solution](./solution.md) covers one candidate. To evaluate several candidates against the same Instance, use {class}`~ommx.Samples` and {class}`~ommx.SampleSet`. Candidates can come from a solver called a sampler or be supplied manually.
 
-| Data Structure  | Description |
-|:---------------|:------------|
-| {class}`~ommx.Samples` | A list of multiple solutions for decision variable IDs |
-| {class}`~ommx.SampleSet` | Evaluations of objective and constraints with decision variables |
+| Data structure | Meaning |
+|:----------|:-----|
+| {class}`~ommx.Samples` | A variable-ID-to-value assignment for each candidate |
+| {class}`~ommx.SampleSet` | Candidate assignments together with evaluated objectives and constraints |
 
-`Samples` corresponds to `State` and `SampleSet` corresponds to `Solution`. This notebook explains how to use `SampleSet`.
+`Samples` corresponds to `State`, and `SampleSet` to `Solution`. Feasibility and objective values have the same meanings as in Solution.
 
 Creating a SampleSet
---------------------
+--------------
 
-Let's consider a simple optimization problem：
+Consider this small optimization problem:
 
 $$
 \begin{aligned}
@@ -49,14 +49,14 @@ instance = Instance.from_components(
 )
 ```
 
-Normally, solutions are provided by a solver, commonly referred to as a sampler, but for simplicity, we prepare them manually here. `ommx.Samples` can hold multiple samples, each expressed as a set of values associated with decision variable IDs, similar to `ommx.State`.
+Candidates are usually obtained from a sampler, but here we supply them manually. As its name suggests, `ommx.Samples` holds multiple samples. Each sample assigns values to decision-variable IDs, just as `ommx.State` does.
 
-Each sample is assigned an ID. Some samplers issue their own IDs for logging, so OMMX allows specifying sample IDs. If omitted, IDs are assigned sequentially starting from `0`.
+Each sample also has an ID. Some samplers generate IDs for identifying log entries, so you can specify them explicitly. If omitted, IDs are assigned sequentially from `0`.
 
 ```{code-cell} ipython3
 from ommx import Samples
 
-# When specifying Sample ID
+# Sample IDを指定する場合
 samples = Samples({
     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
@@ -64,7 +64,7 @@ samples = Samples({
 })# ^ sample ID
 assert isinstance(samples, Samples)
 
-# When automatically assigning Sample ID
+# Sample IDを自動で割り振る場合
 samples = Samples([
     {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
     {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
@@ -73,22 +73,23 @@ samples = Samples([
 assert isinstance(samples, Samples)
 ```
 
-While `ommx.Solution` is obtained via `Instance.evaluate`, `ommx.SampleSet` can be obtained via `Instance.evaluate_samples`.
+Where `Instance.evaluate` produces an `ommx.Solution`, `Instance.evaluate_samples` produces an `ommx.SampleSet`.
 
 ```{code-cell} ipython3
 sample_set = instance.evaluate_samples(samples)
 sample_set.summary
 ```
 
-The `summary` attribute displays each sample's objective value and feasibility in a DataFrame format. For example, the sample with `sample_id=2` is infeasible and shows `feasible=False`. The table is sorted with feasible samples appearing first, and within them, those with better objective values according to `SampleSet.sense` appear at the top.
+The `summary` property displays objective values and feasibility as a DataFrame. Sample `sample_id=2` violates the constraint, so `feasible=False`. The table places feasible samples first, then orders objective values according to `SampleSet.sense`, with better values first.
 
 ```{note}
-For clarity, we explicitly pass `ommx.Samples` created by `to_samples` to `evaluate_samples`, but you can omit it because `to_samples` would be called automatically.
+Instead of a `Samples` object, `evaluate_samples` also accepts a dictionary keyed by sample IDs or a list of assignments.
 ```
 
-Extracting individual samples
-----------------------------
-You can use `SampleSet.get` to retrieve each sample as an `ommx.Solution` by specifying the sample ID:
+Retrieving an individual sample
+---------------------
+
+Use `SampleSet.get` to retrieve a sample by ID as an `ommx.Solution`:
 
 ```{code-cell} ipython3
 from ommx import Solution
@@ -100,9 +101,10 @@ print(f"{solution.objective=}")
 solution.decision_variables_df()
 ```
 
-Retrieving the best solution
----------------------------
-`SampleSet.best_feasible` returns the best feasible sample, meaning the one with the highest objective value among all feasible samples:
+Selecting the best feasible candidate obtained
+-------------
+
+`SampleSet.best_feasible` returns the feasible sample with the best objective according to `sense`. Being best among these candidates does not imply global optimality for the original problem.
 
 ```{code-cell} ipython3
 solution = sample_set.best_feasible
@@ -111,7 +113,7 @@ print(f"{solution.objective=}")
 solution.decision_variables_df()
 ```
 
-Of course, if the problem is a minimization, the sample with the smallest objective value will be returned. If no feasible samples exist, an error will be raised.
+For a minimization problem, it returns the smallest objective value. If no sample is feasible, it raises an error.
 
 ```{code-cell} ipython3
 sample_set_infeasible = instance.evaluate_samples([
@@ -130,5 +132,14 @@ except ValueError as e:
 ```
 
 ```{note}
-OMMX does not provide a method to determine which infeasible solution is the best, as many different criteria can be considered. Implement it yourself if needed.
+There are many possible criteria for ranking infeasible candidates. OMMX does not choose one; implement the criterion needed for your task.
 ```
+
+Evaluating a transformed problem
+-------------------------
+
+The examples above evaluate the problem as constructed. If you transform an Instance, evaluate candidates against the transformed Instance.
+
+Removed constraints are conditions excluded from the current problem but retained for checking results. An Instance may also retain an output objective for reporting, separate from its current objective. Calling `evaluate_samples` on such an Instance uses that retained information in the SampleSet's evaluation results.
+
+See [Transformed problems and removed constraints](./removed_constraints.md) for which constraints enter feasibility and how reported objective values differ from solver-facing ones. Here too, best among the obtained candidates and global optimality for the original problem are different claims.

@@ -72,7 +72,7 @@ uv run ommx list
 The console script shares argument parsing, command execution, and terminal
 output with the Rust executable, including `OMMX_LOCAL_REGISTRY_ROOT` support.
 `inspect` now prints JSON object keys in a stable order. See
-[Install and Run the OMMX CLI](../user_guide/cli.md) for installation options and
+[Install and Run the OMMX CLI](../how_to/manage_local_registry.md) for installation options and
 {ref}`Local Registry cleanup workflow <experiment-cleanup-workflow>` for registry
 management.
 
@@ -89,7 +89,7 @@ sense in the HiGHS model.
 
 Use `OMMXHighsAdapter.solve(instance)` for model construction, solving, and
 solution recovery, or call `adapter.solver_input.run()` to solve a constructed
-model. See the [adapter tutorial](../tutorial/solve_with_ommx_adapter.md).
+model. See the [adapter tutorial](../tutorial/solve_with_ommx_adapter).
 
 When assembling long linear objectives and constraints, the adapter now adds
 terms without repeatedly copying the accumulated expression.
@@ -118,7 +118,7 @@ published feasible solution to be reported as infeasible.
 If you used {meth}`~ommx.Instance.load_qplib` to create a saved model, reimport
 it from the original `.qplib` file. `ommx.dataset.qplib` now loads the corrected
 distribution published with OMMX 2.8.0, even if the older distribution is cached.
-See the [QPLIB tutorial](../tutorial/download_qplib_instance.md).
+See the [QPLIB tutorial](../how_to/load_existing_instance.md).
 
 ### 🛠 Preserve binary variables when importing MPS and MIPLIB ([#1202](https://github.com/Jij-Inc/ommx/pull/1202), [#1205](https://github.com/Jij-Inc/ommx/pull/1205))
 
@@ -132,7 +132,7 @@ precedence.
 Reimport affected saved models from the original MPS file.
 `ommx.dataset.miplib2017` now loads the corrected MIPLIB distribution published
 with OMMX 2.7.0, even if the older distribution is cached. See the
-[MIPLIB tutorial](../tutorial/download_miplib_instance.md).
+[MIPLIB tutorial](../how_to/load_existing_instance.md).
 
 ### 🛠 Consistent tolerance for variable bounds and constraints ([#1192](https://github.com/Jij-Inc/ommx/pull/1192))
 
@@ -281,7 +281,7 @@ solution = instance.evaluate(state, atol=1e-8)
 Variables omitted from the solution file receive zero. The reported `objvar`
 is not treated as a variable; evaluation computes the objective from the model.
 `ommx.qplib.load_solution` is also available. See the
-[QPLIB tutorial](../tutorial/download_qplib_instance.md) for supported files.
+[QPLIB tutorial](../how_to/load_existing_instance.md) for supported files.
 
 ### 🆕 A shared exception for Rust extension transfers ([#1216](https://github.com/Jij-Inc/ommx/pull/1216))
 
@@ -584,8 +584,8 @@ Adapter implementations must express every accepted-model condition in
 in the solver-input construction path; their failures are conversion or backend
 errors rather than `AdapterNotApplicableError`. In particular, OpenJij signed-ID
 and finite-coefficient validation now occurs when sampler input is built. See
-[Adapter input classes](../user_guide/capability_model.md) and the
-[Adapter implementation tutorial](../tutorial/implement_adapter.md) for the
+[Adapter input classes](../user_guide/instance_class.md) and the
+[Adapter Developer Guide](../developer_guide/adapter.md) for the
 responsibility boundary.
 
 ### Adapter input classes are required ([#1160](https://github.com/Jij-Inc/ommx/pull/1160))
@@ -595,7 +595,7 @@ Concrete `SolverAdapter` and `SamplerAdapter` implementations must declare
 declaration. In-repository adapters now expose `InstanceClass` directly, so
 callers can pass `Adapter.INPUT_CLASS` to {meth}`~ommx.Instance.prepare` without
 an `is not None` guard. A missing declaration still produces a clear `TypeError`
-when applicability is checked. See the [Adapter implementation tutorial](../tutorial/implement_adapter.md)
+when applicability is checked. See the [Adapter Developer Guide](../developer_guide/adapter.md)
 for the complete contract.
 
 ## 3.0.0 Beta 3
@@ -721,7 +721,7 @@ source_samples = preparation.evaluate_source(prepared_samples)
 Finite penalties and approximate integer slack now require explicit opt-in.
 Every prepared value is a new {class}`~ommx.Instance`, so applicability must be
 checked on `preparation.input`, not inferred from the source. See
-[Adapter input classes](../user_guide/capability_model.md) and the
+[Adapter input classes](../user_guide/instance_class.md) and the
 [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) for the
 accepted model classes and preparation details.
 
@@ -897,7 +897,7 @@ assert isinstance(output, SampleSet)
 
 `Run.log_sample(..., store_diagnostics=True)` uses the same adapter diagnostics
 channel as `Run.log_solve`. See the [Experiment management
-tutorial](../tutorial/experiment_management.md) for the Solve and Sampling recording model.
+tutorial](../tutorial/experiment_management) for the Solve and Sampling recording model.
 
 ### 🆕 Transparent attachment compression and streaming writes ([#1054](https://github.com/Jij-Inc/ommx/pull/1054))
 
@@ -1194,7 +1194,7 @@ The HiGHS Adapter now records MIP progress snapshots from the HiGHS logging call
 
 PySCIPOpt progress histories now include a synthetic `TERMINATION` row when diagnostics include a termination report, so `progress_history_records` and `progress_history_df` include the final solver state without duplicating the separate termination report.
 
-See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the direct and Experiment-based workflows.
+See [Adapter-specific Diagnostics](../how_to/inspect_adapter_diagnostics.md) for the direct and Experiment-based workflows.
 
 ### 🆕 Versioned protobuf bytes APIs for top-level roots ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
@@ -1214,7 +1214,7 @@ Artifact and Experiment solve payloads now store these top-level roots as `ommx.
 
 {meth}`~ommx.experiment.Run.open_solve` now opens a manual Solve scope for advanced solver features that are not covered by the Adapter API. Inside the scope, use `solve.solver_input` to operate the backend solver model directly, run the backend optimizer, then call `solve.decode(...)` so the decoded {class}`~ommx.Solution` becomes the Experiment Solve output. Manual adapter options can be recorded with `solve.log_adapter_option(...)`, and `store_diagnostics=True` stores diagnostics recorded through `solve.diagnostics` until the scope exits. After the scope closes, {attr}`~ommx.experiment.OpenSolve.terminal_state` exposes the final outcome plus trace and diagnostics finalization state for advanced debugging.
 
-See the [Experiment management tutorial](../tutorial/experiment_management.md) for the workflow example.
+See the [Experiment management tutorial](../tutorial/experiment_management) for the workflow example.
 
 ## 3.0.0 Alpha 6
 
@@ -1226,7 +1226,7 @@ Solver adapters now have an adapter-specific diagnostics channel for preserving 
 
 The PySCIPOpt Adapter now emits {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics from SCIP `BESTSOLFOUND` and `DUALBOUNDIMPROVED` callbacks, plus {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` after `model.optimize()`. The termination report includes SCIP status, primal/dual bounds, gap, incumbent objective value, node counts, LP/cut/solution counters, primal-dual integral, timing, and SCIP/PySCIPOpt version metadata. {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` can post-process the typed collector contents or dictionaries loaded from an Experiment into records or pandas DataFrames. With direct collection, the termination report is recorded before decoding back to an OMMX Solution, so it remains available to the caller even when decoding raises an adapter exception such as infeasible or unbounded detection.
 
-See [Adapter-specific Diagnostics](../user_guide/adapter_diagnostics.md) for the full API workflow and the PySCIPOpt report field references.
+See [Adapter-specific Diagnostics](../how_to/inspect_adapter_diagnostics.md) for the full API workflow and the PySCIPOpt report field references.
 
 ## 3.0.0 Alpha 5
 
@@ -1238,7 +1238,7 @@ See the GitHub Release above for full details. The following summarizes the main
 
 {class}`~ommx.experiment.Experiment`, {meth}`~ommx.experiment.Experiment.with_temp_local_registry`, and {meth}`~ommx.experiment.Experiment.fork` now accept `store_trace=True`. When enabled, each `with experiment.run()` context captures the OpenTelemetry spans emitted inside that Run and stores one trace on the closed {class}`~ommx.experiment.SealedRun`. The stored trace is returned as {class}`~ommx.tracing.TraceResult` from {attr}`~ommx.experiment.SealedRun.trace`, and is carried through commit, load, and fork.
 
-See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
+See [Tracing and Profiling](../how_to/trace_execution) for the full tracing workflow, renderers, and OpenTelemetry setup notes.
 
 ```python
 from ommx.experiment import Experiment
@@ -1395,7 +1395,7 @@ See the {ref}`Python SDK v2 to v3 Migration Guide §13 <13-artifact-api-archive-
 
 The new `ommx.experiment` module records experiment inputs, run conditions, and Solver/Sampler results as one OMMX Artifact. Use {class}`~ommx.experiment.Experiment`, {class}`~ommx.experiment.Run`, and {class}`~ommx.experiment.Solve` to store per-run comparison parameters, attachments, and solve input/output data in the Local Registry.
 
-See the [Experiment management tutorial](../tutorial/experiment_management.md) for the basic workflow, sharing an Experiment, loading a committed Experiment, and creating derived experiments with fork.
+See the [Experiment management tutorial](../tutorial/experiment_management) for the basic workflow, sharing an Experiment, loading a committed Experiment, and creating derived experiments with fork.
 
 ### 🆕 `Run.log_solve` records solve input/output and adapter options ([#902](https://github.com/Jij-Inc/ommx/pull/902))
 
@@ -1550,7 +1550,7 @@ Two entry points ship under `ommx.tracing`:
 - **`%%ommx_trace`** — a Jupyter cell magic that renders a per-cell span tree and a Chrome Trace JSON download link
 - **`capture_trace` / `@traced`** — a context manager and decorator for the same workflow from regular Python scripts, tests, and CI
 
-See [Tracing and Profiling](../user_guide/tracing.ipynb) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
+See [Tracing and Profiling](../how_to/trace_execution) for the full walkthrough, configuring your own `TracerProvider`, and troubleshooting.
 
 ### 🆕 Tracing spans in solver/sampler adapters ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 

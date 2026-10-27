@@ -8,7 +8,7 @@ instructions.
 
 Obtain the agent plugin or skill bundled with your installed OMMX, then install
 it in your coding agent. First follow
-[Install and Run the OMMX CLI](cli.md) to set up the `ommx` command.
+[Install and Run the OMMX CLI](../how_to/manage_local_registry.md) to set up the `ommx` command.
 The commands below use the Python package's CLI through `uv run`; if you installed
 the standalone executable with cargo-binstall, use `ommx` in place of `uv run ommx`.
 
