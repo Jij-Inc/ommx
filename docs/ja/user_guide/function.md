@@ -6,168 +6,111 @@ jupytext:
     format_version: 0.13
     jupytext_version: 1.19.1
 kernelspec:
-  display_name: ommx-update-books (3.9.23)
+  display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
 
-# ommx.Function
+# Function：目的関数と制約の式
 
-数理最適化では目的関数や制約条件を表現するために（数学的な意味での）関数を扱う必要があります。OMMX は多項式をコンパクトに保持し、それらに絶対値、最小値、除算、整数べきなどのスカラー演算を組み合わせられます。
+{class}`~ommx.Function` は、変数の値を数値へ写す式です。目的関数や通常制約の本体に使います。**式を作ること、その値を計算すること、その式を含む問題をソルバーが扱えることは別です。** このページでは式の構築・評価と、入力形式を選ぶ際の注意を説明します。
 
-| データ構造 | 説明 |
-| --- | --- |
-| {class}`~ommx.Linear` | 線形の関数。決定変数のIDとその係数のペアを持つ |
-| {class}`~ommx.Quadratic` | 二次の関数。決定変数のIDのペアとその係数のペアを持つ |
-| {class}`~ommx.Polynomial` | 多項式。決定変数のIDの組とその係数のペアを持つ |
-| {class}`~ommx.Function` | 多項式またはスカラー演算を組み合わせた式 |
+## 式を作り、値を計算する
 
+決定変数に算術演算を適用して式を作れます。次は $f(x,y)=x+2y+3$ です。
 
-## ommx.Function の作成
-Python SDKでこれらのデータ構造を作る場合、大きく分けて二つの方法があります。まずひとつ目は、各データ構造のコンストラクタを直接呼び出す方法です。たとえば、次のようにして`ommx.Linear`を作ることができます。
+```{code-cell} ipython3
+from ommx import Function, Instance
+
+instance = Instance.minimize()
+x = instance.new_binary("x")
+y = instance.new_binary("y")
+f = Function(x + 2 * y + 3)
+
+assert f.evaluate({x.id: 1, y.id: 0}) == 4.0
+instance.objective = f
+instance.add_constraint(x + y <= 1)
+```
+
+{meth}`~ommx.Function.evaluate` は変数IDと値の辞書、または {class}`~ommx.State` を受け取ります。式に必要なIDの値が足りなければ評価できません。Function単体は変数の名前・種類・boundを保持せず、IDを参照します。変数の定義域と制約も含めて候補を検査したい場合は、Functionではなく {meth}`~ommx.Instance.evaluate` を使います。
+
+一部の変数の値だけを決めるには {meth}`~ommx.Function.partial_evaluate` を使います。残った変数の式を返し、元の式は変えません。
+
+```{code-cell} ipython3
+remaining = f.partial_evaluate({x.id: 1})
+assert remaining.evaluate({y.id: 0}) == 4.0
+assert remaining.evaluate({y.id: 1}) == 6.0
+```
+
+## 多項式として組み立てる
+
+加算・減算・乗算を使い、二次式や、より高次の多項式も作れます。変数IDと係数から直接作る型もあります。
+
+| 型 | 表す式 |
+|---|---|
+| {class}`~ommx.Linear` | 線形式 |
+| {class}`~ommx.Quadratic` | 二次以下の多項式 |
+| {class}`~ommx.Polynomial` | 任意次数の多項式 |
+| {class}`~ommx.Function` | これらの多項式、または後述のスカラー演算を組み合わせた式 |
 
 ```{code-cell} ipython3
 from ommx import Linear
 
-linear = Linear(terms={1: 1.0, 2: 2.0}, constant=3.0)
-print(linear)
+by_coefficients = Linear(terms={x.id: 1, y.id: 2}, constant=3)
+assert Function(by_coefficients).almost_equal(f)
+
+quadratic = Function(x * x + 2 * x * y + y * y)
+assert quadratic.degree() == 2
+assert quadratic.evaluate({x.id: 1, y.id: 1}) == 4.0
 ```
 
-このように決定変数はIDで識別され、係数は実数で表されます。係数や定数値にアクセスするには `terms` や `linear_terms` および `constant_term` プロパティを使います。
+多項式の次数や係数は、`degree()`、`terms`、`linear_terms`、`quadratic_terms`、`constant_term`などで調べられます。どの型にどの属性があるかは各型のAPI Referenceを参照してください。
 
-```{code-cell} ipython3
-print(f"{linear.terms=}")
-print(f"{linear.linear_terms=}")
-print(f"{linear.constant_term=}")
-```
+{meth}`~ommx.Function.almost_equal` は多項式の係数を許容誤差内で比較します。一般の式では式構造の比較であり、任意の二つの式がすべての点で同じ値を取るかを判定する機能ではありません。
 
-もう一つの方法は `ommx.DecisionVariable` から作る方法です。`ommx.DecisionVariable` は決定変数のIDを持つだけのデータ構造です。`ommx.Linear` などの多項式を作る際には、`ommx.DecisionVariable` を使って決定変数を作り、それを使って多項式を作ることができます。
+## スカラー演算を組み合わせる
 
-```{code-cell} ipython3
-from ommx import DecisionVariable
-
-x = DecisionVariable.binary(1, name="x")
-y = DecisionVariable.binary(2, name="y")
-
-linear = x + 2.0 * y + 3.0
-print(linear)
-```
-
-このとき多項式のデータ型は決定変数に関するID以外の情報を保持しないことに注意してください。上の例で言えば `x` や `y` といった `DecisionVariable.binary` に渡した情報は `Linear` には伝わりません。この二つ目の方法はどの次数の多項式も作ることができます。
-
-```{code-cell} ipython3
-q = x * x + x * y + y * y
-print(q)
-```
-
-```{code-cell} ipython3
-p = x * x * x + y * y
-print(p)
-```
-
-`Linear`, `Quadratic`, `Polynomial` はそれぞれ固有のデータの保持方法を持っているため別のMessageになっていますが、目的関数や制約条件として共通に扱うための `Function` が用意されています。`Function` は、これらの多項式に加えてスカラー演算を組み合わせた式も保持します。
-
-```{code-cell} ipython3
-from ommx import Function
-
-# Constant
-print(Function(1.0))
-# Linear
-print(Function(linear))
-# Quadratic
-print(Function(q))
-# Polynomial
-print(Function(p))
-```
-
-## スカラー関数の組み合わせ
-
-複合演算を適用する前に、算術式を `Function` に変換します。Python の `abs` と算術演算子は複合式を構築し、点ごとの最小値・最大値には `minimum`・`maximum` メソッドを使います。
+Functionには絶対値、符号、点ごとの最小・最大、除算、整数べきも適用できます。これらは式を構築する操作で、この時点で変数の値を決めるものではありません。
 
 ```{code-cell} ipython3
 fx = Function(x)
 fy = Function(y)
 
 absolute = abs(fx - 3)
-sign = (fx - 1).signum()
 minimum = fx.minimum(fy)
-maximum = fx.maximum(fy)
 quotient = fx / (fy + 1)
 power = fx**2
-same_power = fx.powi(2)
 
-print(absolute)
-print(minimum)
-print(quotient)
-print(power)
-print(same_power)
+assert absolute.evaluate({x.id: 1}) == 2.0
+assert minimum.evaluate({x.id: 1, y.id: 0}) == 0.0
+assert quotient.evaluate({x.id: 1, y.id: 1}) == 0.5
+assert power.evaluate({x.id: 1}) == 1.0
 ```
 
-Python 組み込みの `min(fx, fy)` と `max(fx, fy)` は比較演算を行うため、点ごとの演算式を構築しません。代わりに `fx.minimum(fy)` と `fx.maximum(fy)` を使ってください。
+点ごとの最小値・最大値には`minimum()`・`maximum()`を使います。Python組み込みの`min()`・`max()`はその代わりにはなりません。整数べきには`**`または`powi()`を使います。
 
-`fx**n` と `fx.powi(n)` は同じ演算であり、`n` は符号付き 32 bit 整数の範囲で指定します。浮動小数や関数値の指数、および `2**fx` のような反転累乗はサポートしません。
+除算や負の整数べきは、値を計算できない入力を持つことがあります。評価の`atol`は、分母などをゼロとみなす判断にも使われます。異なる許容誤差で同じ結果になるとは限りません。演算ごとの定義域・数値条件・例外は[Functionの契約](../reference/function_contract.md)を参照してください。
 
-複合式ではオペランドを左から右へ処理し、結合的な演算も一つの適用ごとにちょうど 2 個の値を組み合わせます。そのため、`(abs(a) + abs(b)) + abs(c)` と `abs(a) + (abs(b) + abs(c))` はどちらも括弧と演算順序を保持します。オーバーフローや未定義演算のエラーは、その表現された順序で発生します。protobuf の wire format は、この複合式を再帰的にネストした tree ではなく、flat な逆ポーランド記法（RPN）の命令列として保存します。多項式だけからなる厳密な加算、減算、乗算、符号反転は、引き続きコンパクトな多項式表現へ正規化されます。一方、`Function` の除算は、除数が定数や係数であっても複合式のまま保持されます。除数をゼロとみなすかどうかは評価時の許容誤差で決まるためです。
+## 数学的な次数と、保持する表現形式は別
 
-複合関数は実数値として次の規約で評価されます。明示的な評価処理では、引数 `atol` により $|v| \leq \mathtt{atol}$（境界を含む）をゼロと判定します。
-
-- $|v| \leq \mathtt{atol}$ のとき `signum(v)` は `0`、その区間より小さいときは `-1`、大きいときは `1` です。
-- 分母の絶対値が `atol` 以下である除算は未定義です。
-- 絶対値が `atol` 以下の値を負の整数で累乗する演算は未定義です。`0**0` は `1` と定義します。
-- 指数は常に整数なので、負の底もサポートします。
-- 未定義の演算や非有限の中間結果は、Python では `ValueError` になります。
-
-`atol` を省略した場合は、その評価処理で設定済みのデフォルト許容誤差を使います。式の構築、代入、部分評価では、ゼロに依存する演算を判定するためにデフォルト許容誤差を使いません。`Signum`、`Div`、負の `Powi` ノードは RPN 式に残り、後続の評価処理で指定された `atol` が適用されます。
-
-`evaluate_bound(bounds, atol=...)` も区間評価に同じゼロ判定を使います。この bound から制約や係数を導出する変換は tolerance を受け取り、Function body の意味論を明示します。これは近似的な離散 solver 出力を丸める処理とは別です。
-
-除算と負の整数べきによって `Function` は部分関数になり得ます。代数的な簡約でも定義域は保存されるため、例えば `0 * (1 / fx)` は $|\mathtt{fx}| \leq \mathtt{atol}$ の範囲で引き続き未定義です。
+ソルバー向けに使う場合は、数学的な式だけでなく、Functionが保持する表現形式も確認します。例えば、Functionの`g ** 2`は自動的に展開済み多項式にはなりません。多項式としての二乗が必要なら`g * g`を使います。
 
 ```{code-cell} ipython3
-try:
-    (1 / fx).evaluate({1: 0}, atol=1e-6)
-except ValueError as e:
-    print(f"Error: {e}")
+g = Function(x + y)
+composed_square = g**2
+polynomial_square = g * g
+
+assert composed_square.degree() is None
+assert polynomial_square.degree() == 2
+assert polynomial_square.almost_equal(quadratic)
 ```
 
-多項式のメタデータは、`Function` がコンパクトな多項式表現を使っている場合に限って利用できます。複合式では `degree()` と `num_terms()` は `None` を返し、`terms` などの係数プロパティは `TypeError` を送出します。恒等演算や定数の畳み込みを除き、指数が非負でも整数べきは複合式のまま保持されます。展開済みのコンパクトな多項式が必要な場合は、明示的な乗算を使ってください。現在の全ての `InstanceClassClause` は、objective と constraint body の function に polynomial を要求します。そのため、提供中の全 solver adapter は複合された objective と constraint body を拒否します。adapter を呼ぶ前に、それらの solver-input function をサポート対象の polynomial として再定式化してください。
+上の二つは同じ値を計算できますが、多項式表現を要求する入力条件への適合は異なります。複合式の`degree()`は`None`で、係数属性も多項式と同じようには使えません。
 
-コンパクトな多項式の正規化は厳密です。打ち消しや浮動小数点のアンダーフローで実際にゼロになった項は削除しますが、有限かつ非ゼロの係数は大きさによらず保持します。小さな項を `atol` で取り除くことはありません。OMMX は近似的な cleanup を暗黙には行いません。cleanup が必要であれば、式の構築や評価とは別の明示的な API として提供する必要があります。
+このBookで扱うSDKのInstanceClassは、目的関数や制約本体に多項式表現を要求します。したがって、Functionとして評価できる式が、そのまま掲載Adapterの入力に使えるとは限りません。[InstanceClassと入力条件](./instance_class.md)で、要求する表現へのmembershipを確認できます。Preparationは任意の複合式を自動的に多項式へ展開する仕組みではありません。
 
-## 決定変数の代入・部分評価
+## 詳細の参照先
 
-`Function` と各多項式型は決定変数の値を代入する `evaluate` メソッドを持ちます。例えば上で作った線形関数 $x_1 + 2x_2 + 3$ に $x_1 = 1, x_2 = 0$ を代入すると $1 + 2 \times 0 + 3 = 4$ となります。
+数値のゼロ判定、演算順序、部分評価時に残す演算、係数の正規化は[Functionの契約](../reference/function_contract.md)にまとめています。区間評価には {meth}`~ommx.Function.evaluate_bound` を使いますが、返る区間が実際の最小値・最大値に一致するとは限りません。引数・戻り値と区間評価の条件は各メソッドのAPI Referenceを参照してください。
 
-```{code-cell} ipython3
-value = linear.evaluate({1: 1, 2: 0})
-print(f"{value=}")
-```
-
-引数は `dict[int, float]` の形式と `ommx.State` をサポートしています。`evaluate` は評価に必要な決定変数のIDが足りない場合はエラーを返します。
-
-```{code-cell} ipython3
-try:
-    linear.evaluate({1: 1})
-except ValueError as e:
-    print(f"Error: {e}")
-```
-
-一部の決定変数にだけ値を代入したい場合は `partial_evaluate` メソッドを使います。これは `evaluate` と同じ引数を受け取りますが、値が代入されていない決定変数については評価せずにそのまま返します。
-
-```{code-cell} ipython3
-linear2 = linear.partial_evaluate({1: 1})
-print(f"{linear2=}")
-```
-
-`Linear`、`Quadratic`、`Polynomial` の部分評価では元の Python 型が保たれます。複合 `Function` では未代入の変数に依存する式構造を保持します。閉じた部分式を定数へ畳み込むのは、その結果が `atol` に依存しない場合だけです。ゼロに依存する `Signum`、`Div`、負の `Powi` の部分式は、すべての変数に値が代入された後も複合式のまま保持されます。これにより、後続の `evaluate` に渡す `atol` が結果や定義域エラーを決定します。
-
-+++
-
-## 係数の比較
-
-`Function` と各多項式型には `almost_equal` 関数が用意されています。多項式では各係数が指定された誤差で一致するかを判定します。複合式では同じ式構造を比較するものであり、数学的な大域同値性を証明するものではありません。例えば $ (x + 1)^2 = x^2 + 2x + 1 $ であることを確認するには次のように書きます。
-
-```{code-cell} ipython3
-xx = (x + 1) * (x + 1)
-xx.almost_equal(x * x + 2 * x + 1)
-```
+他言語で式を保存・交換する場合のRPN命令列などのwire表現は、[Message仕様](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/proto)を参照してください。表現形式の詳細は、Pythonで目的関数を作って候補を評価するための前提ではありません。

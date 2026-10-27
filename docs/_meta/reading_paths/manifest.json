@@ -1917,7 +1917,7 @@
       "title": "Functionによる式の構築と評価",
       "slice": "I",
       "role": "guide",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
         "docs/ja/user_guide/function.md"
       ],
@@ -1968,9 +1968,10 @@
       "title": "式の対応範囲と表現条件",
       "slice": "I",
       "role": "guide-section",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/function.md"
+        "docs/ja/user_guide/function.md",
+        "docs/ja/reference/function_contract.md"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/function.md"
@@ -2329,7 +2330,7 @@
       "title": "ParametricInstanceと固定構造の問題族",
       "slice": "I",
       "role": "guide",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
         "docs/ja/user_guide/parametric_instance.md"
       ],
@@ -2366,8 +2367,10 @@
       "title": "変数の役割と値の復元・補完",
       "slice": "I",
       "role": "guide",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/variable_roles.md"
+      ],
       "source_urls": [],
       "requires": [
         "instance.model",
@@ -2410,8 +2413,10 @@
       "title": "変換によって何が保持されるか",
       "slice": "I",
       "role": "guide",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
       "source_urls": [],
       "requires": [
         "evaluation.basic",

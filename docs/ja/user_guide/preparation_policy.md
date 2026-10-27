@@ -45,6 +45,8 @@ assert target.contains(instance)
 
 この条件だけでは、元の問題との数学的な等価性や最適性は保証されません。変換元の条件、使う操作、その操作が保存するものを個別に確認します。
 
+候補・実行可能性・目的値・最適性について何を確認するかは、[変換が何を保存するか](./transformation_guarantees.md)で説明します。
+
 変換後の候補は、そのInstanceが保持する変数・制約・目的の情報を使って解釈します。{ref}`Instanceの変数の役割 <instance-variable-roles>`と[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。
 
 ## PreparationPolicy が選ぶ phase
@@ -65,6 +67,26 @@ assert target.contains(instance)
 各fieldに設定する型とfactoryの全引数は、{class}`~ommx.SpecialConstraintPreparation`、{class}`~ommx.ObjectivePreparation`、{class}`~ommx.IntegerSlackPreparation`、{class}`~ommx.FixedPenaltyPreparation`、{class}`~ommx.IntegerEncodingPreparation`、{class}`~ommx.BinaryPowerPreparation`のAPI Referenceを参照してください。特殊制約loweringの数式と成立条件も、各変換メソッドのAPI Referenceが所有します。特殊制約そのものの意味は[特殊制約型](./special_constraints.md)を参照してください。
 
 固定penaltyの大きさのように、問題のscaleや求める解の性質に依存する選択があります。どの変換を許し、どの値を使うかはapplicationが判断します。
+
+## QUBOへの準備と係数への整形を分ける
+
+QUBO向けの一般的なPolicyには {meth}`~ommx.PreparationPolicy.for_qubo` があります。これはPolicyを作るだけであり、Instanceを変更しません。`InstanceClass.qubo()`をtargetにして明示的に準備し、係数が必要なら後から整形します。
+
+```python
+from ommx import InstanceClass, PreparationPolicy
+
+policy = PreparationPolicy.for_qubo(uniform_penalty_weight=2.0)
+instance.prepare(InstanceClass.qubo(), policy)
+coefficients, offset = instance.as_qubo_format()
+```
+
+ここで2.0は利用者が選んだ重みの例であり、任意の問題に十分な値ではありません。`for_qubo()`自体にも引数を省略した場合の既定値があります。Factoryの既定値があることと、その問題で望む候補を得られることは別です。特に、不等式の本体を直接二乗するpenaltyの注意は[変換の保証](./transformation_guarantees.md)を参照してください。
+
+{meth}`~ommx.Instance.to_qubo` は、このQUBO向けPreparationとactive objectiveの係数整形をまとめた経路で、Instanceをin-placeに変更します。一方、{meth}`~ommx.Instance.as_qubo_format` はPreparationをしません。どちらも返す係数はactiveな目的関数のものであり、`instance.evaluate()`が返す出力目的値と常に同じとは限りません。
+
+準備後も対象はOMMX Instanceです。変数の復元・制約・出力目的関数を確認する情報を保持できますが、係数と定数項だけを渡した先にそれらが自動的に付随するわけではありません。問題と候補をOMMXとして評価・保存する場合はInstanceも扱います。
+
+一般の`for_qubo()`と、具体的なAdapterの推奨Policyは別の選択です。例えばOpenJij SA Adapterは二次より高次も直接受け取り、推奨Policyは固定penaltyの重みを利用者に委ねます。[OpenJij Adapterで小さな問題をサンプリングする](../how_to/sample_with_openjij_adapter)では、そのAdapterのtargetと推奨から始めます。
 
 ## Adapterへの適用：推奨Policyと自動Preparation
 
@@ -100,7 +122,7 @@ result = Adapter.solve_without_preparation(instance)
 
 Adapterでは`INPUT_CLASS` membershipがapplicabilityです。converterやBackendは、その後のsolver input構築や実行で別のerrorを返すことがあります。それらは追加のapplicability条件ではありません。
 
-Solverの出力を{class}`~ommx.Solution`や{class}`~ommx.SampleSet`に戻すときも、Adapterへ渡した同じ変換済みInstanceで評価します。そのInstanceが保持する変数間のdependencyとremoved constraintにより、encoding前の変数値や変換前の制約も評価できます。値の復元は[Instanceの基本モデル](./instance.md)、制約の評価規則は[Removed constraintsと実行可能性](./removed_constraints.md)を参照してください。
+Solverの出力を{class}`~ommx.Solution`や{class}`~ommx.SampleSet`に戻すときも、Adapterへ渡した同じ変換済みInstanceで評価します。そのInstanceが保持する変数間のdependencyとremoved constraintにより、encoding前の変数値や変換前の制約も評価できます。値の復元は[変数の役割と値の復元・補完](./variable_roles.md)、制約の評価規則は[Removed constraintsと実行可能性](./removed_constraints.md)を参照してください。
 
 ## 詳細：到達できない場合と部分的な変更
 
