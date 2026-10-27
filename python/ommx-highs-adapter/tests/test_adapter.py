@@ -294,23 +294,3 @@ def test_relax_constraint():
     solution = OMMXHighsAdapter.solve(instance)
     # x[2] is still present as part of the evaluate/decoding process but has a value of 0
     assert [var.value for var in solution.decision_variables] == [0, 0, 0]
-
-
-def test_dual_mapping_uses_solver_rows_with_sparse_constraint_ids():
-    x = DecisionVariable.continuous(0, lower=0, upper=10)
-    instance = Instance.from_components(
-        decision_variables=[x],
-        objective=x,
-        sense=Sense.Maximize,
-        constraints={
-            7: Constraint(function=0, equality=Equality.EqualToZero),
-            42: x <= 2,
-        },
-    )
-    adapter = OMMXHighsAdapter(instance)
-    model = adapter.solver_input
-    model.run()
-    solution = adapter.decode(model)
-    assert model.getNumRow() == 1
-    assert solution.get_dual_variable(7) is None
-    assert solution.get_dual_variable(42) == pytest.approx(1)

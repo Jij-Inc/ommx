@@ -6,7 +6,7 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### 🛠 Map HiGHS dual values to constraint IDs ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
+### 🛠 Map HiGHS dual values to constraint IDs ([#1300](https://github.com/Jij-Inc/ommx/pull/1300))
 
 HiGHS now records each generated solver row's OMMX constraint ID. Dual values
 remain associated with the correct constraints when IDs are sparse or feasible
