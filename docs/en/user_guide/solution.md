@@ -92,8 +92,8 @@ rows = solution.constraints
 rows[ConstraintID(0)].violation()
 ```
 
-`Instance`, `ParametricInstance`, `Solution`, and `SampleSet` expose all four
-families through `.constraints`. The property keeps a reference to its owner;
+`Instance`, `ParametricInstance`, `Solution`, and `SampleSet` expose all
+constraint families through `.constraints`. The property keeps a reference to its owner;
 it does not collect constraint rows. Indexing fetches the selected constraint
 from the owner's current state. Integer keys raise `TypeError` because the
 family cannot be inferred. A missing typed ID raises `KeyError`.
@@ -133,3 +133,31 @@ IDs of another family. An input mapping containing both `1` and `ConstraintID(1)
 raises `ValueError` because the keys normalize to the same identity. Collections,
 `constraint_violation(id)`, and DataFrame indexes require typed IDs. IDs do not
 support `int()` or integer-index conversion. Variable and sample IDs remain integers.
+
+### Supporting future constraint families
+
+Adding a special-constraint family is an additive API extension. The SDK does
+not promise that the currently known families exhaust all future possibilities.
+Collections, including `.removed_constraints`, implement
+`Mapping[ConstraintIDBase, ConstraintView]`. Iteration returns
+{class}`~ommx.ConstraintIDBase`; values share the metadata interface
+{class}`~ommx.ConstraintView`. Indexing with a known concrete ID still returns
+its precise row type, such as `AttachedConstraint` for `ConstraintID` on a model.
+
+A solver adapter or transformation must explicitly reject families it cannot
+handle. Silently skipping a constraint can relax the optimization problem.
+For example, a consumer that translates only regular constraints needs this
+guard even if its earlier applicability check normally rules out other kinds:
+
+```python
+for cid in instance.constraints:
+    if not isinstance(cid, ConstraintID):
+        raise NotImplementedError(f"Unsupported constraint family: {type(cid).__name__}")
+    constraint = instance.constraints[cid]  # AttachedConstraint
+    # Translate this regular constraint into the target model.
+```
+
+Handle additional concrete ID types explicitly when supported, and keep the
+rejecting fallback. A new family reaching an older consumer should fail; that
+is the extension contract working. Metadata-only inspection can use the common
+interface without interpreting the family's mathematical meaning.

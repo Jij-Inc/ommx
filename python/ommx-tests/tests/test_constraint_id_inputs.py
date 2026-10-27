@@ -66,7 +66,17 @@ def test_integer_and_typed_keys_promote_to_the_same_family(host):
         }
         assert set(rows) == {id_type(7), id_type(42)}
         assert all(type(id_) is id_type for id_ in rows)
-        assert rows[id_type(7)].constraint_id == id_type(7)
+        row = rows[id_type(7)]
+        assert isinstance(
+            row,
+            (
+                AttachedConstraint,
+                AttachedIndicatorConstraint,
+                AttachedOneHotConstraint,
+                AttachedSos1Constraint,
+            ),
+        )
+        assert row.constraint_id == id_type(7)
         assert 7 not in rows  # Returned dictionaries retain normal Python equality.
     assert (
         instance.get_constraint_by_id(7).equality

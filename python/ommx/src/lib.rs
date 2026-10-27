@@ -8,6 +8,7 @@ mod bound;
 #[cfg(feature = "cli")]
 mod cli;
 mod constraint;
+mod constraint_base;
 mod constraint_collection;
 mod constraint_id;
 mod constraint_kind;
@@ -203,6 +204,8 @@ fn _ommx_rust(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(list_experiments, m)?)?;
     m.add_function(wrap_pyfunction!(list_experiment_checkpoints, m)?)?;
 
+    m.add_class::<constraint_base::ConstraintIDBase>()?;
+    m.add_class::<constraint_base::ConstraintView>()?;
     constraint_collection::register(m)?;
 
     // OMMX Message
@@ -360,6 +363,8 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "RemovedConstraintCollection",
     "EvaluatedConstraintCollection",
     "SampledConstraintCollection",
+    "ConstraintIDBase",
+    "ConstraintView",
     "ConstraintID",
     "IndicatorConstraintID",
     "OneHotConstraintID",

@@ -1,13 +1,18 @@
+use crate::constraint_base::ConstraintView;
 use std::collections::BTreeSet;
 
 use pyo3::prelude::*;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(extends = ConstraintView)]
 pub struct EvaluatedConstraint(
     pub ommx::EvaluatedConstraint,
     pub ommx::ConstraintContext,
     pub Option<ommx::RemovedReason>,
+);
+crate::constraint_base::constraint_subclass!(
+    EvaluatedConstraint,
+    crate::constraint_base::ConstraintView
 );
 
 impl EvaluatedConstraint {

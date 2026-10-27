@@ -473,7 +473,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         self._constraint_names: dict[ConstraintID, str] = {}
         for cid in self.instance.constraints:
             if not isinstance(cid, ConstraintID):
-                continue
+                raise OMMXPythonMIPAdapterError(
+                    f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
+                )
             constraint = self.instance.constraints[cid]
             lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Equality.EqualToZero:

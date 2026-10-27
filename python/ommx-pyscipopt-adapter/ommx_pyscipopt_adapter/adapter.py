@@ -916,114 +916,114 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_constraints(self):
-        # Handle SOS1 constraints (first-class constraint type)
-        for sos1_id in self.instance.constraints:
-            if not isinstance(sos1_id, Sos1ConstraintID):
-                continue
-            sos1 = self.instance.constraints[sos1_id]
-            name = f"sos1_{sos1_id}"
-            vars = [self.varname_map[str(v)] for v in sos1.variables]
-            self.model.addConsSOS1(vars, name=name)
-
         for cid in self.instance.constraints:
-            if not isinstance(cid, ConstraintID):
-                continue
-
-            constraint = self.instance.constraints[cid]
-            # Handle constraint function based on its type
-            f = constraint.function
-            degree = f.degree()
-            if degree == 0:
-                # Constant constraint is not passed to SCIP, but checked for feasibility
-                constant_value = f.constant_term
-                if constraint.equality == Equality.EqualToZero and math.isclose(
-                    constant_value, 0, abs_tol=1e-6
-                ):
-                    continue  # Skip feasible constant constraint
-                elif (
-                    constraint.equality == Equality.LessThanOrEqualToZero
-                    and constant_value <= 1e-6
-                ):
-                    continue  # Skip feasible constant constraint
-                else:
-                    raise OMMXPySCIPOptAdapterError(
-                        f"Infeasible constant constraint was found: id {cid}"
-                    )
-            elif degree == 1:
-                expr = self._make_linear_expr(f)
-            elif degree == 2:
-                expr = self._make_quadratic_expr(f)
+            if isinstance(cid, ConstraintID):
+                self._set_regular_constraint(cid)
+            elif isinstance(cid, Sos1ConstraintID):
+                self._set_sos1_constraint(cid)
+            elif isinstance(cid, IndicatorConstraintID):
+                self._set_indicator_constraint(cid)
             else:
                 raise OMMXPySCIPOptAdapterError(
-                    f"Constraints must be either constant, linear or quadratic. "
-                    f"id: {cid}, "
-                    f"degree: {degree}"
+                    f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
                 )
 
-            if constraint.equality == Equality.EqualToZero:
-                constr_expr = expr == 0
-            elif constraint.equality == Equality.LessThanOrEqualToZero:
-                constr_expr = expr <= 0
+    def _set_sos1_constraint(self, sos1_id: Sos1ConstraintID):
+        sos1 = self.instance.constraints[sos1_id]
+        name = f"sos1_{sos1_id}"
+        vars = [self.varname_map[str(v)] for v in sos1.variables]
+        self.model.addConsSOS1(vars, name=name)
+
+    def _set_regular_constraint(self, cid: ConstraintID):
+        constraint = self.instance.constraints[cid]
+        # Handle constraint function based on its type
+        f = constraint.function
+        degree = f.degree()
+        if degree == 0:
+            # Constant constraint is not passed to SCIP, but checked for feasibility
+            constant_value = f.constant_term
+            if constraint.equality == Equality.EqualToZero and math.isclose(
+                constant_value, 0, abs_tol=1e-6
+            ):
+                return  # Skip feasible constant constraint
+            elif (
+                constraint.equality == Equality.LessThanOrEqualToZero
+                and constant_value <= 1e-6
+            ):
+                return  # Skip feasible constant constraint
             else:
                 raise OMMXPySCIPOptAdapterError(
-                    f"Not supported constraint equality: "
-                    f"id: {cid}, equality: {constraint.equality}"
+                    f"Infeasible constant constraint was found: id {cid}"
                 )
+        elif degree == 1:
+            expr = self._make_linear_expr(f)
+        elif degree == 2:
+            expr = self._make_quadratic_expr(f)
+        else:
+            raise OMMXPySCIPOptAdapterError(
+                f"Constraints must be either constant, linear or quadratic. "
+                f"id: {cid}, "
+                f"degree: {degree}"
+            )
 
-            self.model.addCons(constr_expr, name=str(cid))
+        if constraint.equality == Equality.EqualToZero:
+            constr_expr = expr == 0
+        elif constraint.equality == Equality.LessThanOrEqualToZero:
+            constr_expr = expr <= 0
+        else:
+            raise OMMXPySCIPOptAdapterError(
+                f"Not supported constraint equality: "
+                f"id: {cid}, equality: {constraint.equality}"
+            )
 
-        # Handle indicator constraints
-        for ind_id in self.instance.constraints:
-            if not isinstance(ind_id, IndicatorConstraintID):
-                continue
-            indicator = self.instance.constraints[ind_id]
-            f = indicator.function
-            degree = f.degree()
-            if degree == 0:
-                # Constant indicator constraint: check feasibility statically
-                # When indicator is ON, the constant constraint must hold
-                constant_value = f.constant_term
-                is_feasible = (
-                    indicator.equality == Equality.EqualToZero
-                    and math.isclose(constant_value, 0, abs_tol=1e-6)
-                ) or (
-                    indicator.equality == Equality.LessThanOrEqualToZero
-                    and constant_value <= 1e-6
-                )
-                if is_feasible:
-                    continue  # Always feasible, skip
-                # If infeasible when indicator is ON, add indicator constraint
-                # that forces indicator to be 0
-                binvar = self.varname_map[str(indicator.indicator_variable_id)]
-                self.model.addCons(binvar == 0, name=f"ind_{ind_id}_forced_off")
-                continue
-            elif degree == 1:
-                expr = self._make_linear_expr(f)
-            else:
-                raise OMMXPySCIPOptAdapterError(
-                    f"Indicator constraints must be linear. "
-                    f"id: {ind_id}, degree: {degree}"
-                )
+        self.model.addCons(constr_expr, name=str(cid))
 
+    def _set_indicator_constraint(self, ind_id: IndicatorConstraintID):
+        indicator = self.instance.constraints[ind_id]
+        f = indicator.function
+        degree = f.degree()
+        if degree == 0:
+            # Constant indicator constraint: check feasibility statically
+            # When indicator is ON, the constant constraint must hold
+            constant_value = f.constant_term
+            is_feasible = (
+                indicator.equality == Equality.EqualToZero
+                and math.isclose(constant_value, 0, abs_tol=1e-6)
+            ) or (
+                indicator.equality == Equality.LessThanOrEqualToZero
+                and constant_value <= 1e-6
+            )
+            if is_feasible:
+                return  # Always feasible, skip
+            # If infeasible when indicator is ON, add indicator constraint
+            # that forces indicator to be 0
             binvar = self.varname_map[str(indicator.indicator_variable_id)]
+            self.model.addCons(binvar == 0, name=f"ind_{ind_id}_forced_off")
+            return
+        elif degree == 1:
+            expr = self._make_linear_expr(f)
+        else:
+            raise OMMXPySCIPOptAdapterError(
+                f"Indicator constraints must be linear. id: {ind_id}, degree: {degree}"
+            )
 
-            if indicator.equality == Equality.EqualToZero:
-                # Decompose f(x) == 0 into two indicator constraints
-                self.model.addConsIndicator(
-                    expr <= 0, binvar=binvar, name=f"ind_{ind_id}_le"
-                )
-                self.model.addConsIndicator(
-                    -expr <= 0, binvar=binvar, name=f"ind_{ind_id}_ge"
-                )
-            elif indicator.equality == Equality.LessThanOrEqualToZero:
-                self.model.addConsIndicator(
-                    expr <= 0, binvar=binvar, name=f"ind_{ind_id}"
-                )
-            else:
-                raise OMMXPySCIPOptAdapterError(
-                    f"Not supported indicator constraint equality: "
-                    f"id: {ind_id}, equality: {indicator.equality}"
-                )
+        binvar = self.varname_map[str(indicator.indicator_variable_id)]
+
+        if indicator.equality == Equality.EqualToZero:
+            # Decompose f(x) == 0 into two indicator constraints
+            self.model.addConsIndicator(
+                expr <= 0, binvar=binvar, name=f"ind_{ind_id}_le"
+            )
+            self.model.addConsIndicator(
+                -expr <= 0, binvar=binvar, name=f"ind_{ind_id}_ge"
+            )
+        elif indicator.equality == Equality.LessThanOrEqualToZero:
+            self.model.addConsIndicator(expr <= 0, binvar=binvar, name=f"ind_{ind_id}")
+        else:
+            raise OMMXPySCIPOptAdapterError(
+                f"Not supported indicator constraint equality: "
+                f"id: {ind_id}, equality: {indicator.equality}"
+            )
 
     def _make_linear_expr(self, f: Function) -> pyscipopt.Expr:
         return (

@@ -1087,6 +1087,12 @@ iterating one family. `constraints_df(*, kind=...)` requires `kind` on every roo
 Models select active rows by default and support `removed=True`; results include
 retained removed rows. See [collection semantics](../user_guide/solution.md).
 
+For heterogeneous enumeration, use `ConstraintIDBase` and `ConstraintView`
+instead of a union of the currently known families. Adding a special family
+does not change these public return types. Concrete-ID indexing retains its
+specific return type. Consumers that translate or solve models must reject
+unsupported families explicitly; filtering them out would relax the problem.
+
 Family-specific method arguments and `from_components` keys still accept
 integers and promote them, rejecting IDs from another family. Collection
 indexing, membership, and `get` require typed IDs. IDs remain typed in returned

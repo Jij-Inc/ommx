@@ -4,6 +4,7 @@
 //! must remain unequal even when their numerical values coincide. Conversion to
 //! raw integers is confined to internal serialization boundaries.
 
+use crate::constraint_base::ConstraintIDBase;
 use pyo3::{
     conversion::FromPyObjectOwned,
     exceptions::{PyTypeError, PyValueError},
@@ -235,9 +236,13 @@ macro_rules! constraint_id {
     ($name:ident, $doc:literal) => {
         #[doc = $doc]
         #[pyo3_stub_gen::derive::gen_stub_pyclass]
-        #[pyclass(frozen, eq, ord, hash)]
+        #[pyclass(frozen, eq, ord, hash, extends = ConstraintIDBase)]
         #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct $name(ommx::$name);
+        crate::constraint_base::constraint_subclass!(
+            $name,
+            crate::constraint_base::ConstraintIDBase
+        );
 
         impl From<ommx::$name> for $name {
             fn from(id: ommx::$name) -> Self {
@@ -304,10 +309,7 @@ pub enum AnyConstraintID {
 
 impl pyo3_stub_gen::PyStubType for AnyConstraintID {
     fn type_output() -> pyo3_stub_gen::TypeInfo {
-        ConstraintID::type_output()
-            | IndicatorConstraintID::type_output()
-            | OneHotConstraintID::type_output()
-            | Sos1ConstraintID::type_output()
+        crate::constraint_base::ConstraintIDBase::type_output()
     }
 }
 

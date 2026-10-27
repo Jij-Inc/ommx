@@ -71,6 +71,12 @@ integers. Variable and sample IDs remain integers; wire formats are unchanged.
 See [native result queries](../user_guide/solution.md)
 and the [migration guide](../migration/python_sdk_v2_to_v3.md).
 
+Heterogeneous queries use the extensible `ConstraintIDBase` and `ConstraintView`
+types, so adding a special-constraint family does not change their public
+return types. Concrete-ID indexing keeps precise overloads. Solver consumers
+explicitly reject unsupported families instead of silently omitting constraints.
+This extension principle is also recorded in the development and review guidance.
+
 ### 🆕 Create states from variable names and subscripts ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 `Instance.state_from_named_values()` resolves a `NamedState` against the target

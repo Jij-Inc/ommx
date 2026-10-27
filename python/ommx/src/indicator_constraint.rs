@@ -1,3 +1,4 @@
+use crate::constraint_base::ConstraintView;
 use pyo3::{exceptions::PyKeyError, prelude::*};
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use std::collections::HashMap;
@@ -135,13 +136,17 @@ impl IndicatorConstraint {
 
 /// A removed indicator constraint together with the reason it was removed.
 #[gen_stub_pyclass]
-#[pyclass]
+#[pyclass(extends = ConstraintView)]
 #[derive(Clone)]
 pub struct RemovedIndicatorConstraint {
     pub constraint: ommx::IndicatorConstraint,
     pub context: ommx::ConstraintContext,
     pub removed_reason: ommx::RemovedReason,
 }
+crate::constraint_base::constraint_subclass!(
+    RemovedIndicatorConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl RemovedIndicatorConstraint {
     pub fn from_parts(
@@ -160,6 +165,36 @@ impl RemovedIndicatorConstraint {
 #[gen_stub_pymethods]
 #[pymethods]
 impl RemovedIndicatorConstraint {
+    #[getter]
+    pub fn name(&self) -> Option<String> {
+        self.context.label.name.clone()
+    }
+
+    #[getter]
+    pub fn description(&self) -> Option<String> {
+        self.context.label.description.clone()
+    }
+
+    #[getter]
+    pub fn subscripts(&self) -> Vec<i64> {
+        self.context.label.subscripts.clone()
+    }
+
+    #[getter]
+    pub fn parameters(&self) -> HashMap<String, String> {
+        self.context
+            .label
+            .parameters
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    #[getter]
+    pub fn provenance(&self) -> Vec<crate::Provenance> {
+        crate::provenance_list(&self.context)
+    }
+
     #[getter]
     pub fn constraint(&self) -> IndicatorConstraint {
         IndicatorConstraint(self.constraint.clone(), self.context.clone())
@@ -220,11 +255,15 @@ impl RemovedIndicatorConstraint {
 /// `constraints[IndicatorConstraintID(...)]` lookups. Reads pull live data from the parent
 /// host and context setters write through to its SoA context store.
 #[gen_stub_pyclass]
-#[pyclass]
+#[pyclass(extends = ConstraintView)]
 pub struct AttachedIndicatorConstraint {
     pub(crate) host: ConstraintHost,
     pub(crate) id: ommx::IndicatorConstraintID,
 }
+crate::constraint_base::constraint_subclass!(
+    AttachedIndicatorConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl AttachedIndicatorConstraint {
     pub fn new(host: ConstraintHost, id: ommx::IndicatorConstraintID) -> Self {

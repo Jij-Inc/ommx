@@ -202,10 +202,7 @@ enum ConstraintCollectionValue {
 }
 impl PyStubType for ConstraintCollectionValue {
     fn type_output() -> TypeInfo {
-        crate::AttachedConstraint::type_output()
-            | crate::AttachedIndicatorConstraint::type_output()
-            | crate::AttachedOneHotConstraint::type_output()
-            | crate::AttachedSos1Constraint::type_output()
+        crate::constraint_base::ConstraintView::type_output()
     }
 }
 
@@ -351,7 +348,7 @@ class ConstraintCollection:
         """Fetch the constraint identified by a typed ID from the current owner."""
         ...
     @overload
-    def __getitem__(self, key: ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID) -> AttachedConstraint | AttachedIndicatorConstraint | AttachedOneHotConstraint | AttachedSos1Constraint:
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView:
         ...
 
 "# }
@@ -366,10 +363,7 @@ enum RemovedConstraintCollectionValue {
 }
 impl PyStubType for RemovedConstraintCollectionValue {
     fn type_output() -> TypeInfo {
-        crate::RemovedConstraint::type_output()
-            | crate::RemovedIndicatorConstraint::type_output()
-            | crate::RemovedOneHotConstraint::type_output()
-            | crate::RemovedSos1Constraint::type_output()
+        crate::constraint_base::ConstraintView::type_output()
     }
 }
 
@@ -547,7 +541,7 @@ class RemovedConstraintCollection:
         """Fetch the constraint identified by a typed ID from the current owner."""
         ...
     @overload
-    def __getitem__(self, key: ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID) -> RemovedConstraint | RemovedIndicatorConstraint | RemovedOneHotConstraint | RemovedSos1Constraint:
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView:
         ...
 
 "# }
@@ -562,10 +556,7 @@ enum EvaluatedConstraintCollectionValue {
 }
 impl PyStubType for EvaluatedConstraintCollectionValue {
     fn type_output() -> TypeInfo {
-        crate::EvaluatedConstraint::type_output()
-            | crate::EvaluatedIndicatorConstraint::type_output()
-            | crate::EvaluatedOneHotConstraint::type_output()
-            | crate::EvaluatedSos1Constraint::type_output()
+        crate::constraint_base::ConstraintView::type_output()
     }
 }
 
@@ -725,7 +716,7 @@ class EvaluatedConstraintCollection:
         """Fetch the constraint identified by a typed ID from the current owner."""
         ...
     @overload
-    def __getitem__(self, key: ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID) -> EvaluatedConstraint | EvaluatedIndicatorConstraint | EvaluatedOneHotConstraint | EvaluatedSos1Constraint:
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView:
         ...
 
 "# }
@@ -740,10 +731,7 @@ enum SampledConstraintCollectionValue {
 }
 impl PyStubType for SampledConstraintCollectionValue {
     fn type_output() -> TypeInfo {
-        crate::SampledConstraint::type_output()
-            | crate::SampledIndicatorConstraint::type_output()
-            | crate::SampledOneHotConstraint::type_output()
-            | crate::SampledSos1Constraint::type_output()
+        crate::constraint_base::ConstraintView::type_output()
     }
 }
 
@@ -899,7 +887,7 @@ class SampledConstraintCollection:
         """Fetch the constraint identified by a typed ID from the current owner."""
         ...
     @overload
-    def __getitem__(self, key: ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID) -> SampledConstraint | SampledIndicatorConstraint | SampledOneHotConstraint | SampledSos1Constraint:
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView:
         ...
 
 "# }

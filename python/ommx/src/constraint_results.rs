@@ -3,6 +3,7 @@
 //! Root objects retain identity and lifecycle ownership. These wrappers copy
 //! validated rows and their context; they cannot mutate the enclosing result.
 
+use crate::constraint_base::ConstraintView;
 use ommx::{EvaluatedConstraintBehavior, EvaluatedConstraintData, SampledConstraintData};
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -83,8 +84,9 @@ macro_rules! result_class {
     ($name:ident, $inner:ty, $doc:literal) => {
         #[doc = $doc]
         #[pyo3_stub_gen::derive::gen_stub_pyclass]
-        #[pyclass]
+        #[pyclass(extends = ConstraintView)]
         pub struct $name($inner, ommx::ConstraintContext, Option<ommx::RemovedReason>);
+        crate::constraint_base::constraint_subclass!($name, crate::constraint_base::ConstraintView);
 
         impl $name {
             /// The result collection builds one owned row with its owner-held context.

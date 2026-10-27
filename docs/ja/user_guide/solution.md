@@ -104,7 +104,7 @@ rows[ConstraintID(0)].violation()
 ```
 
 `Instance`・`ParametricInstance`・`Solution`・`SampleSet` の `.constraints` は、
-4種類すべての制約を扱います。プロパティは所有元への参照だけを保持し、制約を収集しません。
+すべての種類の制約を扱います。プロパティは所有元への参照だけを保持し、制約を収集しません。
 添字アクセス時に、指定された制約を所有元の現在の状態から取得します。
 整数キーは種類を判断できないため `TypeError`、存在しない型付きIDは `KeyError` になります。
 
@@ -137,3 +137,30 @@ rows[ConstraintID(0)].violation()
 整数を自動昇格し、別種類のIDを拒否します。同じ入力辞書に `1` と `ConstraintID(1)` がある場合は、
 同じIDになるため `ValueError` です。コレクション・`constraint_violation(id)`・DataFrameのインデックスには
 型付きIDを使います。IDは `int()` や整数インデックスへ変換できません。変数IDとサンプルIDは整数のままです。
+
+### 将来の特殊制約への対応
+
+特殊制約の種類の追加は、破壊的変更ではなくAPIの拡張として扱います。
+現在知られている種類が、将来のすべての種類を網羅しているという保証はしません。
+`.removed_constraints` を含むコレクションの型は
+`Mapping[ConstraintIDBase, ConstraintView]` です。IDの列挙は
+{class}`~ommx.ConstraintIDBase`、値の列挙は共通メタデータを参照する
+{class}`~ommx.ConstraintView` を返します。具体的なIDで添字アクセスした場合は、
+モデルの `ConstraintID` に対する `AttachedConstraint` のように、具体的な返り値型を維持します。
+
+ソルバーアダプターや変換処理は、扱えない種類を明示的に拒否する必要があります。
+制約を黙って読み飛ばすと、最適化問題を緩和してしまう可能性があります。
+例えば通常制約だけを変換できる処理では、事前の適用可否チェックがある場合も、
+変換時に次のような分岐を残します。
+
+```python
+for cid in instance.constraints:
+    if not isinstance(cid, ConstraintID):
+        raise NotImplementedError(f"Unsupported constraint family: {type(cid).__name__}")
+    constraint = instance.constraints[cid]  # AttachedConstraint
+    # この通常制約を変換先のモデルへ追加する。
+```
+
+別種類に対応するときは具体的なID型の分岐を追加し、未対応種類を拒否する経路を残します。
+新しい種類を古い利用コードへ渡した場合の失敗は、この拡張契約に沿った動作です。
+数学的意味を解釈しないメタデータの表示などは、共通インターフェースで扱えます。

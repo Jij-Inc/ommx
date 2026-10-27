@@ -13,6 +13,8 @@ from ommx import (
     AttachedSos1Constraint,
     ConstraintCollection,
     ConstraintID,
+    ConstraintIDBase,
+    ConstraintView,
     DecisionVariable,
     EvaluatedConstraintCollection,
     EvaluatedConstraint,
@@ -110,11 +112,7 @@ def test_removal_restoration_and_lowering_update_retained_views():
     assert_type(removed, RemovedConstraintCollection)
     assert_type(
         active.get(ConstraintID(5)),
-        AttachedConstraint
-        | AttachedIndicatorConstraint
-        | AttachedOneHotConstraint
-        | AttachedSos1Constraint
-        | None,
+        ConstraintView | None,
     )
     model.relax_constraint(5, "manual")
     assert ConstraintID(5) not in active
@@ -179,15 +177,26 @@ def test_all_collections_require_typed_keys_and_reject_structural_mutation():
             root.constraints_df()  # type: ignore[call-arg]
         with pytest.raises(TypeError):
             root.constraints_df("regular")  # type: ignore[call-arg]
-    for rows in [
+    collections: list[Mapping[ConstraintIDBase, ConstraintView]] = [
         model.constraints,
         model.removed_constraints,
         make_model(ParametricInstance).constraints,
         make_model(ParametricInstance).removed_constraints,
         samples.constraints,
         samples.get(9).constraints,
-    ]:
+    ]
+    for rows in collections:
         assert rows == rows
+        for key, row in rows.items():
+            assert_type(key, ConstraintIDBase)
+            assert_type(row, ConstraintView)
+            assert isinstance(key, ConstraintIDBase)
+            assert isinstance(row, ConstraintView)
+            assert row.name is None
+            assert row.description is None
+            assert row.subscripts == []
+            assert row.parameters == {}
+            assert row.provenance == []
         for key in [5, True, "5"]:
             with pytest.raises(TypeError):
                 rows[key]  # type: ignore[index]
@@ -206,3 +215,59 @@ def test_all_collections_require_typed_keys_and_reject_structural_mutation():
             rows[ConstraintID(5)] = None  # type: ignore[index]
         with pytest.raises(TypeError):
             del rows[ConstraintID(5)]  # type: ignore[index]
+
+
+class FutureConstraintID(ConstraintIDBase):
+    """Simulate a family introduced after this consumer was written."""
+
+
+def accept_current_families(key: ConstraintIDBase) -> None:
+    if isinstance(
+        key, (ConstraintID, IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID)
+    ):
+        return
+    # Even after checking every currently known family, this is not Never.
+    assert_type(key, ConstraintIDBase)
+    raise NotImplementedError(f"Unsupported constraint family: {type(key).__name__}")
+
+
+def test_new_family_requires_explicit_consumer_support():
+    future = FutureConstraintID()
+    with pytest.raises(NotImplementedError, match="FutureConstraintID"):
+        accept_current_families(future)
+    for root in [make_model(Instance), make_model(Instance).evaluate({0: 1, 1: 0})]:
+        rows = root.constraints
+        # An unrecognized family must not look like a missing ID in a known family.
+        with pytest.raises(TypeError):
+            rows[future]
+        with pytest.raises(TypeError):
+            rows.get(future, "missing")
+
+
+def test_removed_rows_share_the_open_metadata_interface():
+    model = make_model(Instance)
+    indicator = model.constraints[IndicatorConstraintID(5)]
+    indicator.set_name("retained indicator")
+    indicator.set_description("metadata survives removal")
+    indicator.set_subscripts([2])
+    indicator.set_parameters({"group": "test"})
+    model.relax_constraint(5, "manual")
+    model.relax_indicator_constraint(5, "manual")
+    model.convert_one_hot_to_constraint(5)
+    model.convert_sos1_to_constraints(5)
+    assert len(model.removed_constraints) == 4
+    for key, row in model.removed_constraints.items():
+        assert_type(key, ConstraintIDBase)
+        assert_type(row, ConstraintView)
+        assert isinstance(row, ConstraintView)
+        if isinstance(key, IndicatorConstraintID):
+            assert row.name == "retained indicator"
+            assert row.description == "metadata survives removal"
+            assert row.subscripts == [2]
+            assert row.parameters == {"group": "test"}
+        else:
+            assert row.name is None
+            assert row.description is None
+            assert row.subscripts == []
+            assert row.parameters == {}
+        assert row.provenance == []

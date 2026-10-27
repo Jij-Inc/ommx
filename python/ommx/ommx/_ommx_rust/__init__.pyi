@@ -37,6 +37,8 @@ __all__ = [
     "Constraint",
     "ConstraintCollection",
     "ConstraintID",
+    "ConstraintIDBase",
+    "ConstraintView",
     "DecisionVariable",
     "DecisionVariableRole",
     "Descriptor",
@@ -837,7 +839,7 @@ class ArtifactRef:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class AttachedConstraint:
+class AttachedConstraint(ConstraintView):
     r"""
     Attached constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
@@ -1067,7 +1069,7 @@ class AttachedDecisionVariable:
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None: ...
 
 @typing.final
-class AttachedIndicatorConstraint:
+class AttachedIndicatorConstraint(ConstraintView):
     r"""
     Attached indicator constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
@@ -1149,7 +1151,7 @@ class AttachedIndicatorConstraint:
         """
 
 @typing.final
-class AttachedOneHotConstraint:
+class AttachedOneHotConstraint(ConstraintView):
     r"""
     Attached one-hot constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
@@ -1226,7 +1228,7 @@ class AttachedOneHotConstraint:
         """
 
 @typing.final
-class AttachedSos1Constraint:
+class AttachedSos1Constraint(ConstraintView):
     r"""
     Attached SOS1 constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
@@ -1543,15 +1545,7 @@ class Constraint:
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
 
 @typing.final
-class ConstraintCollection(
-    typing.Mapping[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID,
-        AttachedConstraint
-        | AttachedIndicatorConstraint
-        | AttachedOneHotConstraint
-        | AttachedSos1Constraint,
-    ]
-):
+class ConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     r"""
     Live, read-only mapping of all active constraint families. Values are write-through attached handles.
 
@@ -1560,42 +1554,19 @@ class ConstraintCollection(
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
-    def __iter__(
-        self,
-    ) -> typing.Iterator[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID
-    ]:
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
         r"""
         Iterate a snapshot of typed IDs; constraint rows are not collected.
         """
-    def keys(
-        self,
-    ) -> typing.KeysView[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID
-    ]:
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
         r"""
         Live key view. Iteration order is family order, then numeric ID.
         """
-    def values(
-        self,
-    ) -> typing.ValuesView[
-        AttachedConstraint
-        | AttachedIndicatorConstraint
-        | AttachedOneHotConstraint
-        | AttachedSos1Constraint
-    ]:
+    def values(self) -> typing.ValuesView[ConstraintView]:
         r"""
         Live value view; each row is fetched when visited.
         """
-    def items(
-        self,
-    ) -> typing.ItemsView[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID,
-        AttachedConstraint
-        | AttachedIndicatorConstraint
-        | AttachedOneHotConstraint
-        | AttachedSos1Constraint,
-    ]:
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
         r"""
         Live item view; each row is fetched when visited.
         """
@@ -1622,21 +1593,10 @@ class ConstraintCollection(
         Fetch the constraint identified by a typed ID from the current owner.
         """
     @typing.overload
-    def __getitem__(
-        self,
-        key: ConstraintID
-        | IndicatorConstraintID
-        | OneHotConstraintID
-        | Sos1ConstraintID,
-    ) -> (
-        AttachedConstraint
-        | AttachedIndicatorConstraint
-        | AttachedOneHotConstraint
-        | AttachedSos1Constraint
-    ): ...
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
 
 @typing.final
-class ConstraintID:
+class ConstraintID(ConstraintIDBase):
     r"""
     A regular constraint ID. Unequal to integers and IDs of other constraint families.
     """
@@ -1654,6 +1614,36 @@ class ConstraintID:
         family is not accepted. IDs have no integer conversion protocol.
         """
     def __repr__(self) -> builtins.str: ...
+
+class ConstraintIDBase:
+    r"""
+    Common base of constraint IDs, including families introduced by future SDKs.
+
+    Consumers must handle the concrete ID types they support and reject all
+    others. This base alone is not a usable constraint identity. Integers are
+    not instances of this class and are never accepted by mixed-family lookups.
+    """
+    def __new__(cls) -> ConstraintIDBase: ...
+
+class ConstraintView:
+    r"""
+    Common metadata interface for rows fetched from constraint collections.
+
+    The set of concrete constraint families is open. Inspect a concrete ID or
+    row type before using family-specific mathematical operations, and reject
+    unsupported families rather than dropping their constraints. This interface
+    does not imply whether the row is attached or an owned result snapshot.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
 
 @typing.final
 class DecisionVariable:
@@ -1887,7 +1877,7 @@ class DiagnosticCollector:
     def record(self, diagnostic: adapter.DiagnosticReport) -> None: ...
 
 @typing.final
-class EvaluatedConstraint:
+class EvaluatedConstraint(ConstraintView):
     @property
     def equality(self) -> Equality:
         r"""
@@ -1968,15 +1958,7 @@ class EvaluatedConstraint:
         """
 
 @typing.final
-class EvaluatedConstraintCollection(
-    typing.Mapping[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID,
-        EvaluatedConstraint
-        | EvaluatedIndicatorConstraint
-        | EvaluatedOneHotConstraint
-        | EvaluatedSos1Constraint,
-    ]
-):
+class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     r"""
     Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.
 
@@ -1985,42 +1967,19 @@ class EvaluatedConstraintCollection(
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
-    def __iter__(
-        self,
-    ) -> typing.Iterator[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID
-    ]:
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
         r"""
         Iterate a snapshot of typed IDs; constraint rows are not collected.
         """
-    def keys(
-        self,
-    ) -> typing.KeysView[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID
-    ]:
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
         r"""
         Live key view. Iteration order is family order, then numeric ID.
         """
-    def values(
-        self,
-    ) -> typing.ValuesView[
-        EvaluatedConstraint
-        | EvaluatedIndicatorConstraint
-        | EvaluatedOneHotConstraint
-        | EvaluatedSos1Constraint
-    ]:
+    def values(self) -> typing.ValuesView[ConstraintView]:
         r"""
         Live value view; each row is fetched when visited.
         """
-    def items(
-        self,
-    ) -> typing.ItemsView[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID,
-        EvaluatedConstraint
-        | EvaluatedIndicatorConstraint
-        | EvaluatedOneHotConstraint
-        | EvaluatedSos1Constraint,
-    ]:
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
         r"""
         Live item view; each row is fetched when visited.
         """
@@ -2047,18 +2006,7 @@ class EvaluatedConstraintCollection(
         Fetch the constraint identified by a typed ID from the current owner.
         """
     @typing.overload
-    def __getitem__(
-        self,
-        key: ConstraintID
-        | IndicatorConstraintID
-        | OneHotConstraintID
-        | Sos1ConstraintID,
-    ) -> (
-        EvaluatedConstraint
-        | EvaluatedIndicatorConstraint
-        | EvaluatedOneHotConstraint
-        | EvaluatedSos1Constraint
-    ): ...
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
 
 @typing.final
 class EvaluatedDecisionVariable:
@@ -2109,7 +2057,7 @@ class EvaluatedDecisionVariable:
         """
 
 @typing.final
-class EvaluatedIndicatorConstraint:
+class EvaluatedIndicatorConstraint(ConstraintView):
     r"""
     An owned evaluated indicator result. Fetched by typed ID from the owning result's constraints collection.
     """
@@ -2214,7 +2162,7 @@ class EvaluatedNamedFunction:
     def __deepcopy__(self, _memo: typing.Any) -> EvaluatedNamedFunction: ...
 
 @typing.final
-class EvaluatedOneHotConstraint:
+class EvaluatedOneHotConstraint(ConstraintView):
     r"""
     An owned evaluated one-hot result. Fetched by typed ID from the owning result's constraints collection.
     """
@@ -2283,7 +2231,7 @@ class EvaluatedOneHotConstraint:
         """
 
 @typing.final
-class EvaluatedSos1Constraint:
+class EvaluatedSos1Constraint(ConstraintView):
     r"""
     An owned evaluated SOS1 result. Fetched by typed ID from the owning result's constraints collection.
     """
@@ -3487,7 +3435,7 @@ class IndicatorConstraint:
     def __deepcopy__(self, _memo: typing.Any) -> IndicatorConstraint: ...
 
 @typing.final
-class IndicatorConstraintID:
+class IndicatorConstraintID(ConstraintIDBase):
     r"""
     An indicator constraint ID. Unequal to integers and IDs of other constraint families.
     """
@@ -6712,7 +6660,7 @@ class OneHotConstraint:
     def __deepcopy__(self, _memo: typing.Any) -> OneHotConstraint: ...
 
 @typing.final
-class OneHotConstraintID:
+class OneHotConstraintID(ConstraintIDBase):
     r"""
     A one-hot constraint ID. Unequal to integers and IDs of other constraint families.
     """
@@ -7784,9 +7732,7 @@ class Provenance:
         The kind of special constraint this regular constraint was generated from.
         """
     @property
-    def original_id(
-        self,
-    ) -> ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID:
+    def original_id(self) -> ConstraintIDBase:
         r"""
         The ID of the original special constraint (before transformation).
         """
@@ -7977,7 +7923,7 @@ class RemoteArtifactTransportError(RemoteArtifactError):
     ...
 
 @typing.final
-class RemovedConstraint:
+class RemovedConstraint(ConstraintView):
     r"""
     RemovedConstraint wrapper for Python.
 
@@ -8040,15 +7986,7 @@ class RemovedConstraint:
     def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
 
 @typing.final
-class RemovedConstraintCollection(
-    typing.Mapping[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID,
-        RemovedConstraint
-        | RemovedIndicatorConstraint
-        | RemovedOneHotConstraint
-        | RemovedSos1Constraint,
-    ]
-):
+class RemovedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     r"""
     Live, read-only mapping of all removed constraint families. Each access returns a snapshot.
 
@@ -8057,42 +7995,19 @@ class RemovedConstraintCollection(
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
-    def __iter__(
-        self,
-    ) -> typing.Iterator[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID
-    ]:
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
         r"""
         Iterate a snapshot of typed IDs; constraint rows are not collected.
         """
-    def keys(
-        self,
-    ) -> typing.KeysView[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID
-    ]:
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
         r"""
         Live key view. Iteration order is family order, then numeric ID.
         """
-    def values(
-        self,
-    ) -> typing.ValuesView[
-        RemovedConstraint
-        | RemovedIndicatorConstraint
-        | RemovedOneHotConstraint
-        | RemovedSos1Constraint
-    ]:
+    def values(self) -> typing.ValuesView[ConstraintView]:
         r"""
         Live value view; each row is fetched when visited.
         """
-    def items(
-        self,
-    ) -> typing.ItemsView[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID,
-        RemovedConstraint
-        | RemovedIndicatorConstraint
-        | RemovedOneHotConstraint
-        | RemovedSos1Constraint,
-    ]:
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
         r"""
         Live item view; each row is fetched when visited.
         """
@@ -8119,24 +8034,23 @@ class RemovedConstraintCollection(
         Fetch the constraint identified by a typed ID from the current owner.
         """
     @typing.overload
-    def __getitem__(
-        self,
-        key: ConstraintID
-        | IndicatorConstraintID
-        | OneHotConstraintID
-        | Sos1ConstraintID,
-    ) -> (
-        RemovedConstraint
-        | RemovedIndicatorConstraint
-        | RemovedOneHotConstraint
-        | RemovedSos1Constraint
-    ): ...
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
 
 @typing.final
-class RemovedIndicatorConstraint:
+class RemovedIndicatorConstraint(ConstraintView):
     r"""
     A removed indicator constraint together with the reason it was removed.
     """
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
     @property
     def constraint(self) -> IndicatorConstraint: ...
     @property
@@ -8154,7 +8068,7 @@ class RemovedIndicatorConstraint:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class RemovedOneHotConstraint:
+class RemovedOneHotConstraint(ConstraintView):
     r"""
     A removed one-hot constraint together with the reason it was removed.
     """
@@ -8171,6 +8085,8 @@ class RemovedOneHotConstraint:
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    @property
     def removed_reason(self) -> builtins.str: ...
     @property
     def removed_reason_parameters(
@@ -8179,7 +8095,7 @@ class RemovedOneHotConstraint:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class RemovedSos1Constraint:
+class RemovedSos1Constraint(ConstraintView):
     r"""
     A removed SOS1 constraint together with the reason it was removed.
     """
@@ -8195,6 +8111,8 @@ class RemovedSos1Constraint:
     def description(self) -> typing.Optional[builtins.str]: ...
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
     @property
     def removed_reason(self) -> builtins.str: ...
     @property
@@ -8856,7 +8774,7 @@ class SampleSet:
         """
 
 @typing.final
-class SampledConstraint:
+class SampledConstraint(ConstraintView):
     @property
     def equality(self) -> Equality:
         r"""
@@ -8922,15 +8840,7 @@ class SampledConstraint:
         """
 
 @typing.final
-class SampledConstraintCollection(
-    typing.Mapping[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID,
-        SampledConstraint
-        | SampledIndicatorConstraint
-        | SampledOneHotConstraint
-        | SampledSos1Constraint,
-    ]
-):
+class SampledConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     r"""
     Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.
 
@@ -8939,42 +8849,19 @@ class SampledConstraintCollection(
     """
     def __len__(self) -> builtins.int: ...
     def __contains__(self, key: builtins.object) -> builtins.bool: ...
-    def __iter__(
-        self,
-    ) -> typing.Iterator[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID
-    ]:
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
         r"""
         Iterate a snapshot of typed IDs; constraint rows are not collected.
         """
-    def keys(
-        self,
-    ) -> typing.KeysView[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID
-    ]:
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
         r"""
         Live key view. Iteration order is family order, then numeric ID.
         """
-    def values(
-        self,
-    ) -> typing.ValuesView[
-        SampledConstraint
-        | SampledIndicatorConstraint
-        | SampledOneHotConstraint
-        | SampledSos1Constraint
-    ]:
+    def values(self) -> typing.ValuesView[ConstraintView]:
         r"""
         Live value view; each row is fetched when visited.
         """
-    def items(
-        self,
-    ) -> typing.ItemsView[
-        ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID,
-        SampledConstraint
-        | SampledIndicatorConstraint
-        | SampledOneHotConstraint
-        | SampledSos1Constraint,
-    ]:
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
         r"""
         Live item view; each row is fetched when visited.
         """
@@ -9001,18 +8888,7 @@ class SampledConstraintCollection(
         Fetch the constraint identified by a typed ID from the current owner.
         """
     @typing.overload
-    def __getitem__(
-        self,
-        key: ConstraintID
-        | IndicatorConstraintID
-        | OneHotConstraintID
-        | Sos1ConstraintID,
-    ) -> (
-        SampledConstraint
-        | SampledIndicatorConstraint
-        | SampledOneHotConstraint
-        | SampledSos1Constraint
-    ): ...
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
 
 @typing.final
 class SampledDecisionVariable:
@@ -9058,7 +8934,7 @@ class SampledDecisionVariable:
         """
 
 @typing.final
-class SampledIndicatorConstraint:
+class SampledIndicatorConstraint(ConstraintView):
     r"""
     An owned sampled indicator result. Fetched by typed ID from the owning result's constraints collection.
     """
@@ -9184,7 +9060,7 @@ class SampledNamedFunction:
     def __deepcopy__(self, _memo: typing.Any) -> SampledNamedFunction: ...
 
 @typing.final
-class SampledOneHotConstraint:
+class SampledOneHotConstraint(ConstraintView):
     r"""
     An owned sampled one-hot result. Fetched by typed ID from the owning result's constraints collection.
     """
@@ -9258,7 +9134,7 @@ class SampledOneHotConstraint:
         """
 
 @typing.final
-class SampledSos1Constraint:
+class SampledSos1Constraint(ConstraintView):
     r"""
     An owned sampled SOS1 result. Fetched by typed ID from the owning result's constraints collection.
     """
@@ -9948,13 +9824,7 @@ class Solution:
         Use {meth}`constraint_violation` for individual values, also available in
         the `violation` column of {meth}`constraints_df` for every constraint kind.
         """
-    def constraint_violation(
-        self,
-        constraint_id: ConstraintID
-        | IndicatorConstraintID
-        | OneHotConstraintID
-        | Sos1ConstraintID,
-    ) -> builtins.float:
+    def constraint_violation(self, constraint_id: ConstraintIDBase) -> builtins.float:
         r"""
         Get one constraint's nonnegative scalar violation.
 
@@ -10213,7 +10083,7 @@ class Sos1Constraint:
     def __deepcopy__(self, _memo: typing.Any) -> Sos1Constraint: ...
 
 @typing.final
-class Sos1ConstraintID:
+class Sos1ConstraintID(ConstraintIDBase):
     r"""
     An SOS1 constraint ID. Unequal to integers and IDs of other constraint families.
     """

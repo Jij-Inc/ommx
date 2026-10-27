@@ -47,6 +47,8 @@ ommx
    _items/ommx.RemovedConstraintCollection
    _items/ommx.EvaluatedConstraintCollection
    _items/ommx.SampledConstraintCollection
+   _items/ommx.ConstraintIDBase
+   _items/ommx.ConstraintView
    _items/ommx.ConstraintID
    _items/ommx.IndicatorConstraintID
    _items/ommx.OneHotConstraintID

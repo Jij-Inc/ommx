@@ -9,7 +9,18 @@
           "kind": "Class",
           "name": "AttachedConstraint",
           "doc": "Attached constraint — a write-through handle bound to a host\n({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).\n\n`AttachedConstraint` is returned by `Instance.add_constraint` /\n`ParametricInstance.add_constraint` and by their `constraints[id]`\ngetters. Unlike {class}`~ommx.Constraint`, which is a snapshot, reads\npull live data from the parent host and context setters write through\nto its SoA context store. Two `AttachedConstraint` instances pointing\nat the same id on the same host observe the same state.\n\nThe handle keeps the parent host alive through a refcount; drop the\nwrapper to release the back-reference.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__copy__",
@@ -1636,7 +1647,18 @@
           "kind": "Class",
           "name": "AttachedIndicatorConstraint",
           "doc": "Attached indicator constraint — a write-through handle bound to a host\n({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).\n\n`AttachedIndicatorConstraint` is returned by\n`Instance.add_indicator_constraint` /\n`ParametricInstance.add_indicator_constraint` and by their\n`constraints[IndicatorConstraintID(...)]` lookups. Reads pull live data from the parent\nhost and context setters write through to its SoA context store.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__copy__",
@@ -2096,7 +2118,18 @@
           "kind": "Class",
           "name": "AttachedOneHotConstraint",
           "doc": "Attached one-hot constraint — a write-through handle bound to a host\n({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).\n\nReturned by `Instance.add_one_hot_constraint` /\n`ParametricInstance.add_one_hot_constraint` and by their\n`constraints[OneHotConstraintID(...)]` lookups. Reads pull live data from the parent\nhost and context setters write through to its SoA context store.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__copy__",
@@ -2535,7 +2568,18 @@
           "kind": "Class",
           "name": "AttachedSos1Constraint",
           "doc": "Attached SOS1 constraint — a write-through handle bound to a host\n({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).\n\nReturned by `Instance.add_sos1_constraint` /\n`ParametricInstance.add_sos1_constraint` and by their\n`constraints[Sos1ConstraintID(...)]` lookups.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__copy__",
@@ -4049,100 +4093,28 @@
           "doc": "Live, read-only mapping of all active constraint families. Values are write-through attached handles.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.",
           "bases": [
             {
-              "display": "Mapping[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID, AttachedConstraint | AttachedIndicatorConstraint | AttachedOneHotConstraint | AttachedSos1Constraint]",
+              "display": "Mapping[ConstraintIDBase, ConstraintView]",
               "link_target": null,
               "children": [
                 {
-                  "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
-                  "link_target": null,
-                  "children": [
-                    {
-                      "display": "ConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.ConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "IndicatorConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.IndicatorConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "OneHotConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.OneHotConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "Sos1ConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.Sos1ConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    }
-                  ]
+                  "display": "ConstraintIDBase",
+                  "link_target": {
+                    "fqn": "ommx.ConstraintIDBase",
+                    "doc_module": "ommx",
+                    "kind": "Class",
+                    "attribute": null
+                  },
+                  "children": []
                 },
                 {
-                  "display": "AttachedConstraint | AttachedIndicatorConstraint | AttachedOneHotConstraint | AttachedSos1Constraint",
-                  "link_target": null,
-                  "children": [
-                    {
-                      "display": "AttachedConstraint",
-                      "link_target": {
-                        "fqn": "ommx.AttachedConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "AttachedIndicatorConstraint",
-                      "link_target": {
-                        "fqn": "ommx.AttachedIndicatorConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "AttachedOneHotConstraint",
-                      "link_target": {
-                        "fqn": "ommx.AttachedOneHotConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "AttachedSos1Constraint",
-                      "link_target": {
-                        "fqn": "ommx.AttachedSos1Constraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    }
-                  ]
+                  "display": "ConstraintView",
+                  "link_target": {
+                    "fqn": "ommx.ConstraintView",
+                    "doc_module": "ommx",
+                    "kind": "Class",
+                    "attribute": null
+                  },
+                  "children": []
                 }
               ]
             }
@@ -4281,59 +4253,17 @@
                     {
                       "name": "key",
                       "type_": {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
                   ],
                   "return_type": {
-                    "display": "AttachedConstraint | AttachedIndicatorConstraint | AttachedOneHotConstraint | AttachedSos1Constraint",
+                    "display": "ConstraintView",
                     "link_target": null,
-                    "children": [
-                      {
-                        "display": "AttachedConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "AttachedIndicatorConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "AttachedOneHotConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "AttachedSos1Constraint",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
+                    "children": []
                   }
                 }
               ],
@@ -4347,34 +4277,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "Iterator[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID]",
+                    "display": "Iterator[ConstraintIDBase]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -4422,60 +4331,18 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "ItemsView[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID, AttachedConstraint | AttachedIndicatorConstraint | AttachedOneHotConstraint | AttachedSos1Constraint]",
+                    "display": "ItemsView[ConstraintIDBase, ConstraintView]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       {
-                        "display": "AttachedConstraint | AttachedIndicatorConstraint | AttachedOneHotConstraint | AttachedSos1Constraint",
+                        "display": "ConstraintView",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "AttachedConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "AttachedIndicatorConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "AttachedOneHotConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "AttachedSos1Constraint",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -4491,34 +4358,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "KeysView[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID]",
+                    "display": "KeysView[ConstraintIDBase]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -4534,34 +4380,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "ValuesView[AttachedConstraint | AttachedIndicatorConstraint | AttachedOneHotConstraint | AttachedSos1Constraint]",
+                    "display": "ValuesView[ConstraintView]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "AttachedConstraint | AttachedIndicatorConstraint | AttachedOneHotConstraint | AttachedSos1Constraint",
+                        "display": "ConstraintView",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "AttachedConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "AttachedIndicatorConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "AttachedOneHotConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "AttachedSos1Constraint",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -4578,7 +4403,18 @@
           "kind": "Class",
           "name": "ConstraintID",
           "doc": "A regular constraint ID. Unequal to integers and IDs of other constraint families.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintIDBase",
+              "link_target": {
+                "fqn": "ommx.ConstraintIDBase",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__eq__",
@@ -4770,6 +4606,132 @@
             }
           ],
           "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ConstraintIDBase",
+          "doc": "Common base of constraint IDs, including families introduced by future SDKs.\n\nConsumers must handle the concrete ID types they support and reject all\nothers. This base alone is not a usable constraint identity. Integers are\nnot instances of this class and are never accepted by mixed-family lookups.",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__new__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "ConstraintIDBase",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ConstraintView",
+          "doc": "Common metadata interface for rows fetched from constraint collections.\n\nThe set of concrete constraint families is open. Inspect a concrete ID or\nrow type before using family-specific mathematical operations, and reject\nunsupported families rather than dropping their constraints. This interface\ndoes not imply whether the row is attached or an owned result snapshot.",
+          "bases": [],
+          "methods": [],
+          "attributes": [
+            {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "provenance",
+              "doc": "",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
           "deprecated": null
         },
         {
@@ -6489,7 +6451,18 @@
           "kind": "Class",
           "name": "EvaluatedConstraint",
           "doc": "",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "is_feasible",
@@ -6728,100 +6701,28 @@
           "doc": "Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.",
           "bases": [
             {
-              "display": "Mapping[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID, EvaluatedConstraint | EvaluatedIndicatorConstraint | EvaluatedOneHotConstraint | EvaluatedSos1Constraint]",
+              "display": "Mapping[ConstraintIDBase, ConstraintView]",
               "link_target": null,
               "children": [
                 {
-                  "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
-                  "link_target": null,
-                  "children": [
-                    {
-                      "display": "ConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.ConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "IndicatorConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.IndicatorConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "OneHotConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.OneHotConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "Sos1ConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.Sos1ConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    }
-                  ]
+                  "display": "ConstraintIDBase",
+                  "link_target": {
+                    "fqn": "ommx.ConstraintIDBase",
+                    "doc_module": "ommx",
+                    "kind": "Class",
+                    "attribute": null
+                  },
+                  "children": []
                 },
                 {
-                  "display": "EvaluatedConstraint | EvaluatedIndicatorConstraint | EvaluatedOneHotConstraint | EvaluatedSos1Constraint",
-                  "link_target": null,
-                  "children": [
-                    {
-                      "display": "EvaluatedConstraint",
-                      "link_target": {
-                        "fqn": "ommx.EvaluatedConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "EvaluatedIndicatorConstraint",
-                      "link_target": {
-                        "fqn": "ommx.EvaluatedIndicatorConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "EvaluatedOneHotConstraint",
-                      "link_target": {
-                        "fqn": "ommx.EvaluatedOneHotConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "EvaluatedSos1Constraint",
-                      "link_target": {
-                        "fqn": "ommx.EvaluatedSos1Constraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    }
-                  ]
+                  "display": "ConstraintView",
+                  "link_target": {
+                    "fqn": "ommx.ConstraintView",
+                    "doc_module": "ommx",
+                    "kind": "Class",
+                    "attribute": null
+                  },
+                  "children": []
                 }
               ]
             }
@@ -6960,59 +6861,17 @@
                     {
                       "name": "key",
                       "type_": {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
                   ],
                   "return_type": {
-                    "display": "EvaluatedConstraint | EvaluatedIndicatorConstraint | EvaluatedOneHotConstraint | EvaluatedSos1Constraint",
+                    "display": "ConstraintView",
                     "link_target": null,
-                    "children": [
-                      {
-                        "display": "EvaluatedConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "EvaluatedIndicatorConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "EvaluatedOneHotConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "EvaluatedSos1Constraint",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
+                    "children": []
                   }
                 }
               ],
@@ -7026,34 +6885,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "Iterator[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID]",
+                    "display": "Iterator[ConstraintIDBase]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -7101,60 +6939,18 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "ItemsView[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID, EvaluatedConstraint | EvaluatedIndicatorConstraint | EvaluatedOneHotConstraint | EvaluatedSos1Constraint]",
+                    "display": "ItemsView[ConstraintIDBase, ConstraintView]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       {
-                        "display": "EvaluatedConstraint | EvaluatedIndicatorConstraint | EvaluatedOneHotConstraint | EvaluatedSos1Constraint",
+                        "display": "ConstraintView",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "EvaluatedConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "EvaluatedIndicatorConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "EvaluatedOneHotConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "EvaluatedSos1Constraint",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -7170,34 +6966,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "KeysView[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID]",
+                    "display": "KeysView[ConstraintIDBase]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -7213,34 +6988,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "ValuesView[EvaluatedConstraint | EvaluatedIndicatorConstraint | EvaluatedOneHotConstraint | EvaluatedSos1Constraint]",
+                    "display": "ValuesView[ConstraintView]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "EvaluatedConstraint | EvaluatedIndicatorConstraint | EvaluatedOneHotConstraint | EvaluatedSos1Constraint",
+                        "display": "ConstraintView",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "EvaluatedConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "EvaluatedIndicatorConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "EvaluatedOneHotConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "EvaluatedSos1Constraint",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -7395,7 +7149,18 @@
           "kind": "Class",
           "name": "EvaluatedIndicatorConstraint",
           "doc": "An owned evaluated indicator result. Fetched by typed ID from the owning result's constraints collection.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "is_feasible",
@@ -7830,7 +7595,18 @@
           "kind": "Class",
           "name": "EvaluatedOneHotConstraint",
           "doc": "An owned evaluated one-hot result. Fetched by typed ID from the owning result's constraints collection.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "is_feasible",
@@ -8074,7 +7850,18 @@
           "kind": "Class",
           "name": "EvaluatedSos1Constraint",
           "doc": "An owned evaluated SOS1 result. Fetched by typed ID from the owning result's constraints collection.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "is_feasible",
@@ -10543,7 +10330,18 @@
           "kind": "Class",
           "name": "IndicatorConstraintID",
           "doc": "An indicator constraint ID. Unequal to integers and IDs of other constraint families.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintIDBase",
+              "link_target": {
+                "fqn": "ommx.ConstraintIDBase",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__eq__",
@@ -18905,7 +18703,18 @@
           "kind": "Class",
           "name": "OneHotConstraintID",
           "doc": "A one-hot constraint ID. Unequal to integers and IDs of other constraint families.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintIDBase",
+              "link_target": {
+                "fqn": "ommx.ConstraintIDBase",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__eq__",
@@ -23920,30 +23729,9 @@
               "name": "original_id",
               "doc": "The ID of the original special constraint (before transformation).",
               "type_": {
-                "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                "display": "ConstraintIDBase",
                 "link_target": null,
-                "children": [
-                  {
-                    "display": "ConstraintID",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "IndicatorConstraintID",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "OneHotConstraintID",
-                    "link_target": null,
-                    "children": []
-                  },
-                  {
-                    "display": "Sos1ConstraintID",
-                    "link_target": null,
-                    "children": []
-                  }
-                ]
+                "children": []
               },
               "is_property": true,
               "is_readonly": true
@@ -25180,7 +24968,18 @@
           "kind": "Class",
           "name": "RemovedConstraint",
           "doc": "RemovedConstraint wrapper for Python.\n\nHolds the inner `Constraint`, a snapshot of its context, and the removal\nreason. As with [`Constraint`], the context snapshot does not propagate\nback to the originating instance — it is read-only context for inspection.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__copy__",
@@ -25476,100 +25275,28 @@
           "doc": "Live, read-only mapping of all removed constraint families. Each access returns a snapshot.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.",
           "bases": [
             {
-              "display": "Mapping[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID, RemovedConstraint | RemovedIndicatorConstraint | RemovedOneHotConstraint | RemovedSos1Constraint]",
+              "display": "Mapping[ConstraintIDBase, ConstraintView]",
               "link_target": null,
               "children": [
                 {
-                  "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
-                  "link_target": null,
-                  "children": [
-                    {
-                      "display": "ConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.ConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "IndicatorConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.IndicatorConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "OneHotConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.OneHotConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "Sos1ConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.Sos1ConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    }
-                  ]
+                  "display": "ConstraintIDBase",
+                  "link_target": {
+                    "fqn": "ommx.ConstraintIDBase",
+                    "doc_module": "ommx",
+                    "kind": "Class",
+                    "attribute": null
+                  },
+                  "children": []
                 },
                 {
-                  "display": "RemovedConstraint | RemovedIndicatorConstraint | RemovedOneHotConstraint | RemovedSos1Constraint",
-                  "link_target": null,
-                  "children": [
-                    {
-                      "display": "RemovedConstraint",
-                      "link_target": {
-                        "fqn": "ommx.RemovedConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "RemovedIndicatorConstraint",
-                      "link_target": {
-                        "fqn": "ommx.RemovedIndicatorConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "RemovedOneHotConstraint",
-                      "link_target": {
-                        "fqn": "ommx.RemovedOneHotConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "RemovedSos1Constraint",
-                      "link_target": {
-                        "fqn": "ommx.RemovedSos1Constraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    }
-                  ]
+                  "display": "ConstraintView",
+                  "link_target": {
+                    "fqn": "ommx.ConstraintView",
+                    "doc_module": "ommx",
+                    "kind": "Class",
+                    "attribute": null
+                  },
+                  "children": []
                 }
               ]
             }
@@ -25708,59 +25435,17 @@
                     {
                       "name": "key",
                       "type_": {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
                   ],
                   "return_type": {
-                    "display": "RemovedConstraint | RemovedIndicatorConstraint | RemovedOneHotConstraint | RemovedSos1Constraint",
+                    "display": "ConstraintView",
                     "link_target": null,
-                    "children": [
-                      {
-                        "display": "RemovedConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "RemovedIndicatorConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "RemovedOneHotConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "RemovedSos1Constraint",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
+                    "children": []
                   }
                 }
               ],
@@ -25774,34 +25459,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "Iterator[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID]",
+                    "display": "Iterator[ConstraintIDBase]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -25849,60 +25513,18 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "ItemsView[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID, RemovedConstraint | RemovedIndicatorConstraint | RemovedOneHotConstraint | RemovedSos1Constraint]",
+                    "display": "ItemsView[ConstraintIDBase, ConstraintView]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       {
-                        "display": "RemovedConstraint | RemovedIndicatorConstraint | RemovedOneHotConstraint | RemovedSos1Constraint",
+                        "display": "ConstraintView",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "RemovedConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "RemovedIndicatorConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "RemovedOneHotConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "RemovedSos1Constraint",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -25918,34 +25540,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "KeysView[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID]",
+                    "display": "KeysView[ConstraintIDBase]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -25961,34 +25562,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "ValuesView[RemovedConstraint | RemovedIndicatorConstraint | RemovedOneHotConstraint | RemovedSos1Constraint]",
+                    "display": "ValuesView[ConstraintView]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "RemovedConstraint | RemovedIndicatorConstraint | RemovedOneHotConstraint | RemovedSos1Constraint",
+                        "display": "ConstraintView",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "RemovedConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "RemovedIndicatorConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "RemovedOneHotConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "RemovedSos1Constraint",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -26005,7 +25585,18 @@
           "kind": "Class",
           "name": "RemovedIndicatorConstraint",
           "doc": "A removed indicator constraint together with the reason it was removed.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__repr__",
@@ -26032,6 +25623,23 @@
                 "display": "IndicatorConstraint",
                 "link_target": null,
                 "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "description",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
               },
               "is_property": true,
               "is_readonly": true
@@ -26075,6 +25683,62 @@
               "is_readonly": true
             },
             {
+              "name": "name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parameters",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "provenance",
+              "doc": "",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "removed_reason",
               "doc": "",
               "type_": {
@@ -26106,6 +25770,23 @@
               },
               "is_property": true,
               "is_readonly": true
+            },
+            {
+              "name": "subscripts",
+              "doc": "",
+              "type_": {
+                "display": "list[int]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
             }
           ],
           "deprecated": null
@@ -26114,7 +25795,18 @@
           "kind": "Class",
           "name": "RemovedOneHotConstraint",
           "doc": "A removed one-hot constraint together with the reason it was removed.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__repr__",
@@ -26202,6 +25894,23 @@
               "is_readonly": true
             },
             {
+              "name": "provenance",
+              "doc": "",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "removed_reason",
               "doc": "",
               "type_": {
@@ -26275,7 +25984,18 @@
           "kind": "Class",
           "name": "RemovedSos1Constraint",
           "doc": "A removed SOS1 constraint together with the reason it was removed.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__repr__",
@@ -26354,6 +26074,23 @@
                   },
                   {
                     "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "provenance",
+              "doc": "",
+              "type_": {
+                "display": "list[Provenance]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Provenance",
                     "link_target": null,
                     "children": []
                   }
@@ -27998,7 +27735,18 @@
           "kind": "Class",
           "name": "SampledConstraint",
           "doc": "",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "feasible",
@@ -28249,100 +27997,28 @@
           "doc": "Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.",
           "bases": [
             {
-              "display": "Mapping[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID, SampledConstraint | SampledIndicatorConstraint | SampledOneHotConstraint | SampledSos1Constraint]",
+              "display": "Mapping[ConstraintIDBase, ConstraintView]",
               "link_target": null,
               "children": [
                 {
-                  "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
-                  "link_target": null,
-                  "children": [
-                    {
-                      "display": "ConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.ConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "IndicatorConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.IndicatorConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "OneHotConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.OneHotConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "Sos1ConstraintID",
-                      "link_target": {
-                        "fqn": "ommx.Sos1ConstraintID",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    }
-                  ]
+                  "display": "ConstraintIDBase",
+                  "link_target": {
+                    "fqn": "ommx.ConstraintIDBase",
+                    "doc_module": "ommx",
+                    "kind": "Class",
+                    "attribute": null
+                  },
+                  "children": []
                 },
                 {
-                  "display": "SampledConstraint | SampledIndicatorConstraint | SampledOneHotConstraint | SampledSos1Constraint",
-                  "link_target": null,
-                  "children": [
-                    {
-                      "display": "SampledConstraint",
-                      "link_target": {
-                        "fqn": "ommx.SampledConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "SampledIndicatorConstraint",
-                      "link_target": {
-                        "fqn": "ommx.SampledIndicatorConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "SampledOneHotConstraint",
-                      "link_target": {
-                        "fqn": "ommx.SampledOneHotConstraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    },
-                    {
-                      "display": "SampledSos1Constraint",
-                      "link_target": {
-                        "fqn": "ommx.SampledSos1Constraint",
-                        "doc_module": "ommx",
-                        "kind": "Class",
-                        "attribute": null
-                      },
-                      "children": []
-                    }
-                  ]
+                  "display": "ConstraintView",
+                  "link_target": {
+                    "fqn": "ommx.ConstraintView",
+                    "doc_module": "ommx",
+                    "kind": "Class",
+                    "attribute": null
+                  },
+                  "children": []
                 }
               ]
             }
@@ -28481,59 +28157,17 @@
                     {
                       "name": "key",
                       "type_": {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
                   ],
                   "return_type": {
-                    "display": "SampledConstraint | SampledIndicatorConstraint | SampledOneHotConstraint | SampledSos1Constraint",
+                    "display": "ConstraintView",
                     "link_target": null,
-                    "children": [
-                      {
-                        "display": "SampledConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "SampledIndicatorConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "SampledOneHotConstraint",
-                        "link_target": null,
-                        "children": []
-                      },
-                      {
-                        "display": "SampledSos1Constraint",
-                        "link_target": null,
-                        "children": []
-                      }
-                    ]
+                    "children": []
                   }
                 }
               ],
@@ -28547,34 +28181,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "Iterator[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID]",
+                    "display": "Iterator[ConstraintIDBase]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -28622,60 +28235,18 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "ItemsView[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID, SampledConstraint | SampledIndicatorConstraint | SampledOneHotConstraint | SampledSos1Constraint]",
+                    "display": "ItemsView[ConstraintIDBase, ConstraintView]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       {
-                        "display": "SampledConstraint | SampledIndicatorConstraint | SampledOneHotConstraint | SampledSos1Constraint",
+                        "display": "ConstraintView",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "SampledConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "SampledIndicatorConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "SampledOneHotConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "SampledSos1Constraint",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -28691,34 +28262,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "KeysView[ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID]",
+                    "display": "KeysView[ConstraintIDBase]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -28734,34 +28284,13 @@
                 {
                   "parameters": [],
                   "return_type": {
-                    "display": "ValuesView[SampledConstraint | SampledIndicatorConstraint | SampledOneHotConstraint | SampledSos1Constraint]",
+                    "display": "ValuesView[ConstraintView]",
                     "link_target": null,
                     "children": [
                       {
-                        "display": "SampledConstraint | SampledIndicatorConstraint | SampledOneHotConstraint | SampledSos1Constraint",
+                        "display": "ConstraintView",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "SampledConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "SampledIndicatorConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "SampledOneHotConstraint",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "SampledSos1Constraint",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       }
                     ]
                   }
@@ -28916,7 +28445,18 @@
           "kind": "Class",
           "name": "SampledIndicatorConstraint",
           "doc": "An owned sampled indicator result. Fetched by typed ID from the owning result's constraints collection.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "feasible",
@@ -29401,7 +28941,18 @@
           "kind": "Class",
           "name": "SampledOneHotConstraint",
           "doc": "An owned sampled one-hot result. Fetched by typed ID from the owning result's constraints collection.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "feasible",
@@ -29673,7 +29224,18 @@
           "kind": "Class",
           "name": "SampledSos1Constraint",
           "doc": "An owned sampled SOS1 result. Fetched by typed ID from the owning result's constraints collection.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintView",
+              "link_target": {
+                "fqn": "ommx.ConstraintView",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "feasible",
@@ -30522,30 +30084,9 @@
                     {
                       "name": "constraint_id",
                       "type_": {
-                        "display": "ConstraintID | IndicatorConstraintID | OneHotConstraintID | Sos1ConstraintID",
+                        "display": "ConstraintIDBase",
                         "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "IndicatorConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "OneHotConstraintID",
-                            "link_target": null,
-                            "children": []
-                          },
-                          {
-                            "display": "Sos1ConstraintID",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
+                        "children": []
                       },
                       "default": null
                     }
@@ -32561,7 +32102,18 @@
           "kind": "Class",
           "name": "Sos1ConstraintID",
           "doc": "An SOS1 constraint ID. Unequal to integers and IDs of other constraint families.",
-          "bases": [],
+          "bases": [
+            {
+              "display": "ConstraintIDBase",
+              "link_target": {
+                "fqn": "ommx.ConstraintIDBase",
+                "doc_module": "ommx",
+                "kind": "Class",
+                "attribute": null
+              },
+              "children": []
+            }
+          ],
           "methods": [
             {
               "name": "__eq__",
@@ -40752,6 +40304,8 @@
     "ommx.Constraint": "ommx",
     "ommx.ConstraintCollection": "ommx",
     "ommx.ConstraintID": "ommx",
+    "ommx.ConstraintIDBase": "ommx",
+    "ommx.ConstraintView": "ommx",
     "ommx.DecisionVariable": "ommx",
     "ommx.DecisionVariableRole": "ommx",
     "ommx.Equality": "ommx",

@@ -1059,7 +1059,9 @@ class OMMXHighsAdapter(SolverAdapter):
         self._constraint_rows: dict[ConstraintID, int] = {}
         for cid in self.instance.constraints:
             if not isinstance(cid, ConstraintID):
-                continue
+                raise OMMXHighsAdapterError(
+                    f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
+                )
             constr = self.instance.constraints[cid]
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):

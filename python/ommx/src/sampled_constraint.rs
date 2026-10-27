@@ -1,13 +1,18 @@
+use crate::constraint_base::ConstraintView;
 use ommx::{SampledConstraintBehavior, SampledConstraintData};
 use pyo3::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(extends = ConstraintView)]
 pub struct SampledConstraint(
     pub ommx::SampledConstraint,
     pub ommx::ConstraintContext,
     pub Option<ommx::RemovedReason>,
+);
+crate::constraint_base::constraint_subclass!(
+    SampledConstraint,
+    crate::constraint_base::ConstraintView
 );
 
 impl SampledConstraint {

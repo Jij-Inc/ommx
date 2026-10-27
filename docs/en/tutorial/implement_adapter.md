@@ -197,7 +197,9 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
 
     for constraint_id in instance.constraints:
         if not isinstance(constraint_id, ConstraintID):
-            continue
+            raise OMMXPySCIPOptAdapterError(
+                f"Unsupported constraint family: {type(constraint_id).__name__}"
+            )
         constraint = instance.constraints[constraint_id]
         # Generate an expression based on the type of constraint function
         f = constraint.function

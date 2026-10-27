@@ -65,6 +65,11 @@ IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
 詳しくは[Solutionのガイド](../user_guide/solution.md)と
 [移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
 
+種類を横断する取得には、拡張可能な `ConstraintIDBase` と `ConstraintView` を使います。
+特殊制約の種類が追加されても公開返り値型を変えず、具体的なIDによる添字アクセスでは
+具体型を返します。ソルバー側は未対応種類を黙って除外せず、明示的に拒否します。
+この拡張原則は開発・レビュー指針にも記載しています。
+
 ### 🆕 変数の名前と添字から State を作成 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 `Instance.state_from_named_values()` で `NamedState` を対象インスタンスの
