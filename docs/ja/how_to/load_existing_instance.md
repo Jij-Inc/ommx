@@ -102,7 +102,7 @@ instance = artifact.instance
 
 - **SDKのバージョン**：Pythonから呼ぶAPIを定めます。このページでは`ommx==3.0.0b7`です。
 - **Messageのwire schema**：問題や解をシリアライズしたデータの形式です。配布済みデータにある`application/org.ommx.v1.instance`の`v1`は、SDKのメジャーバージョンではありません。公開b7に対応するスキーマは[Message定義](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/proto)で確認できます。
-- **Artifactの形式**：Messageなどをまとめて受け渡すパッケージの形式です。Python APIとは独立した[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/ARTIFACT.md)が定めています。
+- **Artifactの形式**：Messageなどをまとめて受け渡すパッケージの形式です。Python APIとは独立した[Artifact仕様](https://github.com/Jij-Inc/ommx/blob/python-3.0.0b7/rust/ommx/doc/artifact_design.md)が定めています。
 
 ## 入手後に進む先
 
