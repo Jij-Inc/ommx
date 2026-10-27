@@ -55,19 +55,36 @@ Read enough surrounding text and the linked explanation to justify the choice.
 
 Tutorials teach one practical workflow; How-tos complete an independent task;
 Guides own concepts and interpretation; API Reference owns exact formulas,
-preconditions, errors, and mutation guarantees. Moving an explanation must not
-leave a gap while its replacement is still planned. Value reconstruction,
+preconditions, errors, and mutation guarantees. Value reconstruction,
 feasibility, objective values, and optimality are distinct guarantees.
 
-## Use the supporting ledger when helpful
+When moving or removing an explanation, read its actual replacement and follow
+the affected incoming entry through to the definition or usable procedure.
+A page, heading, anchor, or resolving link is not evidence that the explanation
+exists. Follow onward references until the reader reaches the needed content;
+do not accept a chain that only sends them back to the removed explanation.
+The replacement must be available in the reviewed PR/revision, not only in a
+later stacked PR. Report an unmet route rather than recommending Ready while
+its replacement is still planned.
+
+## Reconcile changed explanations with the ledger
 
 The Book-owned data is `docs/_meta/reading_paths/manifest.json`, not part of the
 skill's instructions. It starts as a proposed design based on an explicitly
-recorded revision, not a certification of the current Book. Query only the
-affected concepts/pages; do not load or re-annotate the entire inventory for a
-small review.
+recorded revision, not a certification of the current Book.
 
-Run from the repository root through its Python environment:
+For each changed page affecting prerequisites, introductions, or navigation,
+compare the actual prose and Notebook cells with the affected concept, page,
+and route contracts. Locate the introduction and first understanding-dependent
+use; check their order, scope, and entry knowledge against the declarations.
+This comparison is required, not optional because the analyzer passes. If the
+page or concept is untracked, record that coverage gap. With editing authority,
+update the affected contracts; in a review-only task, report the mismatch
+without rewriting them. Query only the affected subset, not the whole Book.
+
+The helper commands below are optional tools for inspecting the declarations;
+they do not replace the required comparison. If used, run them from the
+repository root through its Python environment:
 
 ```sh
 uv run --no-sync python .agents/skills/book-reading-review/scripts/query.py docs/_meta/reading_paths/manifest.json concept class.membership
@@ -82,8 +99,8 @@ They check declared sets and dependencies, not natural-language comprehension.
 Before editing contracts or using a source-evidence bundle, read
 [the schema and evidence rules](references/schema.md). Keep Book-specific
 concepts, owners, and paths in the ledger rather than copying them into this
-skill. Update affected contracts with an authorized Book edit; a review-only
-request does not authorize rewriting the ledger or posting findings externally.
+skill. A review-only request does not authorize rewriting the ledger or posting
+findings externally.
 
 The analyzer teaches a section's ordered `introduces` before checking its
 `uses`. Represent a use before an explanation as an earlier section; putting
@@ -105,7 +122,16 @@ Keep these outcomes separate:
 - manual review of explanatory sufficiency and entry-page cognitive load;
 - code execution, version compatibility, and mathematical/API correctness.
 
-A contract PASS is not a Book PASS or permission to mark a PR Ready. State
-unreviewed routes and annotation gaps. Build/API-reference checks remain the
-responsibility of the existing Sphinx documentation workflow; do not broaden
-this review into SDK changes or a Book-wide redesign without authorization.
+Before concluding, leave a concise [current-revision review record](references/schema.md#current-revision-review-record)
+in the existing review response or work notes. Identify the reviewed revision,
+paragraphs or Notebook cells, reader routes, and actual introduction/use and
+destination evidence. Distinguish checked coverage from unresolved or unreviewed
+routes; do not create a whole-Book PASS report for a scoped review.
+
+Recommend or mark Ready, within the task's authorization, only after the
+affected prose/contracts have been reconciled, the review record is present,
+and moved explanations have usable destinations at that revision. A contract
+PASS or a warning-free Sphinx build cannot satisfy those conditions. Keep the
+reading review incomplete when an affected route still has a gap.
+Build/API-reference checks remain the responsibility of the existing Sphinx
+workflow; do not broaden this review into SDK changes or a Book-wide redesign.
