@@ -3421,7 +3421,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "SDK同梱CLIの版制約は概念前提と別のenvironment_requirementsで扱う。",
+      "notes": "SDK同梱CLIの版制約は概念前提と別のenvironment_requirementsで扱う。Fでは既存cleanup手順とexperiment-cleanup-workflowラベルをCLI Guideへ移し、Experiment Guideとの循環リンクを解消する。名前の削除/復元、報告のみの確認と明示削除、データ本体の回収と猶予期間をここで扱う。Jの独立したCLI操作導線全体の完成とは区別する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [

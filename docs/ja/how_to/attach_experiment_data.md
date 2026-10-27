@@ -18,7 +18,7 @@ from ommx.experiment import Experiment
 data_dir = Path("attachment-example")
 data_dir.mkdir(exist_ok=True)
 input_file = data_dir / "notes.txt"
-input_file.write_text("candidate evaluated locally\n", encoding="utf-8")
+input_file.write_bytes(b"candidate evaluated locally\n")
 
 instance = Instance.minimize()
 x = instance.new_binary("x")
@@ -60,7 +60,7 @@ from pathlib import Path
 
 destination = Path("attachment-example/restored-notes.txt")
 loaded.write_attachment("notes", destination, overwrite=True)
-assert destination.read_text(encoding="utf-8") == "candidate evaluated locally\n"
+assert destination.read_bytes() == b"candidate evaluated locally\n"
 ```
 
 ここでは例を再実行できるよう`overwrite=True`で指定先ファイルを更新します。既存ファイルを置き換えたくない場合はこの引数を省略し、新しいパスを指定してください。

@@ -69,7 +69,6 @@ forkは既存のRunと添付データを引き継ぎ、親を変更しません�
 
 試行の階層を使わないデータ交換は[ArtifactのTutorial](../tutorial/share_in_ommx_artifact.md)、検索や整理は[CLIのGuide](./cli.md)を参照してください。Local Registryの内部cacheやGC実装は、Experimentの最初の利用で理解する必要はありません。
 
-(experiment-cleanup-workflow)=
 ## Local Registryの管理
 
-保存したデータを調べる入口は[CLIのGuide](./cli.md)です。名前を削除する操作とデータ本体を回収する操作は別なので、削除前に対象と保存先を確認してください。
+保存した記録の名前を削除・復元し、不要なデータ本体を回収する手順は、{ref}`CLIの管理手順 <experiment-cleanup-workflow>`を参照してください。名前を削除する操作とデータ本体を回収する操作は別なので、削除前に対象と保存先を確認してください。
