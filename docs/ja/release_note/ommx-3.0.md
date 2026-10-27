@@ -6,6 +6,11 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 🛠 HiGHSの双対値を制約IDへ正しく対応付ける ([#1300](https://github.com/Jij-Inc/ommx/pull/1300))
+
+HiGHSの各行とOMMX制約IDの対応を保持します。IDが飛び番の場合や、実行可能な定数制約を
+ソルバーのモデルから省略した場合も、双対値を正しい制約へ戻せます。
+
 ### 🛠 制約IDの枯渇をpanicではなくエラーとして報告 ([#1269](https://github.com/Jij-Inc/ommx/pull/1269))
 
 OneHot・Indicatorの単体変換と一括変換は、生成する通常制約のIDが足りない場合、
