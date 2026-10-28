@@ -7,10 +7,15 @@ def load_file(path: str) -> Instance:
 
 def write_file(instance: Instance, path: str):
     """
-    Outputs the instance as an MPS file.
+    Write the active formulation to a gzip-compressed MPS file.
 
-    - The outputted file is compressed by gzip.
-    - Only linear problems are supported.
-    - Various forms of metadata, like problem description and variable/constraint names, are not preserved.
+    Equivalent to :meth:`instance.save_mps(path) <ommx.Instance.save_mps>`.
+    Compression is enabled regardless of the filename extension. Use
+    :meth:`ommx.Instance.save_mps` with ``compress=False`` for plain text.
+
+    Linear and quadratic objectives and regular constraints are supported,
+    subject to that method's variable-kind and special-constraint restrictions.
+    See :meth:`ommx.Instance.save_mps` for the exact supported models, errors,
+    variable filtering, and information lost during export.
     """
     instance.save_mps(path)
