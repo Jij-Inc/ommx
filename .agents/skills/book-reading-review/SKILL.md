@@ -1,6 +1,6 @@
 ---
 name: book-reading-review
-description: Review OMMX Book tutorials, guides, and navigation for reader prerequisites, unfamiliar concepts, introduction order, cognitive load, and independent reading paths. Use when planning or changing those learning paths, rather than for generated API wiring or Sphinx build failures alone.
+description: Review OMMX Book tutorials, guides, and navigation for reader prerequisites, introduction order, cognitive load, independent reading paths, and explanation placement between the Book and API Reference. Use when planning or changing those explanations and learning paths, rather than for generated API wiring or Sphinx build failures alone.
 ---
 
 # Book Reading Review
@@ -53,10 +53,28 @@ Read enough surrounding text and the linked explanation to justify the choice.
   still overload an entry with unexplained names. Move nonessential mechanics
   after the first success instead of adding a glossary before it.
 
+## Inspect explanation ownership
+
+For each affected page, identify what the passage enables its reader to
+understand or do. Inspect retained passages as well as newly added lines.
+
 Tutorials teach one practical workflow; How-tos complete an independent task;
-Guides own concepts and interpretation; API Reference owns exact formulas,
-preconditions, errors, and mutation guarantees. Value reconstruction,
-feasibility, objective values, and optimality are distinct guarantees.
+Guides own concepts and interpretation. Keep the conceptual distinctions,
+minimal examples, and safety summaries needed for that task in the Book.
+API Reference owns exact argument/default rules, exhaustive cases, execution
+order, formulas, preconditions, errors, mutation guarantees, and numerical
+contracts. Value reconstruction, feasibility, objective values, and optimality
+are distinct guarantees.
+
+Overlap alone is not a finding. A short safe-use warning or a counterexample
+teaching an operation's meaning may be necessary even when the API states the
+same fact. Flag repetition when it adds contract detail without serving the
+page's learning goal; neither mathematical notation nor an API name alone
+determines where an explanation belongs.
+
+For a relocation, identify what understanding the Book must retain. If the
+contract is missing from the API Reference, report or fill that documentation
+gap within the authorized scope before removing its only explanation.
 
 When moving or removing an explanation, read its actual replacement and follow
 the affected incoming entry through to the definition or usable procedure.
@@ -143,6 +161,11 @@ the capability not yet available, and the smallest change that restores the
 workflow. Distinguish an omitted explanation from merely unfamiliar spelling.
 Prefer a local gloss, a reorder, or deferring an unnecessary detail over making
 the reader complete another whole Guide.
+
+For an explanation-placement finding, identify the reader's question, the
+detail's canonical owner, and the smallest Book explanation to retain. When
+reviewing a PR, distinguish newly introduced problems from inherited cleanup
+candidates in the affected pages.
 
 Keep these outcomes separate:
 
