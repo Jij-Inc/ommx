@@ -56,7 +56,7 @@ assert {v.id for v in one_item.decision_variables} == {
 
 Parameterは決定変数と同じ式の中で使えますが、役割が異なります。パラメータはInstanceを作る前に指定する値、決定変数は候補に値を割り当てる対象です。両者のIDは同じ空間を使うため、重複させません。上の例では決定変数が0・1、パラメータが2です。
 
-名前や添字などは {meth}`~ommx.ParametricInstance.parameters_df` で確認できます。指定すべきパラメータや値の検査の詳細は、`with_parameters()`のAPI Referenceを参照してください。
+名前や添字などは {meth}`~ommx.ParametricInstance.parameters_df` で確認できます。指定すべきパラメータや値の検査の詳細は、{meth}`~ommx.ParametricInstance.with_parameters`のAPI Referenceを参照してください。
 
 ## モデラーとの境界
 
