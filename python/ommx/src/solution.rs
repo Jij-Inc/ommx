@@ -1,9 +1,8 @@
+use crate::constraint_id::ConstraintIDInput;
 use crate::{
+    constraint_kind::{constraint_kind_collection, ConstraintKind},
     error::OmmxPyResult,
-    pandas::{
-        constraint_id_col, constraint_kind_collection, entries_to_dataframe, ConstraintKind,
-        PyDataFrame, ToPandasEntry,
-    },
+    pandas::{constraint_id_col, entries_to_dataframe, PyDataFrame, ToPandasEntry},
 };
 use pyo3::{
     exceptions::PyKeyError,
@@ -30,6 +29,18 @@ impl_solution_annotations!(Solution);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Solution {
+    /// Unique names across all constraint families, as a set of strings.
+    ///
+    /// Retained removed constraints are included; no sample ID is needed.
+    /// The scope matches `extract_constraints`. Unnamed constraints are excluded;
+    /// an explicitly empty name is included. Duplicate names appear once, even
+    /// when extraction would reject duplicate subscripts.
+    /// Each access returns a fresh set; editing it does not change this owner.
+    #[getter]
+    fn constraint_names(&self) -> BTreeSet<String> {
+        self.inner.constraint_names()
+    }
+
     #[staticmethod]
     pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());
@@ -178,20 +189,13 @@ impl Solution {
             .collect()
     }
 
-    /// Get evaluated constraints as a dict keyed by constraint ID
+    /// Live mapping of all constraint families, including removed results.
+    /// Typed IDs select the family. Rows are fetched only when indexed.
     #[getter]
-    pub fn constraints(&self) -> std::collections::BTreeMap<u64, crate::EvaluatedConstraint> {
-        let context = self.inner.evaluated_constraints().context();
-        self.inner
-            .evaluated_constraints()
-            .iter()
-            .map(|(id, ec)| {
-                (
-                    id.into_inner(),
-                    crate::EvaluatedConstraint::from_parts(ec.clone(), context.collect_for(*id)),
-                )
-            })
-            .collect()
+    pub fn constraints(
+        slf: Bound<'_, Self>,
+    ) -> crate::constraint_collection::EvaluatedConstraintCollection {
+        crate::constraint_collection::EvaluatedConstraintCollection::new(slf.unbind())
     }
 
     /// Get evaluated named functions as a list sorted by ID
@@ -209,15 +213,6 @@ impl Solution {
     pub fn decision_variable_ids(&self) -> BTreeSet<u64> {
         self.inner
             .decision_variable_ids()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect()
-    }
-
-    #[getter]
-    pub fn constraint_ids(&self) -> BTreeSet<u64> {
-        self.inner
-            .constraint_ids()
             .iter()
             .map(|id| id.into_inner())
             .collect()
@@ -336,11 +331,12 @@ impl Solution {
         Ok(result_dict)
     }
 
-    /// Extract the values of constraints based on the `name` with `subscripts` key.
+    /// Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.
     ///
     /// Raises KeyError if no constraint has the requested name. Raises
-    /// ValueError if a matching constraint has parameters or if the same
-    /// subscript is found more than once.
+    /// ValueError if matching constraints share subscripts, including across families.
+    /// Parameters and descriptions are ignored. Retained removed constraints are
+    /// included. Regular constraints return violations, not signed function values.
     ///
     /// # Examples
     ///
@@ -357,18 +353,13 @@ impl Solution {
     /// >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
     /// >>> solution.extract_constraints("c")
     /// {(0,): 0.0, (1,): 0.0}
-    pub fn extract_constraints<'py>(
+    fn extract_constraints(
         &self,
-        py: Python<'py>,
         name: &str,
-    ) -> OmmxPyResult<Bound<'py, PyDict>> {
-        let extracted = self.inner.extract_constraints(name)?;
-        let dict = PyDict::new(py);
-        for (subscripts, value) in extracted {
-            let key_tuple = PyTuple::new(py, &subscripts)?;
-            dict.set_item(key_tuple, value)?;
-        }
-        Ok(dict)
+    ) -> OmmxPyResult<crate::subscript_map::SubscriptMap<f64>> {
+        Ok(crate::subscript_map::SubscriptMap(
+            self.inner.extract_constraints(name)?,
+        ))
     }
 
     /// Extract named functions by name with subscripts as key (returns a Python dict).
@@ -413,9 +404,9 @@ impl Solution {
     /// Set the dual variable value for a specific constraint by ID.
     ///
     /// Raises KeyError if the constraint ID does not exist.
-    pub fn set_dual_variable(
+    pub(crate) fn set_dual_variable(
         &mut self,
-        constraint_id: u64,
+        constraint_id: ConstraintIDInput,
         value: Option<f64>,
     ) -> OmmxPyResult<()> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
@@ -446,36 +437,21 @@ impl Solution {
     }
 
     /// Get the evaluated value of a specific constraint by ID
-    pub fn get_constraint_value(&self, constraint_id: u64) -> OmmxPyResult<f64> {
+    pub(crate) fn get_constraint_value(
+        &self,
+        constraint_id: ConstraintIDInput,
+    ) -> OmmxPyResult<f64> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
         Ok(self.inner.get_constraint_value(constraint_id)?)
     }
 
     /// Get the dual variable value for a specific constraint by ID
-    pub fn get_dual_variable(&self, constraint_id: u64) -> OmmxPyResult<Option<f64>> {
+    pub(crate) fn get_dual_variable(
+        &self,
+        constraint_id: ConstraintIDInput,
+    ) -> OmmxPyResult<Option<f64>> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
         Ok(self.inner.get_dual_variable(constraint_id)?)
-    }
-
-    /// Get a specific evaluated constraint by ID
-    pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::EvaluatedConstraint> {
-        let constraint_id = ommx::ConstraintID::from(constraint_id);
-        let context = self.inner.evaluated_constraints().context();
-        self.inner
-            .evaluated_constraints()
-            .get(&constraint_id)
-            .map(|ec| {
-                crate::EvaluatedConstraint::from_parts(
-                    ec.clone(),
-                    context.collect_for(constraint_id),
-                )
-            })
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {}",
-                    constraint_id.into_inner()
-                ))
-            })
     }
 
     /// Get a specific evaluated named function by ID
@@ -545,7 +521,7 @@ impl Solution {
     /// `"removed_reason"` in `include=`. When the flag is on, rows for
     /// constraints removed before evaluation get `removed_reason` /
     /// `removed_reason.{key}` columns populated; other rows have NA.
-    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None))]
+    #[pyo3(signature = (*, kind, include = None))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
@@ -574,10 +550,7 @@ impl Solution {
                         &m,
                     )
                     .to_pandas_entry(py)?;
-                    dict.set_item(
-                        "violation",
-                        self.constraint_violation(id.into_inner(), kind)?,
-                    )?;
+                    dict.set_item("violation", self.constraint_violation((*id).into())?)?;
                     if flags.removed_reason {
                         // Always emit the `removed_reason` column when
                         // requested so its existence in the resulting
@@ -632,7 +605,7 @@ impl Solution {
     /// Constraint context DataFrame (id-indexed). See
     /// {meth}`ommx.Instance.constraint_context_df` for column / `kind=`
     /// semantics. Reads from the evaluated collection's context store.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
@@ -660,7 +633,7 @@ impl Solution {
     }
 
     /// Constraint parameters DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
@@ -688,7 +661,7 @@ impl Solution {
     }
 
     /// Constraint provenance DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
@@ -716,7 +689,7 @@ impl Solution {
     }
 
     /// Removed-constraint reasons DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
@@ -797,25 +770,20 @@ impl Solution {
     /// Get one constraint's nonnegative scalar violation.
     ///
     /// Uses the definitions in {meth}`total_violation`, including for removed
-    /// constraints. IDs are independent for each `kind`. Raises `KeyError` when
+    /// constraints. The ID type selects its family. Raises `KeyError` when
     /// the ID is absent from that constraint family.
-    #[pyo3(signature = (constraint_id, *, kind = ConstraintKind::Regular))]
-    pub fn constraint_violation(&self, constraint_id: u64, kind: ConstraintKind) -> PyResult<f64> {
-        let violation = match kind {
-            ConstraintKind::Regular => self.inner.constraint_violation(constraint_id.into()),
-            ConstraintKind::Indicator => self
-                .inner
-                .indicator_constraint_violation(constraint_id.into()),
-            ConstraintKind::OneHot => self
-                .inner
-                .one_hot_constraint_violation(constraint_id.into()),
-            ConstraintKind::Sos1 => self.inner.sos1_constraint_violation(constraint_id.into()),
+    pub fn constraint_violation(
+        &self,
+        constraint_id: crate::constraint_id::AnyConstraintID,
+    ) -> PyResult<f64> {
+        use crate::constraint_id::AnyConstraintID;
+        let violation = match constraint_id {
+            AnyConstraintID::Regular(id) => self.inner.constraint_violation(id.into()),
+            AnyConstraintID::Indicator(id) => self.inner.indicator_constraint_violation(id.into()),
+            AnyConstraintID::OneHot(id) => self.inner.one_hot_constraint_violation(id.into()),
+            AnyConstraintID::Sos1(id) => self.inner.sos1_constraint_violation(id.into()),
         };
-        violation.ok_or_else(|| {
-            PyKeyError::new_err(format!(
-                "Unknown {} constraint ID: {constraint_id}",
-                kind.as_str()
-            ))
-        })
+        violation
+            .ok_or_else(|| PyKeyError::new_err(format!("Unknown constraint ID: {constraint_id:?}")))
     }
 }

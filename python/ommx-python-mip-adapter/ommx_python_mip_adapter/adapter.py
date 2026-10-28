@@ -14,6 +14,7 @@ from ommx.adapter import (
     NoSolutionReturned,
 )
 from ommx import (
+    ConstraintID,
     Equality,
     Function,
     Instance,
@@ -334,14 +335,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             # Duals certify the active formulation and need an explicit mapping
             # before they can be attached to projected output semantics.
             if self.instance.output_objective is None:
-                dual_variables = {}
-                for constraint in data.constrs:
-                    pi = constraint.pi
-                    if pi is not None:
-                        id = int(constraint.name)
-                        dual_variables[id] = pi
-                for constraint_id, dual_value in dual_variables.items():
-                    solution.set_dual_variable(constraint_id, dual_value)
+                for constraint_id, name in self._constraint_names.items():
+                    constraint = data.constr_by_name(name)
+                    if constraint is not None and constraint.pi is not None:
+                        solution.set_dual_variable(constraint_id, float(constraint.pi))
 
             if data.status == mip.OptimizationStatus.OPTIMAL:
                 solution.optimality = self.instance.map_active_optimality(
@@ -473,7 +470,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         self.model.objective = self._as_lin_expr(self.instance.objective)
 
     def _set_constraints(self):
-        for cid, constraint in self.instance.constraints.items():
+        self._constraint_names: dict[ConstraintID, str] = {}
+        for cid in self.instance.constraints:
+            if not isinstance(cid, ConstraintID):
+                raise OMMXPythonMIPAdapterError(
+                    f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
+                )
+            constraint = self.instance.constraints[cid]
             lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Equality.EqualToZero:
                 constr_expr = lin_expr == 0
@@ -484,4 +487,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                     f"Not supported constraint equality: "
                     f"id: {cid}, equality: {constraint.equality}"
                 )
-            self.model.add_constr(constr_expr, name=str(cid))
+            name = str(cid)
+            self.model.add_constr(constr_expr, name=name)
+            self._constraint_names[cid] = name

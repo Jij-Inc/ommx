@@ -36,6 +36,65 @@ penaltyによって除去される制約には、エンコード後の式が保�
 制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
 詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
 
+### ⚠ 型付き制約IDとnativeな結果取得 ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
+
+`Instance`・`ParametricInstance`・`Solution`・`SampleSet` は、全種類の制約を
+所有元に追従する `.constraints` コレクションとして公開します。
+
+```python
+from ommx import ConstraintID
+
+rows = solution.constraints
+row = rows[ConstraintID(7)]
+frame = solution.constraints_df(kind="regular")
+```
+
+コレクションは所有元を保持し、型付きIDで参照された行だけを取得します。整数キーは拒否します。
+モデルの値はAttachedハンドル、結果の値は削除済み制約の情報も含む個別のスナップショットです。
+種類別プロパティは `.constraints` と `.removed_constraints` に統合し、
+`get_constraint_by_id`・`get_removed_constraint_by_id`と結果の`constraint_ids`は
+添字アクセスと列挙へ置き換えます。モデルの独立したコピーが必要ならAttachedの行を`.detach()`します。
+`constraints_df`と4種類の制約メタデータDataFrameは、全所有元でキーワード引数`kind`が必須です。
+`get_constraints`メソッドはありません。
+
+`SampleSet.summary_with_constraints`は廃止します。サンプルごとの目的値と全体の実行可能性には
+`summary`を、制約別の結果には`constraints`または`constraints_df(kind=...)`を使います。
+
+`constraints.of_kind("sos1")`は、キーと行の具体型を保持するライブな`ConstraintFamilyView`を
+返します。`constraints_df`と同じkind文字列を受け取り、整数の検索キーを選択した種類へ
+自動昇格します。別種類のIDは拒否します。モデルの`removed_constraints`と結果の
+コレクションでも同じ絞り込みを使えます。
+
+モデル・結果のAPI、変換、診断、provenance、DataFrameで制約IDの種類を保持します。
+IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
+`Sos1ConstraintID` です。種類が決まる入力では整数を自動昇格し、別種類のIDは拒否します。
+返り値と辞書キーは常に型付きです。別種類のIDは等しくならず、`int()` や整数
+インデックスへの変換機能もありません。`constraint_violation(id)` は型から種類を
+判断するため、整数は拒否します。決定変数IDとサンプルIDは整数のままで、保存形式も変わりません。
+
+詳しくは[Solutionのガイド](../user_guide/solution.md)と
+[移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
+
+種類を横断する取得には、拡張可能な `ConstraintIDBase` と `ConstraintView` を使います。
+特殊制約の種類が追加されても公開返り値型を変えず、具体的なIDによる添字アクセスでは
+具体型を返します。ソルバー側は未対応種類を黙って除外せず、明示的に拒否します。
+この拡張原則は開発・レビュー指針にも記載しています。
+
+Attachedの行は所有元の同一性と型付きIDで比較し、Removedと結果の行は
+スナップショットのデータとメタデータで比較します。コレクションとそのビューも
+この比較に従います。型付きIDは `copy`・`deepcopy` に対応し、`.get()` は
+具体的な行の型と代わりの値の型を保持します。不正な検索キーへのエラーは、
+内部enumの抽出失敗を列挙せず、必要な型付きIDの指定方法を示します。
+
+`extract_constraints(name)`は全種類を検索します。`Instance`・`ParametricInstance`では
+添字タプルからAttachedオブジェクトへの辞書、`Solution`・`SampleSet`では違反量への辞書を
+返します。**通常制約も符号付きの式の値から非負の違反量に変わります。** 決定変数の
+抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
+
+全4種類の所有元に`constraint_names: set[str]`を追加し、`extract_constraints`と同じ
+対象の名前を列挙できます。`ParametricInstance.decision_variable_names`も追加しました。
+未設定の名前とパラメータ名は除外し、同名は1件にまとめます。
+
 ### 🆕 変数の名前と添字から State を作成 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 `Instance.state_from_named_values()` で `NamedState` を対象インスタンスの
@@ -1422,7 +1481,7 @@ assert str(instance.objective) == "Function(x1 + 2*x2)"
 df = solution.constraints_df
 
 # After
-df = solution.constraints_df()
+df = solution.constraints_df(kind="regular")
 ```
 
 ワイドな `*_df` メソッドには `include` 引数が追加され、ラベル系・パラメータ系のカラムをそれぞれ ON/OFF できます。デフォルトの `include=("label", "parameters")` は v2 互換のワイド形を維持します:
@@ -1434,7 +1493,7 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。`kind=` で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`、デフォルト `"regular"`):
+加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。必須のキーワード引数`kind=`で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
 
 - `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
@@ -1454,7 +1513,7 @@ v2.5.1 までは {meth}`Solution.constraints_df <ommx.Solution.constraints_df>` 
 df = solution.constraints_df  # 'removed_reason' カラムを含む
 
 # After (3.0.0a3 — `*_df` はメソッドになりました)
-df = solution.constraints_df()  # removed_reason カラムなし
+df = solution.constraints_df(kind="regular")  # removed_reason カラムなし
 df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 # ↳ removed_reason / removed_reason.{key} が追加（active 行は NA）
 ```

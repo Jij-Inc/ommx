@@ -3,14 +3,19 @@
     reason = "PyO3 and pyo3-stub-gen wrappers reference Instance::empty"
 )]
 
+use crate::constraint_id::{
+    ConstraintIDInput, ConstraintMapInput, ConstraintSetInput, IndicatorConstraintIDInput,
+    OneHotConstraintIDInput, Sos1ConstraintIDInput,
+};
 use crate::{
+    constraint_kind::{constraint_kind_collection, ConstraintKind},
     error::OmmxPyResult,
     pandas::{
-        apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
-        raw_entries_to_dataframe, ConstraintKind, PyDataFrame, ToPandasEntry,
+        apply_include_filter, constraint_id_col, entries_to_dataframe, raw_entries_to_dataframe,
+        PyDataFrame, ToPandasEntry,
     },
     Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
-    ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
+    ParametricInstance, Rng, SampleSet, Samples, Sense, Solution, State,
 };
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
@@ -230,6 +235,18 @@ impl_instance_annotations!(Instance);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
+    /// Unique names across all constraint families, as a set of strings.
+    ///
+    /// Only active constraints are included.
+    /// The scope matches `extract_constraints`. Unnamed constraints are excluded;
+    /// an explicitly empty name is included. Duplicate names appear once, even
+    /// when extraction would reject duplicate subscripts.
+    /// Each access returns a fresh set; editing it does not change this owner.
+    #[getter]
+    fn constraint_names(&self) -> BTreeSet<String> {
+        self.inner.constraint_names()
+    }
+
     /// Apply one simultaneous bound-tightening pass using all active regular constraints.
     ///
     /// Calls {meth}`tighten_bounds_simultaneously_once_using_constraints` with
@@ -303,10 +320,10 @@ impl Instance {
     /// Requires finite ``atol < 1``. On failure the instance is unchanged.
     /// If omitted, {func}`~ommx.get_default_atol` supplies the tolerance.
     #[pyo3(signature = (constraint_ids, *, max_terms=32, atol=None))]
-    pub fn tighten_bounds_simultaneously_once_using_constraints(
+    pub(crate) fn tighten_bounds_simultaneously_once_using_constraints(
         &mut self,
         py: Python<'_>,
-        constraint_ids: BTreeSet<u64>,
+        constraint_ids: ConstraintSetInput<ConstraintIDInput>,
         max_terms: usize,
         atol: Option<f64>,
     ) -> OmmxPyResult<BTreeMap<u64, crate::VariableBound>> {
@@ -328,7 +345,7 @@ impl Instance {
             sense,
             Function(ommx::Function::Zero),
             Vec::new(),
-            BTreeMap::new(),
+            Default::default(),
             None,
             None,
             None,
@@ -395,11 +412,16 @@ impl Instance {
 
     /// Create an instance from its components.
     ///
+    /// Constraint mappings accept integer keys or IDs of the matching family.
+    /// Integers are promoted to that family's ID. IDs of another family raise
+    /// {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
+    /// Returned collections always use typed IDs.
+    ///
     /// **Args:**
     /// - `sense`: Optimization sense (minimize or maximize)
     /// - `objective`: Objective function
     /// - `decision_variables`: List of decision variables
-    /// - `constraints`: List of constraints
+    /// - `constraints`: Mapping from regular constraint IDs to constraints
     /// - `named_functions`: Optional list of named functions
     /// - `description`: Optional instance description
     ///
@@ -407,14 +429,18 @@ impl Instance {
     /// A new Instance
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, constraints, indicator_constraints=None, one_hot_constraints=None, sos1_constraints=None, named_functions=None, description=None))]
-    pub fn from_components(
+    pub(crate) fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: Vec<DecisionVariable>,
-        constraints: BTreeMap<u64, Constraint>,
-        indicator_constraints: Option<BTreeMap<u64, crate::IndicatorConstraint>>,
-        one_hot_constraints: Option<BTreeMap<u64, crate::OneHotConstraint>>,
-        sos1_constraints: Option<BTreeMap<u64, crate::Sos1Constraint>>,
+        constraints: ConstraintMapInput<ConstraintIDInput, Constraint>,
+        indicator_constraints: Option<
+            ConstraintMapInput<IndicatorConstraintIDInput, crate::IndicatorConstraint>,
+        >,
+        one_hot_constraints: Option<
+            ConstraintMapInput<OneHotConstraintIDInput, crate::OneHotConstraint>,
+        >,
+        sos1_constraints: Option<ConstraintMapInput<Sos1ConstraintIDInput, crate::Sos1Constraint>>,
         named_functions: Option<Vec<NamedFunction>>,
         description: Option<InstanceDescription>,
     ) -> OmmxPyResult<Self> {
@@ -983,26 +1009,33 @@ impl Instance {
         ))
     }
 
-    /// Dict of all active constraints in the instance keyed by their IDs.
+    /// Extract active constraints of every family by name, keyed by subscript tuples.
     ///
-    /// Each value is an {class}`~ommx.AttachedConstraint`: a write-through
-    /// handle whose getters read from this instance's SoA store and whose
-    /// context setters write back through to it. Use
-    /// {meth}`~ommx.AttachedConstraint.detach` to materialize a
-    /// {class}`~ommx.Constraint` snapshot if you need an independent copy.
-    #[getter]
-    pub fn constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedConstraint> {
+    /// Values are attached handles, just as in `constraints`: edits update this
+    /// model. The returned dictionary snapshots the matching keys; it does not
+    /// track later label or membership changes. Removed constraints are excluded.
+    /// Parameters and descriptions do not participate in matching.
+    ///
+    /// Raises KeyError if no active constraint has this name, and ValueError if
+    /// matching constraints share subscripts, including across different families.
+    /// Use typed-ID lookup in `constraints` to distinguish ambiguous labels.
+    fn extract_constraints(
+        slf: Bound<'_, Self>,
+        name: &str,
+    ) -> PyResult<
+        crate::subscript_map::SubscriptMap<crate::constraint_collection::ConstraintCollectionValue>,
+    > {
         let py = slf.py();
-        let ids: Vec<ConstraintID> = slf.borrow().inner.constraints().keys().copied().collect();
-        let py_instance: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.into_inner(),
-                    crate::AttachedConstraint::from_instance(py_instance.clone_ref(py), id),
-                )
-            })
-            .collect()
+        Self::constraints(slf).extract_by_name(py, name)
+    }
+
+    /// Live mapping of all active constraint families, keyed by typed IDs.
+    /// The view retains this owner and fetches each constraint on demand.
+    #[getter]
+    pub fn constraints(slf: Bound<'_, Self>) -> crate::constraint_collection::ConstraintCollection {
+        crate::constraint_collection::ConstraintCollection::new(crate::ConstraintHost::Instance(
+            slf.unbind(),
+        ))
     }
 
     /// Add a regular constraint to this instance.
@@ -1055,38 +1088,6 @@ impl Instance {
         Ok(crate::AttachedConstraint::from_instance(slf.unbind(), id))
     }
 
-    /// Dict of all active indicator constraints in the instance keyed by
-    /// their IDs.
-    ///
-    /// Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
-    /// write-through handle whose getters read from this instance's SoA
-    /// store and whose context setters write back through to it.
-    #[getter]
-    pub fn indicator_constraints(
-        slf: Bound<'_, Self>,
-    ) -> BTreeMap<u64, crate::AttachedIndicatorConstraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::IndicatorConstraintID> = slf
-            .borrow()
-            .inner
-            .indicator_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_instance: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.into_inner(),
-                    crate::AttachedIndicatorConstraint::from_instance(
-                        py_instance.clone_ref(py),
-                        id,
-                    ),
-                )
-            })
-            .collect()
-    }
-
     /// Add an indicator constraint to this instance.
     ///
     /// Picks an unused {class}`~ommx.IndicatorConstraintID`, drains the
@@ -1112,56 +1113,6 @@ impl Instance {
         ))
     }
 
-    /// Dict of all removed indicator constraints in the instance keyed by their IDs.
-    #[getter]
-    pub fn removed_indicator_constraints(
-        &self,
-    ) -> BTreeMap<u64, crate::RemovedIndicatorConstraint> {
-        let context = self.inner.indicator_constraint_collection().context();
-        self.inner
-            .removed_indicator_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.into_inner(),
-                    crate::RemovedIndicatorConstraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
-    }
-
-    /// Dict of all active one-hot constraints in the instance keyed by their IDs.
-    ///
-    /// Each value is an {class}`~ommx.AttachedOneHotConstraint`: a
-    /// write-through handle whose getters read from this instance's SoA
-    /// store and whose context setters write back through to it.
-    #[getter]
-    pub fn one_hot_constraints(
-        slf: Bound<'_, Self>,
-    ) -> BTreeMap<u64, crate::AttachedOneHotConstraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::OneHotConstraintID> = slf
-            .borrow()
-            .inner
-            .one_hot_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_instance: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.into_inner(),
-                    crate::AttachedOneHotConstraint::from_instance(py_instance.clone_ref(py), id),
-                )
-            })
-            .collect()
-    }
-
     /// Add a one-hot constraint to this instance.
     pub fn add_one_hot_constraint(
         slf: Bound<'_, Self>,
@@ -1178,52 +1129,6 @@ impl Instance {
         ))
     }
 
-    /// Dict of all removed one-hot constraints in the instance keyed by their IDs.
-    #[getter]
-    pub fn removed_one_hot_constraints(&self) -> BTreeMap<u64, crate::RemovedOneHotConstraint> {
-        let context = self.inner.one_hot_constraint_context();
-        self.inner
-            .removed_one_hot_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.into_inner(),
-                    crate::RemovedOneHotConstraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
-    }
-
-    /// Dict of all active SOS1 constraints in the instance keyed by their IDs.
-    ///
-    /// Each value is an {class}`~ommx.AttachedSos1Constraint`: a
-    /// write-through handle whose getters read from this instance's SoA
-    /// store and whose context setters write back through to it.
-    #[getter]
-    pub fn sos1_constraints(slf: Bound<'_, Self>) -> BTreeMap<u64, crate::AttachedSos1Constraint> {
-        let py = slf.py();
-        let ids: Vec<ommx::Sos1ConstraintID> = slf
-            .borrow()
-            .inner
-            .sos1_constraints()
-            .keys()
-            .copied()
-            .collect();
-        let py_instance: Py<Self> = slf.unbind();
-        ids.into_iter()
-            .map(|id| {
-                (
-                    id.into_inner(),
-                    crate::AttachedSos1Constraint::from_instance(py_instance.clone_ref(py), id),
-                )
-            })
-            .collect()
-    }
-
     /// Add a SOS1 constraint to this instance.
     pub fn add_sos1_constraint(
         slf: Bound<'_, Self>,
@@ -1237,26 +1142,6 @@ impl Instance {
             slf.unbind(),
             id,
         ))
-    }
-
-    /// Dict of all removed SOS1 constraints in the instance keyed by their IDs.
-    #[getter]
-    pub fn removed_sos1_constraints(&self) -> BTreeMap<u64, crate::RemovedSos1Constraint> {
-        let context = self.inner.sos1_constraint_context();
-        self.inner
-            .removed_sos1_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.into_inner(),
-                    crate::RemovedSos1Constraint::from_parts(
-                        c.clone(),
-                        context.collect_for(*id),
-                        r.clone(),
-                    ),
-                )
-            })
-            .collect()
     }
 
     /// The kinds of active special constraints this instance currently uses.
@@ -1325,20 +1210,15 @@ impl Instance {
         Ok(lowered.into_iter().map(|kind| kind.into()).collect())
     }
 
-    /// Dict of all removed constraints in the instance keyed by their IDs.
+    /// Live mapping of all removed constraint families, keyed by typed IDs.
+    /// The view retains this owner and fetches each constraint on demand.
     #[getter]
-    pub fn removed_constraints(&self) -> BTreeMap<u64, RemovedConstraint> {
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .removed_constraints()
-            .iter()
-            .map(|(id, (c, r))| {
-                (
-                    id.into_inner(),
-                    RemovedConstraint::from_parts(c.clone(), context.collect_for(*id), r.clone()),
-                )
-            })
-            .collect()
+    pub fn removed_constraints(
+        slf: Bound<'_, Self>,
+    ) -> crate::constraint_collection::RemovedConstraintCollection {
+        crate::constraint_collection::RemovedConstraintCollection::new(
+            crate::ConstraintHost::Instance(slf.unbind()),
+        )
     }
 
     /// List of all named functions in the instance sorted by their IDs.
@@ -1759,6 +1639,7 @@ impl Instance {
     ///
     /// Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
     ///
+    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
@@ -1768,7 +1649,7 @@ impl Instance {
     /// >>> parameters = {parameter.id: 2.0 for parameter in parametric.parameters}
     /// >>> prepared = parametric.with_parameters(parameters)
     /// >>> assert parametric.constraints == {}
-    /// >>> assert 7 in parametric.removed_constraints
+    /// >>> assert ConstraintID(7) in parametric.removed_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
     /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
@@ -1803,6 +1684,7 @@ impl Instance {
     ///
     /// Uniform-penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
     ///
+    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, Optimality, Sense
     /// >>> x = DecisionVariable.binary(0)
     /// >>> instance = Instance.from_components(
@@ -1812,7 +1694,7 @@ impl Instance {
     /// >>> parameter_id = parametric.parameters[0].id
     /// >>> prepared = parametric.with_parameters({parameter_id: 2.0})
     /// >>> assert parametric.constraints == {}
-    /// >>> assert 7 in parametric.removed_constraints
+    /// >>> assert ConstraintID(7) in parametric.removed_constraints
     /// >>> assert prepared.objective.evaluate({0: 0}) == 2.0
     /// >>> solution = prepared.evaluate({0: 0})
     /// >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
@@ -2157,6 +2039,7 @@ impl Instance {
     ///
     /// Relax constraint, and restore it.
     ///
+    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> instance = Instance.from_components(
@@ -2165,19 +2048,19 @@ impl Instance {
     /// ...     constraints={1: sum(x) == 3},
     /// ...     sense=Sense.Maximize,
     /// ... )
-    /// >>> assert set(instance.constraints) == {1}
+    /// >>> assert set(instance.constraints) == {ConstraintID(1)}
     ///
     /// >>> instance.relax_constraint(1, "manual relaxation")
     /// >>> assert not instance.constraints
-    /// >>> assert set(instance.removed_constraints) == {1}
+    /// >>> assert set(instance.removed_constraints) == {ConstraintID(1)}
     ///
     /// >>> instance.restore_constraint(1)
-    /// >>> assert set(instance.constraints) == {1}
+    /// >>> assert set(instance.constraints) == {ConstraintID(1)}
     /// >>> assert not instance.removed_constraints
     #[pyo3(signature = (constraint_id, reason, **parameters))]
-    pub fn relax_constraint(
+    pub(crate) fn relax_constraint(
         &mut self,
-        constraint_id: u64,
+        constraint_id: ConstraintIDInput,
         reason: String,
         #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
     ) -> OmmxPyResult<()> {
@@ -2189,16 +2072,19 @@ impl Instance {
         Ok(())
     }
 
-    pub fn restore_constraint(&mut self, constraint_id: u64) -> OmmxPyResult<()> {
+    pub(crate) fn restore_constraint(
+        &mut self,
+        constraint_id: ConstraintIDInput,
+    ) -> OmmxPyResult<()> {
         self.inner.restore_constraint(constraint_id.into())?;
         Ok(())
     }
 
     /// Relax an indicator constraint by moving it from active to removed.
     #[pyo3(signature = (constraint_id, reason, **parameters))]
-    pub fn relax_indicator_constraint(
+    pub(crate) fn relax_indicator_constraint(
         &mut self,
-        constraint_id: u64,
+        constraint_id: IndicatorConstraintIDInput,
         reason: String,
         #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
     ) -> OmmxPyResult<()> {
@@ -2211,7 +2097,10 @@ impl Instance {
     }
 
     /// Restore a removed indicator constraint back to active.
-    pub fn restore_indicator_constraint(&mut self, constraint_id: u64) -> OmmxPyResult<()> {
+    pub(crate) fn restore_indicator_constraint(
+        &mut self,
+        constraint_id: IndicatorConstraintIDInput,
+    ) -> OmmxPyResult<()> {
         self.inner
             .restore_indicator_constraint(constraint_id.into())?;
         Ok(())
@@ -2222,7 +2111,7 @@ impl Instance {
     /// A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
     /// linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
     /// as a new regular constraint and moves the one-hot constraint into
-    /// {attr}`~ommx.Instance.removed_one_hot_constraints` with
+    /// {attr}`~ommx.Instance.removed_constraints` with
     /// ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
     /// ``constraint_id`` parameter pointing to the new regular constraint.
     /// The generated regular constraint preserves the original one-hot context
@@ -2247,17 +2136,18 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> new_id = instance.convert_one_hot_to_constraint(1)
-    /// >>> instance.one_hot_constraints
-    /// {}
     /// >>> instance.constraints
-    /// {0: Constraint(x0 + x1 + x2 - 1 == 0)}
-    /// >>> instance.removed_one_hot_constraints
-    /// {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
-    pub fn convert_one_hot_to_constraint(&mut self, one_hot_id: u64) -> OmmxPyResult<u64> {
+    /// {ConstraintID(0): Constraint(x0 + x1 + x2 - 1 == 0)}
+    /// >>> instance.removed_constraints
+    /// {OneHotConstraintID(1): RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
+    pub(crate) fn convert_one_hot_to_constraint(
+        &mut self,
+        one_hot_id: OneHotConstraintIDInput,
+    ) -> OmmxPyResult<crate::ConstraintID> {
         let new_id = self
             .inner
             .convert_one_hot_to_constraint(one_hot_id.into())?;
-        Ok(new_id.into_inner())
+        Ok(new_id.into())
     }
 
     /// Convert every active one-hot constraint to a regular equality constraint.
@@ -2286,14 +2176,14 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_all_one_hots_to_constraints()
-    /// [0, 1]
-    /// >>> instance.one_hot_constraints
-    /// {}
+    /// [ConstraintID(0), ConstraintID(1)]
     /// >>> instance.constraints
-    /// {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
-    pub fn convert_all_one_hots_to_constraints(&mut self) -> OmmxPyResult<Vec<u64>> {
+    /// {ConstraintID(0): Constraint(x0 + x1 - 1 == 0), ConstraintID(1): Constraint(x2 + x3 - 1 == 0)}
+    pub fn convert_all_one_hots_to_constraints(
+        &mut self,
+    ) -> OmmxPyResult<Vec<crate::ConstraintID>> {
         let ids = self.inner.convert_all_one_hots_to_constraints()?;
-        Ok(ids.into_iter().map(|id| id.into_inner()).collect())
+        Ok(ids.into_iter().map(|id| id.into()).collect())
     }
 
     /// Convert a SOS1 constraint to regular constraints using the Big-M method.
@@ -2329,7 +2219,7 @@ impl Instance {
     /// mutation. Any error leaves the Instance unchanged.
     ///
     /// On success, the original SOS1 constraint is moved to
-    /// {attr}`~ommx.Instance.removed_sos1_constraints` with
+    /// {attr}`~ommx.Instance.removed_constraints` with
     /// ``reason="ommx.Instance.convert_sos1_to_constraints"`` and a
     /// comma-separated ``constraint_ids`` parameter in returned order. Every
     /// generated regular constraint records a {class}`~ommx.Provenance` entry
@@ -2349,16 +2239,17 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_sos1_to_constraints(1)
-    /// [0]
-    /// >>> instance.sos1_constraints
-    /// {}
+    /// [ConstraintID(0)]
     /// >>> instance.constraints
-    /// {0: Constraint(x0 + x1 + x2 - 1 <= 0)}
-    /// >>> instance.removed_sos1_constraints
-    /// {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
-    pub fn convert_sos1_to_constraints(&mut self, sos1_id: u64) -> OmmxPyResult<Vec<u64>> {
+    /// {ConstraintID(0): Constraint(x0 + x1 + x2 - 1 <= 0)}
+    /// >>> instance.removed_constraints
+    /// {Sos1ConstraintID(1): RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
+    pub(crate) fn convert_sos1_to_constraints(
+        &mut self,
+        sos1_id: Sos1ConstraintIDInput,
+    ) -> OmmxPyResult<Vec<crate::ConstraintID>> {
         let new_ids = self.inner.convert_sos1_to_constraints(sos1_id.into())?;
-        Ok(new_ids.into_iter().map(|id| id.into_inner()).collect())
+        Ok(new_ids.into_iter().map(|id| id.into()).collect())
     }
 
     /// Convert every active SOS1 constraint to regular constraints using Big-M.
@@ -2386,21 +2277,16 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_all_sos1_to_constraints()
-    /// {1: [0], 2: [1]}
-    /// >>> instance.sos1_constraints
-    /// {}
+    /// {Sos1ConstraintID(1): [ConstraintID(0)], Sos1ConstraintID(2): [ConstraintID(1)]}
     /// >>> instance.constraints
-    /// {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
-    pub fn convert_all_sos1_to_constraints(&mut self) -> OmmxPyResult<BTreeMap<u64, Vec<u64>>> {
+    /// {ConstraintID(0): Constraint(x0 + x1 - 1 <= 0), ConstraintID(1): Constraint(x2 + x3 - 1 <= 0)}
+    pub fn convert_all_sos1_to_constraints(
+        &mut self,
+    ) -> OmmxPyResult<BTreeMap<crate::Sos1ConstraintID, Vec<crate::ConstraintID>>> {
         let result = self.inner.convert_all_sos1_to_constraints()?;
         Ok(result
             .into_iter()
-            .map(|(id, ids)| {
-                (
-                    id.into_inner(),
-                    ids.into_iter().map(|c| c.into_inner()).collect(),
-                )
-            })
+            .map(|(id, ids)| (id.into(), ids.into_iter().map(|c| c.into()).collect()))
             .collect())
     }
 
@@ -2449,7 +2335,7 @@ impl Instance {
     /// approximate solver value near 0 or 1.
     ///
     /// On success, the original indicator constraint is moved to
-    /// {attr}`~ommx.Instance.removed_indicator_constraints` with
+    /// {attr}`~ommx.Instance.removed_constraints` with
     /// ``reason="ommx.Instance.convert_indicator_to_constraint"`` and a
     /// comma-separated ``constraint_ids`` parameter in returned order (empty
     /// when no side is emitted). Every generated regular constraint records a
@@ -2478,17 +2364,15 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_indicator_to_constraint(1)
-    /// [0]
-    /// >>> instance.indicator_constraints
-    /// {}
+    /// [ConstraintID(0)]
     /// >>> instance.constraints
-    /// {0: Constraint(x0 + 3*x1 - 5 <= 0)}
+    /// {ConstraintID(0): Constraint(x0 + 3*x1 - 5 <= 0)}
     #[pyo3(signature = (indicator_id, *, atol=None))]
-    pub fn convert_indicator_to_constraint(
+    pub(crate) fn convert_indicator_to_constraint(
         &mut self,
-        indicator_id: u64,
+        indicator_id: IndicatorConstraintIDInput,
         atol: Option<f64>,
-    ) -> OmmxPyResult<Vec<u64>> {
+    ) -> OmmxPyResult<Vec<crate::ConstraintID>> {
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
@@ -2496,7 +2380,7 @@ impl Instance {
         let new_ids = self
             .inner
             .convert_indicator_to_constraint(indicator_id.into(), atol)?;
-        Ok(new_ids.into_iter().map(|id| id.into_inner()).collect())
+        Ok(new_ids.into_iter().map(|id| id.into()).collect())
     }
 
     /// Convert every active indicator constraint to regular constraints using Big-M.
@@ -2516,7 +2400,7 @@ impl Instance {
     pub fn convert_all_indicators_to_constraints(
         &mut self,
         atol: Option<f64>,
-    ) -> OmmxPyResult<BTreeMap<u64, Vec<u64>>> {
+    ) -> OmmxPyResult<BTreeMap<crate::IndicatorConstraintID, Vec<crate::ConstraintID>>> {
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
@@ -2524,12 +2408,7 @@ impl Instance {
         let result = self.inner.convert_all_indicators_to_constraints(atol)?;
         Ok(result
             .into_iter()
-            .map(|(id, ids)| {
-                (
-                    id.into_inner(),
-                    ids.into_iter().map(|c| c.into_inner()).collect(),
-                )
-            })
+            .map(|(id, ids)| (id.into(), ids.into_iter().map(|c| c.into()).collect()))
             .collect())
     }
 
@@ -2746,6 +2625,7 @@ impl Instance {
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
     ///
+    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Equality, Instance, Sense
     /// >>> x = [
     /// ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -2764,10 +2644,10 @@ impl Instance {
     /// ...     constraint_id=0,
     /// ...     max_integer_range=32
     /// ... )
-    /// >>> assert instance.constraints[0].function.terms == {
+    /// >>> assert instance.constraints[ConstraintID(0)].function.terms == {
     /// ...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0
     /// ... }
-    /// >>> assert instance.constraints[0].equality == Equality.EqualToZero
+    /// >>> assert instance.constraints[ConstraintID(0)].equality == Equality.EqualToZero
     ///
     /// Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
     /// unavailable because the coefficients cannot be normalized or the slack
@@ -2778,9 +2658,9 @@ impl Instance {
     /// inequality feasibility threshold and must be less than ``0.5``. If
     /// omitted, :attr:`DEFAULT_ATOL` is used.
     #[pyo3(signature = (constraint_id, max_integer_range, *, atol=None))]
-    pub fn convert_inequality_to_equality_with_integer_slack(
+    pub(crate) fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
-        constraint_id: u64,
+        constraint_id: ConstraintIDInput,
         max_integer_range: u64,
         atol: Option<f64>,
     ) -> OmmxPyResult<()> {
@@ -2790,7 +2670,7 @@ impl Instance {
         };
         self.inner
             .convert_inequality_to_equality_with_integer_slack(
-                constraint_id,
+                ommx::ConstraintID::from(constraint_id).into_inner(),
                 max_integer_range,
                 atol,
             )?;
@@ -2820,6 +2700,7 @@ impl Instance {
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
     ///
+    /// >>> from ommx import ConstraintID
     /// >>> from ommx import DecisionVariable, Equality, Instance, Sense
     /// >>> x = [
     /// ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -2839,14 +2720,14 @@ impl Instance {
     /// ...     slack_upper_bound=2
     /// ... )
     /// >>> assert b == 2.0
-    /// >>> assert instance.constraints[0].function.terms == {
+    /// >>> assert instance.constraints[ConstraintID(0)].function.terms == {
     /// ...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0
     /// ... }
-    /// >>> assert instance.constraints[0].equality == Equality.LessThanOrEqualToZero
+    /// >>> assert instance.constraints[ConstraintID(0)].equality == Equality.LessThanOrEqualToZero
     #[pyo3(signature = (constraint_id, slack_upper_bound, *, atol=None))]
-    pub fn add_integer_slack_to_inequality(
+    pub(crate) fn add_integer_slack_to_inequality(
         &mut self,
-        constraint_id: u64,
+        constraint_id: ConstraintIDInput,
         slack_upper_bound: u64,
         atol: Option<f64>,
     ) -> OmmxPyResult<Option<f64>> {
@@ -2854,9 +2735,11 @@ impl Instance {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        let result =
-            self.inner
-                .add_integer_slack_to_inequality(constraint_id, slack_upper_bound, atol)?;
+        let result = self.inner.add_integer_slack_to_inequality(
+            ommx::ConstraintID::from(constraint_id).into_inner(),
+            slack_upper_bound,
+            atol,
+        )?;
         Ok(result)
     }
 
@@ -3005,7 +2888,7 @@ impl Instance {
     /// `removed=True` returns active + removed rows in the same DataFrame
     /// and auto-sets `"removed_reason"` so removed rows are
     /// distinguishable (active rows have NA in the reason columns).
-    #[pyo3(signature = (kind = ConstraintKind::Regular, include = None, removed = false))]
+    #[pyo3(signature = (*, kind, include = None, removed = false))]
     pub fn constraints_df<'py>(
         &self,
         py: Python<'py>,
@@ -3122,7 +3005,7 @@ impl Instance {
     /// `name`, `subscripts`, `description`. Index column is
     /// `{kind}_constraint_id`. `kind` selects which constraint family
     /// to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
@@ -3153,7 +3036,7 @@ impl Instance {
     ///
     /// One row per (constraint_id, parameter_key) pair. Columns:
     /// `{kind}_constraint_id`, `key`, `value`. Default RangeIndex.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
@@ -3184,7 +3067,7 @@ impl Instance {
     ///
     /// One row per (constraint_id, step) pair. Columns:
     /// `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
@@ -3216,7 +3099,7 @@ impl Instance {
     /// One row per (constraint_id, parameter_key) pair, plus one row with
     /// `key`/`value` set to NA when the reason has no parameters. Columns:
     /// `{kind}_constraint_id`, `reason`, `key`, `value`.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
@@ -3414,37 +3297,6 @@ impl Instance {
             })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Decision variable with ID {variable_id} not found"))
-            })
-    }
-
-    /// Get a specific constraint by ID
-    pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<Constraint> {
-        let cid = ConstraintID::from(constraint_id);
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .constraints()
-            .get(&cid)
-            .map(|constraint| Constraint::from_parts(constraint.clone(), context.collect_for(cid)))
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!("Constraint with ID {constraint_id} not found"))
-            })
-    }
-
-    /// Get a specific removed constraint by ID
-    pub fn get_removed_constraint_by_id(&self, constraint_id: u64) -> PyResult<RemovedConstraint> {
-        let cid = ConstraintID::from(constraint_id);
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .removed_constraints()
-            .get(&cid)
-            .map(|removed_constraint| {
-                let (c, r) = removed_constraint;
-                RemovedConstraint::from_parts(c.clone(), context.collect_for(cid), r.clone())
-            })
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Removed constraint with ID {constraint_id} not found"
-                ))
             })
     }
 

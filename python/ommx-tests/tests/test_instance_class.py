@@ -1,4 +1,10 @@
 from __future__ import annotations
+from ommx import (
+    ConstraintID,
+    IndicatorConstraintID,
+    OneHotConstraintID,
+    Sos1ConstraintID,
+)
 
 from typing import Any, cast
 
@@ -249,7 +255,7 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
         regular_degree, InstanceClassMismatch.RegularConstraintDegreeExceedsBound
     )
     assert regular_degree.relation == Equality.EqualToZero
-    assert regular_degree.actual_degrees == {10: 2}
+    assert regular_degree.actual_degrees == {ConstraintID(10): 2}
     assert regular_degree.bound == PolynomialRequirement.at_most(1)
 
     regular_relation = mismatches[3]
@@ -258,26 +264,26 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
         InstanceClassMismatch.RegularConstraintRelationNotAllowed,
     )
     assert regular_relation.relation == Equality.LessThanOrEqualToZero
-    assert regular_relation.constraint_ids == {11}
+    assert regular_relation.constraint_ids == {ConstraintID(11)}
     assert regular_relation.allowed_relations == {Equality.EqualToZero}
 
     indicator_degree = mismatches[4]
     assert isinstance(
         indicator_degree, InstanceClassMismatch.IndicatorBodyDegreeExceedsBound
     )
-    assert indicator_degree.actual_degrees == {20: 2}
+    assert indicator_degree.actual_degrees == {IndicatorConstraintID(20): 2}
 
     indicator_relation = mismatches[5]
     assert isinstance(
         indicator_relation,
         InstanceClassMismatch.IndicatorConstraintRelationNotAllowed,
     )
-    assert indicator_relation.constraint_ids == {21}
+    assert indicator_relation.constraint_ids == {IndicatorConstraintID(21)}
 
     assert isinstance(mismatches[6], InstanceClassMismatch.OneHotConstraintsNotAllowed)
-    assert mismatches[6].constraint_ids == {30}
+    assert mismatches[6].constraint_ids == {OneHotConstraintID(30)}
     assert isinstance(mismatches[7], InstanceClassMismatch.Sos1ConstraintsNotAllowed)
-    assert mismatches[7].constraint_ids == {40}
+    assert mismatches[7].constraint_ids == {Sos1ConstraintID(40)}
 
     unsupported_sense = mismatches[8]
     assert isinstance(unsupported_sense, InstanceClassMismatch.SenseNotAllowed)
@@ -304,7 +310,10 @@ def test_mismatch_variants_preserve_all_structured_payloads() -> None:
         .mismatches
         if isinstance(mismatch, InstanceClassMismatch.IndicatorConstraintsNotAllowed)
     )
-    assert unsupported_indicator.constraint_ids == {20, 21}
+    assert unsupported_indicator.constraint_ids == {
+        IndicatorConstraintID(20),
+        IndicatorConstraintID(21),
+    }
 
 
 def test_non_polynomial_mismatches_preserve_function_location() -> None:
@@ -350,12 +359,12 @@ def test_non_polynomial_mismatches_preserve_function_location() -> None:
         InstanceClassMismatch.RegularConstraintFunctionNotPolynomial,
     )
     assert mismatches[1].relation == Equality.EqualToZero
-    assert mismatches[1].constraint_ids == {10}
+    assert mismatches[1].constraint_ids == {ConstraintID(10)}
     assert isinstance(
         mismatches[2], InstanceClassMismatch.IndicatorBodyFunctionNotPolynomial
     )
     assert mismatches[2].relation == Equality.EqualToZero
-    assert mismatches[2].constraint_ids == {20}
+    assert mismatches[2].constraint_ids == {IndicatorConstraintID(20)}
 
 
 def test_membership_is_recomputed_after_explicit_lowering() -> None:
@@ -383,7 +392,9 @@ def test_membership_is_recomputed_after_explicit_lowering() -> None:
     assert not prepared_input_class.contains(instance)
     assert instance.active_special_constraint_kinds == {SpecialConstraintKind.OneHot}
     assert instance.lower_special_constraints(set()) == set()
-    assert set(instance.one_hot_constraints) == {30}
+    assert set(
+        (cid for cid in instance.constraints if isinstance(cid, OneHotConstraintID))
+    ) == {OneHotConstraintID(30)}
 
     lowered = instance.lower_special_constraints({SpecialConstraintKind.OneHot})
     assert lowered == {SpecialConstraintKind.OneHot}

@@ -290,19 +290,16 @@ def test_completed_output_returns_the_received_python_object(monkeypatch):
 
 def test_compilation_uses_promotion_plans_and_explicit_wire_messages(monkeypatch):
     value = fixture.compile_for_target()
-    assert set(value.one_hot_constraints) == {0}
-    assert value.constraints == {}
+    assert set(value.constraints) == {ommx.OneHotConstraintID(0)}
 
     advertise(monkeypatch, [1])
     calls = spy_instance(monkeypatch)
     legacy = fixture.compile_for_target()
-    assert set(legacy.constraints) == {23}
-    assert legacy.one_hot_constraints == {}
+    assert set(legacy.constraints) == {ommx.ConstraintID(23)}
     assert len(calls) == 1
     assert calls[0][0] == 1
     restored = INSTANCE.from_v1_bytes(calls[0][1])
-    assert set(restored.constraints) == {23}
-    assert restored.one_hot_constraints == {}
+    assert set(restored.constraints) == {ommx.ConstraintID(23)}
     for state in ({7: 0.0}, {7: 1.0}):
         assert legacy.evaluate(state).feasible == value.evaluate(state).feasible
         assert legacy.evaluate(state).objective == value.evaluate(state).objective
@@ -312,8 +309,7 @@ def test_raw_v1_transport_preserves_advisory_hints(monkeypatch):
     advertise(monkeypatch, [1])
     calls = spy_instance(monkeypatch)
     value = fixture.raw_v1_instance()
-    assert set(value.constraints) == {23}
-    assert value.one_hot_constraints == {}
+    assert set(value.constraints) == {ommx.ConstraintID(23)}
     assert len(calls) == 1
     assert calls[0][0] == 1
     # Check the complete wire message, before the v3 parser ignores advisory hints.

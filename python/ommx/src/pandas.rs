@@ -1,6 +1,7 @@
 //! Thin wrapper around `pandas.DataFrame` for type-safe PyO3 bindings,
 //! plus shared helpers for building DataFrames from domain objects.
 
+use crate::constraint_kind::ConstraintKind;
 use ommx::EvaluatedConstraintBehavior;
 use ommx::SampledConstraintBehavior;
 use std::collections::HashMap;
@@ -134,87 +135,6 @@ const REMOVED_REASON_PREFIX: &str = "removed_reason.";
 // kind= dispatch — shared by the 4 constraint sidecar accessors
 // ---------------------------------------------------------------------------
 
-/// Constraint family selector for `kind=` arguments on the wide
-/// `constraints_df` and the four long-format sidecar accessors.
-///
-/// The Python surface is a string literal (`"regular"`, `"indicator"`,
-/// `"one_hot"`, `"sos1"`); on the Rust side we deal with this enum so
-/// downstream `match` arms get exhaustiveness checking. The
-/// [`FromPyObject`] / [`IntoPyObject`] / [`PyStubType`] impls bridge
-/// between the two: a Python `str` is validated and converted to the
-/// enum on the way in, the enum is rendered back as a Python `str` on
-/// the way out, and the stub surface is `typing.Literal[...]` so
-/// callers get static-typing assistance for typos at edit time.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum ConstraintKind {
-    Regular,
-    Indicator,
-    OneHot,
-    Sos1,
-}
-
-impl ConstraintKind {
-    /// The Python string literal corresponding to this kind.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            ConstraintKind::Regular => "regular",
-            ConstraintKind::Indicator => "indicator",
-            ConstraintKind::OneHot => "one_hot",
-            ConstraintKind::Sos1 => "sos1",
-        }
-    }
-}
-
-/// Accept a Python `str` and validate it against the four known kinds.
-/// Unknown values yield `ValueError` for callers that bypass the
-/// `Literal[...]` stub typing (e.g. dynamically constructed strings).
-impl<'py> FromPyObject<'_, 'py> for ConstraintKind {
-    type Error = PyErr;
-    fn extract(ob: pyo3::Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
-        let s: &str = ob.extract()?;
-        match s {
-            "regular" => Ok(ConstraintKind::Regular),
-            "indicator" => Ok(ConstraintKind::Indicator),
-            "one_hot" => Ok(ConstraintKind::OneHot),
-            "sos1" => Ok(ConstraintKind::Sos1),
-            other => Err(PyValueError::new_err(format!(
-                "unknown constraint kind: {other:?} (expected one of \"regular\", \"indicator\", \"one_hot\", \"sos1\")"
-            ))),
-        }
-    }
-}
-
-/// Render back to a Python `str` so default values like
-/// `ConstraintKind::Regular` show up as `'regular'` in the generated
-/// stubs (via `pyo3_stub_gen::util::fmt_py_obj`).
-impl<'py> pyo3::IntoPyObject<'py> for ConstraintKind {
-    type Target = pyo3::types::PyString;
-    type Output = Bound<'py, Self::Target>;
-    type Error = std::convert::Infallible;
-    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
-        Ok(pyo3::types::PyString::new(py, self.as_str()))
-    }
-}
-
-/// Surface in `__init__.pyi` as a string `Literal`. Both input and
-/// output positions render identically — the wide `*_df` accessors
-/// take this enum but never return it, so `type_input` is the only
-/// position that matters in practice; `type_output` is provided for
-/// completeness.
-impl pyo3_stub_gen::PyStubType for ConstraintKind {
-    fn type_input() -> pyo3_stub_gen::TypeInfo {
-        pyo3_stub_gen::TypeInfo {
-            name: r#"typing.Literal["regular", "indicator", "one_hot", "sos1"]"#.to_string(),
-            source_module: None,
-            import: ["typing".into()].into(),
-            type_refs: Default::default(),
-        }
-    }
-    fn type_output() -> pyo3_stub_gen::TypeInfo {
-        Self::type_input()
-    }
-}
-
 /// Index column name for the chosen constraint kind. Each kind has a
 /// distinct ID space, so the qualified name keeps cross-kind joins
 /// visible (`regular_constraint_id` ≠ `indicator_constraint_id` etc.).
@@ -226,45 +146,6 @@ pub fn constraint_id_col(kind: ConstraintKind) -> &'static str {
         ConstraintKind::Sos1 => "sos1_constraint_id",
     }
 }
-
-/// Dispatch on `ConstraintKind` and bind `coll` to the per-kind constraint
-/// collection on `$container`. Used by the four `constraint_*_df` sidecar
-/// accessors so the four `ConstraintKind` arms collapse to a single call site.
-///
-/// Each host (`Instance` / `ParametricInstance` / `Solution` / `SampleSet`)
-/// passes its own accessor names because the underlying collection types
-/// differ — `ConstraintCollection` for Instance/ParametricInstance,
-/// `EvaluatedConstraintCollection` for Solution, `SampledConstraintCollection`
-/// for SampleSet. Centralising the match shape here avoids drift when adding a
-/// new constraint kind.
-macro_rules! constraint_kind_collection {
-    (
-        $container:expr, $kind:expr,
-        [$regular:ident, $indicator:ident, $one_hot:ident, $sos1:ident],
-        |$coll:ident| $body:block
-    ) => {
-        match $kind {
-            $crate::pandas::ConstraintKind::Regular => {
-                let $coll = $container.$regular();
-                $body
-            }
-            $crate::pandas::ConstraintKind::Indicator => {
-                let $coll = $container.$indicator();
-                $body
-            }
-            $crate::pandas::ConstraintKind::OneHot => {
-                let $coll = $container.$one_hot();
-                $body
-            }
-            $crate::pandas::ConstraintKind::Sos1 => {
-                let $coll = $container.$sos1();
-                $body
-            }
-        }
-    };
-}
-
-pub(crate) use constraint_kind_collection;
 
 // ---------------------------------------------------------------------------
 // Sidecar DataFrame builders
@@ -292,7 +173,7 @@ where
     let entries: Vec<Bound<'py, PyAny>> = ids
         .map(|id| -> PyResult<_> {
             let dict = PyDict::new(py);
-            dict.set_item(id_col, Into::<u64>::into(id))?;
+            dict.set_item(id_col, typed_constraint_id(Into::<u64>::into(id), id_col)?)?;
             set_label_columns(
                 &dict,
                 store.name(id),
@@ -332,7 +213,7 @@ where
         .into_iter()
         .map(|(id, key, value)| -> PyResult<_> {
             let dict = PyDict::new(py);
-            dict.set_item(id_col, id)?;
+            dict.set_item(id_col, typed_constraint_id(id, id_col)?)?;
             dict.set_item("key", key)?;
             dict.set_item("value", value)?;
             Ok(dict.into_any())
@@ -361,7 +242,7 @@ where
         for (step, p) in store.provenance(id).iter().enumerate() {
             let (source_kind, source_id) = provenance_parts(p);
             let dict = PyDict::new(py);
-            dict.set_item(id_col, Into::<u64>::into(id))?;
+            dict.set_item(id_col, typed_constraint_id(Into::<u64>::into(id), id_col)?)?;
             dict.set_item("step", step as u64)?;
             dict.set_item("source_kind", source_kind)?;
             dict.set_item("source_id", source_id)?;
@@ -438,13 +319,13 @@ where
                     key,
                     value,
                 } => {
-                    dict.set_item(id_col, id)?;
+                    dict.set_item(id_col, typed_constraint_id(id, id_col)?)?;
                     dict.set_item("reason", reason)?;
                     dict.set_item("key", key)?;
                     dict.set_item("value", value)?;
                 }
                 Row::Bare { id, reason } => {
-                    dict.set_item(id_col, id)?;
+                    dict.set_item(id_col, typed_constraint_id(id, id_col)?)?;
                     dict.set_item("reason", reason)?;
                     dict.set_item("key", &na)?;
                     dict.set_item("value", &na)?;
@@ -512,11 +393,20 @@ pub fn variable_parameters_dataframe<'py>(
     long_format_dataframe(py, entries, &[id_col, "key", "value"])
 }
 
-fn provenance_parts(p: &Provenance) -> (&'static str, u64) {
+fn provenance_parts(p: &Provenance) -> (&'static str, crate::constraint_id::AnyConstraintID) {
     match *p {
-        Provenance::IndicatorConstraint(id) => ("IndicatorConstraint", id.into()),
-        Provenance::OneHotConstraint(id) => ("OneHotConstraint", id.into()),
-        Provenance::Sos1Constraint(id) => ("Sos1Constraint", id.into()),
+        Provenance::IndicatorConstraint(id) => (
+            "IndicatorConstraint",
+            crate::constraint_id::AnyConstraintID::Indicator(id.into()),
+        ),
+        Provenance::OneHotConstraint(id) => (
+            "OneHotConstraint",
+            crate::constraint_id::AnyConstraintID::OneHot(id.into()),
+        ),
+        Provenance::Sos1Constraint(id) => (
+            "Sos1Constraint",
+            crate::constraint_id::AnyConstraintID::Sos1(id.into()),
+        ),
     }
 }
 
@@ -602,7 +492,7 @@ pub(crate) fn rename_id_column(dict: &Bound<PyDict>, id_col: &str) -> PyResult<(
         .get_item("id")?
         .ok_or_else(|| PyValueError::new_err("entry dict missing required \"id\" column"))?;
     dict.del_item("id")?;
-    dict.set_item(id_col, value)?;
+    dict.set_item(id_col, typed_constraint_id(value.extract()?, id_col)?)?;
     Ok(())
 }
 
@@ -1547,5 +1437,31 @@ impl<'a, 'm> ToPandasEntry
             dict.set_item(sample_id.into_inner(), value)?;
         }
         Ok(dict)
+    }
+}
+
+// Tabular rows originate from Rust serialization-oriented entries. Restore the
+// family before exposing their identity to Python, including empty table schemas.
+fn typed_constraint_id(
+    value: u64,
+    id_col: &str,
+) -> PyResult<crate::constraint_id::AnyConstraintID> {
+    use crate::constraint_id::AnyConstraintID;
+    match id_col {
+        "regular_constraint_id" => Ok(AnyConstraintID::Regular(
+            ommx::ConstraintID::from(value).into(),
+        )),
+        "indicator_constraint_id" => Ok(AnyConstraintID::Indicator(
+            ommx::IndicatorConstraintID::from(value).into(),
+        )),
+        "one_hot_constraint_id" => Ok(AnyConstraintID::OneHot(
+            ommx::OneHotConstraintID::from(value).into(),
+        )),
+        "sos1_constraint_id" => Ok(AnyConstraintID::Sos1(
+            ommx::Sos1ConstraintID::from(value).into(),
+        )),
+        _ => Err(PyValueError::new_err(format!(
+            "Unknown constraint ID column: {id_col}"
+        ))),
     }
 }

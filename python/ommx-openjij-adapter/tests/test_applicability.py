@@ -1,4 +1,10 @@
 from __future__ import annotations
+from ommx import (
+    ConstraintID,
+    IndicatorConstraintID,
+    OneHotConstraintID,
+    Sos1ConstraintID,
+)
 
 import pytest
 
@@ -180,7 +186,7 @@ def test_direct_rejects_regular_constraints_without_mutation() -> None:
         InstanceClassMismatch.RegularConstraintRelationNotAllowed,
     )
     assert mismatch.relation == Equality.LessThanOrEqualToZero
-    assert mismatch.constraint_ids == {7}
+    assert mismatch.constraint_ids == {ConstraintID(7)}
     assert mismatch.allowed_relations == set()
 
 
@@ -208,13 +214,13 @@ def test_direct_rejects_all_special_constraint_families_without_mutation() -> No
 
     indicator = by_type[InstanceClassMismatch.IndicatorConstraintsNotAllowed]
     assert isinstance(indicator, InstanceClassMismatch.IndicatorConstraintsNotAllowed)
-    assert indicator.constraint_ids == {10}
+    assert indicator.constraint_ids == {IndicatorConstraintID(10)}
     one_hot = by_type[InstanceClassMismatch.OneHotConstraintsNotAllowed]
     assert isinstance(one_hot, InstanceClassMismatch.OneHotConstraintsNotAllowed)
-    assert one_hot.constraint_ids == {20}
+    assert one_hot.constraint_ids == {OneHotConstraintID(20)}
     sos1 = by_type[InstanceClassMismatch.Sos1ConstraintsNotAllowed]
     assert isinstance(sos1, InstanceClassMismatch.Sos1ConstraintsNotAllowed)
-    assert sos1.constraint_ids == {30}
+    assert sos1.constraint_ids == {Sos1ConstraintID(30)}
 
 
 def test_recommended_policy_keeps_fixed_penalty_caller_owned() -> None:

@@ -52,8 +52,7 @@ policy = PreparationPolicy(
 instance.prepare(OMMXPySCIPOptAdapter.INPUT_CLASS, policy)
 
 assert OMMXPySCIPOptAdapter.INPUT_CLASS.contains(instance)
-assert not instance.one_hot_constraints
-assert instance.sos1_constraints
+assert instance.active_special_constraint_kinds == {SpecialConstraintKind.Sos1}
 ```
 
 `prepare()`はこのInstanceを直接変更します。OneHotは通常の線形等式に変わり、SOS1はそのまま残っています。変換元のOneHotは[removed constraint](../user_guide/removed_constraints.md)として保持されます。

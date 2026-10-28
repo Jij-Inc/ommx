@@ -1,3 +1,4 @@
+use crate::constraint_base::ConstraintView;
 use pyo3::{exceptions::PyKeyError, prelude::*};
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use std::collections::{BTreeSet, HashMap};
@@ -128,13 +129,17 @@ impl Sos1Constraint {
 
 /// A removed SOS1 constraint together with the reason it was removed.
 #[gen_stub_pyclass]
-#[pyclass]
-#[derive(Clone)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(Clone, PartialEq)]
 pub struct RemovedSos1Constraint {
     pub constraint: ommx::Sos1Constraint,
     pub context: ommx::ConstraintContext,
     pub removed_reason: ommx::RemovedReason,
 }
+crate::constraint_base::constraint_subclass!(
+    RemovedSos1Constraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl RemovedSos1Constraint {
     pub fn from_parts(
@@ -193,6 +198,11 @@ impl RemovedSos1Constraint {
     }
 
     #[getter]
+    pub fn provenance(&self) -> Vec<crate::Provenance> {
+        crate::provenance_list(&self.context)
+    }
+
+    #[getter]
     pub fn removed_reason(&self) -> String {
         self.removed_reason.reason.clone()
     }
@@ -228,13 +238,18 @@ impl RemovedSos1Constraint {
 ///
 /// Returned by `Instance.add_sos1_constraint` /
 /// `ParametricInstance.add_sos1_constraint` and by their
-/// `sos1_constraints[id]` getters.
+/// `constraints[Sos1ConstraintID(...)]` lookups.
 #[gen_stub_pyclass]
-#[pyclass]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
 pub struct AttachedSos1Constraint {
     pub(crate) host: ConstraintHost,
     pub(crate) id: ommx::Sos1ConstraintID,
 }
+crate::constraint_base::constraint_subclass!(
+    AttachedSos1Constraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl AttachedSos1Constraint {
     pub fn new(host: ConstraintHost, id: ommx::Sos1ConstraintID) -> Self {
@@ -287,8 +302,8 @@ fn lookup_sos1_parametric(
 #[pymethods]
 impl AttachedSos1Constraint {
     #[getter]
-    pub fn constraint_id(&self) -> u64 {
-        self.id.into_inner()
+    pub fn constraint_id(&self) -> crate::Sos1ConstraintID {
+        self.id.into()
     }
 
     #[getter]

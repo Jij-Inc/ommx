@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from ommx import Bound, DecisionVariable, Function, Instance, Sense
 import pytest
 
@@ -18,7 +19,7 @@ def test_tighten_bounds_simultaneously_once_returns_changed_domains() -> None:
     assert instance.tighten_bounds_simultaneously_once(atol=0.125) == {0: Bound(-2, 3)}
     assert instance.get_decision_variable_by_id(0).bound == Bound(-2, 3)
     assert instance.tighten_bounds_simultaneously_once(atol=0.125) == {}
-    assert set(instance.constraints) == {0, 1}
+    assert set(instance.constraints) == {ConstraintID(0), ConstraintID(1)}
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -202,7 +203,7 @@ def test_selected_constraints_determine_bound_updates(
     assert instance.get_decision_variable_by_id(0).bound == expected.get(
         0, Bound(-100, 100)
     )
-    assert set(instance.constraints) == {0, 1}
+    assert set(instance.constraints) == {ConstraintID(0), ConstraintID(1)}
 
 
 def test_explicit_all_constraints_matches_all_constraints_api() -> None:

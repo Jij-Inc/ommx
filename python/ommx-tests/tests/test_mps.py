@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from pathlib import Path
 
 import pytest
@@ -34,7 +35,14 @@ def test_example_mps():
     assert instance.sense == Sense.Maximize  # OBJSENSE field is specified
     dvars = instance.decision_variables
     dvars.sort(key=lambda x: x.name)
-    constraints = sorted(instance.constraints.values(), key=lambda c: c.name or "")
+    constraints = sorted(
+        (
+            instance.constraints[cid]
+            for cid in instance.constraints
+            if isinstance(cid, ConstraintID)
+        ),
+        key=lambda c: c.name or "",
+    )
 
     assert len(dvars) == 3
     assert len(constraints) == 3
@@ -120,6 +128,7 @@ def test_output():
     assert len(constr_before) == len(constr_after)
     assert set(constr_before.keys()) == set(constr_after.keys())
     for cid in constr_before:
+        assert isinstance(cid, ConstraintID)
         b = constr_before[cid]
         a = constr_after[cid]
         # Note: MPS format does not preserve constraint names (see Instance.write_mps docstring)

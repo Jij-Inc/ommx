@@ -226,3 +226,18 @@ def test_recommended_preparation_reaches_the_python_mip_input_class() -> None:
     assert instance.prepare(input_class, policy) is None
     assert input_class.contains(instance)
     assert OMMXPythonMIPAdapter.check_applicability(instance).is_member
+
+
+def test_dual_mapping_preserves_typed_sparse_constraint_ids():
+    x = DecisionVariable.continuous(0, lower=0, upper=10)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        sense=Sense.Maximize,
+        constraints={42: x <= 2},
+    )
+    adapter = OMMXPythonMIPAdapter(instance)
+    model = adapter.solver_input
+    model.optimize()
+    solution = adapter.decode(model)
+    assert solution.get_dual_variable(42) == pytest.approx(1)

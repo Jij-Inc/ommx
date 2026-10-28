@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 import math
 from collections import UserDict
 from types import MappingProxyType
@@ -58,7 +59,7 @@ def test_incremental_modeling_workflow():
     assert (x.id, x.name) == (0, "x")
     assert (y.id, y.name) == (1, "y")
     assert instance.objective.almost_equal(Function(x + y))
-    assert constraint.constraint_id == 0
+    assert constraint.constraint_id == ConstraintID(0)
     assert constraint.name == "c1"
 
 
@@ -459,7 +460,7 @@ def test_convert_inequality_to_equality_with_integer_slack_trivial():
         constraint_id=0, max_integer_range=32
     )
     assert instance.constraints == {}
-    assert 0 in instance.removed_constraints
+    assert ConstraintID(0) in instance.removed_constraints
 
 
 def test_convert_inequality_to_equality_with_integer_slack_uses_atol():
@@ -475,7 +476,7 @@ def test_convert_inequality_to_equality_with_integer_slack_uses_atol():
         constraint_id=0, max_integer_range=1, atol=0.4
     )
 
-    constraint = instance.constraints[0]
+    constraint = instance.constraints[ConstraintID(0)]
     slack_id = (constraint.function.required_ids() - {0}).pop()
     assert constraint.evaluate({0: 0.0, slack_id: 0.0}, atol=0.4).is_feasible(atol=0.4)
     assert not constraint.evaluate({0: 1.0, slack_id: 0.0}, atol=0.4).is_feasible(
@@ -521,7 +522,7 @@ def test_add_integer_slack_to_inequality_trivial():
 
     # Check that the constraint is removed
     assert instance.constraints == {}
-    assert 0 in instance.removed_constraints
+    assert ConstraintID(0) in instance.removed_constraints
 
 
 def test_add_integer_slack_to_inequality_continuous():

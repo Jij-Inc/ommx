@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from itertools import product
 
 import pytest
@@ -28,7 +29,7 @@ def test_encoding_precedes_penalty_and_preserves_output_semantics(format_name, k
     assert getattr(instance, f"to_{format_name}")(**options) == expected
     policy = getattr(PreparationPolicy, f"for_{format_name}")(**options)
     instance.prepare(getattr(InstanceClass, format_name)(), policy)
-    removed = instance.removed_constraints[7]
+    removed = instance.removed_constraints[ConstraintID(7)]
     assert removed.function.required_ids() == {2, 3, 4}
     for bits in product([0, 1], repeat=3):
         state = dict(zip([2, 3, 4], bits))

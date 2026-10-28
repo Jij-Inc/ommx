@@ -16,6 +16,7 @@ import pathlib
 import types
 import typing
 import typing_extensions
+from ommx._typing import _K, _T, _V_co
 from typing import TypeAlias
 
 __all__ = [
@@ -35,14 +36,23 @@ __all__ = [
     "Bound",
     "BridgeError",
     "Constraint",
+    "ConstraintCollection",
+    "ConstraintFamilyView",
+    "ConstraintID",
+    "ConstraintIDBase",
+    "ConstraintView",
     "DecisionVariable",
     "DecisionVariableRole",
     "Descriptor",
     "DiagnosticCollector",
     "Equality",
     "EvaluatedConstraint",
+    "EvaluatedConstraintCollection",
     "EvaluatedDecisionVariable",
+    "EvaluatedIndicatorConstraint",
     "EvaluatedNamedFunction",
+    "EvaluatedOneHotConstraint",
+    "EvaluatedSos1Constraint",
     "ExactIntegerSlackError",
     "Experiment",
     "ExperimentCheckpointRef",
@@ -55,6 +65,7 @@ __all__ = [
     "GcReport",
     "GcRoot",
     "IndicatorConstraint",
+    "IndicatorConstraintID",
     "InfeasibleDetected",
     "Instance",
     "InstanceClass",
@@ -74,6 +85,7 @@ __all__ = [
     "NamedState",
     "ObjectivePreparation",
     "OneHotConstraint",
+    "OneHotConstraintID",
     "OpenSolve",
     "Optimality",
     "OutputObjective",
@@ -95,6 +107,7 @@ __all__ = [
     "RemoteArtifactNotFoundError",
     "RemoteArtifactTransportError",
     "RemovedConstraint",
+    "RemovedConstraintCollection",
     "RemovedIndicatorConstraint",
     "RemovedOneHotConstraint",
     "RemovedSos1Constraint",
@@ -102,8 +115,12 @@ __all__ = [
     "Run",
     "SampleSet",
     "SampledConstraint",
+    "SampledConstraintCollection",
     "SampledDecisionVariable",
+    "SampledIndicatorConstraint",
     "SampledNamedFunction",
+    "SampledOneHotConstraint",
+    "SampledSos1Constraint",
     "Samples",
     "Sampling",
     "ScalarLike",
@@ -116,6 +133,7 @@ __all__ = [
     "Sos1BigMPromotionRequest",
     "Sos1BigMSelectorClaim",
     "Sos1Constraint",
+    "Sos1ConstraintID",
     "SpecialConstraintKind",
     "SpecialConstraintPreparation",
     "State",
@@ -823,7 +841,7 @@ class ArtifactRef:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class AttachedConstraint:
+class AttachedConstraint(ConstraintView):
     r"""
     Attached constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
@@ -839,7 +857,7 @@ class AttachedConstraint:
     wrapper to release the back-reference.
     """
     @property
-    def constraint_id(self) -> builtins.int:
+    def constraint_id(self) -> ConstraintID:
         r"""
         The id this handle points at.
         """
@@ -863,6 +881,7 @@ class AttachedConstraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> Constraint:
         r"""
         Return a {class}`~ommx.Constraint` snapshot of the current
@@ -1053,7 +1072,7 @@ class AttachedDecisionVariable:
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None: ...
 
 @typing.final
-class AttachedIndicatorConstraint:
+class AttachedIndicatorConstraint(ConstraintView):
     r"""
     Attached indicator constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
@@ -1061,11 +1080,11 @@ class AttachedIndicatorConstraint:
     `AttachedIndicatorConstraint` is returned by
     `Instance.add_indicator_constraint` /
     `ParametricInstance.add_indicator_constraint` and by their
-    `indicator_constraints[id]` getters. Reads pull live data from the parent
+    `constraints[IndicatorConstraintID(...)]` lookups. Reads pull live data from the parent
     host and context setters write through to its SoA context store.
     """
     @property
-    def constraint_id(self) -> builtins.int:
+    def constraint_id(self) -> IndicatorConstraintID:
         r"""
         The id this handle points at.
         """
@@ -1090,6 +1109,7 @@ class AttachedIndicatorConstraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> IndicatorConstraint:
         r"""
         Return an {class}`~ommx.IndicatorConstraint` snapshot of the
@@ -1135,18 +1155,18 @@ class AttachedIndicatorConstraint:
         """
 
 @typing.final
-class AttachedOneHotConstraint:
+class AttachedOneHotConstraint(ConstraintView):
     r"""
     Attached one-hot constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 
     Returned by `Instance.add_one_hot_constraint` /
     `ParametricInstance.add_one_hot_constraint` and by their
-    `one_hot_constraints[id]` getters. Reads pull live data from the parent
+    `constraints[OneHotConstraintID(...)]` lookups. Reads pull live data from the parent
     host and context setters write through to its SoA context store.
     """
     @property
-    def constraint_id(self) -> builtins.int:
+    def constraint_id(self) -> OneHotConstraintID:
         r"""
         The id this handle points at.
         """
@@ -1167,6 +1187,7 @@ class AttachedOneHotConstraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> OneHotConstraint:
         r"""
         Return a {class}`~ommx.OneHotConstraint` snapshot of the current
@@ -1212,17 +1233,17 @@ class AttachedOneHotConstraint:
         """
 
 @typing.final
-class AttachedSos1Constraint:
+class AttachedSos1Constraint(ConstraintView):
     r"""
     Attached SOS1 constraint — a write-through handle bound to a host
     ({class}`~ommx.Instance` or {class}`~ommx.ParametricInstance`).
 
     Returned by `Instance.add_sos1_constraint` /
     `ParametricInstance.add_sos1_constraint` and by their
-    `sos1_constraints[id]` getters.
+    `constraints[Sos1ConstraintID(...)]` lookups.
     """
     @property
-    def constraint_id(self) -> builtins.int: ...
+    def constraint_id(self) -> Sos1ConstraintID: ...
     @property
     def instance(self) -> typing.Any: ...
     @property
@@ -1237,6 +1258,7 @@ class AttachedSos1Constraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def provenance(self) -> builtins.list[Provenance]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def detach(self) -> Sos1Constraint:
         r"""
         Return a {class}`~ommx.Sos1Constraint` snapshot of the current
@@ -1529,6 +1551,223 @@ class Constraint:
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
 
 @typing.final
+class ConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
+    r"""
+    Live, read-only mapping of all active constraint families. Values are write-through attached handles.
+
+    Keys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.
+    The view keeps its owner alive and observes subsequent owner mutations.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
+        r"""
+        Iterate a snapshot of typed IDs; constraint rows are not collected.
+        """
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
+        r"""
+        Live key view. Iteration order is family order, then numeric ID.
+        """
+    def values(self) -> typing.ValuesView[ConstraintView]:
+        r"""
+        Live value view; each row is fetched when visited.
+        """
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
+        r"""
+        Live item view; each row is fetched when visited.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> AttachedConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: IndicatorConstraintID) -> AttachedIndicatorConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> AttachedOneHotConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> AttachedSos1Constraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> AttachedConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> AttachedConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> AttachedIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> AttachedIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> AttachedOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> AttachedOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> AttachedSos1Constraint | None: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: _T
+    ) -> AttachedSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, AttachedConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, AttachedIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, AttachedOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+
+@typing.final
+class ConstraintFamilyView(typing.Mapping[_K, _V_co]):
+    r"""
+    Live, read-only mapping of one constraint family, created by of_kind. Integers are promoted to the selected ID type; other families raise TypeError. Iteration retains typed IDs. Model rows are attached handles; removed and result rows are snapshots.
+    """
+    def __len__(self) -> builtins.int:
+        r"""
+        Number of current rows in the selected family.
+        """
+    def __getitem__(self, key: _K | builtins.int) -> _V_co:
+        r"""
+        Fetch a row using an integer or an ID of the selected family.
+        """
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[_K]:
+        r"""
+        Snapshot this family's typed IDs now; fetch rows only when indexed.
+        """
+    def keys(self) -> typing.KeysView[_K]:
+        r"""
+        Live keys view. View iterators snapshot IDs on first advance.
+        """
+    def values(self) -> typing.ValuesView[_V_co]:
+        r"""
+        Live values view; rows are fetched on demand.
+        """
+    def items(self) -> typing.ItemsView[_K, _V_co]:
+        r"""
+        Live items view; keys remain typed and rows are fetched on demand.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def get(self, key: _K | builtins.int, default: None = None) -> _V_co | None: ...
+    @typing.overload
+    def get(self, key: _K | builtins.int, default: _T) -> _V_co | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+
+@typing.final
+class ConstraintID(ConstraintIDBase):
+    r"""
+    A regular constraint ID. Unequal to integers and IDs of other constraint families.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __lt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __le__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __gt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __ge__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __hash__(self) -> builtins.int: ...
+    def __new__(cls, value: builtins.int) -> ConstraintID:
+        r"""
+        Create an ID in this constraint family's namespace.
+
+        The value must be an unsigned 64-bit integer. An ID of another
+        family is not accepted. IDs have no integer conversion protocol.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
+    def __copy__(self) -> ConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> ConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
+
+class ConstraintIDBase:
+    r"""
+    Common base of constraint IDs, including families introduced by future SDKs.
+
+    Consumers must handle the concrete ID types they support and reject all
+    others. This base alone is not a usable constraint identity. Integers are
+    not instances of this class and are never accepted by mixed-family lookups.
+    """
+    def __new__(cls) -> ConstraintIDBase: ...
+
+class ConstraintView:
+    r"""
+    Common metadata interface for rows fetched from constraint collections.
+
+    The set of concrete constraint families is open. Inspect a concrete ID or
+    row type before using family-specific mathematical operations, and reject
+    unsupported families rather than dropping their constraints. This interface
+    does not imply whether the row is attached or an owned result snapshot.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+
+@typing.final
 class DecisionVariable:
     r"""
     Decision variable in an optimization problem.
@@ -1760,7 +1999,7 @@ class DiagnosticCollector:
     def record(self, diagnostic: adapter.DiagnosticReport) -> None: ...
 
 @typing.final
-class EvaluatedConstraint:
+class EvaluatedConstraint(ConstraintView):
     @property
     def equality(self) -> Equality:
         r"""
@@ -1782,37 +2021,46 @@ class EvaluatedConstraint:
         Set the dual variable value
         """
     @property
-    def name(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the constraint name
-        """
-    @property
-    def subscripts(self) -> builtins.list[builtins.int]:
-        r"""
-        Get the subscripts
-        """
-    @property
-    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
-        r"""
-        Get the parameters
-        """
-    @property
-    def description(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the description
-        """
-    @property
-    def provenance(self) -> builtins.list[Provenance]:
-        r"""
-        Get the provenance chain.
-
-        See {attr}`~ommx.Constraint.provenance` for semantics.
-        """
-    @property
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
         Get the used decision variable IDs
         """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
         r"""
         Check feasibility using the supplied absolute tolerance.
@@ -1830,6 +2078,123 @@ class EvaluatedConstraint:
 
         Zero implies feasibility. A small positive violation may also be feasible
         within the supplied query tolerance; the residual is not rounded to zero.
+        """
+
+@typing.final
+class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
+    r"""
+    Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.
+
+    Keys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.
+    The view keeps its owner alive and observes subsequent owner mutations.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
+        r"""
+        Iterate a snapshot of typed IDs; constraint rows are not collected.
+        """
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
+        r"""
+        Live key view. Iteration order is family order, then numeric ID.
+        """
+    def values(self) -> typing.ValuesView[ConstraintView]:
+        r"""
+        Live value view; each row is fetched when visited.
+        """
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
+        r"""
+        Live item view; each row is fetched when visited.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> EvaluatedConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: IndicatorConstraintID) -> EvaluatedIndicatorConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> EvaluatedOneHotConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> EvaluatedSos1Constraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> EvaluatedConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> EvaluatedConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> EvaluatedIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> EvaluatedIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> EvaluatedOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> EvaluatedOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> EvaluatedSos1Constraint | None: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: _T
+    ) -> EvaluatedSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, EvaluatedConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, EvaluatedIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, EvaluatedOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, EvaluatedSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
         """
 
 @typing.final
@@ -1881,6 +2246,86 @@ class EvaluatedDecisionVariable:
         """
 
 @typing.final
+class EvaluatedIndicatorConstraint(ConstraintView):
+    r"""
+    An owned evaluated indicator result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostic was computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def indicator_variable_id(self) -> builtins.int:
+        r"""
+        Decision variable that activates this constraint.
+        """
+    @property
+    def equality(self) -> Equality:
+        r"""
+        Equality of the inner constraint.
+        """
+    @property
+    def evaluated_value(self) -> builtins.float:
+        r"""
+        Inner residual at the evaluated state.
+        """
+    @property
+    def indicator_active(self) -> builtins.bool:
+        r"""
+        Whether the indicator was active at evaluation time.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def violation(self) -> builtins.float:
+        r"""
+        Nonnegative violation retained by the evaluation.
+        """
+    def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
+        r"""
+        Compare the stored violation with atol without changing activation diagnostics.
+        """
+
+@typing.final
 class EvaluatedNamedFunction:
     r"""
     EvaluatedNamedFunction wrapper for Python.
@@ -1905,6 +2350,146 @@ class EvaluatedNamedFunction:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> EvaluatedNamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> EvaluatedNamedFunction: ...
+
+@typing.final
+class EvaluatedOneHotConstraint(ConstraintView):
+    r"""
+    An owned evaluated one-hot result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostic was computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def variables(self) -> builtins.set[builtins.int]:
+        r"""
+        Member decision variable IDs.
+        """
+    @property
+    def active_variable(self) -> typing.Optional[builtins.int]:
+        r"""
+        Retained selected-variable diagnostic, using activation_atol.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def violation(self) -> builtins.float:
+        r"""
+        Nonnegative violation retained by the evaluation.
+        """
+    def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
+        r"""
+        Compare the stored violation with atol without changing activation diagnostics.
+        """
+
+@typing.final
+class EvaluatedSos1Constraint(ConstraintView):
+    r"""
+    An owned evaluated SOS1 result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostic was computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def variables(self) -> builtins.set[builtins.int]:
+        r"""
+        Member decision variable IDs.
+        """
+    @property
+    def active_variable(self) -> typing.Optional[builtins.int]:
+        r"""
+        Retained selected-variable diagnostic, using activation_atol.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def violation(self) -> builtins.float:
+        r"""
+        Nonnegative violation retained by the evaluation.
+        """
+    def is_feasible(self, *, atol: builtins.float) -> builtins.bool:
+        r"""
+        Compare the stored violation with atol without changing activation diagnostics.
+        """
 
 class ExactIntegerSlackError(builtins.RuntimeError):
     r"""
@@ -3248,6 +3833,39 @@ class IndicatorConstraint:
     def __copy__(self) -> IndicatorConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> IndicatorConstraint: ...
 
+@typing.final
+class IndicatorConstraintID(ConstraintIDBase):
+    r"""
+    An indicator constraint ID. Unequal to integers and IDs of other constraint families.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __lt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __le__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __gt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __ge__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __hash__(self) -> builtins.int: ...
+    def __new__(cls, value: builtins.int) -> IndicatorConstraintID:
+        r"""
+        Create an ID in this constraint family's namespace.
+
+        The value must be an unsigned 64-bit integer. An ID of another
+        family is not accepted. IDs have no integer conversion protocol.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
+    def __copy__(self) -> IndicatorConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> IndicatorConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
+
 class InfeasibleDetected(builtins.RuntimeError):
     r"""
     The mathematical model was proven infeasible.
@@ -3324,6 +3942,17 @@ class Instance:
     def created(self) -> typing.Optional[datetime.datetime]: ...
     @created.setter
     def created(self, value: datetime.datetime) -> None: ...
+    @property
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Only active constraints are included.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
     @property
     def sense(self) -> Sense:
         r"""
@@ -3418,68 +4047,10 @@ class Instance:
         independent {class}`~ommx.DecisionVariable` snapshot.
         """
     @property
-    def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
+    def constraints(self) -> ConstraintCollection:
         r"""
-        Dict of all active constraints in the instance keyed by their IDs.
-
-        Each value is an {class}`~ommx.AttachedConstraint`: a write-through
-        handle whose getters read from this instance's SoA store and whose
-        context setters write back through to it. Use
-        {meth}`~ommx.AttachedConstraint.detach` to materialize a
-        {class}`~ommx.Constraint` snapshot if you need an independent copy.
-        """
-    @property
-    def indicator_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, AttachedIndicatorConstraint]:
-        r"""
-        Dict of all active indicator constraints in the instance keyed by
-        their IDs.
-
-        Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
-        write-through handle whose getters read from this instance's SoA
-        store and whose context setters write back through to it.
-        """
-    @property
-    def removed_indicator_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedIndicatorConstraint]:
-        r"""
-        Dict of all removed indicator constraints in the instance keyed by their IDs.
-        """
-    @property
-    def one_hot_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, AttachedOneHotConstraint]:
-        r"""
-        Dict of all active one-hot constraints in the instance keyed by their IDs.
-
-        Each value is an {class}`~ommx.AttachedOneHotConstraint`: a
-        write-through handle whose getters read from this instance's SoA
-        store and whose context setters write back through to it.
-        """
-    @property
-    def removed_one_hot_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedOneHotConstraint]:
-        r"""
-        Dict of all removed one-hot constraints in the instance keyed by their IDs.
-        """
-    @property
-    def sos1_constraints(self) -> builtins.dict[builtins.int, AttachedSos1Constraint]:
-        r"""
-        Dict of all active SOS1 constraints in the instance keyed by their IDs.
-
-        Each value is an {class}`~ommx.AttachedSos1Constraint`: a
-        write-through handle whose getters read from this instance's SoA
-        store and whose context setters write back through to it.
-        """
-    @property
-    def removed_sos1_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedSos1Constraint]:
-        r"""
-        Dict of all removed SOS1 constraints in the instance keyed by their IDs.
+        Live mapping of all active constraint families, keyed by typed IDs.
+        The view retains this owner and fetches each constraint on demand.
         """
     @property
     def active_special_constraint_kinds(self) -> builtins.set[SpecialConstraintKind]:
@@ -3491,9 +4062,10 @@ class Instance:
         empty set means the instance has no active special constraints.
         """
     @property
-    def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]:
+    def removed_constraints(self) -> RemovedConstraintCollection:
         r"""
-        Dict of all removed constraints in the instance keyed by their IDs.
+        Live mapping of all removed constraint families, keyed by typed IDs.
+        The view retains this owner and fetches each constraint on demand.
         """
     @property
     def named_functions(self) -> builtins.list[NamedFunction]:
@@ -3561,7 +4133,7 @@ class Instance:
         """
     def tighten_bounds_simultaneously_once_using_constraints(
         self,
-        constraint_ids: builtins.set[builtins.int],
+        constraint_ids: typing.AbstractSet[ConstraintID | builtins.int],
         *,
         max_terms: builtins.int = 32,
         atol: typing.Optional[builtins.float] = None,
@@ -3635,15 +4207,23 @@ class Instance:
         sense: Sense,
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
-        constraints: typing.Mapping[builtins.int, Constraint],
+        constraints: typing.Mapping[ConstraintID, Constraint]
+        | typing.Mapping[builtins.int, Constraint]
+        | typing.Mapping[ConstraintID | builtins.int, Constraint],
         indicator_constraints: typing.Optional[
-            typing.Mapping[builtins.int, IndicatorConstraint]
+            typing.Mapping[IndicatorConstraintID, IndicatorConstraint]
+            | typing.Mapping[builtins.int, IndicatorConstraint]
+            | typing.Mapping[IndicatorConstraintID | builtins.int, IndicatorConstraint]
         ] = None,
         one_hot_constraints: typing.Optional[
-            typing.Mapping[builtins.int, OneHotConstraint]
+            typing.Mapping[OneHotConstraintID, OneHotConstraint]
+            | typing.Mapping[builtins.int, OneHotConstraint]
+            | typing.Mapping[OneHotConstraintID | builtins.int, OneHotConstraint]
         ] = None,
         sos1_constraints: typing.Optional[
-            typing.Mapping[builtins.int, Sos1Constraint]
+            typing.Mapping[Sos1ConstraintID, Sos1Constraint]
+            | typing.Mapping[builtins.int, Sos1Constraint]
+            | typing.Mapping[Sos1ConstraintID | builtins.int, Sos1Constraint]
         ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
@@ -3651,11 +4231,16 @@ class Instance:
         r"""
         Create an instance from its components.
 
+        Constraint mappings accept integer keys or IDs of the matching family.
+        Integers are promoted to that family's ID. IDs of another family raise
+        {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
+        Returned collections always use typed IDs.
+
         **Args:**
         - `sense`: Optimization sense (minimize or maximize)
         - `objective`: Objective function
         - `decision_variables`: List of decision variables
-        - `constraints`: List of constraints
+        - `constraints`: Mapping from regular constraint IDs to constraints
         - `named_functions`: Optional list of named functions
         - `description`: Optional instance description
 
@@ -3907,6 +4492,21 @@ class Instance:
         independent {class}`~ommx.DecisionVariable` snapshot.
 
         Raises {class}`KeyError` if no variable with `variable_id` exists.
+        """
+    def extract_constraints(
+        self, name: builtins.str
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], ConstraintView]:
+        r"""
+        Extract active constraints of every family by name, keyed by subscript tuples.
+
+        Values are attached handles, just as in `constraints`: edits update this
+        model. The returned dictionary snapshots the matching keys; it does not
+        track later label or membership changes. Removed constraints are excluded.
+        Parameters and descriptions do not participate in matching.
+
+        Raises KeyError if no active constraint has this name, and ValueError if
+        matching constraints share subscripts, including across different families.
+        Use typed-ID lookup in `constraints` to distinguish ambiguous labels.
         """
     def add_constraint(
         self,
@@ -4327,6 +4927,7 @@ class Instance:
 
         Penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
 
+        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, Optimality, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
@@ -4336,7 +4937,7 @@ class Instance:
         >>> parameters = {parameter.id: 2.0 for parameter in parametric.parameters}
         >>> prepared = parametric.with_parameters(parameters)
         >>> assert parametric.constraints == {}
-        >>> assert 7 in parametric.removed_constraints
+        >>> assert ConstraintID(7) in parametric.removed_constraints
         >>> assert prepared.objective.evaluate({0: 0}) == 2.0
         >>> solution = prepared.evaluate({0: 0})
         >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
@@ -4366,6 +4967,7 @@ class Instance:
 
         Uniform-penalty conversion preserves existing output semantics, or captures the pre-penalty active objective when no output objective exists; materialization evaluates the penalty energy actively and invalidates optimality transport.
 
+        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, Optimality, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
@@ -4375,7 +4977,7 @@ class Instance:
         >>> parameter_id = parametric.parameters[0].id
         >>> prepared = parametric.with_parameters({parameter_id: 2.0})
         >>> assert parametric.constraints == {}
-        >>> assert 7 in parametric.removed_constraints
+        >>> assert ConstraintID(7) in parametric.removed_constraints
         >>> assert prepared.objective.evaluate({0: 0}) == 2.0
         >>> solution = prepared.evaluate({0: 0})
         >>> assert (solution.sense, solution.objective, solution.feasible) == (Sense.Minimize, 0.0, False)
@@ -4635,7 +5237,10 @@ class Instance:
         5
         """
     def relax_constraint(
-        self, constraint_id: builtins.int, reason: builtins.str, **parameters: str
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        reason: builtins.str,
+        **parameters: str,
     ) -> None:
         r"""
         Remove a constraint from the instance.
@@ -4651,6 +5256,7 @@ class Instance:
 
         Relax constraint, and restore it.
 
+        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> instance = Instance.from_components(
@@ -4659,35 +5265,44 @@ class Instance:
         ...     constraints={1: sum(x) == 3},
         ...     sense=Sense.Maximize,
         ... )
-        >>> assert set(instance.constraints) == {1}
+        >>> assert set(instance.constraints) == {ConstraintID(1)}
 
         >>> instance.relax_constraint(1, "manual relaxation")
         >>> assert not instance.constraints
-        >>> assert set(instance.removed_constraints) == {1}
+        >>> assert set(instance.removed_constraints) == {ConstraintID(1)}
 
         >>> instance.restore_constraint(1)
-        >>> assert set(instance.constraints) == {1}
+        >>> assert set(instance.constraints) == {ConstraintID(1)}
         >>> assert not instance.removed_constraints
         """
-    def restore_constraint(self, constraint_id: builtins.int) -> None: ...
+    def restore_constraint(
+        self, constraint_id: ConstraintID | builtins.int
+    ) -> None: ...
     def relax_indicator_constraint(
-        self, constraint_id: builtins.int, reason: builtins.str, **parameters: str
+        self,
+        constraint_id: IndicatorConstraintID | builtins.int,
+        reason: builtins.str,
+        **parameters: str,
     ) -> None:
         r"""
         Relax an indicator constraint by moving it from active to removed.
         """
-    def restore_indicator_constraint(self, constraint_id: builtins.int) -> None:
+    def restore_indicator_constraint(
+        self, constraint_id: IndicatorConstraintID | builtins.int
+    ) -> None:
         r"""
         Restore a removed indicator constraint back to active.
         """
-    def convert_one_hot_to_constraint(self, one_hot_id: builtins.int) -> builtins.int:
+    def convert_one_hot_to_constraint(
+        self, one_hot_id: OneHotConstraintID | builtins.int
+    ) -> ConstraintID:
         r"""
         Convert a one-hot constraint to a regular equality constraint.
 
         A one-hot constraint over ``{x_1, ..., x_n}`` is mathematically equivalent to the
         linear equality ``x_1 + ... + x_n - 1 == 0``. This method inserts that equality
         as a new regular constraint and moves the one-hot constraint into
-        {attr}`~ommx.Instance.removed_one_hot_constraints` with
+        {attr}`~ommx.Instance.removed_constraints` with
         ``reason="ommx.Instance.convert_one_hot_to_constraint"`` and a
         ``constraint_id`` parameter pointing to the new regular constraint.
         The generated regular constraint preserves the original one-hot context
@@ -4712,14 +5327,12 @@ class Instance:
         ...     sense=Sense.Minimize,
         ... )
         >>> new_id = instance.convert_one_hot_to_constraint(1)
-        >>> instance.one_hot_constraints
-        {}
         >>> instance.constraints
-        {0: Constraint(x0 + x1 + x2 - 1 == 0)}
-        >>> instance.removed_one_hot_constraints
-        {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
+        {ConstraintID(0): Constraint(x0 + x1 + x2 - 1 == 0)}
+        >>> instance.removed_constraints
+        {OneHotConstraintID(1): RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
         """
-    def convert_all_one_hots_to_constraints(self) -> builtins.list[builtins.int]:
+    def convert_all_one_hots_to_constraints(self) -> builtins.list[ConstraintID]:
         r"""
         Convert every active one-hot constraint to a regular equality constraint.
 
@@ -4747,15 +5360,13 @@ class Instance:
         ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_all_one_hots_to_constraints()
-        [0, 1]
-        >>> instance.one_hot_constraints
-        {}
+        [ConstraintID(0), ConstraintID(1)]
         >>> instance.constraints
-        {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
+        {ConstraintID(0): Constraint(x0 + x1 - 1 == 0), ConstraintID(1): Constraint(x2 + x3 - 1 == 0)}
         """
     def convert_sos1_to_constraints(
-        self, sos1_id: builtins.int
-    ) -> builtins.list[builtins.int]:
+        self, sos1_id: Sos1ConstraintID | builtins.int
+    ) -> builtins.list[ConstraintID]:
         r"""
         Convert a SOS1 constraint to regular constraints using the Big-M method.
 
@@ -4790,7 +5401,7 @@ class Instance:
         mutation. Any error leaves the Instance unchanged.
 
         On success, the original SOS1 constraint is moved to
-        {attr}`~ommx.Instance.removed_sos1_constraints` with
+        {attr}`~ommx.Instance.removed_constraints` with
         ``reason="ommx.Instance.convert_sos1_to_constraints"`` and a
         comma-separated ``constraint_ids`` parameter in returned order. Every
         generated regular constraint records a {class}`~ommx.Provenance` entry
@@ -4810,17 +5421,15 @@ class Instance:
         ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_sos1_to_constraints(1)
-        [0]
-        >>> instance.sos1_constraints
-        {}
+        [ConstraintID(0)]
         >>> instance.constraints
-        {0: Constraint(x0 + x1 + x2 - 1 <= 0)}
-        >>> instance.removed_sos1_constraints
-        {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
+        {ConstraintID(0): Constraint(x0 + x1 + x2 - 1 <= 0)}
+        >>> instance.removed_constraints
+        {Sos1ConstraintID(1): RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
         """
     def convert_all_sos1_to_constraints(
         self,
-    ) -> builtins.dict[builtins.int, builtins.list[builtins.int]]:
+    ) -> builtins.dict[Sos1ConstraintID, builtins.list[ConstraintID]]:
         r"""
         Convert every active SOS1 constraint to regular constraints using Big-M.
 
@@ -4847,18 +5456,16 @@ class Instance:
         ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_all_sos1_to_constraints()
-        {1: [0], 2: [1]}
-        >>> instance.sos1_constraints
-        {}
+        {Sos1ConstraintID(1): [ConstraintID(0)], Sos1ConstraintID(2): [ConstraintID(1)]}
         >>> instance.constraints
-        {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
+        {ConstraintID(0): Constraint(x0 + x1 - 1 <= 0), ConstraintID(1): Constraint(x2 + x3 - 1 <= 0)}
         """
     def convert_indicator_to_constraint(
         self,
-        indicator_id: builtins.int,
+        indicator_id: IndicatorConstraintID | builtins.int,
         *,
         atol: typing.Optional[builtins.float] = None,
-    ) -> builtins.list[builtins.int]:
+    ) -> builtins.list[ConstraintID]:
         r"""
         Convert an indicator constraint to regular constraints using the Big-M method.
 
@@ -4905,7 +5512,7 @@ class Instance:
         approximate solver value near 0 or 1.
 
         On success, the original indicator constraint is moved to
-        {attr}`~ommx.Instance.removed_indicator_constraints` with
+        {attr}`~ommx.Instance.removed_constraints` with
         ``reason="ommx.Instance.convert_indicator_to_constraint"`` and a
         comma-separated ``constraint_ids`` parameter in returned order (empty
         when no side is emitted). Every generated regular constraint records a
@@ -4934,15 +5541,13 @@ class Instance:
         ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_indicator_to_constraint(1)
-        [0]
-        >>> instance.indicator_constraints
-        {}
+        [ConstraintID(0)]
         >>> instance.constraints
-        {0: Constraint(x0 + 3*x1 - 5 <= 0)}
+        {ConstraintID(0): Constraint(x0 + 3*x1 - 5 <= 0)}
         """
     def convert_all_indicators_to_constraints(
         self, *, atol: typing.Optional[builtins.float] = None
-    ) -> builtins.dict[builtins.int, builtins.list[builtins.int]]:
+    ) -> builtins.dict[IndicatorConstraintID, builtins.list[ConstraintID]]:
         r"""
         Convert every active indicator constraint to regular constraints using Big-M.
 
@@ -5092,7 +5697,7 @@ class Instance:
         """
     def convert_inequality_to_equality_with_integer_slack(
         self,
-        constraint_id: builtins.int,
+        constraint_id: ConstraintID | builtins.int,
         max_integer_range: builtins.int,
         *,
         atol: typing.Optional[builtins.float] = None,
@@ -5121,6 +5726,7 @@ class Instance:
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
 
+        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Equality, Instance, Sense
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -5139,10 +5745,10 @@ class Instance:
         ...     constraint_id=0,
         ...     max_integer_range=32
         ... )
-        >>> assert instance.constraints[0].function.terms == {
+        >>> assert instance.constraints[ConstraintID(0)].function.terms == {
         ...     (0,): 1.0, (1,): 2.0, (3,): 1.0, (): -5.0
         ... }
-        >>> assert instance.constraints[0].equality == Equality.EqualToZero
+        >>> assert instance.constraints[ConstraintID(0)].equality == Equality.EqualToZero
 
         Raises {class}`~ommx.ExactIntegerSlackError` when exact conversion is
         unavailable because the coefficients cannot be normalized or the slack
@@ -5155,7 +5761,7 @@ class Instance:
         """
     def add_integer_slack_to_inequality(
         self,
-        constraint_id: builtins.int,
+        constraint_id: ConstraintID | builtins.int,
         slack_upper_bound: builtins.int,
         *,
         atol: typing.Optional[builtins.float] = None,
@@ -5184,6 +5790,7 @@ class Instance:
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
 
+        >>> from ommx import ConstraintID
         >>> from ommx import DecisionVariable, Equality, Instance, Sense
         >>> x = [
         ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -5203,10 +5810,10 @@ class Instance:
         ...     slack_upper_bound=2
         ... )
         >>> assert b == 2.0
-        >>> assert instance.constraints[0].function.terms == {
+        >>> assert instance.constraints[ConstraintID(0)].function.terms == {
         ...     (0,): 1.0, (1,): 2.0, (3,): 2.0, (): -4.0
         ... }
-        >>> assert instance.constraints[0].equality == Equality.LessThanOrEqualToZero
+        >>> assert instance.constraints[ConstraintID(0)].equality == Equality.LessThanOrEqualToZero
         """
     def decision_variable_role(
         self, id: builtins.int
@@ -5291,7 +5898,8 @@ class Instance:
         """
     def constraints_df(
         self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
         removed: builtins.bool = False,
     ) -> pandas.DataFrame:
@@ -5321,8 +5929,7 @@ class Instance:
         DataFrame of named functions
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed wide format).
@@ -5333,8 +5940,7 @@ class Instance:
         to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
@@ -5343,8 +5949,7 @@ class Instance:
         `{kind}_constraint_id`, `key`, `value`. Default RangeIndex.
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
@@ -5353,8 +5958,7 @@ class Instance:
         `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -5503,16 +6107,6 @@ class Instance:
     ) -> DecisionVariable:
         r"""
         Get a specific decision variable by ID
-        """
-    def get_constraint_by_id(self, constraint_id: builtins.int) -> Constraint:
-        r"""
-        Get a specific constraint by ID
-        """
-    def get_removed_constraint_by_id(
-        self, constraint_id: builtins.int
-    ) -> RemovedConstraint:
-        r"""
-        Get a specific removed constraint by ID
         """
     def get_named_function_by_id(
         self, named_function_id: builtins.int
@@ -5983,13 +6577,13 @@ class InstanceClassMismatch:
         @property
         def relation(self) -> Equality: ...
         @property
-        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def constraint_ids(self) -> builtins.set[ConstraintID]: ...
         @property
         def allowed_relations(self) -> builtins.set[Equality]: ...
         def __new__(
             cls,
             relation: Equality,
-            constraint_ids: builtins.set[builtins.int],
+            constraint_ids: typing.AbstractSet[ConstraintID | builtins.int],
             allowed_relations: builtins.set[Equality],
         ) -> InstanceClassMismatch.RegularConstraintRelationNotAllowed: ...
 
@@ -6003,13 +6597,15 @@ class InstanceClassMismatch:
         @property
         def relation(self) -> Equality: ...
         @property
-        def actual_degrees(self) -> builtins.dict[builtins.int, builtins.int]: ...
+        def actual_degrees(self) -> builtins.dict[ConstraintID, builtins.int]: ...
         @property
         def bound(self) -> PolynomialRequirement: ...
         def __new__(
             cls,
             relation: Equality,
-            actual_degrees: typing.Mapping[builtins.int, builtins.int],
+            actual_degrees: typing.Mapping[ConstraintID, builtins.int]
+            | typing.Mapping[builtins.int, builtins.int]
+            | typing.Mapping[ConstraintID | builtins.int, builtins.int],
             bound: PolynomialRequirement,
         ) -> InstanceClassMismatch.RegularConstraintDegreeExceedsBound: ...
 
@@ -6022,18 +6618,21 @@ class InstanceClassMismatch:
         @property
         def relation(self) -> Equality: ...
         @property
-        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def constraint_ids(self) -> builtins.set[ConstraintID]: ...
         def __new__(
-            cls, relation: Equality, constraint_ids: builtins.set[builtins.int]
+            cls,
+            relation: Equality,
+            constraint_ids: typing.AbstractSet[ConstraintID | builtins.int],
         ) -> InstanceClassMismatch.RegularConstraintFunctionNotPolynomial: ...
 
     @typing.final
     class IndicatorConstraintsNotAllowed(InstanceClassMismatch):
         __match_args__ = ("constraint_ids",)
         @property
-        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
         def __new__(
-            cls, constraint_ids: builtins.set[builtins.int]
+            cls,
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
         ) -> InstanceClassMismatch.IndicatorConstraintsNotAllowed: ...
 
     @typing.final
@@ -6046,13 +6645,13 @@ class InstanceClassMismatch:
         @property
         def relation(self) -> Equality: ...
         @property
-        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
         @property
         def allowed_relations(self) -> builtins.set[Equality]: ...
         def __new__(
             cls,
             relation: Equality,
-            constraint_ids: builtins.set[builtins.int],
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
             allowed_relations: builtins.set[Equality],
         ) -> InstanceClassMismatch.IndicatorConstraintRelationNotAllowed: ...
 
@@ -6066,13 +6665,17 @@ class InstanceClassMismatch:
         @property
         def relation(self) -> Equality: ...
         @property
-        def actual_degrees(self) -> builtins.dict[builtins.int, builtins.int]: ...
+        def actual_degrees(
+            self,
+        ) -> builtins.dict[IndicatorConstraintID, builtins.int]: ...
         @property
         def bound(self) -> PolynomialRequirement: ...
         def __new__(
             cls,
             relation: Equality,
-            actual_degrees: typing.Mapping[builtins.int, builtins.int],
+            actual_degrees: typing.Mapping[IndicatorConstraintID, builtins.int]
+            | typing.Mapping[builtins.int, builtins.int]
+            | typing.Mapping[IndicatorConstraintID | builtins.int, builtins.int],
             bound: PolynomialRequirement,
         ) -> InstanceClassMismatch.IndicatorBodyDegreeExceedsBound: ...
 
@@ -6085,27 +6688,29 @@ class InstanceClassMismatch:
         @property
         def relation(self) -> Equality: ...
         @property
-        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def constraint_ids(self) -> builtins.set[IndicatorConstraintID]: ...
         def __new__(
-            cls, relation: Equality, constraint_ids: builtins.set[builtins.int]
+            cls,
+            relation: Equality,
+            constraint_ids: typing.AbstractSet[IndicatorConstraintID | builtins.int],
         ) -> InstanceClassMismatch.IndicatorBodyFunctionNotPolynomial: ...
 
     @typing.final
     class OneHotConstraintsNotAllowed(InstanceClassMismatch):
         __match_args__ = ("constraint_ids",)
         @property
-        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def constraint_ids(self) -> builtins.set[OneHotConstraintID]: ...
         def __new__(
-            cls, constraint_ids: builtins.set[builtins.int]
+            cls, constraint_ids: typing.AbstractSet[OneHotConstraintID | builtins.int]
         ) -> InstanceClassMismatch.OneHotConstraintsNotAllowed: ...
 
     @typing.final
     class Sos1ConstraintsNotAllowed(InstanceClassMismatch):
         __match_args__ = ("constraint_ids",)
         @property
-        def constraint_ids(self) -> builtins.set[builtins.int]: ...
+        def constraint_ids(self) -> builtins.set[Sos1ConstraintID]: ...
         def __new__(
-            cls, constraint_ids: builtins.set[builtins.int]
+            cls, constraint_ids: typing.AbstractSet[Sos1ConstraintID | builtins.int]
         ) -> InstanceClassMismatch.Sos1ConstraintsNotAllowed: ...
 
     @typing.final
@@ -6615,6 +7220,39 @@ class OneHotConstraint:
     def __deepcopy__(self, _memo: typing.Any) -> OneHotConstraint: ...
 
 @typing.final
+class OneHotConstraintID(ConstraintIDBase):
+    r"""
+    A one-hot constraint ID. Unequal to integers and IDs of other constraint families.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __lt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __le__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __gt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __ge__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __hash__(self) -> builtins.int: ...
+    def __new__(cls, value: builtins.int) -> OneHotConstraintID:
+        r"""
+        Create an ID in this constraint family's namespace.
+
+        The value must be an unsigned 64-bit integer. An ID of another
+        family is not accepted. IDs have no integer conversion protocol.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
+    def __copy__(self) -> OneHotConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> OneHotConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
+
+@typing.final
 class OpenSolve:
     r"""
     Context manager for a manually executed Solve inside a Run.
@@ -6859,6 +7497,24 @@ class ParametricInstance:
     @created.setter
     def created(self, value: datetime.datetime) -> None: ...
     @property
+    def decision_variable_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique decision-variable names as a set of strings, excluding parameters.
+        Unnamed variables are excluded; explicitly empty names are included.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Only active constraints are included.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
     def sense(self) -> Sense: ...
     @property
     def objective(self) -> Function: ...
@@ -6897,73 +7553,16 @@ class ParametricInstance:
         shape on `Instance`.
         """
     @property
-    def constraints(self) -> builtins.dict[builtins.int, AttachedConstraint]:
+    def constraints(self) -> ConstraintCollection:
         r"""
-        Dict of all active constraints in the instance keyed by their IDs.
-
-        Each value is an {class}`~ommx.AttachedConstraint`: a write-through
-        handle whose getters read from this parametric instance's SoA store
-        and whose context setters write back through to it. Use
-        {meth}`~ommx.AttachedConstraint.detach` to materialize a
-        {class}`~ommx.Constraint` snapshot if you need an independent copy.
+        Live mapping of all active constraint families, keyed by typed IDs.
+        The view retains this owner and fetches each constraint on demand.
         """
     @property
-    def removed_constraints(self) -> builtins.dict[builtins.int, RemovedConstraint]: ...
-    @property
-    def indicator_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, AttachedIndicatorConstraint]:
+    def removed_constraints(self) -> RemovedConstraintCollection:
         r"""
-        Dict of all active indicator constraints in the parametric instance
-        keyed by their IDs.
-
-        Each value is an {class}`~ommx.AttachedIndicatorConstraint`: a
-        write-through handle whose getters read from this parametric
-        instance's SoA store and whose context setters write back through
-        to it.
-        """
-    @property
-    def removed_indicator_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedIndicatorConstraint]:
-        r"""
-        Dict of all removed indicator constraints in the parametric
-        instance keyed by their IDs.
-        """
-    @property
-    def one_hot_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, AttachedOneHotConstraint]:
-        r"""
-        Dict of all active one-hot constraints in the parametric instance
-        keyed by their IDs. Each value is an
-        {class}`~ommx.AttachedOneHotConstraint`.
-        """
-    @property
-    def removed_one_hot_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedOneHotConstraint]:
-        r"""
-        Dict of all removed one-hot constraints in the parametric instance
-        keyed by their IDs. The removed map can become non-empty when an
-        `Instance` whose one-hot constraints have been converted (via
-        `convert_all_one_hots_to_constraints`) is round-tripped back to a
-        `ParametricInstance` via `From<Instance>`.
-        """
-    @property
-    def sos1_constraints(self) -> builtins.dict[builtins.int, AttachedSos1Constraint]:
-        r"""
-        Dict of all active SOS1 constraints in the parametric instance keyed
-        by their IDs. Each value is an {class}`~ommx.AttachedSos1Constraint`.
-        """
-    @property
-    def removed_sos1_constraints(
-        self,
-    ) -> builtins.dict[builtins.int, RemovedSos1Constraint]:
-        r"""
-        Dict of all removed SOS1 constraints in the parametric instance
-        keyed by their IDs. See {meth}`removed_one_hot_constraints` for the
-        round-trip rationale.
+        Live mapping of all removed constraint families, keyed by typed IDs.
+        The view retains this owner and fetches each constraint on demand.
         """
     @property
     def named_functions(self) -> builtins.list[NamedFunction]: ...
@@ -7069,22 +7668,35 @@ class ParametricInstance:
         sense: Sense,
         objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
-        constraints: typing.Mapping[builtins.int, Constraint],
+        constraints: typing.Mapping[ConstraintID, Constraint]
+        | typing.Mapping[builtins.int, Constraint]
+        | typing.Mapping[ConstraintID | builtins.int, Constraint],
         parameters: typing.Sequence[Parameter],
         indicator_constraints: typing.Optional[
-            typing.Mapping[builtins.int, IndicatorConstraint]
+            typing.Mapping[IndicatorConstraintID, IndicatorConstraint]
+            | typing.Mapping[builtins.int, IndicatorConstraint]
+            | typing.Mapping[IndicatorConstraintID | builtins.int, IndicatorConstraint]
         ] = None,
         one_hot_constraints: typing.Optional[
-            typing.Mapping[builtins.int, OneHotConstraint]
+            typing.Mapping[OneHotConstraintID, OneHotConstraint]
+            | typing.Mapping[builtins.int, OneHotConstraint]
+            | typing.Mapping[OneHotConstraintID | builtins.int, OneHotConstraint]
         ] = None,
         sos1_constraints: typing.Optional[
-            typing.Mapping[builtins.int, Sos1Constraint]
+            typing.Mapping[Sos1ConstraintID, Sos1Constraint]
+            | typing.Mapping[builtins.int, Sos1Constraint]
+            | typing.Mapping[Sos1ConstraintID | builtins.int, Sos1Constraint]
         ] = None,
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
     ) -> ParametricInstance:
         r"""
         Build a parametric instance from its model components.
+
+        Constraint mappings accept integer keys or IDs of the matching family.
+        Integers are promoted to that family's ID. IDs of another family raise
+        {class}`TypeError`; keys that become duplicates raise {class}`ValueError`.
+        Returned collections always use typed IDs.
 
         Raises {class}`ValueError` if a decision variable and parameter use the
         same ID.
@@ -7243,6 +7855,21 @@ class ParametricInstance:
         Look up the {class}`~ommx.AttachedDecisionVariable` for the given
         id — a write-through handle.
         """
+    def extract_constraints(
+        self, name: builtins.str
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], ConstraintView]:
+        r"""
+        Extract active constraints of every family by name, keyed by subscript tuples.
+
+        Values are attached handles, just as in `constraints`: edits update this
+        model. The returned dictionary snapshots the matching keys; it does not
+        track later label or membership changes. Removed constraints are excluded.
+        Parameters and descriptions do not participate in matching.
+
+        Raises KeyError if no active constraint has this name, and ValueError if
+        matching constraints share subscripts, including across different families.
+        Use typed-ID lookup in `constraints` to distinguish ambiguous labels.
+        """
     def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
         r"""
         Add a regular constraint to this parametric instance.
@@ -7290,16 +7917,6 @@ class ParametricInstance:
         r"""
         Get a specific decision variable by ID
         """
-    def get_constraint_by_id(self, constraint_id: builtins.int) -> Constraint:
-        r"""
-        Get a specific constraint by ID
-        """
-    def get_removed_constraint_by_id(
-        self, constraint_id: builtins.int
-    ) -> RemovedConstraint:
-        r"""
-        Get a specific removed constraint by ID
-        """
     def get_named_function_by_id(
         self, named_function_id: builtins.int
     ) -> NamedFunction:
@@ -7318,7 +7935,8 @@ class ParametricInstance:
         """
     def constraints_df(
         self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
         removed: builtins.bool = False,
     ) -> pandas.DataFrame:
@@ -7340,8 +7958,7 @@ class ParametricInstance:
         DataFrame of parameters
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
@@ -7349,22 +7966,19 @@ class ParametricInstance:
         semantics.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -7741,7 +8355,7 @@ class Provenance:
         The kind of special constraint this regular constraint was generated from.
         """
     @property
-    def original_id(self) -> builtins.int:
+    def original_id(self) -> ConstraintIDBase:
         r"""
         The ID of the original special constraint (before transformation).
         """
@@ -7932,7 +8546,7 @@ class RemoteArtifactTransportError(RemoteArtifactError):
     ...
 
 @typing.final
-class RemovedConstraint:
+class RemovedConstraint(ConstraintView):
     r"""
     RemovedConstraint wrapper for Python.
 
@@ -7982,6 +8596,7 @@ class RemovedConstraint:
 
         See {attr}`~ommx.Constraint.provenance` for semantics.
         """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __new__(
         cls,
         constraint: Constraint,
@@ -7995,10 +8610,135 @@ class RemovedConstraint:
     def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
 
 @typing.final
-class RemovedIndicatorConstraint:
+class RemovedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
+    r"""
+    Live, read-only mapping of all removed constraint families. Each access returns a snapshot.
+
+    Keys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.
+    The view keeps its owner alive and observes subsequent owner mutations.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
+        r"""
+        Iterate a snapshot of typed IDs; constraint rows are not collected.
+        """
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
+        r"""
+        Live key view. Iteration order is family order, then numeric ID.
+        """
+    def values(self) -> typing.ValuesView[ConstraintView]:
+        r"""
+        Live value view; each row is fetched when visited.
+        """
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
+        r"""
+        Live item view; each row is fetched when visited.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> RemovedConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: IndicatorConstraintID) -> RemovedIndicatorConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> RemovedOneHotConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> RemovedSos1Constraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> RemovedConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> RemovedConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> RemovedIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> RemovedIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> RemovedOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> RemovedOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> RemovedSos1Constraint | None: ...
+    @typing.overload
+    def get(self, key: Sos1ConstraintID, default: _T) -> RemovedSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, RemovedConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, RemovedIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, RemovedOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, RemovedSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+
+@typing.final
+class RemovedIndicatorConstraint(ConstraintView):
     r"""
     A removed indicator constraint together with the reason it was removed.
     """
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def provenance(self) -> builtins.list[Provenance]: ...
     @property
     def constraint(self) -> IndicatorConstraint: ...
     @property
@@ -8013,10 +8753,11 @@ class RemovedIndicatorConstraint:
     def removed_reason_parameters(
         self,
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class RemovedOneHotConstraint:
+class RemovedOneHotConstraint(ConstraintView):
     r"""
     A removed one-hot constraint together with the reason it was removed.
     """
@@ -8033,15 +8774,18 @@ class RemovedOneHotConstraint:
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    @property
     def removed_reason(self) -> builtins.str: ...
     @property
     def removed_reason_parameters(
         self,
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class RemovedSos1Constraint:
+class RemovedSos1Constraint(ConstraintView):
     r"""
     A removed SOS1 constraint together with the reason it was removed.
     """
@@ -8058,11 +8802,14 @@ class RemovedSos1Constraint:
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
+    def provenance(self) -> builtins.list[Provenance]: ...
+    @property
     def removed_reason(self) -> builtins.str: ...
     @property
     def removed_reason_parameters(
         self,
     ) -> builtins.dict[builtins.str, builtins.str]: ...
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -8400,6 +9147,17 @@ class SampleSet:
     @parameters.setter
     def parameters(self, value: typing.Any) -> None: ...
     @property
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Retained removed constraints are included; no sample ID is needed.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
     def best_feasible_id(self) -> builtins.int:
         r"""
         Raises ValueError if there is no feasible sample.
@@ -8467,9 +9225,10 @@ class SampleSet:
         Get named functions for compatibility with existing Python code
         """
     @property
-    def constraints(self) -> builtins.list[SampledConstraint]:
+    def constraints(self) -> SampledConstraintCollection:
         r"""
-        Get constraints for compatibility with existing Python code
+        Live mapping of all constraint families, including removed results.
+        Typed IDs select the family. Rows are fetched only when indexed.
         """
     @property
     def decision_variables(self) -> builtins.list[SampledDecisionVariable]:
@@ -8512,12 +9271,6 @@ class SampleSet:
     def summary(self) -> pandas.DataFrame:
         r"""
         Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.
-        Index is sample_id.
-        """
-    @property
-    def summary_with_constraints(self) -> pandas.DataFrame:
-        r"""
-        Summary DataFrame with per-constraint feasibility columns.
         Index is sample_id.
         """
     def replace_annotations(
@@ -8606,13 +9359,16 @@ class SampleSet:
         >>> all_vars["y"]
         {(0,): 1.0, (1,): 1.0}
         """
-    def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
+    def extract_constraints(
+        self, name: builtins.str, sample_id: builtins.int
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], builtins.float]:
         r"""
-        Extract constraint values for a given name and sample ID.
+        Extract nonnegative violations of all constraint families by name for one sample.
 
         Raises KeyError if the name or sample ID does not exist. Raises
-        ValueError if a matching constraint has parameters or if the same
-        subscript is found more than once.
+        ValueError if matching constraints share subscripts, including across families.
+        Parameters and descriptions are ignored. Retained removed constraints are
+        included. Regular constraints return violations, not signed function values.
         """
     def extract_named_functions(
         self, name: builtins.str, sample_id: builtins.int
@@ -8636,10 +9392,6 @@ class SampleSet:
         r"""
         Get a specific sampled decision variable by ID
         """
-    def get_constraint_by_id(self, constraint_id: builtins.int) -> SampledConstraint:
-        r"""
-        Get a specific sampled constraint by ID
-        """
     def get_named_function_by_id(
         self, named_function_id: builtins.int
     ) -> SampledNamedFunction:
@@ -8658,7 +9410,8 @@ class SampleSet:
         """
     def constraints_df(
         self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
     ) -> pandas.DataFrame:
         r"""
@@ -8681,8 +9434,7 @@ class SampleSet:
         Dynamic columns: one per sample_id (int) with the function's evaluated value.
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
@@ -8690,22 +9442,19 @@ class SampleSet:
         semantics. Reads from the sampled collection's context store.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -8720,33 +9469,11 @@ class SampleSet:
         """
 
 @typing.final
-class SampledConstraint:
+class SampledConstraint(ConstraintView):
     @property
     def equality(self) -> Equality:
         r"""
         Get the constraint equality type
-        """
-    @property
-    def name(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the constraint name
-        """
-    @property
-    def subscripts(self) -> builtins.list[builtins.int]:
-        r"""
-        Get the subscripts
-        """
-    @property
-    def description(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the description
-        """
-    @property
-    def provenance(self) -> builtins.list[Provenance]:
-        r"""
-        Get the provenance chain.
-
-        See {attr}`~ommx.Constraint.provenance` for semantics.
         """
     @property
     def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
@@ -8758,6 +9485,47 @@ class SampledConstraint:
         r"""
         Get the evaluated values for all samples
         """
+    @property
+    def violations(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Nonnegative violations keyed by sample ID.
+        """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
     def feasible(
         self, *, atol: builtins.float
     ) -> builtins.dict[builtins.int, builtins.bool]:
@@ -8765,6 +9533,121 @@ class SampledConstraint:
         Compute feasibility for every sample using the supplied tolerance.
 
         This query does not re-evaluate the functions or change stored values.
+        """
+
+@typing.final
+class SampledConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
+    r"""
+    Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.
+
+    Keys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.
+    The view keeps its owner alive and observes subsequent owner mutations.
+    """
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[ConstraintIDBase]:
+        r"""
+        Iterate a snapshot of typed IDs; constraint rows are not collected.
+        """
+    def keys(self) -> typing.KeysView[ConstraintIDBase]:
+        r"""
+        Live key view. Iteration order is family order, then numeric ID.
+        """
+    def values(self) -> typing.ValuesView[ConstraintView]:
+        r"""
+        Live value view; each row is fetched when visited.
+        """
+    def items(self) -> typing.ItemsView[ConstraintIDBase, ConstraintView]:
+        r"""
+        Live item view; each row is fetched when visited.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def __getitem__(self, key: ConstraintID) -> SampledConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: IndicatorConstraintID) -> SampledIndicatorConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: OneHotConstraintID) -> SampledOneHotConstraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: Sos1ConstraintID) -> SampledSos1Constraint:
+        r"""
+        Fetch the constraint identified by a typed ID from the current owner.
+        """
+    @typing.overload
+    def __getitem__(self, key: ConstraintIDBase) -> ConstraintView: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintID, default: None = None
+    ) -> SampledConstraint | None: ...
+    @typing.overload
+    def get(self, key: ConstraintID, default: _T) -> SampledConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: None = None
+    ) -> SampledIndicatorConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: IndicatorConstraintID, default: _T
+    ) -> SampledIndicatorConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: None = None
+    ) -> SampledOneHotConstraint | None: ...
+    @typing.overload
+    def get(
+        self, key: OneHotConstraintID, default: _T
+    ) -> SampledOneHotConstraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: Sos1ConstraintID, default: None = None
+    ) -> SampledSos1Constraint | None: ...
+    @typing.overload
+    def get(self, key: Sos1ConstraintID, default: _T) -> SampledSos1Constraint | _T: ...
+    @typing.overload
+    def get(
+        self, key: ConstraintIDBase, default: None = None
+    ) -> ConstraintView | None: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
+    @typing.overload
+    def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, SampledConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, SampledIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, SampledOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, SampledSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
         """
 
 @typing.final
@@ -8811,6 +9694,89 @@ class SampledDecisionVariable:
         """
 
 @typing.final
+class SampledIndicatorConstraint(ConstraintView):
+    r"""
+    An owned sampled indicator result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def violations(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Nonnegative violations keyed by sample ID.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostics were computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def indicator_variable_id(self) -> builtins.int:
+        r"""
+        Decision variable that activates this constraint.
+        """
+    @property
+    def equality(self) -> Equality:
+        r"""
+        Equality of the inner constraint.
+        """
+    @property
+    def evaluated_values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Inner residuals keyed by sample ID.
+        """
+    @property
+    def indicator_active(self) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Activation diagnostics keyed by sample ID.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def feasible(
+        self, *, atol: builtins.float
+    ) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Compare each stored violation with atol without changing activation diagnostics.
+        """
+
+@typing.final
 class SampledNamedFunction:
     r"""
     SampledNamedFunction wrapper for Python.
@@ -8853,6 +9819,156 @@ class SampledNamedFunction:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> SampledNamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> SampledNamedFunction: ...
+
+@typing.final
+class SampledOneHotConstraint(ConstraintView):
+    r"""
+    An owned sampled one-hot result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def violations(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Nonnegative violations keyed by sample ID.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostics were computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def variables(self) -> builtins.set[builtins.int]:
+        r"""
+        Member decision variable IDs.
+        """
+    @property
+    def active_variable(
+        self,
+    ) -> builtins.dict[builtins.int, typing.Optional[builtins.int]]:
+        r"""
+        Retained selected-variable diagnostics keyed by sample ID, using activation_atol.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def feasible(
+        self, *, atol: builtins.float
+    ) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Compare each stored violation with atol without changing activation diagnostics.
+        """
+
+@typing.final
+class SampledSos1Constraint(ConstraintView):
+    r"""
+    An owned sampled SOS1 result. Fetched by typed ID from the owning result's constraints collection.
+    """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling name, if supplied.
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Modeling subscripts.
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Modeling parameters.
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Modeling description, if supplied.
+        """
+    @property
+    def provenance(self) -> builtins.list[Provenance]:
+        r"""
+        Transformation lineage, preserving the source constraint family.
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Reason this constraint was removed before evaluation, or None.
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Parameters of the removal reason; empty for an active constraint.
+        """
+    @property
+    def violations(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Nonnegative violations keyed by sample ID.
+        """
+    @property
+    def activation_atol(self) -> builtins.float:
+        r"""
+        Tolerance used when the activation diagnostics were computed.
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        IDs of decision variables used to evaluate this constraint.
+        """
+    @property
+    def variables(self) -> builtins.set[builtins.int]:
+        r"""
+        Member decision variable IDs.
+        """
+    @property
+    def active_variable(
+        self,
+    ) -> builtins.dict[builtins.int, typing.Optional[builtins.int]]:
+        r"""
+        Retained selected-variable diagnostics keyed by sample ID, using activation_atol.
+        """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def feasible(
+        self, *, atol: builtins.float
+    ) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Compare each stored violation with atol without changing activation diagnostics.
+        """
 
 @typing.final
 class Samples:
@@ -9111,6 +10227,17 @@ class Solution:
     @parameters.setter
     def parameters(self, value: typing.Any) -> None: ...
     @property
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Retained removed constraints are included; no sample ID is needed.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
     def objective(self) -> builtins.float:
         r"""
         Get the objective function value
@@ -9182,9 +10309,10 @@ class Solution:
         Get evaluated decision variables as a list sorted by ID
         """
     @property
-    def constraints(self) -> builtins.dict[builtins.int, EvaluatedConstraint]:
+    def constraints(self) -> EvaluatedConstraintCollection:
         r"""
-        Get evaluated constraints as a dict keyed by constraint ID
+        Live mapping of all constraint families, including removed results.
+        Typed IDs select the family. Rows are fetched only when indexed.
         """
     @property
     def named_functions(self) -> builtins.list[EvaluatedNamedFunction]:
@@ -9193,8 +10321,6 @@ class Solution:
         """
     @property
     def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
-    @property
-    def constraint_ids(self) -> builtins.set[builtins.int]: ...
     @property
     def decision_variable_names(self) -> builtins.set[builtins.str]:
         r"""
@@ -9305,13 +10431,16 @@ class Solution:
         >>> all_vars["y"]
         {(0,): 1.0, (1,): 1.0}
         """
-    def extract_constraints(self, name: builtins.str) -> dict:
+    def extract_constraints(
+        self, name: builtins.str
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], builtins.float]:
         r"""
-        Extract the values of constraints based on the `name` with `subscripts` key.
+        Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.
 
         Raises KeyError if no constraint has the requested name. Raises
-        ValueError if a matching constraint has parameters or if the same
-        subscript is found more than once.
+        ValueError if matching constraints share subscripts, including across families.
+        Parameters and descriptions are ignored. Retained removed constraints are
+        included. Regular constraints return violations, not signed function values.
 
         # Examples
 
@@ -9344,7 +10473,9 @@ class Solution:
         multiple times.
         """
     def set_dual_variable(
-        self, constraint_id: builtins.int, value: typing.Optional[builtins.float]
+        self,
+        constraint_id: ConstraintID | builtins.int,
+        value: typing.Optional[builtins.float],
     ) -> None:
         r"""
         Set the dual variable value for a specific constraint by ID.
@@ -9357,19 +10488,17 @@ class Solution:
         r"""
         Get a specific evaluated decision variable by ID
         """
-    def get_constraint_value(self, constraint_id: builtins.int) -> builtins.float:
+    def get_constraint_value(
+        self, constraint_id: ConstraintID | builtins.int
+    ) -> builtins.float:
         r"""
         Get the evaluated value of a specific constraint by ID
         """
     def get_dual_variable(
-        self, constraint_id: builtins.int
+        self, constraint_id: ConstraintID | builtins.int
     ) -> typing.Optional[builtins.float]:
         r"""
         Get the dual variable value for a specific constraint by ID
-        """
-    def get_constraint_by_id(self, constraint_id: builtins.int) -> EvaluatedConstraint:
-        r"""
-        Get a specific evaluated constraint by ID
         """
     def get_named_function_by_id(
         self, named_function_id: builtins.int
@@ -9387,7 +10516,8 @@ class Solution:
         """
     def constraints_df(
         self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        *,
+        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"],
         include: typing.Optional[typing.Sequence[builtins.str]] = None,
     ) -> pandas.DataFrame:
         r"""
@@ -9412,8 +10542,7 @@ class Solution:
         Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
@@ -9421,22 +10550,19 @@ class Solution:
         semantics. Reads from the evaluated collection's context store.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -9471,17 +10597,12 @@ class Solution:
         Use {meth}`constraint_violation` for individual values, also available in
         the `violation` column of {meth}`constraints_df` for every constraint kind.
         """
-    def constraint_violation(
-        self,
-        constraint_id: builtins.int,
-        *,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
-    ) -> builtins.float:
+    def constraint_violation(self, constraint_id: ConstraintIDBase) -> builtins.float:
         r"""
         Get one constraint's nonnegative scalar violation.
 
         Uses the definitions in {meth}`total_violation`, including for removed
-        constraints. IDs are independent for each `kind`. Raises `KeyError` when
+        constraints. The ID type selects its family. Raises `KeyError` when
         the ID is absent from that constraint family.
         """
 
@@ -9559,12 +10680,12 @@ class Sos1BigMPromotion:
         Number of formulations in the original batch request.
         """
     @property
-    def promoted(self) -> builtins.dict[builtins.int, builtins.int]:
+    def promoted(self) -> builtins.dict[ConstraintID, Sos1ConstraintID]:
         r"""
         Applied promotions: cardinality constraint ID to allocated SOS1 ID.
         """
     @property
-    def rejections(self) -> builtins.dict[builtins.int, builtins.str]:
+    def rejections(self) -> builtins.dict[ConstraintID, builtins.str]:
         r"""
         Rejected formulations: cardinality constraint ID to diagnostic message.
 
@@ -9582,7 +10703,7 @@ class Sos1BigMPromotionBatchRejectedError(builtins.RuntimeError):
         Number of formulations in the rejected strict batch.
         """
     @property
-    def rejections(self) -> builtins.dict[builtins.int, builtins.str]:
+    def rejections(self) -> builtins.dict[ConstraintID, builtins.str]:
         r"""
         Diagnostic messages keyed by rejected cardinality constraint ID.
         """
@@ -9601,7 +10722,7 @@ class Sos1BigMPromotionRequest:
     def selector_claims(
         self,
     ) -> builtins.dict[
-        builtins.int, builtins.dict[builtins.int, Sos1BigMSelectorClaim]
+        ConstraintID, builtins.dict[builtins.int, Sos1BigMSelectorClaim]
     ]:
         r"""
         Formulation claims keyed by cardinality constraint ID, then member ID.
@@ -9610,7 +10731,14 @@ class Sos1BigMPromotionRequest:
     def __new__(
         cls,
         selector_claims: typing.Mapping[
+            ConstraintID, typing.Mapping[builtins.int, Sos1BigMSelectorClaim]
+        ]
+        | typing.Mapping[
             builtins.int, typing.Mapping[builtins.int, Sos1BigMSelectorClaim]
+        ]
+        | typing.Mapping[
+            ConstraintID | builtins.int,
+            typing.Mapping[builtins.int, Sos1BigMSelectorClaim],
         ],
     ) -> Sos1BigMPromotionRequest: ...
 
@@ -9635,12 +10763,12 @@ class Sos1BigMSelectorClaim:
         Claimed fresh selector ID, or ``None`` for a reused selector.
         """
     @property
-    def upper_link(self) -> typing.Optional[builtins.int]:
+    def upper_link(self) -> typing.Optional[ConstraintID]:
         r"""
         Claimed upper-link constraint ID, if supplied.
         """
     @property
-    def lower_link(self) -> typing.Optional[builtins.int]:
+    def lower_link(self) -> typing.Optional[ConstraintID]:
         r"""
         Claimed lower-link constraint ID, if supplied.
         """
@@ -9654,8 +10782,8 @@ class Sos1BigMSelectorClaim:
     def fresh(
         selector: builtins.int,
         *,
-        upper_link: typing.Optional[builtins.int] = None,
-        lower_link: typing.Optional[builtins.int] = None,
+        upper_link: typing.Optional[ConstraintID | builtins.int] = None,
+        lower_link: typing.Optional[ConstraintID | builtins.int] = None,
     ) -> Sos1BigMSelectorClaim:
         r"""
         Claim a separate private Binary selector and its optional Big-M links.
@@ -9726,6 +10854,39 @@ class Sos1Constraint:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Sos1Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Sos1Constraint: ...
+
+@typing.final
+class Sos1ConstraintID(ConstraintIDBase):
+    r"""
+    An SOS1 constraint ID. Unequal to integers and IDs of other constraint families.
+    """
+    def __eq__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __lt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __le__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __gt__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __ge__(self, other: builtins.object, /) -> builtins.bool: ...
+    def __hash__(self) -> builtins.int: ...
+    def __new__(cls, value: builtins.int) -> Sos1ConstraintID:
+        r"""
+        Create an ID in this constraint family's namespace.
+
+        The value must be an unsigned 64-bit integer. An ID of another
+        family is not accepted. IDs have no integer conversion protocol.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __reduce__(self) -> tuple[type, tuple[builtins.int]]:
+        r"""
+        Reconstruct the same ID family through its public constructor.
+        The numeric payload is used only by the serialization protocol.
+        """
+    def __copy__(self) -> Sos1ConstraintID:
+        r"""
+        IDs are immutable; copying preserves the same typed identity.
+        """
+    def __deepcopy__(self, _memo: typing.Any) -> Sos1ConstraintID:
+        r"""
+        IDs are immutable, including when nested in copied containers.
+        """
 
 @typing.final
 class SpecialConstraintPreparation:

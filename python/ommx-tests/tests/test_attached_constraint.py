@@ -1,5 +1,6 @@
 """Tests for AttachedConstraint write-through wrapper."""
 
+from ommx import ConstraintID
 import copy
 
 import pytest
@@ -137,7 +138,7 @@ def test_attached_constraint_id_and_instance_handle():
     instance = _empty_instance()
     attached = instance.add_constraint(_make_constraint(name="balance"))
 
-    assert isinstance(attached.constraint_id, int)
+    assert isinstance(attached.constraint_id, ConstraintID)
     assert attached.instance is instance
 
 

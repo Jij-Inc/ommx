@@ -5,6 +5,8 @@ plus context), so they are tested together. The bulk of the coverage focuses
 on context write-through; kind-specific behavior is just `variables`.
 """
 
+from ommx import OneHotConstraintID, Sos1ConstraintID
+
 import copy
 
 import pytest
@@ -98,7 +100,7 @@ def test_one_hot_setter_writes_through_to_instance():
     attached.set_description("updated")
     attached.set_parameters({"a": "1"})
 
-    fresh = instance.one_hot_constraints[cid]
+    fresh = instance.constraints[cid]
     assert fresh.name == "renamed"
     assert fresh.subscripts == [7, 8]
     assert fresh.description == "updated"
@@ -110,7 +112,7 @@ def test_one_hot_two_handles_share_state():
     a = instance.add_one_hot_constraint(
         OneHotConstraint(variables=instance.decision_variables[:2], name="pick_one")
     )
-    b = instance.one_hot_constraints[a.constraint_id]
+    b = instance.constraints[a.constraint_id]
 
     a.set_name("renamed")
     assert b.name == "renamed"
@@ -126,7 +128,11 @@ def test_one_hot_constraints_getter_returns_attached():
         OneHotConstraint(variables=variables[1:], name="c2")
     )
 
-    constraints = instance.one_hot_constraints
+    constraints = {
+        cid: instance.constraints[cid]
+        for cid in instance.constraints
+        if isinstance(cid, OneHotConstraintID)
+    }
     assert set(constraints.keys()) == {a.constraint_id, b.constraint_id}
     assert all(isinstance(c, AttachedOneHotConstraint) for c in constraints.values())
 
@@ -164,7 +170,7 @@ def test_one_hot_add_rejects_undefined_variable():
     with pytest.raises(Exception, match="99"):
         instance.add_one_hot_constraint(bad)
 
-    assert instance.one_hot_constraints == {}
+    assert not any(isinstance(cid, OneHotConstraintID) for cid in instance.constraints)
 
 
 def test_one_hot_copy_and_deepcopy_share_parent():
@@ -192,7 +198,7 @@ def test_one_hot_on_parametric_host():
     assert attached.instance is parametric
 
     attached.set_name("renamed")
-    fresh = parametric.one_hot_constraints[attached.constraint_id]
+    fresh = parametric.constraints[attached.constraint_id]
     assert fresh.name == "renamed"
 
 
@@ -227,7 +233,7 @@ def test_sos1_setter_writes_through_to_instance():
     attached.set_name("renamed")
     attached.set_subscripts([10])
 
-    fresh = instance.sos1_constraints[cid]
+    fresh = instance.constraints[cid]
     assert fresh.name == "renamed"
     assert fresh.subscripts == [10]
 
@@ -238,7 +244,11 @@ def test_sos1_constraints_getter_returns_attached():
     instance.add_sos1_constraint(Sos1Constraint(variables=variables[:2], name="c1"))
     instance.add_sos1_constraint(Sos1Constraint(variables=variables[1:], name="c2"))
 
-    constraints = instance.sos1_constraints
+    constraints = {
+        cid: instance.constraints[cid]
+        for cid in instance.constraints
+        if isinstance(cid, Sos1ConstraintID)
+    }
     assert all(isinstance(c, AttachedSos1Constraint) for c in constraints.values())
 
 
@@ -273,7 +283,7 @@ def test_sos1_on_parametric_host():
     assert attached.instance is parametric
 
     attached.set_subscripts([3])
-    fresh = parametric.sos1_constraints[attached.constraint_id]
+    fresh = parametric.constraints[attached.constraint_id]
     assert fresh.subscripts == [3]
 
 
@@ -293,7 +303,9 @@ def test_one_hot_on_parametric_rejects_parameter_id_in_variables():
     with pytest.raises(Exception, match="(structural|parameter)"):
         parametric.add_one_hot_constraint(bad)
 
-    assert parametric.one_hot_constraints == {}
+    assert not any(
+        isinstance(cid, OneHotConstraintID) for cid in parametric.constraints
+    )
 
 
 def test_sos1_on_parametric_rejects_parameter_id_in_variables():
@@ -306,7 +318,7 @@ def test_sos1_on_parametric_rejects_parameter_id_in_variables():
     with pytest.raises(Exception, match="(structural|parameter)"):
         parametric.add_sos1_constraint(bad)
 
-    assert parametric.sos1_constraints == {}
+    assert not any(isinstance(cid, Sos1ConstraintID) for cid in parametric.constraints)
 
 
 # --------------------------------------------------------------------------- #
@@ -337,7 +349,7 @@ def test_one_hot_rejects_non_binary_variable():
     with pytest.raises(Exception, match="binary"):
         instance.add_one_hot_constraint(bad)
 
-    assert instance.one_hot_constraints == {}
+    assert not any(isinstance(cid, OneHotConstraintID) for cid in instance.constraints)
 
 
 def test_sos1_accepts_non_binary_variable():
