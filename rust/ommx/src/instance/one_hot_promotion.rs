@@ -165,10 +165,7 @@ impl<'a> OneHotPromotionPlan<'a> {
             .collect();
 
         let promotion_count = checked.values().filter(|result| result.is_ok()).count();
-        if let Err(error) = instance
-            .one_hot_constraint_collection
-            .ensure_unused_id_capacity(promotion_count)
-        {
+        if let Err(error) = instance.ensure_constraint_id_capacity(promotion_count) {
             let message = error.to_string();
             let plans = checked
                 .into_iter()
@@ -188,9 +185,8 @@ impl<'a> OneHotPromotionPlan<'a> {
 
         let first_id = (promotion_count > 0).then(|| {
             instance
-                .one_hot_constraint_collection
-                .unused_id()
-                .into_inner()
+                .next_constraint_number()
+                .expect("batch ID capacity was validated")
         });
         let mut offset = 0_u64;
         let plans = checked
@@ -637,12 +633,12 @@ mod tests {
 
             assert_eq!(
                 results[&ConstraintID::from(10)].as_ref().unwrap(),
-                &OneHotConstraintID::from(0)
+                &OneHotConstraintID::from(11)
             );
             assert_eq!(results.len(), 1);
             assert!(instance.constraints().is_empty());
             assert_eq!(
-                instance.one_hot_constraints()[&OneHotConstraintID::from(0)].variables,
+                instance.one_hot_constraints()[&OneHotConstraintID::from(11)].variables,
                 variables([1, 2, 3])
             );
 
@@ -653,7 +649,7 @@ mod tests {
                     .parameters
                     .get(TARGET_ID_PARAMETER)
                     .map(String::as_str),
-                Some("0")
+                Some("11")
             );
             assert_eq!(
                 instance
@@ -665,7 +661,7 @@ mod tests {
             assert_eq!(
                 instance
                     .one_hot_constraint_context()
-                    .collect_for(OneHotConstraintID::from(0)),
+                    .collect_for(OneHotConstraintID::from(11)),
                 context
             );
         }
@@ -679,22 +675,22 @@ mod tests {
 
         assert_eq!(
             results[&ConstraintID::from(10)].as_ref().unwrap(),
-            &OneHotConstraintID::from(0)
+            &OneHotConstraintID::from(21)
         );
         assert_eq!(
             results[&ConstraintID::from(20)].as_ref().unwrap(),
-            &OneHotConstraintID::from(1)
+            &OneHotConstraintID::from(22)
         );
         assert_eq!(results.len(), 2);
         assert!(instance.constraints().is_empty());
         assert_eq!(instance.removed_constraints().len(), 2);
         assert_eq!(instance.one_hot_constraints().len(), 2);
         assert_eq!(
-            instance.one_hot_constraints()[&OneHotConstraintID::from(0)].variables,
+            instance.one_hot_constraints()[&OneHotConstraintID::from(21)].variables,
             variables([1, 2])
         );
         assert_eq!(
-            instance.one_hot_constraints()[&OneHotConstraintID::from(1)].variables,
+            instance.one_hot_constraints()[&OneHotConstraintID::from(22)].variables,
             variables([2, 3])
         );
     }
@@ -738,7 +734,7 @@ mod tests {
         assert_eq!(results.keys().copied().collect::<BTreeSet<_>>(), request);
         assert_eq!(
             results[&ConstraintID::from(20)].as_ref().unwrap(),
-            &OneHotConstraintID::from(0)
+            &OneHotConstraintID::from(21)
         );
         assert!(results[&ConstraintID::from(99)]
             .as_ref()
@@ -771,7 +767,7 @@ mod tests {
             .contains("not an equality-to-zero"));
         assert_eq!(
             results[&ConstraintID::from(20)].as_ref().unwrap(),
-            &OneHotConstraintID::from(0)
+            &OneHotConstraintID::from(21)
         );
         assert_eq!(instance.constraints()[&ConstraintID::from(10)], rejected);
         assert!(!instance

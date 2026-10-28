@@ -106,6 +106,17 @@ pub enum SampleSetError {
         named_function_id: NamedFunctionID,
     },
 
+    /// Two families claim the same constraint number. Choose distinct numbers
+    /// in the input collections before retrying construction.
+    #[error("Constraint number {number} is shared by {first_state} {first_family} and {second_state} {second_family} constraints")]
+    ConflictingConstraintNumber {
+        number: u64,
+        first_family: &'static str,
+        first_state: &'static str,
+        second_family: &'static str,
+        second_state: &'static str,
+    },
+
     #[error("{message}")]
     InvalidSidecar { message: String },
 }
@@ -114,6 +125,7 @@ pub enum SampleSetError {
 ///
 /// Invariants
 /// -----------
+/// - Constraint numbers are unique across all families, including removed rows.
 /// - [`Self::decision_variables`] owns a
 ///   [`SampledDecisionVariableTable`](crate::SampledDecisionVariableTable);
 ///   table keys own [`VariableID`] and sampled decision-variable rows do not
@@ -949,6 +961,18 @@ impl SampleSetBuilder {
                     message: e.to_string(),
                 })?,
         };
+        let mut ids = crate::constraint_ids::ConstraintIds::default();
+        ids.sampled("regular", &constraints)
+            .and_then(|()| ids.sampled("indicator", &self.indicator_constraints))
+            .and_then(|()| ids.sampled("one-hot", &self.one_hot_constraints))
+            .and_then(|()| ids.sampled("SOS1", &self.sos1_constraints))
+            .map_err(|error| SampleSetError::ConflictingConstraintNumber {
+                number: error.number,
+                first_family: error.first_family,
+                first_state: error.first_state,
+                second_family: error.second_family,
+                second_state: error.second_state,
+            })?;
         constraints
             .validate_context_ids()
             .map_err(|e| SampleSetError::InvalidSidecar {
@@ -1099,6 +1123,7 @@ impl SampleSetBuilder {
     /// existing table rows are enforced. It does not revalidate host-level
     /// cross references or sample-ID consistency. The caller must ensure:
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
+    /// - Constraint numbers are unique across all families, including removed rows
     /// - All `used_decision_variable_ids` in sampled constraints and sampled
     ///   named functions exist in `decision_variables`
     /// - Sample IDs are consistent across all components

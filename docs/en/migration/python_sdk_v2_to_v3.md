@@ -697,7 +697,7 @@ df = instance.decision_variables_df(include=[])
 
 `"removed_reason"` is a unit flag — it gates both the `removed_reason` column and the `removed_reason.{key}` parameter columns together. The `removed_reason` column is **schema-stable**: when the flag is on it always appears in the resulting DataFrame, NA-filled if no row carries a reason, so downstream code that branches on schema doesn't need to special-case empty data.
 
-The wide `constraints_df()` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`). `decision_variables_df()` keeps `id` as its index name (only one variable ID space, so disambiguation isn't load-bearing); the long-format variable sidecars in §10 do use `variable_id`. The kind-qualified constraint names make cross-ID-space joins (which would silently produce wrong-but-shaped output when `int64` indexes line up) visible in `df.head()` / `df.info()` and IDE inspection.
+The wide `constraints_df()` index column was renamed from unqualified `id` to `{kind}_constraint_id` (`regular_constraint_id`, `indicator_constraint_id`, `one_hot_constraint_id`, `sos1_constraint_id`). `decision_variables_df()` keeps `id` as its index name (only one variable ID space, so disambiguation isn't load-bearing); the long-format variable sidecars in §10 do use `variable_id`. The kind-qualified constraint names identify the selected family in `df.head()` / `df.info()` and IDE inspection. Constraint numbers are unique across all families, including removed constraints, within each instance.
 
 ## 10. Long-format sidecar DataFrames (`3.0.0a3`, [#846](https://github.com/Jij-Inc/ommx/pull/846))
 

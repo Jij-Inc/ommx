@@ -797,7 +797,8 @@ impl Solution {
     /// Get one constraint's nonnegative scalar violation.
     ///
     /// Uses the definitions in {meth}`total_violation`, including for removed
-    /// constraints. IDs are independent for each `kind`. Raises `KeyError` when
+    /// constraints. Numbers are unique across kinds; `kind` selects the expected
+    /// constraint family. Raises `KeyError` when
     /// the ID is absent from that constraint family.
     #[pyo3(signature = (constraint_id, *, kind = ConstraintKind::Regular))]
     pub fn constraint_violation(&self, constraint_id: u64, kind: ConstraintKind) -> PyResult<f64> {

@@ -320,11 +320,11 @@ fn hosts_reject_activation_conditions_the_current_wire_format_cannot_represent()
             ),
         )]))
         .one_hot_constraints(BTreeMap::from([(
-            0.into(),
+            1.into(),
             OneHotConstraint::new([0.into()].into()).unwrap(),
         )]))
         .sos1_constraints(BTreeMap::from([(
-            0.into(),
+            2.into(),
             Sos1Constraint::new([0.into()].into()).unwrap(),
         )]))
         .build()

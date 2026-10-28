@@ -1021,7 +1021,7 @@ impl Instance {
                     .push(crate::constraint::Provenance::IndicatorConstraint(
                         indicator_id,
                     ));
-                let id = self.constraint_collection.unused_id();
+                let id = self.next_constraint_number()?.into();
                 self.constraint_collection
                     .insert_active_with_context(id, constraint, context)?;
             }

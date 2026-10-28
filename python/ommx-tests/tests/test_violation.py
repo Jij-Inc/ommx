@@ -368,14 +368,14 @@ def test_total_is_sum_of_individual_and_dataframe_violations():
         decision_variables=xs,
         objective=0,
         constraints={0: xs[0] == 3},
-        indicator_constraints={0: (xs[1] <= 0).with_indicator(xs[0])},
-        one_hot_constraints={0: OneHotConstraint(variables=xs)},
-        sos1_constraints={0: Sos1Constraint(variables=xs)},
+        indicator_constraints={1: (xs[1] <= 0).with_indicator(xs[0])},
+        one_hot_constraints={2: OneHotConstraint(variables=xs)},
+        sos1_constraints={3: Sos1Constraint(variables=xs)},
         sense=Sense.Minimize,
     )
     instance.relax_constraint(0, "test relaxation")
-    one_hot_row = instance.convert_one_hot_to_constraint(0)
-    sos1_rows = instance.convert_sos1_to_constraints(0)
+    one_hot_row = instance.convert_one_hot_to_constraint(2)
+    sos1_rows = instance.convert_sos1_to_constraints(3)
     solution = instance.evaluate({0: 1, 1: 1, 2: 1})
     kinds: list[Literal["regular", "indicator", "one_hot", "sos1"]] = [
         "regular",
@@ -383,7 +383,9 @@ def test_total_is_sum_of_individual_and_dataframe_violations():
         "one_hot",
         "sos1",
     ]
-    assert [solution.constraint_violation(0, kind=kind) for kind in kinds] == [
+    assert [
+        solution.constraint_violation(i, kind=kind) for i, kind in enumerate(kinds)
+    ] == [
         2,
         1,
         2,

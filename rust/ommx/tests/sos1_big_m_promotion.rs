@@ -74,7 +74,7 @@ fn public_api_promotes_a_checked_mixed_selector_formulation() {
     assert_eq!(outcomes.len(), 1);
     assert_eq!(
         *outcomes[&cardinality_id].as_ref().unwrap(),
-        Sos1ConstraintID::from(0)
+        Sos1ConstraintID::from(103)
     );
     assert_eq!(instance.removed_constraints().len(), 3);
 
@@ -181,7 +181,7 @@ fn public_api_promotes_independent_requests_with_a_shared_member() {
             .values()
             .map(|result| *result.as_ref().unwrap())
             .collect::<Vec<_>>(),
-        vec![Sos1ConstraintID::from(0), Sos1ConstraintID::from(1)]
+        vec![Sos1ConstraintID::from(203), Sos1ConstraintID::from(204)]
     );
     assert!(instance.constraints().is_empty());
     assert_eq!(instance.removed_constraints().len(), 6);

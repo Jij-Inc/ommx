@@ -2250,9 +2250,9 @@ impl Instance {
     /// >>> instance.one_hot_constraints
     /// {}
     /// >>> instance.constraints
-    /// {0: Constraint(x0 + x1 + x2 - 1 == 0)}
+    /// {2: Constraint(x0 + x1 + x2 - 1 == 0)}
     /// >>> instance.removed_one_hot_constraints
-    /// {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
+    /// {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=2)}
     pub fn convert_one_hot_to_constraint(&mut self, one_hot_id: u64) -> OmmxPyResult<u64> {
         let new_id = self
             .inner
@@ -2286,11 +2286,11 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_all_one_hots_to_constraints()
-    /// [0, 1]
+    /// [3, 4]
     /// >>> instance.one_hot_constraints
     /// {}
     /// >>> instance.constraints
-    /// {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
+    /// {3: Constraint(x0 + x1 - 1 == 0), 4: Constraint(x2 + x3 - 1 == 0)}
     pub fn convert_all_one_hots_to_constraints(&mut self) -> OmmxPyResult<Vec<u64>> {
         let ids = self.inner.convert_all_one_hots_to_constraints()?;
         Ok(ids.into_iter().map(|id| id.into_inner()).collect())
@@ -2349,13 +2349,13 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_sos1_to_constraints(1)
-    /// [0]
+    /// [2]
     /// >>> instance.sos1_constraints
     /// {}
     /// >>> instance.constraints
-    /// {0: Constraint(x0 + x1 + x2 - 1 <= 0)}
+    /// {2: Constraint(x0 + x1 + x2 - 1 <= 0)}
     /// >>> instance.removed_sos1_constraints
-    /// {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
+    /// {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=2)}
     pub fn convert_sos1_to_constraints(&mut self, sos1_id: u64) -> OmmxPyResult<Vec<u64>> {
         let new_ids = self.inner.convert_sos1_to_constraints(sos1_id.into())?;
         Ok(new_ids.into_iter().map(|id| id.into_inner()).collect())
@@ -2386,11 +2386,11 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_all_sos1_to_constraints()
-    /// {1: [0], 2: [1]}
+    /// {1: [3], 2: [4]}
     /// >>> instance.sos1_constraints
     /// {}
     /// >>> instance.constraints
-    /// {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
+    /// {3: Constraint(x0 + x1 - 1 <= 0), 4: Constraint(x2 + x3 - 1 <= 0)}
     pub fn convert_all_sos1_to_constraints(&mut self) -> OmmxPyResult<BTreeMap<u64, Vec<u64>>> {
         let result = self.inner.convert_all_sos1_to_constraints()?;
         Ok(result
@@ -2478,11 +2478,11 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_indicator_to_constraint(1)
-    /// [0]
+    /// [2]
     /// >>> instance.indicator_constraints
     /// {}
     /// >>> instance.constraints
-    /// {0: Constraint(x0 + 3*x1 - 5 <= 0)}
+    /// {2: Constraint(x0 + 3*x1 - 5 <= 0)}
     #[pyo3(signature = (indicator_id, *, atol=None))]
     pub fn convert_indicator_to_constraint(
         &mut self,

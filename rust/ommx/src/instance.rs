@@ -4,6 +4,8 @@ pub(crate) mod arbitrary;
 mod bound_tightening;
 mod builder;
 mod clip_bounds;
+#[cfg(test)]
+mod constraint_ids_tests;
 mod convert;
 mod decision_variable;
 mod encoding;
@@ -243,10 +245,10 @@ impl OutputObjective {
 /// - [`OneHotConstraint`]: exactly one member variable is 1
 /// - [`Sos1Constraint`]: at most one member variable is nonzero
 ///
-/// Each constraint type has its own independent [`ConstraintID`] space:
-/// constraint ID 1 for a regular constraint and constraint ID 1 for an indicator constraint
-/// are distinct and do not conflict. Uniqueness is only required within the same type
-/// (i.e. active and removed constraints of the same type must have disjoint IDs).
+/// Constraint ID types remain family-specific, but their numeric values are unique
+/// across all active and removed constraints in this instance. New constraints
+/// receive numbers from the instance-wide space; transformations retain source
+/// IDs in removed constraints and assign fresh numbers to generated constraints.
 ///
 /// [`SpecialConstraintKind`] identifies active special constraint families.
 /// [`Instance::active_special_constraint_kinds`] inspects them, and
@@ -362,7 +364,7 @@ impl OutputObjective {
 ///
 /// - [`Self::indicator_constraints`] and [`Self::removed_indicator_constraints`]
 ///   are disjoint sets; same for the one-hot and SOS1 collections (within each
-///   kind — id spaces across kinds are independent).
+///   kind and across all kinds).
 /// - For every active or removed [`crate::IndicatorConstraint`], the
 ///   `indicator_variable` is registered in [`Self::decision_variables`] and
 ///   has [`Kind::Binary`](crate::decision_variable::Kind). The function body
@@ -910,6 +912,9 @@ impl Instance {
 ///
 /// # Invariants
 ///
+/// - Constraint numbers are unique across all active and removed families,
+///   as on [`Instance`]. Constructors and protobuf parsing reject collisions.
+///
 /// - [`Self::decision_variables`] owns the
 ///   [`DecisionVariableTable`]: row IDs, decision-variable modeling
 ///   labels, and fixed values share one table owner.
@@ -1260,6 +1265,104 @@ impl ParametricInstance {
     }
 }
 
+fn maximum_number<T: crate::ConstraintType>(collection: &ConstraintCollection<T>) -> Option<u64> {
+    collection
+        .active()
+        .keys()
+        .next_back()
+        .copied()
+        .map(Into::into)
+        .max(
+            collection
+                .removed()
+                .keys()
+                .next_back()
+                .copied()
+                .map(Into::into),
+        )
+}
+
+// Both model roots own the same constraint-number invariant. This implementation
+// stays inside the instance module; it grants no collection mutation authority.
+macro_rules! constraint_numbers {
+    ($owner:ty) => {
+        impl $owner {
+            fn validate_constraint_ids(&self) -> crate::Result<()> {
+                let mut ids = crate::constraint_ids::ConstraintIds::default();
+                ids.created("regular", &self.constraint_collection)?;
+                ids.created("indicator", &self.indicator_constraint_collection)?;
+                ids.created("one-hot", &self.one_hot_constraint_collection)?;
+                ids.created("SOS1", &self.sos1_constraint_collection)?;
+                Ok(())
+            }
+
+            fn maximum_constraint_number(&self) -> Option<u64> {
+                [
+                    maximum_number(&self.constraint_collection),
+                    maximum_number(&self.indicator_constraint_collection),
+                    maximum_number(&self.one_hot_constraint_collection),
+                    maximum_number(&self.sos1_constraint_collection),
+                ]
+                .into_iter()
+                .flatten()
+                .max()
+            }
+
+            fn ensure_constraint_id_capacity(&self, count: usize) -> crate::Result<()> {
+                if count == 0 {
+                    return Ok(());
+                }
+                let count = u64::try_from(count)
+                    .map_err(|_| crate::error!("Constraint ID allocation count exceeds u64"))?;
+                if let Some(maximum_id) = self.maximum_constraint_number() {
+                    maximum_id.checked_add(count).ok_or_else(|| crate::error!(
+                        { maximum_id, count },
+                        "Cannot allocate {count} consecutive constraint IDs after maximum ID {maximum_id}"
+                    ))?;
+                }
+                Ok(())
+            }
+
+            fn next_constraint_number(&self) -> crate::Result<u64> {
+                self.ensure_constraint_id_capacity(1)?;
+                Ok(self.maximum_constraint_number().map_or(0, |id| id + 1))
+            }
+        }
+    };
+}
+
+constraint_numbers!(Instance);
+constraint_numbers!(ParametricInstance);
+
+impl Instance {
+    // Replacement within the regular family keeps its identity. Only ownership
+    // by a different family conflicts with explicit regular insertion.
+    fn validate_regular_constraint_number(&self, id: crate::ConstraintID) -> crate::Result<()> {
+        fn check<T: crate::ConstraintType>(
+            number: u64,
+            family: &str,
+            collection: &ConstraintCollection<T>,
+        ) -> crate::Result<()> {
+            let id = T::ID::from(number);
+            let state = if collection.active().contains_key(&id) {
+                Some("active")
+            } else if collection.removed().contains_key(&id) {
+                Some("removed")
+            } else {
+                None
+            };
+            if let Some(state) = state {
+                crate::bail!({ number, family, state }, "Cannot insert regular constraint with number {number}: it is owned by a {state} {family} constraint");
+            }
+            Ok(())
+        }
+        let number = id.into_inner();
+        check(number, "indicator", &self.indicator_constraint_collection)?;
+        check(number, "one-hot", &self.one_hot_constraint_collection)?;
+        check(number, "SOS1", &self.sos1_constraint_collection)
+    }
+}
+
 #[cfg(test)]
 mod lower_special_constraints_tests {
     use super::*;
@@ -1309,8 +1412,8 @@ mod lower_special_constraints_tests {
                 IndicatorConstraintID::from(1),
                 indicator,
             )]))
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
+            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap()
     }
@@ -1393,7 +1496,7 @@ mod lower_special_constraints_tests {
             .objective(Function::from(linear!(0)))
             .decision_variables(decision_variables)
             .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
+            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
             .build()
             .unwrap();
         let kinds_to_lower: SpecialConstraintKinds = [
@@ -1426,7 +1529,7 @@ mod lower_special_constraints_tests {
             .objective(Function::from(linear!(0)))
             .decision_variables(btreemap! { VariableID::from(0) => dv })
             .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
         let kinds_to_lower: SpecialConstraintKinds =
@@ -1458,8 +1561,8 @@ mod lower_special_constraints_tests {
                 VariableID::from(2) => DecisionVariable::continuous(),
             })
             .constraints(BTreeMap::new())
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
+            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(2), one_hot)]))
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
         let kinds_to_lower: SpecialConstraintKinds =
@@ -1535,7 +1638,7 @@ mod lower_special_constraints_tests {
             .objective(Function::from(linear!(0)))
             .decision_variables(btreemap! { VariableID::from(0) => dv })
             .constraints(BTreeMap::new())
-            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(1), sos1)]))
+            .sos1_constraints(BTreeMap::from([(Sos1ConstraintID::from(3), sos1)]))
             .build()
             .unwrap();
 

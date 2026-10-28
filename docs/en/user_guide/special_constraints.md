@@ -261,11 +261,12 @@ borrow until application, so neither rollback nor an Instance clone is needed.
 The transformation validates the current rows independently; it does not
 require them to originate from {meth}`~ommx.Instance.convert_sos1_to_constraints`.
 
-## Independent ID spaces per constraint type
+## Unique constraint numbers within an instance
 
-In OMMX, each of the four constraint collections — regular / Indicator / OneHot / SOS1 — has an **independent ID space**. The four dicts passed to {meth}`Instance.from_components <ommx.Instance.from_components>` are keyed independently, so using the same integer ID across different constraint types does not cause a collision.
-
-For example, "regular constraint ID=1" and "Indicator constraint ID=1" coexist as distinct constraints.
+All regular, Indicator, OneHot, and SOS1 constraints in an instance share one
+numeric ID space, including removed constraints. Supply distinct numbers across
+all four dictionaries passed to
+{meth}`Instance.from_components <ommx.Instance.from_components>`.
 
 ```{code-cell} ipython3
 z2 = DecisionVariable.binary(10, name="z2")
@@ -274,21 +275,29 @@ x2 = DecisionVariable.continuous(11, lower=0, upper=10, name="x2")
 instance_mix = Instance.from_components(
     decision_variables=[z2, x2] + xs + ys,
     objective=x2,
-    constraints={1: z2 == 1},                                        # regular ID=1
-    indicator_constraints={1: (x2 <= 5).with_indicator(z2)},         # Indicator ID=1
-    one_hot_constraints={1: OneHotConstraint(variables=xs)},         # OneHot ID=1
-    sos1_constraints={1: Sos1Constraint(variables=ys)},              # SOS1 ID=1
+    constraints={1: z2 == 1},
+    indicator_constraints={2: (x2 <= 5).with_indicator(z2)},
+    one_hot_constraints={3: OneHotConstraint(variables=xs)},
+    sos1_constraints={4: Sos1Constraint(variables=ys)},
     sense=Sense.Maximize,
 )
 
-# Each of the four dicts holds its own ID=1 constraint independently
-assert set(instance_mix.constraints.keys()) == {1}
-assert set(instance_mix.indicator_constraints.keys()) == {1}
-assert set(instance_mix.one_hot_constraints.keys()) == {1}
-assert set(instance_mix.sos1_constraints.keys()) == {1}
+assert set(instance_mix.constraints) == {1}
+assert set(instance_mix.indicator_constraints) == {2}
+assert set(instance_mix.one_hot_constraints) == {3}
+assert set(instance_mix.sos1_constraints) == {4}
 ```
 
-When a special constraint is converted to a regular constraint (see [Explicit Constraint Lowering](./capability_model.md)), the generated regular constraint is allocated from the `Constraint` ID space. Only regular constraint IDs can collide after conversion.
+The instance assigns new numbers above the maximum across all active and removed
+constraint families. [Constraint lowering](./capability_model.md) and promotion
+assign fresh numbers to generated constraints; originals retain their numbers
+when moved to removed collections. Provenance and removal reasons record the
+relationship between source and generated constraints.
+
+`ParametricInstance` follows the same rule, and evaluation preserves these
+identities in `Solution` and `SampleSet`. Protobuf input containing duplicate
+numbers across families is rejected without automatic renumbering. This also
+applies to data created during the 3.0.0 beta period under independent ID spaces.
 
 ## Accessing evaluation results
 

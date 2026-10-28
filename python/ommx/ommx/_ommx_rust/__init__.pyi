@@ -4715,9 +4715,9 @@ class Instance:
         >>> instance.one_hot_constraints
         {}
         >>> instance.constraints
-        {0: Constraint(x0 + x1 + x2 - 1 == 0)}
+        {2: Constraint(x0 + x1 + x2 - 1 == 0)}
         >>> instance.removed_one_hot_constraints
-        {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
+        {1: RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=2)}
         """
     def convert_all_one_hots_to_constraints(self) -> builtins.list[builtins.int]:
         r"""
@@ -4747,11 +4747,11 @@ class Instance:
         ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_all_one_hots_to_constraints()
-        [0, 1]
+        [3, 4]
         >>> instance.one_hot_constraints
         {}
         >>> instance.constraints
-        {0: Constraint(x0 + x1 - 1 == 0), 1: Constraint(x2 + x3 - 1 == 0)}
+        {3: Constraint(x0 + x1 - 1 == 0), 4: Constraint(x2 + x3 - 1 == 0)}
         """
     def convert_sos1_to_constraints(
         self, sos1_id: builtins.int
@@ -4810,13 +4810,13 @@ class Instance:
         ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_sos1_to_constraints(1)
-        [0]
+        [2]
         >>> instance.sos1_constraints
         {}
         >>> instance.constraints
-        {0: Constraint(x0 + x1 + x2 - 1 <= 0)}
+        {2: Constraint(x0 + x1 + x2 - 1 <= 0)}
         >>> instance.removed_sos1_constraints
-        {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
+        {1: RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=2)}
         """
     def convert_all_sos1_to_constraints(
         self,
@@ -4847,11 +4847,11 @@ class Instance:
         ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_all_sos1_to_constraints()
-        {1: [0], 2: [1]}
+        {1: [3], 2: [4]}
         >>> instance.sos1_constraints
         {}
         >>> instance.constraints
-        {0: Constraint(x0 + x1 - 1 <= 0), 1: Constraint(x2 + x3 - 1 <= 0)}
+        {3: Constraint(x0 + x1 - 1 <= 0), 4: Constraint(x2 + x3 - 1 <= 0)}
         """
     def convert_indicator_to_constraint(
         self,
@@ -4934,11 +4934,11 @@ class Instance:
         ...     sense=Sense.Minimize,
         ... )
         >>> instance.convert_indicator_to_constraint(1)
-        [0]
+        [2]
         >>> instance.indicator_constraints
         {}
         >>> instance.constraints
-        {0: Constraint(x0 + 3*x1 - 5 <= 0)}
+        {2: Constraint(x0 + 3*x1 - 5 <= 0)}
         """
     def convert_all_indicators_to_constraints(
         self, *, atol: typing.Optional[builtins.float] = None
@@ -9481,7 +9481,8 @@ class Solution:
         Get one constraint's nonnegative scalar violation.
 
         Uses the definitions in {meth}`total_violation`, including for removed
-        constraints. IDs are independent for each `kind`. Raises `KeyError` when
+        constraints. Numbers are unique across kinds; `kind` selects the expected
+        constraint family. Raises `KeyError` when
         the ID is absent from that constraint family.
         """
 

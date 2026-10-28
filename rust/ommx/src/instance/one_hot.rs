@@ -46,8 +46,8 @@ impl Instance {
             .with_context(|| format!("OneHot constraint with ID {id:?} not found"))?
             .clone();
 
-        self.constraint_collection.ensure_unused_id_capacity(1)?;
-        let new_id = self.constraint_collection.unused_id();
+        self.ensure_constraint_id_capacity(1)?;
+        let new_id = self.next_constraint_number()?.into();
 
         let sum = one_hot
             .variables
@@ -101,8 +101,7 @@ impl Instance {
             .keys()
             .copied()
             .collect();
-        self.constraint_collection
-            .ensure_unused_id_capacity(ids.len())?;
+        self.ensure_constraint_id_capacity(ids.len())?;
         ids.into_iter()
             .map(|id| self.convert_one_hot_to_constraint(id))
             .collect()

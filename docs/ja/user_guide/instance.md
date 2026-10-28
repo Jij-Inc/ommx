@@ -99,7 +99,7 @@ instance.decision_variables_df()
 instance.constraints_df()
 ```
 
-{attr}`~ommx.Instance.constraints` は、**通常制約だけ**を制約IDで引く辞書です。特殊制約はここには含まれず、{attr}`~ommx.Instance.indicator_constraints`、{attr}`~ommx.Instance.one_hot_constraints`、{attr}`~ommx.Instance.sos1_constraints`という種類ごとの別の集合で保持されます。制約にも変数と同様のメタデータを付けられます。制約IDの空間は変数IDとは独立し、特殊制約の各種類もそれぞれ独立した制約IDを持ちます。
+{attr}`~ommx.Instance.constraints` は、**通常制約だけ**を制約IDで引く辞書です。特殊制約はここには含まれず、{attr}`~ommx.Instance.indicator_constraints`、{attr}`~ommx.Instance.one_hot_constraints`、{attr}`~ommx.Instance.sos1_constraints`という種類ごとの別の集合で保持されます。制約にも変数と同様のメタデータを付けられます。制約IDの空間は変数IDとは独立しています。制約IDの番号は、removedを含む通常制約・特殊制約の全種類を通じて同じInstance内で一意です。
 
 (instance-edit-metadata)=
 ## 既存モデルの変数・制約に名前や説明を付ける

@@ -12,7 +12,9 @@ use crate::{
 use derive_more::{Deref, From};
 use std::collections::BTreeMap;
 
-/// ID for indicator constraints, independent from regular [`ConstraintID`](crate::ConstraintID).
+/// Family-specific ID for indicator constraints.
+/// Its numeric value is unique across every constraint family in an instance,
+/// including removed constraints.
 #[derive(
     Clone,
     Copy,

@@ -20,7 +20,9 @@ pub enum OneHotConstraintError {
     EmptyVariables,
 }
 
-/// ID for one-hot constraints, independent from regular [`ConstraintID`](crate::ConstraintID).
+/// Family-specific ID for one-hot constraints.
+/// Its numeric value is unique across every constraint family in an instance,
+/// including removed constraints.
 #[derive(
     Clone,
     Copy,

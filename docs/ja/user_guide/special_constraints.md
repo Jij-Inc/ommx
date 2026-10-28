@@ -106,7 +106,11 @@ loweringでは、元の特殊制約をremovedとして保持し、生成した�
 
 ## 制約IDと評価結果の参照
 
-通常制約・Indicator・OneHot・SOS1は、それぞれ独立した制約IDの空間を持ちます。例えば「通常制約ID=0」と「OneHot制約ID=0」は別の制約です。各制約が参照する変数は、同じInstance内の決定変数IDで指定します。
+通常制約・Indicator・OneHot・SOS1のIDの番号は、removed を含む同じInstance内の全制約で一意です。`from_components` に渡す種類別の辞書にも、重複しない番号を指定してください。各制約が参照する変数は、制約とは別の決定変数IDで指定します。
+
+Instanceは全種類のactive／removedの最大番号より後から新しい番号を発行します。lowering・promotionで生成する制約には新しい番号を付け、removedに移す元の制約は元の番号を維持します。変換前後の関係はprovenanceや削除理由に記録されます。
+
+`ParametricInstance`も同じ規則に従い、評価後の`Solution`・`SampleSet`もIDを維持します。protobufの読み込みでは種類間の番号重複をエラーとし、自動再採番はしません。独立したID空間を使っていた3.0.0 beta期間中のデータにも、この検証を適用します。
 
 SolutionやSampleSetのDataFrameは、`kind=` で種類を選びます。
 

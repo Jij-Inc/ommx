@@ -393,6 +393,11 @@ impl Arbitrary for Instance {
                                     constraint_context.set_name(id, "arbitrary_constraint");
                                 }
 
+                                let first_extra_id = if space == InstanceSpace::FullV3 {
+                                    next_constraint_id(&constraints).into_inner()
+                                } else {
+                                    0
+                                };
                                 if let Some(ids) = full_v3_ids {
                                     let fixed_id = ids[0];
                                     let dependent_id = ids[1];
@@ -433,7 +438,7 @@ impl Arbitrary for Instance {
                                         decision_variables.insert(id, DecisionVariable::binary());
                                     }
 
-                                    let removed_id = next_constraint_id(&constraints);
+                                    let removed_id = ConstraintID::from(first_extra_id);
                                     removed_constraints.insert(
                                         removed_id,
                                         (
@@ -444,7 +449,8 @@ impl Arbitrary for Instance {
                                     constraint_context
                                         .set_name(removed_id, "arbitrary_removed_constraint");
 
-                                    let indicator_id = IndicatorConstraintID::from(0);
+                                    let indicator_id =
+                                        IndicatorConstraintID::from(first_extra_id + 1);
                                     indicator_constraints.insert(
                                         indicator_id,
                                         IndicatorConstraint::new(
@@ -458,7 +464,8 @@ impl Arbitrary for Instance {
                                     indicator_constraint_context
                                         .set_name(indicator_id, "arbitrary_indicator");
 
-                                    let removed_indicator_id = IndicatorConstraintID::from(1);
+                                    let removed_indicator_id =
+                                        IndicatorConstraintID::from(first_extra_id + 2);
                                     removed_indicator_constraints.insert(
                                         removed_indicator_id,
                                         (
@@ -477,7 +484,7 @@ impl Arbitrary for Instance {
                                         "arbitrary_removed_indicator",
                                     );
 
-                                    let one_hot_id = OneHotConstraintID::from(0);
+                                    let one_hot_id = OneHotConstraintID::from(first_extra_id + 3);
                                     one_hot_constraints.insert(
                                         one_hot_id,
                                         OneHotConstraint::new(BTreeSet::from([
@@ -489,7 +496,8 @@ impl Arbitrary for Instance {
                                     one_hot_constraint_context
                                         .set_name(one_hot_id, "arbitrary_one_hot");
 
-                                    let removed_one_hot_id = OneHotConstraintID::from(1);
+                                    let removed_one_hot_id =
+                                        OneHotConstraintID::from(first_extra_id + 4);
                                     one_hot_constraints.insert(
                                         removed_one_hot_id,
                                         OneHotConstraint::new(BTreeSet::from([
@@ -506,7 +514,7 @@ impl Arbitrary for Instance {
                                     // generated instances cover variables that
                                     // belong to more than one special
                                     // constraint family.
-                                    let sos1_id = Sos1ConstraintID::from(0);
+                                    let sos1_id = Sos1ConstraintID::from(first_extra_id + 5);
                                     sos1_constraints.insert(
                                         sos1_id,
                                         Sos1Constraint::new(BTreeSet::from([
@@ -517,7 +525,8 @@ impl Arbitrary for Instance {
                                     );
                                     sos1_constraint_context.set_name(sos1_id, "arbitrary_sos1");
 
-                                    let removed_sos1_id = Sos1ConstraintID::from(1);
+                                    let removed_sos1_id =
+                                        Sos1ConstraintID::from(first_extra_id + 6);
                                     sos1_constraints.insert(
                                         removed_sos1_id,
                                         Sos1Constraint::new(BTreeSet::from([
@@ -554,10 +563,14 @@ impl Arbitrary for Instance {
 
                                 if space == InstanceSpace::FullV3 {
                                     instance
-                                        .convert_one_hot_to_constraint(OneHotConstraintID::from(1))
+                                        .convert_one_hot_to_constraint(OneHotConstraintID::from(
+                                            first_extra_id + 4,
+                                        ))
                                         .expect("arbitrary removed one-hot conversion must work");
                                     instance
-                                        .convert_sos1_to_constraints(Sos1ConstraintID::from(1))
+                                        .convert_sos1_to_constraints(Sos1ConstraintID::from(
+                                            first_extra_id + 6,
+                                        ))
                                         .expect("arbitrary removed SOS1 conversion must work");
                                     let mut parameters = v1::Parameters {
                                         entries: HashMap::new(),

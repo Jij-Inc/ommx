@@ -38,7 +38,7 @@ def test_indicator_constraint_forced_on():
         decision_variables=[b, x],
         objective=x,
         constraints={0: b >= 1},  # Force b = 1
-        indicator_constraints={0: ic},
+        indicator_constraints={1: ic},
         sense=Sense.Maximize,
     )
 
@@ -60,7 +60,7 @@ def test_indicator_constraint_eq():
         decision_variables=[b, x],
         objective=x,
         constraints={0: b >= 1},  # Force b = 1
-        indicator_constraints={0: ic},
+        indicator_constraints={1: ic},
         sense=Sense.Maximize,
     )
 

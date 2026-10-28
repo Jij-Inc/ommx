@@ -117,7 +117,8 @@ pub enum SolutionError {
 /// - The decision-variable table rejects modeling labels for unknown variable
 ///   IDs.
 /// - The keys of the evaluated constraint collections are the table-owned
-///   constraint IDs for each constraint family.
+///   constraint IDs for each constraint family. Their numeric values are unique
+///   across all families, including removed constraints.
 /// - [`Self::evaluated_named_functions`] is keyed by the table-owned
 ///   [`NamedFunctionID`]; evaluated named-function rows do not carry IDs.
 /// - [`Self::decision_variables`] contains all variable IDs referenced in
@@ -1250,6 +1251,11 @@ impl SolutionBuilder {
                 NamedFunctionTable::new(self.evaluated_named_functions, self.named_function_labels)?
             }
         };
+        let mut ids = crate::constraint_ids::ConstraintIds::default();
+        ids.evaluated("regular", &evaluated_constraints)?;
+        ids.evaluated("indicator", &self.evaluated_indicator_constraints)?;
+        ids.evaluated("one-hot", &self.evaluated_one_hot_constraints)?;
+        ids.evaluated("SOS1", &self.evaluated_sos1_constraints)?;
         evaluated_constraints.validate_context_ids()?;
         self.evaluated_indicator_constraints
             .validate_context_ids()?;
@@ -1312,6 +1318,7 @@ impl SolutionBuilder {
     /// existing table rows are enforced. It does not revalidate host-level
     /// cross references. The caller must ensure:
     /// - `decision_variables` is keyed by the intended [`VariableID`] for each row
+    /// - Constraint numbers are unique across all families, including removed rows
     /// - All `used_decision_variable_ids` in constraints and evaluated named
     ///   functions exist in `decision_variables`
     /// - Special-constraint violations and activation decisions are consistent
@@ -1391,7 +1398,7 @@ mod tests {
                     crate::OneHotConstraintID::from(0), crate::OneHotConstraint::new(ids.clone()).unwrap(),
                 )]))
                 .sos1_constraints(BTreeMap::from([(
-                    crate::Sos1ConstraintID::from(0), crate::Sos1Constraint::new(ids).unwrap(),
+                    crate::Sos1ConstraintID::from(1), crate::Sos1Constraint::new(ids).unwrap(),
                 )]))
                 .build().unwrap();
             let state = crate::v1::State {
@@ -1415,14 +1422,14 @@ mod tests {
             let restored = Solution::from_v2_bytes(&solution.to_v2_bytes()).unwrap();
             for result in [solution, restored, samples.get(7.into()).unwrap(), restored_samples.get(7.into()).unwrap()] {
                 prop_assert_eq!(result.one_hot_constraint_violation(0.into()), Some(one_hot));
-                prop_assert_eq!(result.sos1_constraint_violation(0.into()), Some(sos1));
+                prop_assert_eq!(result.sos1_constraint_violation(1.into()), Some(sos1));
                 prop_assert_eq!(result.total_violation(), one_hot + sos1);
                 prop_assert!(one_hot >= 0.0 && sos1 >= 0.0);
                 if one_hot == 0.0 {
                     prop_assert!(result.evaluated_one_hot_constraints()[&0.into()].is_feasible(atol));
                 }
                 if sos1 == 0.0 {
-                    prop_assert!(result.evaluated_sos1_constraints()[&0.into()].is_feasible(atol));
+                    prop_assert!(result.evaluated_sos1_constraints()[&1.into()].is_feasible(atol));
                 }
                 if result.total_violation() == 0.0 {
                     prop_assert!(result.feasible_constraints());
@@ -1450,7 +1457,7 @@ mod tests {
                 Constraint::equal_to_zero(Function::from(crate::coeff!(2.5))),
             )]))
             .indicator_constraints(BTreeMap::from([(
-                crate::IndicatorConstraintID::from(0),
+                crate::IndicatorConstraintID::from(1),
                 IndicatorConstraint::new(
                     VariableID::from(0),
                     Equality::LessThanOrEqualToZero,
@@ -1458,11 +1465,11 @@ mod tests {
                 ),
             )]))
             .one_hot_constraints(BTreeMap::from([(
-                crate::OneHotConstraintID::from(0),
+                crate::OneHotConstraintID::from(2),
                 OneHotConstraint::new(variables.clone()).unwrap(),
             )]))
             .sos1_constraints(BTreeMap::from([(
-                crate::Sos1ConstraintID::from(0),
+                crate::Sos1ConstraintID::from(3),
                 Sos1Constraint::new(variables).unwrap(),
             )]))
             .build()

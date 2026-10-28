@@ -492,7 +492,7 @@ impl ParametricInstanceBuilder {
             );
         }
 
-        Ok(ParametricInstance {
+        let instance = ParametricInstance {
             sense,
             objective,
             output_objective: None,
@@ -522,7 +522,9 @@ impl ParametricInstanceBuilder {
             decision_variable_dependency: self.decision_variable_dependency,
             description: self.description,
             annotations: Default::default(),
-        })
+        };
+        instance.validate_constraint_ids()?;
+        Ok(instance)
     }
 }
 
