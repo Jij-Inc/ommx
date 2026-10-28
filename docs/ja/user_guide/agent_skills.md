@@ -8,7 +8,7 @@
 
 インストールした OMMX に付属するプラグインやスキルを取得し、
 コーディングエージェントに導入します。まず
-[OMMX CLI のインストールと実行](../how_to/manage_local_registry.md) に従って、`ommx` コマンドを利用できる
+{ref}`単体CLIの導入手順 <install-cli>`に従って、`ommx` コマンドを利用できる
 状態にしてください。以下では Python パッケージに付属する CLI を `uv run` で
 実行します。cargo-binstall で単体の実行ファイルをインストールした場合は、
 `uv run ommx` を `ommx` に置き換えます。

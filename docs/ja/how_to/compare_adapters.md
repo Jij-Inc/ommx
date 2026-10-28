@@ -47,13 +47,8 @@ instance.add_constraint(
 
 ## 複数のソルバーで問題を解く
 
-ここではOMMX SDK本体と一緒に開発されているOSSへのAdapterを使いましょう。
-OSSでないソルバーについてもAdapterが存在し、同じインターフェースで使う事ができます。
-対応しているソルバーごとのAdapter一覧は[Supported Adapters](../user_guide/supported_ommx_adapters.md)にまとめられています。
-
-
-
-ここではOSSのHiGHSとSCIPのAdapterを使ってナップザック問題を解いてみましょう。
+HiGHSとSCIPのAdapterを使って、先ほど作ったInstanceを解きます。
+ほかの選択肢は[Adapterの選び方](../user_guide/supported_ommx_adapters.md)を参照してください。
 
 ```{code-cell} ipython3
 from ommx_highs_adapter import OMMXHighsAdapter
@@ -75,7 +70,7 @@ solutions = {
 ## 結果の比較
 
 まず、同じInstanceに対して報告された目的値と実行可能性を比べます。最大化と最小化で
-良い目的値の向きが異なるため、`instance.sense`も一緒に確認します。
+良い目的値の向きが異なるため、結果の`solution.sense`も一緒に確認します。
 
 ```{code-cell} ipython3
 import pandas
@@ -83,10 +78,10 @@ import pandas
 comparison = pandas.DataFrame([
     {
         "adapter": name,
-        "sense": str(instance.sense),
+        "sense": repr(solution.sense),
         "objective": solution.objective,
         "feasible": solution.feasible,
-        "optimality": str(solution.optimality),
+        "optimality": repr(solution.optimality),
     }
     for name, solution in solutions.items()
 ]).set_index("adapter")
@@ -94,6 +89,7 @@ comparison
 ```
 
 目的値はOMMXが報告する値です。実行可能性は変数の範囲・種類と制約を含みます。
+`Sense.Maximize`は最大化、`Optimality.Optimal`は最適性が確認された結果を表します。
 実行可能な候補が得られたこと、目的値が一致したこと、最適性が確定したことは別々に読みます。
 この例は同じ入力の比較手順を示すもので、どちらのソルバーが一般に優れるかを示しません。
 
@@ -117,6 +113,10 @@ boundやgapを調べる場合は[diagnosticsのHow-to](inspect_adapter_diagnosti
 元の目的値のboundと扱わないでください。Experimentはこの比較の前提ではありません。
 
 ### 候補の変数値を図にする
+
+{py:meth}`~ommx.Solution.extract_decision_variables`で、名前が`x`の変数の値を取り出します。
+戻り値の辞書は添字のtupleをキーに持ちます。このモデルは1次元なので、
+`key[0]`がモデル作成時の添字`i`に対応します。
 
 ```{code-cell} ipython3
 from matplotlib import pyplot as plt

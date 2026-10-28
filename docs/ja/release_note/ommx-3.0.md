@@ -1171,7 +1171,7 @@ Solver Adapter に、共通の {class}`~ommx.Solution` 結果には入らない 
 
 PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback から {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics を出力し、`model.optimize()` の後に {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` を出力するようになりました。termination report には SCIP の status、primal / dual bound、gap、incumbent objective value、node 数、LP / cut / solution counter、primal-dual integral、求解時間、SCIP / PySCIPOpt version metadata が含まれます。typed collector の中身や Experiment から読み出した dictionary は {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` で records または pandas DataFrame に後処理できます。direct collection では OMMX Solution へ decode する前に termination report が記録されるため、infeasible や unbounded の検出などで decode が adapter exception を投げる場合でも呼び出し側で確認できます。
 
-詳しい API の使い方と PySCIPOpt report の各 field については [Adapter 固有 diagnostics](../how_to/inspect_adapter_diagnostics.md) を参照してください。
+収集・調査の手順は[Adapterのdiagnostics](../how_to/inspect_adapter_diagnostics.md)、reportの各fieldは{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`のAPI Referenceを参照してください。
 
 ## 3.0.0 Alpha 5
 

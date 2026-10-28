@@ -1,68 +1,12 @@
 # 保存したArtifactを調べ、Local Registryを管理する
 
-`ommx` コマンドでは、Artifact の内容確認・入出力、Local Registry の管理、
-同梱のエージェントプラグインやスキルの取得ができます。単体の実行ファイルとして
-インストールする方法と、OMMX Python パッケージに付属する CLI を使う方法があります。
+Artifactは、InstanceやSolutionなどをまとめて保存・受け渡しするためのデータです。
+ここでは`ommx`コマンドで内容を調べ、OMMXのローカル保存領域（Local Registry）を整理します。
+求解やAdapter比較のために、この操作を覚える必要はありません。
 
-公開Python SDK `3.0.0b7`にはCLIは同梱されません。b7の環境は変更せず、
-まず下の単体CLIを導入してください。CLIを含む開発版Pythonパッケージの使い方は
-後半で分けて説明します。
-
-## CLIを用意する
-
-このページの操作は任意です。求解・候補評価・変換・Adapter比較にはCLIは不要です。
-Pythonの例で使うSDK `3.0.0b7`を変更せず、別にRust CLIを導入できます。
-
-### cargo-binstallで単体の実行ファイルをインストールする
-
-[cargo-binstall](https://github.com/cargo-bins/cargo-binstall#installation) を
-インストールし、[Rust SDK のリリース](https://github.com/Jij-Inc/ommx/releases?q=rust-3.0)
-から利用する v3 のバージョンを選びます。公開済みの `3.0.0-beta.7`には
-CLIのバイナリが添付されています。
-
-```bash
-cargo binstall ommx@3.0.0-beta.7
-ommx --help
-```
-
-cargo-binstall はリリースのメタデータに従って、利用環境に対応するアーカイブを
-選択します。単体の実行ファイルは Python 環境がなくても利用できます。
-
-最新の安定版を選ぶ場合は `cargo binstall ommx` を使います。v3 のプレリリースを
-利用する間は、v3 のバージョンを明示してください。バージョンを省略すると安定版の
-v2 系列が選ばれます。利用したいコマンドを含むリリースを選んでください。
-補助ツールの提供状況は[エージェントプラグインとスキル](../user_guide/agent_skills.md)を
-参照してください。このページではArtifactの管理だけを扱います。
-
-### 開発版Pythonパッケージに付属するCLI
-
-Python の `ommx` パッケージには、`3.0.0b8` から `ommx` コマンドが付属します。
-uv プロジェクトにパッケージを追加すると、プロジェクトの環境で CLI を実行できます。
-
-```bash
-uv add 'ommx==3.0.0b8'
-uv run ommx --help
-```
-
-`3.0.0b8`はこのBookの公開b7実行例の基準ではありません。公開されていない場合は
-上の単体CLIを使ってください。b8の開発版を利用する場合は別の環境を用意し、
-既存のb7環境をこの手順のためだけに更新する必要はありません。
-プロジェクトの依存関係で選ばれた OMMX のバージョンが使われます。
-対応する `ommx` がすでに依存関係に含まれている場合は、CLI を別途インストールする
-必要はありません。同じ CLI バージョンであれば、コマンド構文も同じです。
-利用できるコマンドは、インストールしたバージョンによって異なります。
-
-## バージョンとコマンドを確認する
-
-```bash
-uv run ommx --version
-uv run ommx --help
-uv run ommx inspect --help
-```
-
-単体の実行ファイルを使う場合は、`uv run ommx` を `ommx` に置き換えます。
-OMMX の Rust SDK と Python SDK のバージョンは独立して管理されているため、
-Python 経由で起動した場合も、`ommx --version` は Rust CLI のバージョンを表示します。
+まず{ref}`CLIの導入手順 <install-cli>`を確認してください。以降は単体CLIの`ommx`で示します。
+Python SDKに付属するCLIを使う場合は`uv run ommx`に置き換えます。
+利用できるコマンドやオプションは`ommx --help`と各サブコマンドの`--help`で確認できます。
 
 ## ファイルや保存済みの名前を調べる
 
@@ -83,12 +27,15 @@ ommx inspect example.com/team/result:trial-1
 ommx size example.com/team/result:trial-1
 ```
 
-複数の名前が同じデータを参照することがあります。`size`の値を足しても実ディスク使用量には
-なりません。[名前とdigestの違い](../user_guide/artifact.md)を踏まえて読みます。
+末尾の`trial-1`はタグです。名前やタグは別の内容を指すように更新できますが、
+Manifestのdigestは内容の一覧から計算される識別子です。複数の名前が同じデータを参照する
+こともあるため、`size`の値を足しても実ディスク使用量にはなりません。
+詳しくは{ref}`名前とdigestの違い <artifact-identity>`を参照してください。
 
 ## Pythonから絞り込んで探す
 
-公開SDK b7の環境で次を実行できます。空のRegistryでは結果も空です。
+ここからは任意のPythonの例です。[SDKのインストール](../getting_started/install.md)で用意した
+環境を使います。空のRegistryでは結果も空です。
 
 ```python
 from ommx.artifact import list_artifacts
@@ -97,6 +44,10 @@ for record in list_artifacts("example.com/team"):
     print(record.image_name, record.manifest_digest, record.annotations)
 ```
 
+(registry-find-experiment)=
+### 任意：Experimentの記録を探す
+
+[Experiment Tutorial](../tutorial/experiment_management)で実験の記録方法を学んだ後、
 Experimentだけを探す場合は{py:func}`~ommx.experiment.list_experiments`を使います。
 検索したい全体条件は作成時に`experiment.set_annotation("com.example.study", "trial")`
 のように記録します。`org.ommx.*`は予約されているため使いません。Runごとに異なる条件は

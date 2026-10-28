@@ -1,8 +1,10 @@
 # バージョンと実行環境
 
-このBookのPython実行例は、公開済みの**`ommx==3.0.0b7`**を共通の基準にしています。
+このBookのPython実行例は、公開済みの**`ommx==3.0.0b7`**を基準にしています。
+開発版だけの機能は、対応する環境をすでに持つ読者向けの任意例として区別します。
 まず[インストール手順](install.md)のSDKだけを用意し、目的に必要な追加パッケージを選びます。
-以下はmacOS arm64・Python 3.12.12で確認した範囲です。他のOSやアーキテクチャでの
+公開b7例の確認環境はmacOS arm64・Python 3.12.12です。以下の表は目的別の依存を示し、
+Book全ページを同じ環境で実行確認したことを示すものではありません。他のOSやアーキテクチャでの
 wheelの有無は[公開ファイル一覧](https://pypi.org/project/ommx/3.0.0b7/#files)を確認してください。
 
 ## 目的別に追加するもの
@@ -20,6 +22,7 @@ wheelの有無は[公開ファイル一覧](https://pypi.org/project/ommx/3.0.0b
 | トレースの最初の例 | SDKとNotebook kernel。スクリプト用APIもある | Experiment・Adapter |
 | Experimentの記録・保存・再読込 | SDK、例内で作る問題・候補、ファイル保存先 | Adapter・独自Codec・リモートレジストリ |
 | Artifactの受け渡し | SDK、例内で作るデータ。受信は新しいプロセスと空Local Registry | ソルバー・送信側のRegistry・認証 |
+| 保存済みArtifactのCLI調査・整理 | 単体Rust CLI `3.0.0-beta.7`、調査するArtifactのref | Python SDK・Adapter |
 
 Notebookを実行するときは、この環境のPythonをkernelに指定してください。表や図が主題の
 ページでは実行結果を`.ipynb`にも保存しています。表示済み出力を読むだけであれば、
@@ -48,7 +51,7 @@ Adapterの対応範囲をこれらのバージョンだけに限定する宣言�
 | Artifact形式 | Manifest・Media Type・archiveの仕様。中のMessageの版とは別 |
 | データセット配布 | MIPLIBの`v2.7`、QPLIBの`v2.8`。SDKの版ではない |
 
-CLIを使う場合は[単体CLIの手順](../how_to/manage_local_registry.md)から導入できます。
+CLIを使う場合は{ref}`単体CLIの導入手順 <install-cli>`から始められます。
 b7のPython環境をCLIのためだけに更新する必要はありません。認証付きレジストリ共有は
 利用者自身のアカウント・権限を使う任意の操作で、このBookのローカル往復確認とは別です。
-Rust/他言語の入口と版を固定した仕様は[Reference](../reference/index.md)にまとめています。
+Rust/他言語の入口と版を固定した仕様は[Reference](../api/index)にまとめています。

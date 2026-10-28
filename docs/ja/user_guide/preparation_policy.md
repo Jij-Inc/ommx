@@ -59,6 +59,10 @@ Policyには、特殊制約のlowering、整数変数の符号化、制約のpen
 
 ## QUBOへの準備と係数への整形を分ける
 
+QUBOは、Binary変数を使い、activeな制約を持たず、二次以下の多項式を最小化する問題の
+classです。準備によるclassへの適合と、その目的関数をbackend用の係数へ整形する操作は
+別です。QUBOも、準備の前後で扱うOMMX Instanceの一つの表現条件です。
+
 QUBO向けの一般的なPolicyには {meth}`~ommx.PreparationPolicy.for_qubo` があります。これはPolicyを作るだけであり、Instanceを変更しません。`InstanceClass.qubo()`をtargetにして明示的に準備し、係数が必要なら後から整形します。
 
 ```python

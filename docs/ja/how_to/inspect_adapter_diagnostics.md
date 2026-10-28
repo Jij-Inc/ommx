@@ -1,9 +1,8 @@
 # Adapterの終了理由・bound・gapを調べる
 
-Adapter diagnostics は、portable な {class}`~ommx.Solution` には入らない
-solver 側の情報を残すための仕組みです。decode 済みの OMMX 結果を見るときは
-{class}`~ommx.Solution` を使います。backend solver が何を観測し、何を報告し、
-どこまで証明したかを確認したい場合に diagnostics を使います。
+Adapter diagnosticsは、ソルバーの終了理由や探索の進捗を読むための記録です。
+候補の目的値や実行可能性は{class}`~ommx.Solution`で読み、ソルバー側の報告を
+調べたいときにdiagnosticsを使います。
 
 このページは、求解結果の目的値や実行可能性を読めるユーザー向けです。
 [インストール手順](../getting_started/install.md)のSDKとPySCIPOpt Adapterを用意してください。
@@ -37,11 +36,24 @@ print(solution.objective, solution.feasible)
 print(analyze.termination_result)
 ```
 
-`Solution`はOMMXの問題に対する候補の評価です。`termination_result`はbackendが
+この問題の最適な候補は`x=1, y=0`で、目的値は3です。`termination_result`の
+`status`が`"optimal"`なら、SCIPは最適性を確認して終了したと報告しています。
+
+`Solution`はOMMXの問題に対する候補の評価です。`termination_result`はソルバーが
 どのように終了したかの報告で、同じ情報ではありません。時間制限で終了しても候補は
 実行可能な場合があり、候補が実行可能でも最適性が確定したとは限りません。
 
-boundやgapはbackendが実際に解いた定式化に関する値です。変換で目的関数の符号や
+boundやgapは、探索がどこまで進んだかを読む手がかりです。
+
+- `primal_bound`：ソルバーが見つけた最良の実行可能な候補側のbound。
+- `dual_bound`：ソルバーが証明した、これより良い最適値は存在しないという側のbound。
+- `gap`：両者の隔たりを表すソルバーの報告値。具体的な計算方法はソルバーによって異なります。
+
+例えば最大化問題では、候補の目的値が最適値の下側、証明されたboundが上側を押さえます。
+最小化問題では上下が逆です。候補がまだ見つかっていない場合などは、有限なboundやgapが
+得られるとは限りません。
+
+これらはソルバーが実際に解いた定式化に関する値です。変換で目的関数の符号や
 スケール、ペナルティが変わる場合、OMMXの報告目的値とそのまま比較しないでください。
 比較の軸は[Adapterの比較](compare_adapters.md)、対応関係の判断は
 [変換の保証](../user_guide/transformation_guarantees.md)を参照してください。
@@ -55,9 +67,9 @@ matplotlibが必要です。記録の仕組みは先ほどと同じです。
 ```python
 from ommx import dataset
 
-instance = dataset.miplib2017("air05")
+progress_instance = dataset.miplib2017("air05")
 diag = adapter.DiagnosticCollector()
-solution = Adapter.solve(instance, diagnostics=diag)
+solution = Adapter.solve(progress_instance, diagnostics=diag)
 analyze = SCIPDiagnosticsAnalyzer(diag.diagnostics)
 analyze.progress_history_df[["primal_bound", "dual_bound"]].loc[5:].plot()
 ```
@@ -69,51 +81,19 @@ analyze.progress_history_df[["primal_bound", "dual_bound"]].loc[5:].plot()
 SCIP の primal / dual bound の推移。
 ```
 
-`progress_history_df` は `solving_time_sec` を index にした pandas DataFrame です。
-`dual_bound`、`gap`、`incumbent_objective` などの Series property も同じ time index を使うので、
-そのまま時間軸の plot に使えます。diagnostics に SCIP の termination report が含まれる場合、
-この history には最後の `TERMINATION` row も含まれます。`termination_result` はその最終的な
-SCIP report を表す dictionary です。
+横軸はソルバーの経過時間（秒）です。進捗の記録は途中時点の観測なので、
+終了時点の値を読みたい場合は`termination_result`を使ってください。
+pandasを使わずに途中の記録を読む場合は`progress_history_records`を使えます。
 
-```python
-dual_bound = analyze.dual_bound
-gap = analyze.gap
-incumbents = analyze.incumbent_objective
-termination = analyze.termination_result
-```
-
-DataFrame / Series helper は pandas を必要とします。pandas が使えない環境では、
-存在する場合は最後の `TERMINATION` row も含む progress history には `progress_history_records`、
-最終 report には `termination_result` を使ってください。
-
-### PySCIPOpt が記録するもの
-
-PySCIPOpt Adapter は 2 種類の SCIP diagnostics を記録します。
-
-{class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` は、SCIP event callback から記録される
-progress sample と、最終 termination report から記録される progress sample です。
-現在は `BESTSOLFOUND` と `DUALBOUNDIMPROVED` を監視し、最後に `TERMINATION` snapshot を追加します。
-progress snapshot には `solving_time_sec`、`node_count`、`primal_bound`、`dual_bound`、
-`gap`、`incumbent_objective` などが含まれます。
-
-{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` は、`model.optimize()` が終了した後、
-PySCIPOpt model を OMMX Solution に decode する前に記録される最終 report です。
-`status`、`primal_bound`、`dual_bound`、`gap`、`objective_value`、node 数、LP / cut counter、
-primal-dual integral、timing、SCIP / PySCIPOpt version metadata などが含まれます。
-
-callback 由来の progress snapshot は callback 時点の観測値です。SCIP は `BESTSOLFOUND` callback を、
-集計済みの統計がすべて更新される前に呼ぶことがあります。終了時点の値は `TERMINATION` row
-または termination report を参照してください。
-
-完全な member list は API Reference の
+記録するイベントや各field、DataFrame・Seriesの詳細はAPI Referenceの
 {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot`、
 {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`、
 {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` を参照してください。
 
 ## HiGHS で diagnostics を記録する
 
-HiGHSを使う場合だけ{ref}`HiGHS Adapterを追加 <highs-adapter>`します。
-以下は最初の小さなモデルの`instance`に対しても実行できます。
+HiGHSを使う場合だけ{ref}`HiGHS Adapterを追加 <install-highs-adapter>`します。
+以下は最初の小さなモデルの`instance`を使います。
 
 HiGHS Adapter は、`solve()` に {class}`~ommx.adapter.DiagnosticCollector` を渡すと
 MIP progress と termination 情報を記録します。通常は
@@ -128,26 +108,16 @@ solution = OMMXHighsAdapter.solve(instance, diagnostics=diag)
 
 analysis = HighsDiagnosticsAnalyzer(diag.diagnostics)
 
-analysis.progress_history_df[["primal_bound", "dual_bound"]].plot()
-print(analysis.dual_bound)
 print(analysis.termination_result)
 ```
 
-`progress_history_df` は `solving_time_sec` を index にした pandas DataFrame です。
-`dual_bound`、`gap`、`primal_bound` などの Series property も同じ time index を使うので、
-そのまま時間軸の plot に使えます。
+小さな問題では途中の記録がほとんどなくても、終了時の報告を確認できます。
+終了理由やboundのfield名はSCIPと同一とは限りません。読み出せる情報は
+{class}`~ommx_highs_adapter.HighsTerminationReport`、途中の観測は
+{class}`~ommx_highs_adapter.HighsProgressSnapshot`、読み出し方は
+{class}`~ommx_highs_adapter.HighsDiagnosticsAnalyzer`を参照してください。
 
-{class}`~ommx_highs_adapter.HighsProgressSnapshot` は、HiGHS の MIP logging callback から
-記録される progress sample です。progress snapshot には `solving_time_sec`、
-`mip_node_count`、`primal_bound`、`dual_bound`、`gap` などが含まれます。
-
-{class}`~ommx_highs_adapter.HighsTerminationReport` は、`model.run()` が終了した後、
-HiGHS model を OMMX Solution に decode する前に記録される最終 report です。
-`status`、`objective_value`、`mip_dual_bound`、`mip_gap`、`mip_node_count`、
-iteration count、feasibility violation summary、runtime、HiGHS version metadata などが含まれます。
-終了時点の scalar 値が必要な場合は、`termination_result` または `termination_*` property を使ってください。
-
-### 失敗時の処理
+## Solutionを返せなかったときの報告を読む
 
 直接取得は、OMMX Solution への decode が失敗する場合にも有用です。PySCIPOpt Adapter と
 HiGHS Adapter は decode の前に termination report を記録するため、
@@ -155,13 +125,17 @@ HiGHS Adapter は decode の前に termination report を記録するため、
 adapter exception が発生しても、collector には solver の最終 status や bound が残ります。
 
 ```python
+from ommx import Instance
 from ommx.adapter import DiagnosticCollector, UnboundedDetected
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter, SCIPDiagnosticsAnalyzer
 
-collector = DiagnosticCollector()
+unbounded_instance = Instance.maximize()
+z = unbounded_instance.new_continuous("z", lower=0)
+unbounded_instance.objective = z
 
+collector = DiagnosticCollector()
 try:
-    OMMXPySCIPOptAdapter.solve(instance, diagnostics=collector)
+    OMMXPySCIPOptAdapter.solve(unbounded_instance, diagnostics=collector)
 except UnboundedDetected:
     analysis = SCIPDiagnosticsAnalyzer(collector.diagnostics)
     print(analysis.termination_result)
@@ -197,18 +171,10 @@ print(analysis.dual_bound)
 print(analysis.termination_result)
 ```
 
-Experiment から {py:attr}`~ommx.experiment.Solve.diagnostics` で読み出した diagnostics は、
-元の dataclass instance ではなく dictionary です。これにより、保存済み Artifact は求解時に使われた
-Python class 定義から独立して読めます。直接取得した場合と同じ records / DataFrame / Series view が
-必要な場合は、その list をそのまま {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` に渡してください。
-
-{meth}`~ommx.adapter.SolverAdapter.solve` が OMMX Solution を返す前に例外を投げた場合でも、
-可能な限り `Run.log_solve` は failed Solve entry を記録します。この entry は
-`status == "failed"` または `"interrupted"`、output Solution なし、失敗前に収集済みの
-diagnostics あり、という形で保存されます。diagnostics が保存されるのは `store_diagnostics=True`
-の場合です。
-`Run.log_sample` でsamplerが失敗した場合は、output SampleSetを持たないSampling entryとして
-Solveとは分けて記録されます。
+保存した{py:attr}`~ommx.experiment.Solve.diagnostics`も同じAnalyzerで読めます。
+Adapterが例外を投げた場合も、可能な限り失敗の記録と収集済みdiagnosticsが残ります。
+保存はbest-effortなので、必ず残る保証ではありません。保存対象や失敗時の扱いは
+{py:meth}`~ommx.experiment.Run.log_solve`と{py:meth}`~ommx.experiment.Run.log_sample`を参照してください。
 
 adapter diagnostics の contract は API Reference の
 {class}`~ommx.adapter.DiagnosticsSink`、

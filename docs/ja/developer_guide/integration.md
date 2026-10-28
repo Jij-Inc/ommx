@@ -6,6 +6,8 @@ OMMXへ接続する実装者向けです。Python Tutorialの通読は前提で�
 
 共通概念のGuideにはPython例もありますが、Rust・他言語の読者はそれを実行せず、
 数式・表・説明から意味を確認して、下記の版を固定したAPI・仕様へ進めます。
+初めて読む場合は[Instance](../user_guide/instance.md)で問題の構成を、
+[Solution](../user_guide/solution.md)で候補評価の意味を確認してください。
 
 ## 接続する境界を選ぶ
 
@@ -41,10 +43,15 @@ backend用の係数への整形と、問題そのものの変換も分けて扱�
 
 ## 版を合わせて実装する
 
-[Reference](../reference/index.md)にPython/Rust API、Message、Artifact、Codec、Adapterの
+[Reference](../api/index)にPython/Rust API、Message、Artifact、Codec、Adapterの
 固定版の参照先をまとめています。Python `3.0.0b7`とRust `3.0.0-beta.7`は独立した版です。
 wire schemaの版もSDKの版ではありません。公開版を対象にする実装で、根拠を示さずに
 `main`の追加APIへ依存しないでください。
+
+Messageは、問題や候補をProtocol Buffersのbytesにしてソフトウェア間で渡す形式です。
+対象データのMedia Typeでwire schemaを選びます。例えば`ommx.v2`のInstanceはv2の
+問題定義を使い、その中の式にはv1のFunction定義を使います。
+{ref}`ReferenceのMessageとFunctionの定義 <reference-wire>`が参照先です。
 
 別言語での読み書きでは、対象schemaのフィールドを読むことに加え、各root objectの
 公開契約に従って問題や候補を構築します。最小の往復テストを用意して、問題・候補・型や
