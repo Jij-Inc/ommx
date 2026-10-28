@@ -6,10 +6,11 @@ Run commands from the repository root through the project Python environment.
 
 ## Maintained data
 
-`docs/_meta/reading_paths/manifest.json` is the Book-owned source for proposed
-concept/page/route contracts. The initial data comes from the 2026-10-26 design
-audit of the revision recorded in `baseline.source_revision`. Its status and
-fixed source URLs describe that baseline, not the live PR or `main`.
+`docs/_meta/reading_paths/manifest.json` owns the Book-specific concepts,
+explanation responsibilities, and representative reader routes. This skill
+owns the review method; current-revision review records supply the evidence.
+The ledger's recorded baseline, status, and fixed source URLs describe its
+design inputs, not the live PR or `main`.
 
 Resolve the actual revision before reviewing prose. If it differs, inspect the
 changed passages and record the reviewed evidence separately. Do not change a
@@ -17,11 +18,20 @@ revision field to make old annotations look current. Planned owners are not
 already-available explanations. The ledger's open review notes are not waived
 by a successful contract check.
 
+When a content migration is authorized, record the new design source and target
+revision explicitly, reassess the affected contracts, and retain the previous
+ledger in Git history rather than maintaining two active copies. A Skill-only
+edit does not require or authorize that migration. Report affected mismatches
+against the accepted design and actual prose, distinguishing a missing
+explanation from a superseded declaration; unrelated historical diagnostics do
+not determine readiness of the reviewed change.
+
 ## Current-revision review record
 
-Keep scoped review evidence in the existing review response or work notes,
-separate from the historical baseline and generated analyzer output. Use any
-concise format that records:
+Keep scoped review evidence in the existing chat response or, when posting is
+authorized, the relevant issue or PR discussion. Do not create tracked review-note
+files unless explicitly requested, or commit generated PASS reports. Keep
+evidence separate from the design ledger and use any concise format that records:
 
 - **Source:** reviewed commit; for uncommitted work, identify the base commit
   and changed files/diff rather than claiming that the base contains the edits.
@@ -32,25 +42,26 @@ concise format that records:
   briefly why the introduction teaches what the use needs.
 - **Reconciliation:** affected concept/page/route IDs and mismatches or missing
   contracts. Report analyzer results separately from body review.
-- **Ownership and moves:** what the reader must understand from the Book and
-  which exact contract belongs to the API Reference; for a relocation, record
-  the source and actual destination passage. Confirm that the entry reaches
-  the needed explanation/procedure, not merely another reference. Record a
-  missing API explanation as a gap rather than treating a resolving link as
-  sufficient.
+- **Ownership and moves:** what the reader must understand or decide from the
+  README or Book, and which details belong to API or operational Reference;
+  for a relocation, record the source and actual destination passage. Confirm
+  that the entry reaches the needed explanation or complete procedure, including
+  examples owned by Reference. Record a missing explanation as a gap rather
+  than treating a resolving link as sufficient.
 - **Outcome:** checked scope, unresolved findings, and unreviewed routes. Do
   not extrapolate a scoped success to the rest of the Book.
-- **Coverage audits only:** documented SDK revision, major reader tasks and
-  their public API sources, explanation/example/entry destinations, and gaps
-  distinguished from planned or deliberately excluded work. Do not infer
-  coverage from the existing concept catalog alone.
+- **Coverage audits only:** documented SDK revision, major capabilities and
+  their public API sources, the Book's explanation of purpose and choices,
+  and usable destinations for implementation details and examples. Distinguish
+  gaps from planned or deliberately excluded work. Do not infer coverage from
+  the existing concept catalog alone or require each procedure in the Book.
 
 Notebook execution is owned by the repository's separate tests. The Book review
 record describes source, explanations, and displayed outputs; it does not
 require rerunning Notebooks or certify their execution from a Book build.
 
-Do not replace `baseline.source_revision`, silently certify proposed contracts,
-or commit generated PASS output as review evidence. When prose, introduction
+Do not update `baseline.source_revision` merely to certify old annotations or
+silently turn proposed contracts into reviewed ones. When prose, introduction
 order, or navigation changes after review, revisit only the affected evidence.
 A history-only rebase of unchanged content does not require re-executing the
 Book. Recording evidence does not itself authorize publishing a PR comment.
@@ -73,9 +84,12 @@ reader knowledge or a runtime dependency check.
 
 Each concept has a unique nonempty string `id`, a `requires` list of concept
 IDs, and an optional `owner` page ID (or `null` for external knowledge). `label`
-and `scope` describe the actual capability. Aliases are search aids, not evidence
-that two capabilities are equivalent. Owners provide detailed explanations;
-independent entries may teach the required subset locally.
+and `scope` describe the understanding or decision the reader needs. Do not
+create a prerequisite concept for each API spelling. Aliases are search aids,
+not evidence that two capabilities are equivalent. Owners may be Book or
+Reference pages; independent entries may teach the required subset locally.
+Separate conceptual understanding from detailed operation contracts when their
+uses and explanation owners differ.
 
 Each page has a unique `id`, entry `requires`, `deferred`, and ordered `sections`.
 The query helper additionally requires a nonempty `title` on every page;
@@ -87,6 +101,12 @@ Each section has an ID unique within that page and these lists:
 | `introduces` | Teach capabilities left to right, checking their prerequisites |
 | `uses` | Require capabilities after the section's introductions |
 | `mentions` | Record exposure without granting knowledge |
+
+Page IDs and document-role metadata do not prescribe a navigation hierarchy.
+Choose IDs for the page's responsibility and reuse valid concept IDs during a
+reorganization. Existing `title`, `scope`, and notes can describe the reader's
+question, intended understanding, and detail destinations without changing the
+schema. Such metadata is not evaluated as reader knowledge by the checker.
 
 No implicit prerequisite closure is applied to entry knowledge. `parent_page`
 identifies an optional or scoped section; it does not import or export knowledge.
@@ -102,6 +122,9 @@ A route declares `initial` knowledge and ordered `steps`. A step is a page ID or
 join by intersection. An empty alternative represents skipping an optional
 path; it teaches nothing. The route must supply each visited page's entry
 requirements. Invalid pages/concepts must not produce a successful route result.
+Use routes for representative goals and direct entries, including a useful
+stopping point. Do not turn chapter numbers into prerequisites or require a
+route for every operation documented in Reference.
 
 `status`, `contract_status`, and `implementation_verified` do not teach anything.
 In particular, `existing` means a physical baseline source exists, not that it
@@ -134,6 +157,9 @@ The analyzer remains the command for a whole-manifest consistency verdict.
 Analysis output and rendered reports are derived artifacts, not additional
 editable copies of the contracts. Do not commit a stale PASS report alongside
 an edited manifest or automatically turn a PASS into a PR readiness decision.
+The checker does not assess whether adoption reasons are persuasive, a feature's
+purpose is clear, or a Reference example is sufficient; inspect the prose and
+destinations for those judgments.
 
 ## Optional historical evidence
 
