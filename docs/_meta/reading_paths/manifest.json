@@ -1287,7 +1287,7 @@
         "format_function",
         "display_function"
       ],
-      "scope": "Function単体はID、Instance経由では名前・添字で式を読む。文字列とNotebook用プレビューを区別するが、表示上限・省略情報の詳細はAPI Referenceへ送る。表示先InstanceのIDを使い、名前照合はしない。プレビューは省略され得るため、全体の文字列を得る操作と区別する。"
+      "scope": "Function単体はID、Instance経由では名前・添字で式を読む。文字列とNotebook用プレビューを区別し、表示上限の引数・既定値はAPI Referenceへ送る。表示先InstanceのIDを使い、名前照合はしない。プレビューは省略され得るため、全体の文字列を得る操作と区別する。"
     },
     {
       "id": "named.evaluate",
