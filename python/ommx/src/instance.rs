@@ -1353,9 +1353,61 @@ impl Instance {
 
     /// Return the active objective in QUBO format without preparing the instance.
     ///
-    /// # Postconditions
+    /// Returns ``(Q, offset)``, where ``Q`` is a ``dict[tuple[int, int], float]``
+    /// keyed by decision-variable IDs. For binary values, the formatted energy is
+    /// ``offset + sum(c * state[i] * state[j] for (i, j), c in Q.items())``.
+    /// Keys satisfy ``i <= j``; linear terms use ``(i, i)`` and each off-diagonal
+    /// term occurs once, with no factor of two. The constant is returned separately.
+    /// Missing keys have coefficient zero; unused variables need not appear.
     ///
-    /// The returned coefficients represent the active objective rather than preserved output semantics.
+    /// # Applicability and errors
+    ///
+    /// Raises ``RuntimeError`` unless all of the following hold:
+    ///
+    /// - The active sense is {attr}`~ommx.Sense.Minimize`.
+    /// - There are no active regular, Indicator, OneHot, or SOS1 constraints.
+    ///   Removed constraints do not prevent formatting and are not exported.
+    /// - Every variable referenced by the active objective has Binary kind.
+    ///   Other variables retained by the instance do not prevent formatting.
+    /// - The active objective is stored as an expanded polynomial. Composed
+    ///   expressions, including an unexpanded {meth}`~ommx.Function.powi`, are
+    ///   rejected even if mathematically polynomial.
+    /// - Each nonconstant term retained by the numerical filtering below has
+    ///   at most two distinct variable IDs after applying the binary identity
+    ///   ``x**n = x`` for positive integer powers. Terms with the same resulting
+    ///   pair are summed. A retained term with three distinct IDs is rejected;
+    ///   terms are not reduced using auxiliary variables.
+    ///
+    /// This method does not mutate the instance, encode variables, add penalties,
+    /// or change the sense. Use {meth}`~ommx.Instance.prepare` or
+    /// {meth}`~ommx.Instance.to_qubo` when preparation is needed.
+    /// {meth}`~ommx.InstanceClass.qubo` checks the stored polynomial degree
+    /// (at most two), without this formatter's binary-power reduction or numerical
+    /// filtering. For example, an expanded ``x * x * x`` for Binary ``x`` can be
+    /// formatted here even though it is outside that class. Membership checking,
+    /// preparation, and coefficient formatting are separate operations.
+    ///
+    /// # Numerical behavior
+    ///
+    /// Coefficients and the offset use double-precision floating-point arithmetic;
+    /// aggregation can round or overflow, and resulting sums are not checked for
+    /// finiteness. Coefficients are not rescaled. The current implementation skips source
+    /// terms with ``abs(coefficient) <= 2**-52`` (approximately ``2.22e-16``),
+    /// including constants, before converting their keys. After summing terms
+    /// into a pair, it removes that pair when ``abs(sum) < 2**-52``.
+    /// This fixed absolute threshold is independent of evaluation tolerances and
+    /// can change energies and minimizers. Preservation of nonzero small
+    /// coefficients is tracked in [issue #1301](https://github.com/Jij-Inc/ommx/issues/1301);
+    /// the behavior described here is the current implementation.
+    ///
+    /// # Active and output objectives
+    ///
+    /// The coefficients describe the active objective, subject to the numerical
+    /// filtering above. They do not carry {attr}`~ommx.Instance.output_objective`,
+    /// removed constraints, or value-recovery rules. Keep the instance and use
+    /// {meth}`~ommx.Instance.evaluate` or {meth}`~ommx.Instance.evaluate_samples`
+    /// to interpret candidates with its output semantics. Backend energy can
+    /// differ from the objective reported by those methods.
     ///
     /// >>> from ommx import DecisionVariable, Instance, Sense
     /// >>> x = DecisionVariable.binary(0)
@@ -1688,6 +1740,27 @@ impl Instance {
     /// A supplied dependent assertion is compared with the value derived from those
     /// inputs before target-kind canonicalization, so an assertion computed from the
     /// uncanonicalized solver vector can be rejected as inconsistent.
+    ///
+    /// Irrelevant variables are not determined by optimization or reconstruction.
+    /// Supplied values follow the same canonicalization rules above. When omitted,
+    /// Binary, Integer, and Continuous variables receive the value in their bound
+    /// nearest to zero; SemiInteger and SemiContinuous variables receive zero.
+    /// Supply an irrelevant value explicitly when its choice matters for an output
+    /// objective, named function, or removed constraint.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> variables = [
+    /// ...     DecisionVariable.binary(0),
+    /// ...     DecisionVariable.integer(1, lower=2, upper=5),
+    /// ...     DecisionVariable.continuous(2, lower=-5, upper=-2),
+    /// ...     DecisionVariable.semi_integer(3, lower=2, upper=5),
+    /// ...     DecisionVariable.semi_continuous(4, lower=2, upper=5),
+    /// ... ]
+    /// >>> reporting = Instance.from_components(
+    /// ...     decision_variables=variables, objective=0, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> assert reporting.populate_state({}).entries == {0: 0.0, 1: 2.0, 2: -2.0, 3: 0.0, 4: 0.0}
+    /// >>> assert reporting.populate_state({1: 4}).entries[1] == 4.0
     ///
     /// # Postconditions
     ///
@@ -3285,6 +3358,69 @@ impl Instance {
         Ok(Self { inner: instance })
     }
 
+    /// Write the active formulation to an MPS file.
+    ///
+    /// # Parameters
+    ///
+    /// - ``path``: Destination file. Missing parent directories are created and
+    ///   an existing file is overwritten after model validation succeeds.
+    /// - ``compress``: Write gzip-compressed bytes when ``True`` (the default),
+    ///   or plain text when ``False``, independently of the filename extension.
+    ///
+    /// # Supported models
+    ///
+    /// The writer accepts both minimization and maximization. The active objective
+    /// and active regular constraint functions must be stored as expanded
+    /// polynomials of degree at most two. Quadratic terms are written using
+    /// ``QUADOBJ`` and ``QCMATRIX`` sections, with the coefficient convention
+    /// described below. Variables used by the active formulation must have
+    /// Binary, Integer, or Continuous kind. Active Indicator, OneHot, and SOS1
+    /// constraints are rejected; lower them before export if appropriate.
+    /// No preparation is performed automatically.
+    ///
+    /// Unsupported models raise ``RuntimeError`` before creating directories
+    /// or truncating the destination. Errors reported during path setup or
+    /// writing raise ``RuntimeError``. Writing is not atomic: created directories
+    /// and a truncated or partial destination may remain after failure.
+    /// With compression enabled, the current implementation does not propagate
+    /// errors that occur only while finishing the gzip stream. A normal return
+    /// therefore does not guarantee a complete gzip file. The instance is not
+    /// modified.
+    ///
+    /// # Quadratic coefficient convention
+    ///
+    /// The current writer emits each stored quadratic monomial coefficient once,
+    /// unchanged, in both sections. It does not double diagonal objective
+    /// coefficients or add mirrored off-diagonal constraint entries.
+    /// Receiving tools can therefore interpret a different model or reject the
+    /// file even when they recognize these section names.
+    ///
+    /// For example, [Gurobi's MPS convention](https://docs.gurobi.com/projects/optimizer/en/current/reference/fileformats/modelformats.html#quadobj-section)
+    /// applies a one-half multiplier to the objective matrix and requires a
+    /// symmetric constraint matrix. An objective ``6 * x * x`` is written here
+    /// as a diagonal coefficient of ``6``, which that objective convention
+    /// interprets as ``3 * x * x``. Check the receiving tool's conventions and
+    /// imported quadratic expressions before solving; this writer does not
+    /// adapt the coefficients to a selected external tool.
+    ///
+    /// # Information boundary
+    ///
+    /// The writer exports the active objective and sense, active regular
+    /// constraints, and the kinds and bounds of variables used by that model.
+    /// Quadratic coefficients follow the convention above.
+    /// Unused variables, including those referenced only by output semantics,
+    /// named functions, or removed constraints, are omitted. Unused variables
+    /// of unsupported kinds do not prevent export.
+    ///
+    /// ``description.name`` supplies the problem name. Variables and constraints
+    /// use generated names ``OMMX_VAR_<id>`` and ``OMMX_CONSTR_<id>``; their
+    /// modeling names, subscripts, and other labels are not preserved. Other
+    /// Instance information is not exported, including remaining description
+    /// fields, annotations, parameters, named functions, removed constraints,
+    /// dependencies, fixed-value recovery, and {attr}`~ommx.Instance.output_objective`.
+    /// MPS is therefore not a round-trip storage format for an OMMX Instance.
+    /// Retain the OMMX instance when its recovery and output semantics are needed
+    /// to interpret an external tool's candidates.
     #[pyo3(signature = (path, compress = true))]
     pub fn save_mps(&self, py: Python<'_>, path: String, compress: bool) -> OmmxPyResult<()> {
         let _guard = crate::TRACING.attach_parent_context(py);

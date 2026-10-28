@@ -1,4 +1,5 @@
 import importlib
+import json
 from pathlib import Path
 
 from docutils import nodes
@@ -6,6 +7,24 @@ from sphinx.addnodes import desc_parameterlist, desc_sig_operator
 
 
 API_DOCS_DIR = Path(__file__).resolve().parents[3] / "docs" / "api"
+
+
+def test_function_runtime_and_reference_share_canonical_documentation() -> None:
+    from ommx import Function
+
+    project_root = API_DOCS_DIR.parents[1]
+    source = (project_root / "python/ommx/src/function.md").read_text().strip()
+    reference = json.loads((API_DOCS_DIR / "api_reference.json").read_text())
+    function = next(
+        item
+        for item in reference["modules"]["ommx"]["items"]
+        if item["name"] == "Function"
+    )
+
+    runtime_doc = Function.__doc__
+    assert runtime_doc is not None
+    assert runtime_doc.strip() == source
+    assert function["doc"].strip() == source
 
 
 def test_bare_doctest_is_fenced_without_rewriting_existing_myst(

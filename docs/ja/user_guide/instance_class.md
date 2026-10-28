@@ -78,9 +78,32 @@ print(report)
 
 ## 数学的な条件と表現形式は別
 
-`Function`の表現形式も判定対象です。`Function`として保持した線形式`g`の`g ** 2`は自動展開されないため、数学的には二次式でも、多項式表現を要求するclassには入りません。展開済みの多項式として構築する`g * g`との違いは、[Functionの説明](./function.md)を参照してください。
+`Function`の表現形式も判定対象です。数学的に同じ式でも、保持する表現が異なるとclassへの適合結果が変わる場合があります。整数冪と多項式展開の具体例は、{meth}`~ommx.Function.powi`のAPI Referenceを参照してください。
 
 Membershipは要求した表現への適合であり、変換前後の数学的な等価性や最適性を証明するものではありません。それらは、選んだ変換操作とその適用条件によって決まります。
+
+## Classの例：QUBO
+
+QUBO（Quadratic Unconstrained Binary Optimization）は、Binary変数を使い、activeな制約を持たず、二次以下の多項式を最小化する問題です。{meth}`~ommx.InstanceClass.qubo` はこの表現条件を持つclassを返します。線形や定数の目的関数も含まれます。
+
+```{code-cell} ipython3
+qubo_instance = Instance.minimize()
+a = qubo_instance.new_binary("a")
+b = qubo_instance.new_binary("b")
+qubo_instance.objective = a + 2 * a * b + 3
+
+qubo_class = InstanceClass.qubo()
+assert qubo_class.contains(qubo_instance)
+
+# classに入ったInstanceのactive objectiveを係数と定数項にする。
+coefficients, offset = qubo_instance.as_qubo_format()
+assert coefficients == {(a.id, a.id): 1.0, (a.id, b.id): 2.0}
+assert offset == 3.0
+```
+
+QUBOはclassの一例で、OMMX Instanceとは別の基礎モデルではありません。また、Adapter名とclassは一対一ではありません。例えばOpenJij SA Adapterの直接入力は、二次に限らないBinary多項式を許します。利用時は名前からQUBOだと仮定せず、そのAdapterの`INPUT_CLASS`を使います。
+
+**classへの変換と、Backend用の係数への整形も別です。** `as_qubo_format()`はPreparationをせず、activeな目的関数の係数と定数項を取り出します。値の復元規則やremovedな制約を含むInstance全体の代わりになるデータではありません。整形の正確な条件は {meth}`~ommx.Instance.as_qubo_format`、Preparationも行う便利な経路は[PreparationPolicy](./preparation_policy.md)を参照してください。
 
 ## 詳細：判定対象はactiveな数学的内容
 
@@ -91,7 +114,7 @@ Membership は、目的関数と active な4種類の制約族（通常制約、
 - named function だけが参照する変数
 - `output_objective` だけが参照する変数
 
-Instanceが保持する変数と、現在の問題で使う変数の区別は[Instanceの基本モデル](./instance.md)を参照してください。
+Instanceが保持する変数と、現在の問題で使う変数の区別は[変数の役割と値の復元・補完](./variable_roles.md)を参照してください。
 
 同様に、removed constraintはrelation、次数、特殊制約の有無の判定対象ではありません。特殊制約を通常制約へloweringしたInstanceは、変換元をremovedとして保持したまま、特殊制約を許さないclassに入れます。activeとremovedの意味は[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。
 

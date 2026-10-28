@@ -46,10 +46,21 @@ def traced(
         @traced(name="build_qubo", output="qubo.json")
         def process(): ...
 
-    If ``output`` is given, the Chrome Trace JSON is written to that
-    path when the function returns **or raises** — information is
-    never dropped. The exception, if any, is re-raised unchanged after
-    the file is written.
+    If ``output`` is given and a trace result is available, saving Chrome
+    Trace JSON to that path is attempted after capture ends:
+
+    - When the wrapped function returns normally, saving completes before its
+      return value is passed to the caller. A save error propagates instead
+      of returning that value.
+    - When the wrapped function raises, saving is best-effort. Save errors
+      derived from ``Exception`` are suppressed so that the original exception
+      is re-raised unchanged. A trace file is not guaranteed to exist or be
+      complete. If capture fails before a result is available, no save is
+      attempted.
+
+    These rules apply to both synchronous and ``async def`` functions. For
+    an async function, capture surrounds the awaited execution. With
+    ``output=None``, no trace file is saved automatically.
 
     If ``name`` is omitted, the span is named after the function
     (``fn.__qualname__``) so traces from multiple decorated functions

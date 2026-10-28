@@ -3062,14 +3062,99 @@ class FixedPenaltyPreparation:
 @typing.final
 class Function:
     r"""
-    General mathematical function of decision variables.
+    A scalar expression used in optimization objectives and constraint bodies.
+
+    Function refers to variables by ID, without owning their names, kinds, or bounds.
+    It can be evaluated independently of a solver. Use
+    {meth}`~ommx.Instance.evaluate` when variable domains and constraints must also be
+    checked, and {class}`~ommx.InstanceClass` to inspect a solver-input representation.
+    Being evaluable as a Function does not imply that an Adapter accepts it.
+
+    **Construction and polynomial forms**
+
+    Construct a Function from numbers, decision variables, parameters, polynomial
+    objects, or another Function. {class}`~ommx.Linear` stores a linear polynomial,
+    {class}`~ommx.Quadratic` a polynomial of degree at most two, and
+    {class}`~ommx.Polynomial` an arbitrary-degree polynomial. Function is the common
+    wrapper for these forms and for composed scalar expressions.
+
+    >>> from ommx import DecisionVariable, Function, Linear
+    >>> x = DecisionVariable.continuous(0)
+    >>> y = DecisionVariable.continuous(1)
+    >>> constant = Function(3)
+    >>> f = Function(x + 2 * y + 3)
+    >>> by_coefficients = Function(Linear(terms={0: 1, 1: 2}, constant=3))
+    >>> assert f.almost_equal(by_coefficients)
+    >>> assert f.evaluate({0: 1, 1: 0}) == 4.0
+
+    Addition, subtraction, multiplication, and negation of stored polynomials are
+    normalized into polynomial form. Terms that become exactly zero through
+    cancellation or floating-point underflow are removed. Finite nonzero coefficients
+    are retained regardless of magnitude; the evaluation tolerance does not prune
+    them. This describes Function arithmetic, not the numerical behavior of a
+    downstream coefficient-format conversion.
+
+    Use {meth}`~ommx.Function.degree` and {meth}`~ommx.Function.num_terms` for polynomial
+    metadata, and {attr}`~ommx.Function.terms`, {attr}`~ommx.Function.linear_terms`,
+    {attr}`~ommx.Function.quadratic_terms`, and {attr}`~ommx.Function.constant_term`
+    for coefficients. Composed expressions return ``None``
+    for degree/term count and raise ``TypeError`` for coefficient properties; these
+    accessors do not expand an expression. {meth}`~ommx.Function.almost_equal` compares coefficients
+    or expression structure, not global mathematical equivalence.
+
+    **Composed scalar operations**
+
+    Use Python arithmetic and ``abs(f)`` to construct expressions, together with
+    {meth}`~ommx.Function.signum`, {meth}`~ommx.Function.minimum`,
+    {meth}`~ommx.Function.maximum`, and {meth}`~ommx.Function.powi`. These calls
+    construct expressions rather than supplying variable values. For pointwise
+    minimum and maximum, use the methods rather than Python's built-in ``min`` and
+    ``max``.
+
+    >>> fx, fy = Function(x), Function(y)
+    >>> assert abs(fx - 3).evaluate({0: 1}) == 2.0
+    >>> assert fx.minimum(fy).evaluate({0: 1, 1: 0}) == 0.0
+    >>> assert (fx / (fy + 1)).evaluate({0: 1, 1: 1}) == 0.5
+    >>> assert (fx ** 2).evaluate({0: 1}) == 1.0
+
+    Division remains a composed expression even with a constant divisor. Except for
+    identity operations and finite constant folding, integer powers also remain
+    composed, including nonnegative powers. To construct an expanded polynomial
+    square, use ``g * g`` rather than ``g ** 2``. See {meth}`~ommx.Function.powi` for the supported
+    exponent types and domain rules.
+
+    **Evaluation, substitution, and stored order**
+
+    {meth}`~ommx.Function.evaluate` supplies the point-evaluation contract, including tolerance-based
+    zero tests, undefined operations, and non-finite values. {meth}`~ommx.Function.partial_evaluate`
+    returns an expression with selected values substituted and does not fix the
+    tolerance for a later evaluation. {meth}`~ommx.Function.evaluate_bound` returns an enclosing
+    interval, which need not be the tightest possible range.
+
+    Composed expressions retain parentheses and operand order. They evaluate left
+    to right, combining two values per operator application rather than automatically
+    reassociating expressions such as ``(abs(a) + abs(b)) + abs(c)`` and
+    ``abs(a) + (abs(b) + abs(c))``. A domain or overflow error can depend on that
+    order.
+
+    The wire representation uses a flat reverse-Polish-notation (RPN) instruction
+    sequence rather than a recursively nested tree. Its encoding belongs to the
+    [OMMX Message specification](https://github.com/Jij-Inc/ommx/tree/main/proto);
+    constructing a Python Function does not require creating RPN instructions.
     """
     @property
     def terms(self) -> dict:
         r"""
         Get all polynomial terms as a dictionary mapping monomial tuples to coefficients.
 
-        Raises TypeError if this is a non-polynomial expression function.
+        The empty tuple denotes the constant term. Repeated IDs denote powers,
+        for example ``(0, 0)`` for the square of variable 0. The dictionary is a
+        snapshot and does not change the Function when edited.
+        Finite nonzero coefficients are not discarded because of their size or
+        the evaluation tolerance; exact cancellation or floating-point underflow
+        may produce zeros during polynomial arithmetic.
+        Raises ``TypeError`` for a composed expression. This property does not
+        expand the expression, including a retained integer power.
         """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]:
@@ -3146,12 +3231,15 @@ class Function:
         """
     def degree(self) -> typing.Optional[builtins.int]:
         r"""
-        Get the degree of this function.
+        Return the degree of the stored polynomial, or ``None`` for a composed expression.
 
         Returns the highest degree of any term in a polynomial function.
         Zero function has degree 0, constant function has degree 0,
         linear function has degree 1, quadratic function has degree 2, etc.
-        Returns None for non-polynomial expression functions.
+        This inspects the representation; it does not expand an expression to
+        determine its mathematical degree. For the variable expression
+        ``g = Function(DecisionVariable.continuous(0))``, ``g ** 2`` returns
+        ``None`` while the explicitly multiplied ``g * g`` has degree 2.
         """
     def num_terms(self) -> typing.Optional[builtins.int]:
         r"""
@@ -3159,11 +3247,31 @@ class Function:
 
         Zero function has 0 terms, constant function has 1 term,
         and polynomial functions have the number of non-zero coefficient terms.
-        Returns None for non-polynomial expression functions.
+        Returns ``None`` for composed expressions, even when their mathematical
+        value could be represented by a polynomial. No expansion is performed.
         """
     def almost_equal(
         self, other: ToFunction, atol: builtins.float = 1e-06
-    ) -> builtins.bool: ...
+    ) -> builtins.bool:
+        r"""
+        Compare polynomial coefficients or composed-expression structure within ``atol``.
+
+        For two stored polynomials, compares the coefficient of each monomial;
+        an absent monomial has coefficient zero. Different polynomial storage
+        variants may compare equal. For two composed expressions, operators and
+        evaluation order must match, and polynomial operands are compared with
+        the same coefficient tolerance. A polynomial and a composed expression
+        do not compare equal merely because they evaluate to the same values.
+        This is not a test of global mathematical equivalence.
+
+        - ``other``: Function to compare with.
+        - ``atol``: Positive absolute coefficient tolerance.
+
+        >>> from ommx import DecisionVariable, Function
+        >>> x = Function(DecisionVariable.continuous(0))
+        >>> assert (x * x).almost_equal(x * x)
+        >>> assert not (x ** 2).almost_equal(x * x)
+        """
     def __repr__(self) -> builtins.str: ...
     def __neg__(self) -> Function:
         r"""
@@ -3175,15 +3283,24 @@ class Function:
         """
     def signum(self) -> Function:
         r"""
-        Sign of the function value
+        Construct the pointwise sign of this function.
+
+        Evaluation returns 0 when ``abs(value) <= atol``, -1 below that interval,
+        and 1 above it. The tolerance is supplied to {meth}`~ommx.Function.evaluate`,
+        not fixed when this expression is constructed or partially evaluated.
         """
     def minimum(self, rhs: ToFunction) -> Function:
         r"""
-        Pointwise minimum
+        Construct the pointwise minimum of two functions.
+
+        Use this method instead of Python's built-in ``min``, which compares
+        objects rather than constructing an optimization expression.
         """
     def maximum(self, rhs: ToFunction) -> Function:
         r"""
-        Pointwise maximum
+        Construct the pointwise maximum of two functions.
+
+        Use this method instead of Python's built-in ``max``.
         """
     def __add__(self, rhs: ToFunction) -> Function:
         r"""
@@ -3212,7 +3329,11 @@ class Function:
         """
     def __truediv__(self, rhs: ToFunction) -> Function:
         r"""
-        Division
+        Construct division by another function, retaining a composed expression.
+
+        This also applies to a constant divisor. The zero-domain check is made
+        by {meth}`~ommx.Function.evaluate` with its ``atol``; constructing the
+        expression does not establish that all inputs lie in its domain.
         """
     def __rtruediv__(self, lhs: ToFunction) -> Function:
         r"""
@@ -3221,6 +3342,28 @@ class Function:
     def powi(self, exponent: builtins.int) -> Function:
         r"""
         Raise this function to a signed 32-bit integer power.
+
+        ``f.powi(n)`` and ``f ** n`` construct the same operation. Floating-point
+        or function-valued exponents, reversed exponentiation such as ``2 ** f``,
+        and modular exponentiation are not supported.
+
+        Except for identity operations and finite constant folding, powers
+        remain composed expressions, including nonnegative powers. They are not
+        automatically expanded into polynomial coefficients. Use explicit
+        multiplication, such as ``g * g``, when an expanded polynomial square is
+        required by an input format.
+
+        During {meth}`~ommx.Function.evaluate`, a negative power is undefined when
+        the base has absolute value at most ``atol``. Negative bases are supported because the
+        exponent is integral; zero to the zero power is 1. The operand is still
+        evaluated, so raising an undefined expression to zero does not erase its
+        domain restriction.
+
+        >>> from ommx import DecisionVariable, Function
+        >>> g = Function(DecisionVariable.continuous(0))
+        >>> assert (g ** 2).degree() is None
+        >>> assert (g * g).degree() == 2
+        >>> assert (g ** 0).evaluate({0: 0}) == 1.0
         """
     def add_scalar(self, scalar: builtins.float) -> Function: ...
     def add_linear(self, linear: Linear) -> Function: ...
@@ -3246,10 +3389,74 @@ class Function:
     ) -> Function: ...
     def evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
-    ) -> builtins.float: ...
+    ) -> builtins.float:
+        r"""
+        Evaluate this expression at the supplied variable values.
+
+        - ``state``: A {class}`~ommx.State` or mapping from variable IDs to values.
+            All IDs required by the expression must be supplied.
+        - ``atol``: Positive absolute tolerance for zero-sensitive operations.
+            If omitted, {func}`~ommx.get_default_atol` supplies it.
+
+        Returns the scalar value of the expression.
+
+        A Function references IDs but does not own variable kinds, bounds, or
+        constraints. This method does not test candidate feasibility or round
+        discrete-variable values; use {meth}`~ommx.Instance.evaluate` for that.
+
+        ``abs(v) <= atol`` is treated as zero, including the boundary. This gives
+        ``signum(v) == 0`` and makes a denominator or a negative-power base in
+        that interval undefined. ``0 ** 0`` is 1, and integer powers of negative
+        bases are supported. Polynomial coefficients are not pruned using this
+        tolerance.
+
+        Composed expressions evaluate operands from left to right and combine
+        two values at each operator application. Parentheses and operation order
+        are retained rather than reassociated. Overflow and domain failures can
+        therefore depend on the represented order. Simplification does not
+        erase the domain of a partial function: ``0 * (1 / f)`` remains undefined
+        where ``f`` is treated as zero.
+
+        Raises ``ValueError`` for a missing required variable value, undefined
+        point operation, or non-finite operand/intermediate result.
+
+        >>> from ommx import Function, Linear
+        >>> f = Function(Linear(terms={0: 1, 1: 2}, constant=3))
+        >>> assert f.evaluate({0: 1, 1: 0}) == 4.0
+        """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
-    ) -> Function: ...
+    ) -> Function:
+        r"""
+        Substitute supplied variable values and return the remaining Function.
+
+        The original Function is unchanged. Values may cover only some of the
+        required IDs; unresolved variables remain in the returned expression.
+        The concrete {class}`~ommx.Linear`, {class}`~ommx.Quadratic`, and
+        {class}`~ommx.Polynomial` partial-evaluation methods preserve their
+        respective Python types; this method returns a Function.
+
+        Closed subexpressions are folded only when the result is independent of
+        the later evaluation tolerance. ``signum``, division, and negative
+        integer powers remain composed operations even after all their variables
+        are replaced. Construction, substitution, and partial evaluation do not
+        capture a default or supplied ``atol`` for these zero-domain decisions;
+        the subsequent {meth}`~ommx.Function.evaluate` call determines their
+        value or domain.
+
+        - ``state``: Variable-ID/value mapping or {class}`~ommx.State` to substitute.
+        - ``atol``: A positive tolerance; zero-sensitive composed
+            operations are retained rather than resolved with this value.
+
+        >>> from ommx import Function, Linear
+        >>> f = Function(Linear(terms={0: 1, 1: 2}, constant=3))
+        >>> remaining = f.partial_evaluate({0: 1})
+        >>> assert remaining.evaluate({1: 0}) == 4.0
+        >>> x = Function(Linear(terms={0: 1}))
+        >>> sign = x.signum().partial_evaluate({0: 1e-8}, atol=1e-6)
+        >>> assert sign.evaluate({}, atol=1e-6) == 0.0
+        >>> assert sign.evaluate({}, atol=1e-9) == 1.0
+        """
     def evaluate_bound(
         self,
         bounds: typing.Mapping[builtins.int, Bound],
@@ -3265,7 +3472,7 @@ class Function:
 
         - `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.
         - `atol`: Absolute tolerance used by operations whose semantics depend on
-          whether a value is zero. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used.
+          whether a value is zero. If omitted, {func}`~ommx.get_default_atol` supplies it.
           Use the same tolerance when point-evaluating this function.
 
         **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.
@@ -4369,9 +4576,61 @@ class Instance:
         r"""
         Return the active objective in QUBO format without preparing the instance.
 
-        # Postconditions
+        Returns ``(Q, offset)``, where ``Q`` is a ``dict[tuple[int, int], float]``
+        keyed by decision-variable IDs. For binary values, the formatted energy is
+        ``offset + sum(c * state[i] * state[j] for (i, j), c in Q.items())``.
+        Keys satisfy ``i <= j``; linear terms use ``(i, i)`` and each off-diagonal
+        term occurs once, with no factor of two. The constant is returned separately.
+        Missing keys have coefficient zero; unused variables need not appear.
 
-        The returned coefficients represent the active objective rather than preserved output semantics.
+        # Applicability and errors
+
+        Raises ``RuntimeError`` unless all of the following hold:
+
+        - The active sense is {attr}`~ommx.Sense.Minimize`.
+        - There are no active regular, Indicator, OneHot, or SOS1 constraints.
+          Removed constraints do not prevent formatting and are not exported.
+        - Every variable referenced by the active objective has Binary kind.
+          Other variables retained by the instance do not prevent formatting.
+        - The active objective is stored as an expanded polynomial. Composed
+          expressions, including an unexpanded {meth}`~ommx.Function.powi`, are
+          rejected even if mathematically polynomial.
+        - Each nonconstant term retained by the numerical filtering below has
+          at most two distinct variable IDs after applying the binary identity
+          ``x**n = x`` for positive integer powers. Terms with the same resulting
+          pair are summed. A retained term with three distinct IDs is rejected;
+          terms are not reduced using auxiliary variables.
+
+        This method does not mutate the instance, encode variables, add penalties,
+        or change the sense. Use {meth}`~ommx.Instance.prepare` or
+        {meth}`~ommx.Instance.to_qubo` when preparation is needed.
+        {meth}`~ommx.InstanceClass.qubo` checks the stored polynomial degree
+        (at most two), without this formatter's binary-power reduction or numerical
+        filtering. For example, an expanded ``x * x * x`` for Binary ``x`` can be
+        formatted here even though it is outside that class. Membership checking,
+        preparation, and coefficient formatting are separate operations.
+
+        # Numerical behavior
+
+        Coefficients and the offset use double-precision floating-point arithmetic;
+        aggregation can round or overflow, and resulting sums are not checked for
+        finiteness. Coefficients are not rescaled. The current implementation skips source
+        terms with ``abs(coefficient) <= 2**-52`` (approximately ``2.22e-16``),
+        including constants, before converting their keys. After summing terms
+        into a pair, it removes that pair when ``abs(sum) < 2**-52``.
+        This fixed absolute threshold is independent of evaluation tolerances and
+        can change energies and minimizers. Preservation of nonzero small
+        coefficients is tracked in [issue #1301](https://github.com/Jij-Inc/ommx/issues/1301);
+        the behavior described here is the current implementation.
+
+        # Active and output objectives
+
+        The coefficients describe the active objective, subject to the numerical
+        filtering above. They do not carry {attr}`~ommx.Instance.output_objective`,
+        removed constraints, or value-recovery rules. Keep the instance and use
+        {meth}`~ommx.Instance.evaluate` or {meth}`~ommx.Instance.evaluate_samples`
+        to interpret candidates with its output semantics. Backend energy can
+        differ from the objective reported by those methods.
 
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
@@ -4662,6 +4921,27 @@ class Instance:
         A supplied dependent assertion is compared with the value derived from those
         inputs before target-kind canonicalization, so an assertion computed from the
         uncanonicalized solver vector can be rejected as inconsistent.
+
+        Irrelevant variables are not determined by optimization or reconstruction.
+        Supplied values follow the same canonicalization rules above. When omitted,
+        Binary, Integer, and Continuous variables receive the value in their bound
+        nearest to zero; SemiInteger and SemiContinuous variables receive zero.
+        Supply an irrelevant value explicitly when its choice matters for an output
+        objective, named function, or removed constraint.
+
+        >>> from ommx import DecisionVariable, Instance, Sense
+        >>> variables = [
+        ...     DecisionVariable.binary(0),
+        ...     DecisionVariable.integer(1, lower=2, upper=5),
+        ...     DecisionVariable.continuous(2, lower=-5, upper=-2),
+        ...     DecisionVariable.semi_integer(3, lower=2, upper=5),
+        ...     DecisionVariable.semi_continuous(4, lower=2, upper=5),
+        ... ]
+        >>> reporting = Instance.from_components(
+        ...     decision_variables=variables, objective=0, constraints={}, sense=Sense.Minimize
+        ... )
+        >>> assert reporting.populate_state({}).entries == {0: 0.0, 1: 2.0, 2: -2.0, 3: 0.0, 4: 0.0}
+        >>> assert reporting.populate_state({1: 4}).entries[1] == 4.0
 
         # Postconditions
 
@@ -5757,7 +6037,72 @@ class Instance:
         """
     @staticmethod
     def load_mps(path: builtins.str) -> Instance: ...
-    def save_mps(self, path: builtins.str, compress: builtins.bool = True) -> None: ...
+    def save_mps(self, path: builtins.str, compress: builtins.bool = True) -> None:
+        r"""
+        Write the active formulation to an MPS file.
+
+        # Parameters
+
+        - ``path``: Destination file. Missing parent directories are created and
+          an existing file is overwritten after model validation succeeds.
+        - ``compress``: Write gzip-compressed bytes when ``True`` (the default),
+          or plain text when ``False``, independently of the filename extension.
+
+        # Supported models
+
+        The writer accepts both minimization and maximization. The active objective
+        and active regular constraint functions must be stored as expanded
+        polynomials of degree at most two. Quadratic terms are written using
+        ``QUADOBJ`` and ``QCMATRIX`` sections, with the coefficient convention
+        described below. Variables used by the active formulation must have
+        Binary, Integer, or Continuous kind. Active Indicator, OneHot, and SOS1
+        constraints are rejected; lower them before export if appropriate.
+        No preparation is performed automatically.
+
+        Unsupported models raise ``RuntimeError`` before creating directories
+        or truncating the destination. Errors reported during path setup or
+        writing raise ``RuntimeError``. Writing is not atomic: created directories
+        and a truncated or partial destination may remain after failure.
+        With compression enabled, the current implementation does not propagate
+        errors that occur only while finishing the gzip stream. A normal return
+        therefore does not guarantee a complete gzip file. The instance is not
+        modified.
+
+        # Quadratic coefficient convention
+
+        The current writer emits each stored quadratic monomial coefficient once,
+        unchanged, in both sections. It does not double diagonal objective
+        coefficients or add mirrored off-diagonal constraint entries.
+        Receiving tools can therefore interpret a different model or reject the
+        file even when they recognize these section names.
+
+        For example, [Gurobi's MPS convention](https://docs.gurobi.com/projects/optimizer/en/current/reference/fileformats/modelformats.html#quadobj-section)
+        applies a one-half multiplier to the objective matrix and requires a
+        symmetric constraint matrix. An objective ``6 * x * x`` is written here
+        as a diagonal coefficient of ``6``, which that objective convention
+        interprets as ``3 * x * x``. Check the receiving tool's conventions and
+        imported quadratic expressions before solving; this writer does not
+        adapt the coefficients to a selected external tool.
+
+        # Information boundary
+
+        The writer exports the active objective and sense, active regular
+        constraints, and the kinds and bounds of variables used by that model.
+        Quadratic coefficients follow the convention above.
+        Unused variables, including those referenced only by output semantics,
+        named functions, or removed constraints, are omitted. Unused variables
+        of unsupported kinds do not prevent export.
+
+        ``description.name`` supplies the problem name. Variables and constraints
+        use generated names ``OMMX_VAR_<id>`` and ``OMMX_CONSTR_<id>``; their
+        modeling names, subscripts, and other labels are not preserved. Other
+        Instance information is not exported, including remaining description
+        fields, annotations, parameters, named functions, removed constraints,
+        dependencies, fixed-value recovery, and {attr}`~ommx.Instance.output_objective`.
+        MPS is therefore not a round-trip storage format for an OMMX Instance.
+        Retain the OMMX instance when its recovery and output semantics are needed
+        to interpret an external tool's candidates.
+        """
     @staticmethod
     def load_qplib(path: builtins.str) -> Instance: ...
     def logical_memory_profile(self) -> builtins.str:
@@ -7245,7 +7590,40 @@ class ParametricInstance:
         r"""
         Substitute parameters to yield an instance.
 
-        Parameters can be provided as a dict mapping parameter IDs to their values.
+        Provide a dict mapping every declared parameter ID to its numerical value,
+        including parameters not referenced by an expression. The original
+        {class}`~ommx.ParametricInstance` is unchanged and can be materialized again.
+        Missing declared IDs raise ``RuntimeError``.
+
+        The method checks that declared IDs are included, not that the key sets are
+        equal. Additional keys are accepted and participate in substitution wherever
+        referenced. In particular, an extra decision-variable ID can also substitute
+        that coordinate in expressions. For parameter-only materialization, supply
+        exactly the IDs listed by {attr}`~ommx.ParametricInstance.parameters`.
+
+        Substitution uses the SDK's default absolute tolerance and the expression
+        partial-evaluation rules; see {meth}`~ommx.Function.partial_evaluate`.
+        This is not a feasibility check or decision-variable kind/bound validation.
+        There is no blanket finiteness check of all supplied values: a referenced
+        non-finite value can fail during substitution, while an unreferenced value
+        need not be examined. Successful materialization does not prove that all
+        supplied values are finite or that the resulting problem is feasible.
+
+        >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+        >>> x = DecisionVariable.binary(0)
+        >>> p, unused = Parameter(1, name="p"), Parameter(2, name="unused")
+        >>> family = ParametricInstance.from_components(
+        ...     decision_variables=[x], parameters=[p, unused], objective=x + p,
+        ...     constraints={}, sense=Sense.Minimize
+        ... )
+        >>> try:
+        ...     family.with_parameters({p.id: 3})
+        ... except RuntimeError as error:
+        ...     assert "Missing parameters" in str(error)
+        ... else:
+        ...     raise AssertionError("an omitted declared parameter was accepted")
+        >>> concrete = family.with_parameters({p.id: 3, unused.id: 0})
+        >>> assert concrete.objective.evaluate({x.id: 1}) == 4.0
 
         # Postconditions
 

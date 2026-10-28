@@ -279,7 +279,40 @@ impl ParametricInstance {
 
     /// Substitute parameters to yield an instance.
     ///
-    /// Parameters can be provided as a dict mapping parameter IDs to their values.
+    /// Provide a dict mapping every declared parameter ID to its numerical value,
+    /// including parameters not referenced by an expression. The original
+    /// {class}`~ommx.ParametricInstance` is unchanged and can be materialized again.
+    /// Missing declared IDs raise ``RuntimeError``.
+    ///
+    /// The method checks that declared IDs are included, not that the key sets are
+    /// equal. Additional keys are accepted and participate in substitution wherever
+    /// referenced. In particular, an extra decision-variable ID can also substitute
+    /// that coordinate in expressions. For parameter-only materialization, supply
+    /// exactly the IDs listed by {attr}`~ommx.ParametricInstance.parameters`.
+    ///
+    /// Substitution uses the SDK's default absolute tolerance and the expression
+    /// partial-evaluation rules; see {meth}`~ommx.Function.partial_evaluate`.
+    /// This is not a feasibility check or decision-variable kind/bound validation.
+    /// There is no blanket finiteness check of all supplied values: a referenced
+    /// non-finite value can fail during substitution, while an unreferenced value
+    /// need not be examined. Successful materialization does not prove that all
+    /// supplied values are finite or that the resulting problem is feasible.
+    ///
+    /// >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+    /// >>> x = DecisionVariable.binary(0)
+    /// >>> p, unused = Parameter(1, name="p"), Parameter(2, name="unused")
+    /// >>> family = ParametricInstance.from_components(
+    /// ...     decision_variables=[x], parameters=[p, unused], objective=x + p,
+    /// ...     constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> try:
+    /// ...     family.with_parameters({p.id: 3})
+    /// ... except RuntimeError as error:
+    /// ...     assert "Missing parameters" in str(error)
+    /// ... else:
+    /// ...     raise AssertionError("an omitted declared parameter was accepted")
+    /// >>> concrete = family.with_parameters({p.id: 3, unused.id: 0})
+    /// >>> assert concrete.objective.evaluate({x.id: 1}) == 4.0
     ///
     /// # Postconditions
     ///

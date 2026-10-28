@@ -1,35 +1,77 @@
----
-jupytext:
-  text_representation:
-    extension: .md
-    format_name: myst
-    format_version: 0.13
-    jupytext_version: 1.19.1
----
+# 使うAdapterを選ぶ
 
-# サポートされているOMMX Adapter
-OMMXで記述した最適化問題をソルバーで解くには、ソルバーの規格に合わせたデータ構造に変換する必要があります。この変換の役割を担うのがOMMX Adapterです。ソルバーごとに規格が異なるため、それぞれのソルバーに対してAdapterが存在します。
+AdapterはOMMXのInstanceと実行backendの入力・出力を接続します。
+使いたいソルバーやサンプラーが決まっていれば、そのAdapterの手順へ直接進めます。
+すべてのTutorialを順番に実行する必要はありません。
 
-## OSSのソルバー/サンプラー用Adapter
-OMMXリポジトリでは、複数のOSSのソルバー/サンプラー用Adapterがサポートされています。
+| やりたいこと | 最初の手順 | 戻ってくる結果 |
+|---|---|---|
+| 小さな問題を初めて解く | [PySCIPOptのTutorial](../tutorial/solve_with_ommx_adapter) | Solution |
+| Indicator・SOS1を直接扱う | [PySCIPOptで特殊制約を解く](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md) | Solution |
+| 特殊制約を通常の制約へ変換してHiGHSで解く | [Adapter向けのPreparation](../tutorial/prepare_instance_for_adapter.md) | Solution |
+| OpenJijで複数の候補を得る | [小さな問題をサンプリングする](../how_to/sample_with_openjij_adapter) | SampleSet |
 
-OpenJijを使う場合は、[小さな問題をサンプリングするHow-to](../how_to/sample_with_openjij_adapter)へ直接進めます。このページで紹介するほかのソルバーや、そのTutorialの実行は前提ではありません。
+[インストール手順](../getting_started/install.md)で、選んだAdapterだけ追加します。
+`Solution`は一つの候補の評価結果、`SampleSet`は複数の候補と出現回数などを扱う結果です。
+返り値の種類が同じでも、探索方法や最適性の保証は同じとは限りません。
 
-| Package name | PyPI | API Reference | Description |
-|:--- |:--- |:--- |:--- |
-| [ommx-highs-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-highs-adapter) | [![ommx-highs-adapter](https://img.shields.io/pypi/v/ommx-highs-adapter)](https://pypi.org/project/ommx-highs-adapter/) | [![main](https://img.shields.io/badge/API_Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_highs_adapter/index.html) | Adapter for [HiGHS](https://github.com/ERGO-Code/HiGHS)
-| [ommx-openjij-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-openjij-adapter) | [![ommx-openjij-adapter](https://img.shields.io/pypi/v/ommx-openjij-adapter)](https://pypi.org/project/ommx-openjij-adapter/) | [![main](https://img.shields.io/badge/API_Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_openjij_adapter/index.html) | Adapter for [OpenJij](https://github.com/OpenJij/OpenJij)
-| [ommx-python-mip-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-python-mip-adapter) | [![ommx-python-mip-adapter](https://img.shields.io/pypi/v/ommx-python-mip-adapter)](https://pypi.org/project/ommx-python-mip-adapter/) | [![main](https://img.shields.io/badge/API_Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_python_mip_adapter/index.html)| Adapter for [Python-MIP](https://www.python-mip.com/) |
-| [ommx-pyscipopt-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-pyscipopt-adapter) | [![ommx-pyscipopt-adapter](https://img.shields.io/pypi/v/ommx-pyscipopt-adapter)](https://pypi.org/project/ommx-pyscipopt-adapter/) | [![main](https://img.shields.io/badge/API_Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_pyscipopt_adapter/index.html) | Adapter for [PySCIPOpt](https://github.com/scipopt/PySCIPOpt)
+## 選ぶときの四つの確認
 
-## 非OSSのソルバー/サンプラー用Adapter
-非OSSのソルバー/サンプラーも他のリポジトリでサポートされています。
+1. **直接渡せる入力**：Adapterの`INPUT_CLASS`は、その実装が直接扱えるInstanceの条件です。
+   単に「線形」「QUBO」という通称だけでなく、変数の種類・式の表現・制約の種類・最大化か最小化かを確認します。
+2. **必要なPreparation**：直接受け取れない場合は、Adapterの推奨Policyを出発点にします。
+   PreparationはInstanceを入力条件に合わせて変換する処理、Policyは使用を許す変換と設定の選択です。
+   変数に必要な有限の上下限がない場合など、変換できないこともあります。
+3. **ユーザーが決める設定**：ペナルティの重み、許容誤差、探索回数・時間制限などです。
+   推奨Policyを取得しただけで、問題ごとに適切な設定がすべて決まるわけではありません。
+4. **結果から分かること**：報告目的値、実行可能性、候補の数に加え、backendが返す終了理由や
+   目的値の限界値（bound）、候補の目的値との隔たり（gap）、最適性情報を確認します。
+   こうしたbackend側の記録を読むdiagnosticsの対応もAdapterごとに異なります。
 
-| Package name | PyPI | Description |
-|:--- |:--- |:--- |
-| [ommx-da4-adapter](https://github.com/Jij-Inc/ommx-da4-adapter) | [![ommx-da4-adapter](https://img.shields.io/pypi/v/ommx-da4-adapter)](https://pypi.org/project/ommx-da4-adapter/) | Adapter for [Fujitsu Digital Annealer(DA4)](https://www.fujitsu.com/jp/digitalannealer/) |
-|  [ommx-dwave-adapter](https://github.com/Jij-Inc/ommx-dwave-adapter) | [![ommx-dwave-adapter](https://img.shields.io/pypi/v/ommx-dwave-adapter)](https://pypi.org/project/ommx-dwave-adapter) | Adapter for [D-Wave](https://docs.dwavequantum.com/en/latest/index.html) |
-| [ommx-fixstars-amplify-adapter](https://github.com/Jij-Inc/ommx-fixstars-amplify-adapter) | [![ommx-fixstars-amplify-adapter](https://img.shields.io/pypi/v/ommx-fixstars-amplify-adapter)](https://pypi.org/project/ommx-fixstars-amplify-adapter/) | Adapter for [Fixstars Amplify](https://amplify.fixstars.com/ja/docs/amplify/v1/index.html#) |
-| [ommx-gurobipy-adapter](https://github.com/Jij-Inc/ommx-gurobipy-adapter) | [![ommx-gurobipy-adapter](https://img.shields.io/pypi/v/ommx-gurobipy-adapter)](https://pypi.org/project/ommx-gurobipy-adapter/) | Adapter for [Gurobi](https://www.gurobi.com/) |
-| [ommx-kipu-iskay-adapter](https://github.com/Jij-Inc/ommx-kipu-iskay-adapter) | [![ommx-kipu-iskay-adapter](https://img.shields.io/pypi/v/ommx-kipu-iskay-adapter)](https://pypi.org/project/ommx-kipu-iskay-adapter/) | Adapter for [Kipu Iskay through Qiskit Functions Catalog](https://quantum.cloud.ibm.com/docs/en/guides/kipu-optimization) |
-| [ommx-qctrl-qaoa-adapter](https://github.com/Jij-Inc/ommx-qctrl-qaoa-adapter) | [![ommx-qctrl-qaoa-adapter](https://img.shields.io/pypi/v/ommx-qctrl-qaoa-adapter)](https://pypi.org/project/ommx-qctrl-qaoa-adapter/) | Adapter for [Fire Opal QAOA Solver](https://docs.q-ctrl.com/fire-opal/execute/run-algorithms/solve-optimization-problems/fire-opals-qaoa-solver) |
+通常の`solve()`・`sample()`は、元のInstanceを変更せず、内部のcopyに必要なPreparationを
+行ってから実行します。推奨Policy以外の変換を選ぶ場合は、
+[明示的にPreparationを行うHow-to](../how_to/customize_preparation.md)へ進みます。
+
+`INPUT_CLASS`への所属は表現条件の確認であり、変換前との数学的な同値性やbackendの
+最適性保証を示すものではありません。これらは別々に判断します。
+[InstanceClass](instance_class.md)、[PreparationPolicy](preparation_policy.md)、
+[変換の保証](transformation_guarantees.md)で各判断の意味を説明します。
+
+## ソルバー名と問題クラスは一対一ではない
+
+例えばOpenJij SA Adapterの直接入力は、Binary変数の多項式最小化と、求解対象の制約なしという
+条件で、二次式だけに限りません。「OpenJijだから最初にQUBOへ変換する」とは考えず、
+実際の`INPUT_CLASS`と推奨Policyを使います。重みの明示が必要な例は
+[OpenJij How-to](../how_to/sample_with_openjij_adapter)を参照してください。
+
+逆に、同じInstanceを受け取れるAdapterでも、設定・探索方法・終了条件は異なります。
+[複数のAdapterの比較](../how_to/compare_adapters.md)では同じ問題の報告目的値と実行可能性を
+比較し、[diagnostics](../how_to/inspect_adapter_diagnostics.md)ではbackend側の観測を調べます。
+初期候補を持っている場合は[初期候補のHow-to](../how_to/use_initial_state.md)、
+処理のどこに時間がかかるかを見たい場合は[トレースのHow-to](../how_to/trace_execution)へ進みます。
+いずれもExperimentの学習は前提ではありません。
+
+## パッケージと契約の確認先
+
+同一リポジトリで開発するAdapterは以下です。実行例の基準版は
+[インストール手順](../getting_started/install.md)にまとめています。
+実装リンクはその公開タグ、APIリンクはこのBookと同じ開発リビジョンを指します。
+APIに未公開の機能が含まれる場合は、利用する公開タグの実装も確認してください。
+
+| パッケージ | 対応backend | API | 基準版の実装 |
+|---|---|---|---|
+| `ommx-pyscipopt-adapter` | SCIP / PySCIPOpt | {mod}`~ommx_pyscipopt_adapter` | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-pyscipopt-adapter) |
+| `ommx-highs-adapter` | HiGHS | {mod}`~ommx_highs_adapter` | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-highs-adapter) |
+| `ommx-openjij-adapter` | OpenJij SA / SQA | {mod}`~ommx_openjij_adapter` | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-openjij-adapter) |
+| `ommx-python-mip-adapter` | Python-MIP | {mod}`~ommx_python_mip_adapter` | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-python-mip-adapter) |
+
+別リポジトリで提供するAdapterには、[Gurobi](https://github.com/Jij-Inc/ommx-gurobipy-adapter)、
+[D-Wave](https://github.com/Jij-Inc/ommx-dwave-adapter)、
+[Fixstars Amplify](https://github.com/Jij-Inc/ommx-fixstars-amplify-adapter)、
+[Fujitsu DA4](https://github.com/Jij-Inc/ommx-da4-adapter)、
+[Kipu Iskay](https://github.com/Jij-Inc/ommx-kipu-iskay-adapter)、
+[Q-CTRL QAOA](https://github.com/Jij-Inc/ommx-qctrl-qaoa-adapter)などがあります。
+各プロジェクトのSDK互換性、実行環境、認証・ライセンス、結果の契約を個別に確認してください。
+この一覧は、それらがBookの実行環境で確認済みであることを意味しません。
+
+Adapter自体を作る場合は[Developer Guide](../developer_guide/adapter.md)を参照してください。
