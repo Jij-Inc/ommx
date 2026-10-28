@@ -6,6 +6,16 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
+### 全種類の制約でIDの番号を一意にする ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
+
+`Instance`・`ParametricInstance`内では、removedを含む通常制約・Indicator・OneHot・SOS1の
+全種類を通じてIDの番号が一意になります。自動追加や変換もこの共通空間から採番し、
+評価後の`Solution`・`SampleSet`でもIDを維持します。
+
+構築時とprotobuf読み込み時には種類間の番号重複をエラーとし、自動再採番はしません。
+3.0.0 beta期間中に作成したデータも、番号が重複している場合は読み込めなくなります。
+詳細は[特殊制約のID](../user_guide/special_constraints.md)を参照してください。
+
 ### 🛠 HiGHSの双対値を制約IDへ正しく対応付ける ([#1300](https://github.com/Jij-Inc/ommx/pull/1300))
 
 HiGHSの各行とOMMX制約IDの対応を保持します。IDが飛び番の場合や、実行可能な定数制約を

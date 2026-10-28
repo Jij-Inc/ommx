@@ -261,6 +261,7 @@ borrow until application, so neither rollback nor an Instance clone is needed.
 The transformation validates the current rows independently; it does not
 require them to originate from {meth}`~ommx.Instance.convert_sos1_to_constraints`.
 
+(constraint-numbering)=
 ## Unique constraint numbers within an instance
 
 All regular, Indicator, OneHot, and SOS1 constraints in an instance share one
