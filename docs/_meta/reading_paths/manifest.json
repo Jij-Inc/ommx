@@ -259,7 +259,7 @@
     {
       "id": "solution.extract",
       "label": "nameとsubscriptsで変数値を抽出する",
-      "owner": "G4S.extract",
+      "owner": "P14",
       "requires": [
         "solution.read",
         "variables.metadata"
@@ -268,7 +268,7 @@
       "aliases": [
         "extract_decision_variables"
       ],
-      "scope": ""
+      "scope": "Solutionの変数値をname・subscriptsで辞書化し、IDによる識別との違い、tupleキー、名前なしの除外・重複時のエラー、DataFrameとの使い分けを理解する。別Instanceへの再入力やSampleSet全般の習得は含めない。"
     },
     {
       "id": "feasibility.basic",
@@ -380,7 +380,7 @@
         "NamedFunction",
         "named_functions"
       ],
-      "scope": ""
+      "scope": "目的関数・制約とは別に、候補ごとの指標をInstanceへ保持できることを理解する。登録・結果抽出や省略変数の値の解釈は各How-to節で別に扱い、Guideのリンクだけから習得を付与しない。"
     },
     {
       "id": "variables.roles",
@@ -1300,6 +1300,120 @@
         "model export"
       ],
       "scope": "二次以下の多項式・変数種の受付範囲、特殊制約の事前lowering、ラベル・removed・NamedFunction等の情報損失を理解して保存形式を選ぶ。二次拡張に対応した外部ツールでも係数の解釈が一致するとは限らず、取り込み後の式を確認する。厳密な出力・係数契約、lowering操作やArtifactの保存手順の習得までは付与しない。"
+    },
+    {
+      "id": "expression.labels",
+      "label": "Instanceのラベルを使って式を表示する",
+      "owner": "G2.display",
+      "requires": [
+        "expression.basics",
+        "variables.metadata"
+      ],
+      "external": false,
+      "aliases": [
+        "format_function",
+        "display_function"
+      ],
+      "scope": "Function単体はID、Instance経由では名前・添字で式を読む。文字列とNotebook用プレビューを区別し、表示上限の引数・既定値はAPI Referenceへ送る。表示先InstanceのIDを使い、名前照合はしない。プレビューは省略され得るため、全体の文字列を得る操作と区別する。"
+    },
+    {
+      "id": "named.evaluate",
+      "label": "名前付き評価式を登録しSolutionから値を取得する",
+      "owner": "P13",
+      "requires": [
+        "named.outputs",
+        "solution.read"
+      ],
+      "external": false,
+      "aliases": [
+        "named_functions_df",
+        "extract_named_functions"
+      ],
+      "scope": "自己完結した例で登録→候補評価→辞書・DataFrameで取得する。指標の登録は目的値・実行可能性の判定条件を変えない。"
+    },
+    {
+      "id": "named.samples",
+      "label": "複数候補からサンプルIDを指定して指標を取得する",
+      "owner": "P13.samples",
+      "requires": [
+        "named.evaluate",
+        "state.values"
+      ],
+      "external": false,
+      "aliases": [
+        "SampleSet.extract_named_functions"
+      ],
+      "scope": "候補IDから値の割当てへの辞書をまとめて評価し、同じ登録式の指標を取り出す。一般の候補選択・出現回数・変換後の結果の習得は付与しない。"
+    },
+    {
+      "id": "named.values",
+      "label": "評価用の式だけに使う変数の値を明示する",
+      "owner": "P13.values",
+      "requires": [
+        "named.outputs",
+        "state.values",
+        "variable.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "reporting-only variable"
+      ],
+      "scope": "現在の目的・制約に使わず固定値・依存式もないInteger変数の例で、省略時は既定値の指標になり、特定候補の指標にはその値を明示する必要を理解する。全変数kindの復元・補完規則の習得とは分ける。"
+    },
+    {
+      "id": "state.named_reuse",
+      "label": "別Instanceの名前・添字へ照合し候補を再評価する",
+      "owner": "P14.reuse",
+      "requires": [
+        "solution.extract",
+        "state.values",
+        "instance.model"
+      ],
+      "external": false,
+      "aliases": [
+        "state_from_named_values"
+      ],
+      "scope": "開発版だけの任意経路。名前照合で対象IDを得る操作と、値・実行可能性の検査を分ける。公開環境で結果抽出しただけではこの能力や実行環境を付与しない。"
+    },
+    {
+      "id": "bounds.tighten",
+      "label": "制約から導ける範囲の反映と一回更新の限界を理解する",
+      "owner": "G7.bounds",
+      "requires": [
+        "variable.basics",
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "bound tightening"
+      ],
+      "scope": "制約から導くbound更新を任意の変数固定と分ける。開始時boundを参照する一回分の操作であり、収束・完全な実行不可能性検出や実行可能性の証明を約束しない。浮動小数点境界付近の候補判定の保存は無条件に約束しない。"
+    },
+    {
+      "id": "bounds.inspect_once",
+      "label": "一回のbound更新と変更された変数を確認する",
+      "owner": "P15",
+      "requires": [
+        "bounds.tighten"
+      ],
+      "external": false,
+      "aliases": [
+        "tighten_bounds_simultaneously_once"
+      ],
+      "scope": "in-placeで一回実行し、戻り値の変更ID・新boundとInstanceの更新を読む。必要な追加呼出しは利用者が行う。厳密な対象・数値条件はAPI Referenceが所有する。"
+    },
+    {
+      "id": "sdk.development_environment",
+      "label": "Referenceと同じリビジョンの開発版SDK環境を既に持つ",
+      "owner": null,
+      "requires": [
+        "sdk.environment"
+      ],
+      "external": true,
+      "aliases": [
+        "開発版環境"
+      ],
+      "scope": "Bookの公開SDKインストールとは別に読者が用意した環境。このBook内のリンクや公開環境の導入だけから、その準備能力や実行環境があるとはみなさない。"
     }
   ],
   "pages": [
@@ -1959,7 +2073,7 @@
       ],
       "deferred": [],
       "parent_page": "G1",
-      "notes": "G1の「変数の定義域とメタデータ」節がname・subscriptsとIDを区別する。既存モデルへの書き戻しとsnapshotの違いは後段のG1.metadata-editで追跡する。",
+      "notes": "G1の「変数の定義域とメタデータ」節がname・subscriptsとIDを区別する。既存モデルへの書き戻しとsnapshotの違いは後段のG1.metadata-editで追跡する。式の表示と結果抽出への案内は、操作の習得ではない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2007,13 +2121,14 @@
           "introduces": [],
           "uses": [],
           "mentions": [
-            "solution.extract"
+            "solution.extract",
+            "expression.labels"
           ]
         }
       ],
       "deferred": [],
       "parent_page": "G1",
-      "notes": "instance-edit-metadata節。G1冒頭のモデルを使い、既存IDからAttached handleを取得してラベルを編集し、再取得で反映先を確認する。続いてdetach・DataFrameの非反映を例示する。表示・結果抽出は実在するAPIへの次の入口であり、この節の訪問だけでは習得を付与しない。",
+      "notes": "instance-edit-metadata節。G1冒頭のモデルを使い、既存IDからAttached handleを取得してラベルを編集し、再取得で反映先を確認する。続いてdetach・DataFrameの非反映を例示する。表示・結果抽出はBookの手順と実在するAPIへの次の入口であり、この節の訪問だけでは習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2064,13 +2179,15 @@
           ],
           "mentions": [
             "function.support",
-            "expression.form"
+            "expression.form",
+            "expression.labels",
+            "named.outputs"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "Instanceの変数・目的関数・制約を前提に、一つの最小例でFunction単体の数値評価と問題全体の候補評価を区別する。ここで扱うのは手元の未変換の問題と候補の実行可能性であり、変換後の結果やfeasibility viewの読み分けは教えない。演算カタログや格納表現・数値契約は必要な操作のAPI Referenceへ案内し、具体的な表現条件はR_API.functionを訪問した場合だけ追跡する。",
+      "notes": "Instanceの変数・目的関数・制約を前提に、一つの最小例でFunction単体の数値評価と問題全体の候補評価を区別する。ここで扱うのは手元の未変換の問題と候補の実行可能性であり、変換後の結果やfeasibility viewの読み分けは教えない。演算カタログや格納表現・数値契約は必要な操作のAPI Referenceへ案内し、具体的な表現条件はR_API.functionを訪問した場合だけ追跡する。 名前・添字を使った式の表示は任意のG2.display、名前付き評価式の概念はG2.namedに分け、細部のAPIカタログへ戻さない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2121,10 +2238,12 @@
     {
       "id": "G2.named",
       "title": "名前付きの評価式",
-      "slice": "I",
+      "slice": "L",
       "role": "guide-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/function.md"
+      ],
       "source_urls": [],
       "requires": [
         "expression.basics",
@@ -2144,10 +2263,12 @@
       ],
       "deferred": [],
       "parent_page": "G2",
-      "notes": "",
+      "notes": "「目的関数以外にも、候補の指標を持てる」で概念を短く説明する。登録から結果取得の実行はP13へ移し、Guide訪問だけから操作習得は付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/function.md"
+      ]
     },
     {
       "id": "G3",
@@ -2301,7 +2422,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "基本の候補評価・結果読解を先に完結させ、PR #1280の読者レビュー修正で復元/補完と変換済み問題への参照を後段へ置く。短い局所説明はG6/G8の全能力の習得を意味しない。",
+      "notes": "基本の候補評価・結果読解を先に完結させ、PR #1280の読者レビュー修正で復元/補完と変換済み問題への参照を後段へ置く。短い局所説明はG6/G8の全能力の習得を意味しない。 後処理節のP13/P14へのリンクだけから名前付き指標や抽出操作の知識を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2350,8 +2471,10 @@
       "title": "名前と添字による結果の抽出",
       "slice": "B/J",
       "role": "guide-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/solution.md"
+      ],
       "source_urls": [],
       "requires": [
         "solution.read",
@@ -2359,23 +2482,23 @@
       ],
       "sections": [
         {
-          "id": "extract",
-          "introduces": [
-            "variables.metadata",
-            "solution.extract"
-          ],
-          "uses": [
-            "solution.extract"
-          ],
-          "mentions": []
+          "id": "destinations",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "solution.extract",
+            "named.outputs"
+          ]
         }
       ],
       "deferred": [],
       "parent_page": "G4S",
-      "notes": "",
+      "notes": "「結果を後処理に使う」はP13/P14への案内だけであり、抽出操作を教えた扱いにしない。実際の自己完結した説明はP14が所有する。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/solution.md"
+      ]
     },
     {
       "id": "G4M",
@@ -2418,7 +2541,9 @@
             "constraints.lifecycle",
             "objective.views",
             "feasibility.views",
-            "evaluation.snapshot"
+            "evaluation.snapshot",
+            "named.outputs",
+            "solution.extract"
           ]
         }
       ],
@@ -2545,7 +2670,8 @@
             "penalty.choice",
             "conditioning",
             "encoding.integer",
-            "bigm.contract"
+            "bigm.contract",
+            "bounds.tighten"
           ]
         }
       ],
@@ -4749,6 +4875,343 @@
       "source_paths_existing": [
         "docs/ja/user_guide/agent_skills.md"
       ]
+    },
+    {
+      "id": "G2.display",
+      "title": "式を変数名で確認する",
+      "slice": "L",
+      "role": "guide-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/function.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "expression.basics",
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "labels",
+          "introduces": [
+            "variables.metadata",
+            "expression.labels"
+          ],
+          "uses": [
+            "expression.labels"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G2",
+      "notes": "「式を変数名で確認する」の最小例。添字付きのラベルを先に説明し、Instance経由の表示とFunction単体のID表示を対比する。ParametricInstanceへの言及は問題族を作る能力を与えない。IDによる表示文脈とプレビューの省略を局所説明し、全体は上限なしformat_functionで読む。APIは表示引数・既定値を確認する先とする。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/function.md"
+      ]
+    },
+    {
+      "id": "G7.bounds",
+      "title": "制約から導ける変数の範囲を反映する",
+      "slice": "L",
+      "role": "guide-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "variable.basics",
+        "constraint.basics"
+      ],
+      "sections": [
+        {
+          "id": "meaning",
+          "introduces": [
+            "bounds.tighten"
+          ],
+          "uses": [
+            "bounds.tighten"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G7",
+      "notes": "「制約から分かる変数の範囲を反映する」が意味・保証への入口。P15はこれを局所的にも説明するためG7全体の事前読了は不要。数式・数値条件は実在するAPIへ送る。数値境界の注意を残し、正確な数値・失敗時契約の参照先をtighten_bounds_simultaneously_once_using_constraintsにする。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
+    },
+    {
+      "id": "P13",
+      "title": "目的関数以外の指標を評価する",
+      "slice": "L",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/evaluate_named_functions.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model",
+        "variable.basics",
+        "expression.basics",
+        "state.values",
+        "evaluation.basic",
+        "solution.read",
+        "constraint.basics",
+        "sense"
+      ],
+      "sections": [
+        {
+          "id": "register-and-read",
+          "introduces": [
+            "named.outputs",
+            "named.evaluate"
+          ],
+          "uses": [
+            "named.evaluate"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "Instanceと候補評価の知識を明示し、コードの実行状態はこのページだけで完結させる。最初の登録→評価→取得を完了してから任意の複数候補・省略変数の節へ進む。辞書の空tupleとDataFrameのindex/valueは局所説明する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/evaluate_named_functions.md"
+      ]
+    },
+    {
+      "id": "P13.samples",
+      "title": "複数候補から名前付き指標を取得する",
+      "slice": "L",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/evaluate_named_functions.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "named.evaluate",
+        "state.values"
+      ],
+      "sections": [
+        {
+          "id": "samples",
+          "introduces": [
+            "named.samples"
+          ],
+          "uses": [
+            "named.samples"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P13",
+      "notes": "候補IDを先に説明してからevaluate_samplesとID付き抽出を使う。一般のSampleSetの選択規則を習得したとは扱わない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/evaluate_named_functions.md"
+      ]
+    },
+    {
+      "id": "P13.values",
+      "title": "評価式だけに現れる変数の値を明示する",
+      "slice": "L",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/evaluate_named_functions.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "named.outputs",
+        "state.values",
+        "variable.basics"
+      ],
+      "sections": [
+        {
+          "id": "explicit-values",
+          "introduces": [
+            "named.values"
+          ],
+          "uses": [
+            "named.values"
+          ],
+          "mentions": [
+            "variables.roles",
+            "variables.recovery",
+            "variables.defaults"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P13",
+      "notes": "既定値2と明示値4のInteger例と隣接説明で、特定候補の値が必要な理由を教える。全変数役割・補完規則はG6に残す。指標自体は制約でなくても、明示した変数値の定義域は候補評価で検査されることを補足する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/evaluate_named_functions.md"
+      ]
+    },
+    {
+      "id": "P14",
+      "title": "結果を名前と添字で取り出す",
+      "slice": "L",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/extract_named_values.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "sdk.environment",
+        "instance.model",
+        "variable.basics",
+        "state.values",
+        "evaluation.basic",
+        "solution.read"
+      ],
+      "sections": [
+        {
+          "id": "extract",
+          "introduces": [
+            "variables.metadata",
+            "solution.extract"
+          ],
+          "uses": [
+            "solution.extract"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "table",
+          "introduces": [],
+          "uses": [
+            "solution.extract"
+          ],
+          "mentions": [
+            "state.named_reuse"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "小さな問題・候補をこのページで構築して独立に抽出を学ぶ。tupleキーを利用直後に説明し、全名前の辞書・名前なし/重複・DataFrameへ進む。開発版再入力は任意子節であり公開環境の親経路に継承させない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/extract_named_values.md"
+      ]
+    },
+    {
+      "id": "P14.reuse",
+      "title": "別Instanceへ名前と添字で値を対応付ける",
+      "slice": "L",
+      "role": "how-to-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/extract_named_values.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "solution.extract",
+        "state.values",
+        "instance.model",
+        "sdk.development_environment"
+      ],
+      "sections": [
+        {
+          "id": "match-and-evaluate",
+          "introduces": [
+            "state.named_reuse"
+          ],
+          "uses": [
+            "state.named_reuse"
+          ],
+          "mentions": []
+        }
+      ],
+      "deferred": [],
+      "parent_page": "P14",
+      "notes": "「別のInstanceへ値を対応付ける場合」は、Referenceと同じリビジョンの開発版SDK環境を既に用意した読者への任意の参照例。公開SDK導入から実行できる経路を約束しない。IDが異なる例と新boundへの違反で照合と評価を区別する。部分入力を埋めないことと、供給した名前・添字の不明/曖昧エラーを短く説明し、正確な条件はstate_from_named_valuesへ送る。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/extract_named_values.md"
+      ]
+    },
+    {
+      "id": "P15",
+      "title": "制約から変数の上下限を絞る",
+      "slice": "L",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/tighten_bounds.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "model",
+          "introduces": [
+            "variable.basics",
+            "constraint.basics"
+          ],
+          "uses": [
+            "variable.basics",
+            "constraint.basics"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "once",
+          "introduces": [
+            "bounds.tighten",
+            "bounds.inspect_once"
+          ],
+          "uses": [
+            "bounds.inspect_once"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "limits",
+          "introduces": [],
+          "uses": [
+            "bounds.inspect_once"
+          ],
+          "mentions": [
+            "numeric.tolerance"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "上下限と通常制約を知る読者へ、自己完結した二変数例で開始時bound→一回の更新→変更結果を先に示す。二回目で更新伝播を説明するが、自動反復/収束APIを追加しない。空辞書と対象外・数値条件の読み方を後段へ置く。同じatolでも丸め・計算順序で境界付近の判定が変わる場合を局所説明する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/tighten_bounds.md"
+      ]
     }
   ],
   "routes": [
@@ -5262,6 +5725,133 @@
         "G13",
         "P16"
       ]
+    },
+    {
+      "id": "named_metrics",
+      "title": "問題と候補評価から名前付き指標を登録・取得する",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G4S",
+        "P13",
+        "P13.samples",
+        "P13.values"
+      ]
+    },
+    {
+      "id": "named_result_extraction",
+      "title": "問題と候補評価から名前・添字による後処理へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G4S",
+        "G4S.extract",
+        "P14"
+      ]
+    },
+    {
+      "id": "named_metrics_direct",
+      "title": "Instanceと評価を知る読者が指標のHow-toへ直接入る",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "expression.basics",
+        "state.values",
+        "evaluation.basic",
+        "solution.read",
+        "constraint.basics",
+        "sense"
+      ],
+      "steps": [
+        "SETUP",
+        "P13"
+      ]
+    },
+    {
+      "id": "named_values_direct",
+      "title": "評価結果を持つ読者が名前・添字の抽出へ直接入る",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "state.values",
+        "evaluation.basic",
+        "solution.read"
+      ],
+      "steps": [
+        "SETUP",
+        "P14"
+      ]
+    },
+    {
+      "id": "labeled_function",
+      "title": "式の基本からラベルを使った表示へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G2",
+        "G2.display",
+        "G2.named"
+      ]
+    },
+    {
+      "id": "tighten_bounds_direct",
+      "title": "SDK導入から一回のbound更新へ直接進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "P15"
+      ]
+    },
+    {
+      "id": "tighten_bounds_guide",
+      "title": "変換の意味からbound更新へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G4S",
+        "G7",
+        "G7.bounds",
+        "P15"
+      ]
+    },
+    {
+      "id": "named_values_development",
+      "title": "既に開発版環境がある読者が別Instanceへ対応付けて評価する",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment",
+        "sdk.development_environment"
+      ],
+      "steps": [
+        "G1",
+        "G4S",
+        "P14",
+        "P14.reuse"
+      ]
     }
   ],
   "environment_requirements": [
@@ -5292,6 +5882,18 @@
     {
       "page": "P16",
       "observed": "SDK b7のみ。小さなモデルを本文で作る。Adapter・ソルバー・ネットワークは出力例に不要。外部ツール自身のMPS拡張対応は受け手側で確認する。"
+    },
+    {
+      "page": "P13",
+      "observed": "公開SDKの共通環境のみ。登録・単候補/複数候補の指標取得とIntegerの省略/明示値例。"
+    },
+    {
+      "page": "P14",
+      "observed": "通常の3セルは公開SDK環境。任意子節P14.reuseのstate_from_named_valuesは開発版SDKだけで実行する別範囲。"
+    },
+    {
+      "page": "P15",
+      "observed": "公開SDKの共通環境だけで自己完結する。一回分の更新を明示的に呼び、一般presolve統合を前提にしない。"
     }
   ],
   "review_notes": [
