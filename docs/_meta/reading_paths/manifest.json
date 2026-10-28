@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、および英語Book入口の編集契約。英語Bookの各章とQamomileは後続。API全項目の網羅ではない。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstanceの編集契約。英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -24,6 +24,30 @@
         "HOME_EN"
       ],
       "note": "2次案に沿ったREADMEと日英Book冒頭の改訂。目的・現在の採用価値・利用者の判断を導入する。既存ページ全体の所有権・主目次・Referenceへの移管は後続の変更で扱う。baselineは旧契約の設計入力として保持し、今回の本文照合記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "8b620d20ac6222a73274ccbb2d451d88db698143",
+      "target_revision": "codex/instance-api-reference",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "R_API.instance",
+        "R_API.instance.model",
+        "R_API.instance.names",
+        "R_API.instance.metadata-edit",
+        "G2",
+        "G2.display",
+        "G6",
+        "P3",
+        "DEV_A",
+        "P13",
+        "P14"
+      ],
+      "untracked_source_paths": [
+        "docs/en/user_guide/solution.md"
+      ],
+      "note": "更新された2次案の最初の移管。日英Instance Guideを削除し、基本概念と実行例を共有APIへ統合する。旧G1の概念IDは保持し所有先・代表経路を改訂。英語Solutionは前節への暗黙依存を除去しevaluateのAPIへリンクする限定変更で、同章全体の契約監査は対象外。歴史的baselineを変更せず本文照合記録はチャットに残す。"
     }
   ],
   "interpretation": {
@@ -108,7 +132,7 @@
     {
       "id": "instance.model",
       "label": "Instanceが表す問題と共通の意味",
-      "owner": "G1",
+      "owner": "R_API.instance",
       "requires": [
         "ext.math"
       ],
@@ -121,7 +145,7 @@
     {
       "id": "variable.basics",
       "label": "変数ID・種類・定義域を読む",
-      "owner": "G1",
+      "owner": "R_API.instance",
       "requires": [
         "ext.math"
       ],
@@ -138,7 +162,7 @@
     {
       "id": "variables.metadata",
       "label": "変数のname・subscriptsとIDを区別する",
-      "owner": "G1.names",
+      "owner": "R_API.instance.names",
       "requires": [
         "variable.basics"
       ],
@@ -198,7 +222,7 @@
     {
       "id": "constraint.basics",
       "label": "通常制約の関係と充足を読む",
-      "owner": "G1",
+      "owner": "R_API.instance",
       "requires": [
         "variable.basics"
       ],
@@ -214,7 +238,7 @@
     {
       "id": "sense",
       "label": "最小化と最大化の向きを読む",
-      "owner": "G1",
+      "owner": "R_API.instance",
       "requires": [
         "ext.math"
       ],
@@ -231,7 +255,7 @@
     {
       "id": "instance.build",
       "label": "変数・目的・制約からInstanceを構成する",
-      "owner": "G1",
+      "owner": "R_API.instance",
       "requires": [
         "instance.model",
         "variable.basics",
@@ -1292,7 +1316,7 @@
     {
       "id": "metadata.edit",
       "label": "Attached handleでメタデータを編集しsnapshot・表と区別する",
-      "owner": "G1.metadata-edit",
+      "owner": "R_API.instance.metadata-edit",
       "requires": [
         "instance.model",
         "variables.metadata",
@@ -1600,7 +1624,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。",
+      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1696,7 +1720,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。",
+      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2233,34 +2257,29 @@
       ]
     },
     {
-      "id": "G1",
-      "title": "Instanceと問題の基本モデル",
-      "slice": "B/I",
-      "role": "guide",
+      "id": "R_API.instance",
+      "title": "Instance API Reference：問題の構築・参照と評価用情報",
+      "slice": "Instance Reference migration",
+      "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/instance.md"
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/instance.md"
-      ],
+      "source_urls": [],
       "requires": [
-        "ext.math"
+        "ext.math",
+        "ext.python"
       ],
       "sections": [
         {
-          "id": "model",
+          "id": "problem-components",
           "introduces": [
             "instance.model",
-            "variable.basics",
-            "expression.basics",
-            "constraint.basics",
-            "sense",
-            "instance.build"
+            "sense"
           ],
           "uses": [
-            "instance.model",
-            "instance.build"
+            "instance.model"
           ],
           "mentions": [
             "special.indicator",
@@ -2269,35 +2288,115 @@
           ]
         },
         {
-          "id": "preview",
-          "introduces": [],
-          "uses": [],
+          "id": "build-and-evaluate",
+          "introduces": [
+            "variable.basics",
+            "expression.basics",
+            "constraint.basics",
+            "instance.build"
+          ],
+          "uses": [
+            "instance.build"
+          ],
           "mentions": [
             "state.values",
+            "evaluation.basic",
             "solution.read",
+            "optimality.limit"
+          ]
+        },
+        {
+          "id": "domains-and-constraint-access",
+          "introduces": [],
+          "uses": [
+            "variable.basics",
+            "constraint.basics"
+          ],
+          "mentions": [
+            "variables.metadata"
+          ]
+        },
+        {
+          "id": "retained-variables-and-output",
+          "introduces": [],
+          "uses": [
+            "instance.model"
+          ],
+          "mentions": [
             "variables.roles",
             "variables.recovery",
-            "variables.defaults"
+            "variables.defaults",
+            "named.outputs",
+            "constraints.lifecycle",
+            "objective.views",
+            "transformation.guarantees"
           ]
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "Instanceの構成要素として通常制約と特殊制約の両方を明示し、現在のIndicator・OneHot・SOS1だけで種類を固定しない。初例は通常制約の一例とし、constraints辞書は通常制約だけで特殊制約は別集合だと説明する。特殊制約の個別の意味・操作はG3へ送る。変数の四役割と復元・既定値の詳細はG6へ分離し、G1訪問だけでは付与しない。型・定義域を先に導入し、名前付き関数・removed・出力目的関数の除外条件は後段で局所説明する。",
+      "parent_page": "R_API",
+      "notes": "日英のInstance Guideを共有API Referenceへ統合。冒頭で構成要素とsolver非依存の意味を説明し、構築→候補評価の完全例、明示IDの構築例へ進む。domain、全familyで一意な制約番号と型付きID、Attachedとsnapshot、保持変数と出力用情報を同じAPIページで説明する。メタデータの意味と編集は下位契約で追跡する。候補評価や変換保証への短い説明・リンクから各詳細全体の習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/instance.md"
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
-      "id": "G1.names",
-      "title": "変数の名前と添字",
-      "slice": "B/I",
-      "role": "guide-section",
+      "id": "R_API.instance.model",
+      "title": "Instance APIの共通問題モデル（説明のみ）",
+      "slice": "Instance Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/instance.md"
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "components-and-identity",
+          "introduces": [
+            "instance.model",
+            "variable.basics",
+            "constraint.basics",
+            "sense"
+          ],
+          "uses": [
+            "instance.model"
+          ],
+          "mentions": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1"
+          ]
+        }
+      ],
+      "deferred": [
+        "instance.build"
+      ],
+      "parent_page": "R_API.instance",
+      "notes": "Python以外の利用者が、API冒頭の構成要素・条件とdomain/IDの説明だけを参照する部分経路。Pythonの構築・評価・編集例の実行能力は付与しない。クラスページ全体を読むR_API.instanceとは区別する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ]
+    },
+    {
+      "id": "R_API.instance.names",
+      "title": "Instance API：変数・制約のラベルとID",
+      "slice": "Instance Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -2312,26 +2411,31 @@
           "uses": [
             "variables.metadata"
           ],
-          "mentions": []
+          "mentions": [
+            "solution.extract",
+            "expression.labels"
+          ]
         }
       ],
       "deferred": [],
-      "parent_page": "G1",
-      "notes": "G1の「変数の定義域とメタデータ」節がname・subscriptsとIDを区別する。既存モデルへの書き戻しとsnapshotの違いは後段のG1.metadata-editで追跡する。式の表示と結果抽出への案内は、操作の習得ではない。",
+      "parent_page": "R_API.instance",
+      "notes": "APIクラス説明のVariable domains and modeling labels節。name・subscripts・parameters・descriptionとIDによる識別を区別する。表示と名前付き抽出へのAPIリンクだけでは操作能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/instance.md"
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
-      "id": "G1.metadata-edit",
-      "title": "既存モデルの変数・制約に名前や説明を付ける",
-      "slice": "M",
-      "role": "guide-section",
+      "id": "R_API.instance.metadata-edit",
+      "title": "Instance API：Attached handleでラベルを編集する",
+      "slice": "Instance Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/instance.md"
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -2343,40 +2447,25 @@
       ],
       "sections": [
         {
-          "id": "attached-edit",
+          "id": "attached-edit-and-independent-snapshots",
           "introduces": [
             "metadata.edit"
           ],
           "uses": [
-            "variables.metadata"
-          ],
-          "mentions": []
-        },
-        {
-          "id": "snapshot-and-table",
-          "introduces": [],
-          "uses": [
+            "variables.metadata",
             "metadata.edit"
           ],
           "mentions": []
-        },
-        {
-          "id": "next-steps",
-          "introduces": [],
-          "uses": [],
-          "mentions": [
-            "solution.extract",
-            "expression.labels"
-          ]
         }
       ],
       "deferred": [],
-      "parent_page": "G1",
-      "notes": "instance-edit-metadata節。G1冒頭のモデルを使い、既存IDからAttached handleを取得してラベルを編集し、再取得で反映先を確認する。続いてdetach・DataFrameの非反映を例示する。表示・結果抽出はBookの手順と実在するAPIへの次の入口であり、この節の訪問だけでは習得を付与しない。",
+      "parent_page": "R_API.instance",
+      "notes": "APIクラス説明のEdit the Instance through attached handles節。節内でモデルを用意し、変数・制約のAttached handleで名前と説明を変更して再取得で確認する。続くdetach・DataFrameの例はこの節内のモデルを使い、編集が書き戻されないことを示す。Guideへの参照なしで手順が完結する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/instance.md"
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
@@ -5855,7 +5944,7 @@
       ],
       "steps": [
         "SETUP",
-        "G1",
+        "R_API.instance",
         "G4S",
         "G9",
         "G11",
@@ -5871,7 +5960,7 @@
       ],
       "steps": [
         "SETUP.common",
-        "G1",
+        "R_API.instance.model",
         "G4S",
         "R_RUST"
       ]
@@ -5884,7 +5973,7 @@
       ],
       "steps": [
         "SETUP.common",
-        "G1",
+        "R_API.instance.model",
         "G4S",
         "R_WIRE",
         "DEV_X"
@@ -5899,7 +5988,7 @@
       ],
       "steps": [
         "SETUP",
-        "G1",
+        "R_API.instance",
         "G4S",
         "G6",
         "G7",
@@ -5916,7 +6005,7 @@
       ],
       "steps": [
         "SETUP",
-        "G1",
+        "R_API.instance",
         "G2",
         "G5"
       ]
@@ -5930,7 +6019,7 @@
       ],
       "steps": [
         "SETUP",
-        "G1",
+        "R_API.instance",
         "G2",
         "G2.support",
         "R_API.function"
@@ -5969,9 +6058,9 @@
       ],
       "steps": [
         "SETUP",
-        "G1",
-        "G1.names",
-        "G1.metadata-edit"
+        "R_API.instance",
+        "R_API.instance.names",
+        "R_API.instance.metadata-edit"
       ]
     },
     {
@@ -6021,7 +6110,7 @@
       ],
       "steps": [
         "SETUP",
-        "G1",
+        "R_API.instance",
         "G4S",
         "P13",
         "P13.samples",
@@ -6037,7 +6126,7 @@
       ],
       "steps": [
         "SETUP",
-        "G1",
+        "R_API.instance",
         "G4S",
         "G4S.extract",
         "P14"
@@ -6089,7 +6178,7 @@
       ],
       "steps": [
         "SETUP",
-        "G1",
+        "R_API.instance",
         "G2",
         "G2.display",
         "G2.named"
@@ -6116,7 +6205,7 @@
       ],
       "steps": [
         "SETUP",
-        "G1",
+        "R_API.instance",
         "G4S",
         "G7",
         "G7.bounds",
@@ -6133,10 +6222,21 @@
         "sdk.development_environment"
       ],
       "steps": [
-        "G1",
+        "R_API.instance",
         "G4S",
         "P14",
         "P14.reuse"
+      ]
+    },
+    {
+      "id": "instance_api_direct",
+      "title": "日英のInstance入口またはAPI直接入口から基本モデルを読む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.instance"
       ]
     }
   ],

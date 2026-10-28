@@ -209,7 +209,7 @@ MPS ファイルには、変数を整数として指定し、上下限を省略�
 変数の値が上下限の範囲内にあるかどうかを、不等式制約と同じ絶対許容誤差の規則で
 判定するようにしました。範囲内で許される整数値・バイナリ値を求めるときにも同じ規則を使います。
 境界付近の値では、以前のプレリリースと判定が変わる場合があります。
-詳しい規則は [変数の上下限の評価](../user_guide/instance.md)を参照してください。
+詳しい規則は{meth}`~ommx.Bound.contains`を参照してください。
 
 ### 🛠 変数の種類を列挙型に統一 ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
 
@@ -531,7 +531,7 @@ rate = instance.new_semi_continuous("rate", lower=0.5, upper=4)
 `floor(upper + atol)` へ正規化します。正規化後の区間に整数がない場合、`new_integer` は
 `ValueError` を返し、`new_semi_integer` はゼロの選択肢を `[0, 0]` として保持します。
 逐次modeling workflowの詳細は
-[Instance user guide](../user_guide/instance.md) を参照してください。
+{class}`~ommx.Instance`のAPI Referenceを参照してください。
 
 各constructorは決定変数の定義全体を検証してから、rowとmodeling labelをまとめて
 {class}`~ommx.Instance` へ追加します。boundまたはtoleranceが不正な場合や、既存の
@@ -867,7 +867,7 @@ instance.objective = x + y
 instance.add_constraint(x - y == 1, "c1")
 ```
 
-`new_binary` と `add_constraint` には、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を指定できます。詳しい workflow は [Instance の User Guide](../user_guide/instance.md) を参照してください。
+`new_binary` と `add_constraint` には、`name`、`subscripts`、`parameters`、`description` からなる ModelingLabel 全体を指定できます。詳しい workflow は{class}`~ommx.Instance`のAPI Referenceを参照してください。
 決定変数 ID の最大値がすでに `2**64 - 1` の場合、`new_binary` は Rust の panic を伝播せず `ValueError` を送出します。
 
 ## 3.0.0 Beta 1

@@ -222,7 +222,7 @@ Checking whether a value is within its variable bounds now uses the same
 absolute-tolerance rule as checking an inequality constraint. This also applies
 when determining the allowed integer or binary values within a bound.
 Results close to a bound may differ from earlier prereleases. See
-[bound evaluation](../user_guide/instance.md) for the exact rules.
+{meth}`~ommx.Bound.contains` for the exact rules.
 
 ### 🛠 Use enums consistently for variable kinds ([#1196](https://github.com/Jij-Inc/ommx/pull/1196))
 
@@ -342,8 +342,8 @@ Only supported linear constraints are used. Nonlinear constraints, composed
 expressions, special constraints, and linear constraints with more than
 `max_terms` variable terms (default: 32) are skipped. Numerical rounding can
 affect feasibility near tolerance boundaries. See
-{ref}`Bound tightening <simultaneous-bound-tightening>` for supported variable
-types and tolerance behavior.
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`
+for supported variable types and tolerance behavior.
 
 ### 🆕 Read published QPLIB solutions ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
 
@@ -562,8 +562,8 @@ current default returned by {func}`~ommx.get_default_atol`. For these two
 methods, a finite lower endpoint is normalized to `ceil(lower - atol)` and a
 finite upper endpoint to `floor(upper + atol)`. If the normalized interval has
 no integer, `new_integer` raises `ValueError`, while `new_semi_integer` retains
-its zero alternative as `[0, 0]`. See the [Instance user
-guide](../user_guide/instance.md) for the incremental workflow.
+its zero alternative as `[0, 0]`. See the {class}`~ommx.Instance`
+API Reference for the incremental workflow.
 
 Each constructor validates the complete variable definition before committing
 the row and modeling label together to the {class}`~ommx.Instance`. An invalid
@@ -927,7 +927,7 @@ instance.add_constraint(x - y == 1, "c1")
 
 `new_binary` and `add_constraint` accept the complete modeling label: `name`,
 `subscripts`, `parameters`, and `description`. See the
-[Instance user guide](../user_guide/instance.md) for the complete workflow.
+{class}`~ommx.Instance` API Reference for the complete workflow.
 If the maximum decision-variable ID is already `2**64 - 1`, `new_binary`
 raises `ValueError` instead of propagating a Rust panic.
 

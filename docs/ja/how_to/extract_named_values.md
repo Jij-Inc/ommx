@@ -21,7 +21,7 @@ kernelspec:
 小さなInstanceと候補をこのページだけで作ります。AdapterやTSPの実行結果は使いません。
 既にSolutionを持っている場合も、抽出方法は同じです。
 
-[Instance](../user_guide/instance.md)と、候補を評価して[Solution](../user_guide/solution.md)を得る操作を知っている読者向けです。名前・添字による抽出は、このページで説明します。
+{class}`~ommx.Instance`と、候補を評価して[Solution](../user_guide/solution.md)を得る操作を知っている読者向けです。名前・添字による抽出は、このページで説明します。
 
 ## 一つの名前に対応する値を取り出す
 

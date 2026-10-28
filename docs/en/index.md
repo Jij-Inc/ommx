@@ -50,7 +50,7 @@ What a transformation preserves depends on the operation. Some express the same 
 
 Implementing preprocessing and transformations against a common representation lets modeling tools and solving methods reuse them. A new method can connect its inputs and outputs to that representation and benefit from the techniques already available. This is why OMMX develops both data exchange and shared processing of that data.
 
-Today, OMMX supplies specific operations and policies for selecting supported transformations and evaluating candidates. For example, it can {ref}`tighten variable bounds using constraints <simultaneous-bound-tightening>`, but this operation performs one update; it does not automatically optimize an entire preprocessing workflow.
+Today, OMMX supplies specific operations and policies for selecting supported transformations and evaluating candidates. For example, it can {meth}`tighten variable bounds using constraints <ommx.Instance.tighten_bounds_simultaneously_once>`, but this operation performs one update; it does not automatically optimize an entire preprocessing workflow.
 
 The development direction is to combine these techniques and select or repeat them according to a problem's structure. Accumulating both individual techniques and the knowledge of when to apply them should let the shared foundation take on more of the preparation that people perform manually today.
 
@@ -60,10 +60,10 @@ The development direction is to combine these techniques and select or repeat th
 |---|---|---|
 | Solve a problem with a solver | [Solve with an OMMX Adapter](./tutorial/solve_with_ommx_adapter.md) | Create an Instance, solve it, and read the result |
 | Evaluate a candidate you already have | [Solution](./user_guide/solution.md) | Evaluate variable values against a problem and read objective and feasibility results |
-| Understand the problem representation | [Instance](./user_guide/instance.md) | Describe variables, objectives, and constraints |
+| Understand the problem representation | {class}`~ommx.Instance` | Describe variables, objectives, and constraints |
 | Use special constraints | [Special Constraints](./user_guide/special_constraints.md) | Understand Indicator, OneHot, and SOS1 constraints and their solver integration |
 | Convert constraints for a different backend | [Adapter Input Classes and Explicit Constraint Lowering](./user_guide/capability_model.md) | Distinguish input requirements from conversion and inspect conversion history |
-| Tighten variable bounds from constraints | {ref}`Bound tightening <simultaneous-bound-tightening>` | Perform one update and inspect the changed bounds |
+| Tighten variable bounds from constraints | {meth}`Bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>` | Perform one update and inspect the changed bounds |
 | Compare multiple candidates | [SampleSet](./user_guide/sample_set.md) | Read sample evaluations and select among the candidates obtained |
 | Sample a QUBO with OpenJij | [TSP sampling example](./tutorial/tsp_sampling_with_openjij_adapter) | Follow a QUBO sampling application and inspect its results |
 | Obtain existing problems | [MIPLIB](./tutorial/download_miplib_instance.md) or [QPLIB](./tutorial/download_qplib_instance.md) | Download a problem as an OMMX Instance |
@@ -131,7 +131,6 @@ user_guide/supported_ommx_adapters
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
 user_guide/function
-user_guide/instance
 user_guide/parametric_instance
 user_guide/solution
 user_guide/sample_set
