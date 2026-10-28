@@ -43,7 +43,7 @@ backend用の係数への整形と、問題そのものの変換も分けて扱�
 
 ## 版を合わせて実装する
 
-[Reference](../reference/index.md)にPython/Rust API、Message、Artifact、Codec、Adapterの
+[Reference](../api/index)にPython/Rust API、Message、Artifact、Codec、Adapterの
 固定版の参照先をまとめています。Python `3.0.0b7`とRust `3.0.0-beta.7`は独立した版です。
 wire schemaの版もSDKの版ではありません。公開版を対象にする実装で、根拠を示さずに
 `main`の追加APIへ依存しないでください。

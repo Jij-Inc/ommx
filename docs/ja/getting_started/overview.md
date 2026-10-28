@@ -48,4 +48,4 @@ Experimentを追加できます。
 - Pythonで使い始める：[インストール](install.md)から、目的に合うTutorialやHow-toへ。
 - Rustや別の言語・ツールを接続する：[連携のDeveloper Guide](../developer_guide/integration.md)から
   共通概念と版の合ったAPI・仕様へ。Python Tutorialは前提ではありません。
-- 操作の厳密な条件を調べる：[Reference](../reference/index.md)へ。
+- 操作の厳密な条件を調べる：[Reference](../api/index)へ。

@@ -4237,7 +4237,7 @@
     },
     {
       "id": "R_API",
-      "title": "Python API Referenceの入口",
+      "title": "ReferenceとPython SDK APIの入口",
       "slice": "A/K",
       "role": "reference",
       "status": "existing",
@@ -4264,7 +4264,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "Referenceへのリンクだけで概念を既習にしない。個別APIは必要なsectionへ粒度を下げる。",
+      "notes": "Referenceへのリンクだけで概念を既習にしない。個別APIは必要なsectionへ粒度を下げる。 Reference一覧はdocs/api/index.rstへ集約し、Python SDK API・Rust API・形式仕様・連携契約を区別して案内する。別のreference/indexは置かない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -4354,7 +4354,7 @@
       "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/reference/index.md"
+        "docs/api/index.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -4385,7 +4385,7 @@
       "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/reference/index.md"
+        "docs/api/index.rst"
       ],
       "source_urls": [
         "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/proto/ommx/v1/instance.proto"

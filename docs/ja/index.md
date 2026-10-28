@@ -184,7 +184,6 @@ developer_guide/integration
 :maxdepth: 2
 :hidden:
 
-reference/index
 api/index
 ```
 
