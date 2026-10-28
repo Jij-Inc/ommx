@@ -48,6 +48,7 @@ assert solution.objective == 1
 | 変換後の結果を解釈する | [変換後の問題とRemoved constraints](./user_guide/removed_constraints.md) | activeな問題と、元の条件を使った評価の違い |
 | 複数の候補を比較する | [SampleSet](./user_guide/sample_set.md) | サンプルごとの評価と、得られた候補の中からの選択 |
 | 既存の問題を入手する | [既存の問題をInstanceとして読み込む](./how_to/load_existing_instance.md) | MIPLIB/QPLIBや手元のファイルから問題を読み込む |
+| 外部ツールへモデルを渡す | [InstanceをMPSファイルで出力する](./how_to/export_mps.md) | 出力できるモデルと、OMMXとして保存する場合との違い |
 | 実験を記録・比較する | [実験管理Tutorial](./tutorial/experiment_management) | 条件と結果を対応づけた記録 |
 | 問題や結果を保存・共有する | [Artifact共有Tutorial](./tutorial/share_in_ommx_artifact.md) | メタデータとともに受け渡す |
 
@@ -130,6 +131,7 @@ how_to/compare_adapters
 how_to/transform_instance_without_solver
 how_to/sample_with_openjij_adapter
 how_to/load_existing_instance
+how_to/export_mps
 how_to/continue_experiment
 how_to/attach_experiment_data
 how_to/share_artifact_registry
