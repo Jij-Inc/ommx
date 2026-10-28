@@ -76,7 +76,7 @@ assert solution.objective == 1
 | 実験を記録・比較する | [実験管理Tutorial](./tutorial/experiment_management) | 条件と結果を対応づけた記録 |
 | 問題や結果を保存・共有する | [Artifact共有Tutorial](./tutorial/share_in_ommx_artifact.md) | メタデータとともに受け渡す |
 
-このBookでは、何ができるか、なぜ・いつ使うか、何を選び、結果をどう読むかを説明します。小さな例で意味をつかみ、実装に必要な詳しい呼び出し方や引数・前提条件・保証は[API Reference](./api/index.rst)で確認してください。全ページを順に読む必要はありません。
+このBookでは、何ができるか、なぜ・いつ使うか、何を選び、結果をどう読むかを説明します。小さな例で意味をつかみ、実装に必要な詳しい呼び出し方や引数・前提条件・保証は{doc}`API Reference <api/index>`で確認してください。全ページを順に読む必要はありません。
 
 問題と候補の値がすでにある人は、[候補評価のTutorial](./tutorial/evaluate_existing_candidate)から始められます。問題の構築や、以下のAdapter Tutorialの実行は前提ではありません。
 

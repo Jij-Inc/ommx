@@ -44,7 +44,7 @@ For example, the requirement to select exactly one of three binary variables can
 
 Which structures can remain explicit depends on the solving method. For supported models, the [PySCIPOpt Adapter passes Indicator and SOS1 constraints to SCIP](./user_guide/special_constraints.md). When their conversion conditions, including variable-domain and bound requirements, are met, they can instead be [lowered to regular constraints](./user_guide/capability_model.md) for a backend such as HiGHS, provided the resulting problem meets that adapter's input requirements. Your transformation policy determines which conversions are permitted.
 
-What a transformation preserves depends on the operation. Some express the same condition in another form; others change the conditions imposed or the objective being compared. Feasibility, objective values, and optimality before and after a transformation are distinct guarantees. The [constraint-lowering guide](./user_guide/capability_model.md) explains supported conversions and their retained history; individual operations' conditions and guarantees belong to the [API Reference](./api/index.rst).
+What a transformation preserves depends on the operation. Some express the same condition in another form; others change the conditions imposed or the objective being compared. Feasibility, objective values, and optimality before and after a transformation are distinct guarantees. The [constraint-lowering guide](./user_guide/capability_model.md) explains supported conversions and their retained history; individual operations' conditions and guarantees belong to the {doc}`API Reference <api/index>`.
 
 ## Accumulate transformation techniques on a common representation
 
@@ -71,7 +71,7 @@ The development direction is to combine these techniques and select or repeat th
 | Save and share problems and results | [Sharing an Artifact](./tutorial/share_in_ommx_artifact.md) | Package data together with metadata |
 | Connect your own solving tool | [Implement an Adapter](./tutorial/implement_adapter.md) | Translate backend inputs and outputs through the common adapter interface |
 
-This Book explains what OMMX can do, why and when to use it, what to choose, and how to interpret results. Use small examples to understand the meaning, then consult the [API Reference](./api/index.rst) for detailed calls, arguments, preconditions, and guarantees. You do not need to read every page in order.
+This Book explains what OMMX can do, why and when to use it, what to choose, and how to interpret results. Use small examples to understand the meaning, then consult the {doc}`API Reference <api/index>` for detailed calls, arguments, preconditions, and guarantees. You do not need to read every page in order.
 
 If you already have a problem and candidate values, you can begin with [candidate evaluation](./user_guide/solution.md). Running an adapter tutorial is not a prerequisite.
 
