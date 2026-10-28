@@ -6,85 +6,50 @@
 [![Discord-JP](https://img.shields.io/badge/Discord-日本語-default?logo=Discord)](https://discord.gg/CPd9ZsxtR5)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Jij-Inc/ommx)
 
-Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers mathematical programming and optimization developers and reserchers.
+OMMX (Open Mathematical prograMming eXchange) is building a shared foundation for mathematical optimization: a common representation of problems and candidates, with reusable preprocessing, transformations, and evaluation in Python and Rust.
 
-# Tutorial
+Optimization techniques are often implemented inside a particular solver or repeated in each tool integration. OMMX aims to make those techniques reusable across modeling tools and solving methods. A new method should be able to build on accumulated problem-processing techniques, while improvements to those techniques should benefit the tools already using them.
 
-## English
+## Why use OMMX?
 
-| Title | Docs |
-|:------|:-----|
-| Solving Optimization Problems with OMMX Adapter | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/solve_with_ommx_adapter.html) |
-| Sampling from QUBO with OMMX Adapter | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/tsp_sampling_with_openjij_adapter.html) |
-| Comparing Results from Multiple Adapters | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/switching_adapters.html) |
-| Recording and Sharing Experiments | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/experiment_management.html) |
-| Sharing Various Types of Data in an OMMX Artifact | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/share_in_ommx_artifact.html) |
-| Downloading a MIPLIB Instance | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/download_miplib_instance.html) |
-| Implementing an OMMX Adapter | [![Docs](https://img.shields.io/badge/Docs-English-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html) |
+Use OMMX when you want to reuse problem processing as you change models, solving methods, or the source of candidate solutions. The current v3 development line provides:
 
-## 日本語
+- **Transform a shared problem representation.** Apply supported operations such as integer encoding, special-constraint lowering, and bound tightening without implementing them separately for each solver integration.
+- **Evaluate candidates independently of how they were obtained.** Compute objective values and constraint satisfaction for values from a solver, a heuristic, or your own code. Reconstruct recorded fixed and dependent variable values to interpret results after transformations.
+- **Connect to solvers and samplers through adapters.** Adapters translate supported problem representations into backend inputs and return results in OMMX's common model.
+- **Keep problems and results available for later use.** Optional Artifacts package data with metadata; Experiments record trials, settings, and results for comparison and sharing.
 
-| タイトル | Docs |
-|:------|:-----|
-| PySCIPOpt Adapterで0-1ナップサック問題を解く | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/solve_with_ommx_adapter.html) |
-| PySCIPOpt Adapterで特殊制約をそのまま解く | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/solve_special_constraints_with_pyscipopt_adapter.html) |
-| Adapter向けにInstanceを準備する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/prepare_instance_for_adapter.html) |
-| 既存の問題と候補解を評価する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/evaluate_existing_candidate.html) |
-| OMMX AdapterでQUBOからサンプリングする | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/tsp_sampling_with_openjij_adapter.html) |
-| 実験を記録し共有する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/experiment_management.html) |
-| 様々なデータをOMMX Artifact形式で共有する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/tutorial/share_in_ommx_artifact.html) |
+For example, a requirement that at most one variable is nonzero can remain an explicit SOS1 constraint in OMMX. A supporting adapter can pass it to a solver that handles SOS1 directly. For another solver, OMMX can convert it into ordinary constraints when the variable domains and finite bounds meet the conversion's requirements. Keeping this structure lets you choose when to convert it and reuse the conversion across integrations.
 
-### 操作ガイド・開発者向け
+You still choose the mathematical model, solving method, and transformation policy, including any penalty weights. Each transformation has its own applicability conditions and guarantees: recovering variable values does not establish feasibility, and evaluating a feasible candidate does not prove optimality. The Book explains these choices; the API Reference specifies the individual operations.
 
-| タイトル | Docs |
-|:------|:-----|
-| 既存の問題をInstanceとして読み込む | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/how_to/load_existing_instance.html) |
-| Preparationで変換する制約族を選ぶ | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/how_to/customize_preparation.html) |
-| 複数のAdapterで結果を比較する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/how_to/compare_adapters.html) |
-| OMMX Adapterを実装する | [![Docs](https://img.shields.io/badge/Docs-日本語-blue)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/developer_guide/adapter.html) |
+The longer-term goal is to select and combine preprocessing and transformations so that more of today's manual problem preparation can be delegated to this shared foundation. The current implementation supplies specific operations and preparation policies; general automatic selection of transformation sequences remains a development direction.
 
-# SDK
+## Find your next step
 
-[![CodSpeed Badge](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/Jij-Inc/ommx?utm_source=badge)
+The **Book** explains OMMX's concepts, capabilities, and choices, with examples you can follow independently. The **API Reference** provides detailed calls, conditions, and implementation recipes.
 
-See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
+| Purpose | Start here |
+|:--------|:-----------|
+| Understand OMMX and explore its capabilities | [English Book](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/) · [日本語Book](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/) |
+| Choose a solver or sampler integration | [Supported Adapters](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/supported_ommx_adapters.html) |
+| Install the Python SDK and an optional adapter | [Installation guide (日本語)](https://jij-inc-ommx.readthedocs-hosted.com/ja/latest/getting_started/install.html) |
+| Inspect and exchange saved data from the command line | [OMMX CLI](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/cli.html) |
+
+This repository and the `latest` Book document v3 development, including features that may not yet be in a published package. Follow the versioned installation instructions and [release notes](https://github.com/Jij-Inc/ommx/releases) for the capabilities available in your environment. Rust and Python SDK versions are managed independently.
 
 | SDK | Package | API Reference |
 |:----|:--------|:--------------|
+| Python | [![PyPI](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/) | [Python API Reference](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/api/index.html) |
 | Rust | [![crates.io](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | [![docs.rs](https://docs.rs/ommx/badge.svg)](https://docs.rs/ommx) |
-| Rust-to-Python PyO3 bridge | [![crates.io](https://img.shields.io/crates/v/ommx-pyo3-bridge)](https://crates.io/crates/ommx-pyo3-bridge) | [![docs.rs](https://docs.rs/ommx-pyo3-bridge/badge.svg)](https://docs.rs/ommx-pyo3-bridge) |
-| Python | [![PyPI](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/) | [![Docs](https://img.shields.io/badge/API_Reference-main-blue)](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/api/index.html) |
 
-See [Supported Adapters](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/supported_ommx_adapters.html) about a complete list of supported adapters for each solver/sampler.
+## Development
 
-## CLI
+See [DEVELOPMENT.md](./DEVELOPMENT.md) to work on OMMX, or the [adapter implementation guide](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/tutorial/implement_adapter.html) to connect your own solving tool. The [Rust-to-Python PyO3 bridge](https://crates.io/crates/ommx-pyo3-bridge) has its own [API Reference](https://docs.rs/ommx-pyo3-bridge).
 
-Prebuilt v3 `ommx` CLI archives are attached to
-[Rust SDK releases](https://github.com/Jij-Inc/ommx/releases?q=rust-3.0) and can be
-installed with [`cargo-binstall`](https://github.com/cargo-bins/cargo-binstall).
-For example:
+[![CodSpeed Badge](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/Jij-Inc/ommx?utm_source=badge)
 
-```bash
-cargo binstall ommx@3.0.0-beta.6
-ommx --help
-```
-
-Use `cargo binstall ommx` to select the latest stable release. For a v3
-prerelease, specify its version explicitly.
-
-The Python SDK also includes the CLI starting with `3.0.0b8`. In a uv project
-with a compatible `ommx` dependency, run:
-
-```bash
-uv run ommx --help
-```
-
-See [Install and Run the OMMX CLI](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/cli.html)
-for installation options and release availability, then
-[Install OMMX Agent Plugins and Skills](https://jij-inc-ommx.readthedocs-hosted.com/en/latest/user_guide/agent_skills.html)
-to obtain the bundled plugin or skill.
-
-# License
+## License
 © 2024 Jij Inc.
 
 This project is licensed under either of
@@ -94,9 +59,6 @@ This project is licensed under either of
 
 at your option.
 
-# Contribution
-TBW
-
-# Acknowledgement
+## Acknowledgement
 ![BRIDGE](./BRIDGE.png)
 This work was performed for Council for Science, Technology and Innovation (CSTI), Cross-ministerial Strategic Innovation Promotion Program (SIP), "Promoting the application of advanced quantum technology platforms to social issues"(Funding agency : QST).
