@@ -1099,3 +1099,11 @@ indexing, membership, and `get` require typed IDs. IDs remain typed in returned
 values, diagnostics, provenance, and DataFrame indexes. They have no `int()` or
 integer-index conversion. `constraint_violation(id)` infers the family from its
 typed ID and has no `kind` argument. Variable and sample IDs remain integers.
+
+`extract_constraints(name)` now searches every family. On `Instance` and
+`ParametricInstance` it returns attached objects keyed by subscript tuples; on
+`Solution` and `SampleSet` it returns nonnegative violations. **Regular constraints
+now return violations instead of signed function values.** Parameters are ignored,
+as in variable extraction; duplicate subscripts across families raise `ValueError`.
+
+For signed regular values, use `solution.get_constraint_value(id)` or `row.evaluated_value`. See [name-based extraction](../user_guide/solution.md#extract-constraints-by-name).

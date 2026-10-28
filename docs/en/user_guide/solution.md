@@ -177,3 +177,46 @@ Handle additional concrete ID types explicitly when supported, and keep the
 rejecting fallback. A new family reaching an older consumer should fail; that
 is the extension contract working. Metadata-only inspection can use the common
 interface without interpreting the family's mathematical meaning.
+
+(extract-constraints-by-name)=
+## Extract constraints by name
+
+Use `extract_constraints(name)` to obtain a dictionary keyed by subscript tuples,
+just as `extract_decision_variables` groups evaluated variable values by name.
+All constraint families participate. Models return attached constraint objects;
+results return nonnegative violations.
+
+```{code-cell} ipython3
+named = Instance.minimize()
+x_named = named.new_binary("x")
+capacity = named.add_constraint(x_named - 2 <= 0, "capacity", subscripts=[0])
+
+assert named.extract_constraints("capacity")[(0,)] == capacity
+assert named.as_parametric_instance().extract_constraints("capacity")[(0,)].name == "capacity"
+
+named_solution = named.evaluate({x_named.id: 0})
+assert named_solution.extract_constraints("capacity") == {(0,): 0.0}
+named_samples = named.evaluate_samples({7: {x_named.id: 0}})
+assert named_samples.extract_constraints("capacity", 7) == {(0,): 0.0}
+```
+
+| Owner | Returned values | Scope |
+| --- | --- | --- |
+| `Instance` / `ParametricInstance` | `ConstraintView` (concrete Attached handles) | Active constraints |
+| `Solution` | `float` violations | All retained constraints, including removed rows |
+| `SampleSet` | `float` violations for the requested sample ID | All retained constraints, including removed rows |
+
+The dictionary captures the matching subscript keys at extraction time. Model
+handles still refer to their owner and support the same updates as `.constraints`.
+Names and subscripts identify matches; parameters and descriptions are ignored.
+A scalar uses `()` as its key. An unknown name raises `KeyError`; duplicate
+subscripts raise `ValueError`, even across different constraint families.
+Transformations can copy labels onto generated constraints: if a result retains
+both the source and generated rows with the same label, use typed-ID lookup in
+`.constraints` to distinguish them. `SampleSet` also rejects unknown sample IDs.
+
+For regular constraints, extraction returns the violation rather than the signed
+function value: the feasible inequality above has function value `-2` but violation
+`0`. Use `solution.get_constraint_value(id)` or the regular row's `evaluated_value`
+when the signed value is needed. Indicator violations account for activation;
+one-hot and SOS1 use their own violation metrics.

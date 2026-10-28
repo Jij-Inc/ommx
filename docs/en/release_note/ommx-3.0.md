@@ -83,6 +83,12 @@ row equality. Typed IDs support `copy` and `deepcopy`, and `.get()` preserves
 both the concrete row type and the default value's type. Invalid lookup keys
 report the required typed-ID input without exposing internal enum extraction.
 
+`extract_constraints(name)` now searches every family. On `Instance` and
+`ParametricInstance` it returns attached objects keyed by subscript tuples; on
+`Solution` and `SampleSet` it returns nonnegative violations. **Regular constraints
+now return violations instead of signed function values.** Parameters are ignored,
+as in variable extraction; duplicate subscripts across families raise `ValueError`.
+
 ### 🆕 Create states from variable names and subscripts ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 `Instance.state_from_named_values()` resolves a `NamedState` against the target

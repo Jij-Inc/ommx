@@ -1,4 +1,4 @@
-use crate::{SampledConstraint, SampledDecisionVariable};
+use crate::{SampledConstraintData, SampledDecisionVariable};
 use std::collections::BTreeMap;
 
 use super::*;
@@ -121,44 +121,51 @@ impl SampleSet {
         Ok(result)
     }
 
-    /// Extract constraint values for a given name and sample ID
+    /// Extract nonnegative constraint violations by name for one sample.
     ///
-    /// Returns a map from subscripts to values for the specified sample
+    /// Searches every family, including retained removed constraints, and returns
+    /// a mapping from subscripts to violations. Parameters and descriptions are
+    /// ignored. Regular constraints return violations, not signed function values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the sample ID or name does not exist, or matching
+    /// constraints share subscripts, including across different families.
     pub fn extract_constraints(
         &self,
         name: &str,
         sample_id: SampleID,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
-        // Collect all constraints with the given name from their context store.
-        let context = self.constraints.context();
-        let matches: Vec<(crate::ConstraintID, &SampledConstraint)> = self
-            .constraints
-            .iter()
-            .filter(|(id, _)| context.name(**id) == Some(name))
-            .map(|(id, c)| (*id, c))
-            .collect();
-        if matches.is_empty() {
-            return Err(SampleSetError::UnknownConstraintName {
-                name: name.to_string(),
-            });
-        }
+        self.ensure_sample_id(sample_id)?;
         let mut result = BTreeMap::new();
-        for (id, constraint) in &matches {
-            if !context.parameters(*id).is_empty() {
-                return Err(SampleSetError::ParameterizedConstraint);
-            }
-            let subscripts = context.subscripts(*id).to_vec();
-            let value = *constraint
-                .stage
-                .evaluated_values
-                .get(sample_id)
-                .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
-            if result.insert(subscripts.clone(), value).is_some() {
-                return Err(SampleSetError::DuplicateSubscripts {
-                    name: name.to_string(),
-                    subscripts,
-                });
-            }
+        macro_rules! collect {
+            ($collection:expr) => {
+                let collection = $collection;
+                let context = collection.context();
+                for (id, constraint) in collection.iter() {
+                    if context.name(*id) == Some(name) {
+                        let subscripts = context.subscripts(*id).to_vec();
+                        let value = constraint
+                            .violation_for(sample_id)
+                            .ok_or(SampleSetError::UnknownSampleID { id: sample_id })?;
+                        if result.insert(subscripts.clone(), value).is_some() {
+                            return Err(SampleSetError::DuplicateSubscripts {
+                                name: name.to_owned(),
+                                subscripts,
+                            });
+                        }
+                    }
+                }
+            };
+        }
+        collect!(&self.constraints);
+        collect!(&self.indicator_constraints);
+        collect!(&self.one_hot_constraints);
+        collect!(&self.sos1_constraints);
+        if result.is_empty() {
+            return Err(SampleSetError::UnknownConstraintName {
+                name: name.to_owned(),
+            });
         }
         Ok(result)
     }

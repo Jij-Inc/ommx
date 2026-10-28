@@ -400,25 +400,20 @@ impl SampleSet {
         Ok(result_dict)
     }
 
-    /// Extract constraint values for a given name and sample ID.
+    /// Extract nonnegative violations of all constraint families by name for one sample.
     ///
     /// Raises KeyError if the name or sample ID does not exist. Raises
-    /// ValueError if a matching constraint has parameters or if the same
-    /// subscript is found more than once.
-    pub fn extract_constraints<'py>(
+    /// ValueError if matching constraints share subscripts, including across families.
+    /// Parameters and descriptions are ignored. Retained removed constraints are
+    /// included. Regular constraints return violations, not signed function values.
+    fn extract_constraints(
         &self,
-        py: Python<'py>,
         name: &str,
         sample_id: u64,
-    ) -> OmmxPyResult<Bound<'py, PyDict>> {
-        let sample_id = ommx::SampleID::from(sample_id);
-        let extracted = self.inner.extract_constraints(name, sample_id)?;
-        let dict = PyDict::new(py);
-        for (subscripts, value) in extracted {
-            let key = PyTuple::new(py, &subscripts)?;
-            dict.set_item(key, value)?;
-        }
-        Ok(dict)
+    ) -> OmmxPyResult<crate::subscript_map::SubscriptMap<f64>> {
+        Ok(crate::subscript_map::SubscriptMap(
+            self.inner.extract_constraints(name, sample_id.into())?,
+        ))
     }
 
     /// Extract named function values for a given name and sample ID.

@@ -669,3 +669,10 @@ Typed IDを `isinstance` で絞ります。`constraints_df(*, kind=...)` はす�
 返り値・診断・provenance・DataFrameのインデックスも型付きIDを保持します。
 `int()` や整数インデックスへの変換はできません。`constraint_violation(id)` はIDの型から種類を判断し、
 `kind` 引数を取りません。変数IDとサンプルIDは引き続き整数です。
+
+`extract_constraints(name)`は全種類を検索します。`Instance`・`ParametricInstance`では
+添字タプルからAttachedオブジェクトへの辞書、`Solution`・`SampleSet`では違反量への辞書を
+返します。**通常制約も符号付きの式の値から非負の違反量に変わります。** 決定変数の
+抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
+
+通常制約の符号付き評価値には`solution.get_constraint_value(id)`か`row.evaluated_value`を使います。詳しくは[Solutionのガイド](../user_guide/solution.md)を参照してください。

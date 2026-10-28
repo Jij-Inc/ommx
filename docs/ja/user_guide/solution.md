@@ -178,3 +178,33 @@ for cid in instance.constraints:
 別種類に対応するときは具体的なID型の分岐を追加し、未対応種類を拒否する経路を残します。
 新しい種類を古い利用コードへ渡した場合の失敗は、この拡張契約に沿った動作です。
 数学的意味を解釈しないメタデータの表示などは、共通インターフェースで扱えます。
+
+## 名前と添字から制約を取得する
+
+`extract_constraints(name)` は、`extract_decision_variables` と同様に名前で絞り込み、添字のタプルをキーとする辞書を返します。通常制約と特殊制約の全種類が対象です。モデルからはAttachedな制約オブジェクト、評価結果からは非負の違反量を取得します。
+
+```{code-cell} ipython3
+named = Instance.minimize()
+x_named = named.new_binary("x")
+capacity = named.add_constraint(x_named - 2 <= 0, "capacity", subscripts=[0])
+
+assert named.extract_constraints("capacity")[(0,)] == capacity
+assert named.as_parametric_instance().extract_constraints("capacity")[(0,)].name == "capacity"
+
+named_solution = named.evaluate({x_named.id: 0})
+assert named_solution.extract_constraints("capacity") == {(0,): 0.0}
+named_samples = named.evaluate_samples({7: {x_named.id: 0}})
+assert named_samples.extract_constraints("capacity", 7) == {(0,): 0.0}
+```
+
+| 所有元 | 辞書の値 | 対象 |
+| --- | --- | --- |
+| `Instance` / `ParametricInstance` | `ConstraintView`（各種類のAttachedハンドル） | 有効な制約 |
+| `Solution` | 違反量の`float` | 削除済みを含む、保持されている全制約 |
+| `SampleSet` | 指定サンプルの違反量の`float` | 削除済みを含む、保持されている全制約 |
+
+辞書の添字キーは抽出時点のものです。モデルのAttachedハンドルは所有元を保持し、`.constraints`で取得した場合と同じように更新できます。検索には名前と添字だけを使い、parametersとdescriptionは無視します。添字のない制約のキーは`()`です。名前が見つからなければ`KeyError`、同じ添字が重複すれば種類をまたいでいても`ValueError`になります。
+
+変換で生成された制約が元のラベルを引き継ぐと、結果に保持された元の制約と名前・添字が重複する場合があります。その場合は`.constraints`の型付きIDで区別してください。`SampleSet`では存在しないサンプルIDも`KeyError`になります。
+
+通常制約も、式の符号付き評価値ではなく違反量を返します。上の例では式の値は`-2`ですが、満たされている不等式の違反量は`0`です。式の値が必要なら`solution.get_constraint_value(id)`か通常制約の行の`evaluated_value`を使います。indicatorの違反量は有効・無効を考慮し、one-hot・SOS1にはそれぞれの違反量を用います。

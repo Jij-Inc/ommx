@@ -214,7 +214,8 @@ macro_rules! mapping_methods {
 }
 
 #[derive(IntoPyObject)]
-enum ConstraintCollectionValue {
+// Root name-based extraction returns the same open row type as ID lookup.
+pub(crate) enum ConstraintCollectionValue {
     Regular(crate::AttachedConstraint),
     Indicator(crate::AttachedIndicatorConstraint),
     OneHot(crate::AttachedOneHotConstraint),
@@ -239,6 +240,50 @@ impl ConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.
     pub(crate) fn new(owner: ConstraintHost) -> Self {
         Self { owner }
+    }
+    /// Shared implementation of the two model roots' name-based Python mapping.
+    pub(crate) fn extract_by_name(
+        &self,
+        py: Python<'_>,
+        name: &str,
+    ) -> PyResult<crate::subscript_map::SubscriptMap<ConstraintCollectionValue>> {
+        let ids = with_model!(&self.owner, py, |root| {
+            let mut ids = std::collections::BTreeMap::new();
+            macro_rules! collect {
+                ($collection:expr) => {
+                    let collection = $collection;
+                    let context = collection.context();
+                    for id in collection.active().keys() {
+                        if context.name(*id) == Some(name) {
+                            let key = context.subscripts(*id).to_vec();
+                            if ids
+                                .insert(key.clone(), AnyConstraintID::from(*id))
+                                .is_some()
+                            {
+                                return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                                    "Duplicate subscript for constraint name {name:?}: {key:?}"
+                                )));
+                            }
+                        }
+                    }
+                };
+            }
+            collect!(root.constraint_collection());
+            collect!(root.indicator_constraint_collection());
+            collect!(root.one_hot_constraint_collection());
+            collect!(root.sos1_constraint_collection());
+            ids
+        });
+        if ids.is_empty() {
+            return Err(PyKeyError::new_err(format!(
+                "No constraint with name '{name}' found"
+            )));
+        }
+        let rows = ids
+            .into_iter()
+            .map(|(key, id)| Ok((key, self.__getitem__(py, id)?)))
+            .collect::<PyResult<_>>()?;
+        Ok(crate::subscript_map::SubscriptMap(rows))
     }
     fn ids(&self, py: Python<'_>) -> Vec<AnyConstraintID> {
         with_model!(&self.owner, py, |root| {

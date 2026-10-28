@@ -322,11 +322,12 @@ impl Solution {
         Ok(result_dict)
     }
 
-    /// Extract the values of constraints based on the `name` with `subscripts` key.
+    /// Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.
     ///
     /// Raises KeyError if no constraint has the requested name. Raises
-    /// ValueError if a matching constraint has parameters or if the same
-    /// subscript is found more than once.
+    /// ValueError if matching constraints share subscripts, including across families.
+    /// Parameters and descriptions are ignored. Retained removed constraints are
+    /// included. Regular constraints return violations, not signed function values.
     ///
     /// # Examples
     ///
@@ -343,18 +344,13 @@ impl Solution {
     /// >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
     /// >>> solution.extract_constraints("c")
     /// {(0,): 0.0, (1,): 0.0}
-    pub fn extract_constraints<'py>(
+    fn extract_constraints(
         &self,
-        py: Python<'py>,
         name: &str,
-    ) -> OmmxPyResult<Bound<'py, PyDict>> {
-        let extracted = self.inner.extract_constraints(name)?;
-        let dict = PyDict::new(py);
-        for (subscripts, value) in extracted {
-            let key_tuple = PyTuple::new(py, &subscripts)?;
-            dict.set_item(key_tuple, value)?;
-        }
-        Ok(dict)
+    ) -> OmmxPyResult<crate::subscript_map::SubscriptMap<f64>> {
+        Ok(crate::subscript_map::SubscriptMap(
+            self.inner.extract_constraints(name)?,
+        ))
     }
 
     /// Extract named functions by name with subscripts as key (returns a Python dict).

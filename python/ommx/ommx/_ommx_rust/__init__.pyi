@@ -4388,6 +4388,21 @@ class Instance:
 
         Raises {class}`KeyError` if no variable with `variable_id` exists.
         """
+    def extract_constraints(
+        self, name: builtins.str
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], ConstraintView]:
+        r"""
+        Extract active constraints of every family by name, keyed by subscript tuples.
+
+        Values are attached handles, just as in `constraints`: edits update this
+        model. The returned dictionary snapshots the matching keys; it does not
+        track later label or membership changes. Removed constraints are excluded.
+        Parameters and descriptions do not participate in matching.
+
+        Raises KeyError if no active constraint has this name, and ValueError if
+        matching constraints share subscripts, including across different families.
+        Use typed-ID lookup in `constraints` to distinguish ambiguous labels.
+        """
     def add_constraint(
         self,
         constraint: Constraint,
@@ -7733,6 +7748,21 @@ class ParametricInstance:
         Look up the {class}`~ommx.AttachedDecisionVariable` for the given
         id — a write-through handle.
         """
+    def extract_constraints(
+        self, name: builtins.str
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], ConstraintView]:
+        r"""
+        Extract active constraints of every family by name, keyed by subscript tuples.
+
+        Values are attached handles, just as in `constraints`: edits update this
+        model. The returned dictionary snapshots the matching keys; it does not
+        track later label or membership changes. Removed constraints are excluded.
+        Parameters and descriptions do not participate in matching.
+
+        Raises KeyError if no active constraint has this name, and ValueError if
+        matching constraints share subscripts, including across different families.
+        Use typed-ID lookup in `constraints` to distinguish ambiguous labels.
+        """
     def add_constraint(self, constraint: Constraint) -> AttachedConstraint:
         r"""
         Add a regular constraint to this parametric instance.
@@ -9205,13 +9235,16 @@ class SampleSet:
         >>> all_vars["y"]
         {(0,): 1.0, (1,): 1.0}
         """
-    def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
+    def extract_constraints(
+        self, name: builtins.str, sample_id: builtins.int
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], builtins.float]:
         r"""
-        Extract constraint values for a given name and sample ID.
+        Extract nonnegative violations of all constraint families by name for one sample.
 
         Raises KeyError if the name or sample ID does not exist. Raises
-        ValueError if a matching constraint has parameters or if the same
-        subscript is found more than once.
+        ValueError if matching constraints share subscripts, including across families.
+        Parameters and descriptions are ignored. Retained removed constraints are
+        included. Regular constraints return violations, not signed function values.
         """
     def extract_named_functions(
         self, name: builtins.str, sample_id: builtins.int
@@ -10239,13 +10272,16 @@ class Solution:
         >>> all_vars["y"]
         {(0,): 1.0, (1,): 1.0}
         """
-    def extract_constraints(self, name: builtins.str) -> dict:
+    def extract_constraints(
+        self, name: builtins.str
+    ) -> builtins.dict[builtins.tuple[builtins.int, ...], builtins.float]:
         r"""
-        Extract the values of constraints based on the `name` with `subscripts` key.
+        Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.
 
         Raises KeyError if no constraint has the requested name. Raises
-        ValueError if a matching constraint has parameters or if the same
-        subscript is found more than once.
+        ValueError if matching constraints share subscripts, including across families.
+        Parameters and descriptions are ignored. Retained removed constraints are
+        included. Regular constraints return violations, not signed function values.
 
         # Examples
 

@@ -997,6 +997,26 @@ impl Instance {
         ))
     }
 
+    /// Extract active constraints of every family by name, keyed by subscript tuples.
+    ///
+    /// Values are attached handles, just as in `constraints`: edits update this
+    /// model. The returned dictionary snapshots the matching keys; it does not
+    /// track later label or membership changes. Removed constraints are excluded.
+    /// Parameters and descriptions do not participate in matching.
+    ///
+    /// Raises KeyError if no active constraint has this name, and ValueError if
+    /// matching constraints share subscripts, including across different families.
+    /// Use typed-ID lookup in `constraints` to distinguish ambiguous labels.
+    fn extract_constraints(
+        slf: Bound<'_, Self>,
+        name: &str,
+    ) -> PyResult<
+        crate::subscript_map::SubscriptMap<crate::constraint_collection::ConstraintCollectionValue>,
+    > {
+        let py = slf.py();
+        Self::constraints(slf).extract_by_name(py, name)
+    }
+
     /// Live mapping of all active constraint families, keyed by typed IDs.
     /// The view retains this owner and fetches each constraint on demand.
     #[getter]

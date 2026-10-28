@@ -406,8 +406,7 @@ fn solution_error_to_pyerr(error: &ommx::SolutionError, message: String) -> PyEr
         | ommx::SolutionError::UnknownConstraintName { .. }
         | ommx::SolutionError::UnknownNamedFunctionID { .. }
         | ommx::SolutionError::UnknownNamedFunctionName { .. } => PyKeyError::new_err(message),
-        ommx::SolutionError::ParameterizedConstraint
-        | ommx::SolutionError::DuplicateSubscript { .. } => PyValueError::new_err(message),
+        ommx::SolutionError::DuplicateSubscript { .. } => PyValueError::new_err(message),
         _ => PyRuntimeError::new_err(message),
     }
 }
@@ -419,7 +418,6 @@ fn sample_set_error_to_pyerr(error: &ommx::SampleSetError, message: String) -> P
         | ommx::SampleSetError::UnknownSampleID { .. }
         | ommx::SampleSetError::UnknownNamedFunctionName { .. } => PyKeyError::new_err(message),
         ommx::SampleSetError::DuplicateSubscripts { .. }
-        | ommx::SampleSetError::ParameterizedConstraint
         | ommx::SampleSetError::NoFeasibleSolution
         | ommx::SampleSetError::NoFeasibleSolutionRelaxed => PyValueError::new_err(message),
         _ => PyRuntimeError::new_err(message),

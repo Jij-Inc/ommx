@@ -76,6 +76,11 @@ Attachedの行は所有元の同一性と型付きIDで比較し、Removedと結
 具体的な行の型と代わりの値の型を保持します。不正な検索キーへのエラーは、
 内部enumの抽出失敗を列挙せず、必要な型付きIDの指定方法を示します。
 
+`extract_constraints(name)`は全種類を検索します。`Instance`・`ParametricInstance`では
+添字タプルからAttachedオブジェクトへの辞書、`Solution`・`SampleSet`では違反量への辞書を
+返します。**通常制約も符号付きの式の値から非負の違反量に変わります。** 決定変数の
+抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
+
 ### 🆕 変数の名前と添字から State を作成 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 `Instance.state_from_named_values()` で `NamedState` を対象インスタンスの
