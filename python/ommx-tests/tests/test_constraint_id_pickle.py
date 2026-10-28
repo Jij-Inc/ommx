@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from ommx import Instance, ParametricInstance
-from test_live_constraint_collections import FAMILIES, make_model
+from test_live_constraint_collections import FAMILIES, NUMBERS, make_model
 
 
 @pytest.mark.parametrize("id_type", [family[1] for family in FAMILIES])
@@ -69,4 +69,4 @@ def test_constraint_dataframe_pickle(kind, id_type, _row_type):
         restored = pd.read_pickle(buffer)
         pd.testing.assert_frame_equal(restored, frame)
         assert type(restored.index[0]) is id_type
-        assert type(restored.at[id_type(5), "constraint_id"]) is id_type
+        assert type(restored.at[id_type(NUMBERS[id_type]), "constraint_id"]) is id_type

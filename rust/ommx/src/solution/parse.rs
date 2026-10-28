@@ -388,6 +388,12 @@ impl Parse for v2::Solution {
             .map_err(|e| ParseError::from(e).context(message, "relaxation"))?;
         let sense = parse_v2_solution_sense(self.sense, message)?;
 
+        let mut ids = crate::constraint_ids::ConstraintIds::default();
+        ids.evaluated("regular", &evaluated_constraints)
+            .and_then(|()| ids.evaluated("indicator", &evaluated_indicator_constraints))
+            .and_then(|()| ids.evaluated("one-hot", &evaluated_one_hot_constraints))
+            .and_then(|()| ids.evaluated("SOS1", &evaluated_sos1_constraints))
+            .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
         let solution = Solution {
             objective: self.objective,
             evaluated_constraints,

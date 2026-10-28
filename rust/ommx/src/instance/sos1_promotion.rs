@@ -378,10 +378,7 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
         }
 
         let survivor_count = candidates.values().filter(|entry| entry.is_ok()).count();
-        if let Err(error) = instance
-            .sos1_constraint_collection
-            .ensure_unused_id_capacity(survivor_count)
-        {
+        if let Err(error) = instance.ensure_constraint_id_capacity(survivor_count) {
             let message = error.to_string();
             let entries = candidates
                 .into_iter()
@@ -413,8 +410,11 @@ impl<'a> Sos1BigMPromotionPlan<'a> {
                 .expect("validated SOS1 bound intersections are nonempty");
         }
 
-        let first_id = (survivor_count > 0)
-            .then(|| instance.sos1_constraint_collection.unused_id().into_inner());
+        let first_id = (survivor_count > 0).then(|| {
+            instance
+                .next_constraint_number()
+                .expect("batch ID capacity was validated")
+        });
         let mut offset = 0_u64;
         let entries = candidates
             .into_iter()
@@ -1788,7 +1788,7 @@ mod tests {
         );
         let promotion = promote_one(&mut instance, &request).unwrap();
 
-        assert_eq!(promotion, Sos1ConstraintID::from(0));
+        assert_eq!(promotion, Sos1ConstraintID::from(103));
         assert_eq!(
             &instance.sos1_constraints()[&promotion].variables,
             &VariableIDSet::from([member_binary_id(), member_integer_id()])
@@ -1858,7 +1858,7 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             promotions,
-            vec![Sos1ConstraintID::from(0), Sos1ConstraintID::from(1)]
+            vec![Sos1ConstraintID::from(203), Sos1ConstraintID::from(204)]
         );
         assert!(promotions
             .iter()
@@ -2011,7 +2011,7 @@ mod tests {
                 .values()
                 .map(|result| *result.as_ref().unwrap())
                 .collect::<Vec<_>>(),
-            vec![Sos1ConstraintID::from(0), Sos1ConstraintID::from(1)]
+            vec![Sos1ConstraintID::from(203), Sos1ConstraintID::from(204)]
         );
         assert_eq!(
             promotions.keys().collect::<Vec<_>>(),
@@ -2052,7 +2052,7 @@ mod tests {
             .contains("outside the claimed formulation rows"));
         assert!(outcomes[&ConstraintID::from(103)].is_err());
         let promotion = outcomes[&ConstraintID::from(202)].as_ref().unwrap();
-        assert_eq!(*promotion, Sos1ConstraintID::from(0));
+        assert_eq!(*promotion, Sos1ConstraintID::from(203));
         assert_eq!(instance.sos1_constraints().len(), 1);
         for id in [
             upper_row_id(),
@@ -2095,7 +2095,7 @@ mod tests {
         assert!(outcomes[&ConstraintID::from(999)].is_err());
         assert_eq!(
             *outcomes[&ConstraintID::from(202)].as_ref().unwrap(),
-            Sos1ConstraintID::from(0)
+            Sos1ConstraintID::from(203)
         );
         for id in [upper_row_id(), lower_row_id(), cardinality_row_id()] {
             assert!(instance.constraints().contains_key(&id));
@@ -2122,7 +2122,7 @@ mod tests {
         assert!(outcomes[&ConstraintID::from(999)].is_err());
         assert_eq!(
             *outcomes[&cardinality_row_id()].as_ref().unwrap(),
-            Sos1ConstraintID::from(0)
+            Sos1ConstraintID::from(103)
         );
         assert!(instance.constraints().is_empty());
         assert_eq!(instance.removed_constraints().len(), 3);

@@ -346,7 +346,7 @@ def test_convert_sos1_with_integer_variables_emits_bigm_pair():
     removed = instance.removed_constraints[Sos1ConstraintID(10)]
     assert removed.removed_reason == "ommx.Instance.convert_sos1_to_constraints"
     # `constraint_ids` parameter lists all 5 new IDs in insertion order.
-    assert removed.removed_reason_parameters["constraint_ids"] == "0,1,2,3,4"
+    assert removed.removed_reason_parameters["constraint_ids"] == "11,12,13,14,15"
 
 
 def test_convert_sos1_rejects_domain_excluding_zero():

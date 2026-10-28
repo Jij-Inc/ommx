@@ -937,7 +937,7 @@ mod tests {
                     Constraint::less_than_or_equal_to_zero(infeasible_function),
                 ),
             ]))
-            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(1), one_hot)]))
+            .one_hot_constraints(BTreeMap::from([(OneHotConstraintID::from(3), one_hot)]))
             .build()
             .unwrap();
         let target = unconstrained_class(

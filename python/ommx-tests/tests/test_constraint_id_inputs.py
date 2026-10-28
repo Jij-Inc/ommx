@@ -37,6 +37,9 @@ FAMILIES = [
 ]
 
 
+NUMBERS = {id_type: 7 + i for i, (_, id_type) in enumerate(FAMILIES)}
+
+
 def components() -> dict[str, Any]:
     x, y = DecisionVariable.binary(0), DecisionVariable.binary(1)
     return dict(
@@ -44,29 +47,29 @@ def components() -> dict[str, Any]:
         objective=x + y,
         decision_variables=[x, y],
         constraints={7: x + y == 1},
-        indicator_constraints={7: (y == 1).with_indicator(x)},
-        one_hot_constraints={7: OneHotConstraint(variables=[x, y])},
-        sos1_constraints={7: Sos1Constraint(variables=[x, y])},
+        indicator_constraints={8: (y == 1).with_indicator(x)},
+        one_hot_constraints={9: OneHotConstraint(variables=[x, y])},
+        sos1_constraints={10: Sos1Constraint(variables=[x, y])},
     )
 
 
 @pytest.mark.parametrize("host", [Instance, ParametricInstance])
 def test_integer_and_typed_keys_promote_to_the_same_family(host):
     kwargs = components()
-    for name, id_type in FAMILIES:
-        kwargs[name][id_type(42)] = next(iter(kwargs[name].values()))
+    for i, (name, id_type) in enumerate(FAMILIES):
+        kwargs[name][id_type(42 + i)] = next(iter(kwargs[name].values()))
     if host is ParametricInstance:
         kwargs["parameters"] = []
     instance = host.from_components(**kwargs)
-    for name, id_type in FAMILIES:
+    for i, (name, id_type) in enumerate(FAMILIES):
         rows = {
             key: instance.constraints[key]
             for key in instance.constraints
             if isinstance(key, id_type)
         }
-        assert set(rows) == {id_type(7), id_type(42)}
+        assert set(rows) == {id_type(NUMBERS[id_type]), id_type(42 + i)}
         assert all(type(id_) is id_type for id_ in rows)
-        row = rows[id_type(7)]
+        row = rows[id_type(NUMBERS[id_type])]
         assert isinstance(
             row,
             (
@@ -76,8 +79,9 @@ def test_integer_and_typed_keys_promote_to_the_same_family(host):
                 AttachedSos1Constraint,
             ),
         )
-        assert row.constraint_id == id_type(7)
-        assert 7 not in rows  # Returned dictionaries retain normal Python equality.
+        assert row.constraint_id == id_type(NUMBERS[id_type])
+        # Returned dictionaries retain normal Python equality with typed keys.
+        assert NUMBERS[id_type] not in rows
     assert (
         instance.constraints.of_kind("regular")[7].equality
         == instance.constraints[ConstraintID(7)].equality
@@ -91,8 +95,8 @@ def test_mapping_keys_reject_every_other_id_family(host, name, id_type):
         if wrong_type is id_type:
             continue
         kwargs = components()
-        row = kwargs[name].pop(7)
-        kwargs[name][wrong_type(7)] = row
+        row = kwargs[name].pop(NUMBERS[id_type])
+        kwargs[name][wrong_type(NUMBERS[id_type])] = row
         if host is ParametricInstance:
             kwargs["parameters"] = []
         with pytest.raises(TypeError, match=f"Expected int or {id_type.__name__}"):
@@ -103,7 +107,7 @@ def test_mapping_keys_reject_every_other_id_family(host, name, id_type):
 @pytest.mark.parametrize("name,id_type", FAMILIES)
 def test_mapping_rejects_duplicate_ids_after_promotion(host, name, id_type):
     kwargs = components()
-    kwargs[name][id_type(7)] = kwargs[name][7]
+    kwargs[name][id_type(NUMBERS[id_type])] = kwargs[name][NUMBERS[id_type]]
     if host is ParametricInstance:
         kwargs["parameters"] = []
     with pytest.raises(
@@ -135,19 +139,19 @@ def test_regular_integer_lookup_mutation_and_solution_queries():
 
 def test_special_integer_mutations_and_typed_transformation_results():
     instance = Instance.from_components(**components())
-    instance.relax_indicator_constraint(7, "manual")
-    assert set(instance.removed_constraints) == {IndicatorConstraintID(7)}
-    instance.restore_indicator_constraint(7)
-    regular_id = instance.convert_one_hot_to_constraint(7)
+    instance.relax_indicator_constraint(8, "manual")
+    assert set(instance.removed_constraints) == {IndicatorConstraintID(8)}
+    instance.restore_indicator_constraint(8)
+    regular_id = instance.convert_one_hot_to_constraint(9)
     assert_type(regular_id, ConstraintID)
     assert type(regular_id) is ConstraintID
-    for id_ in instance.convert_sos1_to_constraints(7):
+    for id_ in instance.convert_sos1_to_constraints(10):
         assert type(id_) is ConstraintID
-    for id_ in instance.convert_indicator_to_constraint(7):
+    for id_ in instance.convert_indicator_to_constraint(8):
         assert type(id_) is ConstraintID
     assert instance.constraints[regular_id].provenance[
         0
-    ].original_id == OneHotConstraintID(7)
+    ].original_id == OneHotConstraintID(9)
 
 
 @pytest.mark.parametrize(
@@ -214,17 +218,17 @@ def test_static_input_unions_do_not_widen_output_types():
         objective=x,
         decision_variables=[x],
         constraints={7: x == 1, ConstraintID(42): x <= 1},
-        indicator_constraints={7: (x == 1).with_indicator(x)},
-        one_hot_constraints={7: OneHotConstraint(variables=[x])},
-        sos1_constraints={7: Sos1Constraint(variables=[x])},
+        indicator_constraints={8: (x == 1).with_indicator(x)},
+        one_hot_constraints={9: OneHotConstraint(variables=[x])},
+        sos1_constraints={10: Sos1Constraint(variables=[x])},
     )
     assert_type(instance.constraints, ConstraintCollection)
     assert_type(instance.constraints[ConstraintID(7)], AttachedConstraint)
     assert_type(
-        instance.constraints[IndicatorConstraintID(7)], AttachedIndicatorConstraint
+        instance.constraints[IndicatorConstraintID(8)], AttachedIndicatorConstraint
     )
-    assert_type(instance.constraints[OneHotConstraintID(7)], AttachedOneHotConstraint)
-    assert_type(instance.constraints[Sos1ConstraintID(7)], AttachedSos1Constraint)
+    assert_type(instance.constraints[OneHotConstraintID(9)], AttachedOneHotConstraint)
+    assert_type(instance.constraints[Sos1ConstraintID(10)], AttachedSos1Constraint)
 
 
 def test_homogeneous_mapping_variables_are_valid_inputs():

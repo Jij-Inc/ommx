@@ -3,7 +3,8 @@
 use pyo3::{exceptions::PyValueError, prelude::*};
 
 /// Shared constraint family selector for native views and DataFrame accessors.
-/// Selecting a family fixes its independent ID space; view inputs may then promote integers.
+/// Selecting a family fixes the ID type; view inputs may then promote integers.
+/// Constraint numbers remain unique across all families within an instance.
 ///
 /// The Python surface is a string literal (`"regular"`, `"indicator"`,
 /// `"one_hot"`, `"sos1"`); on the Rust side we deal with this enum so

@@ -19,14 +19,14 @@ from ommx import (
     Sense,
     Solution,
 )
-from test_live_constraint_collections import FAMILIES, make_model, remove_all
+from test_live_constraint_collections import FAMILIES, NUMBERS, make_model, remove_all
 
 Model = TypeVar("Model", bound=Instance | ParametricInstance)
 
 
 def label_model(model: Model) -> Model:
     for index, (_, id_type, _) in enumerate(FAMILIES):
-        row = model.constraints[id_type(5)]
+        row = model.constraints[id_type(NUMBERS[id_type])]
         row.set_name("c")
         row.set_subscripts([index, -1])
         row.set_parameters({"group": str(index)})
@@ -45,7 +45,7 @@ def test_model_extraction_returns_attached_rows_of_all_families(
     for index, (_, id_type, row_type) in enumerate(FAMILIES):
         row = extracted[index, -1]
         assert type(row) is row_type
-        assert row == model.constraints[id_type(5)]
+        assert row == model.constraints[id_type(NUMBERS[id_type])]
 
     regular = extracted[0, -1]
     assert isinstance(regular, AttachedConstraint)
@@ -115,7 +115,7 @@ def test_results_extract_violations_including_retained_removed_constraints(remov
 @pytest.mark.parametrize("left,right", list(combinations(range(4), 2)))
 def test_duplicate_subscripts_across_every_family_pair_are_rejected(host, left, right):
     model = label_model(make_model(host))
-    model.constraints[FAMILIES[right][1](5)].set_subscripts([left, -1])
+    model.constraints[FAMILIES[right][1](5 + right)].set_subscripts([left, -1])
     with pytest.raises(ValueError, match="Duplicate subscript"):
         model.extract_constraints("c")
     if isinstance(model, ParametricInstance):
@@ -129,7 +129,7 @@ def test_duplicate_subscripts_across_every_family_pair_are_rejected(host, left, 
 def test_scalar_labels_missing_names_and_invalid_sample_ids():
     model = make_model(Instance)
     for index, (kind, id_type, _) in enumerate(FAMILIES):
-        model.constraints[id_type(5)].set_name(kind)
+        model.constraints[id_type(NUMBERS[id_type])].set_name(kind)
         assert set(model.extract_constraints(kind)) == {()}
     with pytest.raises(KeyError):
         model.extract_constraints("missing")
@@ -156,7 +156,7 @@ def test_feasible_regular_inequality_and_inactive_indicator_return_zero():
 
     other = label_model(make_model(Instance))
     solution = other.evaluate({0: 0, 1: 0})
-    assert solution.constraints[IndicatorConstraintID(5)].evaluated_value == -1
+    assert solution.constraints[IndicatorConstraintID(6)].evaluated_value == -1
     assert solution.extract_constraints("c")[1, -1] == 0
 
 
@@ -169,7 +169,7 @@ def test_constraint_names_match_extraction_on_every_root():
 
     names = ["regular", "", "one_hot", "sos1"]
     for name, (_, id_type, _) in zip(names, FAMILIES):
-        model.constraints[id_type(5)].set_name(name)
+        model.constraints[id_type(NUMBERS[id_type])].set_name(name)
     solution = model.evaluate({0: 0, 1: 0})
     samples = model.evaluate_samples({7: {0: 0, 1: 0}})
     roots: tuple[Instance, ParametricInstance, Solution, SampleSet] = (
@@ -201,7 +201,7 @@ def test_constraint_names_match_extraction_on_every_root():
 def test_constraint_names_deduplicate_without_validating_subscripts():
     model = label_model(make_model(Instance))
     for _, id_type, _ in FAMILIES:
-        model.constraints[id_type(5)].set_subscripts([])
+        model.constraints[id_type(NUMBERS[id_type])].set_subscripts([])
     solution = model.evaluate({0: 0, 1: 0})
     samples = model.evaluate_samples({7: {0: 0, 1: 0}})
     for root in [model, model.as_parametric_instance(), solution, samples]:
@@ -216,7 +216,7 @@ def test_constraint_names_deduplicate_without_validating_subscripts():
 def test_constraint_name_scope_tracks_removal_and_retained_results():
     model = make_model(Instance)
     for name, id_type, _ in FAMILIES:
-        model.constraints[id_type(5)].set_name(name)
+        model.constraints[id_type(NUMBERS[id_type])].set_name(name)
     remove_all(model)
     for row in model.constraints.values():
         assert isinstance(row, AttachedConstraint)

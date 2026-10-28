@@ -53,7 +53,7 @@ def test_convert_inequality_emits_only_upper_big_m():
     )
     removed = instance.removed_constraints[IndicatorConstraintID(7)]
     assert removed.removed_reason == "ommx.Instance.convert_indicator_to_constraint"
-    assert removed.removed_reason_parameters["constraint_ids"] == "0"
+    assert removed.removed_reason_parameters["constraint_ids"] == "8"
 
 
 def test_convert_equality_emits_both_sides():
@@ -72,7 +72,7 @@ def test_convert_equality_emits_both_sides():
         isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
     )
     removed = instance.removed_constraints[IndicatorConstraintID(7)]
-    assert removed.removed_reason_parameters["constraint_ids"] == "0,1"
+    assert removed.removed_reason_parameters["constraint_ids"] == "8,9"
 
 
 def test_convert_equality_uses_explicit_atol_for_composed_body():

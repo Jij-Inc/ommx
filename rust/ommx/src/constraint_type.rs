@@ -389,7 +389,8 @@ impl ConstraintType for Constraint {
 ///
 /// Host objects such as [`crate::Instance`] and [`crate::ParametricInstance`]
 /// still own cross-table semantic invariants, including referenced
-/// decision-variable IDs and special-constraint structural requirements.
+/// decision-variable IDs, numeric constraint-ID uniqueness across all families,
+/// and special-constraint structural requirements.
 ///
 /// # Family-local operations
 ///
@@ -778,31 +779,11 @@ impl<T: ConstraintType> ConstraintCollection<T> {
         }
     }
 
-    /// Verify that `count` consecutive fresh IDs can be allocated.
-    ///
-    /// Crate-internal root transformations use this during their read-only
-    /// planning phase so later calls to [`Self::unused_id`] cannot panic after
-    /// the root has already been partially mutated.
-    pub(crate) fn ensure_unused_id_capacity(&self, count: usize) -> crate::Result<()> {
-        if count == 0 {
-            return Ok(());
-        }
-        let count = u64::try_from(count)
-            .map_err(|_| crate::error!("Constraint ID allocation count exceeds u64"))?;
-        if let Some(maximum_id) = self.maximum_owned_id() {
-            maximum_id.checked_add(count).ok_or_else(|| {
-                crate::error!(
-                    { maximum_id, count },
-                    "Cannot allocate {count} consecutive constraint IDs after maximum ID {maximum_id}",
-                )
-            })?;
-        }
-        Ok(())
-    }
-
     /// Return an ID that is not used by any active or removed constraint in this collection.
     ///
     /// Returns `0` when the collection is empty, otherwise `max(existing id) + 1`.
+    /// This is only a collection-local query. Model insertion must use the
+    /// enclosing instance's allocator, which considers every constraint family.
     ///
     /// # Panics
     ///
@@ -1886,25 +1867,6 @@ mod tests {
         let collection = ConstraintCollection::<Constraint>::new(active, BTreeMap::new()).unwrap();
         assert_eq!(collection.active().len(), 1);
         assert_eq!(collection.removed().len(), 0);
-    }
-
-    #[test]
-    fn collection_preflights_fresh_id_capacity_across_active_and_removed_rows() {
-        let active = BTreeMap::from([(
-            ConstraintID::from(1),
-            Constraint::equal_to_zero(Function::Zero),
-        )]);
-        let removed = BTreeMap::from([(
-            ConstraintID::from(u64::MAX - 2),
-            (Constraint::equal_to_zero(Function::Zero), removed_reason()),
-        )]);
-        let collection = ConstraintCollection::<Constraint>::new(active, removed).unwrap();
-
-        collection.ensure_unused_id_capacity(2).unwrap();
-        let err = collection.ensure_unused_id_capacity(3).unwrap_err();
-
-        assert!(err.to_string().contains("Cannot allocate"));
-        assert_eq!(collection.unused_id(), ConstraintID::from(u64::MAX - 1));
     }
 
     #[test]

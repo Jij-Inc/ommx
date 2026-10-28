@@ -101,7 +101,7 @@ instance.decision_variables_df()
 instance.constraints_df(kind="regular")
 ```
 
-{attr}`~ommx.Instance.constraints` は、全種類の有効な制約を取得するコレクションです。通常制約なら `instance.constraints[ConstraintID(0)]` のように型付きIDでアクセスします。種類ごとにIDの空間が独立しているため、裸の整数は受け付けません。返されるAttachedハンドルを通じて、所有元の制約を参照・更新できます。コレクションを取得した時点では制約を収集せず、アクセス時に該当する制約を取得します。removedな制約は `instance.removed_constraints` で取得します。
+{attr}`~ommx.Instance.constraints` は、全種類の有効な制約を取得するコレクションです。通常制約なら `instance.constraints[ConstraintID(0)]` のように型付きIDでアクセスします。IDの型で制約の種類を指定するため、裸の整数は受け付けません。IDの番号は、removedを含む全種類を通じて同じInstance内で一意です。返されるAttachedハンドルを通じて、所有元の制約を参照・更新できます。コレクションを取得した時点では制約を収集せず、アクセス時に該当する制約を取得します。removedな制約は `instance.removed_constraints` で取得します。
 
 (instance-edit-metadata)=
 ## 既存モデルの変数・制約に名前や説明を付ける

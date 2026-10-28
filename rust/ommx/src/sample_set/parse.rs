@@ -571,6 +571,12 @@ impl Parse for v2::SampleSet {
             );
         }
 
+        let mut ids = crate::constraint_ids::ConstraintIds::default();
+        ids.sampled("regular", &constraints)
+            .and_then(|()| ids.sampled("indicator", &indicator_constraints))
+            .and_then(|()| ids.sampled("one-hot", &one_hot_constraints))
+            .and_then(|()| ids.sampled("SOS1", &sos1_constraints))
+            .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
         Ok(SampleSet {
             decision_variables,
             objectives,

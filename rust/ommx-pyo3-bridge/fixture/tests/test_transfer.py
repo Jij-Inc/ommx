@@ -290,7 +290,9 @@ def test_completed_output_returns_the_received_python_object(monkeypatch):
 
 def test_compilation_uses_promotion_plans_and_explicit_wire_messages(monkeypatch):
     value = fixture.compile_for_target()
-    assert set(value.constraints) == {ommx.OneHotConstraintID(0)}
+    # Promotion allocates a fresh number and retains the source as removed.
+    assert set(value.constraints) == {ommx.OneHotConstraintID(24)}
+    assert set(value.removed_constraints) == {ommx.ConstraintID(23)}
 
     advertise(monkeypatch, [1])
     calls = spy_instance(monkeypatch)
@@ -444,7 +446,9 @@ def test_malformed_root_is_a_bridge_error(version, kind):
 @pytest.mark.parametrize("kind", ["function", "constraint", "decision_variable"])
 def test_malformed_v1_component_is_a_bridge_error(kind):
     receive = getattr(receiver, f"_bridge_protobuf_v1_{kind}_from_bytes")
-    with pytest.raises(ommx.BridgeError, match="invalid OMMX ProtobufV1 bridge payload"):
+    with pytest.raises(
+        ommx.BridgeError, match="invalid OMMX ProtobufV1 bridge payload"
+    ):
         receive(b"\xff")
 
 

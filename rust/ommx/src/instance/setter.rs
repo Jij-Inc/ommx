@@ -132,7 +132,7 @@ impl Instance {
         context: crate::ConstraintContext,
     ) -> crate::Result<ConstraintID> {
         self.validate_required_ids(constraint.required_ids())?;
-        let id = self.constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -169,7 +169,7 @@ impl Instance {
     ) -> crate::Result<crate::IndicatorConstraintID> {
         self.validate_required_ids(constraint.required_ids())?;
         self.require_binary_variable(constraint.indicator_variable)?;
-        let id = self.indicator_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.indicator_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -191,7 +191,7 @@ impl Instance {
         for var_id in &constraint.variables {
             self.require_binary_variable(*var_id)?;
         }
-        let id = self.one_hot_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.one_hot_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -209,7 +209,7 @@ impl Instance {
     ) -> crate::Result<crate::Sos1ConstraintID> {
         validate_sos1_non_empty(&constraint)?;
         self.validate_required_ids(constraint.required_ids())?;
-        let id = self.sos1_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.sos1_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -281,6 +281,7 @@ impl Instance {
     ) -> crate::Result<Option<Constraint>> {
         // Validate that all variables in the constraints are defined
         self.validate_required_ids(constraint.required_ids())?;
+        self.validate_regular_constraint_number(id)?;
         self.apply_validated_constraint_insert(id, constraint)
     }
 
@@ -314,7 +315,8 @@ impl Instance {
             .collect();
 
         // Validate all constraints first (atomic: fail before any insertion)
-        for (_, constraint) in &constraints {
+        for (id, constraint) in &constraints {
+            self.validate_regular_constraint_number(*id)?;
             let required_ids = constraint.required_ids();
             Self::validate_required_ids_with_sets(
                 &required_ids,
@@ -335,27 +337,17 @@ impl Instance {
         Ok(replaced)
     }
 
-    /// Returns the next available ConstraintID.
+    /// Return the next regular constraint ID from the instance-wide number space.
     ///
-    /// Finds the maximum ID from both active constraints and removed constraints,
-    /// then adds 1. If there are no constraints, returns ConstraintID(0).
+    /// Includes active and removed constraints of every family. This does not
+    /// reserve the number: repeated calls return the same ID until insertion.
     ///
-    /// Note: This method does not track which IDs have been allocated.
-    /// Consecutive calls will return the same ID until a constraint is actually added.
+    /// # Panics
+    /// Panics when no number above the current maximum remains.
     pub fn next_constraint_id(&self) -> ConstraintID {
-        let max_in_constraints = self
-            .constraints()
-            .last_key_value()
-            .map(|(id, _)| id.into_inner());
-        let max_in_removed = self
-            .removed_constraints()
-            .last_key_value()
-            .map(|(id, _)| id.into_inner());
-
-        max_in_constraints
-            .max(max_in_removed)
-            .map(|max| ConstraintID::from(max + 1))
-            .unwrap_or(ConstraintID::from(0))
+        self.next_constraint_number()
+            .expect("no constraint number larger than the current maximum remains")
+            .into()
     }
 }
 
@@ -416,7 +408,7 @@ impl ParametricInstance {
         context: crate::ConstraintContext,
     ) -> crate::Result<ConstraintID> {
         self.validate_required_ids(constraint.required_ids())?;
-        let id = self.constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -490,7 +482,7 @@ impl ParametricInstance {
         // call's only added contribution for the indicator variable is the
         // dependency-key check.
         self.validate_required_ids(constraint.required_ids())?;
-        let id = self.indicator_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.indicator_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -511,7 +503,7 @@ impl ParametricInstance {
             self.require_binary_variable(*var_id)?;
         }
         self.validate_required_ids(constraint.required_ids())?;
-        let id = self.one_hot_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.one_hot_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
@@ -532,7 +524,7 @@ impl ParametricInstance {
         let required_ids = constraint.required_ids();
         self.require_decision_variables(required_ids.clone())?;
         self.validate_required_ids(required_ids)?;
-        let id = self.sos1_constraint_collection.unused_id();
+        let id = self.next_constraint_number()?.into();
         self.sos1_constraint_collection
             .insert_active_with_context(id, constraint, context)?;
         Ok(id)
