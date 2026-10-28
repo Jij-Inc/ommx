@@ -77,6 +77,8 @@ Binaryは0または1、Integerは整数、Continuousは実数を取ります。S
 
 `name`、`subscripts`、`parameters`、`description` は、結果の分析や可視化に使うメタデータです。これらは変数の定義域や制約の成立条件を変えません。例えば $x_i$ のような変数の名前を `name="x"`、添字を `subscripts=[i]` として保存できます。
 
+名前と添字を使って{ref}`式を表示する <function-labels>`ことや、[評価結果から値を取り出す](../how_to/extract_named_values.md)こともできます。Instance内の変数の識別には、引き続きIDを使います。
+
 ```{code-cell} ipython3
 instance.decision_variables_df()
 ```
@@ -141,17 +143,21 @@ assert instance.constraints[exclusive.constraint_id].name == "at_most_one"
 
 付け直した変数名・添字は、{meth}`~ommx.Instance.format_function`や{meth}`~ommx.Instance.display_function`で式を表示するときに使われます。その後に評価・求解したSolutionでは、{meth}`~ommx.Solution.extract_decision_variables`で名前・添字に対応する値を取り出せます。ラベルを整えてから結果を作ると、商品などのモデル上の単位で後処理できます。
 
+具体的な手順は{ref}`式を変数名で確認する <function-labels>`、[結果を名前と添字で取り出す](../how_to/extract_named_values.md)を参照してください。
+
 ## モデルを変換する場合
 
 Instanceは構築後にも変換できます。ただし、**変換結果を評価できることと、元の最適化問題と等価であることは別**です。
 
 変数を固定する、別の式で置き換える、制約を別の表現にする、といった操作では、何を保存するかを確認する必要があります。[変換が何を保存するか](./transformation_guarantees.md)では、実行可能性・目的値・最適性を分けて判断します。一連の操作を試す場合は[Instanceを変換し、結果を確認する](../how_to/transform_instance_without_solver.md)を参照してください。
 
-また、{meth}`~ommx.Instance.tighten_bounds_simultaneously_once` は通常制約から変数のboundを締める操作です。対象となる式、許容誤差、数値計算上の制約、制約を選ぶ方法はAPI Referenceを参照してください。
+また、{meth}`~ommx.Instance.tighten_bounds_simultaneously_once` は通常制約から変数のboundを締める操作です。[一回の実行で変更されたboundを確認する](../how_to/tighten_bounds.md)手順を試せます。操作の位置付けは[変換のGuide](./transformation_guarantees.md)、対象となる式や数値条件の詳細はAPI Referenceを参照してください。
 
 ### 結果の確認用に保持する情報
 
 Instanceは、現在の目的関数と制約以外にも、結果を確認するための情報を保持できます。例えば{class}`~ommx.NamedFunction`は、名前を付けて保存し、目的関数や制約とは別に値を確認する式です。
+
+登録と評価結果の取得は[目的関数以外の指標を評価する](../how_to/evaluate_named_functions.md)で説明します。
 
 また、変換で現在課す条件から外した制約をremoved、ソルバー向けとは別に評価用に保持する目的関数を出力目的関数と呼びます。名前付き関数・removedな制約・出力目的関数だけに現れる変数は、それだけではusedにはなりません。
 
