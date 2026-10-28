@@ -76,4 +76,4 @@ experiment.set_autosave_policy(AutosavePolicy.every_n_runs(25))
 
 この例では、以降25個のRunが閉じられるごとにcheckpointします。復帰可能な地点が減ることと引き換えなので、単に最初の使い方として設定する必要はありません。セッション限りの設定であり、復帰後に同じ方針が必要なら改めて設定します。時間間隔・無効化・例外終了時の厳密な条件は{py:class}`~ommx.experiment.AutosavePolicy`を参照してください。
 
-記録状態の意味は[ExperimentのGuide](../user_guide/experiment.md)、検索やcleanupは[CLIのGuide](../user_guide/cli.md)で説明します。
+記録状態の意味は[ExperimentのGuide](../user_guide/experiment.md)、検索やcleanupは[CLIのGuide](../how_to/manage_local_registry.md)で説明します。

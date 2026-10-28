@@ -68,4 +68,4 @@ assert summary == {"trial": 1, "note": "shared record"}
 
 まず、共有された完全な参照、読み書きそれぞれの権限、ログイン先のホスト、ネットワーク接続を確認します。受信側で読むには、ローカルで`commit()`するだけでなく、送信側で`push()`が成功している必要があります。
 
-認証失敗、アクセス拒否、存在しない参照、通信失敗の区別と例外の正確な条件は{meth}`~ommx.artifact.Artifact.load`を参照してください。Local Registryの管理操作は[CLIの案内](../user_guide/cli.md)へ進んでください。
+認証失敗、アクセス拒否、存在しない参照、通信失敗の区別と例外の正確な条件は{meth}`~ommx.artifact.Artifact.load`を参照してください。Local Registryの管理操作は[CLIの案内](../how_to/manage_local_registry.md)へ進んでください。
