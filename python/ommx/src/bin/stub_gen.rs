@@ -17,6 +17,8 @@ fn annotate_constraint_get_overrides(stub: &mut pyo3_stub_gen::StubInfo) {
     // Keep the precise caller types and suppress only this declaration-level
     // diagnostic. test_constraint_collection_typing.py checks every family,
     // lifecycle, arbitrary defaults, and the open-base fallback without ignores.
+    // The generic family view covers the same signatures with Row | Default;
+    // test_constraint_family_view.py checks its concrete callers without ignores.
     // gen_methods_from_python currently cannot attach per-method ignore metadata.
     for module in stub.modules.values_mut() {
         for class in module.class.values_mut() {
@@ -26,6 +28,7 @@ fn annotate_constraint_get_overrides(stub: &mut pyo3_stub_gen::StubInfo) {
                     | "RemovedConstraintCollection"
                     | "EvaluatedConstraintCollection"
                     | "SampledConstraintCollection"
+                    | "ConstraintFamilyView"
             ) {
                 let method = class.methods.get_mut("get").unwrap().last_mut().unwrap();
                 method.type_ignored = Some(pyo3_stub_gen::type_info::IgnoreTarget::Specified(&[

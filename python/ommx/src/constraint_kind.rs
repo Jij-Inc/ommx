@@ -1,9 +1,9 @@
-//! Family selection for pandas views.
+//! Shared family selection for native filtered collections and pandas views.
 
 use pyo3::{exceptions::PyValueError, prelude::*};
 
-/// Constraint family selector for DataFrame accessors. Selecting a family
-/// also selects its independent ID space; native collections use typed IDs.
+/// Shared constraint family selector for native views and DataFrame accessors.
+/// Selecting a family fixes its independent ID space; view inputs may then promote integers.
 ///
 /// The Python surface is a string literal (`"regular"`, `"indicator"`,
 /// `"one_hot"`, `"sos1"`); on the Rust side we deal with this enum so
@@ -62,11 +62,8 @@ impl<'py> pyo3::IntoPyObject<'py> for ConstraintKind {
     }
 }
 
-/// Surface in `__init__.pyi` as a string `Literal`. Both input and
-/// output positions render identically — the wide `*_df` accessors
-/// take this enum but never return it, so `type_input` is the only
-/// position that matters in practice; `type_output` is provided for
-/// completeness.
+/// Surface in `__init__.pyi` as a string `Literal`. Native views specialize
+/// their output per literal; DataFrame accessors accept the same selector.
 impl pyo3_stub_gen::PyStubType for ConstraintKind {
     fn type_input() -> pyo3_stub_gen::TypeInfo {
         pyo3_stub_gen::TypeInfo {
@@ -80,3 +77,41 @@ impl pyo3_stub_gen::PyStubType for ConstraintKind {
         Self::type_input()
     }
 }
+
+/// Dispatch on `ConstraintKind` and bind `coll` to the per-kind constraint
+/// collection on `$container`. Shared by native family views and pandas accessors.
+///
+/// Each host (`Instance` / `ParametricInstance` / `Solution` / `SampleSet`)
+/// passes its own accessor names because the underlying collection types
+/// differ — `ConstraintCollection` for Instance/ParametricInstance,
+/// `EvaluatedConstraintCollection` for Solution, `SampledConstraintCollection`
+/// for SampleSet. Centralising the match shape here avoids drift when adding a
+/// new constraint kind.
+macro_rules! constraint_kind_collection {
+    (
+        $container:expr, $kind:expr,
+        [$regular:ident, $indicator:ident, $one_hot:ident, $sos1:ident],
+        |$coll:ident| $body:block
+    ) => {
+        match $kind {
+            $crate::constraint_kind::ConstraintKind::Regular => {
+                let $coll = $container.$regular();
+                $body
+            }
+            $crate::constraint_kind::ConstraintKind::Indicator => {
+                let $coll = $container.$indicator();
+                $body
+            }
+            $crate::constraint_kind::ConstraintKind::OneHot => {
+                let $coll = $container.$one_hot();
+                $body
+            }
+            $crate::constraint_kind::ConstraintKind::Sos1 => {
+                let $coll = $container.$sos1();
+                $body
+            }
+        }
+    };
+}
+
+pub(crate) use constraint_kind_collection;

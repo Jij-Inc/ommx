@@ -98,7 +98,7 @@ it does not collect constraint rows. Indexing fetches the selected constraint
 from the owner's current state. Integer keys raise `TypeError` because the
 family cannot be inferred. A missing typed ID raises `KeyError`.
 
-| DataFrame `kind` | ID type | Solution value | SampleSet value |
+| `kind` | ID type | Solution value | SampleSet value |
 | --- | --- | --- | --- |
 | `"regular"` | `ConstraintID` | `EvaluatedConstraint` | `SampledConstraint` |
 | `"indicator"` | `IndicatorConstraintID` | `EvaluatedIndicatorConstraint` | `SampledIndicatorConstraint` |
@@ -131,6 +131,28 @@ immediately; iterators over the standard Python views snapshot them on the first
 order. Values are fetched as they are visited. If a snapshotted key is subsequently
 removed, fetching its value raises `KeyError`. Use `dict(rows)` for a materialized mapping.
 
+Use `of_kind` to narrow a collection to one family:
+
+```python
+sos1 = instance.constraints.of_kind("sos1")
+row = sos1[5]  # AttachedSos1Constraint; 5 is promoted to Sos1ConstraintID(5)
+for cid, constraint in sos1.items():
+    print(cid, constraint.name)  # cid is a Sos1ConstraintID
+```
+
+`of_kind` accepts the same strings as `constraints_df`: `"regular"`, `"indicator"`,
+`"one_hot"`, and `"sos1"`. It returns a live {class}`~ommx.ConstraintFamilyView`,
+without collecting rows. The selected family fixes the ID type, so indexing,
+`get`, and membership accept integers as well as that family's typed IDs; IDs of
+another family raise `TypeError`. Iteration still returns typed IDs, and the
+literal `kind` selects the concrete key and row types for static type checking.
+The view retains its owner and follows the same row lifecycle and iterator
+snapshot rules as the original collection. This also applies to
+`instance.removed_constraints.of_kind("sos1")`, `ParametricInstance`, and result
+collections on `Solution` and `SampleSet`. An unknown `kind` raises `ValueError`.
+Filtering is for inspecting a selected family; it does not establish that a
+solver or transformation supports every constraint in the model.
+
 `constraints_df(*, kind=...)` materializes one family as a DataFrame and requires
 `kind` on every owner. Its typed index matches that family's collection keys.
 On models it selects active rows by default; `removed=True` includes both
@@ -141,7 +163,7 @@ sample ID.
 Inputs that already identify a family still promote integers: for example,
 `constraints={1: constraint}` and `instance.get_constraint_by_id(1)`. They reject
 IDs of another family. An input mapping containing both `1` and `ConstraintID(1)`
-raises `ValueError` because the keys normalize to the same identity. Collections,
+raises `ValueError` because the keys normalize to the same identity. Mixed-family collections,
 `constraint_violation(id)`, and DataFrame indexes require typed IDs. IDs do not
 support `int()` or integer-index conversion. Variable and sample IDs remain integers.
 

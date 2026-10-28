@@ -108,7 +108,7 @@ rows[ConstraintID(0)].violation()
 添字アクセス時に、指定された制約を所有元の現在の状態から取得します。
 整数キーは種類を判断できないため `TypeError`、存在しない型付きIDは `KeyError` になります。
 
-| DataFrameの `kind` | IDの型 | Solutionの値 | SampleSetの値 |
+| `kind` | IDの型 | Solutionの値 | SampleSetの値 |
 | --- | --- | --- | --- |
 | `"regular"` | `ConstraintID` | `EvaluatedConstraint` | `SampledConstraint` |
 | `"indicator"` | `IndicatorConstraintID` | `EvaluatedIndicatorConstraint` | `SampledIndicatorConstraint` |
@@ -137,6 +137,26 @@ Removedと結果のスナップショットは、メタデータや削除理由�
 値は列挙された時点で取得します。保持したキーがその後削除されると、値の取得時に `KeyError` になります。
 通常の辞書として収集するには `dict(rows)` を使います。
 
+`of_kind`を使うと、コレクションを1種類に絞れます。
+
+```python
+sos1 = instance.constraints.of_kind("sos1")
+row = sos1[5]  # AttachedSos1Constraint。5はSos1ConstraintID(5)に昇格する
+for cid, constraint in sos1.items():
+    print(cid, constraint.name)  # cidはSos1ConstraintID
+```
+
+`of_kind`は`constraints_df`と同じ文字列`"regular"`・`"indicator"`・`"one_hot"`・
+`"sos1"`を受け取ります。行を収集せず、所有元に追従する
+{class}`~ommx.ConstraintFamilyView`を返します。種類が決まるので、添字アクセス・
+`get`・包含判定には整数とその種類の型付きIDを使えます。別種類のIDは`TypeError`にします。
+列挙されるキーは型付きのままで、静的型検査でもリテラルの`kind`からキーと行の具体型が決まります。
+ビューは所有元を保持し、行のライフサイクルとイテレータのスナップショットのタイミングは
+元のコレクションと同じです。`instance.removed_constraints.of_kind("sos1")`、
+`ParametricInstance`、`Solution`・`SampleSet`の結果コレクションも同じ意味論です。
+未知の`kind`は`ValueError`にします。これは選んだ種類を調べるための絞り込みであり、
+ソルバーや変換処理がモデルの全制約に対応していることを保証するものではありません。
+
 `constraints_df(*, kind=...)` は1種類をDataFrameとして収集し、すべての所有元で `kind` が必須です。
 型付きインデックスは、その種類のコレクションのキーと一致します。モデルでは有効な制約を選び、
 `removed=True` で `.constraints` と `.removed_constraints` の両方を含めます。
@@ -145,7 +165,7 @@ Removedと結果のスナップショットは、メタデータや削除理由�
 
 種類が決まる入力、例えば `constraints={1: constraint}` や `instance.get_constraint_by_id(1)` は、
 整数を自動昇格し、別種類のIDを拒否します。同じ入力辞書に `1` と `ConstraintID(1)` がある場合は、
-同じIDになるため `ValueError` です。コレクション・`constraint_violation(id)`・DataFrameのインデックスには
+同じIDになるため `ValueError` です。種類を横断するコレクション・`constraint_violation(id)`・DataFrameのインデックスには
 型付きIDを使います。IDは `int()` や整数インデックスへ変換できません。変数IDとサンプルIDは整数のままです。
 
 IDは不変で、`copy.copy(id)` と `copy.deepcopy(id)` は自身を返します。

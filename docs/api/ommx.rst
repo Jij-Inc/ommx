@@ -44,6 +44,7 @@ ommx
    _items/ommx.FixedPenaltyPreparation
    _items/ommx.PreparationPolicy
    _items/ommx.ConstraintCollection
+   _items/ommx.ConstraintFamilyView
    _items/ommx.RemovedConstraintCollection
    _items/ommx.EvaluatedConstraintCollection
    _items/ommx.SampledConstraintCollection

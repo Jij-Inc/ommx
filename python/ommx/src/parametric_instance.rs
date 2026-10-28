@@ -3,12 +3,9 @@ use crate::constraint_id::{
     Sos1ConstraintIDInput,
 };
 use crate::{
-    constraint_kind::ConstraintKind,
+    constraint_kind::{constraint_kind_collection, ConstraintKind},
     error::OmmxPyResult,
-    pandas::{
-        constraint_id_col, constraint_kind_collection, entries_to_dataframe, PyDataFrame,
-        ToPandasEntry,
-    },
+    pandas::{constraint_id_col, entries_to_dataframe, PyDataFrame, ToPandasEntry},
     Constraint, DecisionVariable, Function, Instance, NamedFunction, OutputObjective, Parameter,
     RemovedConstraint, Sense,
 };

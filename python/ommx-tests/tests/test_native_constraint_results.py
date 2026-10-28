@@ -199,10 +199,15 @@ from ommx import Instance
 instance = Instance.empty()
 x = instance.new_binary("x")
 c = instance.add_constraint(x == 1)
+regular = instance.constraints.of_kind("regular")
+assert regular[c.constraint_id] == c
+assert list(regular.values()) == [c]
 solution = instance.evaluate({x.id: 1})
 assert solution.constraints[c.constraint_id].violation() == 0
+assert solution.constraints.of_kind("regular")[c.constraint_id].violation() == 0
 samples = instance.evaluate_samples({4: {x.id: 1}})
 assert samples.constraints[c.constraint_id].violations == {4: 0}
+assert samples.constraints.of_kind("regular")[c.constraint_id].violations == {4: 0}
 """,
         ],
         check=True,

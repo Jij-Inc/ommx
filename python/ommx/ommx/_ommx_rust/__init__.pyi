@@ -16,7 +16,7 @@ import pathlib
 import types
 import typing
 import typing_extensions
-from ommx._typing import _T
+from ommx._typing import _K, _T, _V_co
 from typing import TypeAlias
 
 __all__ = [
@@ -37,6 +37,7 @@ __all__ = [
     "BridgeError",
     "Constraint",
     "ConstraintCollection",
+    "ConstraintFamilyView",
     "ConstraintID",
     "ConstraintIDBase",
     "ConstraintView",
@@ -1637,6 +1638,71 @@ class ConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintView]):
     def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
     @typing.overload
     def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, AttachedConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, AttachedIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, AttachedOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+
+@typing.final
+class ConstraintFamilyView(typing.Mapping[_K, _V_co]):
+    r"""
+    Live, read-only mapping of one constraint family, created by of_kind. Integers are promoted to the selected ID type; other families raise TypeError. Iteration retains typed IDs. Model rows are attached handles; removed and result rows are snapshots.
+    """
+    def __len__(self) -> builtins.int:
+        r"""
+        Number of current rows in the selected family.
+        """
+    def __getitem__(self, key: _K | builtins.int) -> _V_co:
+        r"""
+        Fetch a row using an integer or an ID of the selected family.
+        """
+    def __contains__(self, key: builtins.object) -> builtins.bool: ...
+    def __iter__(self) -> typing.Iterator[_K]:
+        r"""
+        Snapshot this family's typed IDs now; fetch rows only when indexed.
+        """
+    def keys(self) -> typing.KeysView[_K]:
+        r"""
+        Live keys view. View iterators snapshot IDs on first advance.
+        """
+    def values(self) -> typing.ValuesView[_V_co]:
+        r"""
+        Live values view; rows are fetched on demand.
+        """
+    def items(self) -> typing.ItemsView[_K, _V_co]:
+        r"""
+        Live items view; keys remain typed and rows are fetched on demand.
+        """
+    def __repr__(self) -> builtins.str: ...
+    def __eq__(self, other: typing.Any) -> typing.Any: ...
+    @typing.overload
+    def get(self, key: _K | builtins.int, default: None = None) -> _V_co | None: ...
+    @typing.overload
+    def get(self, key: _K | builtins.int, default: _T) -> _V_co | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
 
 @typing.final
 class ConstraintID(ConstraintIDBase):
@@ -2102,6 +2168,34 @@ class EvaluatedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintV
     def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
     @typing.overload
     def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, EvaluatedConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, EvaluatedIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, EvaluatedOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, EvaluatedSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
 
 @typing.final
 class EvaluatedDecisionVariable:
@@ -8633,6 +8727,34 @@ class RemovedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVie
     def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
     @typing.overload
     def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, RemovedConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, RemovedIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, RemovedOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, RemovedSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
 
 @typing.final
 class RemovedIndicatorConstraint(ConstraintView):
@@ -9541,6 +9663,34 @@ class SampledConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVie
     def get(self, key: ConstraintIDBase, default: ConstraintView) -> ConstraintView: ...
     @typing.overload
     def get(self, key: ConstraintIDBase, default: _T) -> ConstraintView | _T: ...  # type: ignore[reportIncompatibleMethodOverride]
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["regular"]
+    ) -> ConstraintFamilyView[ConstraintID, SampledConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["indicator"]
+    ) -> ConstraintFamilyView[IndicatorConstraintID, SampledIndicatorConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["one_hot"]
+    ) -> ConstraintFamilyView[OneHotConstraintID, SampledOneHotConstraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
+    @typing.overload
+    def of_kind(
+        self, kind: typing.Literal["sos1"]
+    ) -> ConstraintFamilyView[Sos1ConstraintID, SampledSos1Constraint]:
+        r"""
+        Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.
+        """
 
 @typing.final
 class SampledDecisionVariable:

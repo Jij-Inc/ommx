@@ -8,11 +8,11 @@ use crate::constraint_id::{
     OneHotConstraintIDInput, Sos1ConstraintIDInput,
 };
 use crate::{
-    constraint_kind::ConstraintKind,
+    constraint_kind::{constraint_kind_collection, ConstraintKind},
     error::OmmxPyResult,
     pandas::{
-        apply_include_filter, constraint_id_col, constraint_kind_collection, entries_to_dataframe,
-        raw_entries_to_dataframe, PyDataFrame, ToPandasEntry,
+        apply_include_filter, constraint_id_col, entries_to_dataframe, raw_entries_to_dataframe,
+        PyDataFrame, ToPandasEntry,
     },
     Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
     ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,

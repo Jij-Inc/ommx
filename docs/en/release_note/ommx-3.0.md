@@ -59,6 +59,11 @@ The family-specific model properties are consolidated into `.constraints` and
 replaced by indexing and iteration. `constraints_df` requires keyword-only
 `kind` on every root. There is no `get_constraints` method.
 
+`constraints.of_kind("sos1")` returns a live `ConstraintFamilyView` with concrete
+key and row types. It accepts the same kind strings as `constraints_df`, promotes
+integer lookups to the selected family, and rejects IDs of another family.
+The same filtering is available on model `removed_constraints` and result collections.
+
 Constraint IDs now retain their family throughout model and result APIs,
 transformations, diagnostics, provenance, and DataFrames: `ConstraintID`,
 `IndicatorConstraintID`, `OneHotConstraintID`, and `Sos1ConstraintID`. Inputs whose

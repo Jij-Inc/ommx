@@ -4928,6 +4928,154 @@
               "deprecated": null
             },
             {
+              "name": "of_kind",
+              "doc": "Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"regular\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[ConstraintID, AttachedConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "AttachedConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"indicator\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[IndicatorConstraintID, AttachedIndicatorConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "AttachedIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"one_hot\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[OneHotConstraintID, AttachedOneHotConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "AttachedOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"sos1\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "AttachedSos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "values",
               "doc": "Live value view; each row is fetched when visited.",
               "signatures": [
@@ -4939,6 +5087,356 @@
                     "children": [
                       {
                         "display": "ConstraintView",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ConstraintFamilyView",
+          "doc": "Live, read-only mapping of one constraint family, created by of_kind. Integers are promoted to the selected ID type; other families raise TypeError. Iteration retains typed IDs. Model rows are attached handles; removed and result rows are snapshots.",
+          "bases": [
+            {
+              "display": "Mapping[_K, _V_co]",
+              "link_target": null,
+              "children": [
+                {
+                  "display": "_K",
+                  "link_target": null,
+                  "children": []
+                },
+                {
+                  "display": "_V_co",
+                  "link_target": null,
+                  "children": []
+                }
+              ]
+            }
+          ],
+          "methods": [
+            {
+              "name": "__contains__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "object",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "other",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__getitem__",
+              "doc": "Fetch a row using an integer or an ID of the selected family.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "_K | int",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "_K",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "_V_co",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__iter__",
+              "doc": "Snapshot this family's typed IDs now; fetch rows only when indexed.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Iterator[_K]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "_K",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__len__",
+              "doc": "Number of current rows in the selected family.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__repr__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "_K | int",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "_K",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "_V_co | None",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "_V_co",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "None",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "_K | int",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "_K",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "int",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "default",
+                      "type_": {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "_V_co | _T",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "_V_co",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_T",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "items",
+              "doc": "Live items view; keys remain typed and rows are fetched on demand.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "ItemsView[_K, _V_co]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "_K",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "_V_co",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "keys",
+              "doc": "Live keys view. View iterators snapshot IDs on first advance.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "KeysView[_K]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "_K",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "values",
+              "doc": "Live values view; rows are fetched on demand.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "ValuesView[_V_co]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "_V_co",
                         "link_target": null,
                         "children": []
                       }
@@ -8071,6 +8569,154 @@
                     "children": [
                       {
                         "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "of_kind",
+              "doc": "Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"regular\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[ConstraintID, EvaluatedConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "EvaluatedConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"indicator\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[IndicatorConstraintID, EvaluatedIndicatorConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "EvaluatedIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"one_hot\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[OneHotConstraintID, EvaluatedOneHotConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "EvaluatedOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"sos1\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[Sos1ConstraintID, EvaluatedSos1Constraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "EvaluatedSos1Constraint",
                         "link_target": null,
                         "children": []
                       }
@@ -27707,6 +28353,154 @@
               "deprecated": null
             },
             {
+              "name": "of_kind",
+              "doc": "Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"regular\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[ConstraintID, RemovedConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "RemovedConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"indicator\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[IndicatorConstraintID, RemovedIndicatorConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "RemovedIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"one_hot\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[OneHotConstraintID, RemovedOneHotConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "RemovedOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"sos1\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[Sos1ConstraintID, RemovedSos1Constraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "RemovedSos1Constraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
               "name": "values",
               "doc": "Live value view; each row is fetched when visited.",
               "signatures": [
@@ -30991,6 +31785,154 @@
                     "children": [
                       {
                         "display": "ConstraintIDBase",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "of_kind",
+              "doc": "Return a live view of one family without collecting rows. Uses the same kind strings as constraints_df. Integer keys are promoted; wrong-family IDs are rejected. The view retains this collection and its owner; row lifecycle and iteration snapshot rules match the original collection.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"regular\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"regular\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[ConstraintID, SampledConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "SampledConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"indicator\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"indicator\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[IndicatorConstraintID, SampledIndicatorConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "IndicatorConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "SampledIndicatorConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"one_hot\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"one_hot\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[OneHotConstraintID, SampledOneHotConstraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "OneHotConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "SampledOneHotConstraint",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  }
+                },
+                {
+                  "parameters": [
+                    {
+                      "name": "kind",
+                      "type_": {
+                        "display": "Literal[\"sos1\"]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "\"sos1\"",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ConstraintFamilyView[Sos1ConstraintID, SampledSos1Constraint]",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "Sos1ConstraintID",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "SampledSos1Constraint",
                         "link_target": null,
                         "children": []
                       }
@@ -43299,6 +44241,7 @@
     "ommx.BridgeError": "ommx",
     "ommx.Constraint": "ommx",
     "ommx.ConstraintCollection": "ommx",
+    "ommx.ConstraintFamilyView": "ommx",
     "ommx.ConstraintID": "ommx",
     "ommx.ConstraintIDBase": "ommx",
     "ommx.ConstraintView": "ommx",

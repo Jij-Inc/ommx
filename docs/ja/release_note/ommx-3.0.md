@@ -55,6 +55,11 @@ frame = solution.constraints_df(kind="regular")
 `get_constraint_by_id` と `constraint_ids` は添字アクセスと列挙へ置き換えます。
 `constraints_df` は全所有元でキーワード引数 `kind` が必須です。`get_constraints` メソッドはありません。
 
+`constraints.of_kind("sos1")`は、キーと行の具体型を保持するライブな`ConstraintFamilyView`を
+返します。`constraints_df`と同じkind文字列を受け取り、整数の検索キーを選択した種類へ
+自動昇格します。別種類のIDは拒否します。モデルの`removed_constraints`と結果の
+コレクションでも同じ絞り込みを使えます。
+
 モデル・結果のAPI、変換、診断、provenance、DataFrameで制約IDの種類を保持します。
 IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
 `Sos1ConstraintID` です。種類が決まる入力では整数を自動昇格し、別種類のIDは拒否します。

@@ -1094,8 +1094,11 @@ class SampledConstraintCollection:
 "# }
 }
 
+mod family;
+
 /// Register the read-only collection protocol without introducing Python storage.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    family::register(m)?;
     let mapping = m.py().import("collections.abc")?.getattr("Mapping")?;
     m.add_class::<ConstraintCollection>()?;
     mapping.call_method1("register", (m.py().get_type::<ConstraintCollection>(),))?;

@@ -361,6 +361,7 @@ pyo3_stub_gen::reexport_module_members!("ommx" from "ommx._ommx_rust";
     "PreparationPolicy",
     // Constraint and named function
     "ConstraintCollection",
+    "ConstraintFamilyView",
     "RemovedConstraintCollection",
     "EvaluatedConstraintCollection",
     "SampledConstraintCollection",
