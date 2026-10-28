@@ -21,7 +21,9 @@ def test_function_runtime_and_reference_share_canonical_documentation() -> None:
         if item["name"] == "Function"
     )
 
-    assert Function.__doc__.strip() == source
+    runtime_doc = Function.__doc__
+    assert runtime_doc is not None
+    assert runtime_doc.strip() == source
     assert function["doc"].strip() == source
 
 
