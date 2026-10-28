@@ -108,7 +108,7 @@ instance.constraints_df()
 
 ```{code-cell} ipython3
 variable = instance.attached_decision_variable(x.id)
-constraint = instance.constraints[exclusive.id]
+constraint = instance.constraints[exclusive.constraint_id]
 
 variable.set_name("selected")
 variable.set_subscripts([0])
@@ -118,8 +118,8 @@ constraint.set_description("二つの商品を同時には採用しない")
 
 assert instance.attached_decision_variable(x.id).name == "selected"
 assert instance.attached_decision_variable(x.id).description == "商品0を採用するか"
-assert instance.constraints[exclusive.id].name == "at_most_one"
-assert instance.constraints[exclusive.id].description == "二つの商品を同時には採用しない"
+assert instance.constraints[exclusive.constraint_id].name == "at_most_one"
+assert instance.constraints[exclusive.constraint_id].description == "二つの商品を同時には採用しない"
 ```
 
 {meth}`~ommx.Instance.attached_decision_variable` が返す{class}`~ommx.AttachedDecisionVariable`と、`instance.constraints[id]`が返す{class}`~ommx.AttachedConstraint`の変更は、そのInstanceに反映されます。名前を変えてもIDは変わりません。ここで変更したのはラベルだけで、変数の定義域・目的関数・制約の式は同じです。数学的な条件を変える操作とは区別します。

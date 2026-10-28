@@ -1253,6 +1253,53 @@
         "skill installer"
       ],
       "scope": ""
+    },
+    {
+      "id": "metadata.edit",
+      "label": "Attached handleでメタデータを編集しsnapshot・表と区別する",
+      "owner": "G1.metadata-edit",
+      "requires": [
+        "instance.model",
+        "variables.metadata",
+        "constraint.basics"
+      ],
+      "external": false,
+      "aliases": [
+        "AttachedDecisionVariable",
+        "AttachedConstraint",
+        "detach"
+      ],
+      "scope": "既存IDの変数・通常制約の名前や説明をInstanceに反映する操作。数学的な条件の変更とは区別し、detachしたコピーやDataFrameの編集は書き戻されないと理解する。"
+    },
+    {
+      "id": "mps.export",
+      "label": "SDKだけで小さなモデルをMPSファイルへ出力する",
+      "owner": "P16",
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "external": false,
+      "aliases": [
+        "save_mps",
+        "MPS"
+      ],
+      "scope": "小さなBinaryモデルを作る例からsave_mpsでプレーンテキストまたはgzipを出力し、MPS入力対応の外部ツールへ渡せる。求解・外部候補の取り込みまで習得したとはみなさない。"
+    },
+    {
+      "id": "mps.information-boundary",
+      "label": "MPSで渡す現在のモデルとOMMX保存の情報境界を読む",
+      "owner": "P16",
+      "requires": [
+        "mps.export"
+      ],
+      "external": false,
+      "aliases": [
+        "information loss",
+        "model export"
+      ],
+      "scope": "二次以下の多項式・変数種の要約、特殊制約の事前lowering、ラベル・removed・NamedFunction等の情報損失を理解して保存形式を選ぶ。厳密な出力契約、lowering操作やArtifactの保存手順の習得までは付与しない。"
     }
   ],
   "pages": [
@@ -1890,8 +1937,10 @@
       "title": "変数の名前と添字",
       "slice": "B/I",
       "role": "guide-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/instance.md"
+      ],
       "source_urls": [],
       "requires": [
         "variable.basics"
@@ -1910,10 +1959,66 @@
       ],
       "deferred": [],
       "parent_page": "G1",
-      "notes": "",
+      "notes": "G1の「変数の定義域とメタデータ」節がname・subscriptsとIDを区別する。既存モデルへの書き戻しとsnapshotの違いは後段のG1.metadata-editで追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/instance.md"
+      ]
+    },
+    {
+      "id": "G1.metadata-edit",
+      "title": "既存モデルの変数・制約に名前や説明を付ける",
+      "slice": "M",
+      "role": "guide-section",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/instance.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics",
+        "variables.metadata"
+      ],
+      "sections": [
+        {
+          "id": "attached-edit",
+          "introduces": [
+            "metadata.edit"
+          ],
+          "uses": [
+            "variables.metadata"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "snapshot-and-table",
+          "introduces": [],
+          "uses": [
+            "metadata.edit"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "next-steps",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "solution.extract"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "G1",
+      "notes": "instance-edit-metadata節。G1冒頭のモデルを使い、既存IDからAttached handleを取得してラベルを編集し、再取得で反映先を確認する。続いてdetach・DataFrameの非反映を例示する。表示・結果抽出は実在するAPIへの次の入口であり、この節の訪問だけでは習得を付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/instance.md"
+      ]
     },
     {
       "id": "G2",
@@ -2957,6 +3062,15 @@
       "requires": [],
       "sections": [
         {
+          "id": "choose-output",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "mps.export",
+            "mps.information-boundary"
+          ]
+        },
+        {
           "id": "basics",
           "introduces": [
             "artifact.basics"
@@ -3193,6 +3307,16 @@
             "wire.serialization",
             "artifact.roundtrip"
           ]
+        },
+        {
+          "id": "next-steps",
+          "introduces": [],
+          "uses": [],
+          "mentions": [
+            "metadata.edit",
+            "mps.export",
+            "mps.information-boundary"
+          ]
         }
       ],
       "deferred": [],
@@ -3202,6 +3326,58 @@
       "implementation_verified": false,
       "source_paths_existing": [
         "docs/ja/how_to/load_existing_instance.md"
+      ]
+    },
+    {
+      "id": "P16",
+      "title": "InstanceをMPSファイルで外部ツールへ渡す",
+      "slice": "M",
+      "role": "how-to",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/how_to/export_mps.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "ext.python",
+        "sdk.environment"
+      ],
+      "sections": [
+        {
+          "id": "write",
+          "introduces": [
+            "mps.export"
+          ],
+          "uses": [
+            "mps.export"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "supported-models-and-loss",
+          "introduces": [
+            "mps.information-boundary"
+          ],
+          "uses": [
+            "mps.information-boundary"
+          ],
+          "mentions": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1",
+            "artifact.basics",
+            "artifact.roundtrip"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "SDK b7だけの独立したBinaryモデルとsave_mpsの例。ファイルを渡す準備で終了し外部ツールの実行や候補取り込みを前提にしない。対応範囲と情報境界はBookに要約し、正確な一覧はsave_mps APIへ送る。lowering手順とArtifact保存はリンク先を訪問した場合だけ習得する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/how_to/export_mps.md"
       ]
     },
     {
@@ -5034,6 +5210,58 @@
         },
         "T6"
       ]
+    },
+    {
+      "id": "metadata_edit",
+      "title": "Instanceのラベルを整え、反映先を確認する",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G1.names",
+        "G1.metadata-edit"
+      ]
+    },
+    {
+      "id": "mps_export_direct",
+      "title": "独立したMPS出力How-toからファイルを作る",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "P16"
+      ]
+    },
+    {
+      "id": "mps_export_after_import",
+      "title": "既存問題の読み込みからMPS出力へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "P3",
+        "P16"
+      ]
+    },
+    {
+      "id": "mps_export_from_artifact_guide",
+      "title": "Artifactとの使い分けからMPS出力へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G13",
+        "P16"
+      ]
     }
   ],
   "environment_requirements": [
@@ -5060,6 +5288,10 @@
     {
       "page": "T6",
       "observed": "SDK b7のみ。送受信を別プロセス、受信を空のLocal Registryで実行。hidden solver preparationは削除。"
+    },
+    {
+      "page": "P16",
+      "observed": "SDK b7のみ。小さなモデルを本文で作る。Adapter・ソルバー・ネットワークは出力例に不要。外部ツール自身のMPS拡張対応は受け手側で確認する。"
     }
   ],
   "review_notes": [
