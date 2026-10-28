@@ -730,7 +730,7 @@ instance.variable_parameters_df()
 
 Use these for tidy-data joins / aggregation; reach for the wide `constraints_df(kind="regular")` (with `include=`) when you want one row per id with columns alongside.
 
-`provenance` is intentionally not folded into `constraints_df(kind="regular")` via `include=`: chains have variable length, and a wide pivot would either explode the column space or produce an object-dtype list column. Pivot the long-format `constraint_provenance_df()` yourself if you need a wide view.
+`provenance` is intentionally not folded into `constraints_df(kind="regular")` via `include=`: chains have variable length, and a wide pivot would either explode the column space or produce an object-dtype list column. Pivot the long-format `constraint_provenance_df(kind="regular")` yourself if you need a wide view.
 
 ## 11. Constraint and variable accessors return `AttachedX` write-through handles (`3.0.0a3`, [#849](https://github.com/Jij-Inc/ommx/pull/849), [#850](https://github.com/Jij-Inc/ommx/pull/850), [#852](https://github.com/Jij-Inc/ommx/pull/852))
 
@@ -1076,14 +1076,30 @@ constraint families. Replace `instance.constraints[5]` with
 `instance.constraints[ConstraintID(5)]`; use `IndicatorConstraintID`,
 `OneHotConstraintID`, or `Sos1ConstraintID` for the other families. The old
 family-specific properties are consolidated into `.constraints` and
-`.removed_constraints`. Result `get_constraint_by_id` and `constraint_ids` are
-replaced by indexing and key iteration. There is no `get_constraints` method.
+`.removed_constraints`. `get_constraint_by_id`, `get_removed_constraint_by_id`,
+and result `constraint_ids` are replaced by indexing and key iteration.
+There is no `get_constraints` method.
+
+```python
+row = instance.constraints.of_kind("regular")[5]  # AttachedConstraint
+snapshot = row.detach()  # Explicit independent Constraint copy
+removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstraint snapshot
+```
+
+The metadata methods `constraint_context_df`, `constraint_parameters_df`,
+`constraint_provenance_df`, and `constraint_removed_reasons_df` require
+keyword-only `kind`, just like `constraints_df`. They no longer default to regular
+constraints. This applies to `Instance`, `ParametricInstance`, `Solution`, and `SampleSet`.
+
+`SampleSet.summary_with_constraints` is removed. Use `samples.summary` for sample
+objectives and overall feasibility, and `samples.constraints` or
+`samples.constraints_df(kind=...)` for per-constraint results.
 
 The collection property does not materialize rows. Model accesses return
 `Attached*` handles; result accesses return individual snapshots. Retained
 collection views observe owner mutations. Use `dict(owner.constraints)` when
-an independent mapping is needed. Filter typed keys with `isinstance` when
-iterating one family. `constraints_df(*, kind=...)` requires `kind` on every root.
+an independent mapping is needed. Use `constraints.of_kind("sos1")` when
+inspecting one family. `constraints_df(*, kind=...)` requires `kind` on every root.
 Models select active rows by default and support `removed=True`; results include
 retained removed rows. See [collection semantics](../user_guide/solution.md).
 
@@ -1094,8 +1110,9 @@ specific return type. Consumers that translate or solve models must reject
 unsupported families explicitly; filtering them out would relax the problem.
 
 Family-specific method arguments and `from_components` keys still accept
-integers and promote them, rejecting IDs from another family. Collection
-indexing, membership, and `get` require typed IDs. IDs remain typed in returned
+integers and promote them, rejecting IDs from another family. Mixed-family collection
+indexing, membership, and `get` require typed IDs; views selected with `of_kind`
+promote integers to the selected family. IDs remain typed in returned
 values, diagnostics, provenance, and DataFrame indexes. They have no `int()` or
 integer-index conversion. `constraint_violation(id)` infers the family from its
 typed ID and has no `kind` argument. Variable and sample IDs remain integers.
@@ -1106,4 +1123,4 @@ typed ID and has no `kind` argument. Variable and sample IDs remain integers.
 now return violations instead of signed function values.** Parameters are ignored,
 as in variable extraction; duplicate subscripts across families raise `ValueError`.
 
-For signed regular values, use `solution.get_constraint_value(id)` or `row.evaluated_value`. See [name-based extraction](../user_guide/solution.md#extract-constraints-by-name).
+For signed regular values, use `solution.get_constraint_value(id)` or `row.evaluated_value`. See {ref}`name-based extraction <extract-constraints-by-name>`.

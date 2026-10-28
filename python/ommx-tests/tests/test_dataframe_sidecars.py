@@ -82,20 +82,53 @@ def test_variable_parameters_df(snapshot):
 # ---------------------------------------------------------------------------
 
 
-def test_constraint_context_df_default_kind_is_regular(snapshot):
-    """No kind= argument → kind="regular"; index = regular_constraint_id."""
-    assert _df_snap(_instance_with_context().constraint_context_df()) == snapshot
+def test_regular_kind_context_df(snapshot):
+    """Explicit kind="regular"; index = regular_constraint_id."""
+    assert (
+        _df_snap(_instance_with_context().constraint_context_df(kind="regular"))
+        == snapshot
+    )
 
 
 def test_constraint_parameters_df(snapshot):
     """Long format with regular_constraint_id, key, value columns."""
-    assert _df_snap(_instance_with_context().constraint_parameters_df()) == snapshot
+    assert (
+        _df_snap(_instance_with_context().constraint_parameters_df(kind="regular"))
+        == snapshot
+    )
 
 
 def test_unknown_kind_raises_value_error():
     instance = _instance_with_context()
     with pytest.raises(ValueError):
         instance.constraint_context_df(kind="bogus")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("owner", ["instance", "parametric", "solution", "samples"])
+@pytest.mark.parametrize(
+    "accessor",
+    [
+        "constraint_context_df",
+        "constraint_parameters_df",
+        "constraint_provenance_df",
+        "constraint_removed_reasons_df",
+    ],
+)
+def test_constraint_sidecars_require_explicit_keyword_kind(owner, accessor):
+    instance = _special_instance()
+    roots = {
+        "instance": instance,
+        "parametric": instance.as_parametric_instance(),
+        "solution": instance.evaluate({0: 0, 1: 1, 2: 0, 3: 0}),
+        "samples": instance.evaluate_samples({7: {0: 0, 1: 1, 2: 0, 3: 0}}),
+    }
+    method = getattr(roots[owner], accessor)
+    with pytest.raises(TypeError):
+        method()
+    with pytest.raises(TypeError):
+        method("sos1")
+    for kind in ["regular", "indicator", "one_hot", "sos1"]:
+        assert isinstance(method(kind=kind), pd.DataFrame)
 
 
 def test_indicator_kind_context_df(snapshot):
@@ -143,7 +176,10 @@ def _special_instance() -> Instance:
 
 def test_provenance_empty_when_no_chain(snapshot):
     """Directly-authored constraints have no provenance chain."""
-    assert _df_snap(_instance_with_context().constraint_provenance_df()) == snapshot
+    assert (
+        _df_snap(_instance_with_context().constraint_provenance_df(kind="regular"))
+        == snapshot
+    )
 
 
 def test_provenance_after_one_hot_conversion(snapshot):
@@ -159,7 +195,7 @@ def test_provenance_after_one_hot_conversion(snapshot):
         sense=Sense.Minimize,
     )
     instance.convert_one_hot_to_constraint(7)
-    assert _df_snap(instance.constraint_provenance_df()) == snapshot
+    assert _df_snap(instance.constraint_provenance_df(kind="regular")) == snapshot
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +207,7 @@ def test_removed_reasons_df_after_relax(snapshot):
     """relax_constraint with no extra parameters → 1 row, key/value = NA."""
     instance = _instance_with_context()
     instance.relax_constraint(10, "test_reason")
-    assert _df_snap(instance.constraint_removed_reasons_df()) == snapshot
+    assert _df_snap(instance.constraint_removed_reasons_df(kind="regular")) == snapshot
 
 
 def test_removed_reasons_df_with_parameters_after_one_hot_conversion(snapshot):
@@ -201,7 +237,8 @@ def test_solution_constraint_context_df_matches_instance():
     instance = _instance_with_context()
     sol = instance.evaluate({0: 1, 1: 0, 2: 0})
     pd.testing.assert_frame_equal(
-        instance.constraint_context_df(), sol.constraint_context_df()
+        instance.constraint_context_df(kind="regular"),
+        sol.constraint_context_df(kind="regular"),
     )
 
 
@@ -243,10 +280,10 @@ def test_solution_sidecar_no_duplicate_rows_for_removed():
     instance = _instance_with_relaxed_constraint()
     sol = instance.evaluate({0: 1, 1: 0, 2: 0})
 
-    meta = sol.constraint_context_df()
+    meta = sol.constraint_context_df(kind="regular")
     assert sorted(meta.index.tolist()) == [ConstraintID(10), ConstraintID(11)]
 
-    params = sol.constraint_parameters_df()
+    params = sol.constraint_parameters_df(kind="regular")
     rows = list(zip(params["regular_constraint_id"], params["key"]))
     assert rows == [(ConstraintID(10), "k")]  # exactly one row, not duplicated
 
@@ -255,10 +292,10 @@ def test_sample_set_sidecar_no_duplicate_rows_for_removed():
     instance = _instance_with_relaxed_constraint()
     ss = instance.evaluate_samples({0: {0: 1, 1: 0, 2: 0}})
 
-    meta = ss.constraint_context_df()
+    meta = ss.constraint_context_df(kind="regular")
     assert sorted(meta.index.tolist()) == [ConstraintID(10), ConstraintID(11)]
 
-    params = ss.constraint_parameters_df()
+    params = ss.constraint_parameters_df(kind="regular")
     rows = list(zip(params["regular_constraint_id"], params["key"]))
     assert rows == [(ConstraintID(10), "k")]
 

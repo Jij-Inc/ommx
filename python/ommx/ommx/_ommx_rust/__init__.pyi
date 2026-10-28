@@ -5929,8 +5929,7 @@ class Instance:
         DataFrame of named functions
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed wide format).
@@ -5941,8 +5940,7 @@ class Instance:
         to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
@@ -5951,8 +5949,7 @@ class Instance:
         `{kind}_constraint_id`, `key`, `value`. Default RangeIndex.
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
@@ -5961,8 +5958,7 @@ class Instance:
         `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -6111,18 +6107,6 @@ class Instance:
     ) -> DecisionVariable:
         r"""
         Get a specific decision variable by ID
-        """
-    def get_constraint_by_id(
-        self, constraint_id: ConstraintID | builtins.int
-    ) -> Constraint:
-        r"""
-        Get a specific constraint by ID
-        """
-    def get_removed_constraint_by_id(
-        self, constraint_id: ConstraintID | builtins.int
-    ) -> RemovedConstraint:
-        r"""
-        Get a specific removed constraint by ID
         """
     def get_named_function_by_id(
         self, named_function_id: builtins.int
@@ -7933,18 +7917,6 @@ class ParametricInstance:
         r"""
         Get a specific decision variable by ID
         """
-    def get_constraint_by_id(
-        self, constraint_id: ConstraintID | builtins.int
-    ) -> Constraint:
-        r"""
-        Get a specific constraint by ID
-        """
-    def get_removed_constraint_by_id(
-        self, constraint_id: ConstraintID | builtins.int
-    ) -> RemovedConstraint:
-        r"""
-        Get a specific removed constraint by ID
-        """
     def get_named_function_by_id(
         self, named_function_id: builtins.int
     ) -> NamedFunction:
@@ -7986,8 +7958,7 @@ class ParametricInstance:
         DataFrame of parameters
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
@@ -7995,22 +7966,19 @@ class ParametricInstance:
         semantics.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -9305,12 +9273,6 @@ class SampleSet:
         Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.
         Index is sample_id.
         """
-    @property
-    def summary_with_constraints(self) -> pandas.DataFrame:
-        r"""
-        Summary DataFrame with per-constraint feasibility columns.
-        Index is sample_id.
-        """
     def replace_annotations(
         self, annotations: typing.Mapping[builtins.str, builtins.str]
     ) -> None: ...
@@ -9472,8 +9434,7 @@ class SampleSet:
         Dynamic columns: one per sample_id (int) with the function's evaluated value.
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
@@ -9481,22 +9442,19 @@ class SampleSet:
         semantics. Reads from the sampled collection's context store.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).
@@ -10584,8 +10542,7 @@ class Solution:
         Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
         """
     def constraint_context_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint context DataFrame (id-indexed). See
@@ -10593,22 +10550,19 @@ class Solution:
         semantics. Reads from the evaluated collection's context store.
         """
     def constraint_parameters_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint parameters DataFrame (long format).
         """
     def constraint_provenance_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Constraint provenance DataFrame (long format).
         """
     def constraint_removed_reasons_df(
-        self,
-        kind: typing.Literal["regular", "indicator", "one_hot", "sos1"] = "regular",
+        self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]
     ) -> pandas.DataFrame:
         r"""
         Removed-constraint reasons DataFrame (long format).

@@ -13096,10 +13096,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -13146,10 +13143,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -13196,10 +13190,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -13246,10 +13237,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -14684,48 +14672,6 @@
               "deprecated": null
             },
             {
-              "name": "get_constraint_by_id",
-              "doc": "Get a specific constraint by ID",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "constraint_id",
-                      "type_": {
-                        "display": "_ommx_rust.ConstraintID | int",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": {
-                              "fqn": "ommx.ConstraintID",
-                              "doc_module": "ommx",
-                              "kind": "Class",
-                              "attribute": null
-                            },
-                            "children": []
-                          },
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "get_decision_variable_by_id",
               "doc": "Get a specific decision variable by ID",
               "signatures": [
@@ -14769,48 +14715,6 @@
                   ],
                   "return_type": {
                     "display": "NamedFunction",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "get_removed_constraint_by_id",
-              "doc": "Get a specific removed constraint by ID",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "constraint_id",
-                      "type_": {
-                        "display": "_ommx_rust.ConstraintID | int",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": {
-                              "fqn": "ommx.ConstraintID",
-                              "doc_module": "ommx",
-                              "kind": "Class",
-                              "attribute": null
-                            },
-                            "children": []
-                          },
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "RemovedConstraint",
                     "link_target": null,
                     "children": []
                   }
@@ -22497,10 +22401,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -22547,10 +22448,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -22597,10 +22495,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -22647,10 +22542,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -23493,48 +23385,6 @@
               "deprecated": null
             },
             {
-              "name": "get_constraint_by_id",
-              "doc": "Get a specific constraint by ID",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "constraint_id",
-                      "type_": {
-                        "display": "_ommx_rust.ConstraintID | int",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": {
-                              "fqn": "ommx.ConstraintID",
-                              "doc_module": "ommx",
-                              "kind": "Class",
-                              "attribute": null
-                            },
-                            "children": []
-                          },
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "Constraint",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
               "name": "get_decision_variable_by_id",
               "doc": "Get a specific decision variable by ID",
               "signatures": [
@@ -23604,48 +23454,6 @@
                   ],
                   "return_type": {
                     "display": "Parameter",
-                    "link_target": null,
-                    "children": []
-                  }
-                }
-              ],
-              "is_async": false,
-              "deprecated": null
-            },
-            {
-              "name": "get_removed_constraint_by_id",
-              "doc": "Get a specific removed constraint by ID",
-              "signatures": [
-                {
-                  "parameters": [
-                    {
-                      "name": "constraint_id",
-                      "type_": {
-                        "display": "_ommx_rust.ConstraintID | int",
-                        "link_target": null,
-                        "children": [
-                          {
-                            "display": "ConstraintID",
-                            "link_target": {
-                              "fqn": "ommx.ConstraintID",
-                              "doc_module": "ommx",
-                              "kind": "Class",
-                              "attribute": null
-                            },
-                            "children": []
-                          },
-                          {
-                            "display": "int",
-                            "link_target": null,
-                            "children": []
-                          }
-                        ]
-                      },
-                      "default": null
-                    }
-                  ],
-                  "return_type": {
-                    "display": "RemovedConstraint",
                     "link_target": null,
                     "children": []
                   }
@@ -29396,10 +29204,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -29446,10 +29251,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -29496,10 +29298,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -29546,10 +29345,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -30771,17 +30567,6 @@
             {
               "name": "summary",
               "doc": "Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.\nIndex is sample_id.",
-              "type_": {
-                "display": "DataFrame",
-                "link_target": null,
-                "children": []
-              },
-              "is_property": true,
-              "is_readonly": true
-            },
-            {
-              "name": "summary_with_constraints",
-              "doc": "Summary DataFrame with per-constraint feasibility columns.\nIndex is sample_id.",
               "type_": {
                 "display": "DataFrame",
                 "link_target": null,
@@ -33653,10 +33438,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -33703,10 +33485,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -33753,10 +33532,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {
@@ -33803,10 +33579,7 @@
                           }
                         ]
                       },
-                      "default": {
-                        "kind": "Simple",
-                        "value": "'regular'"
-                      }
+                      "default": null
                     }
                   ],
                   "return_type": {

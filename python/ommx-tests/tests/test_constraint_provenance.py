@@ -27,7 +27,7 @@ def test_user_authored_constraint_has_empty_provenance():
         },
         sense=Sense.Minimize,
     )
-    c = instance.get_constraint_by_id(5)
+    c = instance.constraints.of_kind("regular")[5]
     assert c.provenance == []
 
 
@@ -42,7 +42,7 @@ def test_convert_one_hot_populates_provenance():
     )
     new_id = instance.convert_one_hot_to_constraint(10)
 
-    c = instance.get_constraint_by_id(new_id)
+    c = instance.constraints[new_id]
     assert len(c.provenance) == 1
     assert c.provenance[0].kind == ProvenanceKind.OneHotConstraint
     assert c.provenance[0].original_id == OneHotConstraintID(10)
@@ -61,7 +61,7 @@ def test_convert_sos1_populates_provenance_on_every_generated_constraint():
 
     assert new_ids, "convert_sos1_to_constraints should emit at least one constraint"
     for nid in new_ids:
-        c = instance.get_constraint_by_id(nid)
+        c = instance.constraints[nid]
         assert c.provenance, f"constraint {nid} has no provenance"
         last = c.provenance[-1]
         assert last.kind == ProvenanceKind.Sos1Constraint
@@ -90,7 +90,7 @@ def test_convert_indicator_populates_provenance():
 
     assert new_ids
     for nid in new_ids:
-        c = instance.get_constraint_by_id(nid)
+        c = instance.constraints[nid]
         assert c.provenance
         last = c.provenance[-1]
         assert last.kind == ProvenanceKind.IndicatorConstraint
@@ -154,8 +154,8 @@ def test_provenance_equality_and_hash():
         sense=Sense.Minimize,
     )
     new_id = instance.convert_one_hot_to_constraint(10)
-    p1 = instance.get_constraint_by_id(new_id).provenance[0]
-    p2 = instance.get_constraint_by_id(new_id).provenance[0]
+    p1 = instance.constraints[new_id].provenance[0]
+    p2 = instance.constraints[new_id].provenance[0]
 
     assert p1 == p2
     assert ProvenanceKind.OneHotConstraint == ProvenanceKind.OneHotConstraint

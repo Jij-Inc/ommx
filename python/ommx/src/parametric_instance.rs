@@ -7,7 +7,7 @@ use crate::{
     error::OmmxPyResult,
     pandas::{constraint_id_col, entries_to_dataframe, PyDataFrame, ToPandasEntry},
     Constraint, DecisionVariable, Function, Instance, NamedFunction, OutputObjective, Parameter,
-    RemovedConstraint, Sense,
+    Sense,
 };
 use ommx::{ConstraintID, NamedFunctionID, VariableID};
 use pyo3::{
@@ -736,42 +736,6 @@ impl ParametricInstance {
             })
     }
 
-    /// Get a specific constraint by ID
-    pub(crate) fn get_constraint_by_id(
-        &self,
-        constraint_id: ConstraintIDInput,
-    ) -> PyResult<Constraint> {
-        let cid = ConstraintID::from(constraint_id);
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .constraints()
-            .get(&cid)
-            .map(|c| Constraint::from_parts(c.clone(), context.collect_for(cid)))
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!("Constraint with ID {constraint_id} not found"))
-            })
-    }
-
-    /// Get a specific removed constraint by ID
-    pub(crate) fn get_removed_constraint_by_id(
-        &self,
-        constraint_id: ConstraintIDInput,
-    ) -> PyResult<RemovedConstraint> {
-        let cid = ConstraintID::from(constraint_id);
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .removed_constraints()
-            .get(&cid)
-            .map(|(c, r)| {
-                RemovedConstraint::from_parts(c.clone(), context.collect_for(cid), r.clone())
-            })
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Removed constraint with ID {constraint_id} not found"
-                ))
-            })
-    }
-
     /// Get a specific named function by ID
     pub fn get_named_function_by_id(&self, named_function_id: u64) -> PyResult<NamedFunction> {
         let id = NamedFunctionID::from(named_function_id);
@@ -961,7 +925,7 @@ impl ParametricInstance {
     /// Constraint context DataFrame (id-indexed). See
     /// {meth}`ommx.Instance.constraint_context_df` for column / `kind=`
     /// semantics.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
@@ -989,7 +953,7 @@ impl ParametricInstance {
     }
 
     /// Constraint parameters DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
@@ -1017,7 +981,7 @@ impl ParametricInstance {
     }
 
     /// Constraint provenance DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
@@ -1045,7 +1009,7 @@ impl ParametricInstance {
     }
 
     /// Removed-constraint reasons DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,

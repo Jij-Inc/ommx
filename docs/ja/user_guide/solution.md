@@ -163,7 +163,12 @@ for cid, constraint in sos1.items():
 結果では保持された削除済み制約も常に含めます。SampleSetの行の `violations` と
 `feasible(atol=...)` は、サンプルIDをキーとする辞書を返します。
 
-種類が決まる入力、例えば `constraints={1: constraint}` や `instance.get_constraint_by_id(1)` は、
+メタデータの`constraint_context_df`・`constraint_parameters_df`・`constraint_provenance_df`・
+`constraint_removed_reasons_df`も、全所有元でキーワード引数`kind`が必須です。
+サンプルごとの目的値と全体の実行可能性には`samples.summary`を使い、制約別の結果は
+`samples.constraints`または`samples.constraints_df(kind=...)`で確認します。
+
+種類が決まる入力、例えば `constraints={1: constraint}` や `instance.constraints.of_kind("regular")[1]` は、
 整数を自動昇格し、別種類のIDを拒否します。同じ入力辞書に `1` と `ConstraintID(1)` がある場合は、
 同じIDになるため `ValueError` です。種類を横断するコレクション・`constraint_violation(id)`・DataFrameのインデックスには
 型付きIDを使います。IDは `int()` や整数インデックスへ変換できません。変数IDとサンプルIDは整数のままです。

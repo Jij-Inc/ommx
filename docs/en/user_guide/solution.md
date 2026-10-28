@@ -160,8 +160,14 @@ On models it selects active rows by default; `removed=True` includes both
 removed rows. Sampled rows expose `violations` and `feasible(atol=...)` keyed by
 sample ID.
 
+The metadata methods `constraint_context_df`, `constraint_parameters_df`,
+`constraint_provenance_df`, and `constraint_removed_reasons_df` also require
+keyword-only `kind` on every owner. For sample objectives and overall feasibility,
+use `samples.summary`; inspect per-constraint results through `samples.constraints`
+or `samples.constraints_df(kind=...)`.
+
 Inputs that already identify a family still promote integers: for example,
-`constraints={1: constraint}` and `instance.get_constraint_by_id(1)`. They reject
+`constraints={1: constraint}` and `instance.constraints.of_kind("regular")[1]`. They reject
 IDs of another family. An input mapping containing both `1` and `ConstraintID(1)`
 raises `ValueError` because the keys normalize to the same identity. Mixed-family collections,
 `constraint_violation(id)`, and DataFrame indexes require typed IDs. IDs do not

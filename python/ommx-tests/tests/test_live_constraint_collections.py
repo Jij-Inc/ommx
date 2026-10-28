@@ -172,12 +172,15 @@ def test_all_collections_require_typed_keys_and_reject_structural_mutation():
     samples = model.evaluate_samples({9: {0: 1, 1: 0}})
     assert_type(samples.constraints, SampledConstraintCollection)
     for root in [model, make_model(ParametricInstance), samples, samples.get(9)]:
+        assert not hasattr(root, "get_constraint_by_id")
+        assert not hasattr(root, "get_removed_constraint_by_id")
         assert not hasattr(root, "get_constraints")
         assert not hasattr(root, "indicator_constraints")
         with pytest.raises(TypeError):
             root.constraints_df()  # type: ignore[call-arg]
         with pytest.raises(TypeError):
             root.constraints_df("regular")  # type: ignore[call-arg]
+    assert not hasattr(samples, "summary_with_constraints")
     collections: list[Mapping[ConstraintIDBase, ConstraintView]] = [
         model.constraints,
         model.removed_constraints,

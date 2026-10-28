@@ -15,7 +15,7 @@ use crate::{
         PyDataFrame, ToPandasEntry,
     },
     Constraint, DecisionVariable, DecisionVariableRole, Function, NamedFunction,
-    ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
+    ParametricInstance, Rng, SampleSet, Samples, Sense, Solution, State,
 };
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, VariableID};
 use pyo3::{
@@ -3005,7 +3005,7 @@ impl Instance {
     /// `name`, `subscripts`, `description`. Index column is
     /// `{kind}_constraint_id`. `kind` selects which constraint family
     /// to read: `"regular"`, `"indicator"`, `"one_hot"`, or `"sos1"`.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
@@ -3036,7 +3036,7 @@ impl Instance {
     ///
     /// One row per (constraint_id, parameter_key) pair. Columns:
     /// `{kind}_constraint_id`, `key`, `value`. Default RangeIndex.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
@@ -3067,7 +3067,7 @@ impl Instance {
     ///
     /// One row per (constraint_id, step) pair. Columns:
     /// `{kind}_constraint_id`, `step`, `source_kind`, `source_id`.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
@@ -3099,7 +3099,7 @@ impl Instance {
     /// One row per (constraint_id, parameter_key) pair, plus one row with
     /// `key`/`value` set to NA when the reason has no parameters. Columns:
     /// `{kind}_constraint_id`, `reason`, `key`, `value`.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,
@@ -3297,43 +3297,6 @@ impl Instance {
             })
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Decision variable with ID {variable_id} not found"))
-            })
-    }
-
-    /// Get a specific constraint by ID
-    pub(crate) fn get_constraint_by_id(
-        &self,
-        constraint_id: ConstraintIDInput,
-    ) -> PyResult<Constraint> {
-        let cid = ConstraintID::from(constraint_id);
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .constraints()
-            .get(&cid)
-            .map(|constraint| Constraint::from_parts(constraint.clone(), context.collect_for(cid)))
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!("Constraint with ID {constraint_id} not found"))
-            })
-    }
-
-    /// Get a specific removed constraint by ID
-    pub(crate) fn get_removed_constraint_by_id(
-        &self,
-        constraint_id: ConstraintIDInput,
-    ) -> PyResult<RemovedConstraint> {
-        let cid = ConstraintID::from(constraint_id);
-        let context = self.inner.constraint_collection().context();
-        self.inner
-            .removed_constraints()
-            .get(&cid)
-            .map(|removed_constraint| {
-                let (c, r) = removed_constraint;
-                RemovedConstraint::from_parts(c.clone(), context.collect_for(cid), r.clone())
-            })
-            .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Removed constraint with ID {constraint_id} not found"
-                ))
             })
     }
 

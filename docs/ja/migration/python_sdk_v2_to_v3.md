@@ -648,13 +648,29 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 `instance.constraints[5]` は `instance.constraints[ConstraintID(5)]` に変更します。
 特殊制約には `IndicatorConstraintID`・`OneHotConstraintID`・`Sos1ConstraintID` を使います。
 種類別プロパティは `.constraints` と `.removed_constraints` に統合されます。
-結果の `get_constraint_by_id` と `constraint_ids` は添字アクセスとキー列挙に置き換えます。
+`get_constraint_by_id`・`get_removed_constraint_by_id`と、結果の`constraint_ids`は
+添字アクセスとキー列挙に置き換えます。
 `get_constraints` メソッドはありません。
+
+```python
+row = instance.constraints.of_kind("regular")[5]  # AttachedConstraint
+snapshot = row.detach()  # 独立したConstraintのコピーを明示的に取得
+removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstraintのスナップショット
+```
+
+メタデータの`constraint_context_df`・`constraint_parameters_df`・`constraint_provenance_df`・
+`constraint_removed_reasons_df`も、`constraints_df`と同じくキーワード引数`kind`を必須にします。
+省略時に通常制約を選ぶ動作は廃止します。`Instance`・`ParametricInstance`・`Solution`・
+`SampleSet`に共通です。
+
+`SampleSet.summary_with_constraints`は廃止します。サンプルごとの目的値と全体の
+実行可能性には`samples.summary`を、制約別の結果には`samples.constraints`または
+`samples.constraints_df(kind=...)`を使います。
 
 プロパティ取得時には制約を収集せず、モデルへのアクセスは `Attached*`、結果へのアクセスは
 個別のスナップショットを返します。保持したコレクションは所有元の変更を反映します。
-独立した辞書が必要な場合は `dict(owner.constraints)` を使います。1種類だけ列挙する場合は、
-Typed IDを `isinstance` で絞ります。`constraints_df(*, kind=...)` はすべての所有元で
+独立した辞書が必要な場合は `dict(owner.constraints)` を使います。1種類だけ調べる場合は、
+`constraints.of_kind("sos1")`で絞ります。`constraints_df(*, kind=...)` はすべての所有元で
 `kind` が必須です。モデルは有効な行を選び、`removed=True` で削除済みも含めます。
 結果は保持された削除済みも含めます。詳細は[コレクションの意味](../user_guide/solution.md)を参照してください。
 
@@ -665,7 +681,8 @@ Typed IDを `isinstance` で絞ります。`constraints_df(*, kind=...)` はす�
 単に除外すると問題を緩和してしまいます。
 
 種類が決まるメソッド引数や `from_components` のキーは引き続き整数を自動昇格し、別種類のIDを拒否します。
-コレクションの添字アクセス・所属判定・`get` には型付きIDが必須です。
+種類を横断するコレクションの添字アクセス・所属判定・`get`には型付きIDが必須です。
+`of_kind`で絞ったビューは、その種類の整数IDを自動昇格します。
 返り値・診断・provenance・DataFrameのインデックスも型付きIDを保持します。
 `int()` や整数インデックスへの変換はできません。`constraint_violation(id)` はIDの型から種類を判断し、
 `kind` 引数を取りません。変数IDとサンプルIDは引き続き整数です。

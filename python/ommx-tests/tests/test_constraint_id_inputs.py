@@ -79,8 +79,8 @@ def test_integer_and_typed_keys_promote_to_the_same_family(host):
         assert row.constraint_id == id_type(7)
         assert 7 not in rows  # Returned dictionaries retain normal Python equality.
     assert (
-        instance.get_constraint_by_id(7).equality
-        == instance.get_constraint_by_id(ConstraintID(7)).equality
+        instance.constraints.of_kind("regular")[7].equality
+        == instance.constraints[ConstraintID(7)].equality
     )
 
 
@@ -116,7 +116,7 @@ def test_regular_integer_lookup_mutation_and_solution_queries():
     instance = Instance.from_components(**components())
     instance.relax_constraint(7, "manual")
     assert set(instance.removed_constraints) == {ConstraintID(7)}
-    assert instance.get_removed_constraint_by_id(7).removed_reason == "manual"
+    assert instance.removed_constraints.of_kind("regular")[7].removed_reason == "manual"
     instance.restore_constraint(7)
     assert {key for key in instance.constraints if isinstance(key, ConstraintID)} == {
         ConstraintID(7)
@@ -145,7 +145,7 @@ def test_special_integer_mutations_and_typed_transformation_results():
         assert type(id_) is ConstraintID
     for id_ in instance.convert_indicator_to_constraint(7):
         assert type(id_) is ConstraintID
-    assert instance.get_constraint_by_id(regular_id).provenance[
+    assert instance.constraints[regular_id].provenance[
         0
     ].original_id == OneHotConstraintID(7)
 
@@ -240,7 +240,7 @@ def test_homogeneous_mapping_variables_are_valid_inputs():
             constraints=rows,
         )
         assert_type(instance.constraints, ConstraintCollection)
-        assert instance.get_constraint_by_id(7).equality == (x == 1).equality
+        assert instance.constraints.of_kind("regular")[7].equality == (x == 1).equality
 
 
 @pytest.mark.parametrize(

@@ -93,7 +93,7 @@ def test_reject_wrong_family_before_mutation_and_ambiguous_integer():
         Sos1ConstraintID(7),
     ]:
         with pytest.raises(TypeError):
-            instance.get_constraint_by_id(wrong)
+            instance.constraints.of_kind("regular")[wrong]
         with pytest.raises(TypeError):
             instance.relax_constraint(wrong, "manual")
         solution = instance.evaluate({0: 1, 1: 0})

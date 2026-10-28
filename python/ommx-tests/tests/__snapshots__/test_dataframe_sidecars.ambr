@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: test_constraint_context_df_default_kind_is_regular
+# name: test_regular_kind_context_df
   '''
                             name subscripts         description
   regular_constraint_id                                        

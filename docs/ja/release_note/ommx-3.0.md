@@ -51,9 +51,14 @@ frame = solution.constraints_df(kind="regular")
 
 コレクションは所有元を保持し、型付きIDで参照された行だけを取得します。整数キーは拒否します。
 モデルの値はAttachedハンドル、結果の値は削除済み制約の情報も含む個別のスナップショットです。
-種類別プロパティは `.constraints` と `.removed_constraints` に統合し、結果の
-`get_constraint_by_id` と `constraint_ids` は添字アクセスと列挙へ置き換えます。
-`constraints_df` は全所有元でキーワード引数 `kind` が必須です。`get_constraints` メソッドはありません。
+種類別プロパティは `.constraints` と `.removed_constraints` に統合し、
+`get_constraint_by_id`・`get_removed_constraint_by_id`と結果の`constraint_ids`は
+添字アクセスと列挙へ置き換えます。モデルの独立したコピーが必要ならAttachedの行を`.detach()`します。
+`constraints_df`と4種類の制約メタデータDataFrameは、全所有元でキーワード引数`kind`が必須です。
+`get_constraints`メソッドはありません。
+
+`SampleSet.summary_with_constraints`は廃止します。サンプルごとの目的値と全体の実行可能性には
+`summary`を、制約別の結果には`constraints`または`constraints_df(kind=...)`を使います。
 
 `constraints.of_kind("sos1")`は、キーと行の具体型を保持するライブな`ConstraintFamilyView`を
 返します。`constraints_df`と同じkind文字列を受け取り、整数の検索キーを選択した種類へ
@@ -1488,7 +1493,7 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。`kind=` で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`、デフォルト `"regular"`):
+加えて、SoA の label/context store を直接読む 6 種類の long-format / id-indexed sidecar アクセサが追加されました。必須のキーワード引数`kind=`で対象の制約ファミリーを切り替えます (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
 
 - `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)

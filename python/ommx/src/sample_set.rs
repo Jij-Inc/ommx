@@ -7,7 +7,6 @@ use crate::{
     },
     Solution,
 };
-use ommx::SampledConstraintBehavior;
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyTuple},
@@ -558,69 +557,6 @@ impl SampleSet {
         )
     }
 
-    /// Summary DataFrame with per-constraint feasibility columns.
-    /// Index is sample_id.
-    #[getter]
-    pub fn summary_with_constraints<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<Bound<'py, PyDataFrame>> {
-        let feasible_map = self.inner.feasible();
-        let constraints = self.inner.constraints();
-        let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
-
-        // Build constraint labels
-        let constraint_context = self.inner.constraints().context();
-        let constraint_labels: Vec<(ommx::ConstraintID, String)> = constraints
-            .iter()
-            .map(|(&id, _sc)| {
-                let label = match constraint_context.name(id).filter(|n| !n.is_empty()) {
-                    Some(name) => {
-                        let subs = constraint_context.subscripts(id);
-                        if subs.is_empty() {
-                            name.to_string()
-                        } else {
-                            let subs_strs: Vec<String> =
-                                subs.iter().map(|s| s.to_string()).collect();
-                            format!("{}[{}]", name, subs_strs.join(", "))
-                        }
-                    }
-                    None => id.into_inner().to_string(),
-                };
-                (id, label)
-            })
-            .collect();
-
-        let entries: Vec<_> = self
-            .inner
-            .objectives()
-            .iter()
-            .map(|(sample_id, &objective)| {
-                let dict = PyDict::new(py);
-                dict.set_item("sample_id", sample_id.into_inner())?;
-                dict.set_item("objective", objective)?;
-                dict.set_item(
-                    "feasible",
-                    feasible_map.get(sample_id).copied().unwrap_or(false),
-                )?;
-                for (constraint_id, label) in &constraint_labels {
-                    let c_feasible = constraints[constraint_id]
-                        .is_feasible_for(*sample_id, self.inner.feasibility_atol())
-                        .unwrap_or(false);
-                    dict.set_item(label.as_str(), c_feasible)?;
-                }
-                Ok(dict.into_any())
-            })
-            .collect::<PyResult<_>>()?;
-        sorted_entries_to_dataframe(
-            py,
-            entries,
-            &["feasible", "objective"],
-            &[false, ascending],
-            "sample_id",
-        )
-    }
-
     /// DataFrame of decision variables with per-sample value columns.
     /// Static columns: id, kind, lower, upper, name, subscripts, description.
     /// Dynamic columns: one per sample_id (int) with the variable's value.
@@ -758,7 +694,7 @@ impl SampleSet {
     /// Constraint context DataFrame (id-indexed). See
     /// {meth}`ommx.Instance.constraint_context_df` for column / `kind=`
     /// semantics. Reads from the sampled collection's context store.
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_context_df<'py>(
         &self,
         py: Python<'py>,
@@ -786,7 +722,7 @@ impl SampleSet {
     }
 
     /// Constraint parameters DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_parameters_df<'py>(
         &self,
         py: Python<'py>,
@@ -814,7 +750,7 @@ impl SampleSet {
     }
 
     /// Constraint provenance DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_provenance_df<'py>(
         &self,
         py: Python<'py>,
@@ -842,7 +778,7 @@ impl SampleSet {
     }
 
     /// Removed-constraint reasons DataFrame (long format).
-    #[pyo3(signature = (kind = ConstraintKind::Regular))]
+    #[pyo3(signature = (*, kind))]
     pub fn constraint_removed_reasons_df<'py>(
         &self,
         py: Python<'py>,

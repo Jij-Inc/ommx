@@ -55,9 +55,14 @@ Collections retain their owner and fetch a row only when indexed by a typed ID.
 Integer keys are rejected. Model values are attached handles; result values are
 individual snapshots including retained removed constraints and their metadata.
 The family-specific model properties are consolidated into `.constraints` and
-`.removed_constraints`; result `get_constraint_by_id` and `constraint_ids` are
-replaced by indexing and iteration. `constraints_df` requires keyword-only
-`kind` on every root. There is no `get_constraints` method.
+`.removed_constraints`; `get_constraint_by_id`, `get_removed_constraint_by_id`,
+and result `constraint_ids` are replaced by indexing and iteration. Use `.detach()`
+on an attached row when an independent model snapshot is needed. `constraints_df`
+and all four constraint metadata DataFrame methods require keyword-only `kind`
+on every root. There is no `get_constraints` method.
+
+`SampleSet.summary_with_constraints` is removed. Use `summary` for sample objectives
+and overall feasibility, and `constraints` or `constraints_df(kind=...)` for constraint results.
 
 `constraints.of_kind("sos1")` returns a live `ConstraintFamilyView` with concrete
 key and row types. It accepts the same kind strings as `constraints_df`, promotes
@@ -1555,7 +1560,7 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. `kind=` selects the constraint family (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`, default `"regular"`):
+Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. Required keyword-only `kind=` selects the constraint family (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
 
 - `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
