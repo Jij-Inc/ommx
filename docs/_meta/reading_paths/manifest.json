@@ -158,7 +158,7 @@
         "polynomial representation",
         "格納表現"
       ],
-      "scope": ""
+      "scope": "数学的に同じ式でも保持する表現が異なり、表現を要求するclassへの適合結果が変わり得ることを理解する。各演算がどの表現を生成するかや整数冪・展開の正確な規則はFunctionのAPI Referenceで別に確認する。"
     },
     {
       "id": "constraint.basics",
@@ -431,7 +431,7 @@
         "default",
         "不要な変数"
       ],
-      "scope": ""
+      "scope": "irrelevantな変数の省略時に補われる値と、元の候補から復元した値を区別する。特定候補の値が重要なら明示する。変数kindごとの既定値選択規則の習得は含めず、Instance.populate_stateのAPI Referenceが所有する。"
     },
     {
       "id": "special.indicator",
@@ -845,7 +845,7 @@
         "Parameter",
         "with_parameters"
       ],
-      "scope": ""
+      "scope": "固定した変数・制約構造へパラメータを指定し、具体的なInstanceを作って再利用する。必要なID集合・余分なキー・値の検査条件はwith_parametersのAPI Referenceが所有し、Guide訪問だけからそれらの契約の習得を付与しない。"
     },
     {
       "id": "adapter.diagnostics",
@@ -2507,7 +2507,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "固定構造の問題族から二つのInstanceを作り、同じ候補の評価差を読む最小例。ID空間やモデラーとの役割の違いは局所説明し、必要なパラメータ・値の検査の詳細は実在するwith_parametersのAPI Referenceへ送る。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2556,7 +2556,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "Instanceと候補評価を前提に、固定した小さな問題から保持変数・used変数を区別し、四役割、依存式による復元、irrelevantの既定値、復元・補完後の評価対象へ進む。復元できることと問題の等価性は分け、後者はG7へ送る。",
+      "notes": "Instanceと候補評価を前提に、固定した小さな問題から保持変数・used変数を区別し、四役割、依存式による復元、irrelevantの補完、復元・補完後の評価対象へ進む。Integerの最小例で補完は元候補の復元でないことを教えるが、全kindの既定値規則はpopulate_stateのAPI Referenceに委ねる。復元できることと問題の等価性は分け、後者はG7へ送る。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2874,7 +2874,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "membership例の後にFunctionの表現形式の詳細を置き、OneHotの数学的な条件と専用表現を局所的に区別する。QUBOをclassの一例として局所導入し、Preparationによるclass適合とBackend向け係数整形、および係数だけではInstanceの復元・removed情報を運べないことを区別する。active/usedの詳細やAdapter適用は基本のmembership例の後に置く。",
+      "notes": "OneHotの数学的な条件と専用表現を局所的に区別する。数学的な式と保持表現の違いは概念だけを説明し、整数冪・展開の具体的な契約は実在するFunction.powiのAPI Referenceへ直接送る。QUBOをclassの一例として局所導入し、Preparationによるclass適合とBackend向け係数整形、および係数だけではInstanceの復元・removed情報を運べないことを区別する。active/usedの詳細やAdapter適用は基本のmembership例の後に置く。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2970,7 +2970,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "target・Policy・prepareの共通モデルをAdapter適用より先に置き、直入読者向けにOneHot/loweringとphaseを局所説明する。個別操作の数式・適用条件はAPI Reference、候補・実行可能性・目的・最適性の保証は実在するG7へ送る。QUBO向けPolicyの作成、明示的Preparation、係数整形を分ける。明示的なprepareの基本例はin-placeとし、変換前のInstance本体を後で使う必要がある場合のみcopyを説明する。Adapter easy API内部のcopy契約とは区別する。",
+      "notes": "target・Policy・prepareの共通モデルをAdapter適用より先に置き、直入読者向けにOneHot/loweringと使用を許す操作の選択を局所説明する。固定実行順序・適用回数・停止判定の詳細と例外・診断属性・変更残存の厳密な契約はInstance.prepareのAPI Referenceが所有する。Bookはtarget到達時の停止と明示的prepareの失敗で変更が残る場合の安全な利用に必要な注意を残す。候補・実行可能性・目的・最適性の保証はG7へ送る。QUBO向けPolicy作成、明示的Preparation、係数整形を分け、変換前のInstance本体を後で使う必要がある場合のみcopyを説明する。Adapter easy API内部のcopy契約とは区別する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
