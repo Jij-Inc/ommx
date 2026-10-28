@@ -52,16 +52,18 @@ assert ic.equality == Equality.LessThanOrEqualToZero
 ```
 
 Add it to an instance by passing a `dict[int, IndicatorConstraint]` to the `indicator_constraints=` argument of {meth}`Instance.from_components <ommx.Instance.from_components>`.
+Use a different ID from the regular constraint: all constraint kinds share
+[one numeric ID space](#constraint-numbering) within an instance.
 
 ```{code-cell} ipython3
 instance = Instance.from_components(
     decision_variables=[z, x],
     objective=x,
     constraints={0: z == 1},       # fix z = 1
-    indicator_constraints={0: ic}, # z = 1 => x <= 5
+    indicator_constraints={1: ic}, # z = 1 => x <= 5
     sense=Sense.Maximize,
 )
-assert set(instance.indicator_constraints.keys()) == {0}
+assert set(instance.indicator_constraints.keys()) == {1}
 ```
 
 The PySCIPOpt Adapter accepts Indicator constraints and passes them directly to SCIP.
