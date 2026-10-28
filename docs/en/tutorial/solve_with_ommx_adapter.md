@@ -178,10 +178,10 @@ assert np.isclose(solution.objective, expected)
 
 ### Analyzing Constraints
 
-The `constraints_df()` method returns a `pandas.DataFrame` object that includes details about each constraint's equality or inequality, its left-hand-side value (`"value"`), name, and more:
+The `constraints_df(kind="regular")` method returns a `pandas.DataFrame` object that includes details about each regular constraint's equality or inequality, its left-hand-side value (`"value"`), name, and more:
 
 ```{code-cell} ipython3
-solution.constraints_df()
+solution.constraints_df(kind="regular")
 ```
 
 Specifically, the `"value"` is helpful for understanding how much slack remains in each constraint. In this case, item 0 has weight $w_0 = 11$, item 3 has weight $w_3 = 35$, and the knapsack's capacity $W$ is $47$. Therefore, for the weight constraint 

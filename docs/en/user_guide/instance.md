@@ -136,7 +136,7 @@ print(f"{x1.id=}, {x1.name=}")
 Next, let's look at the constraints.
 
 ```{code-cell} ipython3
-instance.constraints_df()
+instance.constraints_df(kind="regular")
 ```
 
 In OMMX, constraints are also managed by ID, and this ID is independent of the decision variable ID. The ID is assigned when a constraint is attached to an `Instance`: the key you use in the `constraints` dictionary passed to {meth}`~ommx.Instance.from_components` becomes the constraint ID.
@@ -150,7 +150,7 @@ c = (x * y == 0).set_name("prod-zero")
 print(f"{c.name=}")
 ```
 
-You can also use the {attr}`~ommx.Instance.constraints` property to directly obtain a `dict[int, ommx.Constraint]` keyed by constraint ID. To obtain an `ommx.Constraint` by its ID, use the {meth}`~ommx.Instance.get_constraint_by_id` method.
+The {attr}`~ommx.Instance.constraints` property provides a live collection of all active constraint families. Index it with a typed ID, such as `instance.constraints[ConstraintID(0)]` for a regular constraint. Bare integers are rejected because each family has its own ID space. The returned attached handle reads and updates the owning instance. No rows are collected when you obtain the collection; each row is fetched when accessed. Removed constraints are available through `instance.removed_constraints`.
 
 ```{code-cell} ipython3
 for cid, c in instance.constraints.items():

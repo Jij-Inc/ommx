@@ -1,3 +1,4 @@
+from ommx import ConstraintID, IndicatorConstraintID
 import sys
 
 import pytest
@@ -13,7 +14,7 @@ def _attached_constraint_with_missing_state():
         constraints={0: variable == 0},
         sense=ommx.Sense.Minimize,
     )
-    return instance.constraints[0].evaluate({})
+    return instance.constraints[ConstraintID(0)].evaluate({})
 
 
 def _instance_with_required_variable() -> ommx.Instance:
@@ -184,7 +185,7 @@ def test_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
         instance.restore_constraint(0)
 
     assert instance.constraints == {}
-    assert set(instance.removed_constraints) == {0}
+    assert set(instance.removed_constraints) == {ConstraintID(0)}
 
 
 def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> None:
@@ -211,8 +212,16 @@ def test_indicator_constraint_restore_overflow_falls_back_to_runtime_error() -> 
     ):
         instance.restore_indicator_constraint(0)
 
-    assert instance.indicator_constraints == {}
-    assert set(instance.removed_indicator_constraints) == {0}
+    assert not any(
+        isinstance(cid, IndicatorConstraintID) for cid in instance.constraints
+    )
+    assert set(
+        (
+            cid
+            for cid in instance.removed_constraints
+            if isinstance(cid, IndicatorConstraintID)
+        )
+    ) == {IndicatorConstraintID(0)}
 
 
 @pytest.mark.parametrize("value", [float("nan"), 0.5])

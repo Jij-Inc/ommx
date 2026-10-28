@@ -49,6 +49,71 @@ Constraints removed by the penalty phase now store their encoded expressions.
 Their evaluated values and the original output objective are preserved through
 decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
 
+### ⚠ Typed constraint IDs and native result queries ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
+
+`Instance`, `ParametricInstance`, `Solution`, and `SampleSet` expose all
+constraint families through a live `.constraints` collection:
+
+```python
+from ommx import ConstraintID
+
+rows = solution.constraints
+row = rows[ConstraintID(7)]
+frame = solution.constraints_df(kind="regular")
+```
+
+Collections retain their owner and fetch a row only when indexed by a typed ID.
+Integer keys are rejected. Model values are attached handles; result values are
+individual snapshots including retained removed constraints and their metadata.
+The family-specific model properties are consolidated into `.constraints` and
+`.removed_constraints`; `get_constraint_by_id`, `get_removed_constraint_by_id`,
+and result `constraint_ids` are replaced by indexing and iteration. Use `.detach()`
+on an attached row when an independent model snapshot is needed. `constraints_df`
+and all four constraint metadata DataFrame methods require keyword-only `kind`
+on every root. There is no `get_constraints` method.
+
+`SampleSet.summary_with_constraints` is removed. Use `summary` for sample objectives
+and overall feasibility, and `constraints` or `constraints_df(kind=...)` for constraint results.
+
+`constraints.of_kind("sos1")` returns a live `ConstraintFamilyView` with concrete
+key and row types. It accepts the same kind strings as `constraints_df`, promotes
+integer lookups to the selected family, and rejects IDs of another family.
+The same filtering is available on model `removed_constraints` and result collections.
+
+Constraint IDs now retain their family throughout model and result APIs,
+transformations, diagnostics, provenance, and DataFrames: `ConstraintID`,
+`IndicatorConstraintID`, `OneHotConstraintID`, and `Sos1ConstraintID`. Inputs whose
+family is fixed automatically promote integers; IDs from other families are
+rejected. Returned IDs and dictionary keys are always typed. Different families
+never compare equal, and IDs have no `int()` or integer-index conversion.
+`constraint_violation(id)` selects the family from the typed ID and rejects bare
+integers. Variable and sample IDs remain integers; wire formats are unchanged.
+
+See [native result queries](../user_guide/solution.md)
+and the [migration guide](../migration/python_sdk_v2_to_v3.md).
+
+Heterogeneous queries use the extensible `ConstraintIDBase` and `ConstraintView`
+types, so adding a special-constraint family does not change their public
+return types. Concrete-ID indexing keeps precise overloads. Solver consumers
+explicitly reject unsupported families instead of silently omitting constraints.
+This extension principle is also recorded in the development and review guidance.
+
+Attached rows compare by owner identity and typed ID; removed and result rows
+compare their snapshot data and metadata. Collections and their views use that
+row equality. Typed IDs support `copy` and `deepcopy`, and `.get()` preserves
+both the concrete row type and the default value's type. Invalid lookup keys
+report the required typed-ID input without exposing internal enum extraction.
+
+`extract_constraints(name)` now searches every family. On `Instance` and
+`ParametricInstance` it returns attached objects keyed by subscript tuples; on
+`Solution` and `SampleSet` it returns nonnegative violations. **Regular constraints
+now return violations instead of signed function values.** Parameters are ignored,
+as in variable extraction; duplicate subscripts across families raise `ValueError`.
+
+All four owners provide `constraint_names: set[str]` for the same scope as
+`extract_constraints`. `ParametricInstance.decision_variable_names` lists variable
+names without including parameters. Unnamed rows are excluded and names are deduplicated.
+
 ### 🆕 Create states from variable names and subscripts ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 `Instance.state_from_named_values()` resolves a `NamedState` against the target
@@ -1494,7 +1559,7 @@ Every `*_df` accessor on `Instance` / `ParametricInstance` / `Solution` / `Sampl
 df = solution.constraints_df
 
 # After
-df = solution.constraints_df()
+df = solution.constraints_df(kind="regular")
 ```
 
 The wide `*_df` methods take an `include` argument that gates the label / parameters column families. The default `include=("label", "parameters")` preserves the v2-equivalent wide shape:
@@ -1506,7 +1571,7 @@ solution.decision_variables_df(include=["label"])      # core + label
 solution.decision_variables_df(include=["parameters"]) # core + parameters
 ```
 
-Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. `kind=` selects the constraint family (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`, default `"regular"`):
+Six new long-format / id-indexed sidecar accessors read directly from the SoA label/context stores. Required keyword-only `kind=` selects the constraint family (`"regular"` / `"indicator"` / `"one_hot"` / `"sos1"`):
 
 - `constraint_context_df(kind=...)` — id-indexed (`name` / `subscripts` / `description`)
 - `constraint_parameters_df(kind=...)` — long format (`{kind}_constraint_id` / `key` / `value`)
@@ -1526,7 +1591,7 @@ In v2.5.1 {meth}`Solution.constraints_df <ommx.Solution.constraints_df>` carried
 df = solution.constraints_df  # contains a 'removed_reason' column
 
 # After (3.0.0a3 — `*_df` are now methods)
-df = solution.constraints_df()  # no removed_reason column
+df = solution.constraints_df(kind="regular")  # no removed_reason column
 df = solution.constraints_df(include=("label", "parameters", "removed_reason"))
 # ↳ adds removed_reason / removed_reason.{key} (NA for active rows)
 ```

@@ -15,9 +15,9 @@ v3 では、v2 で始まった PyO3 移行が完了しました。SDK の domain
 
 1. `ommx.v1.*_pb2` は削除されました。SDK domain class は top-level `ommx` から import します。
 2. `Constraint` は `id` を持たなくなりました。制約IDは `Instance.from_components(..., constraints={id: constraint})` に渡す `dict` の key が所有します。
-3. `Instance` / `ParametricInstance` / `Solution` の制約コレクションは `list[T]` ではなく `dict[int, T]` です。`decision_variables` は `list` のままです。
+3. 全所有元の `.constraints` は型付きIDで参照する専用コレクションです。`decision_variables` は `list` のままです。
 4. `.raw`、`.from_raw()`、`.from_protobuf()`、`.to_protobuf()` など、protobuf 層を露出する bridge API は削除されました。
-5. `*_df` accessor は property ではなく method です。`instance.constraints_df()` のように呼び出してください。
+5. `*_df` accessor は property ではなく method です。`instance.constraints_df(kind="regular")` のように呼び出してください。
 6. `instance.constraints[id]` や `instance.decision_variables` は、snapshot ではなく書き込みが host に反映される `AttachedX` handle を返します。
 
 ## 1. import の変更
@@ -161,7 +161,7 @@ Instance.from_components(
 `ParametricInstance.from_components` も同じ shape を取ります。
 
 (42-constraint-accessors-on-instance--parametricinstance--solution-return-dicts)=
-### 4.2 `Instance` / `ParametricInstance` / `Solution` の制約 accessor は dict を返す
+### 4.2 制約の参照を型付きIDのコレクションへ統一
 
 ```python
 # v2.5.1
@@ -169,11 +169,14 @@ for c in instance.constraints:
     print(c.id, c.function)
 
 # v3
-for cid, c in instance.constraints.items():
-    print(cid, c.function)
+from ommx import ConstraintID
+
+for cid in instance.constraints:
+    if isinstance(cid, ConstraintID):
+        print(cid, instance.constraints[cid].function)
 ```
 
-`Instance` / `ParametricInstance` の制約 dict は、v3 final では `AttachedX` handle を返します。`Solution.constraints` は評価結果の snapshot なので `EvaluatedConstraint` のままです。`SampleSet.constraints` / `.decision_variables` / `.named_functions` は `list` のままです。
+`Instance` / `ParametricInstance` の `.constraints` は、型付きIDで参照すると `AttachedX` handle を返します。`Solution.constraints` と `SampleSet.constraints` も全種類を含む専用コレクションで、各アクセス時に評価結果のsnapshotを返します。`SampleSet.decision_variables` と `.named_functions` は `list` のままです。
 
 ## 5. rename、signature、挙動の変更
 
@@ -261,8 +264,9 @@ preparation-free methodだけに公開できます。Adapter inputに
 removed 制約とすべての特殊制約を含めます。通常の等式・不等式の違反量の定義は変わりません。
 
 ```python
+from ommx import OneHotConstraintID
 solution.total_violation()
-solution.constraint_violation(30, kind="one_hot")
+solution.constraint_violation(OneHotConstraintID(30))
 solution.constraints_df(kind="sos1")[["feasible", "violation"]]
 ```
 
@@ -291,7 +295,8 @@ Solution/SampleSet の feasibility プロパティは引き続き利用できま
 `feasibility_atol` プロパティから、取り出した制約にも同じ判定条件を渡せます。
 
 ```python
-evaluated = solution.constraints[1]
+from ommx import ConstraintID
+evaluated = solution.constraints[ConstraintID(1)]
 evaluated.is_feasible(atol=solution.feasibility_atol)
 evaluated.is_feasible(atol=1e-8)  # 保存済みの同じ違反量に対する別の問い合わせ
 ```
@@ -462,13 +467,13 @@ Preparation前に`source`が公開していたものです（§5.6）。Policy�
 df = instance.constraints_df
 
 # v3
-df = instance.constraints_df()
+df = instance.constraints_df(kind="regular")
 ```
 
 kind 別や removed / active 別の DataFrame accessor は、`constraints_df(kind=..., removed=...)` に統合されています。
 
 ```python
-instance.constraints_df(kind="normal")
+instance.constraints_df(kind="regular")
 instance.constraints_df(kind="one_hot")
 instance.constraints_df(kind="sos1", removed=True)
 solution.constraints_df(kind="indicator")
@@ -491,15 +496,17 @@ instance.replace_annotations({"team": "optimization"})
 `instance.constraints[id]` や `instance.decision_variables` は、host に書き戻す `AttachedX` handle を返します。
 
 ```python
-c = instance.constraints[5]
+from ommx import ConstraintID
+c = instance.constraints[ConstraintID(5)]
 c.set_name("balance")
-assert instance.constraints[5].name == "balance"
+assert instance.constraints[ConstraintID(5)].name == "balance"
 ```
 
 detached snapshot が必要な場合は `detach()` を使います。
 
 ```python
-snapshot = instance.constraints[5].detach()
+from ommx import ConstraintID
+snapshot = instance.constraints[ConstraintID(5)].detach()
 ```
 
 ### 10.1 fixed decision-variable values
@@ -634,3 +641,55 @@ ommx push ghcr.io/jij-inc/ommx/demo:v1
 - [ ] `decision_variable_analysis()` を `decision_variable_roles()` / `decision_variable_role(id)` / `fixed_decision_variables()` / `dependent_decision_variable_ids()` / `irrelevant_decision_variable_ids()` / `decision_variables_df()["state_role"]` に置き換える。
 - [ ] element-level `to_bytes()` / `from_bytes()` を、所有者全体の round-trip に置き換える。新規 payload は `to_v2_bytes()`、legacy v1 互換または evaluate 用 DTO では `to_v1_bytes()` を使う。
 - [ ] Artifact archive API を `ArtifactDraft` / `Artifact.save` / `Artifact.import_archive` / `Artifact.inspect_archive` に移行する。
+
+## 型付き制約IDと所有元を参照するコレクション
+
+4種類の所有元すべてで、`.constraints` は全種類の制約を扱う読み取り専用コレクションです。
+`instance.constraints[5]` は `instance.constraints[ConstraintID(5)]` に変更します。
+特殊制約には `IndicatorConstraintID`・`OneHotConstraintID`・`Sos1ConstraintID` を使います。
+種類別プロパティは `.constraints` と `.removed_constraints` に統合されます。
+`get_constraint_by_id`・`get_removed_constraint_by_id`と、結果の`constraint_ids`は
+添字アクセスとキー列挙に置き換えます。
+`get_constraints` メソッドはありません。
+
+```python
+row = instance.constraints.of_kind("regular")[5]  # AttachedConstraint
+snapshot = row.detach()  # 独立したConstraintのコピーを明示的に取得
+removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstraintのスナップショット
+```
+
+メタデータの`constraint_context_df`・`constraint_parameters_df`・`constraint_provenance_df`・
+`constraint_removed_reasons_df`も、`constraints_df`と同じくキーワード引数`kind`を必須にします。
+省略時に通常制約を選ぶ動作は廃止します。`Instance`・`ParametricInstance`・`Solution`・
+`SampleSet`に共通です。
+
+`SampleSet.summary_with_constraints`は廃止します。サンプルごとの目的値と全体の
+実行可能性には`samples.summary`を、制約別の結果には`samples.constraints`または
+`samples.constraints_df(kind=...)`を使います。
+
+プロパティ取得時には制約を収集せず、モデルへのアクセスは `Attached*`、結果へのアクセスは
+個別のスナップショットを返します。保持したコレクションは所有元の変更を反映します。
+独立した辞書が必要な場合は `dict(owner.constraints)` を使います。1種類だけ調べる場合は、
+`constraints.of_kind("sos1")`で絞ります。`constraints_df(*, kind=...)` はすべての所有元で
+`kind` が必須です。モデルは有効な行を選び、`removed=True` で削除済みも含めます。
+結果は保持された削除済みも含めます。詳細は[コレクションの意味](../user_guide/solution.md)を参照してください。
+
+種類を横断して列挙する型には、現在の種類のUnionではなく `ConstraintIDBase` と
+`ConstraintView` を使います。特殊制約の種類が追加されても、これらの公開返り値型は変わりません。
+具体的なIDによる添字アクセスは、具体的な返り値型を維持します。
+モデルを変換・求解するコードでは未対応種類を明示的に拒否してください。
+単に除外すると問題を緩和してしまいます。
+
+種類が決まるメソッド引数や `from_components` のキーは引き続き整数を自動昇格し、別種類のIDを拒否します。
+種類を横断するコレクションの添字アクセス・所属判定・`get`には型付きIDが必須です。
+`of_kind`で絞ったビューは、その種類の整数IDを自動昇格します。
+返り値・診断・provenance・DataFrameのインデックスも型付きIDを保持します。
+`int()` や整数インデックスへの変換はできません。`constraint_violation(id)` はIDの型から種類を判断し、
+`kind` 引数を取りません。変数IDとサンプルIDは引き続き整数です。
+
+`extract_constraints(name)`は全種類を検索します。`Instance`・`ParametricInstance`では
+添字タプルからAttachedオブジェクトへの辞書、`Solution`・`SampleSet`では違反量への辞書を
+返します。**通常制約も符号付きの式の値から非負の違反量に変わります。** 決定変数の
+抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
+
+通常制約の符号付き評価値には`solution.get_constraint_value(id)`か`row.evaluated_value`を使います。詳しくは[Solutionのガイド](../user_guide/solution.md)を参照してください。

@@ -192,9 +192,15 @@ def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict)
         
 def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dict):
     """Set the constraints for the model"""
-    # Process regular constraints. instance.constraints is a dict[int, Constraint]
-    # keyed by constraint ID.
-    for constraint_id, constraint in instance.constraints.items():
+    # Select regular constraints by their typed IDs.
+    from ommx import ConstraintID
+
+    for constraint_id in instance.constraints:
+        if not isinstance(constraint_id, ConstraintID):
+            raise OMMXPySCIPOptAdapterError(
+                f"Unsupported constraint family: {type(constraint_id).__name__}"
+            )
+        constraint = instance.constraints[constraint_id]
         # Generate an expression based on the type of constraint function
         f = constraint.function
         degree = f.degree()

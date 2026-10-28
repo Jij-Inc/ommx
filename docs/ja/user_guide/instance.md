@@ -96,10 +96,10 @@ instance.decision_variables_df()
 通常制約は $f(x)=0$ または $f(x)\leq 0$ として保持されます。例えば $f(x)\geq 0$ は $-f(x)\leq 0$ に書き換えられます。{attr}`~ommx.Constraint.equality` が、等式か不等式かを示します。
 
 ```{code-cell} ipython3
-instance.constraints_df()
+instance.constraints_df(kind="regular")
 ```
 
-{attr}`~ommx.Instance.constraints` は、**通常制約だけ**を制約IDで引く辞書です。特殊制約はここには含まれず、{attr}`~ommx.Instance.indicator_constraints`、{attr}`~ommx.Instance.one_hot_constraints`、{attr}`~ommx.Instance.sos1_constraints`という種類ごとの別の集合で保持されます。制約にも変数と同様のメタデータを付けられます。制約IDの空間は変数IDとは独立しています。制約IDの番号は、removedを含む通常制約・特殊制約の全種類を通じて同じInstance内で一意です。
+{attr}`~ommx.Instance.constraints` は、全種類の有効な制約を取得するコレクションです。通常制約なら `instance.constraints[ConstraintID(0)]` のように型付きIDでアクセスします。IDの型で制約の種類を指定するため、裸の整数は受け付けません。IDの番号は、removedを含む全種類を通じて同じInstance内で一意です。返されるAttachedハンドルを通じて、所有元の制約を参照・更新できます。コレクションを取得した時点では制約を収集せず、アクセス時に該当する制約を取得します。removedな制約は `instance.removed_constraints` で取得します。
 
 (instance-edit-metadata)=
 ## 既存モデルの変数・制約に名前や説明を付ける
@@ -137,7 +137,7 @@ assert instance.attached_decision_variable(x.id).name == "selected"
 assert instance.constraints[exclusive.constraint_id].name == "at_most_one"
 ```
 
-`constraints_df()`の編集も同様に書き戻されません。変数の`detach()`や{meth}`~ommx.Instance.get_decision_variable_by_id`もsnapshotを返すため、Instanceのラベルを編集するときは上のAttached handleを使います。snapshotの独立性は、{meth}`~ommx.AttachedDecisionVariable.detach`と{meth}`~ommx.AttachedConstraint.detach`のAPI Referenceで確認できます。
+`constraints_df(kind="regular")`の編集も同様に書き戻されません。変数の`detach()`や{meth}`~ommx.Instance.get_decision_variable_by_id`もsnapshotを返すため、Instanceのラベルを編集するときは上のAttached handleを使います。snapshotの独立性は、{meth}`~ommx.AttachedDecisionVariable.detach`と{meth}`~ommx.AttachedConstraint.detach`のAPI Referenceで確認できます。
 
 付け直した変数名・添字は、{meth}`~ommx.Instance.format_function`や{meth}`~ommx.Instance.display_function`で式を表示するときに使われます。その後に評価・求解したSolutionでは、{meth}`~ommx.Solution.extract_decision_variables`で名前・添字に対応する値を取り出せます。ラベルを整えてから結果を作ると、商品などのモデル上の単位で後処理できます。
 

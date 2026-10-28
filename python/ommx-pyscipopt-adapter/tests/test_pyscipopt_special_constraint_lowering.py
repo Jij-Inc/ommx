@@ -1,3 +1,5 @@
+from ommx import ConstraintID
+from ommx import IndicatorConstraintID, OneHotConstraintID, Sos1ConstraintID
 import copy
 
 import pytest
@@ -45,23 +47,33 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
         OMMXPySCIPOptAdapter.recommended_preparation_policy(),
     )
 
-    assert set(instance.one_hot_constraints) == {10}
+    assert set(
+        (cid for cid in instance.constraints if isinstance(cid, OneHotConstraintID))
+    ) == {OneHotConstraintID(10)}
     assert prepared.active_special_constraint_kinds == {
         SpecialConstraintKind.Indicator,
         SpecialConstraintKind.Sos1,
     }
-    assert prepared.one_hot_constraints == {}
-    assert set(prepared.indicator_constraints) == {30}
-    assert set(prepared.sos1_constraints) == {20}
+    assert not any(isinstance(cid, OneHotConstraintID) for cid in prepared.constraints)
+    assert set(
+        (cid for cid in prepared.constraints if isinstance(cid, IndicatorConstraintID))
+    ) == {IndicatorConstraintID(30)}
+    assert set(
+        (cid for cid in prepared.constraints if isinstance(cid, Sos1ConstraintID))
+    ) == {Sos1ConstraintID(20)}
 
     lowered = [
         constraint
-        for constraint in prepared.constraints.values()
+        for constraint in (
+            prepared.constraints[cid]
+            for cid in prepared.constraints
+            if isinstance(cid, ConstraintID)
+        )
         if constraint.provenance
         and constraint.provenance[-1].kind == ProvenanceKind.OneHotConstraint
     ]
     assert len(lowered) == 1
-    assert lowered[0].provenance[-1].original_id == 10
+    assert lowered[0].provenance[-1].original_id == OneHotConstraintID(10)
 
     assert input_class.contains(prepared)
     report = OMMXPySCIPOptAdapter.check_applicability(prepared)
@@ -70,5 +82,5 @@ def test_recommended_preparation_lowers_only_one_hot() -> None:
     assert adapter.instance is prepared
 
     constraint_names = {constraint.name for constraint in adapter.model.getConss()}
-    assert "ind_30" in constraint_names
-    assert "sos1_20" in constraint_names
+    assert f"ind_{IndicatorConstraintID(30)}" in constraint_names
+    assert f"sos1_{Sos1ConstraintID(20)}" in constraint_names

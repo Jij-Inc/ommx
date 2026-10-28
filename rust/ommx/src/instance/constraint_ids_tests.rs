@@ -282,73 +282,125 @@ proptest! {
 
 #[test]
 fn result_builders_and_protobuf_reject_duplicate_numbers_including_removed() {
-    for first_removed in [false, true] {
-        for second_removed in [false, true] {
-            let mut wire: v2::Instance = mixed().into();
-            change_wire_id(&mut wire, 0, 0, first_removed);
-            change_wire_id(&mut wire, 1, 1, second_removed);
-            let instance = Instance::try_from(wire).unwrap();
-            let state = v1::State::from_iter([(0, 1.0)]);
-            let solution = instance.evaluate(&state, ATol::default()).unwrap();
-            let samples = instance
-                .evaluate_samples(&crate::Sampled::from((0.into(), state)), ATol::default())
-                .unwrap();
+    for first in 0..4 {
+        for second in first + 1..4 {
+            for first_removed in [false, true] {
+                for second_removed in [false, true] {
+                    let mut wire: v2::Instance = mixed().into();
+                    change_wire_id(&mut wire, first, first as u64, first_removed);
+                    change_wire_id(&mut wire, second, second as u64, second_removed);
+                    let instance = Instance::try_from(wire).unwrap();
+                    let state = v1::State::from_iter([(0, 1.0)]);
+                    let solution = instance.evaluate(&state, ATol::default()).unwrap();
+                    let samples = instance
+                        .evaluate_samples(&crate::Sampled::from((0.into(), state)), ATol::default())
+                        .unwrap();
+                    let message = format!("Constraint number {first}");
 
-            // Change the indicator's identity consistently in its table and
-            // sidecars. Each collection remains valid in isolation.
-            macro_rules! collide {
-                ($collection:expr) => {{
-                    let collection = $collection.as_mut().unwrap();
-                    let row = collection.entries.remove(&1).unwrap();
-                    collection.entries.insert(0, row);
-                    if let Some(reason) = collection.removed_reasons.remove(&1) {
-                        collection.removed_reasons.insert(0, reason);
+                    // Move the second family's row and sidecars onto the first
+                    // family's number. Each collection is still valid alone.
+                    macro_rules! collide {
+                        ($collection:expr) => {{
+                            let collection = $collection.as_mut().unwrap();
+                            let old = second as u64;
+                            let new = first as u64;
+                            let row = collection.entries.remove(&old).unwrap();
+                            collection.entries.insert(new, row);
+                            if let Some(reason) = collection.removed_reasons.remove(&old) {
+                                collection.removed_reasons.insert(new, reason);
+                            }
+                            if let Some(context) = collection.contexts.remove(&old) {
+                                collection.contexts.insert(new, context);
+                            }
+                        }};
                     }
-                    if let Some(context) = collection.contexts.remove(&1) {
-                        collection.contexts.insert(0, context);
+                    let mut wire: v2::Solution = solution.clone().into();
+                    match second {
+                        1 => collide!(wire.evaluated_indicator_constraints),
+                        2 => collide!(wire.evaluated_one_hot_constraints),
+                        3 => collide!(wire.evaluated_sos1_constraints),
+                        _ => unreachable!(),
                     }
-                }};
+                    let error = crate::Solution::from_v2_bytes(&wire.encode_to_vec()).unwrap_err();
+                    assert!(format!("{error:#}").contains(&message));
+                    let atol = ATol::default();
+                    let error = crate::Solution::builder()
+                        .objective(0.0)
+                        .sense(Sense::Minimize)
+                        .decision_variables(solution.decision_variables().clone())
+                        .evaluated_constraints_collection(
+                            wire.evaluated_regular_constraints
+                                .unwrap()
+                                .parse(&atol)
+                                .unwrap(),
+                        )
+                        .evaluated_indicator_constraints_collection(
+                            wire.evaluated_indicator_constraints
+                                .unwrap()
+                                .parse(&atol)
+                                .unwrap(),
+                        )
+                        .evaluated_one_hot_constraints_collection(
+                            wire.evaluated_one_hot_constraints
+                                .unwrap()
+                                .parse_with_values(solution.decision_variable_table(), atol)
+                                .unwrap(),
+                        )
+                        .evaluated_sos1_constraints_collection(
+                            wire.evaluated_sos1_constraints
+                                .unwrap()
+                                .parse_with_values(solution.decision_variable_table(), atol)
+                                .unwrap(),
+                        )
+                        .build()
+                        .unwrap_err();
+                    assert!(error.to_string().contains(&message));
+
+                    let mut wire: v2::SampleSet = samples.clone().into();
+                    match second {
+                        1 => collide!(wire.sampled_indicator_constraints),
+                        2 => collide!(wire.sampled_one_hot_constraints),
+                        3 => collide!(wire.sampled_sos1_constraints),
+                        _ => unreachable!(),
+                    }
+                    let error = crate::SampleSet::from_v2_bytes(&wire.encode_to_vec()).unwrap_err();
+                    assert!(format!("{error:#}").contains(&message));
+                    let error = crate::SampleSet::builder()
+                        .sense(Sense::Minimize)
+                        .objectives(samples.objectives().clone())
+                        .decision_variables(samples.decision_variables().clone())
+                        .constraints_collection(
+                            wire.sampled_regular_constraints
+                                .unwrap()
+                                .parse(&atol)
+                                .unwrap(),
+                        )
+                        .indicator_constraints_collection(
+                            wire.sampled_indicator_constraints
+                                .unwrap()
+                                .parse(&atol)
+                                .unwrap(),
+                        )
+                        .one_hot_constraints_collection(
+                            wire.sampled_one_hot_constraints
+                                .unwrap()
+                                .parse_with_values(samples.decision_variable_table(), atol)
+                                .unwrap(),
+                        )
+                        .sos1_constraints_collection(
+                            wire.sampled_sos1_constraints
+                                .unwrap()
+                                .parse_with_values(samples.decision_variable_table(), atol)
+                                .unwrap(),
+                        )
+                        .build()
+                        .unwrap_err();
+                    assert!(matches!(
+                        error,
+                        crate::SampleSetError::ConflictingConstraintNumber { number, .. } if number == first as u64
+                    ));
+                }
             }
-            let mut wire: v2::Solution = solution.clone().into();
-            collide!(wire.evaluated_indicator_constraints);
-            let error = crate::Solution::from_v2_bytes(&wire.encode_to_vec()).unwrap_err();
-            assert!(format!("{error:#}").contains("Constraint number 0"));
-            let indicator = wire
-                .evaluated_indicator_constraints
-                .unwrap()
-                .parse(&ATol::default())
-                .unwrap();
-            let error = crate::Solution::builder()
-                .objective(0.0)
-                .sense(Sense::Minimize)
-                .decision_variables(solution.decision_variables().clone())
-                .evaluated_constraints_collection(solution.evaluated_constraints().clone())
-                .evaluated_indicator_constraints_collection(indicator)
-                .build()
-                .unwrap_err();
-            assert!(error.to_string().contains("Constraint number 0"));
-
-            let mut wire: v2::SampleSet = samples.clone().into();
-            collide!(wire.sampled_indicator_constraints);
-            let error = crate::SampleSet::from_v2_bytes(&wire.encode_to_vec()).unwrap_err();
-            assert!(format!("{error:#}").contains("Constraint number 0"));
-            let indicator = wire
-                .sampled_indicator_constraints
-                .unwrap()
-                .parse(&ATol::default())
-                .unwrap();
-            let error = crate::SampleSet::builder()
-                .sense(Sense::Minimize)
-                .objectives(samples.objectives().clone())
-                .decision_variables(samples.decision_variables().clone())
-                .constraints_collection(samples.constraints().clone())
-                .indicator_constraints_collection(indicator)
-                .build()
-                .unwrap_err();
-            assert!(matches!(
-                error,
-                crate::SampleSetError::ConflictingConstraintNumber { number: 0, .. }
-            ));
         }
     }
 }

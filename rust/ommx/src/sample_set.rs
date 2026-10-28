@@ -65,9 +65,6 @@ pub enum SampleSetError {
     #[error("Decision variable with parameters is not supported")]
     ParameterizedVariable,
 
-    #[error("Constraint with parameters is not supported")]
-    ParameterizedConstraint,
-
     #[error("Unknown sample ID: {id:?}")]
     UnknownSampleID { id: SampleID },
 

@@ -1,3 +1,4 @@
+use crate::constraint_base::ConstraintView;
 use crate::{ConstraintHost, Equality, EvaluatedConstraint, Function, Instance, State};
 use fnv::FnvHashMap;
 use ommx::Evaluate;
@@ -274,13 +275,17 @@ impl Constraint {
 /// reason. As with [`Constraint`], the context snapshot does not propagate
 /// back to the originating instance — it is read-only context for inspection.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
-#[derive(Clone)]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(Clone, PartialEq)]
 pub struct RemovedConstraint {
     pub constraint: ommx::Constraint,
     pub context: ommx::ConstraintContext,
     pub removed_reason: ommx::RemovedReason,
 }
+crate::constraint_base::constraint_subclass!(
+    RemovedConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl RemovedConstraint {
     pub fn from_parts(
@@ -430,11 +435,16 @@ impl RemovedConstraint {
 /// The handle keeps the parent host alive through a refcount; drop the
 /// wrapper to release the back-reference.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
 pub struct AttachedConstraint {
     pub(crate) host: ConstraintHost,
     pub(crate) id: ommx::ConstraintID,
 }
+crate::constraint_base::constraint_subclass!(
+    AttachedConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl AttachedConstraint {
     pub fn new(host: ConstraintHost, id: ommx::ConstraintID) -> Self {
@@ -487,8 +497,8 @@ fn lookup_constraint_parametric(
 impl AttachedConstraint {
     /// The id this handle points at.
     #[getter]
-    pub fn constraint_id(&self) -> u64 {
-        self.id.into_inner()
+    pub fn constraint_id(&self) -> crate::ConstraintID {
+        self.id.into()
     }
 
     /// The parent host this constraint lives in

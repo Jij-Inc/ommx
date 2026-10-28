@@ -155,7 +155,7 @@ def test_duplicate_named_function_subscripts_raise_value_error() -> None:
             operation()
 
 
-def test_parameterized_constraints_raise_value_error() -> None:
+def test_constraint_extraction_ignores_parameters() -> None:
     x = ommx.DecisionVariable.binary(0)
     constraint = (x == 1).set_name("c").add_parameters({"group": "a"})
     instance = ommx.Instance.from_components(
@@ -167,10 +167,8 @@ def test_parameterized_constraints_raise_value_error() -> None:
     solution = instance.evaluate({0: 1})
     sample_set = instance.evaluate_samples({7: {0: 1}})
 
-    with pytest.raises(ValueError, match="Constraint with parameters"):
-        solution.extract_constraints("c")
-    with pytest.raises(ValueError, match="Constraint with parameters"):
-        sample_set.extract_constraints("c", 7)
+    assert solution.extract_constraints("c") == {(): 0.0}
+    assert sample_set.extract_constraints("c", 7) == {(): 0.0}
 
 
 def test_missing_feasible_sample_raises_value_error_for_all_aliases() -> None:

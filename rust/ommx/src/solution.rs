@@ -57,9 +57,6 @@ pub enum SolutionError {
     #[error("Decision variable with parameters is not supported")]
     ParameterizedVariable,
 
-    #[error("Constraint with parameters is not supported")]
-    ParameterizedConstraint,
-
     #[error("Duplicate subscript: {subscripts:?}")]
     DuplicateSubscript { subscripts: Vec<i64> },
 
@@ -264,6 +261,30 @@ fn validate_all_solution_constraint_used_ids(
 }
 
 impl Solution {
+    /// Unique constraint names across every family, including retained removed rows.
+    ///
+    /// Searches the same rows as `extract_constraints`. Unnamed constraints are
+    /// excluded; explicitly empty names are included. Duplicate names are
+    /// returned once, even when their subscripts are ambiguous for extraction.
+    pub fn constraint_names(&self) -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        macro_rules! collect {
+            ($collection:expr) => {
+                let collection = $collection;
+                names.extend(
+                    collection
+                        .keys()
+                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+                );
+            };
+        }
+        collect!(&self.evaluated_constraints);
+        collect!(&self.evaluated_indicator_constraints);
+        collect!(&self.evaluated_one_hot_constraints);
+        collect!(&self.evaluated_sos1_constraints);
+        names
+    }
+
     /// The tolerance used by this solution's feasibility queries and wire flags.
     ///
     /// Explicit constraint queries may use a different tolerance without
@@ -557,47 +578,47 @@ impl Solution {
         Ok(result)
     }
 
-    /// Extract constraints by name with subscripts as key
+    /// Extract nonnegative constraint violations by name, keyed by subscripts.
     ///
-    /// Returns a mapping from subscripts (as a vector) to the constraint's evaluated value.
-    /// This is useful for extracting constraints that have the same name but different subscripts.
+    /// Searches every constraint family, including retained removed constraints.
+    /// Parameters and descriptions are ignored, as in decision-variable extraction.
+    /// For a regular constraint this returns its violation, not its signed function
+    /// value; use [`Self::get_constraint_value`] when the latter is needed.
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - No constraints with the given name are found
-    /// - A constraint with parameters is found
-    /// - The same subscript is found multiple times
-    ///
+    /// Returns an error if no constraint has the requested name, or matching
+    /// constraints share subscripts, including across different families.
     pub fn extract_constraints(
         &self,
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
-        // Collect all constraints with the given name from the collection's
-        // modeling-label sidecar.
-        let context = self.evaluated_constraints.context();
-        let matches: Vec<(ConstraintID, &EvaluatedConstraint)> = self
-            .evaluated_constraints
-            .iter()
-            .filter(|(id, _)| context.name(**id) == Some(name))
-            .map(|(id, c)| (*id, c))
-            .collect();
-        if matches.is_empty() {
-            return Err(SolutionError::UnknownConstraintName {
-                name: name.to_string(),
-            });
-        }
-
         let mut result = BTreeMap::new();
-        for (id, ec) in &matches {
-            if !context.parameters(*id).is_empty() {
-                return Err(SolutionError::ParameterizedConstraint);
-            }
-            let key = context.subscripts(*id).to_vec();
-            if result.contains_key(&key) {
-                return Err(SolutionError::DuplicateSubscript { subscripts: key });
-            }
-            result.insert(key, ec.stage.evaluated_value);
+        macro_rules! collect {
+            ($collection:expr) => {
+                let collection = $collection;
+                let context = collection.context();
+                for (id, constraint) in collection.iter() {
+                    if context.name(*id) == Some(name) {
+                        let subscripts = context.subscripts(*id).to_vec();
+                        if result
+                            .insert(subscripts.clone(), constraint.violation())
+                            .is_some()
+                        {
+                            return Err(SolutionError::DuplicateSubscript { subscripts });
+                        }
+                    }
+                }
+            };
+        }
+        collect!(&self.evaluated_constraints);
+        collect!(&self.evaluated_indicator_constraints);
+        collect!(&self.evaluated_one_hot_constraints);
+        collect!(&self.evaluated_sos1_constraints);
+        if result.is_empty() {
+            return Err(SolutionError::UnknownConstraintName {
+                name: name.to_owned(),
+            });
         }
         Ok(result)
     }
@@ -1436,6 +1457,127 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_extract_constraints_all_families() {
+        use crate::{DecisionVariable, Equality, Instance, OneHotConstraint, Sos1Constraint};
+
+        let variables = BTreeSet::from([VariableID::from(0), VariableID::from(1)]);
+        let mut instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(
+                variables
+                    .iter()
+                    .map(|&id| (id, DecisionVariable::binary()))
+                    .collect(),
+            )
+            .constraints(BTreeMap::from([(
+                0.into(),
+                Constraint::equal_to_zero(Function::from(crate::coeff!(-2.0))),
+            )]))
+            .indicator_constraints(BTreeMap::from([(
+                1.into(),
+                IndicatorConstraint::new(
+                    0.into(),
+                    Equality::EqualToZero,
+                    Function::from(crate::coeff!(-3.0)),
+                ),
+            )]))
+            .one_hot_constraints(BTreeMap::from([(
+                2.into(),
+                OneHotConstraint::new(variables.clone()).unwrap(),
+            )]))
+            .sos1_constraints(BTreeMap::from([(
+                3.into(),
+                Sos1Constraint::new(variables).unwrap(),
+            )]))
+            .build()
+            .unwrap();
+        let context = |index| {
+            let mut context = crate::ConstraintContext::default();
+            context.label.name = Some("c".into());
+            context.label.subscripts = vec![index];
+            context
+                .label
+                .parameters
+                .insert("group".into(), index.to_string());
+            context
+        };
+        instance
+            .set_constraint_context(0.into(), context(0))
+            .unwrap();
+        instance
+            .set_indicator_constraint_context(1.into(), context(1))
+            .unwrap();
+        instance
+            .set_one_hot_constraint_context(2.into(), context(2))
+            .unwrap();
+        instance
+            .set_sos1_constraint_context(3.into(), context(3))
+            .unwrap();
+        let names = BTreeSet::from(["c".to_owned()]);
+        assert_eq!(instance.constraint_names(), names);
+        let parametric: crate::ParametricInstance = instance.clone().into();
+        assert_eq!(parametric.constraint_names(), names);
+        assert_eq!(
+            parametric.decision_variable_names(),
+            instance.decision_variable_names()
+        );
+        let state = crate::v1::State {
+            entries: [(0, 0.0), (1, 0.0)].into(),
+        };
+        let solution = instance.evaluate(&state, ATol::default()).unwrap();
+        let expected = BTreeMap::from([
+            (vec![0], 2.0),
+            (vec![1], 0.0),
+            (vec![2], 1.0),
+            (vec![3], 0.0),
+        ]);
+        assert_eq!(solution.extract_constraints("c").unwrap(), expected);
+        assert_eq!(solution.constraint_names(), names);
+        assert!(matches!(
+            solution.extract_constraints("missing"),
+            Err(SolutionError::UnknownConstraintName { .. })
+        ));
+        let samples = instance
+            .evaluate_samples(
+                &crate::Sampled::from((crate::SampleID::from(7), state.clone())),
+                ATol::default(),
+            )
+            .unwrap();
+        assert_eq!(
+            samples.extract_constraints("c", 7.into()).unwrap(),
+            expected
+        );
+        assert_eq!(samples.constraint_names(), names);
+        assert!(matches!(
+            samples.extract_constraints("c", 99.into()),
+            Err(crate::SampleSetError::UnknownSampleID { .. })
+        ));
+
+        // Cross-family duplicate labels must not silently overwrite a result.
+        instance
+            .set_sos1_constraint_context(3.into(), context(0))
+            .unwrap();
+        assert!(matches!(
+            instance
+                .evaluate(&state, ATol::default())
+                .unwrap()
+                .extract_constraints("c"),
+            Err(SolutionError::DuplicateSubscript { .. })
+        ));
+        let samples = instance
+            .evaluate_samples(
+                &crate::Sampled::from((crate::SampleID::from(7), state)),
+                ATol::default(),
+            )
+            .unwrap();
+        assert!(matches!(
+            samples.extract_constraints("c", 7.into()),
+            Err(crate::SampleSetError::DuplicateSubscripts { .. })
+        ));
     }
 
     #[test]

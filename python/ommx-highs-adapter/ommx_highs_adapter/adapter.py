@@ -11,6 +11,7 @@ from highspy.highs import highs_linear_expression, highs_var
 from opentelemetry import trace
 
 from ommx import (
+    ConstraintID,
     Equality,
     Function,
     Instance,
@@ -1055,8 +1056,13 @@ class OMMXHighsAdapter(SolverAdapter):
         self.model.changeObjectiveSense(sense)
 
     def _set_constraints(self):
-        self._constraint_rows: dict[int, int] = {}
-        for cid, constr in self.instance.constraints.items():
+        self._constraint_rows: dict[ConstraintID, int] = {}
+        for cid in self.instance.constraints:
+            if not isinstance(cid, ConstraintID):
+                raise OMMXHighsAdapterError(
+                    f"Unsupported constraint family: {type(cid).__name__} (id: {cid})"
+                )
+            constr = self.instance.constraints[cid]
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
                 val = const_expr

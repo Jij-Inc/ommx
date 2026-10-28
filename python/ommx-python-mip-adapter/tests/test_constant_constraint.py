@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 from ommx import DecisionVariable, Instance, Linear, Sense
 from ommx.adapter import InfeasibleDetected
@@ -24,7 +25,9 @@ def test_constant_constraint_feasible():
     assert solution.state.entries == {0: 1.0}
     assert solution.objective == 1.0
 
-    assert len(solution.constraints) == 2
+    assert (
+        len({cid for cid in solution.constraints if isinstance(cid, ConstraintID)}) == 2
+    )
 
 
 @pytest.mark.skip(

@@ -1,18 +1,28 @@
+use crate::constraint_base::ConstraintView;
 use std::collections::BTreeSet;
 
 use pyo3::prelude::*;
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
-pub struct EvaluatedConstraint(pub ommx::EvaluatedConstraint, pub ommx::ConstraintContext);
+#[pyclass(eq, extends = ConstraintView)]
+#[derive(PartialEq)]
+pub struct EvaluatedConstraint(
+    pub ommx::EvaluatedConstraint,
+    pub ommx::ConstraintContext,
+    pub Option<ommx::RemovedReason>,
+);
+crate::constraint_base::constraint_subclass!(
+    EvaluatedConstraint,
+    crate::constraint_base::ConstraintView
+);
 
 impl EvaluatedConstraint {
     pub fn standalone(inner: ommx::EvaluatedConstraint) -> Self {
-        Self(inner, ommx::ConstraintContext::default())
+        Self(inner, ommx::ConstraintContext::default(), None)
     }
 
     pub fn from_parts(inner: ommx::EvaluatedConstraint, context: ommx::ConstraintContext) -> Self {
-        Self(inner, context)
+        Self(inner, context, None)
     }
 }
 
@@ -52,43 +62,6 @@ impl EvaluatedConstraint {
         Ok(self.0.is_feasible(ommx::ATol::new(atol)?))
     }
 
-    /// Get the constraint name
-    #[getter]
-    pub fn name(&self) -> Option<String> {
-        self.1.label.name.clone()
-    }
-
-    /// Get the subscripts
-    #[getter]
-    pub fn subscripts(&self) -> Vec<i64> {
-        self.1.label.subscripts.clone()
-    }
-
-    /// Get the parameters
-    #[getter]
-    pub fn parameters(&self) -> std::collections::HashMap<String, String> {
-        self.1
-            .label
-            .parameters
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
-    }
-
-    /// Get the description
-    #[getter]
-    pub fn description(&self) -> Option<String> {
-        self.1.label.description.clone()
-    }
-
-    /// Get the provenance chain.
-    ///
-    /// See {attr}`~ommx.Constraint.provenance` for semantics.
-    #[getter]
-    pub fn provenance(&self) -> Vec<crate::Provenance> {
-        crate::provenance_list(&self.1)
-    }
-
     /// Get the used decision variable IDs
     #[getter]
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
@@ -112,3 +85,5 @@ impl EvaluatedConstraint {
         self.0.violation()
     }
 }
+
+constraint_result_context!(EvaluatedConstraint);

@@ -3,6 +3,10 @@ from itertools import combinations
 import pytest
 
 from ommx import (
+    ConstraintID,
+    IndicatorConstraintID,
+    OneHotConstraintID,
+    Sos1ConstraintID,
     DecisionVariable,
     Instance,
     OneHotConstraint,
@@ -62,17 +66,16 @@ def test_added_constraints_share_numbers_across_families(parametric):
             constraints={},
             parameters=[],
         )
-    assert instance.add_constraint(x == 0).constraint_id == 0
-    assert (
-        instance.add_indicator_constraint((x == 0).with_indicator(x)).constraint_id == 1
-    )
-    assert (
-        instance.add_one_hot_constraint(OneHotConstraint(variables=[x])).constraint_id
-        == 2
-    )
-    assert (
-        instance.add_sos1_constraint(Sos1Constraint(variables=[x])).constraint_id == 3
-    )
+    assert instance.add_constraint(x == 0).constraint_id == ConstraintID(0)
+    assert instance.add_indicator_constraint(
+        (x == 0).with_indicator(x)
+    ).constraint_id == IndicatorConstraintID(1)
+    assert instance.add_one_hot_constraint(
+        OneHotConstraint(variables=[x])
+    ).constraint_id == OneHotConstraintID(2)
+    assert instance.add_sos1_constraint(
+        Sos1Constraint(variables=[x])
+    ).constraint_id == Sos1ConstraintID(3)
     restored = type(instance).from_v2_bytes(instance.to_v2_bytes())
     assert restored.to_v2_bytes() == instance.to_v2_bytes()
 
@@ -90,5 +93,5 @@ def test_promotion_rejects_exhausted_shared_number_space_atomically():
     request = Sos1BigMPromotionRequest({maximum: {0: Sos1BigMSelectorClaim.reused()}})
     report = instance.promote_sos1_big_m(request)
     assert report.promoted == {}
-    assert "Cannot allocate" in report.rejections[maximum]
+    assert "Cannot allocate" in report.rejections[ConstraintID(maximum)]
     assert instance.to_v2_bytes() == before

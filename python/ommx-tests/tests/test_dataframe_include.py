@@ -111,12 +111,15 @@ def test_decision_variables_df_state_role():
 
 
 def test_constraints_df_default(snapshot):
-    assert _df_snap(_build_instance().constraints_df()) == snapshot
+    assert _df_snap(_build_instance().constraints_df(kind="regular")) == snapshot
 
 
 def test_constraints_df_include_empty(snapshot):
     """include=[] drops label columns; equality / function_type / used_ids stay."""
-    assert _df_snap(_build_instance().constraints_df(include=[])) == snapshot
+    assert (
+        _df_snap(_build_instance().constraints_df(kind="regular", include=[]))
+        == snapshot
+    )
 
 
 # ---------------------------------------------------------------------------

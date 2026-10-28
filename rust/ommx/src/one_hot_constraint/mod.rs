@@ -110,7 +110,7 @@ pub struct OneHotEvaluatedData {
 /// Each violation is nonnegative and not NaN. The violation and active-variable
 /// maps must have the same sample IDs. Evaluation constructs this data and
 /// SampleSet validates the metrics and diagnostics against its sampled variables.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct OneHotSampledData {
     /// Tolerance used to determine the retained activation diagnostic.
     /// Feasibility queries supply their own tolerance and do not change it.

@@ -35,7 +35,7 @@ def assert_component_constraint(value: ommx.Constraint) -> None:
     assert value.description == "bridge fixture"
     assert len(value.provenance) == 1
     assert value.provenance[0].kind == ommx.ProvenanceKind.OneHotConstraint
-    assert value.provenance[0].original_id == 23
+    assert value.provenance[0].original_id == ommx.OneHotConstraintID(23)
 
 
 def assert_component_decision_variable(value: ommx.DecisionVariable) -> None:

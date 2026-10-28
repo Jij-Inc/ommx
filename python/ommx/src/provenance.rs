@@ -82,8 +82,19 @@ impl Provenance {
 
     /// The ID of the original special constraint (before transformation).
     #[getter]
-    pub fn original_id(&self) -> u64 {
-        self.original_id
+    pub fn original_id(&self) -> crate::constraint_id::AnyConstraintID {
+        use crate::constraint_id::AnyConstraintID;
+        match self.kind {
+            ProvenanceKind::IndicatorConstraint => AnyConstraintID::Indicator(
+                ommx::IndicatorConstraintID::from(self.original_id).into(),
+            ),
+            ProvenanceKind::OneHotConstraint => {
+                AnyConstraintID::OneHot(ommx::OneHotConstraintID::from(self.original_id).into())
+            }
+            ProvenanceKind::Sos1Constraint => {
+                AnyConstraintID::Sos1(ommx::Sos1ConstraintID::from(self.original_id).into())
+            }
+        }
     }
 
     pub fn __repr__(&self) -> String {

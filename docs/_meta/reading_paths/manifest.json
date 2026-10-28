@@ -331,7 +331,7 @@
       "aliases": [
         "SampleSet",
         "best_feasible",
-        "summary_with_constraints"
+        "SampleSet.summary"
       ],
       "scope": "既存のSampleSetから候補を読む能力。Samples/Stateを自作することや出現回数の内部表現は前提にしない。"
     },

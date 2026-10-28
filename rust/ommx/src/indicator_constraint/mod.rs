@@ -99,7 +99,7 @@ pub struct IndicatorEvaluatedData {
 /// `evaluated_values` and `indicator_active` must have identical sample IDs.
 /// Evaluation and parsing establish this row invariant, and SampleSet validates
 /// the IDs against its other tables before exposing the result.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IndicatorSampledData {
     pub evaluated_values: crate::Sampled<f64>,
     /// Tolerance used to determine the retained activation diagnostic.

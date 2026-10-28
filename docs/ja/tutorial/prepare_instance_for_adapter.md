@@ -26,7 +26,7 @@ kernelspec:
 このページだけでも実行できるように、前のチュートリアルと同じモデルを作り直します。
 
 ```{code-cell} ipython3
-from ommx import Instance, Sos1Constraint
+from ommx import Instance, Sos1Constraint, SpecialConstraintKind
 
 source = Instance.maximize()
 enabled = source.new_binary("enabled")
@@ -64,8 +64,9 @@ assert solution.feasible
 assert abs(solution.objective - 20.0) < 1e-8
 
 # 呼び出し元のInstanceは変更されない
-assert source.indicator_constraints
-assert source.sos1_constraints
+assert source.active_special_constraint_kinds == {
+    SpecialConstraintKind.Indicator, SpecialConstraintKind.Sos1,
+}
 
 solution.decision_variables_df()
 ```

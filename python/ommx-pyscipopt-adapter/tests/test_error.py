@@ -1,3 +1,4 @@
+from ommx import ConstraintID, IndicatorConstraintID, OneHotConstraintID
 import pytest
 import pyscipopt
 
@@ -145,7 +146,7 @@ def test_error_nonlinear_constraint():
     assert isinstance(
         mismatch, InstanceClassMismatch.RegularConstraintDegreeExceedsBound
     )
-    assert mismatch.actual_degrees == {0: 3}
+    assert mismatch.actual_degrees == {ConstraintID(0): 3}
     assert mismatch.bound == PolynomialRequirement.at_most(2)
 
 
@@ -168,7 +169,7 @@ def test_rejects_quadratic_indicator_body_without_mutating_input():
     assert len(mismatches) == 1
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.IndicatorBodyDegreeExceedsBound)
-    assert mismatch.actual_degrees == {0: 2}
+    assert mismatch.actual_degrees == {IndicatorConstraintID(0): 2}
     assert mismatch.bound == PolynomialRequirement.at_most(1)
     assert instance.to_v2_bytes() == before
 
@@ -237,7 +238,7 @@ def test_rejects_one_hot_without_implicit_lowering():
     assert len(mismatches) == 1
     mismatch = mismatches[0]
     assert isinstance(mismatch, InstanceClassMismatch.OneHotConstraintsNotAllowed)
-    assert mismatch.constraint_ids == {0}
+    assert mismatch.constraint_ids == {OneHotConstraintID(0)}
     assert instance.to_v2_bytes() == before
 
 

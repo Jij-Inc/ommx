@@ -40,7 +40,7 @@ An **indicator constraint** enforces a constraint $f(x) \leq 0$ (or $f(x) = 0$) 
 Create an {class}`~ommx.IndicatorConstraint` from an existing {class}`~ommx.Constraint` by calling {meth}`Constraint.with_indicator() <ommx.Constraint.with_indicator>`. The indicator argument accepts a variable ID, a standalone {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
 
 ```{code-cell} ipython3
-from ommx import DecisionVariable, Equality, Instance, Sense
+from ommx import ConstraintID, IndicatorConstraintID, DecisionVariable, Equality, Instance, Sense
 
 z = DecisionVariable.binary(0, name="z")
 x = DecisionVariable.continuous(1, lower=0, upper=10, name="x")
@@ -63,7 +63,7 @@ instance = Instance.from_components(
     indicator_constraints={1: ic}, # z = 1 => x <= 5
     sense=Sense.Maximize,
 )
-assert set(instance.indicator_constraints.keys()) == {1}
+assert set(instance.constraints) == {ConstraintID(0), IndicatorConstraintID(1)}
 ```
 
 The PySCIPOpt Adapter accepts Indicator constraints and passes them directly to SCIP.
@@ -81,7 +81,7 @@ assert abs(solution.objective - 5.0) < 1e-6
 A **one-hot constraint** over a set of binary variables $\{x_1, \ldots, x_n\}$ requires $\sum_i x_i = 1$ — i.e. exactly one of them is 1.
 
 ```{code-cell} ipython3
-from ommx import OneHotConstraint
+from ommx import OneHotConstraint, OneHotConstraintID
 
 xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
 oh = OneHotConstraint(variables=xs)
@@ -99,7 +99,7 @@ instance_oh = Instance.from_components(
     one_hot_constraints={0: oh},
     sense=Sense.Maximize,
 )
-assert set(instance_oh.one_hot_constraints.keys()) == {0}
+assert set(instance_oh.constraints.keys()) == {OneHotConstraintID(0)}
 ```
 
 Pass the original Instance to the easy `solve()` API. Its recommended
@@ -115,15 +115,14 @@ assert abs(solution.objective - 10.0) < 1e-6
 The caller-owned `instance_oh` remains unchanged:
 
 ```{code-cell} ipython3
-assert set(instance_oh.one_hot_constraints.keys()) == {0}
-assert instance_oh.constraints == {}
-assert instance_oh.removed_one_hot_constraints == {}
+assert set(instance_oh.constraints.keys()) == {OneHotConstraintID(0)}
+assert instance_oh.removed_constraints == {}
 ```
 
 Callers using `solve_without_preparation()` must instead lower OneHot in place
 before solving. That explicit conversion removes the active OneHot constraint,
 adds the equivalent regular constraint, and records the original in
-`removed_one_hot_constraints`.
+`removed_constraints`.
 
 (sos1-constraint)=
 ## Sos1Constraint
@@ -135,7 +134,7 @@ An **SOS1 (Special Ordered Set type 1)** constraint over a set of variables $\{x
 - SOS1 variables are not necessarily binary — continuous variables work too.
 
 ```{code-cell} ipython3
-from ommx import Sos1Constraint
+from ommx import Sos1Constraint, Sos1ConstraintID
 
 ys = [DecisionVariable.continuous(i, lower=0, upper=10, name="y", subscripts=[i]) for i in range(3, 6)]
 s1 = Sos1Constraint(variables=ys)
@@ -152,7 +151,7 @@ instance_s1 = Instance.from_components(
     sos1_constraints={0: s1},
     sense=Sense.Maximize,
 )
-assert set(instance_s1.sos1_constraints.keys()) == {0}
+assert set(instance_s1.constraints.keys()) == {Sos1ConstraintID(0)}
 ```
 
 The PySCIPOpt Adapter accepts SOS1 constraints and passes them directly to SCIP.
@@ -285,10 +284,11 @@ instance_mix = Instance.from_components(
     sense=Sense.Maximize,
 )
 
-assert set(instance_mix.constraints) == {1}
-assert set(instance_mix.indicator_constraints) == {2}
-assert set(instance_mix.one_hot_constraints) == {3}
-assert set(instance_mix.sos1_constraints) == {4}
+# All four constraint families use distinct numbers.
+assert set(instance_mix.constraints) == {
+    ConstraintID(1), IndicatorConstraintID(2),
+    OneHotConstraintID(3), Sos1ConstraintID(4),
+}
 ```
 
 The instance assigns new numbers above the maximum across all active and removed
@@ -314,7 +314,7 @@ The {class}`~ommx.Solution` or {class}`~ommx.SampleSet` obtained after solving e
 | SOS1 | `"sos1"` |
 
 ```python
-solution.constraints_df()                  # regular (default)
+solution.constraints_df(kind="regular")                  # regular
 solution.constraints_df(kind="indicator")  # indicator
 sample_set.constraints_df(kind="one_hot")  # one-hot
 ```
@@ -328,7 +328,7 @@ The Indicator DataFrame includes an `indicator_active` column that disambiguates
 `removed_reason` is no longer a default column of {meth}`~ommx.Solution.constraints_df`. Pass `"removed_reason"` in `include=` to fold the reason name and the `removed_reason.{key}` parameter columns back in (rows whose constraint was not removed before evaluation get NA in those columns):
 
 ```python
-df = solution.constraints_df(
+df = solution.constraints_df(kind="regular",
     include=("label", "parameters", "removed_reason"),
 )
 ```
@@ -339,7 +339,7 @@ The same applies to Indicator, OneHot, and SOS1: pass the corresponding `kind=` 
 
 {class}`~ommx.IndicatorConstraint` supports the same relax / restore workflow as regular constraints.
 
-- {meth}`Instance.relax_indicator_constraint() <ommx.Instance.relax_indicator_constraint>`: relax (deactivate) an indicator constraint and record a reason string. The relaxed constraint is moved into `removed_indicator_constraints`.
+- {meth}`Instance.relax_indicator_constraint() <ommx.Instance.relax_indicator_constraint>`: relax (deactivate) an indicator constraint and record a reason string. The relaxed constraint is moved into `removed_constraints`.
 - {meth}`Instance.restore_indicator_constraint() <ommx.Instance.restore_indicator_constraint>`: restore a previously relaxed indicator constraint. Fails if the indicator variable has already been substituted or fixed.
 
-For OneHot and SOS1, movement into `removed_one_hot_constraints` / `removed_sos1_constraints` happens via the conversion APIs covered in [Explicit Constraint Lowering](./capability_model.md).
+For OneHot and SOS1, movement into `removed_constraints` happens via the conversion APIs covered in [Explicit Constraint Lowering](./capability_model.md).

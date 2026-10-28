@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 from types import SimpleNamespace
 from typing import cast
 
@@ -193,7 +194,9 @@ def _assert_sample_set_uses_instance_model(sample_set, instance):
         assert actual.objective == pytest.approx(expected.objective)
         assert actual.sense == expected.sense
         assert actual.feasible == expected.feasible
-        assert len(actual.constraints) == len(expected.constraints)
+        assert len(
+            {cid for cid in actual.constraints if isinstance(cid, ConstraintID)}
+        ) == len({cid for cid in expected.constraints if isinstance(cid, ConstraintID)})
 
 
 def _assert_solution_uses_source_model(solution, instance, ans):
@@ -201,7 +204,9 @@ def _assert_solution_uses_source_model(solution, instance, ans):
     assert solution.sense == expected.sense
     assert solution.objective == pytest.approx(expected.objective)
     assert solution.feasible == expected.feasible
-    assert len(solution.constraints) == len(expected.constraints)
+    assert len(
+        {cid for cid in solution.constraints if isinstance(cid, ConstraintID)}
+    ) == len({cid for cid in expected.constraints if isinstance(cid, ConstraintID)})
 
 
 @pytest.mark.parametrize(
@@ -372,11 +377,7 @@ def test_prepared_instance_evaluation_populates_variable_removed_with_trivial_in
     )
     assert instance.used_decision_variables == []
 
-    sample_set = OMMXOpenJijSAAdapter.sample(
-        instance,
-        num_reads=1,
-        seed=999,
-    )
+    sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=1, seed=999)
     solution = sample_set.get(0)
     assert solution.state.get(0) == expected_value
     assert solution.feasible
@@ -400,9 +401,5 @@ def test_prepared_instance_evaluation_restores_integer_sos1():
     )
     instance.prepare(input_class, policy)
 
-    sample_set = OMMXOpenJijSAAdapter.sample(
-        instance,
-        num_reads=4,
-        seed=999,
-    )
+    sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=4, seed=999)
     assert len(sample_set.constraints_df(kind="sos1")) == 1

@@ -1,3 +1,4 @@
+from ommx import ConstraintID
 import pytest
 
 from ommx import (
@@ -74,7 +75,7 @@ def test_public_model_properties_return_typed_enum_members() -> None:
         sense=Sense.Minimize,
     )
     attached_variable = instance.decision_variables[0]
-    attached_constraint = instance.constraints[0]
+    attached_constraint = instance.constraints[ConstraintID(0)]
     solution = instance.evaluate({0: 0})
     sample_set = instance.evaluate_samples([{0: 0}])
 
@@ -85,7 +86,7 @@ def test_public_model_properties_return_typed_enum_members() -> None:
     assert type(attached_constraint.equality) is Equality
     assert type(solution.sense) is Sense
     assert type(solution.decision_variables[0].kind) is Kind
-    assert type(solution.constraints[0].equality) is Equality
+    assert type(solution.constraints[ConstraintID(0)].equality) is Equality
     assert type(sample_set.sense) is Sense
     assert type(sample_set.decision_variables[0].kind) is Kind
-    assert type(sample_set.constraints[0].equality) is Equality
+    assert type(sample_set.constraints[ConstraintID(0)].equality) is Equality

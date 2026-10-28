@@ -28,6 +28,9 @@
 //! 5. Add a `ConstraintCollection<NewConstraint>` field to [`Instance`].
 //! 6. Add a variant to [`SpecialConstraintKind`] and update
 //!    `Instance::active_special_constraint_kinds`.
+//! 7. Include the family in heterogeneous Python collections, name enumeration,
+//!    and name-based extraction on models and results. Result extraction uses the family's
+//!    violation metric; no family may be silently omitted.
 //!
 //! [`IndicatorConstraint`]: crate::IndicatorConstraint
 //! [`Instance`]: crate::Instance
