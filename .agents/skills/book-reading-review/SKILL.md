@@ -1,6 +1,6 @@
 ---
 name: book-reading-review
-description: Review OMMX Book tutorials, guides, and navigation for reader prerequisites, introduction order, cognitive load, independent reading paths, and explanation placement between the Book and API Reference. Use when planning or changing those explanations and learning paths, rather than for generated API wiring or Sphinx build failures alone.
+description: Review OMMX Book tutorials, guides, and navigation for reader prerequisites, introduction order, cognitive load, independent reading paths, and explanation placement between the Book and API Reference. Also audit major SDK feature coverage when requested. Use for those explanations and learning paths, rather than for generated API wiring or Sphinx build failures alone.
 ---
 
 # Book Reading Review
@@ -28,6 +28,31 @@ skill merely because a Book file changed.
   Tutorial. A declared prerequisite is different from a recommended link.
 - Separate conceptual knowledge from execution dependencies. Hidden cells still
   require their imports, input data, and prior runtime state.
+
+Notebook execution correctness is covered by the repository's separate tests.
+Do not add Notebook reruns to a Book review. Inspect the example and its displayed
+outputs for explanatory sufficiency; runtime test failures belong to the test
+workflow. Keep documented SDK versions and prerequisites accurate without
+treating a Book build as execution evidence.
+
+## Audit feature coverage when requested
+
+For a whole-Book coverage audit, start from the public SDK at the documented
+version and the reader tasks it supports, including tasks absent from the Book
+or ledger. Group APIs by useful operations rather than requiring a page for
+every method. Check the public bindings/exports against their owning
+implementation; distinguish released capabilities from development-only APIs.
+
+For each major task, locate its conceptual explanation, usable example, and
+entry path. Record source pointers and whether coverage is usable, only
+mentioned, planned, absent, or deliberately excluded. A release note, API entry,
+or planned ledger owner alone does not supply a Book learning path. Distinguish
+missing implementation of an existing plan from a proposed expansion of scope.
+
+Reconcile gaps with the accepted workstream scope and explanation ownership
+below. Keep feature inventories in the review record or Book-owned ledger,
+not in this skill. Ordinary page/PR reviews remain limited to affected tasks;
+they do not require a whole-SDK inventory.
 
 ## Inspect introductions and uses
 
@@ -128,6 +153,9 @@ This comparison is required, not optional because the analyzer passes. If the
 page or concept is untracked, record that coverage gap. With editing authority,
 update the affected contracts; in a review-only task, report the mismatch
 without rewriting them. Query only the affected subset, not the whole Book.
+The query helper returns declarations alongside whole-manifest diagnostics,
+even when contracts are inconsistent. Use those diagnostics to interpret the
+target; successful lookup is not a consistency or readiness verdict.
 
 The helper commands below are optional tools for inspecting the declarations;
 they do not replace the required comparison. If used, run them from the
