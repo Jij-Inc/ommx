@@ -44,6 +44,9 @@ FAMILIES = [
 ]
 
 
+NUMBERS = {id_type: 7 + i for i, (_, id_type, _, _) in enumerate(FAMILIES)}
+
+
 def model():
     x, y = DecisionVariable.binary(0), DecisionVariable.binary(1)
     return Instance.from_components(
@@ -56,12 +59,12 @@ def model():
             .set_parameters({"group": "a"})
         },
         indicator_constraints={
-            IndicatorConstraintID(7): IndicatorConstraint(
+            IndicatorConstraintID(8): IndicatorConstraint(
                 indicator_variable=x, function=y - 1, equality=Equality.EqualToZero
             )
         },
-        one_hot_constraints={OneHotConstraintID(7): OneHotConstraint(variables=[x, y])},
-        sos1_constraints={Sos1ConstraintID(7): Sos1Constraint(variables=[x, y])},
+        one_hot_constraints={OneHotConstraintID(9): OneHotConstraint(variables=[x, y])},
+        sos1_constraints={Sos1ConstraintID(10): Sos1Constraint(variables=[x, y])},
     )
 
 
@@ -104,8 +107,8 @@ def test_reject_wrong_family_before_mutation_and_ambiguous_integer():
     with pytest.raises(TypeError):
         solution.constraint_violation(7)  # type: ignore[arg-type] -- test rejection of bare integers
     assert solution.constraint_violation(ConstraintID(7)) == 0
-    assert solution.constraint_violation(IndicatorConstraintID(7)) == 1
-    assert solution.constraint_violation(Sos1ConstraintID(7)) == 0
+    assert solution.constraint_violation(IndicatorConstraintID(8)) == 1
+    assert solution.constraint_violation(Sos1ConstraintID(10)) == 0
 
 
 @pytest.mark.parametrize("kind,id_type,evaluated_type,sampled_type", FAMILIES)
@@ -116,8 +119,10 @@ def test_all_families_native_dataframe_and_roundtrip(
     samples = instance.evaluate_samples({3: {0: 1, 1: 0}, 91: {0: 1, 1: 1}})
     for result in [samples, SampleSet.from_v2_bytes(samples.to_v2_bytes())]:
         rows = result.constraints
-        assert set(rows) == {constructor(7) for _, constructor, _, _ in FAMILIES}
-        row = rows[id_type(7)]
+        assert set(rows) == {
+            constructor(NUMBERS[constructor]) for _, constructor, _, _ in FAMILIES
+        }
+        row = rows[id_type(NUMBERS[id_type])]
         assert isinstance(row, sampled_type)
         assert set(row.violations) == {3, 91}
         assert set(row.feasible(atol=1e-6)) == {3, 91}
@@ -127,7 +132,7 @@ def test_all_families_native_dataframe_and_roundtrip(
         for sample_id in [3, 91]:
             solution = result.get(sample_id)
             for restored in [solution, Solution.from_v2_bytes(solution.to_v2_bytes())]:
-                evaluated = restored.constraints[id_type(7)]
+                evaluated = restored.constraints[id_type(NUMBERS[id_type])]
                 assert isinstance(evaluated, evaluated_type)
                 assert evaluated.violation() == row.violations[sample_id]
                 assert (
@@ -139,12 +144,14 @@ def test_all_families_native_dataframe_and_roundtrip(
                 }
         with pytest.raises(AttributeError):
             getattr(rows, "clear")()
-        assert set(rows) == {constructor(7) for _, constructor, _, _ in FAMILIES}
+        assert set(rows) == {
+            constructor(NUMBERS[constructor]) for _, constructor, _, _ in FAMILIES
+        }
 
 
 def test_removed_context_provenance_and_owned_snapshots():
     instance = model()
-    generated = instance.convert_one_hot_to_constraint(OneHotConstraintID(7))
+    generated = instance.convert_one_hot_to_constraint(OneHotConstraintID(9))
     instance.relax_constraint(ConstraintID(7), "manual", phase="test")
     samples = instance.evaluate_samples({3: {0: 1, 1: 0}})
     for root in [samples, samples.get(3)]:
@@ -158,10 +165,10 @@ def test_removed_context_provenance_and_owned_snapshots():
         assert removed.parameters == {"group": "a"}
         assert removed.removed_reason == "manual"
         assert removed.removed_reason_parameters == {"phase": "test"}
-        assert rows[generated].provenance[0].original_id == OneHotConstraintID(7)
-        assert root.constraints[OneHotConstraintID(7)].removed_reason is not None
+        assert rows[generated].provenance[0].original_id == OneHotConstraintID(9)
+        assert root.constraints[OneHotConstraintID(9)].removed_reason is not None
         frame = root.constraint_provenance_df(kind="regular")
-        assert frame.iloc[0]["source_id"] == OneHotConstraintID(7)
+        assert frame.iloc[0]["source_id"] == OneHotConstraintID(9)
         assert isinstance(frame.iloc[0]["regular_constraint_id"], ConstraintID)
     solution = samples.get(3)
     snapshot = solution.constraints[generated]
@@ -220,13 +227,13 @@ def test_static_overloads():
     samples = instance.evaluate_samples({3: {0: 1, 1: 0}})
     assert_type(solution.constraints[ConstraintID(7)], EvaluatedConstraint)
     assert_type(
-        solution.constraints[IndicatorConstraintID(7)], EvaluatedIndicatorConstraint
+        solution.constraints[IndicatorConstraintID(8)], EvaluatedIndicatorConstraint
     )
-    assert_type(solution.constraints[OneHotConstraintID(7)], EvaluatedOneHotConstraint)
-    assert_type(solution.constraints[Sos1ConstraintID(7)], EvaluatedSos1Constraint)
+    assert_type(solution.constraints[OneHotConstraintID(9)], EvaluatedOneHotConstraint)
+    assert_type(solution.constraints[Sos1ConstraintID(10)], EvaluatedSos1Constraint)
     assert_type(samples.constraints[ConstraintID(7)], SampledConstraint)
     assert_type(
-        samples.constraints[IndicatorConstraintID(7)], SampledIndicatorConstraint
+        samples.constraints[IndicatorConstraintID(8)], SampledIndicatorConstraint
     )
-    assert_type(samples.constraints[OneHotConstraintID(7)], SampledOneHotConstraint)
-    assert_type(samples.constraints[Sos1ConstraintID(7)], SampledSos1Constraint)
+    assert_type(samples.constraints[OneHotConstraintID(9)], SampledOneHotConstraint)
+    assert_type(samples.constraints[Sos1ConstraintID(10)], SampledSos1Constraint)

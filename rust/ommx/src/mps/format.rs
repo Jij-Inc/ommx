@@ -438,7 +438,7 @@ mod tests {
                 ),
             ]))
             .indicator_constraints(BTreeMap::from([(
-                IndicatorConstraintID::from(1),
+                IndicatorConstraintID::from(10),
                 IndicatorConstraint::new(
                     binary,
                     Equality::EqualToZero,
@@ -446,11 +446,11 @@ mod tests {
                 ),
             )]))
             .one_hot_constraints(BTreeMap::from([(
-                OneHotConstraintID::from(1),
+                OneHotConstraintID::from(11),
                 OneHotConstraint::new(BTreeSet::from([binary])).unwrap(),
             )]))
             .sos1_constraints(BTreeMap::from([(
-                Sos1ConstraintID::from(1),
+                Sos1ConstraintID::from(12),
                 Sos1Constraint::new(BTreeSet::from([binary])).unwrap(),
             )]))
             .build()
@@ -468,9 +468,9 @@ mod tests {
           - objective function is not polynomial
           - regular EqualToZero constraint functions for IDs {ConstraintID(1)} are not polynomial
           - regular LessThanOrEqualToZero constraint degrees {ConstraintID(2): Degree(3)} exceed degree <= 2
-          - indicator constraints {IndicatorConstraintID(1)} are not allowed
-          - one-hot constraints {OneHotConstraintID(1)} are not allowed
-          - SOS1 constraints {Sos1ConstraintID(1)} are not allowed
+          - indicator constraints {IndicatorConstraintID(10)} are not allowed
+          - one-hot constraints {OneHotConstraintID(11)} are not allowed
+          - SOS1 constraints {Sos1ConstraintID(12)} are not allowed
         "###);
         assert_eq!(buffer, b"unchanged");
     }

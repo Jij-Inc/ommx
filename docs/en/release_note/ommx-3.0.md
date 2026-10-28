@@ -6,6 +6,17 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
+### Unique constraint numbers across families ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
+
+Constraint numbers are now unique across regular, Indicator, OneHot, and SOS1
+constraints, including removed constraints, within each `Instance` or
+`ParametricInstance`. Automatic additions and transformations allocate from this
+shared space. Evaluation preserves the identities in `Solution` and `SampleSet`.
+
+Constructors and protobuf loading reject cross-family collisions without automatic
+renumbering. Data created during the 3.0.0 beta period may therefore no longer load
+if it contains duplicate numbers. See {ref}`constraint numbering <constraint-numbering>`.
+
 ### 🛠 Map HiGHS dual values to constraint IDs ([#1300](https://github.com/Jij-Inc/ommx/pull/1300))
 
 HiGHS now records each generated solver row's OMMX constraint ID. Dual values

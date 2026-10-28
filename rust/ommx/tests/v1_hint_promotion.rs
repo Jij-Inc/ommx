@@ -1,7 +1,7 @@
 use ommx::{
     coeff, ATol, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance, Kind,
-    Linear, LinearMonomial, Message, OneHotConstraintID, OneHotPromotionRequest, ParseError,
-    RawParseError, Sense, Sos1BigMPromotionRequest, VariableID,
+    Linear, LinearMonomial, Message, OneHotPromotionRequest, ParseError, RawParseError, Sense,
+    Sos1BigMPromotionRequest, VariableID,
 };
 use proptest::prelude::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -426,7 +426,7 @@ fn repeated_valid_one_hot_hints_share_one_promotion_and_ignore_advisory_members(
 }
 
 #[test]
-fn maximum_regular_source_id_allocates_from_the_empty_one_hot_namespace() {
+fn maximum_regular_source_id_rejects_promotion_without_mutation() {
     let source_id = ConstraintID::from(u64::MAX);
     let source = Instance::new(
         Sense::Minimize,
@@ -441,19 +441,19 @@ fn maximum_regular_source_id_allocates_from_the_empty_one_hot_namespace() {
     )
     .unwrap();
     let hint = one_hot_hint(source_id.into_inner(), vec![0, 1]);
-    let bytes = raw_instance_from(source, vec![hint], vec![]).encode_to_vec();
+    let bytes = raw_instance_from(source.clone(), vec![hint], vec![]).encode_to_vec();
 
     let (instance, report) = Instance::from_v1_bytes_with_promotion(&bytes).unwrap();
 
-    assert!(!report.has_rejections());
-    assert_eq!(
-        report.one_hot_outcomes()[0].one_hot_constraint_id(),
-        Some(OneHotConstraintID::from(0))
-    );
-    assert!(instance.removed_constraints().contains_key(&source_id));
-    assert!(instance
-        .one_hot_constraints()
-        .contains_key(&OneHotConstraintID::from(0)));
+    assert!(report.has_rejections());
+    assert_eq!(report.one_hot_outcomes()[0].one_hot_constraint_id(), None);
+    match &report.one_hot_outcomes()[0] {
+        ommx::V1OneHotHintPromotionOutcome::Rejected { error, .. } => {
+            assert!(error.to_string().contains("Cannot allocate"));
+        }
+        outcome => panic!("expected ID exhaustion, got {outcome:?}"),
+    }
+    assert_eq!(instance, source);
 }
 
 #[test]

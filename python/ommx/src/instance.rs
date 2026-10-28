@@ -2137,9 +2137,9 @@ impl Instance {
     /// ... )
     /// >>> new_id = instance.convert_one_hot_to_constraint(1)
     /// >>> instance.constraints
-    /// {ConstraintID(0): Constraint(x0 + x1 + x2 - 1 == 0)}
+    /// {ConstraintID(2): Constraint(x0 + x1 + x2 - 1 == 0)}
     /// >>> instance.removed_constraints
-    /// {OneHotConstraintID(1): RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=0)}
+    /// {OneHotConstraintID(1): RemovedOneHotConstraint(OneHotConstraint(exactly one of {x0, x1, x2} = 1), reason=ommx.Instance.convert_one_hot_to_constraint, constraint_id=2)}
     pub(crate) fn convert_one_hot_to_constraint(
         &mut self,
         one_hot_id: OneHotConstraintIDInput,
@@ -2176,9 +2176,9 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_all_one_hots_to_constraints()
-    /// [ConstraintID(0), ConstraintID(1)]
+    /// [ConstraintID(3), ConstraintID(4)]
     /// >>> instance.constraints
-    /// {ConstraintID(0): Constraint(x0 + x1 - 1 == 0), ConstraintID(1): Constraint(x2 + x3 - 1 == 0)}
+    /// {ConstraintID(3): Constraint(x0 + x1 - 1 == 0), ConstraintID(4): Constraint(x2 + x3 - 1 == 0)}
     pub fn convert_all_one_hots_to_constraints(
         &mut self,
     ) -> OmmxPyResult<Vec<crate::ConstraintID>> {
@@ -2239,11 +2239,11 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_sos1_to_constraints(1)
-    /// [ConstraintID(0)]
+    /// [ConstraintID(2)]
     /// >>> instance.constraints
-    /// {ConstraintID(0): Constraint(x0 + x1 + x2 - 1 <= 0)}
+    /// {ConstraintID(2): Constraint(x0 + x1 + x2 - 1 <= 0)}
     /// >>> instance.removed_constraints
-    /// {Sos1ConstraintID(1): RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=0)}
+    /// {Sos1ConstraintID(1): RemovedSos1Constraint(Sos1Constraint(at most one of {x0, x1, x2} ≠ 0), reason=ommx.Instance.convert_sos1_to_constraints, constraint_ids=2)}
     pub(crate) fn convert_sos1_to_constraints(
         &mut self,
         sos1_id: Sos1ConstraintIDInput,
@@ -2277,9 +2277,9 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_all_sos1_to_constraints()
-    /// {Sos1ConstraintID(1): [ConstraintID(0)], Sos1ConstraintID(2): [ConstraintID(1)]}
+    /// {Sos1ConstraintID(1): [ConstraintID(3)], Sos1ConstraintID(2): [ConstraintID(4)]}
     /// >>> instance.constraints
-    /// {ConstraintID(0): Constraint(x0 + x1 - 1 <= 0), ConstraintID(1): Constraint(x2 + x3 - 1 <= 0)}
+    /// {ConstraintID(3): Constraint(x0 + x1 - 1 <= 0), ConstraintID(4): Constraint(x2 + x3 - 1 <= 0)}
     pub fn convert_all_sos1_to_constraints(
         &mut self,
     ) -> OmmxPyResult<BTreeMap<crate::Sos1ConstraintID, Vec<crate::ConstraintID>>> {
@@ -2364,9 +2364,9 @@ impl Instance {
     /// ...     sense=Sense.Minimize,
     /// ... )
     /// >>> instance.convert_indicator_to_constraint(1)
-    /// [ConstraintID(0)]
+    /// [ConstraintID(2)]
     /// >>> instance.constraints
-    /// {ConstraintID(0): Constraint(x0 + 3*x1 - 5 <= 0)}
+    /// {ConstraintID(2): Constraint(x0 + 3*x1 - 5 <= 0)}
     #[pyo3(signature = (indicator_id, *, atol=None))]
     pub(crate) fn convert_indicator_to_constraint(
         &mut self,

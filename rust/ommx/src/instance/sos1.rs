@@ -83,8 +83,7 @@ impl Instance {
             .count();
         let generated_constraint_count = sos1_generated_constraint_count(&plans)?;
         self.ensure_new_decision_variable_capacity(fresh_indicator_count)?;
-        self.constraint_collection
-            .ensure_unused_id_capacity(generated_constraint_count)?;
+        self.ensure_constraint_id_capacity(generated_constraint_count)?;
         self.apply_sos1_conversion(id, plans)
     }
 
@@ -135,8 +134,7 @@ impl Instance {
                         })
                 })?;
         self.ensure_new_decision_variable_capacity(fresh_indicator_count)?;
-        self.constraint_collection
-            .ensure_unused_id_capacity(generated_constraint_count)?;
+        self.ensure_constraint_id_capacity(generated_constraint_count)?;
         // Phase 2: apply. Planned state only references variables that existed at
         // plan time; `apply_sos1_conversion` only adds fresh variables / constraints
         // and relaxes its own SOS1, so earlier applications cannot invalidate later
@@ -307,14 +305,17 @@ impl Instance {
         sos1_id: Sos1ConstraintID,
         constraint: Constraint,
     ) -> ConstraintID {
-        let new_id = self.constraint_collection.unused_id();
+        let new_id = self
+            .next_constraint_number()
+            .expect("batch ID capacity was validated before mutation")
+            .into();
         let context = ConstraintContext {
             provenance: vec![Provenance::Sos1Constraint(sos1_id)],
             ..Default::default()
         };
         self.constraint_collection
             .insert_active_with_context(new_id, constraint, context)
-            .expect("new_id was allocated from this collection");
+            .expect("new_id was allocated by the instance");
         new_id
     }
 }

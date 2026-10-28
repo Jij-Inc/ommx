@@ -81,8 +81,7 @@ impl Instance {
         atol: ATol,
     ) -> Result<Vec<ConstraintID>> {
         let plan = self.plan_indicator_conversion(id, atol)?;
-        self.constraint_collection
-            .ensure_unused_id_capacity(plan.generated_constraints.len())?;
+        self.ensure_constraint_id_capacity(plan.generated_constraints.len())?;
         self.apply_indicator_conversion(id, plan)
     }
 
@@ -126,8 +125,7 @@ impl Instance {
                             )
                         })
                 })?;
-        self.constraint_collection
-            .ensure_unused_id_capacity(generated_constraint_count)?;
+        self.ensure_constraint_id_capacity(generated_constraint_count)?;
         let mut result = BTreeMap::new();
         for (id, plan) in all_plans {
             result.insert(id, self.apply_indicator_conversion(id, plan)?);
@@ -278,14 +276,17 @@ impl Instance {
         indicator_id: IndicatorConstraintID,
         constraint: Constraint,
     ) -> ConstraintID {
-        let new_id = self.constraint_collection.unused_id();
+        let new_id = self
+            .next_constraint_number()
+            .expect("batch ID capacity was validated before mutation")
+            .into();
         let context = ConstraintContext {
             provenance: vec![Provenance::IndicatorConstraint(indicator_id)],
             ..Default::default()
         };
         self.constraint_collection
             .insert_active_with_context(new_id, constraint, context)
-            .expect("new_id was allocated from this collection");
+            .expect("new_id was allocated by the instance");
         new_id
     }
 }

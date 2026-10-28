@@ -57,7 +57,7 @@ source.add_sos1_constraint(
     )
 )
 
-assert set(source.constraints) == {IndicatorConstraintID(0), Sos1ConstraintID(0)}
+assert set(source.constraints) == {IndicatorConstraintID(0), Sos1ConstraintID(1)}
 source
 ```
 

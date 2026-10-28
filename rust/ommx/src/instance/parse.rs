@@ -413,7 +413,7 @@ impl Parse for v1::Instance {
         )
         .map_err(|e| ParseError::new(e).context(message, "decision_variables"))?;
 
-        Ok(Instance {
+        let instance = Instance {
             sense,
             objective,
             output_objective: None,
@@ -433,7 +433,11 @@ impl Parse for v1::Instance {
             annotations: self.annotations,
             named_functions: crate::NamedFunctionTable::new(named_functions, named_function_labels)
                 .map_err(|e| ParseError::new(e).context(message, "named_functions"))?,
-        })
+        };
+        instance
+            .validate_constraint_ids()
+            .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
+        Ok(instance)
     }
 }
 
@@ -590,7 +594,7 @@ impl Parse for v2::Instance {
             message,
         )?;
 
-        Ok(Instance {
+        let instance = Instance {
             sense,
             objective,
             output_objective,
@@ -604,7 +608,11 @@ impl Parse for v2::Instance {
             description: self.description,
             annotations,
             named_functions,
-        })
+        };
+        instance
+            .validate_constraint_ids()
+            .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
+        Ok(instance)
     }
 }
 
@@ -807,7 +815,7 @@ impl Parse for v1::ParametricInstance {
         )
         .map_err(|e| ParseError::new(e).context(message, "decision_variables"))?;
 
-        Ok(ParametricInstance {
+        let instance = ParametricInstance {
             sense,
             objective,
             output_objective: None,
@@ -827,7 +835,11 @@ impl Parse for v1::ParametricInstance {
             decision_variable_dependency,
             description: self.description,
             annotations: self.annotations,
-        })
+        };
+        instance
+            .validate_constraint_ids()
+            .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
+        Ok(instance)
     }
 }
 
@@ -993,7 +1005,7 @@ impl Parse for v2::ParametricInstance {
             message,
         )?;
 
-        Ok(ParametricInstance {
+        let instance = ParametricInstance {
             sense,
             objective,
             output_objective,
@@ -1007,7 +1019,11 @@ impl Parse for v2::ParametricInstance {
             decision_variable_dependency,
             description: self.description,
             annotations,
-        })
+        };
+        instance
+            .validate_constraint_ids()
+            .map_err(|error| ParseError::new(error).context(message, "constraints"))?;
+        Ok(instance)
     }
 }
 

@@ -449,7 +449,7 @@ impl InstanceBuilder {
             );
         }
 
-        Ok(Instance {
+        let instance = Instance {
             sense,
             objective,
             output_objective: None,
@@ -479,7 +479,9 @@ impl InstanceBuilder {
             parameters: self.parameters,
             description: self.description,
             annotations: Default::default(),
-        })
+        };
+        instance.validate_constraint_ids()?;
+        Ok(instance)
     }
 }
 

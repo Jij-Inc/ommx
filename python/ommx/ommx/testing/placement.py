@@ -295,7 +295,7 @@ def build_sos1(input: Input) -> Instance:
     constraints = _common_constraints(input, s, c)
 
     sos1_constraints: dict = {}
-    sid = 0
+    sid = max(constraints, default=-1) + 1
     for group in (_west_indices(input), _east_indices(input)):
         if len(group) >= 2:
             sos1_constraints[sid] = Sos1Constraint(variables=[c[i] for i in group])
@@ -346,7 +346,7 @@ def _build_with_delta(
                 cid += 1
 
     sos1_constraints: dict = {}
-    sid = 0
+    sid = cid
     if with_sos1_on_c:
         for group in (_west_indices(input), _east_indices(input)):
             if len(group) >= 2:

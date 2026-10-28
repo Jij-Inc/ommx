@@ -32,6 +32,7 @@ from ommx import (
 )
 from test_live_constraint_collections import (
     FAMILIES,
+    NUMBERS,
     FutureConstraintID,
     make_model,
     remove_all,
@@ -41,29 +42,31 @@ from test_live_constraint_collections import (
 @pytest.mark.parametrize("host", [Instance, ParametricInstance])
 @pytest.mark.parametrize("kind,id_type,row_type", FAMILIES)
 def test_family_views_filter_and_promote_integers(host, kind, id_type, row_type):
+    number = NUMBERS[id_type]
     model = make_model(host)
     rows = model.constraints.of_kind(kind)
     assert isinstance(rows, ConstraintFamilyView)
     assert isinstance(rows, Mapping)
     assert len(rows) == 1
-    assert list(rows) == [id_type(5)]
-    assert isinstance(rows[5], row_type)
-    assert rows[5] == rows[id_type(5)] == rows.get(5)
-    assert 5 in rows and id_type(5) in rows
+    assert list(rows) == [id_type(number)]
+    assert isinstance(rows[number], row_type)
+    assert rows[number] == rows[id_type(number)] == rows.get(number)
+    assert number in rows and id_type(number) in rows
     assert set(rows.keys()) == set(model.constraints_df(kind=kind).index)
-    assert list(rows.values()) == [rows[5]]
-    assert list(rows.items()) == [(id_type(5), rows[5])]
+    assert list(rows.values()) == [rows[number]]
+    assert list(rows.items()) == [(id_type(number), rows[number])]
     assert rows == dict(rows) == rows
-    assert rows != {5: rows[5]}
+    assert rows != {number: rows[number]}
     assert rows == rows
-    rows[5].set_name("changed through family view")
-    assert model.constraints[id_type(5)].name == "changed through family view"
+    rows[number].set_name("changed through family view")
+    assert model.constraints[id_type(number)].name == "changed through family view"
     del model
-    assert rows[5].name == "changed through family view"
+    assert rows[number].name == "changed through family view"
 
 
 @pytest.mark.parametrize("kind,id_type,_", FAMILIES)
 def test_every_lifecycle_uses_same_key_rules(kind, id_type, _):
+    number = NUMBERS[id_type]
     model = make_model(Instance)
     solution = model.evaluate({0: 1, 1: 0})
     samples = model.evaluate_samples({9: {0: 1, 1: 0}})
@@ -79,8 +82,8 @@ def test_every_lifecycle_uses_same_key_rules(kind, id_type, _):
     for parent in collections:
         rows = parent.of_kind(kind)
         assert len(rows) == 1
-        assert rows[5] == parent[id_type(5)]
-        assert list(rows) == [id_type(5)]
+        assert rows[number] == parent[id_type(number)]
+        assert list(rows) == [id_type(number)]
         assert rows.get(999) is None
         sentinel = object()
         assert rows.get(999, sentinel) is sentinel
@@ -89,7 +92,9 @@ def test_every_lifecycle_uses_same_key_rules(kind, id_type, _):
             rows[999]
         assert error.value.args == (id_type(999),)
         wrong_keys: list[Any] = [True, "5", 5.0, FutureConstraintID()]
-        wrong_keys += [other(5) for _, other, _ in FAMILIES if other is not id_type]
+        wrong_keys += [
+            other(number) for _, other, _ in FAMILIES if other is not id_type
+        ]
         for key in wrong_keys:
             with pytest.raises(TypeError):
                 rows[key]
@@ -103,9 +108,9 @@ def test_every_lifecycle_uses_same_key_rules(kind, id_type, _):
         with pytest.raises(TypeError):
             parent[5]  # type: ignore[call-overload]
         with pytest.raises(TypeError):
-            rows[5] = rows[5]  # type: ignore[index]
+            rows[number] = rows[number]  # type: ignore[index]
         with pytest.raises(TypeError):
-            del rows[5]  # type: ignore[index]
+            del rows[number]  # type: ignore[index]
         with pytest.raises(ValueError, match="unknown constraint kind"):
             parent.of_kind("unknown")  # type: ignore[call-overload]
         with pytest.raises(TypeError):
@@ -143,11 +148,11 @@ def test_removal_and_restoration_update_family_views():
     assert snapshot.removed_reason == "manual"
     sos1 = model.constraints.of_kind("sos1")
     removed_sos1 = model.removed_constraints.of_kind("sos1")
-    model.convert_sos1_to_constraints(5)
+    model.convert_sos1_to_constraints(8)
     assert not sos1
-    assert 5 in removed_sos1
+    assert 8 in removed_sos1
     # Result views retain removed rows just like their parent collections.
-    assert 5 in model.evaluate({0: 1, 1: 0}).constraints.of_kind("sos1")
+    assert 8 in model.evaluate({0: 1, 1: 0}).constraints.of_kind("sos1")
 
 
 def test_result_rows_are_fetched_lazily_and_owner_is_retained():
@@ -166,38 +171,38 @@ def test_precise_types_and_runtime_generic_alias():
     model = make_model(Instance)
     rows = model.constraints.of_kind("sos1")
     assert_type(rows, ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint])
-    assert_type(rows[5], AttachedSos1Constraint)
-    assert_type(rows[Sos1ConstraintID(5)], AttachedSos1Constraint)
+    assert_type(rows[8], AttachedSos1Constraint)
+    assert_type(rows[Sos1ConstraintID(8)], AttachedSos1Constraint)
     assert_type(next(iter(rows)), Sos1ConstraintID)
     assert_type(next(iter(rows.keys())), Sos1ConstraintID)
     assert_type(next(iter(rows.values())), AttachedSos1Constraint)
     assert_type(
         next(iter(rows.items())), tuple[Sos1ConstraintID, AttachedSos1Constraint]
     )
-    assert_type(rows.get(5), AttachedSos1Constraint | None)
-    assert_type(rows.get(999, rows[5]), AttachedSos1Constraint)
+    assert_type(rows.get(8), AttachedSos1Constraint | None)
+    assert_type(rows.get(999, rows[8]), AttachedSos1Constraint)
     assert_type(rows.get(999, "missing"), AttachedSos1Constraint | str)
     mapping: Mapping[Sos1ConstraintID, AttachedSos1Constraint] = rows
-    assert mapping[Sos1ConstraintID(5)] == rows[5]
+    assert mapping[Sos1ConstraintID(8)] == rows[8]
     alias = ConstraintFamilyView[Sos1ConstraintID, AttachedSos1Constraint]
     assert get_origin(alias) is ConstraintFamilyView
     assert_type(model.constraints.of_kind("regular")[5], AttachedConstraint)
-    assert_type(model.constraints.of_kind("indicator")[5], AttachedIndicatorConstraint)
-    assert_type(model.constraints.of_kind("one_hot")[5], AttachedOneHotConstraint)
+    assert_type(model.constraints.of_kind("indicator")[6], AttachedIndicatorConstraint)
+    assert_type(model.constraints.of_kind("one_hot")[7], AttachedOneHotConstraint)
     solution = model.evaluate({0: 1, 1: 0})
     assert_type(solution.constraints.of_kind("regular")[5], EvaluatedConstraint)
     assert_type(
-        solution.constraints.of_kind("indicator")[5], EvaluatedIndicatorConstraint
+        solution.constraints.of_kind("indicator")[6], EvaluatedIndicatorConstraint
     )
-    assert_type(solution.constraints.of_kind("one_hot")[5], EvaluatedOneHotConstraint)
-    assert_type(solution.constraints.of_kind("sos1")[5], EvaluatedSos1Constraint)
+    assert_type(solution.constraints.of_kind("one_hot")[7], EvaluatedOneHotConstraint)
+    assert_type(solution.constraints.of_kind("sos1")[8], EvaluatedSos1Constraint)
     samples = model.evaluate_samples({9: {0: 1, 1: 0}})
     assert_type(samples.constraints.of_kind("regular")[5], SampledConstraint)
-    assert_type(samples.constraints.of_kind("indicator")[5], SampledIndicatorConstraint)
-    assert_type(samples.constraints.of_kind("one_hot")[5], SampledOneHotConstraint)
-    assert_type(samples.constraints.of_kind("sos1")[5], SampledSos1Constraint)
+    assert_type(samples.constraints.of_kind("indicator")[6], SampledIndicatorConstraint)
+    assert_type(samples.constraints.of_kind("one_hot")[7], SampledOneHotConstraint)
+    assert_type(samples.constraints.of_kind("sos1")[8], SampledSos1Constraint)
     removed = remove_all(model)
     assert_type(removed.of_kind("regular")[5], RemovedConstraint)
-    assert_type(removed.of_kind("indicator")[5], RemovedIndicatorConstraint)
-    assert_type(removed.of_kind("one_hot")[5], RemovedOneHotConstraint)
-    assert_type(removed.of_kind("sos1")[5], RemovedSos1Constraint)
+    assert_type(removed.of_kind("indicator")[6], RemovedIndicatorConstraint)
+    assert_type(removed.of_kind("one_hot")[7], RemovedOneHotConstraint)
+    assert_type(removed.of_kind("sos1")[8], RemovedSos1Constraint)

@@ -20,7 +20,9 @@ pub enum Sos1ConstraintError {
     EmptyVariables,
 }
 
-/// ID for SOS1 constraints, independent from regular [`ConstraintID`](crate::ConstraintID).
+/// Family-specific ID for SOS1 constraints.
+/// Its numeric value is unique across every constraint family in an instance,
+/// including removed constraints.
 #[derive(
     Clone,
     Copy,

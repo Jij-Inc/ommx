@@ -59,25 +59,25 @@ def test_get_types():
     assert_type(active.get(ConstraintID(5), None), AttachedConstraint | None)
     assert_type(active.get(ConstraintID(999), Missing()), AttachedConstraint | Missing)
     assert_type(
-        active.get(IndicatorConstraintID(5)), AttachedIndicatorConstraint | None
+        active.get(IndicatorConstraintID(6)), AttachedIndicatorConstraint | None
     )
     assert_type(
-        active.get(IndicatorConstraintID(5), None), AttachedIndicatorConstraint | None
+        active.get(IndicatorConstraintID(6), None), AttachedIndicatorConstraint | None
     )
     assert_type(
         active.get(IndicatorConstraintID(999), Missing()),
         AttachedIndicatorConstraint | Missing,
     )
-    assert_type(active.get(OneHotConstraintID(5)), AttachedOneHotConstraint | None)
+    assert_type(active.get(OneHotConstraintID(7)), AttachedOneHotConstraint | None)
     assert_type(
-        active.get(OneHotConstraintID(5), None), AttachedOneHotConstraint | None
+        active.get(OneHotConstraintID(7), None), AttachedOneHotConstraint | None
     )
     assert_type(
         active.get(OneHotConstraintID(999), Missing()),
         AttachedOneHotConstraint | Missing,
     )
-    assert_type(active.get(Sos1ConstraintID(5)), AttachedSos1Constraint | None)
-    assert_type(active.get(Sos1ConstraintID(5), None), AttachedSos1Constraint | None)
+    assert_type(active.get(Sos1ConstraintID(8)), AttachedSos1Constraint | None)
+    assert_type(active.get(Sos1ConstraintID(8), None), AttachedSos1Constraint | None)
     assert_type(
         active.get(Sos1ConstraintID(999), Missing()), AttachedSos1Constraint | Missing
     )
@@ -85,25 +85,25 @@ def test_get_types():
     assert_type(removed.get(ConstraintID(5), None), RemovedConstraint | None)
     assert_type(removed.get(ConstraintID(999), Missing()), RemovedConstraint | Missing)
     assert_type(
-        removed.get(IndicatorConstraintID(5)), RemovedIndicatorConstraint | None
+        removed.get(IndicatorConstraintID(6)), RemovedIndicatorConstraint | None
     )
     assert_type(
-        removed.get(IndicatorConstraintID(5), None), RemovedIndicatorConstraint | None
+        removed.get(IndicatorConstraintID(6), None), RemovedIndicatorConstraint | None
     )
     assert_type(
         removed.get(IndicatorConstraintID(999), Missing()),
         RemovedIndicatorConstraint | Missing,
     )
-    assert_type(removed.get(OneHotConstraintID(5)), RemovedOneHotConstraint | None)
+    assert_type(removed.get(OneHotConstraintID(7)), RemovedOneHotConstraint | None)
     assert_type(
-        removed.get(OneHotConstraintID(5), None), RemovedOneHotConstraint | None
+        removed.get(OneHotConstraintID(7), None), RemovedOneHotConstraint | None
     )
     assert_type(
         removed.get(OneHotConstraintID(999), Missing()),
         RemovedOneHotConstraint | Missing,
     )
-    assert_type(removed.get(Sos1ConstraintID(5)), RemovedSos1Constraint | None)
-    assert_type(removed.get(Sos1ConstraintID(5), None), RemovedSos1Constraint | None)
+    assert_type(removed.get(Sos1ConstraintID(8)), RemovedSos1Constraint | None)
+    assert_type(removed.get(Sos1ConstraintID(8), None), RemovedSos1Constraint | None)
     assert_type(
         removed.get(Sos1ConstraintID(999), Missing()), RemovedSos1Constraint | Missing
     )
@@ -113,27 +113,27 @@ def test_get_types():
         evaluated.get(ConstraintID(999), Missing()), EvaluatedConstraint | Missing
     )
     assert_type(
-        evaluated.get(IndicatorConstraintID(5)), EvaluatedIndicatorConstraint | None
+        evaluated.get(IndicatorConstraintID(6)), EvaluatedIndicatorConstraint | None
     )
     assert_type(
-        evaluated.get(IndicatorConstraintID(5), None),
+        evaluated.get(IndicatorConstraintID(6), None),
         EvaluatedIndicatorConstraint | None,
     )
     assert_type(
         evaluated.get(IndicatorConstraintID(999), Missing()),
         EvaluatedIndicatorConstraint | Missing,
     )
-    assert_type(evaluated.get(OneHotConstraintID(5)), EvaluatedOneHotConstraint | None)
+    assert_type(evaluated.get(OneHotConstraintID(7)), EvaluatedOneHotConstraint | None)
     assert_type(
-        evaluated.get(OneHotConstraintID(5), None), EvaluatedOneHotConstraint | None
+        evaluated.get(OneHotConstraintID(7), None), EvaluatedOneHotConstraint | None
     )
     assert_type(
         evaluated.get(OneHotConstraintID(999), Missing()),
         EvaluatedOneHotConstraint | Missing,
     )
-    assert_type(evaluated.get(Sos1ConstraintID(5)), EvaluatedSos1Constraint | None)
+    assert_type(evaluated.get(Sos1ConstraintID(8)), EvaluatedSos1Constraint | None)
     assert_type(
-        evaluated.get(Sos1ConstraintID(5), None), EvaluatedSos1Constraint | None
+        evaluated.get(Sos1ConstraintID(8), None), EvaluatedSos1Constraint | None
     )
     assert_type(
         evaluated.get(Sos1ConstraintID(999), Missing()),
@@ -143,25 +143,25 @@ def test_get_types():
     assert_type(sampled.get(ConstraintID(5), None), SampledConstraint | None)
     assert_type(sampled.get(ConstraintID(999), Missing()), SampledConstraint | Missing)
     assert_type(
-        sampled.get(IndicatorConstraintID(5)), SampledIndicatorConstraint | None
+        sampled.get(IndicatorConstraintID(6)), SampledIndicatorConstraint | None
     )
     assert_type(
-        sampled.get(IndicatorConstraintID(5), None), SampledIndicatorConstraint | None
+        sampled.get(IndicatorConstraintID(6), None), SampledIndicatorConstraint | None
     )
     assert_type(
         sampled.get(IndicatorConstraintID(999), Missing()),
         SampledIndicatorConstraint | Missing,
     )
-    assert_type(sampled.get(OneHotConstraintID(5)), SampledOneHotConstraint | None)
+    assert_type(sampled.get(OneHotConstraintID(7)), SampledOneHotConstraint | None)
     assert_type(
-        sampled.get(OneHotConstraintID(5), None), SampledOneHotConstraint | None
+        sampled.get(OneHotConstraintID(7), None), SampledOneHotConstraint | None
     )
     assert_type(
         sampled.get(OneHotConstraintID(999), Missing()),
         SampledOneHotConstraint | Missing,
     )
-    assert_type(sampled.get(Sos1ConstraintID(5)), SampledSos1Constraint | None)
-    assert_type(sampled.get(Sos1ConstraintID(5), None), SampledSos1Constraint | None)
+    assert_type(sampled.get(Sos1ConstraintID(8)), SampledSos1Constraint | None)
+    assert_type(sampled.get(Sos1ConstraintID(8), None), SampledSos1Constraint | None)
     assert_type(
         sampled.get(Sos1ConstraintID(999), Missing()), SampledSos1Constraint | Missing
     )

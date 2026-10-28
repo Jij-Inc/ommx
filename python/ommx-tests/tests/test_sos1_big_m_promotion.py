@@ -131,10 +131,10 @@ def test_promote_sos1_big_m_exposes_batch_report(mode: Mode) -> None:
     report = instance.promote_sos1_big_m(request, mode=mode)
 
     assert_report_keys(report, request)
-    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(103)}
     assert report.rejections == {}
-    assert set(instance.constraints[Sos1ConstraintID(0)].variables) == {0, 1}
-    assert set(instance.constraints) == {Sos1ConstraintID(0)}
+    assert set(instance.constraints[Sos1ConstraintID(103)].variables) == {0, 1}
+    assert set(instance.constraints) == {Sos1ConstraintID(103)}
     assert set(instance.removed_constraints) == {
         ConstraintID(100),
         ConstraintID(101),
@@ -142,7 +142,7 @@ def test_promote_sos1_big_m_exposes_batch_report(mode: Mode) -> None:
     }
     assert set(
         (cid for cid in instance.constraints if isinstance(cid, Sos1ConstraintID))
-    ) == {Sos1ConstraintID(0)}
+    ) == {Sos1ConstraintID(103)}
     assert instance.populate_state({0: 0, 1: 2}).entries[10] == 1
 
 
@@ -168,8 +168,8 @@ def test_promote_sos1_big_m_accepts_tight_continuous_links() -> None:
     report = instance.promote_sos1_big_m(request)
 
     assert_report_keys(report, request)
-    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
-    assert set(instance.constraints[Sos1ConstraintID(0)].variables) == {1}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(103)}
+    assert set(instance.constraints[Sos1ConstraintID(103)].variables) == {1}
 
 
 @pytest.mark.parametrize("mode", ["best_effort", "strict"])
@@ -182,12 +182,13 @@ def test_promote_sos1_big_m_keys_shared_member_formulations_by_cardinality(
         sense=Sense.Minimize,
         objective=0,
         decision_variables=[first, second],
-        constraints={0: first - 1 <= 0, 2**64 - 1: first + second - 1 <= 0},
+        constraints={0: first - 1 <= 0, 2**64 - 3: first + second - 1 <= 0},
     )
-    # Reverse insertion order and boundary IDs distinguish keys from positions.
+    # Reserve the last two numbers for generated constraints. Reverse insertion
+    # order and boundary IDs distinguish keys from positions.
     request = Sos1BigMPromotionRequest(
         selector_claims={
-            2**64 - 1: {
+            2**64 - 3: {
                 0: Sos1BigMSelectorClaim.reused(),
                 1: Sos1BigMSelectorClaim.reused(),
             },
@@ -199,19 +200,19 @@ def test_promote_sos1_big_m_keys_shared_member_formulations_by_cardinality(
 
     assert_report_keys(report, request)
     assert report.promoted == {
-        ConstraintID(0): Sos1ConstraintID(0),
-        ConstraintID(2**64 - 1): Sos1ConstraintID(1),
+        ConstraintID(0): Sos1ConstraintID(2**64 - 2),
+        ConstraintID(2**64 - 3): Sos1ConstraintID(2**64 - 1),
     }
     assert report.rejections == {}
-    assert set(instance.constraints[Sos1ConstraintID(0)].variables) == {0}
-    assert set(instance.constraints[Sos1ConstraintID(1)].variables) == {0, 1}
+    assert set(instance.constraints[Sos1ConstraintID(2**64 - 2)].variables) == {0}
+    assert set(instance.constraints[Sos1ConstraintID(2**64 - 1)].variables) == {0, 1}
     assert set(instance.removed_constraints) == {
         ConstraintID(0),
-        ConstraintID(2**64 - 1),
+        ConstraintID(2**64 - 3),
     }
     assert set(
         (cid for cid in instance.constraints if isinstance(cid, Sos1ConstraintID))
-    ) == {Sos1ConstraintID(0), Sos1ConstraintID(1)}
+    ) == {Sos1ConstraintID(2**64 - 2), Sos1ConstraintID(2**64 - 1)}
 
 
 def test_promote_sos1_big_m_defaults_to_best_effort_and_retains_all_rejections() -> (
@@ -226,11 +227,11 @@ def test_promote_sos1_big_m_defaults_to_best_effort_and_retains_all_rejections()
     report = instance.promote_sos1_big_m(request)
 
     assert_report_keys(report, request)
-    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(103)}
     assert set(report.rejections) == {ConstraintID(999), ConstraintID(2**64 - 1)}
     assert "is not active" in report.rejections[ConstraintID(999)]
     assert "at least one member" in report.rejections[ConstraintID(2**64 - 1)]
-    assert set(instance.constraints) == {Sos1ConstraintID(0)}
+    assert set(instance.constraints) == {Sos1ConstraintID(103)}
     assert set(instance.removed_constraints) == {
         ConstraintID(100),
         ConstraintID(101),
@@ -238,14 +239,14 @@ def test_promote_sos1_big_m_defaults_to_best_effort_and_retains_all_rejections()
     }
     assert set(
         (cid for cid in instance.constraints if isinstance(cid, Sos1ConstraintID))
-    ) == {Sos1ConstraintID(0)}
+    ) == {Sos1ConstraintID(103)}
     assert instance.populate_state({0: 0, 1: 2}).entries[10] == 1
 
     # Derived snapshots cannot change the report's exclusive per-key outcomes.
     report.promoted.clear()
     report.rejections.clear()
     assert_report_keys(report, request)
-    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(103)}
     assert len(report.rejections) == 2
 
 
@@ -280,7 +281,7 @@ def test_promote_sos1_big_m_rejects_overlapping_links(mode: Mode) -> None:
     else:
         report = instance.promote_sos1_big_m(request, mode=mode)
         assert_report_keys(report, request)
-        assert report.promoted == {ConstraintID(202): Sos1ConstraintID(0)}
+        assert report.promoted == {ConstraintID(202): Sos1ConstraintID(203)}
         assert set(report.rejections) == {ConstraintID(102), ConstraintID(103)}
         assert all(
             "outside the claimed formulation" in reason
@@ -290,12 +291,12 @@ def test_promote_sos1_big_m_rejects_overlapping_links(mode: Mode) -> None:
             ConstraintID(100),
             ConstraintID(102),
             ConstraintID(103),
-            Sos1ConstraintID(0),
+            Sos1ConstraintID(203),
         }
         assert set(instance.removed_constraints) == {ConstraintID(202)}
         assert set(
             (cid for cid in instance.constraints if isinstance(cid, Sos1ConstraintID))
-        ) == {Sos1ConstraintID(0)}
+        ) == {Sos1ConstraintID(203)}
 
 
 def test_promote_sos1_big_m_strict_rejects_the_full_batch_atomically() -> None:
@@ -321,7 +322,7 @@ def test_promote_sos1_big_m_strict_rejects_the_full_batch_atomically() -> None:
 
     report = instance.promote_sos1_big_m(valid_request, mode="strict")
     assert_report_keys(report, valid_request)
-    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(103)}
     assert report.rejections == {}
 
 
@@ -362,7 +363,7 @@ def test_promote_sos1_big_m_checks_mathematical_coverage(
     )
     report = instance.promote_sos1_big_m(request, mode=mode)
     assert_report_keys(report, request)
-    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(0)}
+    assert report.promoted == {ConstraintID(102): Sos1ConstraintID(103)}
     assert report.rejections == {}
     assert instance.get_decision_variable_by_id(1).bound.upper == 3 - shortfall
 

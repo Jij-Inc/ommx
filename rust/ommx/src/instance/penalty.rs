@@ -737,7 +737,7 @@ mod tests {
         let indicator_constraints = has_kind(SpecialConstraintKind::Indicator)
             .then(|| {
                 (
-                    crate::IndicatorConstraintID::from(1),
+                    crate::IndicatorConstraintID::from(2),
                     crate::IndicatorConstraint::new(
                         variable,
                         Equality::EqualToZero,
@@ -750,7 +750,7 @@ mod tests {
         let one_hot_constraints = has_kind(SpecialConstraintKind::OneHot)
             .then(|| {
                 (
-                    crate::OneHotConstraintID::from(1),
+                    crate::OneHotConstraintID::from(3),
                     crate::OneHotConstraint::new(BTreeSet::from([variable])).unwrap(),
                 )
             })
@@ -759,7 +759,7 @@ mod tests {
         let sos1_constraints = has_kind(SpecialConstraintKind::Sos1)
             .then(|| {
                 (
-                    crate::Sos1ConstraintID::from(1),
+                    crate::Sos1ConstraintID::from(4),
                     crate::Sos1Constraint::new(BTreeSet::from([variable])).unwrap(),
                 )
             })
@@ -1559,13 +1559,13 @@ mod tests {
             SpecialConstraintKind::Sos1,
         ]);
         lowered
-            .convert_indicator_to_constraint(crate::IndicatorConstraintID::from(1), ATol::default())
+            .convert_indicator_to_constraint(crate::IndicatorConstraintID::from(2), ATol::default())
             .unwrap();
         lowered
-            .convert_one_hot_to_constraint(crate::OneHotConstraintID::from(1))
+            .convert_one_hot_to_constraint(crate::OneHotConstraintID::from(3))
             .unwrap();
         lowered
-            .convert_sos1_to_constraints(crate::Sos1ConstraintID::from(1))
+            .convert_sos1_to_constraints(crate::Sos1ConstraintID::from(4))
             .unwrap();
 
         assert_eq!(lowered.removed_indicator_constraints().len(), 1);
