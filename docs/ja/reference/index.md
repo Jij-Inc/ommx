@@ -26,7 +26,12 @@ Python SDKとRust SDKの版は独立しています。Rust利用者はPython Tut
 [連携のDeveloper Guide](../developer_guide/integration.md)から共通概念とRust APIへ進めます。
 開発版の実装を対象にする場合は、依存するcommitと同じソースを参照します。
 
+(reference-wire)=
 ## 言語に依存しない形式
+
+Messageは問題や候補をProtocol Buffersのbytesとして読み書きするための形式です。
+Media Typeに対応するschemaを選び、変数IDと式・制約・候補値の対応も保持します。
+このwire schemaの版はSDKパッケージの版とは独立しています。
 
 | 対象 | 公開b7に対応する仕様・定義 |
 |---|---|

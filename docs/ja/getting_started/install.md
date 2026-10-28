@@ -4,9 +4,9 @@
 
 バージョンを指定せずにインストールすると、安定版のv2が選ばれるため、Tutorialのv3 APIを使えません。ここでは、公開済みの`3.0.0b7`で実行を確認した手順を示します。
 
-目的別の追加依存、共通の版の対応、Rust・CLIの入口は[バージョンと実行環境](compatibility.md)に
-まとめています。Artifactの受け渡しやExperimentの最小例も、以下の手順1・2のSDKだけで
-実行できます。Adapterは使いたい場合だけ追加します。
+目的別の追加依存、Python・Rust・データ形式の版の違いは
+[バージョンと実行環境](compatibility.md)にまとめています。Artifactの受け渡しや
+Experimentの最小例もSDKだけで始められます。
 
 ## 1. 仮想環境を作る
 
@@ -71,7 +71,7 @@ python -m pip install "ommx-pyscipopt-adapter==3.0.0b7"
 1. [PySCIPOpt Adapterで0-1ナップサック問題を解く](../tutorial/solve_with_ommx_adapter)：変換せずに求解し、結果を読む。
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1を使う。
 
-(highs-adapter)=
+(install-highs-adapter)=
 ### HiGHS Adapter
 
 ```sh
@@ -104,8 +104,30 @@ python -m pip install matplotlib
 ```
 
 ```{note}
-このBookはv3の開発版に対応しており、生成API Referenceには公開b7にない機能もあります。
-目的別の実行条件と版を固定した参照先は[バージョンと実行環境](compatibility.md)と
-[Reference](../reference/index.md)で確認してください。外部ツール・レジストリ認証などの
-追加条件は、それらを使う各How-toに記載しています。
+このBookはv3の開発版に対応しており、API Referenceなどには未公開の機能が含まれる場合があります。上記のバージョンで実行を確認した範囲は、ここから案内するInstance変換How-toとmembership例、既存問題の入手How-toと候補評価Tutorial、3つのAdapter Tutorialと2つのAdapter How-to、およびOpenJijの小さなサンプリングHow-toとTSPのNotebookです。ほかの機能や外部ツールの導入条件は、それぞれのページを確認してください。
 ```
+
+(install-cli)=
+## 任意：Artifactを管理するCLI
+
+[保存したArtifactの調査・整理](../how_to/manage_local_registry.md)には、単体の`ommx`コマンドを使えます。
+単体CLIの利用にPython SDKや仮想環境は不要です。求解やPython SDKの利用にもCLIは不要です。
+公開Python SDKの上記の環境にはCLIが同梱されないため、
+その環境を更新せず、別にRust CLIを導入します。
+
+[cargo-binstall](https://github.com/cargo-bins/cargo-binstall#installation)を用意し、
+[Rust SDKのリリース](https://github.com/Jij-Inc/ommx/releases?q=rust-3.0)から
+利用環境向けのCLIバイナリがある版を選びます。次の版にはバイナリが添付されています。
+
+```sh
+cargo binstall ommx@3.0.0-beta.7
+ommx --version
+ommx --help
+```
+
+プレリリースを使う間はバージョンを明示します。省略すると安定版が選ばれ、
+このBookで説明するコマンドが含まれない場合があります。
+
+CLI同梱の開発版Python SDKをすでに利用している場合は、代わりに`uv run ommx`で起動できます。
+Python経由でも`ommx --version`はRust CLIのバージョンを表示します。
+Rust SDKとPython SDKのバージョンは独立して管理されています。

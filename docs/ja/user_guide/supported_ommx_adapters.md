@@ -18,13 +18,19 @@ AdapterはOMMXのInstanceと実行backendの入力・出力を接続します。
 ## 選ぶときの四つの確認
 
 1. **直接渡せる入力**：Adapterの`INPUT_CLASS`は、その実装が直接扱えるInstanceの条件です。
-   単に「線形」「QUBO」という通称だけでなく、変数の種類・式の表現・制約族・senseを確認します。
+   単に「線形」「QUBO」という通称だけでなく、変数の種類・式の表現・制約の種類・最大化か最小化かを確認します。
 2. **必要なPreparation**：直接受け取れない場合は、Adapterの推奨Policyを出発点にします。
-   対応しない制約や必要な有限boundによっては、変換できない場合もあります。
+   PreparationはInstanceを入力条件に合わせて変換する処理、Policyは使用を許す変換と設定の選択です。
+   変数に必要な有限の上下限がない場合など、変換できないこともあります。
 3. **ユーザーが決める設定**：ペナルティの重み、許容誤差、探索回数・時間制限などです。
    推奨Policyを取得しただけで、問題ごとに適切な設定がすべて決まるわけではありません。
 4. **結果から分かること**：報告目的値、実行可能性、候補の数に加え、backendが返す終了理由や
-   bound・gap・最適性情報を確認します。利用可能なdiagnosticsもAdapterごとに異なります。
+   目的値の限界値（bound）、候補の目的値との隔たり（gap）、最適性情報を確認します。
+   こうしたbackend側の記録を読むdiagnosticsの対応もAdapterごとに異なります。
+
+通常の`solve()`・`sample()`は、元のInstanceを変更せず、内部のcopyに必要なPreparationを
+行ってから実行します。推奨Policy以外の変換を選ぶ場合は、
+[明示的にPreparationを行うHow-to](../how_to/customize_preparation.md)へ進みます。
 
 `INPUT_CLASS`への所属は表現条件の確認であり、変換前との数学的な同値性やbackendの
 最適性保証を示すものではありません。これらは別々に判断します。
@@ -33,7 +39,7 @@ AdapterはOMMXのInstanceと実行backendの入力・出力を接続します。
 
 ## ソルバー名と問題クラスは一対一ではない
 
-例えばOpenJij SA Adapterの直接入力は、Binary変数の多項式最小化とactive制約なしという
+例えばOpenJij SA Adapterの直接入力は、Binary変数の多項式最小化と、求解対象の制約なしという
 条件で、二次式だけに限りません。「OpenJijだから最初にQUBOへ変換する」とは考えず、
 実際の`INPUT_CLASS`と推奨Policyを使います。重みの明示が必要な例は
 [OpenJij How-to](../how_to/sample_with_openjij_adapter)を参照してください。
@@ -47,19 +53,17 @@ AdapterはOMMXのInstanceと実行backendの入力・出力を接続します。
 
 ## パッケージと契約の確認先
 
-同一リポジトリで開発するAdapterは以下です。Bookの実行例の基準は公開`3.0.0b7`です。
-リンク先の実装も同じタグを指します。正確な引数と対応範囲は各APIを確認してください。
+同一リポジトリで開発するAdapterは以下です。実行例の基準版は
+[インストール手順](../getting_started/install.md)にまとめています。
+実装リンクはその公開タグ、APIリンクはこのBookと同じ開発リビジョンを指します。
+APIに未公開の機能が含まれる場合は、利用する公開タグの実装も確認してください。
 
-| パッケージ | 対応backend | b7の実装 |
-|---|---|---|
-| `ommx-pyscipopt-adapter` | SCIP / PySCIPOpt | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-pyscipopt-adapter) |
-| `ommx-highs-adapter` | HiGHS | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-highs-adapter) |
-| `ommx-openjij-adapter` | OpenJij SA / SQA | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-openjij-adapter) |
-| `ommx-python-mip-adapter` | Python-MIP | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-python-mip-adapter) |
-
-このBookのAPI ReferenceはBookと同じ開発リビジョンから生成されます。
-公開パッケージと差がある機能は、[Referenceのバージョン案内](../reference/index.md)に従って
-公開タグの契約も確認してください。
+| パッケージ | 対応backend | API | 基準版の実装 |
+|---|---|---|---|
+| `ommx-pyscipopt-adapter` | SCIP / PySCIPOpt | {mod}`~ommx_pyscipopt_adapter` | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-pyscipopt-adapter) |
+| `ommx-highs-adapter` | HiGHS | {mod}`~ommx_highs_adapter` | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-highs-adapter) |
+| `ommx-openjij-adapter` | OpenJij SA / SQA | {mod}`~ommx_openjij_adapter` | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-openjij-adapter) |
+| `ommx-python-mip-adapter` | Python-MIP | {mod}`~ommx_python_mip_adapter` | [実装](https://github.com/Jij-Inc/ommx/tree/python-3.0.0b7/python/ommx-python-mip-adapter) |
 
 別リポジトリで提供するAdapterには、[Gurobi](https://github.com/Jij-Inc/ommx-gurobipy-adapter)、
 [D-Wave](https://github.com/Jij-Inc/ommx-dwave-adapter)、
@@ -68,6 +72,6 @@ AdapterはOMMXのInstanceと実行backendの入力・出力を接続します。
 [Kipu Iskay](https://github.com/Jij-Inc/ommx-kipu-iskay-adapter)、
 [Q-CTRL QAOA](https://github.com/Jij-Inc/ommx-qctrl-qaoa-adapter)などがあります。
 各プロジェクトのSDK互換性、実行環境、認証・ライセンス、結果の契約を個別に確認してください。
-この一覧は、それらがBookのb7環境で実行確認済みであることを意味しません。
+この一覧は、それらがBookの実行環境で確認済みであることを意味しません。
 
 Adapter自体を作る場合は[Developer Guide](../developer_guide/adapter.md)を参照してください。
