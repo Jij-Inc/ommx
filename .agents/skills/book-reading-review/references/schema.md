@@ -40,6 +40,14 @@ concise format that records:
   sufficient.
 - **Outcome:** checked scope, unresolved findings, and unreviewed routes. Do
   not extrapolate a scoped success to the rest of the Book.
+- **Coverage audits only:** documented SDK revision, major reader tasks and
+  their public API sources, explanation/example/entry destinations, and gaps
+  distinguished from planned or deliberately excluded work. Do not infer
+  coverage from the existing concept catalog alone.
+
+Notebook execution is owned by the repository's separate tests. The Book review
+record describes source, explanations, and displayed outputs; it does not
+require rerunning Notebooks or certify their execution from a Book build.
 
 Do not replace `baseline.source_revision`, silently certify proposed contracts,
 or commit generated PASS output as review evidence. When prose, introduction
@@ -113,6 +121,15 @@ The analyzer exits `0` for consistent contracts, `1` for reference/learning-flow
 violations, and `2` for malformed input, unsupported schema, or I/O failure.
 Inspect findings and individual route results, not just the exit code. Knowledge
 reported on a failed route is diagnostic, not a guarantee about its reader.
+
+The query helper returns the requested declaration even when learning contracts
+are inconsistent. Its `manifest_diagnostics` contains whole-manifest consistency
+and findings; page queries also include `target_page_analysis`. Diagnostics may
+refer to unrelated pages and do not prevent inspection of the requested target.
+Query exit `0` means the lookup succeeded, not that contracts passed. Exit `2`
+indicates malformed input, empty/duplicate concept or page IDs that prevent
+unambiguous indexing, an unknown target, incompatible evidence, or I/O failure.
+The analyzer remains the command for a whole-manifest consistency verdict.
 
 Analysis output and rendered reports are derived artifacts, not additional
 editable copies of the contracts. Do not commit a stale PASS report alongside
