@@ -100,6 +100,8 @@ print(f"{solution.objective=}")
 solution.decision_variables_df()
 ```
 
+取り出したSolutionから[名前と添字で変数値を取得](../how_to/extract_named_values.md)できます。また、[名前付きの評価式](../how_to/evaluate_named_functions.md)を登録しておくと、目的関数以外の指標も候補ごとに確認できます。
+
 得られた候補の中から最良の実行可能なものを選ぶ
 -------------
 `SampleSet.best_feasible`は、得られた実行可能なサンプルの中で、`sense`に応じて最も良い目的値を持つものを返します。候補の集合で最良であることは、元の問題の最適解であることを意味しません。
