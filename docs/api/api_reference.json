@@ -16426,6 +16426,23 @@
               "is_property": true
             },
             {
+              "name": "constraint_names",
+              "doc": "Unique names across all constraint families, as a set of strings.\n\nOnly active constraints are included.\nThe scope matches `extract_constraints`. Unnamed constraints are excluded;\nan explicitly empty name is included. Duplicate names appear once, even\nwhen extraction would reject duplicate subscripts.\nEach access returns a fresh set; editing it does not change this owner.",
+              "type_": {
+                "display": "set[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "constraints",
               "doc": "Live mapping of all active constraint families, keyed by typed IDs.\nThe view retains this owner and fetches each constraint on demand.",
               "type_": {
@@ -23372,6 +23389,23 @@
               "is_property": true
             },
             {
+              "name": "constraint_names",
+              "doc": "Unique names across all constraint families, as a set of strings.\n\nOnly active constraints are included.\nThe scope matches `extract_constraints`. Unnamed constraints are excluded;\nan explicitly empty name is included. Duplicate names appear once, even\nwhen extraction would reject duplicate subscripts.\nEach access returns a fresh set; editing it does not change this owner.",
+              "type_": {
+                "display": "set[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "constraints",
               "doc": "Live mapping of all active constraint families, keyed by typed IDs.\nThe view retains this owner and fetches each constraint on demand.",
               "type_": {
@@ -23428,6 +23462,23 @@
                 "children": [
                   {
                     "display": "int",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "decision_variable_names",
+              "doc": "Unique decision-variable names as a set of strings, excluding parameters.\nUnnamed variables are excluded; explicitly empty names are included.\nEach access returns a fresh set; editing it does not change this owner.",
+              "type_": {
+                "display": "set[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
                     "link_target": null,
                     "children": []
                   }
@@ -29568,6 +29619,23 @@
               "is_readonly": true
             },
             {
+              "name": "constraint_names",
+              "doc": "Unique names across all constraint families, as a set of strings.\n\nRetained removed constraints are included; no sample ID is needed.\nThe scope matches `extract_constraints`. Unnamed constraints are excluded;\nan explicitly empty name is included. Duplicate names appear once, even\nwhen extraction would reject duplicate subscripts.\nEach access returns a fresh set; editing it does not change this owner.",
+              "type_": {
+                "display": "set[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "constraints",
               "doc": "Live mapping of all constraint families, including removed results.\nTyped IDs select the family. Rows are fetched only when indexed.",
               "type_": {
@@ -33607,6 +33675,23 @@
                     "link_target": null,
                     "children": []
                   },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "constraint_names",
+              "doc": "Unique names across all constraint families, as a set of strings.\n\nRetained removed constraints are included; no sample ID is needed.\nThe scope matches `extract_constraints`. Unnamed constraints are excluded;\nan explicitly empty name is included. Duplicate names appear once, even\nwhen extraction would reject duplicate subscripts.\nEach access returns a fresh set; editing it does not change this owner.",
+              "type_": {
+                "display": "set[str]",
+                "link_target": null,
+                "children": [
                   {
                     "display": "str",
                     "link_target": null,

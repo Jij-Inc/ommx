@@ -85,6 +85,18 @@ impl_solution_annotations!(SampleSet);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampleSet {
+    /// Unique names across all constraint families, as a set of strings.
+    ///
+    /// Retained removed constraints are included; no sample ID is needed.
+    /// The scope matches `extract_constraints`. Unnamed constraints are excluded;
+    /// an explicitly empty name is included. Duplicate names appear once, even
+    /// when extraction would reject duplicate subscripts.
+    /// Each access returns a fresh set; editing it does not change this owner.
+    #[getter]
+    fn constraint_names(&self) -> BTreeSet<String> {
+        self.inner.constraint_names()
+    }
+
     #[staticmethod]
     pub fn from_v1_bytes(bytes: &Bound<PyBytes>) -> OmmxPyResult<Self> {
         let _guard = crate::TRACING.attach_parent_context(bytes.py());

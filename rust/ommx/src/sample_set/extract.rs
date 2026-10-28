@@ -4,6 +4,30 @@ use std::collections::BTreeMap;
 use super::*;
 
 impl SampleSet {
+    /// Unique constraint names across every family, including retained removed rows.
+    ///
+    /// Searches the same rows as `extract_constraints`. Unnamed constraints are
+    /// excluded; explicitly empty names are included. Duplicate names are
+    /// returned once, even when their subscripts are ambiguous for extraction.
+    pub fn constraint_names(&self) -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        macro_rules! collect {
+            ($collection:expr) => {
+                let collection = $collection;
+                names.extend(
+                    collection
+                        .keys()
+                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+                );
+            };
+        }
+        collect!(&self.constraints);
+        collect!(&self.indicator_constraints);
+        collect!(&self.one_hot_constraints);
+        collect!(&self.sos1_constraints);
+        names
+    }
+
     /// Get all unique decision variable names in this sample set
     ///
     /// Returns a set of all unique variable names that have at least one named variable.

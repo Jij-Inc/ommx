@@ -89,6 +89,10 @@ report the required typed-ID input without exposing internal enum extraction.
 now return violations instead of signed function values.** Parameters are ignored,
 as in variable extraction; duplicate subscripts across families raise `ValueError`.
 
+All four owners provide `constraint_names: set[str]` for the same scope as
+`extract_constraints`. `ParametricInstance.decision_variable_names` lists variable
+names without including parameters. Unnamed rows are excluded and names are deduplicated.
+
 ### 🆕 Create states from variable names and subscripts ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 `Instance.state_from_named_values()` resolves a `NamedState` against the target

@@ -81,6 +81,10 @@ Attachedの行は所有元の同一性と型付きIDで比較し、Removedと結
 返します。**通常制約も符号付きの式の値から非負の違反量に変わります。** 決定変数の
 抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
 
+全4種類の所有元に`constraint_names: set[str]`を追加し、`extract_constraints`と同じ
+対象の名前を列挙できます。`ParametricInstance.decision_variable_names`も追加しました。
+未設定の名前とパラメータ名は除外し、同名は1件にまとめます。
+
 ### 🆕 変数の名前と添字から State を作成 ([#1273](https://github.com/Jij-Inc/ommx/pull/1273))
 
 `Instance.state_from_named_values()` で `NamedState` を対象インスタンスの

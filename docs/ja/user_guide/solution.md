@@ -181,6 +181,8 @@ for cid in instance.constraints:
 
 ## 名前と添字から制約を取得する
 
+全4種類の所有元で`constraint_names: set[str]`から検索対象の名前一覧を取得できます。`ParametricInstance`にも`decision_variable_names`があり、パラメータ名は含みません。名前が未設定の行は除外し、明示的な空文字の名前は含めます。返す集合は取得時点の独立した値です。同名は1件にまとまり、添字が重複して抽出できない名前も一覧には含まれます。
+
 `extract_constraints(name)` は、`extract_decision_variables` と同様に名前で絞り込み、添字のタプルをキーとする辞書を返します。通常制約と特殊制約の全種類が対象です。モデルからはAttachedな制約オブジェクト、評価結果からは非負の違反量を取得します。
 
 ```{code-cell} ipython3
@@ -188,6 +190,7 @@ named = Instance.minimize()
 x_named = named.new_binary("x")
 capacity = named.add_constraint(x_named - 2 <= 0, "capacity", subscripts=[0])
 
+assert named.constraint_names == {"capacity"}
 assert named.extract_constraints("capacity")[(0,)] == capacity
 assert named.as_parametric_instance().extract_constraints("capacity")[(0,)].name == "capacity"
 

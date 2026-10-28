@@ -183,6 +183,12 @@ interface without interpreting the family's mathematical meaning.
 
 Use `extract_constraints(name)` to obtain a dictionary keyed by subscript tuples,
 just as `extract_decision_variables` groups evaluated variable values by name.
+All four owners expose `constraint_names: set[str]` to discover the names in this
+query scope. `ParametricInstance` also exposes `decision_variable_names`, matching
+the other owners; parameter names are excluded. Unnamed rows are omitted, while
+explicitly empty names are included. Each access returns a fresh set, with duplicate
+names listed once even if their subscripts would be ambiguous for extraction.
+
 All constraint families participate. Models return attached constraint objects;
 results return nonnegative violations.
 
@@ -191,6 +197,7 @@ named = Instance.minimize()
 x_named = named.new_binary("x")
 capacity = named.add_constraint(x_named - 2 <= 0, "capacity", subscripts=[0])
 
+assert named.constraint_names == {"capacity"}
 assert named.extract_constraints("capacity")[(0,)] == capacity
 assert named.as_parametric_instance().extract_constraints("capacity")[(0,)].name == "capacity"
 

@@ -10,9 +10,14 @@ from ommx import (
     AttachedConstraint,
     ConstraintID,
     ConstraintView,
+    DecisionVariable,
     IndicatorConstraintID,
     Instance,
+    Parameter,
     ParametricInstance,
+    SampleSet,
+    Sense,
+    Solution,
 )
 from test_live_constraint_collections import FAMILIES, make_model, remove_all
 
@@ -36,6 +41,7 @@ def test_model_extraction_returns_attached_rows_of_all_families(
     extracted = model.extract_constraints("c")
     assert_type(extracted, dict[tuple[int, ...], ConstraintView])
     assert set(extracted) == {(index, -1) for index in range(4)}
+    row: ConstraintView | None = None
     for index, (_, id_type, row_type) in enumerate(FAMILIES):
         row = extracted[index, -1]
         assert type(row) is row_type
@@ -152,3 +158,114 @@ def test_feasible_regular_inequality_and_inactive_indicator_return_zero():
     solution = other.evaluate({0: 0, 1: 0})
     assert solution.constraints[IndicatorConstraintID(5)].evaluated_value == -1
     assert solution.extract_constraints("c")[1, -1] == 0
+
+
+def test_constraint_names_match_extraction_on_every_root():
+    model = make_model(Instance)
+    assert model.constraint_names == set()  # All four rows are unnamed.
+    assert model.as_parametric_instance().constraint_names == set()
+    assert model.evaluate({0: 0, 1: 0}).constraint_names == set()
+    assert model.evaluate_samples({7: {0: 0, 1: 0}}).constraint_names == set()
+
+    names = ["regular", "", "one_hot", "sos1"]
+    for name, (_, id_type, _) in zip(names, FAMILIES):
+        model.constraints[id_type(5)].set_name(name)
+    solution = model.evaluate({0: 0, 1: 0})
+    samples = model.evaluate_samples({7: {0: 0, 1: 0}})
+    roots: tuple[Instance, ParametricInstance, Solution, SampleSet] = (
+        model,
+        model.as_parametric_instance(),
+        solution,
+        samples,
+    )
+    for root in roots:
+        actual = root.constraint_names
+        assert_type(actual, set[str])
+        assert actual == set(names)
+        actual.clear()
+        assert root.constraint_names == set(names)  # A fresh independent set.
+    for name in names:
+        assert model.extract_constraints(name)
+        assert model.as_parametric_instance().extract_constraints(name)
+        assert solution.extract_constraints(name)
+        assert samples.extract_constraints(name, 7)
+
+    old_names = model.constraint_names
+    model.constraints[ConstraintID(5)].set_name("renamed")
+    assert model.constraint_names == {"renamed", "", "one_hot", "sos1"}
+    assert (
+        old_names == solution.constraint_names == samples.constraint_names == set(names)
+    )
+
+
+def test_constraint_names_deduplicate_without_validating_subscripts():
+    model = label_model(make_model(Instance))
+    for _, id_type, _ in FAMILIES:
+        model.constraints[id_type(5)].set_subscripts([])
+    solution = model.evaluate({0: 0, 1: 0})
+    samples = model.evaluate_samples({7: {0: 0, 1: 0}})
+    for root in [model, model.as_parametric_instance(), solution, samples]:
+        assert root.constraint_names == {"c"}
+    for root in [model, model.as_parametric_instance(), solution]:
+        with pytest.raises(ValueError, match="Duplicate subscript"):
+            root.extract_constraints("c")
+    with pytest.raises(ValueError, match="Duplicate subscript"):
+        samples.extract_constraints("c", 7)
+
+
+def test_constraint_name_scope_tracks_removal_and_retained_results():
+    model = make_model(Instance)
+    for name, id_type, _ in FAMILIES:
+        model.constraints[id_type(5)].set_name(name)
+    remove_all(model)
+    for row in model.constraints.values():
+        assert isinstance(row, AttachedConstraint)
+        row.set_name("generated")
+    assert model.constraint_names == {"generated"}
+    parametric = model.as_parametric_instance()
+    assert parametric.constraint_names == {"generated"}
+    solution = model.evaluate({0: 0, 1: 0})
+    samples = model.evaluate_samples({7: {0: 0, 1: 0}})
+    expected = {"generated", *(name for name, _, _ in FAMILIES)}
+    assert solution.constraint_names == expected
+    assert samples.constraint_names == expected
+    assert samples.get(7).constraint_names == expected
+    assert (
+        type(solution).from_v2_bytes(solution.to_v2_bytes()).constraint_names
+        == expected
+    )
+    assert (
+        type(samples).from_v2_bytes(samples.to_v2_bytes()).constraint_names == expected
+    )
+
+
+def test_parametric_variable_names_exclude_parameters_and_track_label_edits():
+    model = ParametricInstance.from_components(
+        sense=Sense.Minimize,
+        objective=0,
+        decision_variables=[
+            DecisionVariable.binary(0, name="x"),
+            DecisionVariable.binary(1, name="x"),
+            DecisionVariable.binary(2, name=""),
+            DecisionVariable.binary(3),
+        ],
+        parameters=[Parameter(100, name="parameter_only")],
+        constraints={},
+    )
+    names = model.decision_variable_names
+    assert_type(names, set[str])
+    assert names == {"x", ""}
+    names.add("external")
+    assert model.decision_variable_names == {"x", ""}
+    model.attached_decision_variable(0).set_name("renamed")
+    assert model.decision_variable_names == {"x", "", "renamed"}
+    assert (
+        model.with_parameters({100: 1}).decision_variable_names
+        == model.decision_variable_names
+    )
+    assert model.constraint_names == set()
+    empty = Instance.minimize()
+    assert empty.constraint_names == set()
+    assert empty.as_parametric_instance().decision_variable_names == set()
+    assert empty.evaluate({}).constraint_names == set()
+    assert empty.evaluate_samples({7: {}}).constraint_names == set()

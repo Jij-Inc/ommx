@@ -3849,6 +3849,17 @@ class Instance:
     @created.setter
     def created(self, value: datetime.datetime) -> None: ...
     @property
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Only active constraints are included.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
     def sense(self) -> Sense:
         r"""
         Active optimization sense used by the solver-facing formulation.
@@ -7408,6 +7419,24 @@ class ParametricInstance:
     @created.setter
     def created(self, value: datetime.datetime) -> None: ...
     @property
+    def decision_variable_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique decision-variable names as a set of strings, excluding parameters.
+        Unnamed variables are excluded; explicitly empty names are included.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Only active constraints are included.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
     def sense(self) -> Sense: ...
     @property
     def objective(self) -> Function: ...
@@ -9028,6 +9057,17 @@ class SampleSet:
     @parameters.setter
     def parameters(self, value: typing.Any) -> None: ...
     @property
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Retained removed constraints are included; no sample ID is needed.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
+    @property
     def best_feasible_id(self) -> builtins.int:
         r"""
         Raises ValueError if there is no feasible sample.
@@ -10078,6 +10118,17 @@ class Solution:
     def parameters(self) -> typing.Optional[typing.Any]: ...
     @parameters.setter
     def parameters(self, value: typing.Any) -> None: ...
+    @property
+    def constraint_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Unique names across all constraint families, as a set of strings.
+
+        Retained removed constraints are included; no sample ID is needed.
+        The scope matches `extract_constraints`. Unnamed constraints are excluded;
+        an explicitly empty name is included. Duplicate names appear once, even
+        when extraction would reject duplicate subscripts.
+        Each access returns a fresh set; editing it does not change this owner.
+        """
     @property
     def objective(self) -> builtins.float:
         r"""

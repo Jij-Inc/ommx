@@ -74,7 +74,7 @@ use crate::{
     Evaluate, Function, ModelingLabel, NamedFunction, NamedFunctionTable, VariableID,
     VariableIDSet,
 };
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// A special constraint family that can be explicitly lowered to regular constraints.
 ///
@@ -440,6 +440,30 @@ pub struct Instance {
 }
 
 impl Instance {
+    /// Unique names of active constraints across every family.
+    ///
+    /// Unnamed and removed constraints are excluded. An explicitly empty name
+    /// is included. Names are deduplicated even when subscripts are ambiguous.
+    pub fn constraint_names(&self) -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        macro_rules! collect {
+            ($collection:expr) => {
+                let collection = $collection;
+                names.extend(
+                    collection
+                        .active()
+                        .keys()
+                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+                );
+            };
+        }
+        collect!(&self.constraint_collection);
+        collect!(&self.indicator_constraint_collection);
+        collect!(&self.one_hot_constraint_collection);
+        collect!(&self.sos1_constraint_collection);
+        names
+    }
+
     /// Return the preserved objective semantics used for solver output.
     ///
     /// [`None`] identifies an instance whose active objective is also its
@@ -1054,6 +1078,39 @@ pub struct ParametricInstance {
 }
 
 impl ParametricInstance {
+    /// Unique decision-variable names, excluding unnamed variables and parameters.
+    /// An explicitly empty name is included.
+    pub fn decision_variable_names(&self) -> BTreeSet<String> {
+        self.decision_variables
+            .keys()
+            .filter_map(|id| self.variable_labels().name(*id).map(str::to_owned))
+            .collect()
+    }
+
+    /// Unique names of active constraints across every family.
+    ///
+    /// Unnamed and removed constraints are excluded. An explicitly empty name
+    /// is included. Names are deduplicated even when subscripts are ambiguous.
+    pub fn constraint_names(&self) -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        macro_rules! collect {
+            ($collection:expr) => {
+                let collection = $collection;
+                names.extend(
+                    collection
+                        .active()
+                        .keys()
+                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+                );
+            };
+        }
+        collect!(&self.constraint_collection);
+        collect!(&self.indicator_constraint_collection);
+        collect!(&self.one_hot_constraint_collection);
+        collect!(&self.sos1_constraint_collection);
+        names
+    }
+
     /// Return the preserved objective semantics used after specialization.
     ///
     /// `None` means the active [`Self::sense`] and [`Self::objective`] define

@@ -260,6 +260,30 @@ fn validate_all_solution_constraint_used_ids(
 }
 
 impl Solution {
+    /// Unique constraint names across every family, including retained removed rows.
+    ///
+    /// Searches the same rows as `extract_constraints`. Unnamed constraints are
+    /// excluded; explicitly empty names are included. Duplicate names are
+    /// returned once, even when their subscripts are ambiguous for extraction.
+    pub fn constraint_names(&self) -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        macro_rules! collect {
+            ($collection:expr) => {
+                let collection = $collection;
+                names.extend(
+                    collection
+                        .keys()
+                        .filter_map(|id| collection.context().name(*id).map(str::to_owned)),
+                );
+            };
+        }
+        collect!(&self.evaluated_constraints);
+        collect!(&self.evaluated_indicator_constraints);
+        collect!(&self.evaluated_one_hot_constraints);
+        collect!(&self.evaluated_sos1_constraints);
+        names
+    }
+
     /// The tolerance used by this solution's feasibility queries and wire flags.
     ///
     /// Explicit constraint queries may use a different tolerance without
@@ -1486,6 +1510,14 @@ mod tests {
         instance
             .set_sos1_constraint_context(0.into(), context(3))
             .unwrap();
+        let names = BTreeSet::from(["c".to_owned()]);
+        assert_eq!(instance.constraint_names(), names);
+        let parametric: crate::ParametricInstance = instance.clone().into();
+        assert_eq!(parametric.constraint_names(), names);
+        assert_eq!(
+            parametric.decision_variable_names(),
+            instance.decision_variable_names()
+        );
         let state = crate::v1::State {
             entries: [(0, 0.0), (1, 0.0)].into(),
         };
@@ -1497,6 +1529,7 @@ mod tests {
             (vec![3], 0.0),
         ]);
         assert_eq!(solution.extract_constraints("c").unwrap(), expected);
+        assert_eq!(solution.constraint_names(), names);
         assert!(matches!(
             solution.extract_constraints("missing"),
             Err(SolutionError::UnknownConstraintName { .. })
@@ -1511,6 +1544,7 @@ mod tests {
             samples.extract_constraints("c", 7.into()).unwrap(),
             expected
         );
+        assert_eq!(samples.constraint_names(), names);
         assert!(matches!(
             samples.extract_constraints("c", 99.into()),
             Err(crate::SampleSetError::UnknownSampleID { .. })
