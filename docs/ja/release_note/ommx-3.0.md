@@ -75,7 +75,7 @@ uv run ommx list
 
 console script は Rust 実行ファイルと引数解析・コマンド実行・表示を共有し、
 `OMMX_LOCAL_REGISTRY_ROOT` にも従います。`inspect` が表示する JSON のキー順も
-一定になりました。導入手順は [OMMX CLI のインストールと実行](../user_guide/cli.md)、
+一定になりました。導入手順は [OMMX CLI のインストールと実行](../how_to/manage_local_registry.md)、
 Registry の管理は {ref}`Local Registry の cleanup workflow <experiment-cleanup-workflow>`
 を参照してください。
 
@@ -1139,7 +1139,7 @@ HiGHS Adapter は HiGHS の logging callback から MIP progress snapshot を記
 
 PySCIPOpt の progress history は、diagnostics に termination report が含まれる場合に synthetic な `TERMINATION` 行を含むようになりました。これにより、別の termination report を重複させずに、`progress_history_records` と `progress_history_df` から最終 solver state も確認できます。
 
-direct solve と Experiment 経由の workflow については [Adapter 固有 diagnostics](../user_guide/adapter_diagnostics.md) を参照してください。
+direct solve と Experiment 経由の workflow については [Adapter 固有 diagnostics](../how_to/inspect_adapter_diagnostics.md) を参照してください。
 
 ### 🆕 top-level root 向け versioned protobuf bytes API ([#989](https://github.com/Jij-Inc/ommx/pull/989))
 
@@ -1171,7 +1171,7 @@ Solver Adapter に、共通の {class}`~ommx.Solution` 結果には入らない 
 
 PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback から {class}`~ommx_pyscipopt_adapter.SCIPProgressSnapshot` diagnostics を出力し、`model.optimize()` の後に {class}`~ommx_pyscipopt_adapter.SCIPTerminationReport` を出力するようになりました。termination report には SCIP の status、primal / dual bound、gap、incumbent objective value、node 数、LP / cut / solution counter、primal-dual integral、求解時間、SCIP / PySCIPOpt version metadata が含まれます。typed collector の中身や Experiment から読み出した dictionary は {class}`~ommx_pyscipopt_adapter.SCIPDiagnosticsAnalyzer` で records または pandas DataFrame に後処理できます。direct collection では OMMX Solution へ decode する前に termination report が記録されるため、infeasible や unbounded の検出などで decode が adapter exception を投げる場合でも呼び出し側で確認できます。
 
-詳しい API の使い方と PySCIPOpt report の各 field については [Adapter 固有 diagnostics](../user_guide/adapter_diagnostics.md) を参照してください。
+収集・調査の手順は[Adapterのdiagnostics](../how_to/inspect_adapter_diagnostics.md)、reportの各fieldは{class}`~ommx_pyscipopt_adapter.SCIPTerminationReport`のAPI Referenceを参照してください。
 
 ## 3.0.0 Alpha 5
 
@@ -1183,7 +1183,7 @@ PySCIPOpt Adapter は、SCIP の `BESTSOLFOUND` と `DUALBOUNDIMPROVED` callback
 
 {class}`~ommx.experiment.Experiment`、{meth}`~ommx.experiment.Experiment.with_temp_local_registry`、{meth}`~ommx.experiment.Experiment.fork` が `store_trace=True` を受け取れるようになりました。有効化すると、各 `with experiment.run()` context 内で発生した OpenTelemetry span を capture し、close 済みの {class}`~ommx.experiment.SealedRun` に trace を 1 つ保存します。保存された trace は {attr}`~ommx.experiment.SealedRun.trace` から {class}`~ommx.tracing.TraceResult` として取得でき、commit、load、fork をまたいで保持されます。
 
-詳しい trace workflow、renderer、OpenTelemetry の設定については [トレースとプロファイリング](../user_guide/tracing.ipynb) を参照してください。
+詳しい trace workflow、renderer、OpenTelemetry の設定については [トレースとプロファイリング](../how_to/trace_execution) を参照してください。
 
 ```python
 from ommx.experiment import Experiment
@@ -1495,7 +1495,7 @@ assert instance.constraints[c.constraint_id].name == "budget"
 - **`%%ommx_trace`** — Jupyterセル単位でスパンツリーとChrome Trace JSONダウンロードリンクを表示するセルマジック
 - **`capture_trace` / `@traced`** — 通常のPythonスクリプト／テスト／CIから同じ機能を使うためのコンテキストマネージャとデコレータ
 
-詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは [トレースとプロファイリング](../user_guide/tracing.ipynb) を参照してください。
+詳しい使い方、独自 `TracerProvider` の設定方法、トラブルシューティングは [トレースとプロファイリング](../how_to/trace_execution) を参照してください。
 
 ### 🆕 Solver / Sampler Adapter のトレーシング対応 ([#833](https://github.com/Jij-Inc/ommx/pull/833))
 
