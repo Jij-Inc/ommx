@@ -141,6 +141,7 @@ how_to/share_artifact_registry
 :hidden:
 
 user_guide/instance
+user_guide/variable_roles
 user_guide/solution
 user_guide/sample_set
 user_guide/function
@@ -156,6 +157,7 @@ user_guide/removed_constraints
 
 user_guide/instance_class
 user_guide/preparation_policy
+user_guide/transformation_guarantees
 user_guide/supported_ommx_adapters
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state

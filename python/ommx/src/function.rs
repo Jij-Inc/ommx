@@ -13,33 +13,7 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// General mathematical function of decision variables.
-///
-/// Function is a unified type that can represent constant, linear, quadratic,
-/// and polynomial functions as well as composed expressions such as absolute
-/// values, minima, divisions, and integer powers. It is used as the objective
-/// function and constraint functions in optimization problems.
-///
-/// # Examples
-///
-/// Create from various types:
-///
-/// >>> x = DecisionVariable.binary(0)
-/// >>> y = DecisionVariable.binary(1)
-/// >>> f = Function(1.0)  # Constant
-/// >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
-/// >>> f = Function(x * y)  # From Quadratic expression
-///
-/// Access the terms:
-///
-/// >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
-/// >>> f.terms
-/// {(1,): 2.5, (): 1.0}
-///
-/// Check the degree:
-///
-/// >>> f.degree()
-/// 1
+#[doc = include_str!("function.md")]
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);
@@ -49,7 +23,7 @@ pyo3_stub_gen::inventory::submit! {
     pyo3_stub_gen::type_info::PyClassInfo {
         pyclass_name: "Function",
         struct_id: || std::any::TypeId::of::<Function>(),
-        doc: "General mathematical function of decision variables.",
+        doc: include_str!("function.md"),
         module: Some("ommx._ommx_rust"),
         bases: &[],
         getters: &[],
@@ -331,12 +305,15 @@ impl Function {
             .map(|cow_quadratic| Quadratic(cow_quadratic.into_owned()))
     }
 
-    /// Get the degree of this function.
+    /// Return the degree of the stored polynomial, or ``None`` for a composed expression.
     ///
     /// Returns the highest degree of any term in a polynomial function.
     /// Zero function has degree 0, constant function has degree 0,
     /// linear function has degree 1, quadratic function has degree 2, etc.
-    /// Returns None for non-polynomial expression functions.
+    /// This inspects the representation; it does not expand an expression to
+    /// determine its mathematical degree. For the variable expression
+    /// ``g = Function(DecisionVariable.continuous(0))``, ``g ** 2`` returns
+    /// ``None`` while the explicitly multiplied ``g * g`` has degree 2.
     pub fn degree(&self) -> Option<u32> {
         self.0.degree().map(|degree| degree.into_inner())
     }
@@ -345,11 +322,29 @@ impl Function {
     ///
     /// Zero function has 0 terms, constant function has 1 term,
     /// and polynomial functions have the number of non-zero coefficient terms.
-    /// Returns None for non-polynomial expression functions.
+    /// Returns ``None`` for composed expressions, even when their mathematical
+    /// value could be represented by a polynomial. No expansion is performed.
     pub fn num_terms(&self) -> Option<usize> {
         self.0.num_terms()
     }
 
+    /// Compare polynomial coefficients or composed-expression structure within ``atol``.
+    ///
+    /// For two stored polynomials, compares the coefficient of each monomial;
+    /// an absent monomial has coefficient zero. Different polynomial storage
+    /// variants may compare equal. For two composed expressions, operators and
+    /// evaluation order must match, and polynomial operands are compared with
+    /// the same coefficient tolerance. A polynomial and a composed expression
+    /// do not compare equal merely because they evaluate to the same values.
+    /// This is not a test of global mathematical equivalence.
+    ///
+    /// - ``other``: Function to compare with.
+    /// - ``atol``: Positive absolute coefficient tolerance.
+    ///
+    /// >>> from ommx import DecisionVariable, Function
+    /// >>> x = Function(DecisionVariable.continuous(0))
+    /// >>> assert (x * x).almost_equal(x * x)
+    /// >>> assert not (x ** 2).almost_equal(x * x)
     #[pyo3(signature = (other, atol=ATol::default().into_inner()))]
     pub fn almost_equal(&self, other: &Function, atol: f64) -> crate::error::OmmxPyResult<bool> {
         Ok(self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol)?))
@@ -369,17 +364,26 @@ impl Function {
         Function(self.0.clone().abs())
     }
 
-    /// Sign of the function value
+    /// Construct the pointwise sign of this function.
+    ///
+    /// Evaluation returns 0 when ``abs(value) <= atol``, -1 below that interval,
+    /// and 1 above it. The tolerance is supplied to {meth}`~ommx.Function.evaluate`,
+    /// not fixed when this expression is constructed or partially evaluated.
     pub fn signum(&self) -> Function {
         Function(self.0.clone().signum())
     }
 
-    /// Pointwise minimum
+    /// Construct the pointwise minimum of two functions.
+    ///
+    /// Use this method instead of Python's built-in ``min``, which compares
+    /// objects rather than constructing an optimization expression.
     pub fn minimum(&self, rhs: Function) -> Function {
         Function(self.0.clone().min(rhs.0))
     }
 
-    /// Pointwise maximum
+    /// Construct the pointwise maximum of two functions.
+    ///
+    /// Use this method instead of Python's built-in ``max``.
     pub fn maximum(&self, rhs: Function) -> Function {
         Function(self.0.clone().max(rhs.0))
     }
@@ -429,7 +433,11 @@ impl Function {
         Ok(Function((&lhs.0 * &self.0)?))
     }
 
-    /// Division
+    /// Construct division by another function, retaining a composed expression.
+    ///
+    /// This also applies to a constant divisor. The zero-domain check is made
+    /// by {meth}`~ommx.Function.evaluate` with its ``atol``; constructing the
+    /// expression does not establish that all inputs lie in its domain.
     pub fn __truediv__(&self, rhs: Function) -> crate::error::OmmxPyResult<Function> {
         Ok(Function((self.0.clone() / rhs.0)?))
     }
@@ -440,6 +448,28 @@ impl Function {
     }
 
     /// Raise this function to a signed 32-bit integer power.
+    ///
+    /// ``f.powi(n)`` and ``f ** n`` construct the same operation. Floating-point
+    /// or function-valued exponents, reversed exponentiation such as ``2 ** f``,
+    /// and modular exponentiation are not supported.
+    ///
+    /// Except for identity operations and finite constant folding, powers
+    /// remain composed expressions, including nonnegative powers. They are not
+    /// automatically expanded into polynomial coefficients. Use explicit
+    /// multiplication, such as ``g * g``, when an expanded polynomial square is
+    /// required by an input format.
+    ///
+    /// During {meth}`~ommx.Function.evaluate`, a negative power is undefined when
+    /// the base has absolute value at most ``atol``. Negative bases are supported because the
+    /// exponent is integral; zero to the zero power is 1. The operand is still
+    /// evaluated, so raising an undefined expression to zero does not erase its
+    /// domain restriction.
+    ///
+    /// >>> from ommx import DecisionVariable, Function
+    /// >>> g = Function(DecisionVariable.continuous(0))
+    /// >>> assert (g ** 2).degree() is None
+    /// >>> assert (g * g).degree() == 2
+    /// >>> assert (g ** 0).evaluate({0: 0}) == 1.0
     pub fn powi(&self, exponent: i32) -> Function {
         Function(self.0.clone().powi(exponent))
     }
@@ -518,7 +548,14 @@ impl Function {
 
     /// Get all polynomial terms as a dictionary mapping monomial tuples to coefficients.
     ///
-    /// Raises TypeError if this is a non-polynomial expression function.
+    /// The empty tuple denotes the constant term. Repeated IDs denote powers,
+    /// for example ``(0, 0)`` for the square of variable 0. The dictionary is a
+    /// snapshot and does not change the Function when edited.
+    /// Finite nonzero coefficients are not discarded because of their size or
+    /// the evaluation tolerance; exact cancellation or floating-point underflow
+    /// may produce zeros during polynomial arithmetic.
+    /// Raises ``TypeError`` for a composed expression. This property does not
+    /// expand the expression, including a retained integer power.
     #[getter]
     pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let terms = self
@@ -610,6 +647,38 @@ impl Function {
         Ok(Self(inner))
     }
 
+    /// Evaluate this expression at the supplied variable values.
+    ///
+    /// - ``state``: A {class}`~ommx.State` or mapping from variable IDs to values.
+    ///     All IDs required by the expression must be supplied.
+    /// - ``atol``: Positive absolute tolerance for zero-sensitive operations.
+    ///     If omitted, {func}`~ommx.get_default_atol` supplies it.
+    ///
+    /// Returns the scalar value of the expression.
+    ///
+    /// A Function references IDs but does not own variable kinds, bounds, or
+    /// constraints. This method does not test candidate feasibility or round
+    /// discrete-variable values; use {meth}`~ommx.Instance.evaluate` for that.
+    ///
+    /// ``abs(v) <= atol`` is treated as zero, including the boundary. This gives
+    /// ``signum(v) == 0`` and makes a denominator or a negative-power base in
+    /// that interval undefined. ``0 ** 0`` is 1, and integer powers of negative
+    /// bases are supported. Polynomial coefficients are not pruned using this
+    /// tolerance.
+    ///
+    /// Composed expressions evaluate operands from left to right and combine
+    /// two values at each operator application. Parentheses and operation order
+    /// are retained rather than reassociated. Overflow and domain failures can
+    /// therefore depend on the represented order. Simplification does not
+    /// erase the domain of a partial function: ``0 * (1 / f)`` remains undefined
+    /// where ``f`` is treated as zero.
+    ///
+    /// Raises ``ValueError`` for a missing required variable value, undefined
+    /// point operation, or non-finite operand/intermediate result.
+    ///
+    /// >>> from ommx import Function, Linear
+    /// >>> f = Function(Linear(terms={0: 1, 1: 2}, constant=3))
+    /// >>> assert f.evaluate({0: 1, 1: 0}) == 4.0
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(&self, state: State, atol: Option<f64>) -> crate::error::OmmxPyResult<f64> {
         use ommx::Evaluate;
@@ -620,6 +689,34 @@ impl Function {
         Ok(self.0.evaluate(&state.0, atol)?)
     }
 
+    /// Substitute supplied variable values and return the remaining Function.
+    ///
+    /// The original Function is unchanged. Values may cover only some of the
+    /// required IDs; unresolved variables remain in the returned expression.
+    /// The concrete {class}`~ommx.Linear`, {class}`~ommx.Quadratic`, and
+    /// {class}`~ommx.Polynomial` partial-evaluation methods preserve their
+    /// respective Python types; this method returns a Function.
+    ///
+    /// Closed subexpressions are folded only when the result is independent of
+    /// the later evaluation tolerance. ``signum``, division, and negative
+    /// integer powers remain composed operations even after all their variables
+    /// are replaced. Construction, substitution, and partial evaluation do not
+    /// capture a default or supplied ``atol`` for these zero-domain decisions;
+    /// the subsequent {meth}`~ommx.Function.evaluate` call determines their
+    /// value or domain.
+    ///
+    /// - ``state``: Variable-ID/value mapping or {class}`~ommx.State` to substitute.
+    /// - ``atol``: A positive tolerance; zero-sensitive composed
+    ///     operations are retained rather than resolved with this value.
+    ///
+    /// >>> from ommx import Function, Linear
+    /// >>> f = Function(Linear(terms={0: 1, 1: 2}, constant=3))
+    /// >>> remaining = f.partial_evaluate({0: 1})
+    /// >>> assert remaining.evaluate({1: 0}) == 4.0
+    /// >>> x = Function(Linear(terms={0: 1}))
+    /// >>> sign = x.signum().partial_evaluate({0: 1e-8}, atol=1e-6)
+    /// >>> assert sign.evaluate({}, atol=1e-6) == 0.0
+    /// >>> assert sign.evaluate({}, atol=1e-9) == 1.0
     #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate(
         &self,
@@ -643,7 +740,7 @@ impl Function {
     ///
     /// - `bounds`: Mapping from variable ID to its {class}`~ommx.Bound`.
     /// - `atol`: Absolute tolerance used by operations whose semantics depend on
-    ///   whether a value is zero. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used.
+    ///   whether a value is zero. If omitted, {func}`~ommx.get_default_atol` supplies it.
     ///   Use the same tolerance when point-evaluating this function.
     ///
     /// **Returns:** A {class}`~ommx.Bound` that contains $[\inf f, \sup f]$ over the given variable bounds.

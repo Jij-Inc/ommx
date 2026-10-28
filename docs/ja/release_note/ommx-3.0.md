@@ -256,7 +256,7 @@ assert changed[0].upper == 5
 変数項が `max_terms`（既定値: 32）を超える線形制約はスキップします。
 丸め誤差により、許容誤差の境界付近で実行可能性の判定が変わる場合があります。
 対応する変数の種類と許容誤差の扱いは
-{ref}`変数の上下限の絞り込み <simultaneous-bound-tightening>` を参照してください。
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once` のAPI Referenceを参照してください。
 
 ### 🆕 QPLIB の公開解を読み込む ([#1208](https://github.com/Jij-Inc/ommx/pull/1208))
 

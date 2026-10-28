@@ -32,8 +32,12 @@ concise format that records:
   briefly why the introduction teaches what the use needs.
 - **Reconciliation:** affected concept/page/route IDs and mismatches or missing
   contracts. Report analyzer results separately from body review.
-- **Moves:** source and actual destination passage; confirm that the entry
-  reaches the needed explanation/procedure, not merely another reference.
+- **Ownership and moves:** what the reader must understand from the Book and
+  which exact contract belongs to the API Reference; for a relocation, record
+  the source and actual destination passage. Confirm that the entry reaches
+  the needed explanation/procedure, not merely another reference. Record a
+  missing API explanation as a gap rather than treating a resolving link as
+  sufficient.
 - **Outcome:** checked scope, unresolved findings, and unreviewed routes. Do
   not extrapolate a scoped success to the rest of the Book.
 

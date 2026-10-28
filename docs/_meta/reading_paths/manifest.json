@@ -81,7 +81,7 @@
       "aliases": [
         "Instance"
       ],
-      "scope": ""
+      "scope": "変数の定義域、目的関数、通常制約と特殊制約、最大化・最小化をまとめる共通の問題モデル。特殊制約もソルバー固有の指示でなくOMMXが意味を定める条件であり、その種類は今後も拡張していく前提を含む。個々の特殊制約の成立条件や追加・評価操作の習得までは付与しない。"
     },
     {
       "id": "variable.basics",
@@ -148,7 +148,7 @@
     {
       "id": "expression.form",
       "label": "数学的な式と格納表現の違いを読む",
-      "owner": "G2.support",
+      "owner": "R_API.function",
       "requires": [
         "expression.basics"
       ],
@@ -158,7 +158,7 @@
         "polynomial representation",
         "格納表現"
       ],
-      "scope": ""
+      "scope": "数学的に同じ式でも保持する表現が異なり、表現を要求するclassへの適合結果が変わり得ることを理解する。各演算がどの表現を生成するかや整数冪・展開の正確な規則はFunctionのAPI Referenceで別に確認する。"
     },
     {
       "id": "constraint.basics",
@@ -431,7 +431,7 @@
         "default",
         "不要な変数"
       ],
-      "scope": ""
+      "scope": "irrelevantな変数の省略時に補われる値と、元の候補から復元した値を区別する。特定候補の値が重要なら明示する。変数kindごとの既定値選択規則の習得は含めず、Instance.populate_stateのAPI Referenceが所有する。"
     },
     {
       "id": "special.indicator",
@@ -608,7 +608,7 @@
         "QUBO",
         "qubo"
       ],
-      "scope": ""
+      "scope": "QUBOをInstanceClassの一例として読み、classへの適合・Preparationと、Backend向けの係数整形を区別する。係数と定数項だけでは、Instanceが持つ変数の復元規則やremoved制約の評価情報を運べない。"
     },
     {
       "id": "adapter.basic",
@@ -803,19 +803,18 @@
     },
     {
       "id": "function.support",
-      "label": "式の表現形と対応範囲を区別する",
+      "label": "式を評価できることとAdapterの入力対応を区別する",
       "owner": "G2.support",
       "requires": [
-        "expression.form",
-        "class.membership"
+        "expression.basics",
+        "instance.model"
       ],
       "external": false,
       "aliases": [
-        "PolynomialRequirement",
-        "非多項式",
-        "polynomial"
+        "入力対応",
+        "対応範囲"
       ],
-      "scope": ""
+      "scope": "Functionとして式を構築・評価できることと、Adapterがその表現を直接受け取れることは別だと理解する。格納表現・対応演算の詳細はFunctionのAPI Reference、membership判定はG9、変換の選択はG10へ送り、参照リンクだけからそれらの能力を付与しない。"
     },
     {
       "id": "function.representation",
@@ -846,7 +845,7 @@
         "Parameter",
         "with_parameters"
       ],
-      "scope": ""
+      "scope": "固定した変数・制約構造へパラメータを指定し、具体的なInstanceを作って再利用する。必要なID集合・余分なキー・値の検査条件はwith_parametersのAPI Referenceが所有し、Guide訪問だけからそれらの契約の習得を付与しない。"
     },
     {
       "id": "adapter.diagnostics",
@@ -1858,7 +1857,11 @@
             "instance.model",
             "instance.build"
           ],
-          "mentions": []
+          "mentions": [
+            "special.indicator",
+            "special.onehot",
+            "special.sos1"
+          ]
         },
         {
           "id": "preview",
@@ -1875,7 +1878,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "現物の変数役割詳細はG6へ分離する設計。G1訪問だけでG6の知識を付与しない。 PR #1280の読者レビュー修正では、型・定義域を復元/既定値の規則より前に置き、名前付き関数・removed・出力目的関数の除外条件を局所説明付きで後段へ移す。G6分離の完了ではない。",
+      "notes": "Instanceの構成要素として通常制約と特殊制約の両方を明示し、現在のIndicator・OneHot・SOS1だけで種類を固定しない。初例は通常制約の一例とし、constraints辞書は通常制約だけで特殊制約は別集合だと説明する。特殊制約の個別の意味・操作はG3へ送る。変数の四役割と復元・既定値の詳細はG6へ分離し、G1訪問だけでは付与しない。型・定義域を先に導入し、名前付き関数・removed・出力目的関数の除外条件は後段で局所説明する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1914,10 +1917,10 @@
     },
     {
       "id": "G2",
-      "title": "Functionによる式の構築と評価",
+      "title": "Functionの式評価とInstanceの候補評価",
       "slice": "I",
       "role": "guide",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
         "docs/ja/user_guide/function.md"
       ],
@@ -1926,7 +1929,9 @@
       ],
       "requires": [
         "ext.math",
-        "variable.basics"
+        "instance.model",
+        "variable.basics",
+        "constraint.basics"
       ],
       "sections": [
         {
@@ -1943,20 +1948,24 @@
           "id": "evaluate",
           "introduces": [
             "state.values",
-            "expression.evaluate"
+            "expression.evaluate",
+            "evaluation.basic",
+            "feasibility.basic"
           ],
           "uses": [
-            "expression.evaluate"
+            "expression.evaluate",
+            "evaluation.basic",
+            "feasibility.basic"
           ],
           "mentions": [
             "function.support",
-            "function.representation"
+            "expression.form"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "Instanceの変数・目的関数・制約を前提に、一つの最小例でFunction単体の数値評価と問題全体の候補評価を区別する。ここで扱うのは手元の未変換の問題と候補の実行可能性であり、変換後の結果やfeasibility viewの読み分けは教えない。演算カタログや格納表現・数値契約は必要な操作のAPI Referenceへ案内し、具体的な表現条件はR_API.functionを訪問した場合だけ追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1965,10 +1974,10 @@
     },
     {
       "id": "G2.support",
-      "title": "式の対応範囲と表現条件",
+      "title": "式の評価可能性とAdapterの入力対応",
       "slice": "I",
       "role": "guide-section",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
         "docs/ja/user_guide/function.md"
       ],
@@ -1981,30 +1990,23 @@
       ],
       "sections": [
         {
-          "id": "form",
-          "introduces": [
-            "expression.form"
-          ],
-          "uses": [
-            "expression.form"
-          ],
-          "mentions": []
-        },
-        {
           "id": "limits",
           "introduces": [
-            "class.membership",
             "function.support"
           ],
           "uses": [
             "function.support"
           ],
-          "mentions": []
+          "mentions": [
+            "expression.form",
+            "class.membership",
+            "preparation.target"
+          ]
         }
       ],
       "deferred": [],
       "parent_page": "G2",
-      "notes": "",
+      "notes": "実在する「評価できる式が、そのまま求解に使えるとは限らない」節。評価可能性と入力対応の違いだけを説明し、表現の詳細はAPI Reference、classへの判定や変換の選択はG9/G10へ送る。構築方法を一通り学ぶことはモデラー・ファイルから受け取った問題を使う前提ではない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2329,7 +2331,7 @@
       "title": "ParametricInstanceと固定構造の問題族",
       "slice": "I",
       "role": "guide",
-      "status": "revise",
+      "status": "existing",
       "source_paths": [
         "docs/ja/user_guide/parametric_instance.md"
       ],
@@ -2354,7 +2356,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "固定構造の問題族から二つのInstanceを作り、同じ候補の評価差を読む最小例。ID空間やモデラーとの役割の違いは局所説明し、必要なパラメータ・値の検査の詳細は実在するwith_parametersのAPI Referenceへ送る。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2366,13 +2368,16 @@
       "title": "変数の役割と値の復元・補完",
       "slice": "I",
       "role": "guide",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/variable_roles.md"
+      ],
       "source_urls": [],
       "requires": [
         "instance.model",
         "variable.basics",
-        "state.values"
+        "state.values",
+        "evaluation.basic"
       ],
       "sections": [
         {
@@ -2400,18 +2405,22 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "Instanceと候補評価を前提に、固定した小さな問題から保持変数・used変数を区別し、四役割、依存式による復元、irrelevantの補完、復元・補完後の評価対象へ進む。Integerの最小例で補完は元候補の復元でないことを教えるが、全kindの既定値規則はpopulate_stateのAPI Referenceに委ねる。復元できることと問題の等価性は分け、後者はG7へ送る。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/variable_roles.md"
+      ]
     },
     {
       "id": "G7",
       "title": "変換によって何が保持されるか",
       "slice": "I",
       "role": "guide",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
       "source_urls": [],
       "requires": [
         "evaluation.basic",
@@ -2437,18 +2446,22 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "",
+      "notes": "候補評価・実行可能性・最適性の区別を前提に、操作の目的と七つの問い、複数操作の接続、評価対象の選択を説明する。固定と不等式penaltyの実在する反例節はG7.conditioningとG7.penaltyで個別に追跡し、子節の知識を親から暗黙に継承させない。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
     },
     {
       "id": "G7.penalty",
       "title": "ペナルティ化の対応と保証",
       "slice": "I",
       "role": "guide-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
       "source_urls": [],
       "requires": [
         "transformation.guarantees",
@@ -2471,10 +2484,12 @@
       ],
       "deferred": [],
       "parent_page": "G7",
-      "notes": "",
+      "notes": "実在する「不等式の本体を二乗すると、実行可能候補の順序も変わり得る」節。不等式本体の二乗と違反量の二乗を区別し、重みだけでは不適切なpenaltyを補えない反例から、slack・個別操作の条件を確認する必要を説明する。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
     },
     {
       "id": "G7.encoding",
@@ -2517,8 +2532,10 @@
       "title": "変数固定と部分問題",
       "slice": "I",
       "role": "guide-section",
-      "status": "planned",
-      "source_paths": [],
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ],
       "source_urls": [],
       "requires": [
         "transformation.guarantees",
@@ -2538,10 +2555,12 @@
       ],
       "deferred": [],
       "parent_page": "G7",
-      "notes": "",
+      "notes": "実在する「固定した部分問題と、元の問題全体を分ける」節。Binaryの二候補から部分問題の最適値と元の最適値を区別し、候補を評価したこと自体は最適性判定でないと説明する。元の制約から導ける固定との違いも扱う。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "docs/ja/user_guide/transformation_guarantees.md"
+      ]
     },
     {
       "id": "G8",
@@ -2703,7 +2722,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "class.quboの局所導入は設計案。現#1284本文への実装は未完了。 I1の読者レビュー修正ではmembership例の後にFunctionの表現形式の詳細を置き、OneHotの数学的な条件と専用表現を局所的に区別する。active/usedの詳細やAdapter適用は基本のmembership例の後に置く。",
+      "notes": "OneHotの数学的な条件と専用表現を局所的に区別する。数学的な式と保持表現の違いは概念だけを説明し、整数冪・展開の具体的な契約は実在するFunction.powiのAPI Referenceへ直接送る。QUBOをclassの一例として局所導入し、Preparationによるclass適合とBackend向け係数整形、および係数だけではInstanceの復元・removed情報を運べないことを区別する。active/usedの詳細やAdapter適用は基本のmembership例の後に置く。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2799,7 +2818,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "I1ではtarget・Policy・prepareの共通モデルをAdapter適用より先に置く。直入読者向けにOneHot/loweringとphaseを局所説明する。個別操作の数式・適用条件はAPI Reference、G7の一般的な変換保証は後続作業のまま。 明示的なprepareの基本例はin-placeとし、変換前のInstance本体を後で使う必要がある場合のみcopyを説明する。Adapter easy API内部のcopy契約とは区別する。",
+      "notes": "target・Policy・prepareの共通モデルをAdapter適用より先に置き、直入読者向けにOneHot/loweringと使用を許す操作の選択を局所説明する。固定実行順序・適用回数・停止判定の詳細と例外・診断属性・変更残存の厳密な契約はInstance.prepareのAPI Referenceが所有する。Bookはtarget到達時の停止と明示的prepareの失敗で変更が残る場合の安全な利用に必要な注意を残す。候補・実行可能性・目的・最適性の保証はG7へ送る。QUBO向けPolicy作成、明示的Preparation、係数整形を分け、変換前のInstance本体を後で使う必要がある場合のみcopyを説明する。Adapter easy API内部のcopy契約とは区別する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -3927,6 +3946,44 @@
       ]
     },
     {
+      "id": "R_API.function",
+      "title": "Function APIの演算・表現と数値評価の契約",
+      "slice": "I",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/function.rs",
+        "python/ommx/src/function.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "expression.basics"
+      ],
+      "sections": [
+        {
+          "id": "representation",
+          "introduces": [
+            "expression.form"
+          ],
+          "uses": [
+            "expression.form"
+          ],
+          "mentions": [
+            "function.representation"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "Functionの生成API Referenceに掲載するbinding docstringと隣接Markdownが、構築・演算・多項式と複合式・数値評価の契約を所有する。G2のリンクやAPI一覧の訪問だけではこの節を既習としない。RPNの符号化そのものは別のR_WIRE.functionが所有し、本節の外部仕様リンクだけからwire契約の習得を付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/function.rs",
+        "python/ommx/src/function.md"
+      ]
+    },
+    {
       "id": "R_API.transform",
       "title": "変換APIの厳密な条件",
       "slice": "A",
@@ -4628,6 +4685,52 @@
         "G4S",
         "R_WIRE",
         "DEV_X"
+      ]
+    },
+    {
+      "id": "variable_recovery_guarantees",
+      "title": "候補評価から変数の復元と変換の保証へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G4S",
+        "G6",
+        "G7",
+        "G7.conditioning",
+        "G7.penalty"
+      ]
+    },
+    {
+      "id": "function_parametric",
+      "title": "問題モデルからFunctionと固定構造の問題族へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G2",
+        "G5"
+      ]
+    },
+    {
+      "id": "function_api_contract",
+      "title": "Functionの概念から必要なAPIの表現・数値契約へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "SETUP",
+        "G1",
+        "G2",
+        "G2.support",
+        "R_API.function"
       ]
     },
     {
