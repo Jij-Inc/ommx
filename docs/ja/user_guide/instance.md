@@ -81,7 +81,7 @@ Binaryは0または1、Integerは整数、Continuousは実数を取ります。S
 instance.decision_variables_df()
 ```
 
-{meth}`~ommx.Instance.decision_variables_df` は、定義やラベルをpandasのDataFrameとして返します。一つの変数をIDから取得する場合は {meth}`~ommx.Instance.get_decision_variable_by_id` を使います。
+{meth}`~ommx.Instance.decision_variables_df` は、定義やラベルをpandasのDataFrameとして返します。一つの変数の独立したコピーをIDから取得する場合は {meth}`~ommx.Instance.get_decision_variable_by_id` を使います。Instance上の名前や説明を編集する方法は、後述の{ref}`既存モデルのメタデータ編集 <instance-edit-metadata>`で説明します。
 
 ## 保持される変数と、現在使われている変数
 
@@ -100,6 +100,45 @@ instance.constraints_df()
 ```
 
 {attr}`~ommx.Instance.constraints` は、**通常制約だけ**を制約IDで引く辞書です。特殊制約はここには含まれず、{attr}`~ommx.Instance.indicator_constraints`、{attr}`~ommx.Instance.one_hot_constraints`、{attr}`~ommx.Instance.sos1_constraints`という種類ごとの別の集合で保持されます。制約にも変数と同様のメタデータを付けられます。制約IDの空間は変数IDとは独立し、特殊制約の各種類もそれぞれ独立した制約IDを持ちます。
+
+(instance-edit-metadata)=
+## 既存モデルの変数・制約に名前や説明を付ける
+
+読み込んだ問題に業務上の名前や説明を付けると、式の確認や結果の分析に使えます。**Instanceに結び付いた参照（Attached handle）を取得して編集します。** 次の例では、このページの冒頭で作った問題の変数・通常制約をIDで取得し、ラベルを付け直します。ファイルから読み込んだInstanceでも同じ手順です。
+
+```{code-cell} ipython3
+variable = instance.attached_decision_variable(x.id)
+constraint = instance.constraints[exclusive.id]
+
+variable.set_name("selected")
+variable.set_subscripts([0])
+variable.set_description("商品0を採用するか")
+constraint.set_name("at_most_one")
+constraint.set_description("二つの商品を同時には採用しない")
+
+assert instance.attached_decision_variable(x.id).name == "selected"
+assert instance.attached_decision_variable(x.id).description == "商品0を採用するか"
+assert instance.constraints[exclusive.id].name == "at_most_one"
+assert instance.constraints[exclusive.id].description == "二つの商品を同時には採用しない"
+```
+
+{meth}`~ommx.Instance.attached_decision_variable` が返す{class}`~ommx.AttachedDecisionVariable`と、`instance.constraints[id]`が返す{class}`~ommx.AttachedConstraint`の変更は、そのInstanceに反映されます。名前を変えてもIDは変わりません。ここで変更したのはラベルだけで、変数の定義域・目的関数・制約の式は同じです。数学的な条件を変える操作とは区別します。
+
+一方、`detach()`は取得時点の独立したコピー（snapshot）を返します。DataFrameも表示・分析用の表であり、どちらを編集してもInstanceへの書き戻しは起きません。
+
+```{code-cell} ipython3
+snapshot = variable.detach()
+snapshot.set_name("snapshot_only")
+
+table = instance.decision_variables_df()
+table.loc[x.id, "name"] = "table_only"
+
+assert instance.attached_decision_variable(x.id).name == "selected"
+```
+
+通常制約の`detach()`や`constraints_df()`も同様です。変数の{meth}`~ommx.Instance.get_decision_variable_by_id`もsnapshotを返すため、Instanceのラベルを編集するときは上のAttached handleを使います。コピーとsetterの詳しい契約は、{meth}`~ommx.AttachedDecisionVariable.detach`と{meth}`~ommx.AttachedConstraint.detach`のAPI Referenceで確認できます。
+
+付け直した変数名・添字は、{meth}`~ommx.Instance.format_function`や{meth}`~ommx.Instance.display_function`で式を表示するときに使われます。その後に評価・求解したSolutionでは、{meth}`~ommx.Solution.extract_decision_variables`で名前・添字に対応する値を取り出せます。ラベルを整えてから結果を作ると、商品などのモデル上の単位で後処理できます。
 
 ## モデルを変換する場合
 
