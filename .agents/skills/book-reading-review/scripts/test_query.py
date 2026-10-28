@@ -11,6 +11,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from analyze import analyze
 from query import main, query
 
 
@@ -295,11 +296,90 @@ class QueryTest(unittest.TestCase):
             page["actual_evidence"]["observations"][0]["mapping_relation"], "unmapped"
         )
 
-    def test_query_rejects_semantically_inconsistent_manifest(self):
+    def test_query_returns_invalid_target_with_diagnostics(self):
         document = manifest()
         document["pages"][0]["sections"][0]["introduces"] = []
-        with self.assertRaisesRegex(ValueError, "inconsistent"):
-            query(document, "page", "A")
+        before = deepcopy(document)
+        result = query(document, "page", "A")
+        self.assertEqual(result["target_page_contract"], document["pages"][0])
+        self.assertFalse(result["target_page_analysis"]["contract_consistent"])
+        self.assertEqual(result["actual_evidence"]["status"], "not_assessed")
+        self.assertFalse(result["manifest_diagnostics"]["contract_consistent"])
+        self.assertIn(
+            "unavailable_use",
+            {f["code"] for f in result["manifest_diagnostics"]["findings"]},
+        )
+        self.assertEqual(document, before)
+
+    def test_unrelated_invalid_child_does_not_block_page_or_concept_lookup(self):
+        document = manifest()
+        document["pages"][1]["sections"][0]["mentions"].append("unknown")
+        analysis = analyze(document)
+        self.assertFalse(analysis["contract_consistent"])
+        page_result = query(document, "page", "A")
+        self.assertTrue(page_result["target_page_analysis"]["contract_consistent"])
+        self.assertEqual(page_result["target_page_contract"], document["pages"][0])
+        concept_result = query(document, "concept", "x")
+        self.assertEqual(concept_result["concept"], document["concepts"][0])
+        for result in (page_result, concept_result):
+            diagnostics = result["manifest_diagnostics"]
+            self.assertEqual(diagnostics["scope"], "whole_manifest")
+            self.assertFalse(diagnostics["contract_consistent"])
+            self.assertEqual(diagnostics["findings"], analysis["findings"])
+
+    def test_invalid_concept_dependencies_remain_visible(self):
+        for requires in (["unknown"], ["x"]):
+            with self.subTest(requires=requires):
+                document = manifest()
+                document["concepts"][0]["requires"] = requires
+                result = query(document, "concept", "x")
+                self.assertEqual(result["concept"]["requires"], requires)
+                self.assertFalse(result["manifest_diagnostics"]["catalog_consistent"])
+                self.assertEqual(
+                    result["manifest_diagnostics"]["findings"],
+                    analyze(document)["findings"],
+                )
+
+    def test_duplicate_and_empty_catalog_ids_are_rejected(self):
+        for catalog, kind, identifier in (
+            ("concepts", "concept", "x"),
+            ("pages", "page", "A"),
+        ):
+            for defect in ("duplicate", "empty"):
+                with self.subTest(catalog=catalog, defect=defect):
+                    document = manifest()
+                    if defect == "duplicate":
+                        document[catalog].append(deepcopy(document[catalog][0]))
+                    else:
+                        document[catalog][0]["id"] = ""
+                    with self.assertRaises(ValueError):
+                        query(document, kind, identifier)
+
+    def test_contract_errors_do_not_bypass_evidence_revision_checks(self):
+        document = manifest()
+        document["pages"][1]["sections"][0]["mentions"].append("unknown")
+        self.write_evidence()
+        result = query(document, "page", "A", evidence_dir=self.directory)
+        self.assertEqual(result["actual_evidence"]["status"], "annotations_loaded")
+        self.assertFalse(result["manifest_diagnostics"]["contract_consistent"])
+        documents = evidence()
+        documents["source_inventory.json"]["source_commit"] = "other-revision"
+        self.write_evidence(documents)
+        with self.assertRaisesRegex(ValueError, "source_commit does not match"):
+            query(document, "page", "A", evidence_dir=self.directory)
+
+    def test_cli_reports_contract_errors_without_failing_lookup(self):
+        document = manifest()
+        document["pages"][1]["sections"][0]["mentions"].append("unknown")
+        path = self.write_json("inconsistent.json", document)
+        status, output, errors = self.invoke(path, "page", "A")
+        self.assertEqual(status, 0, errors)
+        result = json.loads(output)
+        self.assertTrue(result["target_page_analysis"]["contract_consistent"])
+        self.assertFalse(result["manifest_diagnostics"]["contract_consistent"])
+        self.assertEqual(
+            result["manifest_diagnostics"]["findings"], analyze(document)["findings"]
+        )
 
     def test_cli_manifest_path_is_explicit_and_defaults_to_no_evidence(self):
         path = self.write_json("chosen-manifest.json", manifest())

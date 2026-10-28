@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Query a validated Book manifest and optional revision-matched source evidence."""
+"""Query Book declarations with diagnostics and optional revision-matched evidence."""
 
 from __future__ import annotations
 
@@ -158,16 +158,21 @@ def _load_evidence(manifest, evidence_dir):
 def query(manifest, kind, identifier, *, evidence_dir=None):
     """Return a contract, with source annotations only when explicitly requested.
 
-    Invalid manifests, unknown IDs, or incompatible evidence raise ValueError.
+    Contract violations are returned as diagnostics, not lookup failures.
+    Malformed input, ambiguous catalogs, unknown IDs, or incompatible evidence
+    raise ValueError.
     The optional evidence directory is never resolved relative to this script.
     """
     result = analyze(manifest)
-    if not result["contract_consistent"]:
-        raise ValueError(
-            "Manifest contracts are inconsistent; run analyze.py for diagnostics"
-        )
     if kind not in {"concept", "page"}:
         raise ValueError(f"Unknown query kind: {kind!r}")
+    for catalog in ("concepts", "pages"):
+        seen = set()
+        for item in manifest[catalog]:
+            key = _string(item["id"], f"{catalog}.id")
+            if key in seen:
+                raise ValueError(f"{catalog}: duplicate id {key!r}")
+            seen.add(key)
     pages = {page["id"]: page for page in manifest["pages"]}
     for page_id, page in pages.items():
         _string(page.get("title"), f"pages.{page_id}.title")
@@ -201,7 +206,12 @@ def query(manifest, kind, identifier, *, evidence_dir=None):
         if identifier not in pages:
             raise ValueError(f"Unknown page/section contract: {identifier}")
         page = pages[identifier]
-        response = {"target_page_contract": page}
+        response = {
+            "target_page_contract": page,
+            "target_page_analysis": next(
+                item for item in result["pages"] if item["id"] == identifier
+            ),
+        }
 
     actual_evidence = {
         "status": "not_assessed",
@@ -228,7 +238,17 @@ def query(manifest, kind, identifier, *, evidence_dir=None):
             "prose_verification": "not_performed",
             "runtime_verification": "not_performed",
         }
-    return {**response, "actual_evidence": actual_evidence, "limitation": _LIMITATION}
+    return {
+        **response,
+        "manifest_diagnostics": {
+            "scope": "whole_manifest",
+            "contract_consistent": result["contract_consistent"],
+            "catalog_consistent": result["catalog_consistent"],
+            "findings": result["findings"],
+        },
+        "actual_evidence": actual_evidence,
+        "limitation": _LIMITATION,
+    }
 
 
 def main(argv=None):

@@ -81,6 +81,11 @@ then sample generated artifacts to confirm the behavior is reflected correctly.
 Use the narrowest commands that match the diff. Python commands must run through
 the project environment.
 
+Notebook execution correctness belongs to the repository's separate tests.
+Keep these publication checks focused on generated references and rendered
+output; do not add Notebook reruns or enable execution for a Book review.
+An HTML build is not evidence that Notebook code executed successfully.
+
 - After PyO3 public API or docstring changes:
   ```
   task python:stubgen
