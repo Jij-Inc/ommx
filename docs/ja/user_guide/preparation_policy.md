@@ -35,7 +35,7 @@ assert target.contains(instance)
 
 ## Targetに入った時点で止まる
 
-PreparationはPolicyのすべての操作を必ず最後まで実行する仕組みではありません。実行前と、選択した変換段階（phase）の完了後にInstance全体のmembershipを調べ、targetに入った時点で停止します。最初からmemberならInstanceは変更されません。
+PreparationはPolicyのすべての操作を必ず最後まで実行する仕組みではありません。targetに入った時点で停止します。最初からmemberならInstanceは変更されません。
 
 成功時に成立する条件は、指定したtargetへのmembershipです。
 
@@ -49,22 +49,11 @@ assert target.contains(instance)
 
 変換後の候補は、そのInstanceが保持する変数・制約・目的の情報を使って解釈します。{ref}`Instanceの変数の役割 <instance-variable-roles>`と[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。
 
-## PreparationPolicy が選ぶ phase
+## 使用を許可する変換を選ぶ
 
-`PreparationPolicy` の各 field は optional で、未指定の phase は実行されません。デフォルトではすべての phase が無効です。各 field は、`Instance`の変換操作のうちどれを呼ぶかを選択します。各操作の入力条件やerrorは、対応するメソッドのAPI Referenceを参照してください。
+Policyには、特殊制約のlowering、整数変数の符号化、制約のpenalty化など、使用を許す変換を設定します。未指定の変換は実行されません。変換先のclassだけでなく、どの操作を使ってよいかも利用者が選びます。
 
-{meth}`~ommx.Instance.prepare` は、選択された phase を高々1回ずつ次の固定順序で適用します。
-
-| 順序 | Policy field | 役割 |
-|---|---|---|
-| 1 | `special_constraints` | 選択した active な特殊制約を通常制約へ lowering |
-| 2 | `objective` | active objectiveを指定したsenseへ変換 |
-| 3 | `integer_slack` | active な通常不等式への Integer slack 導入 |
-| 4 | `integer_encoding` | 使用中の Integer 変数を Binary 変数で encoding |
-| 5 | `fixed_penalty` | active な通常制約を固定 weight の penalty として目的関数へ移動 |
-| 6 | `binary_power_reduction` | activeなBinary変数の冪を縮約 |
-
-各fieldに設定する型とfactoryの全引数は、{class}`~ommx.SpecialConstraintPreparation`、{class}`~ommx.ObjectivePreparation`、{class}`~ommx.IntegerSlackPreparation`、{class}`~ommx.FixedPenaltyPreparation`、{class}`~ommx.IntegerEncodingPreparation`、{class}`~ommx.BinaryPowerPreparation`のAPI Referenceを参照してください。特殊制約loweringの数式と成立条件も、各変換メソッドのAPI Referenceが所有します。特殊制約そのものの意味は[特殊制約型](./special_constraints.md)を参照してください。
+設定できる項目・型は{class}`~ommx.PreparationPolicy`、実行順序・適用回数・停止判定の詳細は{meth}`~ommx.Instance.prepare`のAPI Referenceを参照してください。特殊制約loweringの数式と成立条件も、各変換メソッドのAPI Referenceが所有します。特殊制約そのものの意味は[特殊制約型](./special_constraints.md)を参照してください。
 
 固定penaltyの大きさのように、問題のscaleや求める解の性質に依存する選択があります。どの変換を許し、どの値を使うかはapplicationが判断します。
 
@@ -124,10 +113,8 @@ Adapterでは`INPUT_CLASS` membershipがapplicabilityです。converterやBacken
 
 Solverの出力を{class}`~ommx.Solution`や{class}`~ommx.SampleSet`に戻すときも、Adapterへ渡した同じ変換済みInstanceで評価します。そのInstanceが保持する変数間のdependencyとremoved constraintにより、encoding前の変数値や変換前の制約も評価できます。値の復元は[変数の役割と値の復元・補完](./variable_roles.md)、制約の評価規則は[Removed constraintsと実行可能性](./removed_constraints.md)を参照してください。
 
-## 詳細：到達できない場合と部分的な変更
+## 失敗時のInstanceを再利用する場合
 
-すべての configured phase を適用しても target に到達しない場合、{class}`~ommx.PreparationTargetNotReachedError` が送出されます。`report` 属性には、最終状態に対する {class}`~ommx.InstanceClassMembershipReport` が入ります。呼び出し側は report を見て Policy を追加・変更するか、異なる target を選べます。
+明示的な`prepare()`は、失敗しても変更前の状態へ自動的に戻るとは限りません。失敗後も変換前のInstance自体を使う必要がある場合だけ、事前にcopyを作ってください。
 
-Preparation全体が失敗しても、自動的に変更前の状態へ戻るわけではありません。後のphaseが失敗しても、それより前に完了した変更はInstanceに残ります。通常の`solve()`と`sample()`ではこの変更も内部copyだけに残ります。明示的な`prepare()`で失敗後も変換前のInstance自体を使う必要がある場合だけ、事前にcopyを作ってください。個々の変換が失敗時にどこまで変更を残すかは、それぞれのAPI Referenceを参照してください。
-
-初めてAdapterを使う場合は[Tutorial](../tutorial/prepare_instance_for_adapter.md)から始め、失敗時の処理が必要になった時点で本節と各変換のAPI Referenceを確認してください。
+例外・診断情報の取得方法と変更が残る範囲は、{meth}`~ommx.Instance.prepare`および各変換メソッドのAPI Referenceにあります。初めてAdapterを使う場合は[Tutorial](../tutorial/prepare_instance_for_adapter.md)から始め、失敗の調査が必要になった時点で確認できます。
