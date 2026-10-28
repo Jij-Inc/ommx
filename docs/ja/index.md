@@ -105,7 +105,7 @@ Adapterを実装する人は、利用者向けTutorialの通読ではなく、[D
 | OMMX Adapter | OMMXと個々のソルバーの入力・出力の接続 |
 | OMMX Artifact | 問題・結果・添付データをメタデータ付きで保存・共有するパッケージ |
 
-Messageのスキーマは[Protocol Buffers](https://protobuf.dev/)で定義され、PythonとRustのSDKを提供しています。Pythonのユーザーコードでは `from ommx import Instance` のように公開APIを使います。wire formatのスキーマは[OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html)を参照してください。
+Messageのスキーマは[Protocol Buffers](https://protobuf.dev/)で定義され、PythonとRustのSDKを提供しています。Pythonのユーザーコードでは `from ommx import Instance` のように公開APIを使います。現行のwire formatの定義は[スキーマのソース](https://github.com/Jij-Inc/ommx/tree/main/proto/ommx)、v1の生成済み一覧は[OMMX v1 Message Schema](https://jij-inc.github.io/ommx/protobuf.html)を参照してください。
 
 ```{figure} ./assets/introduction_02.png
 :alt: 共通のOMMX表現を介して複数のソフトウェアを接続する図
@@ -114,7 +114,7 @@ Messageのスキーマは[Protocol Buffers](https://protobuf.dev/)で定義さ�
 共通の問題・結果表現を介して、ソフトウェアを接続する。
 ```
 
-Artifactには、問題と結果に加えて「何を、どの設定で解いたか」を記録できます。[OCI Artifact](https://opencontainers.org/)を利用しているため、GitHub Container Registryなど既存のregistryで配布することもできます。OMMXはこの仕組みでMIPLIBやQPLIBの問題を公開しています。
+Artifactには、問題と結果に加えて「何を、どの設定で解いたか」を記録できます。[OCI Artifact](https://opencontainers.org/)を利用しているため、GitHub Container Registryなど既存のregistryで配布することもできます。OMMXはこの仕組みでMIPLIBやQPLIBの問題を公開しています。形式を直接読み書きするツール向けのmanifest・layer・media typeの定義は、[Artifact形式仕様](https://github.com/Jij-Inc/ommx/blob/main/rust/ommx/doc/artifact_design.md)を参照してください。
 
 ```{toctree}
 :caption: Getting Started

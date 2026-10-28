@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "READMEと日本語Bookの主要概念とページ/節の編集契約。Qamomileは後続。API全項目の網羅ではない。",
+  "scope": "README、日本語Bookの主要概念とページ/節、および英語Book入口の編集契約。英語Bookの各章とQamomileは後続。API全項目の網羅ではない。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -20,9 +20,10 @@
       "target_revision": "codex/readme-book-purpose",
       "affected_pages": [
         "README",
-        "HOME"
+        "HOME",
+        "HOME_EN"
       ],
-      "note": "2次案に沿ったREADMEとBook冒頭の改訂。目的・現在の採用価値・利用者の判断を導入する。既存ページ全体の所有権・主目次・Referenceへの移管は後続の変更で扱う。baselineは旧契約の設計入力として保持し、今回の本文照合記録はチャットに残す。"
+      "note": "2次案に沿ったREADMEと日英Book冒頭の改訂。目的・現在の採用価値・利用者の判断を導入する。既存ページ全体の所有権・主目次・Referenceへの移管は後続の変更で扱う。baselineは旧契約の設計入力として保持し、今回の本文照合記録はチャットに残す。"
     }
   ],
   "interpretation": {
@@ -1604,6 +1605,102 @@
       "implementation_verified": false,
       "source_paths_existing": [
         "docs/ja/index.md"
+      ]
+    },
+    {
+      "id": "HOME_EN",
+      "title": "英語Bookの入口と目的別案内",
+      "role": "orientation",
+      "status": "revise",
+      "source_paths": [
+        "docs/en/index.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "purpose",
+          "introduces": [
+            "ommx.purpose"
+          ],
+          "uses": [],
+          "mentions": []
+        },
+        {
+          "id": "current-adoption",
+          "introduces": [
+            "ommx.adoption"
+          ],
+          "uses": [
+            "ommx.purpose"
+          ],
+          "mentions": [
+            "adapter.basic",
+            "artifact.roundtrip",
+            "experiment.record"
+          ]
+        },
+        {
+          "id": "candidate-example",
+          "introduces": [],
+          "uses": [
+            "ommx.adoption"
+          ],
+          "mentions": [
+            "instance.model",
+            "evaluation.basic",
+            "optimality.limit"
+          ]
+        },
+        {
+          "id": "structure-and-transformation",
+          "introduces": [],
+          "uses": [
+            "ommx.adoption"
+          ],
+          "mentions": [
+            "special.onehot",
+            "special.indicator",
+            "special.sos1",
+            "transformation.guarantees"
+          ]
+        },
+        {
+          "id": "development-direction",
+          "introduces": [],
+          "uses": [
+            "ommx.purpose"
+          ],
+          "mentions": [
+            "bounds.tighten"
+          ]
+        },
+        {
+          "id": "purpose-based-entry-and-exchange",
+          "introduces": [],
+          "uses": [
+            "ommx.adoption"
+          ],
+          "mentions": [
+            "adapter.basic",
+            "class.membership",
+            "preparation.target",
+            "artifact.roundtrip",
+            "experiment.record",
+            "class.qubo",
+            "bigm.contract"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": null,
+      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/en/index.md"
       ]
     },
     {
@@ -5364,7 +5461,7 @@
   "routes": [
     {
       "id": "adoption-from-readme",
-      "title": "READMEからOMMXの採用目的とBookの入口を選ぶ",
+      "title": "READMEからOMMXの採用目的と日本語Bookの入口を選ぶ",
       "initial": [
         "ext.math"
       ],
@@ -5381,6 +5478,27 @@
       ],
       "steps": [
         "HOME"
+      ]
+    },
+    {
+      "id": "adoption-from-readme-en",
+      "title": "READMEからOMMXの採用目的と英語Bookの入口を選ぶ",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "README",
+        "HOME_EN"
+      ]
+    },
+    {
+      "id": "adoption-from-book-en",
+      "title": "英語Bookへ直接入り、目的・現在の用途・開発方向を理解する",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "HOME_EN"
       ]
     },
     {
