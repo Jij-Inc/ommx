@@ -40,14 +40,15 @@ skill merely because a Book file changed.
   reader purpose and the objects they work with; document genres and chapter
   numbers do not establish prerequisites. A declared prerequisite is different
   from a recommended link.
-- Separate conceptual knowledge from execution dependencies. Hidden cells still
-  require their imports, input data, and prior runtime state.
+- Separate conceptual knowledge from execution dependencies. Book pseudocode
+  has no runtime prerequisite; runnable Reference or Example code still needs
+  its imports, input data, and prior runtime state, including hidden cells.
 
-Notebook execution correctness is covered by the repository's separate tests.
-Do not add Notebook reruns to a Book review. Inspect the example and its displayed
-outputs for explanatory sufficiency; runtime test failures belong to the test
-workflow. Keep documented SDK versions and prerequisites accurate without
-treating a Book build as execution evidence.
+Review Book pseudocode and illustrative results for explanatory and mathematical
+correctness, not executability. Existing Notebook execution remains owned by the
+repository's separate tests; do not add Notebook reruns to a reading review or
+skip existing tests because the Book policy changed. Keep documented SDK versions
+and prerequisites accurate without treating a Book build as execution evidence.
 
 ## Check purpose and capability explanations
 
@@ -71,14 +72,14 @@ or ledger. Group APIs by useful operations rather than requiring a page for
 every method. Check the public bindings/exports against their owning
 implementation; distinguish released capabilities from development-only APIs.
 
-For each major capability, locate the Book explanation of its existence, use,
-and selection criteria, the entry path, and the detailed Reference destination.
-An API entry or a release note alone does not explain why to use a capability.
-A complete usage example in the linked Reference can supply procedural coverage;
-do not require duplicating it in the Book. Inspect examples where they actually
-live and record whether coverage is usable, only mentioned, planned, absent, or
-deliberately excluded. Distinguish missing implementation of an existing plan
-from a proposed expansion of scope.
+Audit the Book's coverage of adoption reasons and choices across capabilities,
+with entry paths to the relevant Reference or Examples. Individual API meanings
+and procedures may be fully owned by Reference; their absence from the Book is
+not a coverage gap. An API catalogue or a release note alone does not answer the
+Book's purpose and selection questions. Inspect executable examples at their
+owning destination and record whether coverage is usable, only mentioned,
+planned, absent, or deliberately excluded. Distinguish missing implementation of
+an existing plan from a proposed expansion of scope.
 
 Reconcile gaps with the accepted workstream scope and explanation ownership
 below. Keep feature inventories in the review record or Book-owned ledger,
@@ -119,20 +120,29 @@ Assign ownership by the reader's question, not by a Tutorial/How-to/Guide label:
 
 - README explains the project's purpose, present adoption value, and entry points.
 - Book explains the overall model, available capabilities, why and when to use
-  them, choices, and result interpretation. Keep small examples and the
-  conceptual distinctions needed to understand them.
-- API Reference owns detailed calls and usable recipes, exact argument/default
-  rules, exhaustive cases, execution order, formulas, preconditions, errors,
-  mutation guarantees, and numerical contracts.
+  them, choices across capabilities, and result interpretation through prose,
+  mathematics, diagrams, and explanatory pseudocode.
+- API Reference owns class meanings, components, basic usage, and executable
+  examples as well as exact argument/default rules, exhaustive cases, execution
+  order, formulas, preconditions, errors, mutation guarantees, and numerical
+  contracts. Its executable API examples belong in the doctest workflow.
+- Independent Examples own complete runnable workflows whose value comes from
+  following an application end to end; their tests maintain executability.
 - Setup, CLI/operational reference, and format/integration specifications own
   their respective environment, command, authentication, and interoperability
   details. Python API entries cannot substitute for those destinations.
 
-Keep useful standalone tutorials and extended runnable examples discoverable
-from the relevant capability. Judge each by its stated purpose; neither a
-mandatory tutorial sequence nor a complete recipe in every chapter is required.
-Related API operations may need a complete example together rather than scattered
-call fragments. Reference should serve both human and AI-assisted implementation.
+Keep application-focused, end-to-end tutorials and runnable workflows
+discoverable as independent Examples from the relevant capability, without
+making them a mandatory Book sequence. Related API operations may need a
+complete Reference example together rather than scattered call fragments.
+Reference should serve both human and AI-assisted implementation.
+
+Label Book pseudocode explicitly and use a non-executable presentation such as a
+`text` code block. Show only the steps or relationships needed for the explanation;
+do not present invented methods as actual SDK APIs. Review the meaning, conditions,
+and claimed guarantees, and link to the executable Reference or Example. Book
+pseudocode does not need imports, environment setup, or execution tests.
 
 Overlap alone is not a finding. A short safe-use warning or a counterexample
 teaching an operation's meaning may be necessary even when the API states the
@@ -140,9 +150,12 @@ same fact. Flag repetition when it adds contract detail without serving the
 page's learning goal; neither mathematical notation nor an API name alone
 determines where an explanation belongs.
 
-For a relocation, identify what understanding the Book must retain. If the
-contract is missing from the API Reference, report or fill that documentation
-gap within the authorized scope before removing its only explanation.
+For a relocation, decide whether any explanation of adoption value, overall flow,
+or choices across capabilities must remain in the Book. Removing an entire
+class guide without leaving a shortened copy is valid. Preserve the needed
+meaning, contracts, and runnable examples at their owning Reference or Example
+destination before removing them or replacing Book code with pseudocode. Fill
+missing destination content within the authorized scope or report the gap.
 
 When moving or removing an explanation, read its actual replacement and follow
 the affected incoming entry through to the definition or usable procedure.
@@ -248,9 +261,9 @@ merely unfamiliar spelling. Prefer a local gloss, a reorder, or deferring an
 unnecessary detail over making the reader complete another whole chapter.
 
 For an explanation-placement finding, identify the reader's question, the
-detail's canonical owner, and the smallest Book explanation to retain. When
-reviewing a PR, distinguish newly introduced problems from inherited cleanup
-candidates in the affected pages.
+canonical owner, and whether any explanation still belongs in the Book; none
+may be needed. When reviewing a PR, distinguish newly introduced problems from
+inherited cleanup candidates in the affected pages.
 
 Keep these outcomes separate:
 
