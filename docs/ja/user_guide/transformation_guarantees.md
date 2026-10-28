@@ -36,9 +36,9 @@ kernelspec:
 
 例えば、$0\leq x\leq10$に加えて通常制約$x\leq3$があるなら、上限を3に絞っても実行可能な候補を除きません。これは任意の値に固定して部分問題を作る操作とは異なり、問題の条件から導ける範囲を変数に反映する操作です。
 
-{meth}`~ommx.Instance.tighten_bounds_simultaneously_once`は、対象となる通常制約を呼び出し開始時のboundで調べ、導いた更新をまとめて一度適用します。更新後のboundで収束まで繰り返すpresolverではなく、完全な実行不可能性検出も約束しません。対象・許容誤差などのAPI契約に従って使い、更新がなかったことだけで問題が実行可能だと判断しないでください。
+{meth}`~ommx.Instance.tighten_bounds_simultaneously_once`は、対象となる通常制約を呼び出し開始時のboundで調べ、導いた更新をまとめて一度適用します。更新後のboundで収束まで繰り返すpresolverではなく、完全な実行不可能性検出も約束しません。浮動小数点計算では数値境界付近の候補の判定が変わる場合もあります。対象・許容誤差などのAPI契約に従って使い、更新がなかったことだけで問題が実行可能だと判断しないでください。
 
-[制約から変数のboundを絞る](../how_to/tighten_bounds.md)では、実行前後のboundと変更された変数を確認できます。厳密な適用条件・数式・数値条件は同メソッドのAPI Referenceにあります。
+[制約から変数のboundを絞る](../how_to/tighten_bounds.md)では、実行前後のboundと変更された変数を確認できます。厳密な適用条件・数式・数値条件・失敗時の扱いは{meth}`~ommx.Instance.tighten_bounds_simultaneously_once_using_constraints`のAPI Referenceで説明します。
 
 ## 保証を読む七つの問い
 

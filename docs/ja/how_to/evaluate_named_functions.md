@@ -43,7 +43,7 @@ assert solution.objective == 1
 assert solution.extract_named_functions("distance") == {(): 10.0}
 ```
 
-この候補の費用は1、距離は10です。距離が短いかどうかは、目的値や実行可能性の判定には使っていません。`id=0`は名前付き評価式のIDで、変数や制約のIDとは別です。
+この候補の費用は1、距離は10です。距離が短いかどうかは、目的値や実行可能性の判定には使っていません。`id=0`は名前付き評価式のIDで、変数や制約のIDとは別です。式が参照する変数も、`decision_variables`に含めます。
 
 {meth}`~ommx.Solution.extract_named_functions`は、指定した名前を持つ評価式の値を、添字のtupleをキーとする辞書にします。この例は添字を付けていないため、キーは空のtuple`()`です。例えば設備ごとの指標なら、同じ名前に異なる`subscripts`を付けて登録できます。
 
@@ -95,6 +95,8 @@ assert omitted.extract_named_functions("recorded") == {(): 2.0}
 assert explicit.extract_named_functions("recorded") == {(): 4.0}
 ```
 
-この変数は、固定値やほかの変数への依存式も持たないためirrelevantです。値を省略した最初の評価では既定値2が補われ、その値で指標を計算しています。これは元の候補から復元した値ではありません。手元の候補が4を持つなら、二つ目のようにその値を渡してください。used・fixed・dependent・irrelevantの違いと補完規則は[変数の役割](../user_guide/variable_roles.md)で説明します。
+この変数は、固定値やほかの変数への依存式も持たないためirrelevantです。値を省略した最初の評価では既定値2が補われ、その値で指標を計算しています。これは元の候補から復元した値ではありません。手元の候補が4を持つなら、二つ目のようにその値を渡してください。
+
+指標にしか使わない変数でも、値を渡せば、その変数の種類や上下限に照らして検査されます。「指標は制約ではない」ことと「変数の定義域を無視できる」ことは別です。used・fixed・dependent・irrelevantの違いと補完規則は[変数の役割](../user_guide/variable_roles.md)、候補全体の検査は{meth}`~ommx.Instance.evaluate`で説明します。
 
 添字の重複や存在しない名前の扱い、複数候補からの抽出など、正確な操作条件は{class}`~ommx.NamedFunction`、{meth}`~ommx.Solution.extract_named_functions`、{meth}`~ommx.SampleSet.extract_named_functions`のAPI Referenceを参照してください。

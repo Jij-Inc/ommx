@@ -57,13 +57,15 @@ assert text == "x[0] + 2*x[1]"
 
 表示は`x[0] + 2*x[1]`です。Function単体の`str()`や`repr()`はIDを使いますが、{meth}`~ommx.Instance.format_function`はそのInstanceの変数名・添字を使います。どちらも式の値や意味を変える操作ではありません。
 
-Notebookでは{meth}`~ommx.Instance.display_function`で式のプレビューを表示できます。
+表示する式のIDは、ラベルを参照するInstanceに属している必要があります。別のInstanceの式を渡しても、名前で変数を照合する操作にはなりません。
+
+Notebookでは{meth}`~ommx.Instance.display_function`で式のプレビューを表示できます。大きな式では省略されることがあるため、表示された部分を式全体だと解釈しないでください。
 
 ```{code-cell} ipython3
 labeled.display_function(labeled.objective)
 ```
 
-表示上限や省略情報などは各API Referenceを参照してください。{meth}`~ommx.ParametricInstance.format_function`と{meth}`~ommx.ParametricInstance.display_function`では、パラメータのラベルも使えます。
+全体を文字列にする場合は、上限を指定せずに`format_function()`を使います。表示上限の引数と既定値は{meth}`~ommx.Instance.format_function`と{meth}`~ommx.Instance.display_function`のAPI Referenceを参照してください。{meth}`~ommx.ParametricInstance.format_function`と{meth}`~ommx.ParametricInstance.display_function`では、パラメータのラベルも使えます。
 
 (named-evaluation-expressions)=
 ## 目的関数以外にも、候補の指標を持てる

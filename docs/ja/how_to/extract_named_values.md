@@ -66,7 +66,9 @@ assert named_values["y"][()] == 2.0
 名前を付けていない変数は、この辞書には含まれません。また、同じ名前・同じ添字の
 変数が複数ある場合は、一つの値を勝手に選ばずエラーになります。名前・添字が同じでも
 IDが異なれば別の変数です。区別が必要な場合は、{attr}`~ommx.Solution.state`の
-IDごとの値を使います。各抽出APIの正確なエラー条件はAPI Referenceを参照してください。
+IDごとの値を使います。存在しない名前や重複をどう扱うかは、
+{meth}`~ommx.Solution.extract_decision_variables`と
+{meth}`~ommx.Solution.extract_all_decision_variables`のAPI Referenceを参照してください。
 
 ## 表として調べる
 
@@ -121,6 +123,10 @@ assert not target.evaluate(state).feasible
 $y=2$が新しい上限1を超えます。**照合は値の妥当性や実行可能性の検査ではない**ため、
 必要な値がそろった候補を対象Instanceで評価します。名前なしの変数や、抽出から省かれた
 値を自動で移す操作でもありません。
+
+照合できない名前・添字や曖昧なラベルはエラーになります。一方、入力にない変数の値は
+埋めません。部分的な入力とエラーの正確な条件は
+{meth}`~ommx.Instance.state_from_named_values`のAPI Referenceで確認してください。
 
 探索の初期候補として使う場合は、[Adapterへ初期候補を渡す手順](./use_initial_state.md)へ
 進んでください。初期候補を受け取れるかどうかは、各Adapterの契約に従います。
