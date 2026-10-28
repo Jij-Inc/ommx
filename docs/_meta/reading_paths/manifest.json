@@ -1299,7 +1299,7 @@
         "information loss",
         "model export"
       ],
-      "scope": "二次以下の多項式・変数種の要約、特殊制約の事前lowering、ラベル・removed・NamedFunction等の情報損失を理解して保存形式を選ぶ。厳密な出力契約、lowering操作やArtifactの保存手順の習得までは付与しない。"
+      "scope": "二次以下の多項式・変数種の受付範囲、特殊制約の事前lowering、ラベル・removed・NamedFunction等の情報損失を理解して保存形式を選ぶ。二次拡張に対応した外部ツールでも係数の解釈が一致するとは限らず、取り込み後の式を確認する。厳密な出力・係数契約、lowering操作やArtifactの保存手順の習得までは付与しない。"
     }
   ],
   "pages": [
@@ -3373,7 +3373,7 @@
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "SDK b7だけの独立したBinaryモデルとsave_mpsの例。ファイルを渡す準備で終了し外部ツールの実行や候補取り込みを前提にしない。対応範囲と情報境界はBookに要約し、正確な一覧はsave_mps APIへ送る。lowering手順とArtifact保存はリンク先を訪問した場合だけ習得する。",
+      "notes": "SDK b7だけの独立したBinaryモデルとsave_mpsの例。ファイルを渡す準備で終了し外部ツールの実行や候補取り込みを前提にしない。出力APIの受付範囲と情報境界、二次式の受け手側での確認はBookに要約し、正確な一覧・係数規約はsave_mps APIへ送る。lowering手順とArtifact保存はリンク先を訪問した場合だけ習得する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [

@@ -41,7 +41,9 @@ assert path.is_file()
 
 ## 出力できるモデルを確認する
 
-公開`3.0.0b7`では、出力対象の変数がBinary・Integer・Continuousで、目的関数と通常制約が二次以下の多項式であるモデルに対応します。三次以上の多項式や一般の非線形式は対象外です。また、数学的には二次式でも、保持している式の表現によってはそのまま出力できません。例えば整数冪の扱いは{meth}`~ommx.Function.powi`のAPI Referenceを参照してください。二次の項を含む場合は、受け取るツールもそのMPS拡張に対応している必要があります。
+公開`3.0.0b7`では、出力対象の変数がBinary・Integer・Continuousで、目的関数と通常制約が二次以下の多項式であるモデルを出力APIが受け付けます。三次以上の多項式や一般の非線形式は対象外です。また、数学的には二次式でも、保持している式の表現によってはそのまま出力できません。例えば整数冪の扱いは{meth}`~ommx.Function.powi`のAPI Referenceを参照してください。
+
+二次項を含む出力では、受け取るツールがMPSの二次拡張に対応していても、係数の解釈が一致するとは限りません。求解前に、取り込まれた目的関数・制約が元の式と一致するか確認してください。現行の出力APIが使う係数規約は、{meth}`~ommx.Instance.save_mps`のAPI Referenceで説明します。
 
 Indicator・OneHot・SOS1などの[特殊制約](../user_guide/special_constraints.md)が現在課されている場合は、出力前に通常制約へ変換（lowering）します。{meth}`~ommx.Instance.lower_special_constraints`はInstance自体を変更するため、元のモデルも残す場合は`instance.copy()`で作ったコピーを変換します。変換にはboundなどの条件があり、loweringだけでMPS出力への適合が保証されるわけではありません。必要な変換は[変換How-to](./transform_instance_without_solver.md)から確認してください。
 
