@@ -13,8 +13,9 @@ def write_file(instance: Instance, path: str):
     Compression is enabled regardless of the filename extension. Use
     :meth:`ommx.Instance.save_mps` with ``compress=False`` for plain text.
 
-    Linear and quadratic objectives and regular constraints are supported,
-    subject to that method's variable-kind and special-constraint restrictions.
+    The writer accepts linear and quadratic objectives and regular constraints,
+    subject to that method's variable-kind and special-constraint restrictions
+    and quadratic coefficient convention.
     See :meth:`ommx.Instance.save_mps` for the exact supported models, errors,
     variable filtering, and information lost during export.
     """
