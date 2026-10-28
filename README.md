@@ -60,5 +60,7 @@ This project is licensed under either of
 at your option.
 
 ## Acknowledgement
-![BRIDGE](./BRIDGE.png)
+
+<img src="./BRIDGE.png" alt="BRIDGE" width="300">
+
 This work was performed for Council for Science, Technology and Innovation (CSTI), Cross-ministerial Strategic Innovation Promotion Program (SIP), "Promoting the application of advanced quantum technology platforms to social issues"(Funding agency : QST).
