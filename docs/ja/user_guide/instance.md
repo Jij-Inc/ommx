@@ -137,7 +137,7 @@ assert instance.attached_decision_variable(x.id).name == "selected"
 assert instance.constraints[exclusive.constraint_id].name == "at_most_one"
 ```
 
-`constraints_df()`の編集も同様に書き戻されません。変数の`detach()`や{meth}`~ommx.Instance.get_decision_variable_by_id`もsnapshotを返すため、Instanceのラベルを編集するときは上のAttached handleを使います。コピーとsetterの詳しい契約は、{meth}`~ommx.AttachedDecisionVariable.detach`と{meth}`~ommx.AttachedConstraint.detach`のAPI Referenceで確認できます。
+`constraints_df()`の編集も同様に書き戻されません。変数の`detach()`や{meth}`~ommx.Instance.get_decision_variable_by_id`もsnapshotを返すため、Instanceのラベルを編集するときは上のAttached handleを使います。snapshotの独立性は、{meth}`~ommx.AttachedDecisionVariable.detach`と{meth}`~ommx.AttachedConstraint.detach`のAPI Referenceで確認できます。
 
 付け直した変数名・添字は、{meth}`~ommx.Instance.format_function`や{meth}`~ommx.Instance.display_function`で式を表示するときに使われます。その後に評価・求解したSolutionでは、{meth}`~ommx.Solution.extract_decision_variables`で名前・添字に対応する値を取り出せます。ラベルを整えてから結果を作ると、商品などのモデル上の単位で後処理できます。
 
