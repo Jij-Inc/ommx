@@ -47,7 +47,7 @@ assert solution.objective == 5
 候補の提示が必ず探索を速めるとは限らず、この例は速度比較ではありません。
 
 別のAdapterでは初期候補への対応や省略値の扱いが異なります。利用するAdapterの
-`initial_state`のAPI契約を確認してください。特に部分的な候補が、OMMXの
+`initial_state`のAPI契約（例：{py:meth}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter.solve`）を確認してください。特に部分的な候補が、OMMXの
 `Instance.evaluate()`で必要な値をすべて含むとは限りません。
 
 ## Stateとして渡す場合
@@ -64,13 +64,14 @@ assert solution.feasible
 ## 名前と添字から値を対応付ける
 
 ```{note}
-この節は開発版の機能です。公開`3.0.0b7`には`state_from_named_values()`がないため、
-上のIDによる手順を使ってください。名前付き入力のためにb7環境を更新する必要はありません。
+この節は、対応する開発版SDKをすでに用意している人向けの参考例です。
+[インストール手順](../getting_started/install.md)の公開版にはこの機能がないため、
+上のIDによる手順を使ってください。この節のためだけに環境を更新する必要はありません。
 ```
 
 モデルを作り直すとIDが変わる場合は、{py:meth}`~ommx.Instance.state_from_named_values`で
-名前と添字から`State`を作れます。この機能を使う場合は、対象SDK/Adapterの
-開発リビジョンを[API Reference](../reference/index.md)と揃えてください。
+名前と添字から`State`を作れます。このBookのAPI Referenceは開発リビジョンに対応するため、
+手元のSDKにメソッドがあることを確認してから利用してください。
 スカラーの添字は`()`、1次元は`(i,)`です。
 
 ```python
