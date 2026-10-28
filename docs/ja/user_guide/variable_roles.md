@@ -102,7 +102,7 @@ assert explicit.state.entries[unused.id] == 4.0
 
 `unused`の値は現在の目的値や制約には影響しませんが、一意には決まりません。省略した場合の2は、ソルバーが選んだ値でも、元の候補から復元した値でもありません。
 
-Binary・Integer・Continuousの既定値はbound内で0に最も近い値、SemiInteger・SemiContinuousでは0です。SemiInteger・SemiContinuousは指定範囲に加えて0も許す変数です。種類とboundの意味は {ref}`変数の定義域 <decision-variable-domains>`を参照してください。
+変数の種類やboundによって、補う既定値は異なります。正確な選択規則は{meth}`~ommx.Instance.populate_state`のAPI Referenceを参照してください。ここで重要なのは、補われた値を元の候補の値とみなさず、特定の候補を調べるときには値を明示することです。
 
 ## 復元・補完した後、どの情報を評価するか
 

@@ -1839,6 +1839,27 @@ impl Instance {
     /// inputs before target-kind canonicalization, so an assertion computed from the
     /// uncanonicalized solver vector can be rejected as inconsistent.
     ///
+    /// Irrelevant variables are not determined by optimization or reconstruction.
+    /// Supplied values follow the same canonicalization rules above. When omitted,
+    /// Binary, Integer, and Continuous variables receive the value in their bound
+    /// nearest to zero; SemiInteger and SemiContinuous variables receive zero.
+    /// Supply an irrelevant value explicitly when its choice matters for an output
+    /// objective, named function, or removed constraint.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, Sense
+    /// >>> variables = [
+    /// ...     DecisionVariable.binary(0),
+    /// ...     DecisionVariable.integer(1, lower=2, upper=5),
+    /// ...     DecisionVariable.continuous(2, lower=-5, upper=-2),
+    /// ...     DecisionVariable.semi_integer(3, lower=2, upper=5),
+    /// ...     DecisionVariable.semi_continuous(4, lower=2, upper=5),
+    /// ... ]
+    /// >>> reporting = Instance.from_components(
+    /// ...     decision_variables=variables, objective=0, constraints={}, sense=Sense.Minimize
+    /// ... )
+    /// >>> assert reporting.populate_state({}).entries == {0: 0.0, 1: 2.0, 2: -2.0, 3: 0.0, 4: 0.0}
+    /// >>> assert reporting.populate_state({1: 4}).entries[1] == 4.0
+    ///
     /// # Postconditions
     ///
     /// The returned state restores fixed variables needed only by preserved output semantics.
