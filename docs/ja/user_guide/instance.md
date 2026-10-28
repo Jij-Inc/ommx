@@ -124,19 +124,20 @@ assert instance.constraints[exclusive.constraint_id].description == "二つの�
 
 {meth}`~ommx.Instance.attached_decision_variable` が返す{class}`~ommx.AttachedDecisionVariable`と、`instance.constraints[id]`が返す{class}`~ommx.AttachedConstraint`の変更は、そのInstanceに反映されます。名前を変えてもIDは変わりません。ここで変更したのはラベルだけで、変数の定義域・目的関数・制約の式は同じです。数学的な条件を変える操作とは区別します。
 
-一方、`detach()`は取得時点の独立したコピー（snapshot）を返します。DataFrameも表示・分析用の表であり、どちらを編集してもInstanceへの書き戻しは起きません。
+一方、`detach()`は取得時点の独立したコピー（snapshot）を返します。次の例では、通常制約のsnapshotの名前だけを変えます。DataFrameも表示・分析用の表であり、どちらを編集してもInstanceへの書き戻しは起きません。
 
 ```{code-cell} ipython3
-snapshot = variable.detach()
+snapshot = constraint.detach()
 snapshot.set_name("snapshot_only")
 
 table = instance.decision_variables_df()
 table.loc[x.id, "name"] = "table_only"
 
 assert instance.attached_decision_variable(x.id).name == "selected"
+assert instance.constraints[exclusive.constraint_id].name == "at_most_one"
 ```
 
-通常制約の`detach()`や`constraints_df()`も同様です。変数の{meth}`~ommx.Instance.get_decision_variable_by_id`もsnapshotを返すため、Instanceのラベルを編集するときは上のAttached handleを使います。コピーとsetterの詳しい契約は、{meth}`~ommx.AttachedDecisionVariable.detach`と{meth}`~ommx.AttachedConstraint.detach`のAPI Referenceで確認できます。
+`constraints_df()`の編集も同様に書き戻されません。変数の`detach()`や{meth}`~ommx.Instance.get_decision_variable_by_id`もsnapshotを返すため、Instanceのラベルを編集するときは上のAttached handleを使います。コピーとsetterの詳しい契約は、{meth}`~ommx.AttachedDecisionVariable.detach`と{meth}`~ommx.AttachedConstraint.detach`のAPI Referenceで確認できます。
 
 付け直した変数名・添字は、{meth}`~ommx.Instance.format_function`や{meth}`~ommx.Instance.display_function`で式を表示するときに使われます。その後に評価・求解したSolutionでは、{meth}`~ommx.Solution.extract_decision_variables`で名前・添字に対応する値を取り出せます。ラベルを整えてから結果を作ると、商品などのモデル上の単位で後処理できます。
 
