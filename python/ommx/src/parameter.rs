@@ -3,19 +3,37 @@ use ommx::{LinearMonomial, VariableID};
 use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::HashMap;
 
-/// Parameter in an optimization problem.
+/// A symbolic numerical input to a fixed-structure optimization problem.
 ///
-/// Parameters are values that are fixed during optimization but may vary between different
-/// runs or scenarios. They share the same ID space with decision variables.
+/// The caller supplies a value when materializing a
+/// {class}`~ommx.ParametricInstance`; the solver does not choose it. Parameters
+/// can represent coefficients or constants in objectives and constraints.
+/// Their IDs share the decision-variable ID space and must be distinct from
+/// all decision-variable IDs and other parameter IDs in the same family.
+/// Changing a parameter value does not create or remove model components.
 ///
-/// Note that this object overloads `==` for creating a constraint, not for equality comparison.
+/// ``name``, ``subscripts``, ``parameters``, and ``description`` are modeling
+/// labels. In particular, the string-valued ``parameters`` metadata is separate
+/// from the numerical assignment passed to
+/// {meth}`~ommx.ParametricInstance.with_parameters`.
+///
+/// Arithmetic operators build expressions just as for decision variables.
+/// The comparisons ``==``, ``<=``, and ``>=`` construct constraints; ``==``
+/// does not compare two Parameter objects for equality. Compare their IDs
+/// when checking identity.
 ///
 /// # Examples
 ///
-/// >>> p = Parameter(1, name="penalty")
+/// >>> from ommx import DecisionVariable, Linear, Parameter
+/// >>> p = Parameter(1, name="offset")
 /// >>> x = DecisionVariable.integer(2)
-/// >>> x + p  # Returns Linear expression
-/// Linear(...)
+/// >>> expression = x + p
+/// >>> assert isinstance(expression, Linear)
+/// >>> assert expression.evaluate({x.id: 2, p.id: 3}) == 5.0
+///
+/// See {meth}`~ommx.ParametricInstance.from_components` for a complete model
+/// using parameterized profits, weights, and capacity, then
+/// {meth}`~ommx.ParametricInstance.with_parameters` to create an Instance.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]

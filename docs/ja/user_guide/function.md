@@ -35,7 +35,7 @@ assert f.evaluate(candidate) == 5.0
 assert not instance.evaluate(candidate).feasible
 ```
 
-Function単体は変数の名前・種類・上下限を保持せず、IDを参照します。{meth}`~ommx.Function.evaluate`は式の数値を計算しますが、別に課した制約や変数の定義域までは検査しません。問題全体に対する候補の検査には{meth}`~ommx.Instance.evaluate`を使います。評価結果の読み方は[StateからSolutionへの評価](./solution.md)を参照してください。
+Function単体は変数の名前・種類・上下限を保持せず、IDを参照します。{meth}`~ommx.Function.evaluate`は式の数値を計算しますが、別に課した制約や変数の定義域までは検査しません。問題全体に対する候補の検査には{meth}`~ommx.Instance.evaluate`を使います。評価結果の読み方は{class}`~ommx.Solution`のAPI Referenceを参照してください。
 
 (function-labels)=
 ## 式を変数名で確認する

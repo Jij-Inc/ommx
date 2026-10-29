@@ -4214,7 +4214,7 @@
         {
           "kind": "Class",
           "name": "ConstraintCollection",
-          "doc": "Live, read-only mapping of all active constraint families. Values are write-through attached handles.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.",
+          "doc": "Live, read-only mapping of all active constraint families in a model.\n\nObtained from {attr}`~ommx.Instance.constraints` or\n{attr}`~ommx.ParametricInstance.constraints`. The collection keeps its owner\nalive and observes subsequent owner mutations. Obtaining it does not collect\nconstraint rows; indexing fetches the selected row from the owner's current\nstate. Active model rows are attached handles whose label setters update that\nowner.\n\n>>> from ommx import ConstraintID, Instance\n>>> model = Instance.minimize()\n>>> x = model.new_binary(\"x\")\n>>> rule = model.add_constraint(x <= 1, \"limit\")\n>>> rows = model.constraints\n>>> cid = rule.constraint_id\n>>> rows[cid].set_name(\"capacity\")\n>>> assert model.constraints[cid].name == \"capacity\"\n>>> assert rows.get(ConstraintID(99)) is None\n>>> assert rows.get(ConstraintID(99), \"missing\") == \"missing\"\n\n**Typed keys and row ownership**\n\nMixed-family lookups require typed IDs, even though constraint numbers are\nunique across all families in an Instance. Bare integers raise ``TypeError``;\na missing typed ID raises ``KeyError``. ``get(id)`` returns ``None`` for a\nmissing typed ID, or the supplied default in ``get(id, default)``. Indexing and\n``get`` preserve the concrete row type for a known concrete ID; the latter's\nreturn type also includes the default's type. See {class}`~ommx.ConstraintIDBase`\nfor ID families, integer promotion, and the extension contract.\n\nThe collection cannot be changed by item assignment or deletion. Change the\nmodel through its owner methods. Related collections use the same lookup and\niteration rules but have different row ownership:\n\n| Collection | Included constraints | Returned rows |\n| --- | --- | --- |\n| {class}`~ommx.ConstraintCollection` | Active model constraints | Attached handles |\n| {class}`~ommx.RemovedConstraintCollection` | Retained removed model constraints | Independent snapshots |\n| {class}`~ommx.EvaluatedConstraintCollection` | Active and retained removed constraints in a Solution | Independent evaluated snapshots |\n| {class}`~ommx.SampledConstraintCollection` | Active and retained removed constraints in a SampleSet | Independent sampled snapshots |\n\nAttached handles compare equal when they refer to the same owner object and\ntyped ID. Handles from different owners are unequal even if the models contain\nidentical data. Removed and result snapshots compare their stored data, including\nmetadata and removal reasons. Mapping equality and membership in ``values()`` or\n``items()`` use those row equality rules.\n\n**Live views and iteration**\n\n``keys()``, ``values()``, and ``items()`` are live views. ``iter(rows)`` snapshots\ntyped IDs immediately; iterators over the standard Python views snapshot them on\nthe first ``next()``. Within the currently supported families, IDs follow family\norder (regular, indicator, one-hot, SOS1), then numeric order. Values are fetched\nas they are visited. If a snapshotted key is removed before its value is fetched,\nthat access raises ``KeyError``.\n\n>>> ids_before_addition = iter(rows)\n>>> keys = rows.keys()\n>>> added = model.add_constraint(x >= 0, \"lower\")\n>>> assert list(ids_before_addition) == [cid]\n>>> assert list(keys) == [cid, added.constraint_id]\n>>> assert rows == dict(rows)\n\n``dict(rows)`` materializes a mapping at that time; its active model values are\nstill attached handles. To inspect just one family, use ``of_kind`` and\n{class}`~ommx.ConstraintFamilyView`. To collect a table, use the owner's\n``constraints_df(kind=...)``. Its typed index matches the selected family's keys;\non models, ``removed=True`` includes both active and retained removed rows.",
           "bases": [
             {
               "display": "Mapping[ConstraintIDBase, ConstraintView]",
@@ -5104,7 +5104,7 @@
         {
           "kind": "Class",
           "name": "ConstraintFamilyView",
-          "doc": "Live, read-only mapping of one constraint family, created by of_kind. Integers are promoted to the selected ID type; other families raise TypeError. Iteration retains typed IDs. Model rows are attached handles; removed and result rows are snapshots.",
+          "doc": "Live, read-only mapping of one constraint family, created by ``of_kind``.\n\nThe selected family fixes the key type. Indexing, ``get``, and membership accept\nintegers as well as that family's typed IDs; an ID of another family raises\n``TypeError``. Iteration and dictionary keys retain typed IDs. A literal\n``kind`` also selects the concrete key and row types for static type checking.\n\n>>> from ommx import ConstraintID, Instance\n>>> model = Instance.minimize()\n>>> x = model.new_binary(\"x\")\n>>> rule = model.add_constraint(x <= 1, \"limit\")\n>>> regular = model.constraints.of_kind(\"regular\")\n>>> assert rule.constraint_id == ConstraintID(0)\n>>> assert regular[0] == regular[ConstraintID(0)]\n>>> assert list(regular) == [ConstraintID(0)]\n>>> assert 0 in regular\n>>> assert regular.get(99) is None\n>>> regular[0].set_name(\"capacity\")\n>>> assert model.constraints[ConstraintID(0)].name == \"capacity\"\n\nThe accepted strings are ``\"regular\"``, ``\"indicator\"``, ``\"one_hot\"``, and\n``\"sos1\"``, matching ``constraints_df(kind=...)``. An unknown ``kind`` raises\n``ValueError``. See {class}`~ommx.EvaluatedConstraintCollection` for the current\nID and result-type table.\n\nThe view retains its owner without collecting rows. It follows the row ownership,\nequality, and iterator snapshot rules of {class}`~ommx.ConstraintCollection`:\nactive model rows are attached handles, while removed and result rows are\nindependent snapshots. This applies to Instance and ParametricInstance active\nand removed collections, and to Solution and SampleSet result collections.\n\nFiltering is an inspection operation. Selecting one family does not establish\nthat a solver or transformation supports every constraint in the model. A\nconsumer must inspect all constraints and reject unsupported families; see\n{class}`~ommx.ConstraintIDBase`.",
           "bases": [
             {
               "display": "Mapping[_K, _V_co]",
@@ -5454,7 +5454,7 @@
         {
           "kind": "Class",
           "name": "ConstraintID",
-          "doc": "A regular constraint ID. Unequal to integers and IDs of other constraint families.",
+          "doc": "A regular constraint ID. Unequal to integers and IDs of other constraint families.\n\nSee {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts.",
           "bases": [
             {
               "display": "ConstraintIDBase",
@@ -5668,7 +5668,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create an ID in this constraint family's namespace.\n\nThe value must be an unsigned 64-bit integer. An ID of another\nfamily is not accepted. IDs have no integer conversion protocol.",
+              "doc": "Create a typed ID identifying this constraint family and number.\n\nThe value must be an unsigned 64-bit integer. An ID of another\nfamily is not accepted. IDs have no integer conversion protocol.",
               "signatures": [
                 {
                   "parameters": [
@@ -5753,7 +5753,7 @@
         {
           "kind": "Class",
           "name": "ConstraintIDBase",
-          "doc": "Common base of constraint IDs, including families introduced by future SDKs.\n\nConsumers must handle the concrete ID types they support and reject all\nothers. This base alone is not a usable constraint identity. Integers are\nnot instances of this class and are never accepted by mixed-family lookups.",
+          "doc": "Common base of constraint IDs, including families introduced by future SDKs.\n\nConsumers must handle the concrete ID types they support and reject all\nothers. This base alone is not a usable constraint identity. Integers are\nnot instances of this class and are never accepted by mixed-family lookups.\n\n**Typed identity and integer inputs**\n\nThe currently supported concrete types are {class}`~ommx.ConstraintID`,\n{class}`~ommx.IndicatorConstraintID`, {class}`~ommx.OneHotConstraintID`, and\n{class}`~ommx.Sos1ConstraintID`. An ID carries its family and an unsigned\n64-bit number. IDs from different families are unequal, even if their\nnumbers coincide. Within one Instance, constraint numbers must still be\nunique across all active and removed families.\n\nAPIs whose argument already fixes a family promote integer inputs to that\nfamily's ID: for example, ``constraints={1: constraint}`` in\n{meth}`~ommx.Instance.from_components`, or\n``instance.constraints.of_kind(\"regular\")[1]``. They reject IDs of another\nfamily. Such mapping inputs reject ``1`` and ``ConstraintID(1)`` together\nwith ``ValueError``, because the keys normalize to the same identity.\nMixed-family collections and ``constraint_violation(id)`` require typed\nIDs. DataFrame indexes also retain typed IDs. Constraint IDs do not support\n``int()`` or integer-index conversion; variable and sample IDs remain integers.\n\nIDs are immutable. Shallow and deep copies return the same ID object;\ncopying containers or pickling preserves ID family and value, including\nIDs used in DataFrame indexes or columns.\n\n>>> import copy\n>>> import pickle\n>>> from ommx import ConstraintID, OneHotConstraintID\n>>> cid = ConstraintID(7)\n>>> assert cid != 7 and cid != OneHotConstraintID(7)\n>>> assert copy.copy(cid) is cid\n>>> assert copy.deepcopy(cid) is cid\n>>> assert copy.deepcopy({cid: [cid]}) == {cid: [cid]}\n>>> restored = pickle.loads(pickle.dumps({cid: [cid]}))\n>>> assert restored == {cid: [cid]}\n>>> assert type(next(iter(restored))) is ConstraintID\n\n**Supporting additional families**\n\nNew special-constraint families are additive API extensions. Collections,\nincluding removed and result collections, expose the open common interfaces\n``Mapping[ConstraintIDBase, ConstraintView]``; their known concrete ID\noverloads retain precise row types. The currently supported families are\nnot an exhaustive list of future possibilities.\n\nA solver adapter or transformation must reject families it cannot handle.\nSilently skipping their constraints can relax the optimization problem.\nKeep this check even if an earlier applicability check normally excludes\nunsupported kinds. For example, a consumer requiring regular rows can\nvalidate the complete collection before processing it:\n\n>>> from ommx import ConstraintID, Instance, OneHotConstraint\n>>> def regular_rows(model):\n...     rows = []\n...     for cid in model.constraints:\n...         if not isinstance(cid, ConstraintID):\n...             raise NotImplementedError(\"Unsupported constraint family\")\n...         rows.append(model.constraints[cid])\n...     return rows\n>>> model = Instance.minimize()\n>>> x = model.new_binary(\"x\")\n>>> y = model.new_binary(\"y\")\n>>> rule = model.add_constraint(x + y <= 1)\n>>> assert regular_rows(model) == [rule]\n>>> _ = model.add_one_hot_constraint(OneHotConstraint(variables=[x, y]))\n>>> regular_rows(model)\nTraceback (most recent call last):\n...\nNotImplementedError: Unsupported constraint family\n\nHandle additional concrete ID types explicitly when supported and retain\nthe rejecting fallback. Receiving a new family in an older consumer should\nfail explicitly. Metadata-only inspection can use {class}`~ommx.ConstraintView`\nwithout interpreting each family's mathematical meaning.",
           "bases": [],
           "methods": [
             {
@@ -5779,7 +5779,7 @@
         {
           "kind": "Class",
           "name": "ConstraintView",
-          "doc": "Common metadata interface for rows fetched from constraint collections.\n\nThe set of concrete constraint families is open. Inspect a concrete ID or\nrow type before using family-specific mathematical operations, and reject\nunsupported families rather than dropping their constraints. This interface\ndoes not imply whether the row is attached or an owned result snapshot.",
+          "doc": "Common metadata interface for rows fetched from constraint collections.\n\nThe set of concrete constraint families is open. Inspect a concrete ID or\nrow type before using family-specific mathematical operations, and reject\nunsupported families rather than dropping their constraints. This interface\ndoes not imply whether the row is attached or an owned result snapshot.\nSee {class}`~ommx.ConstraintCollection` for the ownership and iteration\ncontracts and {class}`~ommx.ConstraintIDBase` for explicit family dispatch.",
           "bases": [],
           "methods": [],
           "attributes": [
@@ -7866,7 +7866,7 @@
         {
           "kind": "Class",
           "name": "EvaluatedConstraintCollection",
-          "doc": "Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.",
+          "doc": "Live mapping of a Solution's constraint results, including retained removed rows.\n\nObtained from {attr}`~ommx.Solution.constraints`. The collection keeps its\nSolution alive and fetches each row on access. Each row is an independent\nsnapshot containing labels, provenance, removal reasons, and evaluation\ndiagnostics. Editing a fetched snapshot does not update the Solution. Use an\nowner method such as {meth}`~ommx.Solution.set_dual_variable` to update the result;\nsubsequent collection access observes that update.\n\n>>> from ommx import Instance\n>>> model = Instance.minimize()\n>>> x = model.new_binary(\"x\")\n>>> upper = model.add_constraint(x <= 1, \"upper\")\n>>> lower = model.add_constraint(x >= 0, \"lower\")\n>>> model.relax_constraint(lower.constraint_id, \"inspect later\")\n>>> solution = model.evaluate({x.id: 0})\n>>> rows = solution.constraints\n>>> assert lower.constraint_id in rows\n>>> assert rows[lower.constraint_id].removed_reason == \"inspect later\"\n>>> snapshot = rows[upper.constraint_id]\n>>> solution.set_dual_variable(upper.constraint_id, 3.0)\n>>> assert snapshot.dual_variable is None\n>>> assert rows[upper.constraint_id].dual_variable == 3.0\n>>> snapshot.dual_variable = 8.0\n>>> assert rows[upper.constraint_id].dual_variable == 3.0\n\n**Result types**\n\nThe currently supported families have the following concrete result types.\nThe set of possible families is open; use {class}`~ommx.ConstraintIDBase` and\n{class}`~ommx.ConstraintView` for common interfaces, and explicitly reject\nunsupported families when interpreting their mathematical meaning.\n\n| ``kind`` | Typed ID | Solution row | SampleSet row |\n| --- | --- | --- | --- |\n| ``\"regular\"`` | {class}`~ommx.ConstraintID` | {class}`~ommx.EvaluatedConstraint` | {class}`~ommx.SampledConstraint` |\n| ``\"indicator\"`` | {class}`~ommx.IndicatorConstraintID` | {class}`~ommx.EvaluatedIndicatorConstraint` | {class}`~ommx.SampledIndicatorConstraint` |\n| ``\"one_hot\"`` | {class}`~ommx.OneHotConstraintID` | {class}`~ommx.EvaluatedOneHotConstraint` | {class}`~ommx.SampledOneHotConstraint` |\n| ``\"sos1\"`` | {class}`~ommx.Sos1ConstraintID` | {class}`~ommx.EvaluatedSos1Constraint` | {class}`~ommx.SampledSos1Constraint` |\n\nFor the mixed-family typed-key contract, ``get``, live views, iteration timing,\nand snapshot equality, see {class}`~ommx.ConstraintCollection`. Filter without\ncollecting rows using ``of_kind`` and {class}`~ommx.ConstraintFamilyView`.\n{meth}`~ommx.Solution.constraints_df` collects one family as a DataFrame;\nretained removed constraints remain included. Its ``kind`` argument is required,\nas it is for ``constraint_context_df``, ``constraint_parameters_df``,\n``constraint_provenance_df``, and ``constraint_removed_reasons_df`` on all owners.\n\nFor multiple candidates, {class}`~ommx.SampledConstraintCollection` returns\nsampled rows. Their ``violations`` and ``feasible(atol=...)`` are keyed by sample\nID. Per-sample objective and overall feasibility belong to\n{attr}`~ommx.SampleSet.summary`, rather than the per-constraint rows.",
           "bases": [
             {
               "display": "Mapping[ConstraintIDBase, ConstraintView]",
@@ -12153,7 +12153,7 @@
         {
           "kind": "Class",
           "name": "IndicatorConstraintID",
-          "doc": "An indicator constraint ID. Unequal to integers and IDs of other constraint families.",
+          "doc": "An indicator constraint ID. Unequal to integers and IDs of other constraint families.\n\nSee {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts.",
           "bases": [
             {
               "display": "ConstraintIDBase",
@@ -12367,7 +12367,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create an ID in this constraint family's namespace.\n\nThe value must be an unsigned 64-bit integer. An ID of another\nfamily is not accepted. IDs have no integer conversion protocol.",
+              "doc": "Create a typed ID identifying this constraint family and number.\n\nThe value must be an unsigned 64-bit integer. An ID of another\nfamily is not accepted. IDs have no integer conversion protocol.",
               "signatures": [
                 {
                   "parameters": [
@@ -13941,7 +13941,7 @@
             },
             {
               "name": "evaluate",
-              "doc": "Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.\n\n# Postconditions\n\nEvaluation first applies the canonicalization, population, and consistency\nassertion rules documented by {meth}`~ommx.Instance.populate_state`, then\napplies preserved output objective semantics to the populated state.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> fixed = instance.partial_evaluate({0: 1})\n>>> solution = fixed.evaluate({})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)\n\n# Errors\n\nEvaluation raises ``ValueError`` when an active required ID is missing.\n\n>>> required = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize\n... )\n>>> try:\n...     required.evaluate({})\n... except ValueError as error:\n...     assert \"missing required variable IDs\" in str(error)\n... else:\n...     raise AssertionError(\"evaluation accepted a missing active ID\")",
+              "doc": "Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.\n\nAccepts a State, an ID-to-value mapping, or an iterable of ID/value pairs.\nThis checks one candidate against this problem's variable domains and\nconstraints and computes its output objective; it does not search for a\nbetter candidate or prove optimality. An infeasible candidate can still\nhave an objective value. See {class}`~ommx.Solution` for a complete\nexample and how to interpret the results.\n\nEvaluate a solver's returned candidate with the transformed Instance\nused for that solve. Its recorded dependencies, removed constraints,\nand output objective are needed to reconstruct and interpret the result.\n\n# Postconditions\n\nEvaluation first applies the canonicalization, population, and consistency\nassertion rules documented by {meth}`~ommx.Instance.populate_state`, then\napplies preserved output objective semantics to the populated state.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> fixed = instance.partial_evaluate({0: 1})\n>>> solution = fixed.evaluate({})\n>>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)\n\n# Errors\n\nEvaluation raises ``ValueError`` when an active required ID is missing.\n\n>>> required = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={}, sense=Sense.Minimize\n... )\n>>> try:\n...     required.evaluate({})\n... except ValueError as error:\n...     assert \"missing required variable IDs\" in str(error)\n... else:\n...     raise AssertionError(\"evaluation accepted a missing active ID\")",
               "signatures": [
                 {
                   "parameters": [
@@ -13990,7 +13990,7 @@
             },
             {
               "name": "evaluate_samples",
-              "doc": "Evaluate samples into a sample set.\n\n# Postconditions\n\nEvery sample uses the canonicalization, population, and consistency assertion\nrules documented by {meth}`~ommx.Instance.populate_state` before applying\npreserved output objective semantics. SampleID membership is preserved.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> fixed = instance.partial_evaluate({0: 1})\n>>> sample_set = fixed.evaluate_samples({7: {}})\n>>> assert sample_set.sense == Sense.Maximize\n>>> assert sample_set.objectives[7] == 3.0\n>>> assert sample_set.get(7).state.entries == {0: 1.0}",
+              "doc": "Evaluate multiple candidates into a {class}`~ommx.SampleSet`.\n\nAccepts {class}`~ommx.Samples`, a mapping from sample IDs to states, or\na sequence of states with automatically assigned sample IDs. Each state\nmaps decision-variable IDs to values. This evaluates supplied candidates;\nit does not generate them or establish global optimality. See\n{class}`~ommx.SampleSet` for a complete example, summary tables, and\nselection of the best feasible candidate obtained.\n\nUse the transformed Instance associated with the returned candidates,\nas for {meth}`~ommx.Instance.evaluate` on a single candidate.\n\n# Postconditions\n\nEvery sample uses the canonicalization, population, and consistency assertion\nrules documented by {meth}`~ommx.Instance.populate_state` before applying\npreserved output objective semantics. SampleID membership is preserved.\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = DecisionVariable.binary(0)\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize\n... )\n>>> assert instance.convert_active_objective(Sense.Minimize)\n>>> fixed = instance.partial_evaluate({0: 1})\n>>> sample_set = fixed.evaluate_samples({7: {}})\n>>> assert sample_set.sense == Sense.Maximize\n>>> assert sample_set.objectives[7] == 3.0\n>>> assert sample_set.get(7).state.entries == {0: 1.0}",
               "signatures": [
                 {
                   "parameters": [
@@ -20725,7 +20725,7 @@
         {
           "kind": "Class",
           "name": "OneHotConstraintID",
-          "doc": "A one-hot constraint ID. Unequal to integers and IDs of other constraint families.",
+          "doc": "A one-hot constraint ID. Unequal to integers and IDs of other constraint families.\n\nSee {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts.",
           "bases": [
             {
               "display": "ConstraintIDBase",
@@ -20939,7 +20939,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create an ID in this constraint family's namespace.\n\nThe value must be an unsigned 64-bit integer. An ID of another\nfamily is not accepted. IDs have no integer conversion protocol.",
+              "doc": "Create a typed ID identifying this constraint family and number.\n\nThe value must be an unsigned 64-bit integer. An ID of another\nfamily is not accepted. IDs have no integer conversion protocol.",
               "signatures": [
                 {
                   "parameters": [
@@ -21097,7 +21097,7 @@
         {
           "kind": "Class",
           "name": "Parameter",
-          "doc": "Parameter in an optimization problem.\n\nParameters are values that are fixed during optimization but may vary between different\nruns or scenarios. They share the same ID space with decision variables.\n\nNote that this object overloads `==` for creating a constraint, not for equality comparison.\n\n# Examples\n\n>>> p = Parameter(1, name=\"penalty\")\n>>> x = DecisionVariable.integer(2)\n>>> x + p  # Returns Linear expression\nLinear(...)",
+          "doc": "A symbolic numerical input to a fixed-structure optimization problem.\n\nThe caller supplies a value when materializing a\n{class}`~ommx.ParametricInstance`; the solver does not choose it. Parameters\ncan represent coefficients or constants in objectives and constraints.\nTheir IDs share the decision-variable ID space and must be distinct from\nall decision-variable IDs and other parameter IDs in the same family.\nChanging a parameter value does not create or remove model components.\n\n``name``, ``subscripts``, ``parameters``, and ``description`` are modeling\nlabels. In particular, the string-valued ``parameters`` metadata is separate\nfrom the numerical assignment passed to\n{meth}`~ommx.ParametricInstance.with_parameters`.\n\nArithmetic operators build expressions just as for decision variables.\nThe comparisons ``==``, ``<=``, and ``>=`` construct constraints; ``==``\ndoes not compare two Parameter objects for equality. Compare their IDs\nwhen checking identity.\n\n# Examples\n\n>>> from ommx import DecisionVariable, Linear, Parameter\n>>> p = Parameter(1, name=\"offset\")\n>>> x = DecisionVariable.integer(2)\n>>> expression = x + p\n>>> assert isinstance(expression, Linear)\n>>> assert expression.evaluate({x.id: 2, p.id: 3}) == 5.0\n\nSee {meth}`~ommx.ParametricInstance.from_components` for a complete model\nusing parameterized profits, weights, and capacity, then\n{meth}`~ommx.ParametricInstance.with_parameters` to create an Instance.",
           "bases": [],
           "methods": [
             {
@@ -22038,7 +22038,7 @@
         {
           "kind": "Class",
           "name": "ParametricInstance",
-          "doc": "",
+          "doc": "A family of optimization problems with fixed variables and constraints.\n\nA ParametricInstance leaves some coefficients or constants symbolic as\n{class}`~ommx.Parameter` objects. The model's caller supplies their values\nwith {meth}`~ommx.ParametricInstance.with_parameters` to obtain an ordinary\n{class}`~ommx.Instance` for evaluation, preparation, or a solver adapter.\nParameters are inputs chosen before solving; they are not decision variables\nfor the solver to optimize.\n\n**Reuse a problem under different numerical conditions**\n\nHere the two items and their scores stay fixed, while the allowed number\nof selected items changes. The original family remains available after\neach call to ``with_parameters``.\n\n>>> from ommx import ConstraintID, DecisionVariable, Parameter, ParametricInstance, Sense\n>>> xs = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(2)]\n>>> capacity = Parameter(2, name=\"capacity\", description=\"Maximum selected items\")\n>>> family = ParametricInstance.from_components(\n...     decision_variables=xs, parameters=[capacity],\n...     objective=3 * xs[0] + 2 * xs[1],\n...     constraints={0: xs[0] + xs[1] <= capacity}, sense=Sense.Maximize,\n... )\n>>> one_item = family.with_parameters({capacity.id: 1})\n>>> two_items = family.with_parameters({capacity.id: 2})\n>>> candidate = {xs[0].id: 1, xs[1].id: 1}\n>>> assert not one_item.evaluate(candidate).feasible\n>>> assert two_items.evaluate(candidate).feasible\n>>> assert two_items.evaluate(candidate).objective == 5.0\n>>> assert {v.id for v in one_item.decision_variables} == {v.id for v in two_items.decision_variables}\n>>> assert set(one_item.constraints) == set(two_items.constraints) == {ConstraintID(0)}\n>>> assert family.parameter_ids == {capacity.id}\n\nMaterialization preserves decision-variable and constraint IDs. Those IDs\nlet callers associate results with the same items and conditions across\ninstances; they do not imply identical feasibility or optimal solutions.\nParameters can also appear as objective and constraint coefficients, as in\nthe weighted knapsack example in {meth}`~ommx.ParametricInstance.from_components`.\n\n**Parameter identities and modeling labels**\n\nParameters and decision variables use one ID space and must not overlap.\nHere the decision variables have IDs 0 and 1, and the parameter has ID 2.\nBoth can appear in arithmetic expressions, but only decision variables\nreceive candidate values after materialization. Parameter names, subscripts,\nstring-valued metadata, and descriptions describe model inputs; the IDs\nidentify the numerical values passed to ``with_parameters``.\n\n{attr}`~ommx.ParametricInstance.parameters` and\n{attr}`~ommx.ParametricInstance.parameter_ids` list declared parameters.\n{meth}`~ommx.ParametricInstance.parameters_df` collects their definitions\nand labels into a DataFrame, not a table of supplied numerical values.\n\n>>> table = family.parameters_df()\n>>> assert table.loc[capacity.id, \"name\"] == \"capacity\"\n>>> assert table.loc[capacity.id, \"description\"] == \"Maximum selected items\"\n\n{meth}`~ommx.ParametricInstance.decision_variables_df` and\n{meth}`~ommx.ParametricInstance.constraints_df` provide the corresponding\nmodel tables; the latter requires an explicit ``kind``. For required IDs,\nextra keys, and numerical substitution rules, read\n{meth}`~ommx.ParametricInstance.with_parameters`.\n\n**When to rebuild the model**\n\nParameter values do not generate variable or constraint definitions. If an\ninput changes the number of items or the model's structure, build new\ncomponents in Python or use a modeler that generates that structure. This\ndiffers from changing numerical coefficients within an existing family.\nNo Experiment is needed to construct or materialize a ParametricInstance.\nUse {class}`~ommx.experiment.Experiment` separately when recording the\nconditions and results of multiple trials is useful.",
           "bases": [],
           "methods": [
             {
@@ -22879,7 +22879,7 @@
             },
             {
               "name": "from_components",
-              "doc": "Build a parametric instance from its model components.\n\nConstraint mappings accept integer keys or IDs of the matching family.\nIntegers are promoted to that family's ID. IDs of another family raise\n{class}`TypeError`; keys that become duplicates raise {class}`ValueError`.\nReturned collections always use typed IDs.\n\nRaises {class}`ValueError` if a decision variable and parameter use the\nsame ID.",
+              "doc": "Build a parametric instance from its model components.\n\nConstraint mappings accept integer keys or IDs of the matching family.\nIntegers are promoted to that family's ID. IDs of another family raise\n{class}`TypeError`; keys that become duplicates raise {class}`ValueError`.\nReturned collections always use typed IDs.\n\nRaises {class}`ValueError` if a decision variable and parameter use the\nsame ID.\n\n**Parameterize objective coefficients, weights, and a capacity**\n\nThis two-item knapsack family fixes the item count and uses parameters\nfor both coefficients and the right-hand-side constant. Parameter IDs\nare separate from the decision-variable IDs in the shared ID space.\n\n>>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense\n>>> n = 2\n>>> xs = [DecisionVariable.binary(i, name=\"x\", subscripts=[i]) for i in range(n)]\n>>> profits = [Parameter(n + i, name=\"profit\", subscripts=[i]) for i in range(n)]\n>>> weights = [Parameter(2 * n + i, name=\"weight\", subscripts=[i]) for i in range(n)]\n>>> capacity = Parameter(3 * n, name=\"capacity\")\n>>> family = ParametricInstance.from_components(\n...     decision_variables=xs, parameters=profits + weights + [capacity],\n...     objective=sum(p * x for p, x in zip(profits, xs)),\n...     constraints={0: sum(w * x for w, x in zip(weights, xs)) <= capacity},\n...     sense=Sense.Maximize,\n... )\n>>> values = {p.id: value for p, value in zip(profits, [3, 2])}\n>>> values.update({w.id: value for w, value in zip(weights, [2, 1])})\n>>> values[capacity.id] = 2\n>>> instance = family.with_parameters(values)\n>>> solution = instance.evaluate({xs[0].id: 1, xs[1].id: 0})\n>>> assert solution.feasible and solution.objective == 3.0\n>>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible",
               "signatures": [
                 {
                   "parameters": [
@@ -23583,7 +23583,7 @@
             },
             {
               "name": "parameters_df",
-              "doc": "DataFrame of parameters",
+              "doc": "Collect declared parameter definitions and modeling labels into a DataFrame.\n\nThe index is the parameter ID, named ``id``. By default, the table\nincludes ``name``, ``subscripts``, ``description``, and flattened\n``parameters.<key>`` metadata columns. ``include=[]`` omits optional\ncolumns; ``include=[\"label\"]`` selects the modeling labels and\n``include=[\"parameters\"]`` selects the string-valued metadata.\n\nThese labels are not the numerical assignments supplied to\n{meth}`~ommx.ParametricInstance.with_parameters`. Editing the DataFrame\ndoes not change this ParametricInstance. See the class example for\nselecting a parameter's name and description by ID.",
               "signatures": [
                 {
                   "parameters": [
@@ -24077,7 +24077,7 @@
             },
             {
               "name": "parameter_ids",
-              "doc": "",
+              "doc": "IDs of all declared parameters, including those unused in expressions.\n\n{meth}`~ommx.ParametricInstance.with_parameters` requires a value for\nevery ID in this set. The set is independent of the owner.",
               "type_": {
                 "display": "set[int]",
                 "link_target": null,
@@ -24094,7 +24094,7 @@
             },
             {
               "name": "parameters",
-              "doc": "",
+              "doc": "Declared parameters and their modeling labels, sorted by ID.\n\nThese are independent definitions, not assigned numerical values.\nSupply values through {meth}`~ommx.ParametricInstance.with_parameters`.",
               "type_": {
                 "display": "list[Parameter]",
                 "link_target": null,
@@ -27447,7 +27447,7 @@
         {
           "kind": "Class",
           "name": "RemovedConstraintCollection",
-          "doc": "Live, read-only mapping of all removed constraint families. Each access returns a snapshot.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.",
+          "doc": "Live mapping of all retained removed constraint families in a model.\n\nObtained from {attr}`~ommx.Instance.removed_constraints` or\n{attr}`~ommx.ParametricInstance.removed_constraints`. Each access returns an\nindependent snapshot, including labels, provenance, and removal reasons.\nChanging that snapshot does not update its owner; a later lookup reads the\nowner's current state.\n\nThe collection keeps its owner alive. The typed-key, ``get``, live-view,\niteration, and snapshot equality rules are documented in\n{class}`~ommx.ConstraintCollection`. Use ``of_kind`` and\n{class}`~ommx.ConstraintFamilyView` to inspect one family. A model's\n``constraints_df(kind=..., removed=True)`` includes both active and removed rows.",
           "bases": [
             {
               "display": "Mapping[ConstraintIDBase, ConstraintView]",
@@ -29029,7 +29029,7 @@
         {
           "kind": "Class",
           "name": "SampleSet",
-          "doc": "The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).\n\n- Similar to `Solution` rather than the raw `State` message.\n  This class contains the sampled values of decision variables with the objective value, constraint violations,\n  feasibility, and modeling labels/context of constraints and decision variables.\n- This class is usually created via `Instance.evaluate_samples`.\n\n# Examples\n\nLet's consider a simple optimization problem:\n\nmaximize x_1 + 2 x_2 + 3 x_3\nsubject to x_1 + x_2 + x_3 = 1\nx_1, x_2, x_3 in {0, 1}\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + 2*x[1] + 3*x[2],\n...     constraints={0: sum(x) == 1},\n...     sense=Sense.Maximize,\n... )\n\nwith three samples:\n\n>>> samples = {\n...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0\n...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0\n...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)\n... } # ^ sample ID\n\nNote that this will be done by sampling-based solvers, but we do it manually here.\nWe can evaluate the samples via `Instance.evaluate_samples`:\n\n>>> sample_set = instance.evaluate_samples(samples)\n>>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE\n           objective  feasible\nsample_id\n1                3.0      True\n0                1.0      True\n2                3.0     False\n\nThe `summary` attribute shows the objective value, feasibility of each sample.\nNote that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.\nYou can get each sample by `get` as a `Solution` format:\n\n>>> solution = sample_set.get(sample_id=0)\n>>> solution.objective\n1.0\n\n`best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:\n\n>>> solution = sample_set.best_feasible\n>>> solution.objective\n3.0\n\nOf course, the sample of smallest objective value is returned for minimization problems.",
+          "doc": "Multiple candidates evaluated against the same optimization problem.\n\n{class}`~ommx.Samples` contains candidate assignments identified by sample\nIDs; a SampleSet adds their objective values, feasibility, evaluated variables\nand constraints, and modeling labels. Samples corresponds to\n{class}`~ommx.State`, while SampleSet corresponds to {class}`~ommx.Solution`.\nCandidates may come from a sampler or be supplied manually.\n\nUse {meth}`~ommx.Instance.evaluate_samples` with Samples, a dictionary of\nsample IDs to assignments, or an iterable of assignments. Explicit IDs are\npreserved; iterables receive IDs from 0. See {class}`~ommx.Samples` for\nconstruction and repeated-assignment semantics.\n\n**Evaluate several candidates**\n\nLet's consider a simple optimization problem:\n\nmaximize x_1 + 2 x_2 + 3 x_3\nsubject to x_1 + x_2 + x_3 = 1\nx_1, x_2, x_3 in {0, 1}\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=x[0] + 2*x[1] + 3*x[2],\n...     constraints={0: sum(x) == 1},\n...     sense=Sense.Maximize,\n... )\n\nwith three samples:\n\n>>> samples = {\n...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0\n...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0\n...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)\n... } # ^ sample ID\n\nEvaluate all candidates using the same Instance:\n\n>>> sample_set = instance.evaluate_samples(samples)\n>>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE\n           objective  feasible\nsample_id\n1                3.0      True\n0                1.0      True\n2                3.0     False\n\n{attr}`~ommx.SampleSet.summary` shows each sample's objective and feasibility.\nFeasible candidates appear first, ordered by the objective according to\n{attr}`~ommx.SampleSet.sense`. Feasibility checks variable kinds and bounds\nand all retained constraints, including removed constraints.\nRetrieve an individual sample as a Solution using its ID:\n\n>>> solution = sample_set.get(sample_id=0)\n>>> solution.objective\n1.0\n\n{attr}`~ommx.SampleSet.best_feasible` selects the largest objective value\namong feasible samples for this maximization problem:\n\n>>> solution = sample_set.best_feasible\n>>> solution.objective\n3.0\n\nMinimization selects the smallest objective instead. This is the best among\nthe supplied candidates, not a proof of global optimality. Selection raises\nValueError when no candidate is feasible, including for an empty SampleSet.\n\n**Inspect a candidate's values and diagnostics**\n\nThe Solution returned by {meth}`~ommx.SampleSet.get` retains variable labels,\nevaluated constraints, named metrics, and the evaluation tolerance. Use its\nextraction methods or query {meth}`~ommx.SampleSet.extract_decision_variables`,\n{meth}`~ommx.SampleSet.extract_constraints`, and\n{meth}`~ommx.SampleSet.extract_named_functions` with a sample ID directly.\n{class}`~ommx.NamedFunction` records additional metrics without changing the\nobjective or adding feasibility conditions.\n\n{attr}`~ommx.SampleSet.constraints` exposes per-constraint results across\nsamples through {class}`~ommx.SampledConstraintCollection`.\n{meth}`~ommx.SampleSet.constraints_df` selects one family for a table;\n{attr}`~ommx.SampleSet.summary` is the per-sample overview.\n\n**Evaluate transformed problems**\n\nEvaluate candidates with the transformed Instance supplied to the sampler.\nIt retains the fixed values and dependencies needed to restore variables,\nremoved constraints to inspect, and any preserved output objective.\nEvaluation reports that output objective and sense, which may differ from\nthe active solver-facing objective.\n\n>>> from ommx import Instance, Optimality, Sense\n>>> original = Instance.maximize()\n>>> x = original.new_binary(\"x\")\n>>> y = original.new_binary(\"y\")\n>>> original.objective = 3 * x + y\n>>> prepared = original.partial_evaluate({x.id: 1})\n>>> assert prepared.convert_active_objective(Sense.Minimize)\n>>> results = prepared.evaluate_samples({7: {y.id: 0}, 9: {y.id: 1}})\n>>> assert results.sense == Sense.Maximize\n>>> assert results.objectives == {7: 3.0, 9: 4.0}\n>>> assert results.get(7).state.entries == {x.id: 1.0, y.id: 0.0}\n>>> assert results.best_feasible_id == 9\n>>> assert results.best_feasible.optimality == Optimality.Unspecified\n\nSuccessful value reconstruction, feasibility, and optimality remain separate\nquestions. {attr}`~ommx.SampleSet.feasible` includes retained removed\nconstraints; {attr}`~ommx.SampleSet.feasible_relaxed` excludes them while\nstill checking all variable domains. See {class}`~ommx.Solution` for output\ninterpretation and {meth}`~ommx.Instance.populate_state` for reconstruction,\ndefaults, and normalization. Choosing the best supplied candidate never\nestablishes optimality of the original or transformed problem.",
           "bases": [],
           "methods": [
             {
@@ -29581,7 +29581,7 @@
             },
             {
               "name": "extract_decision_variables",
-              "doc": "Extract decision variable values for a given name and sample ID.\n\nRaises KeyError if the name or sample ID does not exist, and ValueError\nif the same subscript is found more than once.",
+              "doc": "Extract decision variable values for a given name and sample ID.\n\nReturns a dictionary keyed by subscript tuples. A scalar variable uses\n``()``. This is equivalent to extracting the name from ``get(sample_id)``;\nnames and subscripts identify matches, not parameters or descriptions.\n\nRaises KeyError if the name or sample ID does not exist, and ValueError\nif the same subscript is found more than once.\n\n>>> from ommx import Instance\n>>> instance = Instance.maximize()\n>>> x = instance.new_binary(\"selected\", subscripts=[0])\n>>> instance.objective = x\n>>> results = instance.evaluate_samples({7: {x.id: 1}})\n>>> assert results.extract_decision_variables(\"selected\", 7) == {(0,): 1.0}\n>>> assert results.get(7).extract_decision_variables(\"selected\") == {(0,): 1.0}",
               "signatures": [
                 {
                   "parameters": [
@@ -29616,7 +29616,7 @@
             },
             {
               "name": "extract_named_functions",
-              "doc": "Extract named function values for a given name and sample ID.\n\nRaises KeyError if the name or sample ID does not exist, and ValueError\nif the same subscript is found more than once.",
+              "doc": "Extract named function values for a given name and sample ID.\n\nReturns a dictionary keyed by subscript tuples, with ``()`` for a scalar\nmetric. Named functions report candidate metrics without changing the\nobjective or feasibility conditions. See {meth}`~ommx.Solution.extract_named_functions`\nfor the corresponding single-candidate query.\n\nRaises KeyError if the name or sample ID does not exist, and ValueError\nif the same subscript is found more than once.\n\n>>> from ommx import DecisionVariable, Instance, NamedFunction, Sense\n>>> x = DecisionVariable.binary(0, name=\"selected\")\n>>> cost = NamedFunction(id=10, function=4 * x, name=\"cost\")\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={},\n...     sense=Sense.Maximize, named_functions=[cost],\n... )\n>>> results = instance.evaluate_samples({7: {x.id: 0}, 9: {x.id: 1}})\n>>> assert results.extract_named_functions(\"cost\", 9) == {(): 4.0}\n>>> assert results.get(9).extract_named_functions(\"cost\") == {(): 4.0}",
               "signatures": [
                 {
                   "parameters": [
@@ -29769,7 +29769,7 @@
             },
             {
               "name": "get",
-              "doc": "Return one sample as a Solution.\n\nRaises KeyError if the sample ID does not exist.",
+              "doc": "Return one sample as a Solution.\n\n``sample_id`` is the candidate's ID, not its row position in\n{attr}`~ommx.SampleSet.summary`. The independent result contains evaluated\nvalues, variable and constraint labels, retained removed constraints,\nnamed functions, reported objective and sense, and the stored tolerance.\nChanging the extracted Solution does not update the SampleSet.\nRaises KeyError if the sample ID does not exist.\n\n>>> from ommx import Instance, Solution\n>>> instance = Instance.maximize()\n>>> x = instance.new_binary(\"selected\", subscripts=[0])\n>>> instance.objective = x\n>>> results = instance.evaluate_samples({10: {x.id: 0}, 20: {x.id: 1}})\n>>> assert list(results.summary.index) == [20, 10]\n>>> solution = results.get(sample_id=10)\n>>> assert isinstance(solution, Solution)\n>>> assert solution.objective == 0.0\n>>> assert solution.extract_decision_variables(\"selected\") == {(0,): 0.0}",
               "signatures": [
                 {
                   "parameters": [
@@ -29992,7 +29992,7 @@
             },
             {
               "name": "num_samples",
-              "doc": "",
+              "doc": "Number of candidate IDs, including repeated assignments with different IDs.",
               "signatures": [
                 {
                   "parameters": [],
@@ -30045,7 +30045,7 @@
             },
             {
               "name": "sample_ids",
-              "doc": "",
+              "doc": "All candidate IDs as an independent set of integers.",
               "signatures": [
                 {
                   "parameters": [],
@@ -30155,7 +30155,7 @@
             },
             {
               "name": "best_feasible",
-              "doc": "Raises ValueError if there is no feasible sample.",
+              "doc": "The best feasible candidate as an independent Solution.\n\nSelects only candidates satisfying {attr}`~ommx.SampleSet.feasible`,\nincluding variable domains and retained removed constraints. Minimization\nselects the smallest reported objective; maximization selects the largest.\nSelection does not prove global optimality or change the extracted\nSolution's optimality status.\n\nRaises ValueError if there is no feasible candidate, including when the\nSampleSet is empty. There is no universal ordering of infeasible candidates:\nchoose your own criteria from the constraint and variable diagnostics.\nThe objective ordering in ``summary`` is not such a feasibility criterion.\n\n>>> from ommx import Instance\n>>> instance = Instance.maximize()\n>>> x = instance.new_binary(\"x\")\n>>> instance.objective = x\n>>> _ = instance.add_constraint(x == 1, \"required\")\n>>> results = instance.evaluate_samples({10: {x.id: 0}, 20: {x.id: 1}})\n>>> assert results.best_feasible_id == 20\n>>> assert results.best_feasible.state.entries == {x.id: 1.0}\n>>> infeasible = instance.evaluate_samples([{x.id: 0}])\n>>> infeasible.best_feasible\nTraceback (most recent call last):\n...\nValueError: No feasible solution found",
               "type_": {
                 "display": "Solution",
                 "link_target": null,
@@ -30166,7 +30166,7 @@
             },
             {
               "name": "best_feasible_id",
-              "doc": "Raises ValueError if there is no feasible sample.",
+              "doc": "ID of the best feasible candidate, using the same selection as\n{attr}`~ommx.SampleSet.best_feasible`.\n\nRaises ValueError if there is no feasible sample, including when empty.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -30177,7 +30177,7 @@
             },
             {
               "name": "best_feasible_relaxed",
-              "doc": "Raises ValueError if there is no feasible sample in the relaxed problem.",
+              "doc": "The best candidate satisfying relaxed feasibility as an independent Solution.\n\nUses {attr}`~ommx.SampleSet.feasible_relaxed`: removed constraints are\nexcluded, while all variable kinds and bounds still apply. The selected\ncandidate can therefore fail {attr}`~ommx.Solution.feasible`.\nComparison still uses the reported objective and sense; it does not switch\nto an active solver-facing objective. Raises ValueError if there is no\nqualifying candidate, including when empty.",
               "type_": {
                 "display": "Solution",
                 "link_target": null,
@@ -30188,7 +30188,7 @@
             },
             {
               "name": "best_feasible_relaxed_id",
-              "doc": "Raises ValueError if there is no feasible sample in the relaxed problem.",
+              "doc": "ID of the best candidate satisfying {attr}`~ommx.SampleSet.feasible_relaxed`.\n\nUses the reported objective and {attr}`~ommx.SampleSet.sense`, like\n{attr}`~ommx.SampleSet.best_feasible_relaxed`.\nRaises ValueError if there is no such candidate, including when empty.",
               "type_": {
                 "display": "int",
                 "link_target": null,
@@ -30199,7 +30199,7 @@
             },
             {
               "name": "best_feasible_unrelaxed",
-              "doc": "Raises ValueError if there is no feasible sample.",
+              "doc": "Alias for {attr}`~ommx.SampleSet.best_feasible`, including removed constraints.\nRaises ValueError if there is no feasible sample.",
               "type_": {
                 "display": "Solution",
                 "link_target": null,
@@ -30304,7 +30304,7 @@
             },
             {
               "name": "feasible",
-              "doc": "Get feasibility status for all samples, including variable bounds and kinds.\n\nEach value matches the feasibility of the corresponding extracted Solution.",
+              "doc": "Get feasibility status for all samples, including variable bounds and kinds.\n\nIncludes all retained regular and special constraints, even removed ones.\nEach value matches {attr}`~ommx.Solution.feasible` on the corresponding\nextracted Solution and uses {attr}`~ommx.SampleSet.feasibility_atol`.",
               "type_": {
                 "display": "dict[int, bool]",
                 "link_target": null,
@@ -30348,7 +30348,7 @@
             },
             {
               "name": "feasible_unrelaxed",
-              "doc": "Get unrelaxed feasibility status for all samples",
+              "doc": "Alias for {attr}`~ommx.SampleSet.feasible`, keyed by sample ID.",
               "type_": {
                 "display": "dict[int, bool]",
                 "link_target": null,
@@ -30436,7 +30436,7 @@
             },
             {
               "name": "objectives",
-              "doc": "Get objectives for all samples",
+              "doc": "Reported objective values keyed by sample ID.\n\nEvaluation uses the Instance's preserved output objective when present,\notherwise its active objective. An infeasible candidate can still have\nan objective value; read this together with {attr}`~ommx.SampleSet.feasible`.",
               "type_": {
                 "display": "dict[int, float]",
                 "link_target": null,
@@ -30507,7 +30507,7 @@
             },
             {
               "name": "sense",
-              "doc": "Get the optimization sense (minimize or maximize)",
+              "doc": "The sense associated with the reported objective values.\n\nThis is the preserved output sense when recorded by the evaluated\nInstance, otherwise its active sense. ``summary`` and the ``best_feasible``\nselectors use it even if a transformation changed the solver-facing sense.",
               "type_": {
                 "display": "Sense",
                 "link_target": null,
@@ -30566,7 +30566,7 @@
             },
             {
               "name": "summary",
-              "doc": "Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.\nIndex is sample_id.",
+              "doc": "A materialized overview with one row per sample ID.\n\nThe index is ``sample_id`` and the columns are ``objective`` and\n``feasible``. Feasibility matches {attr}`~ommx.SampleSet.feasible`, including\nvariable kinds and bounds and all retained constraints, even removed ones.\nFeasible candidates appear first; within each feasibility group, objective\nvalues are ascending for minimization and descending for maximization,\naccording to {attr}`~ommx.SampleSet.sense`.\n\nThe index keeps the candidate's ID rather than its displayed row position;\nuse that ID with {meth}`~ommx.SampleSet.get`. Identical assignments under\ndifferent IDs remain separate rows. Editing the DataFrame does not update\nthe SampleSet. See the {class}`~ommx.SampleSet` example for the table layout.",
               "type_": {
                 "display": "DataFrame",
                 "link_target": null,
@@ -30867,7 +30867,7 @@
         {
           "kind": "Class",
           "name": "SampledConstraintCollection",
-          "doc": "Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.",
+          "doc": "Live mapping of a SampleSet's constraint results, including retained removed rows.\n\nObtained from {attr}`~ommx.SampleSet.constraints`. Each access returns an\nindependent snapshot with labels, provenance, removal reasons, and sampled\nevaluation diagnostics. Changing that snapshot does not update the SampleSet;\na later lookup reads the owner's current state. The collection keeps its owner\nalive.\n\nThe typed-key, ``get``, live-view, iteration, and snapshot equality rules are\ndocumented in {class}`~ommx.ConstraintCollection`. See\n{class}`~ommx.EvaluatedConstraintCollection` for the current ID and result-type\ntable, and {class}`~ommx.ConstraintFamilyView` for ``of_kind`` filtering.\nSampled rows expose ``violations`` and ``feasible(atol=...)`` keyed by sample ID.\nUse {attr}`~ommx.SampleSet.summary` for per-sample objectives and overall\nfeasibility, or {meth}`~ommx.SampleSet.constraints_df` with an explicit ``kind``\nfor a table of one constraint family, including retained removed rows.",
           "bases": [
             {
               "display": "Mapping[ConstraintIDBase, ConstraintView]",
@@ -33035,7 +33035,7 @@
         {
           "kind": "Class",
           "name": "Samples",
-          "doc": "Collection of State samples",
+          "doc": "Multiple candidate assignments, each identified by a sample ID.\n\nEach candidate is a {class}`~ommx.State`: a mapping from variable IDs to values.\nSample IDs identify candidates, independently of the variable IDs within each\ncandidate. Samples does not evaluate an objective or establish feasibility.\nPass it to {meth}`~ommx.Instance.evaluate_samples` to obtain a\n{class}`~ommx.SampleSet`, just as evaluating one State produces a\n{class}`~ommx.Solution`.\n\n**Choose sample IDs or assign them automatically**\n\nA dictionary from sample IDs to States or variable-value dictionaries preserves\nthe supplied IDs. Use these IDs to associate results with a sampler's records.\nAn iterable of States or variable-value dictionaries assigns IDs from 0 in\niteration order.\n\n>>> from ommx import Samples, State\n>>> explicit = Samples({10: {0: 1, 1: 0}, 20: State({0: 0, 1: 1})})\n>>> assert explicit.sample_ids() == {10, 20}\n>>> assert explicit.get_state(20).entries == {0: 0.0, 1: 1.0}\n>>> automatic = Samples([{0: 1, 1: 0}, {0: 0, 1: 1}])\n>>> assert automatic.sample_ids() == {0, 1}\n\nIdentical assignments may occur under different IDs. {meth}`~ommx.Samples.num_samples`\ncounts sample IDs, not distinct assignments; the IDs remain available after\nevaluation.\n\n>>> repeated = Samples([{0: 1}, {0: 1}])\n>>> assert repeated.num_samples() == 2\n>>> assert repeated.sample_ids() == {0, 1}\n>>> assert repeated.get_state(0).entries == repeated.get_state(1).entries\n\n**Accepted inputs**\n\nThe constructor also accepts an existing Samples object, one State, or a\nnonempty variable-value dictionary. A single assignment receives sample ID 0.\nAn empty dictionary or empty iterable creates no samples; use ``[{}]`` or\n``State({})`` to represent one empty assignment.\n\n>>> single = Samples({5: 1.0})\n>>> assert single.sample_ids() == {0}\n>>> assert single.get_state(0).entries == {5: 1.0}\n>>> assert Samples({}).num_samples() == 0\n>>> assert Samples([{}]).num_samples() == 1\n>>> assert Samples(State({})).num_samples() == 1\n\n{meth}`~ommx.Instance.evaluate_samples` accepts these inputs directly, so an\nexplicit Samples construction is optional. {meth}`~ommx.Samples.append` adds\nan assignment under one or more new IDs and rejects duplicate IDs without\nchanging the collection.",
           "bases": [],
           "methods": [
             {
@@ -33153,7 +33153,7 @@
             },
             {
               "name": "get_state",
-              "doc": "Get the state for a specific sample ID",
+              "doc": "Return an independent State for one sample ID.\n\nRaises KeyError if the sample ID is not present. This returns raw candidate\nvalues, not a feasibility assessment; use {meth}`~ommx.Instance.evaluate_samples`\nto obtain evaluated results.",
               "signatures": [
                 {
                   "parameters": [
@@ -33184,7 +33184,7 @@
             },
             {
               "name": "num_samples",
-              "doc": "Get the number of samples",
+              "doc": "Number of sample IDs, including separate IDs with identical assignments.",
               "signatures": [
                 {
                   "parameters": [],
@@ -33200,7 +33200,7 @@
             },
             {
               "name": "sample_ids",
-              "doc": "Get all sample IDs",
+              "doc": "All sample IDs as an independent set of integers.",
               "signatures": [
                 {
                   "parameters": [],
@@ -33263,7 +33263,7 @@
         {
           "kind": "Class",
           "name": "Solution",
-          "doc": "Python SDK domain type for evaluated optimization results.\n\nThis class contains annotations persisted in protobuf payloads and mirrored\nto OMMX Artifact descriptors.",
+          "doc": "A candidate evaluated against a particular optimization problem.\n\nA {class}`~ommx.State` maps variable IDs to values; it does not say whether\nthose values satisfy a problem. A Solution adds the objective value,\nfeasibility results, evaluated variables and constraints, and their modeling\nlabels. Use {meth}`~ommx.Instance.evaluate` with a State or an ID-to-value\ndictionary to obtain one, whether the candidate came from a solver or was\nsupplied manually.\n\n**Evaluate a candidate**\n\nThis problem maximizes ``x + y`` while forbidding both binary variables\nfrom being 1. Evaluation checks one assignment; it does not search for a\nbetter assignment or prove optimality.\n\n>>> from ommx import Instance, Optimality, State\n>>> instance = Instance.maximize()\n>>> x = instance.new_binary(\"x\")\n>>> y = instance.new_binary(\"y\")\n>>> instance.objective = x + y\n>>> exclusive = instance.add_constraint(x * y == 0, \"exclusive\")\n>>> state = State({x.id: 1, y.id: 0})\n>>> solution = instance.evaluate(state)\n>>> assert solution.state.entries == {x.id: 1.0, y.id: 0.0}\n>>> assert solution.feasible\n>>> assert solution.objective == 1.0\n>>> assert solution.optimality == Optimality.Unspecified\n\n**Read feasibility, objective, and optimality separately**\n\n| Property | Meaning | Does not establish |\n| --- | --- | --- |\n| {attr}`~ommx.Solution.feasible` | Variable domains and all retained constraints are satisfied | No better candidate exists |\n| {attr}`~ommx.Solution.objective` | The candidate's reported objective value | Feasibility or optimality |\n| {attr}`~ommx.Solution.optimality` | Recorded optimality status, for example supplied by an adapter | A proof performed by ``evaluate`` |\n\nAn infeasible candidate can still have an objective value when its\nexpressions can be evaluated. It cannot be selected as a better feasible\nsolution merely because that value looks preferable.\n\n>>> infeasible = instance.evaluate({x.id: 1, y.id: 1})\n>>> assert infeasible.objective == 2.0\n>>> assert not infeasible.feasible\n\nFeasibility includes variable ``kind`` and bounds, not only constraints.\nFloating-point checks use the tolerance supplied to ``evaluate(..., atol=...)``;\n{attr}`~ommx.Solution.feasibility_atol` records it. The exact rules for\ndiscrete-value normalization, reconstruction, and omitted values belong to\n{meth}`~ommx.Instance.populate_state`.\n\n**Inspect evaluated values**\n\n{meth}`~ommx.Solution.decision_variables_df` combines variable definitions\nand labels with evaluated values. {meth}`~ommx.Solution.constraints_df`\nselects one constraint family and includes its evaluation diagnostics.\nFor a regular constraint ``f(x) <= 0``, the signed value ``f(x)`` and the\nnonnegative violation ``max(0, f(x))`` are different quantities.\n\nFor queries without pandas, {attr}`~ommx.Solution.constraints` is a live\n{class}`~ommx.EvaluatedConstraintCollection` indexed by typed constraint IDs.\nIt includes active constraints and constraints retained after removal.\nEach fetched row is an independent snapshot; editing it does not update\nthe Solution. Use an owner method such as\n{meth}`~ommx.Solution.set_dual_variable` when changing result data.\n{class}`~ommx.ConstraintFamilyView` documents family-filtered queries, and\n{class}`~ommx.ConstraintIDBase` documents the extensible ID interface.\n\n{meth}`~ommx.Solution.extract_decision_variables` and\n{meth}`~ommx.Solution.extract_constraints` use names and subscript tuples to\nretrieve variable values and constraint violations for application-level\nanalysis. {class}`~ommx.NamedFunction` expressions registered on the Instance\nprovide additional reported metrics through\n{meth}`~ommx.Solution.extract_named_functions` or\n{meth}`~ommx.Solution.named_functions_df`. These metrics do not add an\nobjective or a feasibility condition.\n\n**Evaluate a transformed problem**\n\nEvaluate a solver's returned State with the transformed Instance that was\nsupplied to it. That Instance retains the fixed values, dependencies,\nremoved constraints, and output objective needed to interpret the result.\nPassing the State directly to the original Instance may lose that context\nor leave required original variables unspecified.\n\n>>> from ommx import Instance, Optimality, Sense\n>>> original = Instance.maximize()\n>>> x = original.new_binary(\"x\")\n>>> y = original.new_binary(\"y\")\n>>> original.objective = 3 * x + y\n>>> prepared = original.partial_evaluate({x.id: 1})\n>>> assert prepared.convert_active_objective(Sense.Minimize)\n>>> restored = prepared.evaluate({y.id: 0})\n>>> assert restored.state.entries == {x.id: 1.0, y.id: 0.0}\n>>> assert prepared.objective.evaluate({y.id: 0}) == -3.0\n>>> assert (restored.sense, restored.objective) == (Sense.Maximize, 3.0)\n>>> assert restored.optimality == Optimality.Unspecified\n\nFixed and dependent values are reconstructed. Otherwise irrelevant variables\nomitted from the candidate receive defaults; a default is not a value found\nby the solver. Supply such a value when it matters to reported metrics.\nDistinguish successful reconstruction, feasibility including removed\nconstraints, and transport of objective or optimality information.\n{attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints but\nstill checks variable domains. Output objective and optimality transport\nfollow {attr}`~ommx.Instance.output_objective` and\n{meth}`~ommx.Instance.map_active_optimality`, respectively.\n\nUse {class}`~ommx.SampleSet` to evaluate multiple candidates with the same\nrules. Being best among the candidates obtained does not establish global\noptimality. Solution annotations can also be persisted in protobuf payloads\nand mirrored to OMMX Artifact descriptors.",
           "bases": [],
           "methods": [
             {
@@ -33620,7 +33620,7 @@
             },
             {
               "name": "constraints_df",
-              "doc": "DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.\n\nThe `violation` column uses {meth}`constraint_violation`. Dispatched on `kind=`. See\n{meth}`ommx.Instance.constraints_df` for column / `kind=` /\n`include=` semantics.\n\n`Solution` has no `removed=` parameter (no active/removed\ndistinction at the evaluated stage); reason data is gated by\n`\"removed_reason\"` in `include=`. When the flag is on, rows for\nconstraints removed before evaluation get `removed_reason` /\n`removed_reason.{key}` columns populated; other rows have NA.",
+              "doc": "DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.\n\n``kind`` is required: ``\"regular\"``, ``\"indicator\"``, ``\"one_hot\"``, or\n``\"sos1\"``. The index contains typed IDs of the selected family. Rows\nretain their labels and evaluation diagnostics; editing this materialized\ntable does not update the Solution.\n\nFor regular constraints, ``value`` is the signed left-hand-side value:\nequality requires zero and inequality requires a nonpositive value,\nwithin {attr}`~ommx.Solution.feasibility_atol`. The nonnegative\n``violation`` column and per-row ``feasible`` are therefore distinct\nfrom ``value``. Per-constraint feasibility does not check variable domains.\nThe `violation` column uses {meth}`constraint_violation`. See\n{meth}`ommx.Instance.constraints_df` for column / `kind=` /\n`include=` semantics.\n\n`Solution` has no `removed=` parameter (no active/removed\ndistinction at the evaluated stage); reason data is gated by\n`\"removed_reason\"` in `include=`. When the flag is on, rows for\nconstraints removed before evaluation get `removed_reason` /\n`removed_reason.{key}` columns populated; other rows have NA.\nThe related metadata queries {meth}`~ommx.Solution.constraint_context_df`,\n{meth}`~ommx.Solution.constraint_parameters_df`,\n{meth}`~ommx.Solution.constraint_provenance_df`, and\n{meth}`~ommx.Solution.constraint_removed_reasons_df` also require ``kind``.\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> x = instance.new_binary(\"x\")\n>>> capacity = instance.add_constraint(x <= 2, \"capacity\")\n>>> solution = instance.evaluate({x.id: 0})\n>>> table = solution.constraints_df(kind=\"regular\")\n>>> assert table.loc[capacity.constraint_id, \"value\"] == -2.0\n>>> assert table.loc[capacity.constraint_id, \"violation\"] == 0.0\n>>> assert table.loc[capacity.constraint_id, \"feasible\"]",
               "signatures": [
                 {
                   "parameters": [
@@ -33691,7 +33691,7 @@
             },
             {
               "name": "decision_variables_df",
-              "doc": "DataFrame of evaluated decision variables\n\nColumns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value",
+              "doc": "A materialized DataFrame of variable definitions, labels, and evaluated values.\n\nThe integer ``id`` index identifies variables. Columns include ``kind``,\n``lower``, ``upper``, and ``value``, plus modeling labels such as ``name``,\n``subscripts``, ``description``, and ``parameters.{key}``. Evaluated rows\nhave no ``substituted_value`` field, so that compatibility column is NA;\nread the populated value from ``value``. ``include`` selects optional\nlabel/sidecar columns as on {meth}`~ommx.Instance.decision_variables_df`.\nEditing this table does not update the Solution.\n\n>>> from ommx import Instance\n>>> instance = Instance.maximize()\n>>> x = instance.new_binary(\"selected\", subscripts=[0])\n>>> instance.objective = x\n>>> solution = instance.evaluate({x.id: 1})\n>>> table = solution.decision_variables_df()\n>>> assert table.loc[x.id, \"name\"] == \"selected\"\n>>> assert table.loc[x.id, \"value\"] == 1.0\n>>> table.loc[x.id, \"value\"] = 0.0\n>>> assert solution.state.entries[x.id] == 1.0",
               "signatures": [
                 {
                   "parameters": [
@@ -33764,7 +33764,7 @@
             },
             {
               "name": "extract_constraints",
-              "doc": "Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.\n\nRaises KeyError if no constraint has the requested name. Raises\nValueError if matching constraints share subscripts, including across families.\nParameters and descriptions are ignored. Retained removed constraints are\nincluded. Regular constraints return violations, not signed function values.\n\n# Examples\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: c0, 1: c1},\n...     sense=Sense.Maximize,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}",
+              "doc": "Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.\n\nDiscover available names with {attr}`~ommx.Solution.constraint_names`.\nMatching uses the name and subscripts only; a scalar constraint has the\nkey ``()``. The returned dictionary captures values at extraction time.\n\nRaises KeyError if no constraint has the requested name. Raises\nValueError if matching constraints share subscripts, including across families.\nParameters and descriptions are ignored. Retained removed constraints are\nincluded. Regular constraints return violations, not signed function values.\nIndicator violations account for activation, while OneHot and SOS1 use\ntheir respective metrics; see {meth}`~ommx.Solution.total_violation`.\nUse {meth}`~ommx.Solution.get_constraint_value` or the regular row's\n``evaluated_value`` when the signed value is needed.\n\nA transformation may copy a source constraint's labels onto generated\nconstraints. If both survive in the result with the same name and\nsubscripts, distinguish them through typed-ID lookup in\n{attr}`~ommx.Solution.constraints` instead of name extraction.\n\nRelated methods on {meth}`~ommx.Instance.extract_constraints` and\n{meth}`~ommx.ParametricInstance.extract_constraints` return attached\nhandles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`\nreturns violations for a selected sample, including removed constraints.\n\n# Examples\n\n>>> from ommx import DecisionVariable, Instance, Sense\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> c0 = (x[0] + x[1] == 1).set_name(\"c\").add_subscripts([0])\n>>> c1 = (x[1] + x[2] == 1).set_name(\"c\").add_subscripts([1])\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints={0: c0, 1: c1},\n...     sense=Sense.Maximize,\n... )\n>>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})\n>>> solution.extract_constraints(\"c\")\n{(0,): 0.0, (1,): 0.0}\n\nA feasible inequality can have a negative signed value and zero violation:\n\n>>> from ommx import Instance\n>>> named = Instance.minimize()\n>>> x = named.new_binary(\"x\")\n>>> capacity = named.add_constraint(x <= 2, \"capacity\", subscripts=[0])\n>>> assert named.constraint_names == {\"capacity\"}\n>>> assert named.extract_constraints(\"capacity\")[(0,)] == capacity\n>>> assert named.as_parametric_instance().extract_constraints(\"capacity\")[(0,)].name == \"capacity\"\n>>> solution = named.evaluate({x.id: 0})\n>>> assert solution.extract_constraints(\"capacity\") == {(0,): 0.0}\n>>> assert solution.get_constraint_value(capacity.constraint_id) == -2.0\n>>> samples = named.evaluate_samples({7: {x.id: 0}})\n>>> assert samples.extract_constraints(\"capacity\", 7) == {(0,): 0.0}",
               "signatures": [
                 {
                   "parameters": [
@@ -33838,7 +33838,7 @@
             },
             {
               "name": "extract_named_functions",
-              "doc": "Extract named functions by name with subscripts as key (returns a Python dict).\n\nRaises KeyError if no named function has the requested name, and\nValueError if the same subscript is found more than once.",
+              "doc": "Extract named functions by name with subscripts as key (returns a Python dict).\n\nNamed functions report additional metrics for the evaluated candidate;\nregistering one does not change the objective or add a constraint.\nDiscover names with {attr}`~ommx.Solution.named_function_names`, or use\n{meth}`~ommx.Solution.named_functions_df` for a table including labels.\nA scalar metric uses the empty tuple ``()`` as its key.\n\nRaises KeyError if no named function has the requested name, and\nValueError if the same subscript is found more than once.\n\n>>> from ommx import DecisionVariable, Instance, NamedFunction, Sense\n>>> x = DecisionVariable.binary(0, name=\"selected\")\n>>> cost = NamedFunction(id=10, function=4 * x, name=\"cost\")\n>>> instance = Instance.from_components(\n...     decision_variables=[x], objective=x, constraints={},\n...     sense=Sense.Maximize, named_functions=[cost],\n... )\n>>> solution = instance.evaluate({x.id: 1})\n>>> assert solution.objective == 1.0\n>>> assert solution.extract_named_functions(\"cost\") == {(): 4.0}\n>>> assert solution.named_functions_df().loc[cost.id, \"value\"] == 4.0",
               "signatures": [
                 {
                   "parameters": [
@@ -34419,7 +34419,7 @@
             },
             {
               "name": "constraints",
-              "doc": "Live mapping of all constraint families, including removed results.\nTyped IDs select the family. Rows are fetched only when indexed.",
+              "doc": "Live mapping of all constraint families, including removed results.\n\nTyped IDs select the family. Rows are fetched only when indexed, as\nindependent snapshots with labels, provenance, removal reasons, and\nevaluation diagnostics. Changing a snapshot does not update this\nSolution; subsequent lookups read the owner's current result.\nUse {meth}`~ommx.Solution.set_dual_variable` to update a stored regular\nconstraint's dual value.\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> x = instance.new_binary(\"x\")\n>>> capacity = instance.add_constraint(x <= 2, \"capacity\")\n>>> solution = instance.evaluate({x.id: 0})\n>>> rows = solution.constraints\n>>> row = rows[capacity.constraint_id]\n>>> assert row.evaluated_value == -2.0\n>>> assert row.violation() == 0.0\n>>> assert row.is_feasible(atol=solution.feasibility_atol)\n>>> row.dual_variable = 9.0\n>>> assert rows[capacity.constraint_id].dual_variable is None\n>>> solution.set_dual_variable(capacity.constraint_id, 2.0)\n>>> assert rows[capacity.constraint_id].dual_variable == 2.0\n>>> assert row.dual_variable == 9.0\n\n{class}`~ommx.EvaluatedConstraintCollection` specifies membership,\nlookup, iteration, and equality. Its ``of_kind`` method returns a\n{class}`~ommx.ConstraintFamilyView` for one family without collecting\nrows. Use {meth}`~ommx.Solution.constraints_df` for a materialized table.",
               "type_": {
                 "display": "EvaluatedConstraintCollection",
                 "link_target": {
@@ -34513,7 +34513,7 @@
             },
             {
               "name": "feasible",
-              "doc": "Feasibility of the solution in terms of all constraints, including removed constraints.\n\nThis is an alias for `feasible_unrelaxed`.\n\nCompatibility: The meaning of this property has changed from Python SDK 1.7.0.\nPreviously, this property represents the feasibility of the remaining constraints only,\ni.e. excluding relaxed constraints.\nFrom Python SDK 1.7.0, this property represents the feasibility of all constraints,\nincluding relaxed constraints.",
+              "doc": "Whether all retained constraints and variable domains are satisfied.\n\nChecks all regular and special constraints, including removed constraints,\ntogether with the kind and bounds of every retained variable, using\n{attr}`~ommx.Solution.feasibility_atol`. This is an alias for\n{attr}`~ommx.Solution.feasible_unrelaxed`; it does not establish optimality.\n\nCompatibility: The meaning of this property has changed from Python SDK 1.7.0.\nPreviously, this property represents the feasibility of the remaining constraints only,\ni.e. excluding relaxed constraints.\nFrom Python SDK 1.7.0, this property represents the feasibility of all constraints,\nincluding relaxed constraints.",
               "type_": {
                 "display": "bool",
                 "link_target": null,
@@ -34524,7 +34524,7 @@
             },
             {
               "name": "feasible_relaxed",
-              "doc": "Feasibility of the solution in terms of remaining constraints, not including relaxed (removed) constraints.",
+              "doc": "Whether active constraints and all retained variable domains are satisfied.\n\nExcludes constraints retained after removal, across all constraint families.\nVariable kind and bound checks are still applied with\n{attr}`~ommx.Solution.feasibility_atol`. A result can satisfy this property\nwhile failing {attr}`~ommx.Solution.feasible` because a removed constraint\nis violated.\n\n>>> from ommx import Instance\n>>> instance = Instance.minimize()\n>>> x = instance.new_binary(\"x\")\n>>> instance.objective = x\n>>> required = instance.add_constraint(x == 1, \"required\")\n>>> instance.relax_constraint(required.constraint_id, \"manual relaxation\")\n>>> solution = instance.evaluate({x.id: 0})\n>>> assert solution.feasible_relaxed\n>>> assert not solution.feasible\n>>> assert solution.constraints[required.constraint_id].violation() == 1.0",
               "type_": {
                 "display": "bool",
                 "link_target": null,
@@ -34535,7 +34535,7 @@
             },
             {
               "name": "feasible_unrelaxed",
-              "doc": "Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.",
+              "doc": "Alias for {attr}`~ommx.Solution.feasible`, including removed constraints\nand every retained variable's kind and bounds.",
               "type_": {
                 "display": "bool",
                 "link_target": null,
@@ -34629,7 +34629,7 @@
             },
             {
               "name": "objective",
-              "doc": "Get the objective function value",
+              "doc": "The reported objective value of this candidate.\n\nEvaluation uses the Instance's preserved output objective when one is\npresent; otherwise it uses the active objective. Read the value together\nwith {attr}`~ommx.Solution.sense` and {attr}`~ommx.Solution.feasible`.\nAn infeasible candidate can have an objective value, and the value alone\nestablishes neither feasibility nor optimality.",
               "type_": {
                 "display": "float",
                 "link_target": null,
@@ -34640,7 +34640,7 @@
             },
             {
               "name": "optimality",
-              "doc": "Get the optimality status",
+              "doc": "The recorded optimality status, not a result of candidate evaluation.\n\n{meth}`~ommx.Instance.evaluate` produces ``Optimality.Unspecified``.\nAn adapter may attach a solver's status, or a caller may set this property;\nsetting it does not prove the claim. For a transformed formulation, use\n{meth}`~ommx.Instance.map_active_optimality` to determine which status\ntransports to the reported output problem.",
               "type_": {
                 "display": "Optimality",
                 "link_target": null,
@@ -34692,7 +34692,7 @@
             },
             {
               "name": "sense",
-              "doc": "Get the optimization sense (minimize or maximize)",
+              "doc": "The optimization sense associated with the reported objective value.\n\nThis is the preserved output sense when an output objective is recorded\non the evaluated Instance, and otherwise its active sense. It can differ\nfrom the solver-facing sense after a transformation. Raises RuntimeError\nfor older serialized results that do not record a sense.",
               "type_": {
                 "display": "Sense",
                 "link_target": null,
@@ -34751,7 +34751,7 @@
             },
             {
               "name": "state",
-              "doc": "Get the solution state containing variable values",
+              "doc": "An independent State containing the evaluated variable values.\n\nIncludes retained fixed and dependent values restored by evaluation and\ndefaults supplied for omitted irrelevant variables. See\n{meth}`~ommx.Instance.populate_state` for the reconstruction rules.",
               "type_": {
                 "display": "State",
                 "link_target": {
@@ -35722,7 +35722,7 @@
         {
           "kind": "Class",
           "name": "Sos1ConstraintID",
-          "doc": "An SOS1 constraint ID. Unequal to integers and IDs of other constraint families.",
+          "doc": "An SOS1 constraint ID. Unequal to integers and IDs of other constraint families.\n\nSee {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts.",
           "bases": [
             {
               "display": "ConstraintIDBase",
@@ -35936,7 +35936,7 @@
             },
             {
               "name": "__new__",
-              "doc": "Create an ID in this constraint family's namespace.\n\nThe value must be an unsigned 64-bit integer. An ID of another\nfamily is not accepted. IDs have no integer conversion protocol.",
+              "doc": "Create a typed ID identifying this constraint family and number.\n\nThe value must be an unsigned 64-bit integer. An ID of another\nfamily is not accepted. IDs have no integer conversion protocol.",
               "signatures": [
                 {
                   "parameters": [
@@ -36132,7 +36132,7 @@
         {
           "kind": "Class",
           "name": "State",
-          "doc": "State wrapper for Python",
+          "doc": "A candidate assignment from integer decision-variable IDs to numeric values.\n\nA State contains values, not the variable domains, objective, or constraints of\nan optimization problem. Creating one does not establish feasibility or\noptimality. Pass it to {meth}`~ommx.Instance.evaluate` on the corresponding\nproblem to obtain a {class}`~ommx.Solution` with evaluation results.\n\n>>> from ommx import Instance, State\n>>> instance = Instance.maximize()\n>>> x = instance.new_binary(\"x\")\n>>> instance.objective = x\n>>> candidate = State({x.id: 1})\n>>> assert candidate.entries == {x.id: 1.0}\n>>> result = instance.evaluate(candidate)\n>>> assert result.feasible and result.objective == 1.0\n\nAPIs accepting a State also accept an ID-to-value mapping or an iterable of\nID/value pairs. The assignment must use the IDs of the Instance being evaluated.\nAfter transforming a problem, evaluate the returned candidate with that\ntransformed Instance so that its recorded fixed values, dependencies, retained\nconstraints, and output objective can be interpreted correctly.\n\nThe returned Solution's {attr}`~ommx.Solution.state` contains the populated\nassignment. Missing required IDs are errors; reconstruction, default values for\nirrelevant variables, and tolerance-based normalization are documented by\n{meth}`~ommx.Instance.populate_state`.",
           "bases": [],
           "methods": [
             {

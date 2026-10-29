@@ -110,4 +110,4 @@ assert explicit.state.entries[unused.id] == 4.0
 
 名前付き関数、removedな制約（現在は課さず、結果確認用に保持する制約）、出力目的関数（現在の目的関数とは別に評価用に保持する目的関数）だけに現れる変数は、それだけではusedになりません。それらにirrelevantな変数が現れ、値を省略した場合は既定値で評価されます。特定の候補について確認したいなら、その候補の値を渡してください。
 
-評価結果を読む通常の入口は[StateからSolutionへの評価](./solution.md)、保持された制約や目的関数を読む場合は[変換後の問題とRemoved constraints](./removed_constraints.md)です。
+評価結果を読む通常の入口は{class}`~ommx.Solution`のAPI Reference、保持された制約や目的関数を読む場合は[変換後の問題とRemoved constraints](./removed_constraints.md)です。

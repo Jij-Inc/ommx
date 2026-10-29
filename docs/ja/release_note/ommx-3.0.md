@@ -86,7 +86,7 @@ IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
 インデックスへの変換機能もありません。`constraint_violation(id)` は型から種類を
 判断するため、整数は拒否します。決定変数IDとサンプルIDは整数のままで、保存形式も変わりません。
 
-詳しくは[Solutionのガイド](../user_guide/solution.md)と
+詳しくは{class}`制約の評価結果の取得 <ommx.EvaluatedConstraintCollection>`と
 [移行ガイド](../migration/python_sdk_v2_to_v3.md)を参照してください。
 
 種類を横断する取得には、拡張可能な `ConstraintIDBase` と `ConstraintView` を使います。

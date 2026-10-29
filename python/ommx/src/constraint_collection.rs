@@ -227,15 +227,16 @@ impl PyStubType for ConstraintCollectionValue {
     }
 }
 
-/// Live, read-only mapping of all active constraint families. Values are write-through attached handles.
-///
-/// Keys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.
-/// The view keeps its owner alive and observes subsequent owner mutations.
+#[doc = include_str!("constraint_collection/mapping.md")]
 #[pyclass(frozen)]
 pub struct ConstraintCollection {
     owner: ConstraintHost,
 }
-collection_stub!(ConstraintCollection, ConstraintCollectionValue, "Live, read-only mapping of all active constraint families. Values are write-through attached handles.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.");
+collection_stub!(
+    ConstraintCollection,
+    ConstraintCollectionValue,
+    include_str!("constraint_collection/mapping.md")
+);
 impl ConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.
     pub(crate) fn new(owner: ConstraintHost) -> Self {
@@ -466,15 +467,16 @@ impl PyStubType for RemovedConstraintCollectionValue {
     }
 }
 
-/// Live, read-only mapping of all removed constraint families. Each access returns a snapshot.
-///
-/// Keys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.
-/// The view keeps its owner alive and observes subsequent owner mutations.
+#[doc = include_str!("constraint_collection/removed.md")]
 #[pyclass(frozen)]
 pub struct RemovedConstraintCollection {
     owner: ConstraintHost,
 }
-collection_stub!(RemovedConstraintCollection, RemovedConstraintCollectionValue, "Live, read-only mapping of all removed constraint families. Each access returns a snapshot.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.");
+collection_stub!(
+    RemovedConstraintCollection,
+    RemovedConstraintCollectionValue,
+    include_str!("constraint_collection/removed.md")
+);
 impl RemovedConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.
     pub(crate) fn new(owner: ConstraintHost) -> Self {
@@ -693,15 +695,16 @@ impl PyStubType for EvaluatedConstraintCollectionValue {
     }
 }
 
-/// Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.
-///
-/// Keys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.
-/// The view keeps its owner alive and observes subsequent owner mutations.
+#[doc = include_str!("constraint_collection/evaluated.md")]
 #[pyclass(frozen)]
 pub struct EvaluatedConstraintCollection {
     owner: Py<crate::Solution>,
 }
-collection_stub!(EvaluatedConstraintCollection, EvaluatedConstraintCollectionValue, "Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.");
+collection_stub!(
+    EvaluatedConstraintCollection,
+    EvaluatedConstraintCollectionValue,
+    include_str!("constraint_collection/evaluated.md")
+);
 impl EvaluatedConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.
     pub(crate) fn new(owner: Py<crate::Solution>) -> Self {
@@ -902,15 +905,16 @@ impl PyStubType for SampledConstraintCollectionValue {
     }
 }
 
-/// Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.
-///
-/// Keys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.
-/// The view keeps its owner alive and observes subsequent owner mutations.
+#[doc = include_str!("constraint_collection/sampled.md")]
 #[pyclass(frozen)]
 pub struct SampledConstraintCollection {
     owner: Py<crate::SampleSet>,
 }
-collection_stub!(SampledConstraintCollection, SampledConstraintCollectionValue, "Live, read-only mapping of all constraint result families, including removed constraints. Each access returns a snapshot.\n\nKeys must be typed constraint IDs; integers raise TypeError. Missing IDs raise KeyError.\nThe view keeps its owner alive and observes subsequent owner mutations.");
+collection_stub!(
+    SampledConstraintCollection,
+    SampledConstraintCollectionValue,
+    include_str!("constraint_collection/sampled.md")
+);
 impl SampledConstraintCollection {
     /// Constructed only by the owning root property; no rows are copied.
     pub(crate) fn new(owner: Py<crate::SampleSet>) -> Self {

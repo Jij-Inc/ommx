@@ -18,6 +18,78 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+/// A family of optimization problems with fixed variables and constraints.
+///
+/// A ParametricInstance leaves some coefficients or constants symbolic as
+/// {class}`~ommx.Parameter` objects. The model's caller supplies their values
+/// with {meth}`~ommx.ParametricInstance.with_parameters` to obtain an ordinary
+/// {class}`~ommx.Instance` for evaluation, preparation, or a solver adapter.
+/// Parameters are inputs chosen before solving; they are not decision variables
+/// for the solver to optimize.
+///
+/// **Reuse a problem under different numerical conditions**
+///
+/// Here the two items and their scores stay fixed, while the allowed number
+/// of selected items changes. The original family remains available after
+/// each call to ``with_parameters``.
+///
+/// >>> from ommx import ConstraintID, DecisionVariable, Parameter, ParametricInstance, Sense
+/// >>> xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
+/// >>> capacity = Parameter(2, name="capacity", description="Maximum selected items")
+/// >>> family = ParametricInstance.from_components(
+/// ...     decision_variables=xs, parameters=[capacity],
+/// ...     objective=3 * xs[0] + 2 * xs[1],
+/// ...     constraints={0: xs[0] + xs[1] <= capacity}, sense=Sense.Maximize,
+/// ... )
+/// >>> one_item = family.with_parameters({capacity.id: 1})
+/// >>> two_items = family.with_parameters({capacity.id: 2})
+/// >>> candidate = {xs[0].id: 1, xs[1].id: 1}
+/// >>> assert not one_item.evaluate(candidate).feasible
+/// >>> assert two_items.evaluate(candidate).feasible
+/// >>> assert two_items.evaluate(candidate).objective == 5.0
+/// >>> assert {v.id for v in one_item.decision_variables} == {v.id for v in two_items.decision_variables}
+/// >>> assert set(one_item.constraints) == set(two_items.constraints) == {ConstraintID(0)}
+/// >>> assert family.parameter_ids == {capacity.id}
+///
+/// Materialization preserves decision-variable and constraint IDs. Those IDs
+/// let callers associate results with the same items and conditions across
+/// instances; they do not imply identical feasibility or optimal solutions.
+/// Parameters can also appear as objective and constraint coefficients, as in
+/// the weighted knapsack example in {meth}`~ommx.ParametricInstance.from_components`.
+///
+/// **Parameter identities and modeling labels**
+///
+/// Parameters and decision variables use one ID space and must not overlap.
+/// Here the decision variables have IDs 0 and 1, and the parameter has ID 2.
+/// Both can appear in arithmetic expressions, but only decision variables
+/// receive candidate values after materialization. Parameter names, subscripts,
+/// string-valued metadata, and descriptions describe model inputs; the IDs
+/// identify the numerical values passed to ``with_parameters``.
+///
+/// {attr}`~ommx.ParametricInstance.parameters` and
+/// {attr}`~ommx.ParametricInstance.parameter_ids` list declared parameters.
+/// {meth}`~ommx.ParametricInstance.parameters_df` collects their definitions
+/// and labels into a DataFrame, not a table of supplied numerical values.
+///
+/// >>> table = family.parameters_df()
+/// >>> assert table.loc[capacity.id, "name"] == "capacity"
+/// >>> assert table.loc[capacity.id, "description"] == "Maximum selected items"
+///
+/// {meth}`~ommx.ParametricInstance.decision_variables_df` and
+/// {meth}`~ommx.ParametricInstance.constraints_df` provide the corresponding
+/// model tables; the latter requires an explicit ``kind``. For required IDs,
+/// extra keys, and numerical substitution rules, read
+/// {meth}`~ommx.ParametricInstance.with_parameters`.
+///
+/// **When to rebuild the model**
+///
+/// Parameter values do not generate variable or constraint definitions. If an
+/// input changes the number of items or the model's structure, build new
+/// components in Python or use a modeler that generates that structure. This
+/// differs from changing numerical coefficients within an existing family.
+/// No Experiment is needed to construct or materialize a ParametricInstance.
+/// Use {class}`~ommx.experiment.Experiment` separately when recording the
+/// conditions and results of multiple trials is useful.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
@@ -140,6 +212,32 @@ impl ParametricInstance {
     ///
     /// Raises {class}`ValueError` if a decision variable and parameter use the
     /// same ID.
+    ///
+    /// **Parameterize objective coefficients, weights, and a capacity**
+    ///
+    /// This two-item knapsack family fixes the item count and uses parameters
+    /// for both coefficients and the right-hand-side constant. Parameter IDs
+    /// are separate from the decision-variable IDs in the shared ID space.
+    ///
+    /// >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+    /// >>> n = 2
+    /// >>> xs = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(n)]
+    /// >>> profits = [Parameter(n + i, name="profit", subscripts=[i]) for i in range(n)]
+    /// >>> weights = [Parameter(2 * n + i, name="weight", subscripts=[i]) for i in range(n)]
+    /// >>> capacity = Parameter(3 * n, name="capacity")
+    /// >>> family = ParametricInstance.from_components(
+    /// ...     decision_variables=xs, parameters=profits + weights + [capacity],
+    /// ...     objective=sum(p * x for p, x in zip(profits, xs)),
+    /// ...     constraints={0: sum(w * x for w, x in zip(weights, xs)) <= capacity},
+    /// ...     sense=Sense.Maximize,
+    /// ... )
+    /// >>> values = {p.id: value for p, value in zip(profits, [3, 2])}
+    /// >>> values.update({w.id: value for w, value in zip(weights, [2, 1])})
+    /// >>> values[capacity.id] = 2
+    /// >>> instance = family.with_parameters(values)
+    /// >>> solution = instance.evaluate({xs[0].id: 1, xs[1].id: 0})
+    /// >>> assert solution.feasible and solution.objective == 3.0
+    /// >>> assert not instance.evaluate({xs[0].id: 1, xs[1].id: 1}).feasible
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, indicator_constraints=None, one_hot_constraints=None, sos1_constraints=None, named_functions=None, description=None))]
     pub(crate) fn from_components(
@@ -685,6 +783,10 @@ impl ParametricInstance {
             .collect()
     }
 
+    /// Declared parameters and their modeling labels, sorted by ID.
+    ///
+    /// These are independent definitions, not assigned numerical values.
+    /// Supply values through {meth}`~ommx.ParametricInstance.with_parameters`.
     #[getter]
     pub fn parameters(&self) -> Vec<Parameter> {
         self.inner
@@ -712,6 +814,10 @@ impl ParametricInstance {
             .collect()
     }
 
+    /// IDs of all declared parameters, including those unused in expressions.
+    ///
+    /// {meth}`~ommx.ParametricInstance.with_parameters` requires a value for
+    /// every ID in this set. The set is independent of the owner.
     #[getter]
     pub fn parameter_ids(&self) -> BTreeSet<u64> {
         self.inner
@@ -910,7 +1016,18 @@ impl ParametricInstance {
         )
     }
 
-    /// DataFrame of parameters
+    /// Collect declared parameter definitions and modeling labels into a DataFrame.
+    ///
+    /// The index is the parameter ID, named ``id``. By default, the table
+    /// includes ``name``, ``subscripts``, ``description``, and flattened
+    /// ``parameters.<key>`` metadata columns. ``include=[]`` omits optional
+    /// columns; ``include=["label"]`` selects the modeling labels and
+    /// ``include=["parameters"]`` selects the string-valued metadata.
+    ///
+    /// These labels are not the numerical assignments supplied to
+    /// {meth}`~ommx.ParametricInstance.with_parameters`. Editing the DataFrame
+    /// does not change this ParametricInstance. See the class example for
+    /// selecting a parameter's name and description by ID.
     #[pyo3(signature = (include = None))]
     pub fn parameters_df<'py>(
         &self,

@@ -267,7 +267,7 @@ macro_rules! constraint_id {
         #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pymethods]
         impl $name {
-            /// Create an ID in this constraint family's namespace.
+            /// Create a typed ID identifying this constraint family and number.
             ///
             /// The value must be an unsigned 64-bit integer. An ID of another
             /// family is not accepted. IDs have no integer conversion protocol.
@@ -304,19 +304,19 @@ macro_rules! constraint_id {
 
 constraint_id!(
     ConstraintID,
-    "A regular constraint ID. Unequal to integers and IDs of other constraint families."
+    "A regular constraint ID. Unequal to integers and IDs of other constraint families.\n\nSee {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts."
 );
 constraint_id!(
     IndicatorConstraintID,
-    "An indicator constraint ID. Unequal to integers and IDs of other constraint families."
+    "An indicator constraint ID. Unequal to integers and IDs of other constraint families.\n\nSee {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts."
 );
 constraint_id!(
     OneHotConstraintID,
-    "A one-hot constraint ID. Unequal to integers and IDs of other constraint families."
+    "A one-hot constraint ID. Unequal to integers and IDs of other constraint families.\n\nSee {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts."
 );
 constraint_id!(
     Sos1ConstraintID,
-    "An SOS1 constraint ID. Unequal to integers and IDs of other constraint families."
+    "An SOS1 constraint ID. Unequal to integers and IDs of other constraint families.\n\nSee {class}`~ommx.ConstraintIDBase` for lookup, copying, serialization, and extension contracts."
 );
 
 /// An identity whose concrete Python type determines its constraint family.

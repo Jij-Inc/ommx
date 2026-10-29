@@ -672,7 +672,7 @@ removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstrain
 独立した辞書が必要な場合は `dict(owner.constraints)` を使います。1種類だけ調べる場合は、
 `constraints.of_kind("sos1")`で絞ります。`constraints_df(*, kind=...)` はすべての所有元で
 `kind` が必須です。モデルは有効な行を選び、`removed=True` で削除済みも含めます。
-結果は保持された削除済みも含めます。詳細は[コレクションの意味](../user_guide/solution.md)を参照してください。
+結果は保持された削除済みも含めます。詳細は{class}`コレクションの意味 <ommx.ConstraintCollection>`を参照してください。
 
 種類を横断して列挙する型には、現在の種類のUnionではなく `ConstraintIDBase` と
 `ConstraintView` を使います。特殊制約の種類が追加されても、これらの公開返り値型は変わりません。
@@ -692,4 +692,4 @@ removed = instance.removed_constraints.of_kind("regular")[7]  # RemovedConstrain
 返します。**通常制約も符号付きの式の値から非負の違反量に変わります。** 決定変数の
 抽出と同様にparametersは無視し、種類をまたぐ添字の重複は`ValueError`にします。
 
-通常制約の符号付き評価値には`solution.get_constraint_value(id)`か`row.evaluated_value`を使います。詳しくは[Solutionのガイド](../user_guide/solution.md)を参照してください。
+通常制約の符号付き評価値には`solution.get_constraint_value(id)`か`row.evaluated_value`を使います。詳しくは{meth}`名前と添字による取得 <ommx.Solution.extract_constraints>`を参照してください。

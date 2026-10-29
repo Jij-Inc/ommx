@@ -1933,6 +1933,17 @@ impl Instance {
 
     /// Evaluate the given {class}`~ommx.State` into a {class}`~ommx.Solution`.
     ///
+    /// Accepts a State, an ID-to-value mapping, or an iterable of ID/value pairs.
+    /// This checks one candidate against this problem's variable domains and
+    /// constraints and computes its output objective; it does not search for a
+    /// better candidate or prove optimality. An infeasible candidate can still
+    /// have an objective value. See {class}`~ommx.Solution` for a complete
+    /// example and how to interpret the results.
+    ///
+    /// Evaluate a solver's returned candidate with the transformed Instance
+    /// used for that solve. Its recorded dependencies, removed constraints,
+    /// and output objective are needed to reconstruct and interpret the result.
+    ///
     /// # Postconditions
     ///
     /// Evaluation first applies the canonicalization, population, and consistency
@@ -2107,7 +2118,17 @@ impl Instance {
         Ok(Self { inner: new_inner })
     }
 
-    /// Evaluate samples into a sample set.
+    /// Evaluate multiple candidates into a {class}`~ommx.SampleSet`.
+    ///
+    /// Accepts {class}`~ommx.Samples`, a mapping from sample IDs to states, or
+    /// a sequence of states with automatically assigned sample IDs. Each state
+    /// maps decision-variable IDs to values. This evaluates supplied candidates;
+    /// it does not generate them or establish global optimality. See
+    /// {class}`~ommx.SampleSet` for a complete example, summary tables, and
+    /// selection of the best feasible candidate obtained.
+    ///
+    /// Use the transformed Instance associated with the returned candidates,
+    /// as for {meth}`~ommx.Instance.evaluate` on a single candidate.
     ///
     /// # Postconditions
     ///

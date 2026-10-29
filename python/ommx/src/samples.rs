@@ -8,6 +8,7 @@ use pyo3::{
 };
 use std::collections::{BTreeSet, HashMap};
 
+#[doc = include_str!("samples.md")]
 #[pyclass(skip_from_py_object)]
 #[derive(Clone, Default)]
 pub struct Samples(pub ommx::Sampled<ommx::v1::State>);
@@ -17,7 +18,7 @@ pyo3_stub_gen::inventory::submit! {
     pyo3_stub_gen::type_info::PyClassInfo {
         pyclass_name: "Samples",
         struct_id: || std::any::TypeId::of::<Samples>(),
-        doc: "Collection of State samples",
+        doc: include_str!("samples.md"),
         module: Some("ommx._ommx_rust"),
         bases: &[],
         getters: &[],
@@ -231,17 +232,21 @@ impl Samples {
         Ok(PyBytes::new(py, &v1_samples.encode_to_vec()))
     }
 
-    /// Get the number of samples
+    /// Number of sample IDs, including separate IDs with identical assignments.
     pub fn num_samples(&self) -> usize {
         self.0.num_samples()
     }
 
-    /// Get all sample IDs
+    /// All sample IDs as an independent set of integers.
     pub fn sample_ids(&self) -> BTreeSet<u64> {
         self.0.ids().into_iter().map(|id| id.into_inner()).collect()
     }
 
-    /// Get the state for a specific sample ID
+    /// Return an independent State for one sample ID.
+    ///
+    /// Raises KeyError if the sample ID is not present. This returns raw candidate
+    /// values, not a feasibility assessment; use {meth}`~ommx.Instance.evaluate_samples`
+    /// to obtain evaluated results.
     pub fn get_state(&self, sample_id: u64) -> PyResult<crate::State> {
         let id = ommx::SampleID::from(sample_id);
         Ok(crate::State(

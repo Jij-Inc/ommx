@@ -59,12 +59,13 @@ The development direction is to combine these techniques and select or repeat th
 | Your task | Start here | What you will learn |
 |---|---|---|
 | Solve a problem with a solver | [Solve with an OMMX Adapter](./tutorial/solve_with_ommx_adapter.md) | Create an Instance, solve it, and read the result |
-| Evaluate a candidate you already have | [Solution](./user_guide/solution.md) | Evaluate variable values against a problem and read objective and feasibility results |
+| Evaluate a candidate you already have | {class}`~ommx.Solution` | Evaluate variable values against a problem and read objective and feasibility results |
 | Understand the problem representation | {class}`~ommx.Instance` | Describe variables, objectives, and constraints |
+| Change numeric conditions in a fixed problem structure | {class}`~ommx.ParametricInstance` | Reuse the structure and variable/constraint IDs with different parameter values |
 | Use special constraints | [Special Constraints](./user_guide/special_constraints.md) | Understand Indicator, OneHot, and SOS1 constraints and their solver integration |
 | Convert constraints for a different backend | [Adapter Input Classes and Explicit Constraint Lowering](./user_guide/capability_model.md) | Distinguish input requirements from conversion and inspect conversion history |
 | Tighten variable bounds from constraints | {meth}`Bound tightening <ommx.Instance.tighten_bounds_simultaneously_once>` | Perform one update and inspect the changed bounds |
-| Compare multiple candidates | [SampleSet](./user_guide/sample_set.md) | Read sample evaluations and select among the candidates obtained |
+| Compare multiple candidates | {class}`~ommx.SampleSet` | Read sample evaluations and select among the candidates obtained |
 | Sample a QUBO with OpenJij | [TSP sampling example](./tutorial/tsp_sampling_with_openjij_adapter) | Follow a QUBO sampling application and inspect its results |
 | Obtain existing problems | [MIPLIB](./tutorial/download_miplib_instance.md) or [QPLIB](./tutorial/download_qplib_instance.md) | Download a problem as an OMMX Instance |
 | Record and compare experiments | [Experiment management](./tutorial/experiment_management.md) | Associate settings with results |
@@ -73,7 +74,7 @@ The development direction is to combine these techniques and select or repeat th
 
 This Book explains what OMMX can do, why and when to use it, what to choose, and how to interpret results. Use small examples to understand the meaning, then consult the {doc}`API Reference <api/index>` for detailed calls, arguments, preconditions, and guarantees. You do not need to read every page in order.
 
-If you already have a problem and candidate values, you can begin with [candidate evaluation](./user_guide/solution.md). Running an adapter tutorial is not a prerequisite.
+If you already have a problem and candidate values, you can begin with {class}`candidate evaluation <ommx.Solution>`. Running an adapter tutorial is not a prerequisite.
 
 ## Use or implement an Adapter
 
@@ -131,9 +132,6 @@ user_guide/supported_ommx_adapters
 user_guide/adapter_diagnostics
 user_guide/adapter_initial_state
 user_guide/function
-user_guide/parametric_instance
-user_guide/solution
-user_guide/sample_set
 user_guide/special_constraints
 user_guide/capability_model
 user_guide/experiment
