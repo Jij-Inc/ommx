@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use crate::{ConstraintHost, Equality, Function, VariableIDInput};
 
 #[gen_stub_pyclass]
+#[doc = include_str!("docstrings/ommx/IndicatorConstraint.md")]
 #[pyclass]
 #[derive(Clone)]
 pub struct IndicatorConstraint(pub ommx::IndicatorConstraint, pub ommx::ConstraintContext);

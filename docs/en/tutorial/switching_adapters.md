@@ -52,7 +52,7 @@ instance = Instance.from_components(
 
 Here, we will use OSS adapters developed as a part of OMMX Python SDK.
 For non-OSS solvers, adapters are also available and can be used with the same interface.
-A complete list of supported adapters for each solver can be found in [Supported Adapters](../user_guide/supported_ommx_adapters.md).
+A complete list of supported adapters for each solver can be found in {doc}`Adapter packages and input contracts </api/adapters>`.
 
 Here, let's solve the knapsack problem with OSS solvers, Highs, SCIP.
 

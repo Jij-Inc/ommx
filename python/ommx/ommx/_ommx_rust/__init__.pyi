@@ -3362,18 +3362,67 @@ class FixedPenaltyPreparation:
         r"""
         Select the uniform fixed-weight penalty owner operation.
 
-        ``weight`` is the common $w$ in the class formula for every active
-        regular constraint. In particular, this replaces $F(x)$ by
+        `weight` is the common $w$ in the {class}`~ommx.FixedPenaltyPreparation` formula
+        for every active regular constraint. This replaces $F(x)$ by
         $F(x) + w \sum_i g_i(x)^2$ for minimization and by
         $F(x) - w \sum_i g_i(x)^2$ for maximization, after normalizing $w$.
-        ``atol`` is used by the owner operation to accept a penalty magnitude
-        down to ``-atol`` and normalize a tolerated negative value to zero. When
-        at least one active regular constraint is converted, the weight must be
-        finite. With no active constraint of any family, the owner operation is
-        an identity and does not inspect the weight.
-        Removed constraints record
-        ``reason="ommx.Instance.uniform_penalty_method_with_fixed_weight"`` with
-        no reason parameters.
+        Creating this setting does not apply it; select it in a
+        {class}`~ommx.PreparationPolicy` passed to {meth}`~ommx.Instance.prepare`.
+
+        `atol` is used by the owner operation to accept a penalty magnitude down to
+        `-atol` and normalize a tolerated negative value to zero. When at least one active
+        regular constraint is converted, the weight must be finite. With no active
+        constraint of any family, the owner operation is an identity and does not inspect
+        the weight. Removed constraints record
+        `reason="ommx.Instance.uniform_penalty_method_with_fixed_weight"` with no reason
+        parameters. The class documentation defines atomicity, retained output semantics,
+        and rejection of active special constraints.
+
+        **An inequality body is not its violation**
+
+        For $x \in \{0,1\}$, minimize $x$ subject to $x-1\leq0$. Both values are feasible,
+        and the original objective prefers zero. Squaring the inequality's body with
+        weight two gives $x + 2(x-1)^2$, which instead prefers one:
+
+        | $x$ | Original objective $x$ | Squared body $(x-1)^2$ | Penalized objective |
+        | --- | --- | --- | --- |
+        | 0 | 0 | 1 | 2 |
+        | 1 | 1 | 0 | 1 |
+
+        This differs from the one-sided penalty $\max(0,x-1)^2$, which is zero for both
+        candidates. Increasing the weight does not fix an unsuitable penalty formula.
+        The following applies only the selected fixed-penalty phase, so the inequality
+        body is squared directly:
+
+        ```pycon
+        >>> from ommx import FixedPenaltyPreparation, Instance, InstanceClass, PreparationPolicy
+        >>> instance = Instance.minimize()
+        >>> x = instance.new_binary("x")
+        >>> instance.objective = x
+        >>> _ = instance.add_constraint(x <= 1)
+        >>> before_zero = instance.evaluate({x.id: 0})
+        >>> before_one = instance.evaluate({x.id: 1})
+        >>> assert before_zero.feasible and before_one.feasible
+        >>> assert (before_zero.objective, before_one.objective) == (0.0, 1.0)
+        >>> policy = PreparationPolicy(
+        ...     fixed_penalty=FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight(
+        ...         weight=2.0
+        ...     )
+        ... )
+        >>> instance.prepare(InstanceClass.qubo(), policy)
+        >>> assert instance.objective.evaluate({x.id: 0}) == 2.0
+        >>> assert instance.objective.evaluate({x.id: 1}) == 1.0
+        >>> assert instance.evaluate({x.id: 0}).feasible
+        >>> assert instance.evaluate({x.id: 0}).objective == 0.0
+
+        ```
+
+        The reported objective still describes the preserved output problem; inspect
+        feasibility separately from the penalized objective. To penalize an inequality as
+        an equality with a suitable slack variable, use an appropriate conversion first,
+        such as {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`.
+        Its integer-domain, range, and numerical preconditions still apply. Choosing the
+        penalty formula and a sufficient weight belongs to the application.
         """
 
 @typing.final
@@ -4033,6 +4082,73 @@ class GcRoot:
 
 @typing.final
 class IndicatorConstraint:
+    r"""
+    A condition enforced when a controlling Binary variable equals one.
+
+    For a Binary variable $z$, an Indicator requires $f(x)\leq0$ or $f(x)=0$
+    when $z=1$. At $z=0$, the Indicator is satisfied regardless of the body's
+    value; variable domains and other constraints still apply. This is a one-way
+    implication: a satisfied body does not require $z=1$.
+
+    Construct one from a regular constraint with {meth}`~ommx.Constraint.with_indicator`,
+    or pass `indicator_variable`, `function`, and `equality` to this class.
+    The controlling variable accepts a variable ID, a standalone
+    {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
+    These accepted forms are exposed as the `VariableIDLike` type alias.
+    Only its ID is stored. The enclosing Instance validates that the referenced
+    variables exist and that the controlling variable is Binary when inserting it.
+
+    **Construct and evaluate a conditional limit**
+
+    The following model limits the amount to five only when the facility is enabled:
+
+    ```pycon
+    >>> from ommx import Equality, IndicatorConstraintID, Instance
+    >>> instance = Instance.maximize()
+    >>> enabled = instance.new_binary("enabled")
+    >>> amount = instance.new_continuous("amount", lower=0, upper=10)
+    >>> instance.objective = amount
+    >>> condition = (amount <= 5).with_indicator(enabled)
+    >>> assert condition.indicator_variable_id == enabled.id
+    >>> assert condition.equality == Equality.LessThanOrEqualToZero
+    >>> attached = instance.add_indicator_constraint(condition)
+    >>> cid = attached.constraint_id
+    >>> assert isinstance(cid, IndicatorConstraintID)
+    >>> off = instance.evaluate({enabled.id: 0, amount.id: 6})
+    >>> on = instance.evaluate({enabled.id: 1, amount.id: 5})
+    >>> violated = instance.evaluate({enabled.id: 1, amount.id: 6})
+    >>> assert off.feasible and on.feasible and not violated.feasible
+    >>> assert not off.constraints_df(kind="indicator").loc[cid, "indicator_active"]
+    >>> assert on.constraints_df(kind="indicator").loc[cid, "indicator_active"]
+
+    ```
+
+    The `indicator_active` column distinguishes an inactive condition from an active
+    condition whose body is satisfied. Indicator results do not have a dual variable.
+    See {meth}`~ommx.Solution.constraints_df` for the precise columns and violation
+    semantics, and {meth}`~ommx.Instance.evaluate` for numerical tolerances and invalid
+    activation values.
+
+    **Identity, transformation, and solver use**
+
+    {meth}`~ommx.Instance.add_indicator_constraint` returns an attached handle. The
+    constructor above creates an independent value; context changes on it do not
+    edit a constraint already inserted into a host. Alternatively, provide explicit
+    IDs through the `indicator_constraints` mapping of
+    {meth}`~ommx.Instance.from_components`. Constraint numbers must be distinct
+    across all active and removed families, as described by {class}`~ommx.Instance`.
+
+    {meth}`~ommx.Instance.relax_indicator_constraint` moves a condition out of the
+    active formulation while retaining it for evaluation.
+    {meth}`~ommx.Instance.restore_indicator_constraint` makes it active again, subject
+    to the current variable dependencies and fixed values.
+
+    A backend may receive this structure directly or require regular constraints.
+    For explicit Big-M lowering, use {meth}`~ommx.Instance.convert_indicator_to_constraint`;
+    its finite-bound and numerical conditions are part of that operation's contract.
+    The {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`
+    documents native handling and its complete solving examples.
+    """
     @property
     def indicator_variable_id(self) -> builtins.int: ...
     @property
@@ -4243,6 +4359,14 @@ class Instance:
     including removed constraints. Their numbering is separate from variable
     IDs. Supply distinct numbers across the regular and special-constraint
     mappings passed to {meth}`~ommx.Instance.from_components`.
+    The Instance allocates new constraint numbers above the maximum across all
+    active and removed families. Lowering and promotion allocate fresh numbers
+    for generated constraints while retained originals keep their IDs.
+    {class}`~ommx.ParametricInstance` follows the same rule, and evaluation
+    preserves those IDs in {class}`~ommx.Solution` and {class}`~ommx.SampleSet`.
+    Protobuf input with cross-family duplicate numbers is rejected without
+    automatic renumbering, including data from earlier v3 beta versions that
+    used separate number spaces.
 
     {attr}`~ommx.Instance.constraints` is a live collection of all active
     families. A typed ID identifies both the family and the number. Bare
@@ -5171,7 +5295,7 @@ class Instance:
         requested kind was active.
 
         ``atol`` controls zero-sensitive interval bounds used while lowering
-        Indicator constraints. If omitted, :attr:`DEFAULT_ATOL` is used. This
+        Indicator constraints. If omitted, {attr}`~ommx.DEFAULT_ATOL` is used. This
         aligns zero-sensitive Function body evaluation; lowering itself assumes
         exact discrete variable values.
 
@@ -5185,6 +5309,65 @@ class Instance:
 
         Raises if an underlying conversion fails, including insufficient fresh
         IDs or a required non-finite Big-M bound.
+
+        **Select a family and inspect the generated constraints**
+
+        This model contains OneHot and SOS1 constraints. Lowering only OneHot preserves
+        the active SOS1, retains the original OneHot for evaluation, and adds an equality.
+
+        ```pycon
+        >>> from ommx import (
+        ...     ConstraintID,
+        ...     Instance,
+        ...     OneHotConstraint,
+        ...     OneHotConstraintID,
+        ...     ProvenanceKind,
+        ...     Sos1Constraint,
+        ...     SpecialConstraintKind,
+        ... )
+        >>> instance = Instance.maximize()
+        >>> choices = [instance.new_binary("choice", subscripts=[i]) for i in range(3)]
+        >>> instance.objective = sum(choices)
+        >>> original = instance.add_one_hot_constraint(OneHotConstraint(variables=choices))
+        >>> _ = instance.add_sos1_constraint(Sos1Constraint(variables=choices))
+        >>> assert instance.active_special_constraint_kinds == {
+        ...     SpecialConstraintKind.OneHot,
+        ...     SpecialConstraintKind.Sos1,
+        ... }
+        >>> assert instance.lower_special_constraints({SpecialConstraintKind.OneHot}) == {
+        ...     SpecialConstraintKind.OneHot,
+        ... }
+        >>> assert instance.active_special_constraint_kinds == {SpecialConstraintKind.Sos1}
+        >>> assert original.constraint_id not in instance.constraints
+        >>> removed = instance.removed_constraints[original.constraint_id]
+        >>> assert removed.removed_reason == "ommx.Instance.convert_one_hot_to_constraint"
+        >>> assert removed.removed_reason_parameters == {"constraint_id": "2"}
+        >>> generated = instance.constraints[ConstraintID(2)]
+        >>> assert generated.provenance[-1].kind == ProvenanceKind.OneHotConstraint
+        >>> assert generated.provenance[-1].original_id == OneHotConstraintID(0)
+        >>> rows = instance.constraints_df(kind="one_hot", removed=True)
+        >>> assert rows.loc[original.constraint_id, "removed_reason"] == removed.removed_reason
+        >>> assert instance.evaluate(
+        ...     {choices[0].id: 1, choices[1].id: 0, choices[2].id: 0}
+        ... ).feasible
+        >>> assert instance.lower_special_constraints({SpecialConstraintKind.OneHot}) == set()
+        >>> assert instance.lower_special_constraints(set()) == set()
+
+        ```
+
+        `removed=True` includes active and removed rows for the selected family and adds
+        the removal-reason columns. Each generated regular constraint records its source
+        through {attr}`~ommx.Constraint.provenance`; removed rows record generated IDs in
+        their reason parameters. The single-constraint conversion APIs define the
+        family-specific parameter names and ordering. See
+        {meth}`~ommx.Instance.convert_one_hot_to_constraint`,
+        {meth}`~ommx.Instance.convert_sos1_to_constraints`, and
+        {meth}`~ommx.Instance.convert_indicator_to_constraint` for their formulas,
+        preconditions, complete examples, and per-operation mutation guarantees.
+
+        After evaluation, {meth}`~ommx.Solution.constraints_df` accepts
+        `include=("removed_reason",)` to show those reasons alongside violations. The
+        same family selection is available for {class}`~ommx.SampleSet`.
         """
     def to_v1_bytes(self) -> bytes:
         r"""
@@ -5821,36 +6004,55 @@ class Instance:
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Instance:
         r"""
-        Creates a new instance by fixing decision variables from a supplied state.
+        Create a new Instance by fixing decision variables from a supplied state.
 
-        This method validates supplied values, selects their Instance-owned representations
-        under the rules below, and substitutes the specified decision variables. This creates
-        a new problem instance where these variables are fixed and is useful for scenarios such as:
+        The original Instance remains unchanged. The new Instance validates and
+        canonicalizes supplied values, fixes the specified variables, and substitutes
+        them into active expressions. Use this to study a configuration or optimize
+        the remaining variables under chosen conditions.
 
-        - Creating simplified sub-problems with some variables fixed
-        - Incrementally solving a problem by fixing some variables and optimizing the rest
-        - Testing specific configurations of a problem
+        `state` accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of
+        `(variable_id, value)` pairs. `atol` is the absolute tolerance; `None` uses
+        {attr}`~ommx.DEFAULT_ATOL`.
 
-        **Args:**
-        - `state`: Maps decision variable IDs to their fixed values.
-          Can be a {class}`~ommx.State` object or a dictionary mapping variable IDs to values.
-        - `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
+        **A fixed subproblem is not necessarily equivalent to the original**
 
-        **Returns:**
-        A new instance with the specified decision variables fixed to values selected by the
-        canonicalization and ownership rules below.
+        For a binary variable, minimizing `x` has optimum zero, while fixing `x=1`
+        leaves a subproblem whose optimum is one. Evaluation can restore that fixed
+        value without establishing optimality for the original problem:
 
-        # Postconditions
+        ```pycon
+        >>> from ommx import Instance
+        >>> source = Instance.minimize()
+        >>> x = source.new_binary("x")
+        >>> source.objective = x
+        >>> original_candidate = source.evaluate({x.id: 0})
+        >>> conditioned = source.partial_evaluate({x.id: 1})
+        >>> conditioned_candidate = conditioned.evaluate({})
+        >>> assert original_candidate.feasible and original_candidate.objective == 0.0
+        >>> assert conditioned_candidate.feasible and conditioned_candidate.objective == 1.0
+        >>> assert conditioned_candidate.state.entries[x.id] == 1.0
+        >>> assert {v.id for v in source.used_decision_variables} == {x.id}
 
-        After the existing kind and bound validation, accepted supplied coordinates
-        use the same Instance-owned canonicalization rules as
-        {meth}`~ommx.Instance.populate_state` before propagation and substitution.
-        Non-fixed, non-dependent Continuous and SemiContinuous values are not rounded.
-        Existing fixed values remain authoritative, dependent inputs remain consistency
-        assertions, and values outside the existing partial-evaluation acceptance contract
-        remain rejected. The new instance rewrites only active expressions while retaining
-        canonical fixed values for output evaluation.
+        ```
 
+        The optimum claims here follow by comparing the two binary values, not from
+        `evaluate`. If the original constraints already force the fixed value, fixing
+        it may instead be a simplification that preserves all feasible candidates.
+        This method does not prove that the remaining constraints are feasible; evaluate
+        an actual candidate to check them.
+
+        **Canonicalization and retained output values**
+
+        After kind and bound validation, accepted supplied coordinates follow the
+        Instance-owned rules in {meth}`~ommx.Instance.populate_state` before propagation
+        and substitution. Non-fixed, non-dependent Continuous and SemiContinuous values
+        are not rounded. Existing fixed values remain authoritative, and dependent
+        inputs remain consistency assertions. Values outside the partial-evaluation
+        acceptance contract remain rejected. The new Instance rewrites only active
+        expressions while retaining canonical fixed values for output evaluation.
+
+        ```pycon
         >>> from ommx import DecisionVariable, Instance, Sense
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
@@ -5864,6 +6066,8 @@ class Instance:
         >>> assert fixed.attached_decision_variable(0).substituted_value == 1.0
         >>> solution = fixed.evaluate({})
         >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
+
+        ```
         """
     def evaluate_samples(
         self, samples: ToSamples, *, atol: typing.Optional[builtins.float] = None
@@ -7150,48 +7354,126 @@ class Instance:
         """
     def prepare(self, input_class: InstanceClass, policy: PreparationPolicy) -> None:
         r"""
-        Apply the caller's ``policy`` to this instance in place to reach
-        ``input_class`` membership.
+        Apply the caller's `policy` to this Instance in place to reach `input_class`
+        membership.
 
-        ``policy`` selects existing {class}`~ommx.Instance` owner operations.
-        Whole-class membership is checked before the first phase and after each
-        selected phase. Phases are applied at most once in this order, stopping
-        as soon as membership is reached:
+        The {class}`~ommx.InstanceClass` target describes required representation
+        conditions; {class}`~ommx.PreparationPolicy` selects permitted transformations.
+        Constructing either object does not change the Instance. Preparation executes
+        existing Instance-owned operations and checks their resulting representation.
 
-        1. ``special_constraints``:
-           {meth}`~ommx.Instance.lower_special_constraints`
-        2. ``objective``: {meth}`~ommx.Instance.convert_active_objective`
-        3. ``integer_slack``:
+        **Convert a representation and evaluate the same candidates**
+
+        This complete example lowers a OneHot constraint to a regular linear equality.
+        OneHot means exactly one of the Binary variables is one. Save the initial
+        evaluations to compare them later; keeping the original Instance itself is only
+        necessary when it must be evaluated or reused separately after the mutation.
+
+        ```pycon
+        >>> from ommx import (
+        ...     Equality,
+        ...     Instance,
+        ...     InstanceClass,
+        ...     InstanceClassClause,
+        ...     Kind,
+        ...     OneHotConstraint,
+        ...     OneHotConstraintID,
+        ...     PolynomialRequirement,
+        ...     PreparationPolicy,
+        ...     Sense,
+        ...     SpecialConstraintKind,
+        ...     SpecialConstraintPreparation,
+        ... )
+        >>> instance = Instance.maximize()
+        >>> x = [instance.new_binary("x", subscripts=[i]) for i in range(2)]
+        >>> instance.objective = 3 * x[0] + 2 * x[1]
+        >>> _ = instance.add_one_hot_constraint(OneHotConstraint(variables=x))
+        >>> state = {x[0].id: 1, x[1].id: 0}
+        >>> both = {x[0].id: 1, x[1].id: 1}
+        >>> before = instance.evaluate(state)
+        >>> before_both = instance.evaluate(both)
+        >>> linear = PolynomialRequirement.at_most(1)
+        >>> target = InstanceClass(
+        ...     [
+        ...         InstanceClassClause(
+        ...             label="binary-linear-equality",
+        ...             allowed_variable_kinds={Kind.Binary},
+        ...             objective_polynomial_requirement=linear,
+        ...             regular_constraint_polynomial_requirements={Equality.EqualToZero: linear},
+        ...             allowed_senses={Sense.Maximize},
+        ...         )
+        ...     ]
+        ... )
+        >>> assert not target.contains(instance)
+        >>> policy = PreparationPolicy(
+        ...     special_constraints=SpecialConstraintPreparation.lower_special_constraints(
+        ...         kinds={SpecialConstraintKind.OneHot}
+        ...     )
+        ... )
+        >>> assert set(instance.constraints) == {OneHotConstraintID(0)}
+        >>> assert instance.prepare(target, policy) is None
+        >>> assert target.contains(instance)
+        >>> assert len(instance.constraints) == 1
+        >>> assert instance.active_special_constraint_kinds == set()
+        >>> assert set(instance.removed_constraints) == {OneHotConstraintID(0)}
+        >>> assert instance.constraints_df(kind="regular").shape[0] == 1
+        >>> after = instance.evaluate(state)
+        >>> assert before.feasible and after.feasible
+        >>> assert before.objective == after.objective == 3.0
+        >>> assert not before_both.feasible
+        >>> assert not instance.evaluate(both).feasible
+
+        ```
+
+        The active formulation now contains `x[0] + x[1] == 1`; the original OneHot is
+        retained for evaluation in {attr}`~ommx.Instance.removed_constraints`. The exact
+        lowering contract is {meth}`~ommx.Instance.convert_one_hot_to_constraint`.
+        Agreement for the two candidates above illustrates this operation; checking a
+        few candidates does not prove the guarantees of arbitrary transformations.
+
+        **Phase order, early stopping, and guarantees**
+
+        Whole-class membership is checked before the first phase and after each selected
+        phase. Phases are applied at most once in this order, stopping as soon as
+        membership is reached:
+
+        1. `special_constraints`: {meth}`~ommx.Instance.lower_special_constraints`
+        2. `objective`: {meth}`~ommx.Instance.convert_active_objective`
+        3. `integer_slack`:
            {meth}`~ommx.Instance.convert_inequality_to_equality_with_integer_slack`,
-           followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only
-           when exact conversion is unavailable and ``slack_upper_bound`` is set
-        4. ``integer_encoding``: {meth}`~ommx.Instance.log_encode`
-        5. ``fixed_penalty``
-        6. ``binary_power_reduction``:
-           {meth}`~ommx.Instance.reduce_binary_power`
+           followed by {meth}`~ommx.Instance.add_integer_slack_to_inequality` only when
+           exact conversion is unavailable and `slack_upper_bound` is set
+        4. `integer_encoding`: {meth}`~ommx.Instance.log_encode`
+        5. `fixed_penalty`: the selected {class}`~ommx.FixedPenaltyPreparation` operation
+        6. `binary_power_reduction`: {meth}`~ommx.Instance.reduce_binary_power`
 
-        Success guarantees ``input_class`` membership. When ``input_class`` is an
-        Adapter's ``INPUT_CLASS``, that membership is the complete applicability
-        condition; converter-local or backend failures may still occur later.
+        If the input already belongs to the target class, no phase runs and the Instance
+        is unchanged. Unselected phases do not run. This is not a general loop that
+        selects or repeats preprocessing operations until convergence.
 
-        Preparation is not globally transactional. Changes committed by an
-        earlier owner operation remain if a later operation raises an error.
-        Within the Integer-slack phase, active regular inequalities are processed
-        in ascending constraint-ID order, and a later failure leaves earlier
-        conversions committed. Other phases retain the mutation and failure
-        semantics of their owner operations.
+        Success guarantees `input_class` membership. When `input_class` is an Adapter's
+        `INPUT_CLASS`, membership is its complete applicability condition; converter-local
+        or backend failures may still occur later. Membership alone does not establish
+        equivalence to the source problem, preservation of every feasible candidate, or
+        optimality of a returned result. Each selected operation owns those guarantees
+        and their domain, bound, and numerical conditions.
 
-        Existing Rust owner signals retain their Python exception mappings.
-        When configured phases are exhausted without reaching ``input_class``,
-        {class}`~ommx.PreparationTargetNotReachedError` exposes the final
-        membership report through its ``report`` attribute.
+        **QUBO preparation and coefficient formatting**
 
-        # Postconditions
+        {meth}`~ommx.PreparationPolicy.for_qubo` constructs a policy without modifying a
+        model. Here Preparation changes the active maximization into minimization and
+        turns a regular equality into a penalty. The selected weight `2.0` is specific to
+        this example; the factory's default weight is not a sufficiency guarantee.
 
-        Selected owner operations establish their own output semantics, and
-        successful composition reaches the target class.
-
-        >>> from ommx import DecisionVariable, Instance, InstanceClass, Optimality, PreparationPolicy, Sense
+        ```pycon
+        >>> from ommx import (
+        ...     DecisionVariable,
+        ...     Instance,
+        ...     InstanceClass,
+        ...     Optimality,
+        ...     PreparationPolicy,
+        ...     Sense,
+        ... )
         >>> x = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
         ...     decision_variables=[x], objective=x, constraints={7: x == 1}, sense=Sense.Maximize
@@ -7203,7 +7485,64 @@ class Instance:
         >>> assert instance.objective.evaluate({0: 0}) == 2.0
         >>> solution = instance.evaluate({0: 0})
         >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 0.0)
+        >>> assert not solution.feasible
         >>> assert instance.map_active_optimality(Optimality.Optimal) == Optimality.Unspecified
+        >>> coefficients, offset = instance.as_qubo_format()
+        >>> assert coefficients == {(0, 0): -3.0}
+        >>> assert offset == 2.0
+
+        ```
+
+        {meth}`~ommx.Instance.as_qubo_format` performs no Preparation. It extracts the
+        active objective's coefficients and constant, which need not equal the output
+        objective used by `evaluate`. The Instance still holds reconstruction and retained
+        evaluation information; coefficients alone do not carry it to another system.
+        Keep the Instance when those semantics are needed for evaluation or storage.
+        {meth}`~ommx.Instance.to_qubo` combines Preparation and formatting in place.
+
+        For an Adapter, use its own `INPUT_CLASS` and recommended policy as the starting
+        point. A backend can accept higher-degree Binary polynomials or require choices
+        that a generic QUBO policy does not express. To execute a caller-selected policy,
+        prepare explicitly and then use `solve_without_preparation` or
+        `sample_without_preparation`; see {class}`~ommx.adapter.SolverAdapter` and
+        {class}`~ommx.adapter.SamplerAdapter`.
+
+        **Errors and mutation on failure**
+
+        Preparation is not globally transactional. Changes committed by an earlier owner
+        operation remain if a later operation raises an error. Within the Integer-slack
+        phase, active regular inequalities are processed in ascending constraint-ID order,
+        and a later failure leaves earlier conversions committed. Other phases retain the
+        mutation and failure semantics of their owner operations. If the original
+        Instance must remain available after failure, make a copy before calling
+        `prepare` and discard the partially prepared copy on error.
+
+        Existing Rust owner signals retain their Python exception mappings. When
+        configured phases are exhausted without reaching `input_class`,
+        {class}`~ommx.PreparationTargetNotReachedError` exposes the final membership report
+        through its `report` attribute:
+
+        ```pycon
+        >>> from ommx import (
+        ...     Instance,
+        ...     InstanceClass,
+        ...     PreparationPolicy,
+        ...     PreparationTargetNotReachedError,
+        ... )
+        >>> blocked = Instance.minimize()
+        >>> z = blocked.new_binary("z")
+        >>> blocked.objective = z
+        >>> _ = blocked.add_constraint(z == 1)
+        >>> target = InstanceClass.qubo()
+        >>> try:
+        ...     blocked.prepare(target, PreparationPolicy())
+        ... except PreparationTargetNotReachedError as error:
+        ...     assert not error.report.is_member
+        ...     assert error.report == target.check_membership(blocked)
+        ... else:
+        ...     raise AssertionError("an empty policy unexpectedly removed a constraint")
+
+        ```
         """
     def promote_sos1_big_m(
         self,
@@ -7248,12 +7587,259 @@ class Instance:
         Promotion does not promise identical
         violations or feasibility classification at finite tolerance.
         Unknown mode strings raise {class}`ValueError` before planning.
+
+        **The claimed formulation**
+
+        A Big-M formulation links each member $x_i$ to a Binary selector $y_i$ using
+        finite coefficients $M_i^+$ and $M_i^-$ that cover its domain:
+
+        $$
+        x_i-M_i^+y_i\leq0,\qquad -x_i-M_i^-y_i\leq0,\qquad \sum_i y_i\leq1.
+        $$
+
+        At $y_i=0$, the links force $x_i=0$, so at most one member can be nonzero.
+        Conversely, if the coefficients cover the prepared member domains, an
+        SOS1-feasible assignment can select its nonzero member, or select none when
+        all members are zero. Projecting out fresh selectors then gives the same feasible
+        member assignments. Binary members can act as their own selectors, and a side
+        already implied by a member's domain can be omitted.
+
+        The request uses {class}`~ommx.Sos1BigMSelectorClaim` to identify reused members
+        and fresh selectors with their link-row IDs. It is an unchecked claim about the
+        current Instance, not a declaration of new rows. The rows need not originate from
+        {meth}`~ommx.Instance.convert_sos1_to_constraints`. A fresh selector must be
+        private to its formulation and its domain must permit the canonical indicator
+        for every possible prepared member value.
+
+        All bound preparation reads the original variable domains and only the claimed
+        links; cardinality rows and unrelated constraints do not contribute. For
+        example, $x\leq3z$ with Binary $z$ can tighten a stored upper bound of $100$ to
+        $3$. Only accepted promotions commit their prepared bounds.
+
+        **Build a formulation and handle a batch**
+
+        The regular rows below encode an SOS1 containing a Binary member and an Integer
+        member. The Integer member uses a separate selector. A second request entry has
+        no matching cardinality row, illustrating rejection without relying on a solver.
+
+        ```pycon
+        >>> from ommx import (
+        ...     Bound,
+        ...     ConstraintID,
+        ...     DecisionVariable,
+        ...     Instance,
+        ...     Sense,
+        ...     Sos1ConstraintID,
+        ...     Sos1BigMPromotionBatchRejectedError,
+        ...     Sos1BigMPromotionRequest,
+        ...     Sos1BigMSelectorClaim,
+        ... )
+        >>> binary_member = DecisionVariable.binary(0)
+        >>> integer_member = DecisionVariable.integer(1, lower=-100, upper=100)
+        >>> selector = DecisionVariable.binary(10)
+        >>> instance = Instance.from_components(
+        ...     sense=Sense.Minimize,
+        ...     objective=integer_member,
+        ...     decision_variables=[binary_member, integer_member, selector],
+        ...     constraints={
+        ...         100: integer_member - 3 * selector <= 0,
+        ...         101: -integer_member - 2 * selector <= 0,
+        ...         102: binary_member + selector - 1 <= 0,
+        ...     },
+        ... )
+        >>> request = Sos1BigMPromotionRequest(
+        ...     {
+        ...         102: {
+        ...             0: Sos1BigMSelectorClaim.reused(),
+        ...             1: Sos1BigMSelectorClaim.fresh(10, upper_link=100, lower_link=101),
+        ...         },
+        ...         999: {},
+        ...     }
+        ... )
+        >>> before = instance.to_v2_bytes()
+        >>> try:
+        ...     instance.promote_sos1_big_m(request, mode="strict")
+        ... except Sos1BigMPromotionBatchRejectedError as error:
+        ...     assert error.request_count == 2
+        ...     assert set(error.rejections) == {ConstraintID(999)}
+        ... else:
+        ...     raise AssertionError("strict mode accepted an invalid formulation")
+        >>> assert instance.to_v2_bytes() == before
+        >>> report = instance.promote_sos1_big_m(request)
+        >>> assert report.request_count == 2
+        >>> assert report.promoted == {ConstraintID(102): Sos1ConstraintID(103)}
+        >>> assert set(report.rejections) == {ConstraintID(999)}
+        >>> assert set(report.promoted).isdisjoint(report.rejections)
+        >>> assert set(report.promoted) | set(report.rejections) == set(request.selector_claims)
+        >>> assert instance.get_decision_variable_by_id(1).bound == Bound(-2, 3)
+        >>> assert set(instance.constraints[Sos1ConstraintID(103)].variables) == {0, 1}
+        >>> assert set(instance.removed_constraints) == {
+        ...     ConstraintID(100),
+        ...     ConstraintID(101),
+        ...     ConstraintID(102),
+        ... }
+        >>> assert instance.populate_state({0: 0, 1: 2}).entries[10] == 1.0
+        >>> assert instance.evaluate({0: 0, 1: 2}).feasible
+
+        ```
+
+        The report's maps are snapshots. A successful strict call returns the same
+        report type with no rejections; when strict mode rejects, entries absent from
+        the exception's rejection map were accepted during planning but were not applied.
+        Inspect members and retained formulation history on the mutated Instance using
+        the returned SOS1 IDs and original regular IDs.
         """
 
 @typing.final
 class InstanceClass:
     r"""
-    A set of :class:`Instance` values represented as a finite union of clauses.
+    A set of exact {class}`~ommx.Instance` representations, used for inspection and
+    as a target for {meth}`~ommx.Instance.prepare`.
+
+    Membership checks the Instance as it is: it does not convert expressions,
+    prepare a model, or run a solver. An Adapter's `INPUT_CLASS` is one use of this
+    common representation contract.
+
+    **Clauses describe alternatives**
+
+    An InstanceClass is a finite union of {class}`~ommx.InstanceClassClause` values.
+    An Instance belongs to the class if it satisfies every condition in at least one
+    clause. Conditions from different clauses are not combined. For example, a
+    union of continuous quadratic problems and mixed-integer linear problems does
+    not automatically include mixed-integer quadratic problems. An empty list of
+    clauses accepts no Instance.
+
+    A clause specifies the allowed kinds of used variables, the objective's
+    polynomial representation and degree, the relations and polynomial requirements
+    of regular constraints and Indicator bodies, whether active OneHot and SOS1
+    constraints are allowed, and the optimization direction. Its label identifies
+    it in diagnostics without changing membership.
+
+    **Inspect membership without changing the model**
+
+    This target accepts Binary variables, a linear objective, regular linear
+    equalities, and maximization. It does not accept active special constraints.
+
+    ```pycon
+    >>> from ommx import (
+    ...     Equality,
+    ...     Instance,
+    ...     InstanceClass,
+    ...     InstanceClassClause,
+    ...     Kind,
+    ...     OneHotConstraint,
+    ...     OneHotConstraintID,
+    ...     PolynomialRequirement,
+    ...     Sense,
+    ... )
+    >>> linear = PolynomialRequirement.at_most(1)
+    >>> target = InstanceClass(
+    ...     [
+    ...         InstanceClassClause(
+    ...             label="binary-linear-equality",
+    ...             allowed_variable_kinds={Kind.Binary},
+    ...             objective_polynomial_requirement=linear,
+    ...             regular_constraint_polynomial_requirements={Equality.EqualToZero: linear},
+    ...             allowed_senses={Sense.Maximize},
+    ...         )
+    ...     ]
+    ... )
+    >>> instance = Instance.maximize()
+    >>> xs = [instance.new_binary("x", subscripts=[i]) for i in range(2)]
+    >>> instance.objective = 3 * xs[0] + 2 * xs[1]
+    >>> _ = instance.add_one_hot_constraint(OneHotConstraint(variables=xs))
+    >>> assert not target.contains(instance)
+    >>> report = target.check_membership(instance)
+    >>> assert not report.is_member
+    >>> assert report.matching_clauses == []
+    >>> assert report.clause_reports[0].clause_label == "binary-linear-equality"
+    >>> assert report.clause_reports[0].mismatches
+    >>> assert set(instance.constraints) == {OneHotConstraintID(0)}
+
+    ```
+
+    OneHot means exactly one member is one. Although a linear equality can express
+    that condition for Binary variables, its dedicated representation does not
+    match a clause that permits only regular equalities. The check leaves OneHot
+    unchanged. {meth}`~ommx.Instance.prepare` contains a complete example converting
+    this representation and comparing candidate evaluations before and after it.
+
+    {meth}`~ommx.InstanceClass.contains` returns a Boolean.
+    {meth}`~ommx.InstanceClass.check_membership` returns an
+    {class}`~ommx.InstanceClassMembershipReport`; its `clause_reports` describe each
+    alternative, and `matching_clauses` identifies every matching index and label.
+    Each {class}`~ommx.InstanceClassClauseReport` exposes structured
+    {class}`~ommx.InstanceClassMismatch` values with the affected positions or IDs.
+
+    Alternatively, add a clause that accepts the dedicated OneHot representation:
+
+    ```pycon
+    >>> with_one_hot = InstanceClass(
+    ...     [
+    ...         InstanceClassClause(
+    ...             label="binary-linear-with-one-hot",
+    ...             allowed_variable_kinds={Kind.Binary},
+    ...             objective_polynomial_requirement=linear,
+    ...             allowed_senses={Sense.Maximize},
+    ...             allows_one_hot=True,
+    ...         )
+    ...     ]
+    ... )
+    >>> combined = target.union(with_one_hot)
+    >>> assert combined.contains(instance)
+    >>> assert combined.check_membership(instance).matching_clauses == [
+    ...     (1, "binary-linear-with-one-hot")
+    ... ]
+    >>> assert not target.contains(instance)
+
+    ```
+
+    **The active representation determines membership**
+
+    Variable-kind checks use {attr}`~ommx.Instance.used_decision_variables`: variables
+    referenced by the active objective and active constraints, including special
+    constraints. Fixed, dependent, and irrelevant variables are excluded, as are
+    variables referenced only by removed constraints, named functions, or the output
+    objective. Removed constraints do not contribute their relations, degrees, or
+    special-constraint kinds. A lowered Instance can therefore retain the original
+    special constraints for evaluation while matching a class that disallows them
+    as active constraints.
+
+    The stored {class}`~ommx.Function` representation matters as well as its
+    mathematical meaning. Polynomial requirements reject composed expressions even
+    when they happen to define a polynomial; see {meth}`~ommx.Function.powi` for an
+    example. Membership establishes representation requirements, not equivalence to
+    a previous model or a guarantee about the solution returned by a backend.
+
+    **QUBO is one Instance class**
+
+    {meth}`~ommx.InstanceClass.qubo` accepts Binary polynomial minimization of degree
+    at most two with no active constraints. Linear and constant objectives are
+    included. The model remains an OMMX Instance:
+
+    ```pycon
+    >>> qubo = Instance.minimize()
+    >>> a = qubo.new_binary("a")
+    >>> b = qubo.new_binary("b")
+    >>> qubo.objective = a + 2 * a * b + 3
+    >>> assert InstanceClass.qubo().contains(qubo)
+    >>> coefficients, offset = qubo.as_qubo_format()
+    >>> assert coefficients == {(a.id, a.id): 1.0, (a.id, b.id): 2.0}
+    >>> assert offset == 3.0
+
+    ```
+
+    {meth}`~ommx.Instance.as_qubo_format` extracts active-objective coefficients and
+    the constant without Preparation. Those values do not replace the Instance's
+    reconstruction rules, retained constraints, or output objective.
+    {meth}`~ommx.Instance.to_qubo` combines Preparation and formatting and changes
+    the Instance in place; {meth}`~ommx.Instance.prepare` shows the explicit path.
+
+    Use a concrete Adapter's `INPUT_CLASS` rather than inferring it from a solver
+    name: some samplers accept Binary polynomials beyond degree two. For membership,
+    recommended policies, and the distinction between automatic and explicit
+    Preparation, see {class}`~ommx.adapter.SolverAdapter` and
+    {class}`~ommx.adapter.SamplerAdapter`.
     """
     @property
     def clauses(self) -> builtins.list[InstanceClassClause]: ...
@@ -7356,6 +7942,12 @@ class InstanceClassClause:
     Every condition in a clause must hold. The containing instance class is
     the finite union of its clauses, so alternatives are not combined across
     clause boundaries.
+
+    Omitted regular-constraint and Indicator-body maps are empty, so those
+    constraint families are not accepted. OneHot and SOS1 are also disabled
+    unless their Boolean options are enabled. The objective and constraint
+    requirements describe stored polynomials, not a request to expand expressions.
+    See {class}`~ommx.InstanceClass` for construction and membership examples.
     """
     @property
     def label(self) -> builtins.str:
@@ -8180,10 +8772,62 @@ class ObjectivePreparation:
 @typing.final
 class OneHotConstraint:
     r"""
-    A one-hot constraint: exactly one variable must be 1, the rest must be 0.
+    Require exactly one member of a nonempty set of Binary variables to equal one.
 
-    This is a structural constraint — no explicit function is stored.
-    The implicit constraint is `sum(x_i) = 1` where all `x_i` are binary.
+    All other members must equal zero, so the mathematical condition is
+    $\sum_i x_i=1$. This is a structural constraint: it stores member IDs rather than
+    an explicit Function. Keeping the selection structure allows transformations and
+    result inspection to retain its meaning.
+
+    Each `variables` entry accepts a variable ID, a standalone
+    {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
+    These accepted forms are exposed as the `VariableIDLike` type alias.
+    Only their IDs are stored; duplicate entries identify the same member. The
+    constructor rejects an empty set. The enclosing Instance validates that every
+    referenced variable exists and is Binary when inserting the constraint.
+
+    **Construct and evaluate a choice**
+
+    ```pycon
+    >>> from ommx import Instance, OneHotConstraint, OneHotConstraintID
+    >>> instance = Instance.maximize()
+    >>> choices = [instance.new_binary("choice", subscripts=[i]) for i in range(3)]
+    >>> instance.objective = sum(value * x for value, x in zip([5, 10, 3], choices))
+    >>> condition = OneHotConstraint(variables=choices)
+    >>> assert condition.variables == [x.id for x in choices]
+    >>> attached = instance.add_one_hot_constraint(condition)
+    >>> cid = attached.constraint_id
+    >>> assert isinstance(cid, OneHotConstraintID)
+    >>> chosen = instance.evaluate({choices[0].id: 0, choices[1].id: 1, choices[2].id: 0})
+    >>> assert chosen.feasible and chosen.objective == 10
+    >>> assert not instance.evaluate({x.id: 0 for x in choices}).feasible
+    >>> assert not instance.evaluate({x.id: 1 for x in choices}).feasible
+    >>> rows = chosen.constraints_df(kind="one_hot")
+    >>> assert list(rows.index) == [cid]
+    >>> assert rows.loc[cid, "violation"] == 0.0
+
+    ```
+
+    Unlike {class}`~ommx.Sos1Constraint`, this condition does not allow selecting
+    no member. Numerical evaluation and reported violations use the contracts of
+    {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Solution.constraints_df`.
+
+    **Identity and lowering**
+
+    {meth}`~ommx.Instance.add_one_hot_constraint` returns an attached handle. The
+    constructor creates an independent value; context changes on it do not edit a
+    constraint already inserted into a host. For explicit IDs, use the
+    `one_hot_constraints` mapping of {meth}`~ommx.Instance.from_components`.
+    Constraint numbers share the active/removed cross-family space described by
+    {class}`~ommx.Instance`.
+
+    {meth}`~ommx.Instance.convert_one_hot_to_constraint` lowers the condition to a
+    regular equality, assigns the equality a fresh ID, and retains the original
+    OneHot for evaluation. Generated constraints carry provenance back to that
+    original; the method's example shows how to inspect the relationship.
+    {meth}`~ommx.Instance.lower_special_constraints` selects whole families to lower.
+    For automatic preparation and execution, consult the selected Adapter's
+    Reference, such as {class}`~ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter`.
     """
     @property
     def variables(self) -> builtins.list[builtins.int]: ...
@@ -9329,18 +9973,31 @@ class PreparationPolicy:
     r"""
     Select optional transformations applied by {meth}`~ommx.Instance.prepare`.
 
+    A policy stores choices and settings; constructing or editing it does not
+    transform an Instance. The target {class}`~ommx.InstanceClass` describes the
+    required representation, this policy selects permitted operations, and
+    `Instance.prepare(input_class, policy)` applies them to that Instance in place.
+
     Each property selects at most one phase. Properties may be combined freely,
     although owner-operation validation and target membership can still make a
-    combination fail for a particular {class}`~ommx.Instance`.
-    See {meth}`~ommx.Instance.prepare` for phase ordering, early stopping, and
-    mutation on failure.
+    combination fail for a particular {class}`~ommx.Instance`. A policy is not a list
+    of operations that will always run: Preparation stops as soon as the whole
+    target class is reached, including before the first phase if already satisfied.
+    See {meth}`~ommx.Instance.prepare` for the complete execution example, phase
+    ordering, early stopping, and mutation on failure.
 
-    # Invariants
+    **Defaults and explicit selection**
 
-    A default policy selects no Preparation phase. Future phases also default
-    to disabled.
+    A default policy selects no Preparation phase. Future phases also default to
+    disabled. The following policy initially leaves every transformation unselected,
+    then permits only lowering OneHot constraints to regular equalities:
 
-    >>> from ommx import PreparationPolicy
+    ```pycon
+    >>> from ommx import (
+    ...     PreparationPolicy,
+    ...     SpecialConstraintKind,
+    ...     SpecialConstraintPreparation,
+    ... )
     >>> policy = PreparationPolicy()
     >>> assert (
     ...     policy.special_constraints,
@@ -9350,6 +10007,45 @@ class PreparationPolicy:
     ...     policy.fixed_penalty,
     ...     policy.binary_power_reduction,
     ... ) == (None, None, None, None, None, None)
+    >>> policy.special_constraints = SpecialConstraintPreparation.lower_special_constraints(
+    ...     kinds={SpecialConstraintKind.OneHot}
+    ... )
+    >>> assert policy.integer_encoding is None
+    >>> assert policy.fixed_penalty is None
+
+    ```
+
+    The corresponding settings are {class}`~ommx.SpecialConstraintPreparation`,
+    {class}`~ommx.ObjectivePreparation`, {class}`~ommx.IntegerSlackPreparation`,
+    {class}`~ommx.IntegerEncodingPreparation`, {class}`~ommx.FixedPenaltyPreparation`,
+    and {class}`~ommx.BinaryPowerPreparation`. Unselected phases do not run. The
+    application chooses permitted transformations, numerical tolerances, and penalty
+    magnitudes; a target class alone does not decide them or prove the transformations
+    preserve the desired mathematical guarantees.
+
+    **QUBO, HUBO, and Adapter policies**
+
+    {meth}`~ommx.PreparationPolicy.for_qubo` and
+    {meth}`~ommx.PreparationPolicy.for_hubo` return fresh policies for their respective
+    formatting targets. Creating either policy does not prepare a model. Their
+    penalty defaults are documented choices, not a guarantee that an arbitrary
+    problem's desired candidate will be selected. In particular,
+    {meth}`~ommx.FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight`
+    explains why squaring an inequality's body differs from penalizing only its
+    violation.
+
+    The explicit path is to call `Instance.prepare` with the target and chosen
+    policy, then format the active objective if coefficients are needed. The complete
+    QUBO example is in {meth}`~ommx.Instance.prepare`. The convenience methods
+    {meth}`~ommx.Instance.to_qubo` and {meth}`~ommx.Instance.to_hubo` perform both
+    Preparation and coefficient formatting in place; `as_qubo_format` and
+    `as_hubo_format` perform formatting alone.
+
+    A generic QUBO/HUBO factory is separate from an Adapter's
+    `recommended_preparation_policy()`. An Adapter can accept a different class or
+    leave problem-specific choices to the application. For explicit policies followed
+    by strict execution, see {class}`~ommx.adapter.SolverAdapter` and
+    {class}`~ommx.adapter.SamplerAdapter`.
     """
     @property
     def special_constraints(self) -> typing.Optional[SpecialConstraintPreparation]: ...
@@ -12564,10 +13260,70 @@ class Sos1BigMSelectorClaim:
 @typing.final
 class Sos1Constraint:
     r"""
-    A SOS1 (Special Ordered Set type 1) constraint: at most one variable can be non-zero.
+    A Special Ordered Set type 1: at most one member may be nonzero.
 
-    This is a structural constraint — no explicit function is stored.
-    Unlike OneHotConstraint, SOS1 allows all variables to be zero.
+    Members need not be Binary, and a nonzero member need not equal one. All-zero
+    values are allowed, unlike {class}`~ommx.OneHotConstraint`. Negative values also
+    count as nonzero when the member's domain permits them. This structural
+    constraint stores member IDs rather than an explicit Function.
+
+    Each `variables` entry accepts a variable ID, a standalone
+    {class}`~ommx.DecisionVariable`, or an {class}`~ommx.AttachedDecisionVariable`.
+    These accepted forms are exposed as the `VariableIDLike` type alias.
+    Only their IDs are stored; duplicate entries identify the same member. The
+    constructor rejects an empty set. The enclosing Instance validates that the
+    referenced variables exist when inserting the constraint.
+
+    **Construct and evaluate alternative amounts**
+
+    ```pycon
+    >>> from ommx import Instance, Sos1Constraint, Sos1ConstraintID
+    >>> instance = Instance.maximize()
+    >>> amounts = [
+    ...     instance.new_continuous("amount", lower=-10, upper=10, subscripts=[i])
+    ...     for i in range(3)
+    ... ]
+    >>> instance.objective = sum(amounts)
+    >>> condition = Sos1Constraint(variables=amounts)
+    >>> assert condition.variables == [x.id for x in amounts]
+    >>> attached = instance.add_sos1_constraint(condition)
+    >>> cid = attached.constraint_id
+    >>> assert isinstance(cid, Sos1ConstraintID)
+    >>> assert instance.evaluate({x.id: 0 for x in amounts}).feasible
+    >>> one = instance.evaluate({amounts[0].id: 7, amounts[1].id: 0, amounts[2].id: 0})
+    >>> assert one.feasible
+    >>> assert instance.evaluate(
+    ...     {amounts[0].id: -7, amounts[1].id: 0, amounts[2].id: 0}
+    ... ).feasible
+    >>> assert not instance.evaluate(
+    ...     {amounts[0].id: 7, amounts[1].id: 1, amounts[2].id: 0}
+    ... ).feasible
+    >>> rows = one.constraints_df(kind="sos1")
+    >>> assert list(rows.index) == [cid]
+    >>> assert rows.loc[cid, "violation"] == 0.0
+
+    ```
+
+    See {meth}`~ommx.Instance.evaluate` for numerical evaluation and
+    {meth}`~ommx.Solution.constraints_df` for violation and activation diagnostics.
+    The constructor creates an independent value;
+    {meth}`~ommx.Instance.add_sos1_constraint` returns an attached handle.
+    For explicit IDs, use the `sos1_constraints` mapping of
+    {meth}`~ommx.Instance.from_components`. Constraint numbers follow the same
+    cross-family uniqueness rule as regular constraints, including removed rows.
+
+    **Use the structure directly or express it with regular constraints**
+
+    The {class}`PySCIPOpt Adapter <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>` can
+    pass SOS1 directly to its backend. When regular constraints are required,
+    {meth}`~ommx.Instance.convert_sos1_to_constraints` constructs a Big-M
+    formulation under its domain and finite-bound conditions. The original SOS1 is
+    retained for evaluation, and generated constraints record its provenance.
+
+    The reverse operation, {meth}`~ommx.Instance.promote_sos1_big_m`, validates
+    explicit claims that existing regular rows form an SOS1 formulation. Its
+    Reference explains the mathematical correspondence, accepted bounds, batch
+    outcomes, and complete examples. The rows need not have been generated by OMMX.
     """
     @property
     def variables(self) -> builtins.list[builtins.int]: ...

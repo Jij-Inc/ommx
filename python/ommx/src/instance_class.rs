@@ -52,6 +52,12 @@ impl PolynomialRequirement {
 /// Every condition in a clause must hold. The containing instance class is
 /// the finite union of its clauses, so alternatives are not combined across
 /// clause boundaries.
+///
+/// Omitted regular-constraint and Indicator-body maps are empty, so those
+/// constraint families are not accepted. OneHot and SOS1 are also disabled
+/// unless their Boolean options are enabled. The objective and constraint
+/// requirements describe stored polynomials, not a request to expand expressions.
+/// See {class}`~ommx.InstanceClass` for construction and membership examples.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(frozen)]
 #[derive(Debug, Clone)]
@@ -164,7 +170,7 @@ impl InstanceClassClause {
     }
 }
 
-/// A set of :class:`Instance` values represented as a finite union of clauses.
+#[doc = include_str!("docstrings/ommx/InstanceClass.md")]
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(frozen)]
 #[derive(Debug, Clone)]

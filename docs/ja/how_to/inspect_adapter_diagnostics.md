@@ -56,7 +56,7 @@ boundやgapは、探索がどこまで進んだかを読む手がかりです。
 これらはソルバーが実際に解いた定式化に関する値です。変換で目的関数の符号や
 スケール、ペナルティが変わる場合、OMMXの報告目的値とそのまま比較しないでください。
 比較の軸は[Adapterの比較](compare_adapters.md)、対応関係の判断は
-[変換の保証](../user_guide/transformation_guarantees.md)を参照してください。
+[問題を変換して解法へ渡す](../user_guide/transform_and_solve.md)を参照してください。
 
 ## 進捗を図にする
 

@@ -79,4 +79,4 @@ solution.decision_variables_df()
 
 この解では `enabled = 1`、`option_a = 1`、`option_b = 0`、`option_c = 1` となり、Indicator制約とSOS1制約をどちらも満たします。呼び出し前に通常制約へ書き換える必要はありませんでした。
 
-一方、Indicator制約やSOS1制約を直接扱わないソルバーもあります。次の[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md)では、同じモデルをHiGHSで解き、OMMXが通常制約への変換を担う例を見ます。各特殊制約の意味と個別APIの参照先は[特殊制約型](../user_guide/special_constraints.md)にまとめています。
+一方、Indicator制約やSOS1制約を直接扱わないソルバーもあります。次の[Adapter向けにInstanceを準備する](./prepare_instance_for_adapter.md)では、同じモデルをHiGHSで解き、OMMXが通常制約への変換を担う例を見ます。各特殊制約の意味と個別APIの参照先は{class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`にまとめています。

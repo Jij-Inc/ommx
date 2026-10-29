@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変数復元・保持情報のReference移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変換・解法選択章、変数復元・保持情報・特殊制約・InstanceClass・Preparation・Adapterの共有Reference移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -131,6 +131,48 @@
         "P12"
       ],
       "note": "2次案の候補評価章を日英で追加し、日本語variable_roles/removed_constraintsのAPI手順を共有Referenceへ統合する。概念IDを保持してG6/G8の所有先を変更し、新しいBook章はAPI操作と区別した判断能力を契約にする。関連ページの変更は移管先への導線に限定し、各ページ全体の再編集ではない。歴史的baselineを更新せず、本文照合の証拠はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "95a3c8dff24c0670d65578f21671ba2530d6bc69",
+      "target_revision": "codex/transformation-book",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "B_TRANSFORM",
+        "R_API.special_constraints",
+        "R_API.special_constraints.evaluate",
+        "R_API.instance_class",
+        "R_API.instance_class.scope",
+        "R_API.preparation",
+        "R_API.instance.prepare",
+        "R_API.adapter",
+        "R_API.adapter.custom_policy",
+        "R_ADAPTERS",
+        "R_API.preparation.penalty",
+        "R_API.instance.partial_evaluate",
+        "R_API.instance.encoding",
+        "R_API.instance.bounds",
+        "R_API.transform",
+        "SETUP",
+        "T2",
+        "T3",
+        "P2",
+        "P3",
+        "P4",
+        "P12",
+        "P15",
+        "P16",
+        "T8",
+        "DEV_A",
+        "MIG3",
+        "RELEASE"
+      ],
+      "note": "2次案第2章を日英で追加し、旧special_constraints/capability_model/instance_class/preparation_policy/transformation_guarantees/supported_ommx_adaptersと日本語の明示Preparation二手順を共有Referenceへ統合。旧G3/G9/G10/G11/P1/P11/G7系を意味的な所有先へ移し、未実装だったencoding節は既存API本文へ割り当てる。新章は数学読者の独立入口とし、API操作能力をリンクだけで付与しない。transformation.guaranteesは数学的な判断として再評価し、固定・penalty・boundの操作契約と分離する。歴史的baselineと過去の編集記録を保持し、本文照合の証拠はチャットに残す。 HOME/HOME_ENは目的別入口を新章とReferenceへ接続する。SETUP/T2/T3/P2/P3/P4/P12/P15/P16/T8/DEV_A/MIG3/RELEASEは削除ページから実在する移管先への導線と対応する案内文の変更のみを対象とし、既存の各ページ全体の学習契約を再監査したものではない。未台帳化の英語release noteとswitching_adaptersもリンク・案内文の限定変更であり、章全体は今回のレビュー範囲外。台帳化済みのP12/T8のNotebookは参照リンクのみを変更し、コードセル・出力・実行結果全体を再検証した扱いにしない。",
+      "untracked_source_paths": [
+        "docs/en/release_note/ommx-3.0.md",
+        "docs/en/tutorial/switching_adapters.md"
+      ]
     }
   ],
   "interpretation": {
@@ -578,7 +620,7 @@
     {
       "id": "special.indicator",
       "label": "Indicatorの含意を読む",
-      "owner": "G3",
+      "owner": "R_API.special_constraints",
       "requires": [
         "constraint.basics"
       ],
@@ -593,7 +635,7 @@
     {
       "id": "special.onehot",
       "label": "OneHotの意味を読む",
-      "owner": "G3",
+      "owner": "R_API.special_constraints",
       "requires": [
         "constraint.basics"
       ],
@@ -608,7 +650,7 @@
     {
       "id": "special.sos1",
       "label": "SOS1の意味を読む",
-      "owner": "G3",
+      "owner": "R_API.special_constraints",
       "requires": [
         "constraint.basics"
       ],
@@ -685,7 +727,7 @@
     {
       "id": "class.membership",
       "label": "InstanceClassへの所属を判定する",
-      "owner": "G9",
+      "owner": "R_API.instance_class",
       "requires": [
         "instance.model"
       ],
@@ -701,7 +743,7 @@
     {
       "id": "class.declare",
       "label": "構造条件でtarget classを宣言する",
-      "owner": "G9",
+      "owner": "R_API.instance_class",
       "requires": [
         "class.membership",
         "variable.basics",
@@ -719,7 +761,7 @@
     {
       "id": "class.scope",
       "label": "所属判定のactive・usedの対象範囲を読む",
-      "owner": "G9.scope",
+      "owner": "R_API.instance_class.scope",
       "requires": [
         "class.membership",
         "variables.roles",
@@ -737,7 +779,7 @@
     {
       "id": "class.qubo",
       "label": "QUBOを問題クラスの一例として読む",
-      "owner": "G9",
+      "owner": "R_API.instance_class",
       "requires": [
         "class.membership",
         "expression.basics",
@@ -755,7 +797,7 @@
     {
       "id": "adapter.basic",
       "label": "Adapterで問題を実行し候補を受け取る",
-      "owner": "G11",
+      "owner": "R_API.adapter",
       "requires": [
         "instance.model"
       ],
@@ -770,7 +812,7 @@
     {
       "id": "adapter.auto_prepare",
       "label": "Adapterがcopyに必要な変換を行うことを読む",
-      "owner": "G10",
+      "owner": "R_API.adapter",
       "requires": [
         "adapter.basic"
       ],
@@ -785,7 +827,7 @@
     {
       "id": "preparation.target",
       "label": "targetに向けたPreparationと停止条件を読む",
-      "owner": "G10",
+      "owner": "R_API.instance.prepare",
       "requires": [
         "class.membership"
       ],
@@ -800,7 +842,7 @@
     {
       "id": "policy.select",
       "label": "変換方針を選択し編集する",
-      "owner": "G10",
+      "owner": "R_API.preparation",
       "requires": [
         "preparation.target"
       ],
@@ -815,7 +857,7 @@
     {
       "id": "mutation.copy",
       "label": "copyとin-place変更の責任を区別する",
-      "owner": "G10",
+      "owner": "R_API.instance.prepare",
       "requires": [
         "instance.model"
       ],
@@ -830,7 +872,7 @@
     {
       "id": "adapter.strict",
       "label": "準備済み入力をstrict APIで実行する",
-      "owner": "G10",
+      "owner": "R_API.adapter",
       "requires": [
         "adapter.basic",
         "preparation.target"
@@ -845,7 +887,7 @@
     {
       "id": "penalty.choice",
       "label": "penaltyとweightの選択を読む",
-      "owner": "G7.penalty",
+      "owner": "R_API.preparation.penalty",
       "requires": [
         "constraint.basics",
         "expression.basics",
@@ -864,7 +906,7 @@
     {
       "id": "encoding.integer",
       "label": "整数からBinaryへの対応を読む",
-      "owner": "G7.encoding",
+      "owner": "R_API.instance.encoding",
       "requires": [
         "variable.basics",
         "state.values"
@@ -880,7 +922,7 @@
     {
       "id": "slack.variable",
       "label": "不等式へのslack導入を読む",
-      "owner": "G7.encoding",
+      "owner": "R_API.instance.encoding",
       "requires": [
         "constraint.basics"
       ],
@@ -895,11 +937,9 @@
     {
       "id": "transformation.guarantees",
       "label": "状態・実行可能性・目的・最適性の対応を区別する",
-      "owner": "G7",
+      "owner": "B_TRANSFORM",
       "requires": [
-        "evaluation.basic",
-        "feasibility.basic",
-        "optimality.limit"
+        "ext.math"
       ],
       "external": false,
       "aliases": [
@@ -908,12 +948,12 @@
         "projection",
         "relaxation"
       ],
-      "scope": ""
+      "scope": "候補の対応、実行可能性、目的値・順序、最適性、数値条件を別々に確認する判断。APIによる候補評価の操作や変換の厳密な契約の習得は含めず、数学的な小例から直接理解できる。"
     },
     {
       "id": "conditioning",
       "label": "変数固定を部分問題への制限として読む",
-      "owner": "G7.conditioning",
+      "owner": "R_API.instance.partial_evaluate",
       "requires": [
         "transformation.guarantees",
         "variable.basics"
@@ -956,7 +996,7 @@
         "入力対応",
         "対応範囲"
       ],
-      "scope": "Functionとして式を構築・評価できることと、Adapterがその表現を直接受け取れることは別だと理解する。格納表現・対応演算の詳細はFunctionのAPI Reference、membership判定はG9、変換の選択はG10へ送り、参照リンクだけからそれらの能力を付与しない。"
+      "scope": "Functionとして式を構築・評価できることと、Adapterがその表現を直接受け取れることは別だと理解する。格納表現・対応演算の詳細はFunctionのAPI Reference、membership判定はR_API.instance_class、変換の選択はR_API.preparationへ送り、参照リンクだけからそれらの能力を付与しない。"
     },
     {
       "id": "function.representation",
@@ -1520,7 +1560,7 @@
     {
       "id": "bounds.tighten",
       "label": "制約から導ける範囲の反映と一回更新の限界を理解する",
-      "owner": "G7.bounds",
+      "owner": "R_API.instance.bounds",
       "requires": [
         "variable.basics",
         "constraint.basics"
@@ -1590,6 +1630,40 @@
       "owner": "B_EVALUATE",
       "external": false,
       "aliases": []
+    },
+    {
+      "id": "transform.structure",
+      "label": "問題構造を保って共通の変換を使う理由を理解する",
+      "owner": "B_TRANSFORM",
+      "requires": [
+        "ext.math"
+      ],
+      "external": false,
+      "aliases": [],
+      "scope": "同じ特殊条件を保ったまま対応Backendへ渡す経路と、条件を別表現に変換する経路を比較する。SOS1の短い数学例は各特殊制約APIの構築・評価能力を付与しない。"
+    },
+    {
+      "id": "transform.preparation_choice",
+      "label": "入力条件と許可する変換を分けて選ぶ",
+      "owner": "B_TRANSFORM",
+      "requires": [
+        "transform.structure"
+      ],
+      "external": false,
+      "aliases": [],
+      "scope": "入力に求める表現、許可する変換、実行を分け、入力条件への到達だけでは数学的な保証やBackend実行の成功にならないと理解する。InstanceClassの宣言やPolicy編集の操作はReferenceが所有する。"
+    },
+    {
+      "id": "transform.backend_choice",
+      "label": "変換の限界と結果の保証から解法を選ぶ",
+      "owner": "B_TRANSFORM",
+      "requires": [
+        "transform.preparation_choice",
+        "transformation.guarantees"
+      ],
+      "external": false,
+      "aliases": [],
+      "scope": "入力条件・許容する意味の変化・設定・結果の情報を比較する。変換できない場合のBackend変更、boundやモデルの再検討、許可する変換の見直しを選ぶ。"
     }
   ],
   "pages": [
@@ -1741,13 +1815,16 @@
             "named.outputs",
             "solution.extract",
             "expression.labels",
-            "results.evaluation_scope"
+            "results.evaluation_scope",
+            "transform.structure",
+            "transform.preparation_choice",
+            "transform.backend_choice"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。",
+      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1843,13 +1920,16 @@
             "named.outputs",
             "solution.extract",
             "expression.labels",
-            "results.evaluation_scope"
+            "results.evaluation_scope",
+            "transform.structure",
+            "transform.preparation_choice",
+            "transform.backend_choice"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。",
+      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。 問題構造・変換・解法選択は日英B_TRANSFORM、特殊制約とPreparationの操作は共有API、package一覧はR_ADAPTERSへ接続する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2598,17 +2678,20 @@
       ]
     },
     {
-      "id": "G3",
-      "title": "特殊制約の意味",
-      "slice": "B",
-      "role": "guide",
+      "id": "R_API.special_constraints",
+      "title": "Special constraints API Reference：意味と構築",
+      "slice": "Transformation migration",
+      "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/special_constraints.md"
+        "python/ommx/src/docstrings/ommx/IndicatorConstraint.md",
+        "docs/api/_items/ommx.IndicatorConstraint.rst",
+        "python/ommx/src/docstrings/ommx/OneHotConstraint.md",
+        "docs/api/_items/ommx.OneHotConstraint.rst",
+        "python/ommx/src/docstrings/ommx/Sos1Constraint.md",
+        "docs/api/_items/ommx.Sos1Constraint.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/special_constraints.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.math",
         "variable.basics",
@@ -2630,31 +2713,35 @@
           "mentions": []
         }
       ],
-      "deferred": [
-        "adapter.basic",
-        "bigm.contract",
-        "policy.select"
-      ],
-      "parent_page": null,
-      "notes": "意味の説明と評価例の前提を分離する提案。評価例はG3.evaluateの契約で扱う。",
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "旧日英special_constraintsの意味・ID入力・登録時検証・独立値とAttachedを各クラスの冒頭とIdentity節へ移管。Indicatorは含意、OneHotはちょうど一つ、SOS1は高々一つの非零と局所定義する。構築・候補評価の完全例は子契約、loweringとpromotionの厳密な条件はInstanceの所有APIへ進む。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/special_constraints.md"
+        "python/ommx/src/docstrings/ommx/IndicatorConstraint.md",
+        "docs/api/_items/ommx.IndicatorConstraint.rst",
+        "python/ommx/src/docstrings/ommx/OneHotConstraint.md",
+        "docs/api/_items/ommx.OneHotConstraint.rst",
+        "python/ommx/src/docstrings/ommx/Sos1Constraint.md",
+        "docs/api/_items/ommx.Sos1Constraint.rst"
       ]
     },
     {
-      "id": "G3.evaluate",
-      "title": "特殊制約の候補を評価する例",
-      "slice": "B",
-      "role": "guide-section",
-      "status": "revise",
+      "id": "R_API.special_constraints.evaluate",
+      "title": "Special constraints API Reference：構築と候補評価の完全例",
+      "slice": "Transformation migration",
+      "role": "reference-section",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/special_constraints.md"
+        "python/ommx/src/docstrings/ommx/IndicatorConstraint.md",
+        "docs/api/_items/ommx.IndicatorConstraint.rst",
+        "python/ommx/src/docstrings/ommx/OneHotConstraint.md",
+        "docs/api/_items/ommx.OneHotConstraint.rst",
+        "python/ommx/src/docstrings/ommx/Sos1Constraint.md",
+        "docs/api/_items/ommx.Sos1Constraint.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/special_constraints.md"
-      ],
+      "source_urls": [],
       "requires": [
         "special.indicator",
         "special.onehot",
@@ -2679,12 +2766,17 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G3",
-      "notes": "",
+      "parent_page": "R_API.special_constraints",
+      "notes": "各クラスのConstruct and evaluate節を順に読む契約。Indicatorの非活動と違反、OneHotの未選択・複数選択、SOS1の全零・負値・複数非零を局所例で区別し、Solutionのfamily別行を確認する。数値判定と列の完全な仕様はInstance.evaluateとSolution.constraints_dfへ送る。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/special_constraints.md"
+        "python/ommx/src/docstrings/ommx/IndicatorConstraint.md",
+        "docs/api/_items/ommx.IndicatorConstraint.rst",
+        "python/ommx/src/docstrings/ommx/OneHotConstraint.md",
+        "docs/api/_items/ommx.OneHotConstraint.rst",
+        "python/ommx/src/docstrings/ommx/Sos1Constraint.md",
+        "docs/api/_items/ommx.Sos1Constraint.rst"
       ]
     },
     {
@@ -3097,23 +3189,48 @@
       ]
     },
     {
-      "id": "G7",
-      "title": "変換によって何が保持されるか",
-      "slice": "I",
-      "role": "guide",
+      "id": "B_TRANSFORM",
+      "title": "問題を変換して解法へ渡す / Transform a problem and connect it to a solving method",
+      "slice": "Transformation migration",
+      "role": "book-chapter",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/transformation_guarantees.md"
+        "docs/ja/user_guide/transform_and_solve.md",
+        "docs/en/user_guide/transform_and_solve.md"
       ],
       "source_urls": [],
       "requires": [
-        "evaluation.basic",
-        "feasibility.basic",
-        "optimality.limit"
+        "ext.math"
       ],
       "sections": [
         {
-          "id": "guarantees",
+          "id": "preserve-structure",
+          "introduces": [
+            "transform.structure"
+          ],
+          "uses": [],
+          "mentions": [
+            "special.sos1",
+            "bigm.contract"
+          ]
+        },
+        {
+          "id": "input-and-transformations",
+          "introduces": [
+            "transform.preparation_choice"
+          ],
+          "uses": [
+            "transform.structure"
+          ],
+          "mentions": [
+            "class.membership",
+            "class.qubo",
+            "preparation.target",
+            "policy.select"
+          ]
+        },
+        {
+          "id": "mathematical-guarantees",
           "introduces": [
             "transformation.guarantees"
           ],
@@ -3121,38 +3238,77 @@
             "transformation.guarantees"
           ],
           "mentions": [
-            "penalty.choice",
             "conditioning",
+            "penalty.choice",
             "encoding.integer",
-            "bigm.contract",
+            "slack.variable",
             "bounds.tighten"
           ]
+        },
+        {
+          "id": "choose-a-solving-method",
+          "introduces": [
+            "transform.backend_choice"
+          ],
+          "uses": [
+            "transform.preparation_choice",
+            "transformation.guarantees",
+            "transform.backend_choice"
+          ],
+          "mentions": [
+            "adapter.basic",
+            "adapter.auto_prepare",
+            "adapter.strict",
+            "mutation.copy",
+            "results.evaluation_scope"
+          ]
+        },
+        {
+          "id": "current-operations-and-direction",
+          "introduces": [],
+          "uses": [
+            "transform.backend_choice"
+          ],
+          "mentions": [
+            "bounds.tighten"
+          ],
+          "notes": "現在の個別操作と一回のbound更新を、将来の一般的な自動選択・反復と区別する説明はこの最終節で初めて行う。前節の解法選択だけからこの理解を付与しない。"
         }
       ],
-      "deferred": [],
+      "deferred": [
+        "class.declare",
+        "class.scope"
+      ],
       "parent_page": null,
-      "notes": "候補評価・実行可能性・最適性の区別を前提に、操作の目的と七つの問い、複数操作の接続、評価対象の選択を説明する。固定と不等式penaltyの実在する反例節はG7.conditioningとG7.penaltyで個別に追跡し、子節の知識を親から暗黙に継承させない。",
+      "notes": "数理最適化の基礎だけから直接入れる日英第2章。SOS1のnative/loweredの経路で共通表現の価値を導入し、入力条件・許す変換・数学的保証・設定・結果情報の選択へ進む。固定部分問題と不等式本体の二乗の反例は数式で読む。API操作や全特殊制約の詳細は紹介・リンクだけから付与しない。旧G7の保証判断とG11の選択軸を統合し、現在の明示的phase/一回bound更新と将来の自動選択・反復を区別する。第3章の既読を要求しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/transformation_guarantees.md"
+        "docs/ja/user_guide/transform_and_solve.md",
+        "docs/en/user_guide/transform_and_solve.md"
       ]
     },
     {
-      "id": "G7.penalty",
-      "title": "ペナルティ化の対応と保証",
-      "slice": "I",
-      "role": "guide-section",
+      "id": "R_API.preparation.penalty",
+      "title": "FixedPenaltyPreparation API Reference：penalty式とweightの限界",
+      "slice": "Transformation migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/transformation_guarantees.md"
+        "python/ommx/src/docstrings/ommx/FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight.md",
+        "python/ommx/src/preparation.rs",
+        "docs/api/_items/ommx.FixedPenaltyPreparation.rst"
       ],
       "source_urls": [],
       "requires": [
         "transformation.guarantees",
         "constraint.basics",
         "expression.basics",
-        "sense"
+        "sense",
+        "instance.model",
+        "state.values",
+        "evaluation.basic",
+        "feasibility.basic"
       ],
       "sections": [
         {
@@ -3168,63 +3324,83 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G7",
-      "notes": "実在する「不等式の本体を二乗すると、実行可能候補の順序も変わり得る」節。不等式本体の二乗と違反量の二乗を区別し、重みだけでは不適切なpenaltyを補えない反例から、slack・個別操作の条件を確認する必要を説明する。",
+      "parent_page": "R_API.preparation",
+      "notes": "旧G7.penaltyの不等式本体の二乗と違反量の二乗の反例を、uniform_penalty_method_with_fixed_weightの数学表と完全な実行例へ移管。選択したfixed-penalty phaseだけを適用し、active objectiveと保持された評価目的を区別する。重みの正規化・有限性・removed理由・slack先行変換への参照もこの設定の所有契約で扱う。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/transformation_guarantees.md"
+        "python/ommx/src/docstrings/ommx/FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight.md",
+        "python/ommx/src/preparation.rs",
+        "docs/api/_items/ommx.FixedPenaltyPreparation.rst"
       ]
     },
     {
-      "id": "G7.encoding",
-      "title": "補助変数と符号化の対応",
-      "slice": "I",
-      "role": "guide-section",
-      "status": "planned",
-      "source_paths": [],
+      "id": "R_API.instance.encoding",
+      "title": "Instance API Reference：整数符号化とslackの対応",
+      "slice": "Transformation migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
       "source_urls": [],
       "requires": [
-        "transformation.guarantees",
         "variable.basics",
         "state.values",
         "constraint.basics"
       ],
       "sections": [
         {
-          "id": "encoding",
+          "id": "log-encoding",
           "introduces": [
-            "encoding.integer",
+            "encoding.integer"
+          ],
+          "uses": [
+            "encoding.integer"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "integer-slack",
+          "introduces": [
             "slack.variable"
           ],
           "uses": [
-            "encoding.integer",
-            "slack.variable",
-            "transformation.guarantees"
+            "slack.variable"
           ],
           "mentions": []
         }
       ],
       "deferred": [],
-      "parent_page": "G7",
-      "notes": "",
+      "parent_page": "R_API.instance",
+      "notes": "旧G7.encodingは未実装のBook節だった。既存のlog_encodeの有限整数範囲とbit対応式・復元例、convert_inequality_to_equality_with_integer_slackの条件と完全例、add_integer_slack_to_inequalityの離散化残差と例を実在するReference所有先にする。これら個別操作の説明を一般の変換保証の習得とは扱わない。",
       "contract_status": "proposed",
       "implementation_verified": false,
-      "source_paths_existing": []
+      "source_paths_existing": [
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ]
     },
     {
-      "id": "G7.conditioning",
-      "title": "変数固定と部分問題",
-      "slice": "I",
-      "role": "guide-section",
+      "id": "R_API.instance.partial_evaluate",
+      "title": "Instance.partial_evaluate API Reference：固定部分問題と復元",
+      "slice": "Transformation migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/transformation_guarantees.md"
+        "python/ommx/src/docstrings/ommx/Instance.partial_evaluate.md",
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
       "source_urls": [],
       "requires": [
         "transformation.guarantees",
-        "variable.basics"
+        "variable.basics",
+        "instance.model",
+        "state.values",
+        "evaluation.basic",
+        "feasibility.basic"
       ],
       "sections": [
         {
@@ -3239,12 +3415,14 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G7",
-      "notes": "実在する「固定した部分問題と、元の問題全体を分ける」節。Binaryの二候補から部分問題の最適値と元の最適値を区別し、候補を評価したこと自体は最適性判定でないと説明する。元の制約から導ける固定との違いも扱う。",
+      "parent_page": "R_API.instance",
+      "notes": "旧G7.conditioningのBinary反例をA fixed subproblem is not necessarily equivalent to the original節と完全例へ移管。source不変の新Instance、固定値復元、元問題と部分問題の最適値の差を示す。数値正規化と保持された出力意味は後段の契約が所有する。候補評価は最適性の証明ではない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/transformation_guarantees.md"
+        "python/ommx/src/docstrings/ommx/Instance.partial_evaluate.md",
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
@@ -3378,17 +3556,17 @@
       ]
     },
     {
-      "id": "G9",
-      "title": "InstanceClassと入力条件",
-      "slice": "I",
-      "role": "guide",
+      "id": "R_API.instance_class",
+      "title": "InstanceClass API Reference：所属判定と入力条件",
+      "slice": "Transformation migration",
+      "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/instance_class.md"
+        "python/ommx/src/docstrings/ommx/InstanceClass.md",
+        "python/ommx/src/instance_class.rs",
+        "docs/api/_items/ommx.InstanceClass.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/instance_class.md"
-      ],
+      "source_urls": [],
       "requires": [
         "instance.model",
         "variable.basics",
@@ -3434,26 +3612,27 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "OneHotの数学的な条件と専用表現を局所的に区別する。数学的な式と保持表現の違いは概念だけを説明し、整数冪・展開の具体的な契約は実在するFunction.powiのAPI Referenceへ直接送る。QUBOをclassの一例として局所導入し、Preparationによるclass適合とBackend向け係数整形、および係数だけではInstanceの復元・removed情報を運べないことを区別する。active/usedの詳細やAdapter適用は基本のmembership例の後に置く。",
+      "parent_page": "R_API",
+      "notes": "旧日英InstanceClass/capability説明を共有クラス本文へ統合。clauseの和集合、OneHotを保持した非所属例、reportとunion、格納表現、QUBOと係数整形を説明する。表現条件の宣言は完全例、active/usedの対象範囲は子契約で追跡する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/instance_class.md"
+        "python/ommx/src/docstrings/ommx/InstanceClass.md",
+        "python/ommx/src/instance_class.rs",
+        "docs/api/_items/ommx.InstanceClass.rst"
       ]
     },
     {
-      "id": "G9.scope",
-      "title": "InstanceClassが検査する対象範囲",
-      "slice": "I",
-      "role": "guide-section",
-      "status": "revise",
+      "id": "R_API.instance_class.scope",
+      "title": "InstanceClass API Reference：所属判定の対象範囲",
+      "slice": "Transformation migration",
+      "role": "reference-section",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/instance_class.md"
+        "python/ommx/src/docstrings/ommx/InstanceClass.md",
+        "docs/api/_items/ommx.InstanceClass.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/instance_class.md"
-      ],
+      "source_urls": [],
       "requires": [
         "class.membership",
         "variables.roles",
@@ -3473,110 +3652,105 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G9",
-      "notes": "containsの基本操作と、active/used/removed-only/output-onlyの厳密な対象範囲を区別する。",
+      "parent_page": "R_API.instance_class",
+      "notes": "The active representation determines membership節がactive objective/constraintsとused variablesを検査対象にし、fixed/dependent/irrelevant、removed-only、named/output-onlyを除外する契約を所有する。基本のcontains操作とは独立した詳細である。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/instance_class.md"
+        "python/ommx/src/docstrings/ommx/InstanceClass.md",
+        "docs/api/_items/ommx.InstanceClass.rst"
       ]
     },
     {
-      "id": "G10",
-      "title": "PreparationとPolicy",
-      "slice": "I",
-      "role": "guide",
+      "id": "R_API.preparation",
+      "title": "PreparationPolicy API Reference：許可する操作と設定",
+      "slice": "Transformation migration",
+      "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/preparation_policy.md"
+        "python/ommx/src/docstrings/ommx/PreparationPolicy.md",
+        "python/ommx/src/preparation.rs",
+        "docs/api/_items/ommx.PreparationPolicy.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/preparation_policy.md"
-      ],
+      "source_urls": [],
       "requires": [
         "instance.model",
         "class.membership"
       ],
       "sections": [
         {
-          "id": "target",
+          "id": "target-and-policy",
           "introduces": [
             "preparation.target",
-            "policy.select",
-            "mutation.copy"
+            "policy.select"
           ],
           "uses": [
             "preparation.target",
-            "policy.select",
-            "mutation.copy"
+            "policy.select"
           ],
           "mentions": []
         },
         {
-          "id": "adapter_application",
-          "introduces": [
-            "adapter.basic",
-            "adapter.auto_prepare",
-            "adapter.strict"
-          ],
+          "id": "policy-factories",
+          "introduces": [],
           "uses": [
-            "adapter.auto_prepare",
-            "adapter.strict"
+            "policy.select"
           ],
           "mentions": [
+            "class.qubo",
             "penalty.choice",
-            "bigm.contract"
+            "adapter.auto_prepare",
+            "adapter.strict",
+            "mutation.copy"
           ]
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "target・Policy・prepareの共通モデルをAdapter適用より先に置き、直入読者向けにOneHot/loweringと使用を許す操作の選択を局所説明する。固定実行順序・適用回数・停止判定の詳細と例外・診断属性・変更残存の厳密な契約はInstance.prepareのAPI Referenceが所有する。Bookはtarget到達時の停止と明示的prepareの失敗で変更が残る場合の安全な利用に必要な注意を残す。候補・実行可能性・目的・最適性の保証はG7へ送る。QUBO向けPolicy作成、明示的Preparation、係数整形を分け、変換前のInstance本体を後で使う必要がある場合のみcopyを説明する。Adapter easy API内部のcopy契約とは区別する。",
+      "parent_page": "R_API",
+      "notes": "旧preparation_policyのtarget/Policy/実行の分離、全phase既定無効、新規PolicyでOneHot loweringだけを許す完全例、QUBO/HUBO factoryとAdapter推奨Policyの違いを所有する。固定順序・停止・失敗時変更と変換前後比較はInstance.prepare、Adapterのcopy/strict契約は共通Adapter Referenceへ進む。リンクだけからそれらの操作能力を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/preparation_policy.md"
+        "python/ommx/src/docstrings/ommx/PreparationPolicy.md",
+        "python/ommx/src/preparation.rs",
+        "docs/api/_items/ommx.PreparationPolicy.rst"
       ]
     },
     {
-      "id": "G11",
-      "title": "Adapterを選ぶ",
-      "slice": "J",
-      "role": "guide",
+      "id": "R_ADAPTERS",
+      "title": "Adapter Reference：パッケージ一覧と導入先",
+      "slice": "Transformation migration",
+      "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/supported_ommx_adapters.md"
+        "docs/api/adapters.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/supported_ommx_adapters.md"
-      ],
+      "source_urls": [],
       "requires": [
-        "instance.model"
+        "ext.math"
       ],
       "sections": [
         {
-          "id": "selection",
-          "introduces": [
-            "adapter.basic",
-            "adapter.auto_prepare"
-          ],
-          "uses": [
-            "adapter.basic"
-          ],
+          "id": "input-contract-and-packages",
+          "introduces": [],
+          "uses": [],
           "mentions": [
+            "adapter.basic",
             "class.membership",
             "policy.select",
+            "adapter.auto_prepare",
+            "adapter.strict",
             "class.qubo"
           ]
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "Jの選択入口。入力条件・変換の選択・ユーザー設定・結果の保証を分け、solve/sampleが元のInstanceを変更せず内部copyを準備することを局所説明する。classへの所属判定の操作はG9へ送り、このページだけから判定能力を付与しない。具体的な版と導入条件はSETUPへ集約し、実際に存在するAdapter APIと基準版実装へリンクする。",
+      "parent_page": "R_API",
+      "notes": "旧日英supported_ommx_adaptersのcore/external package一覧、導入先、対応入力の確認先を共有Referenceへ移す。利用者の比較軸はB_TRANSFORMが所有する。この一覧からAdapter実行・所属判定・Policy編集能力を付与しない。OpenJij SAの入力をQUBOに限定せず、個別Adapterと外部packageの現行Referenceへ進む。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/supported_ommx_adapters.md"
+        "docs/api/adapters.rst"
       ]
     },
     {
@@ -3748,17 +3922,15 @@
       ]
     },
     {
-      "id": "P1",
-      "title": "Policyを選んで明示的に準備する",
-      "slice": "C",
-      "role": "how-to",
+      "id": "R_API.adapter.custom_policy",
+      "title": "PySCIPOpt Adapter Reference：明示的Policyからstrict実行へ",
+      "slice": "Transformation migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/customize_preparation.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/how_to/customize_preparation.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.python",
         "sdk.environment",
@@ -3808,12 +3980,12 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "PR #1159のレビュー修正では、推奨Policyを部分的に上書きするのではなく、OneHot loweringだけを有効にした新規Policyを作る。「許可する変換を固定する」という説明と実行を一致させる。 同じInstanceをin-placeに準備し、そのままstrict実行する。元のInstanceの保存やcopyはこの操作の前提にしない。",
+      "parent_page": "R_API.adapter",
+      "notes": "旧customize_preparationの一連の手順をPySCIPOptクラスのSelect a policy and use the strict solve path節へ移管する。同じクラスの前の節でOneHotとSOS1を定義し、OneHotだけloweringする新規Policy→in-place prepare→INPUT_CLASS確認→solve_without_preparation→実行可能性・目的値・全変数行の確認まで実行例を所有する。easy solveがローカルPolicyを再利用しない点も説明する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/customize_preparation.md"
+        "python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py"
       ]
     },
     {
@@ -4563,90 +4735,98 @@
       ]
     },
     {
-      "id": "P11",
-      "title": "Instanceを変換し、結果を確認する",
-      "slice": "I",
-      "role": "how-to",
+      "id": "R_API.instance.prepare",
+      "title": "Instance.prepare API Reference：変換前後の候補比較と実行契約",
+      "slice": "Transformation migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/how_to/transform_instance_without_solver.md"
+        "python/ommx/src/docstrings/ommx/Instance.prepare.md",
+        "python/ommx/src/preparation.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/how_to/transform_instance_without_solver.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.math",
         "ext.python",
-        "sdk.environment"
+        "instance.model",
+        "instance.build",
+        "variable.basics",
+        "expression.basics",
+        "constraint.basics",
+        "sense",
+        "state.values",
+        "evaluation.basic",
+        "feasibility.basic",
+        "optimality.limit",
+        "class.membership",
+        "class.declare"
       ],
       "sections": [
         {
-          "id": "source",
+          "id": "one-hot-conversion",
           "introduces": [
-            "instance.model",
-            "variable.basics",
-            "expression.basics",
-            "constraint.basics",
-            "sense",
-            "instance.build",
             "special.onehot",
-            "state.values",
-            "evaluation.basic"
-          ],
-          "uses": [
-            "instance.build",
-            "special.onehot"
-          ],
-          "mentions": []
-        },
-        {
-          "id": "target",
-          "introduces": [
-            "class.membership",
-            "expression.form",
-            "class.declare",
             "preparation.target",
             "policy.select"
           ],
           "uses": [
-            "class.declare",
+            "instance.build",
+            "special.onehot",
+            "preparation.target",
             "policy.select",
-            "preparation.target"
+            "evaluation.basic",
+            "feasibility.basic"
           ],
-          "mentions": []
+          "mentions": [
+            "constraints.lifecycle"
+          ]
         },
         {
-          "id": "evaluate",
-          "introduces": [
-            "constraints.lifecycle",
-            "solution.read",
-            "feasibility.basic",
-            "optimality.limit",
-            "feasibility.views",
-            "evaluation.snapshot",
+          "id": "phases-and-guarantees",
+          "introduces": [],
+          "uses": [
+            "preparation.target"
+          ],
+          "mentions": [
             "transformation.guarantees"
+          ]
+        },
+        {
+          "id": "qubo-and-formatting",
+          "introduces": [],
+          "uses": [
+            "preparation.target",
+            "policy.select",
+            "optimality.limit"
+          ],
+          "mentions": [
+            "class.qubo",
+            "objective.views",
+            "penalty.choice"
+          ]
+        },
+        {
+          "id": "errors-and-mutation",
+          "introduces": [
+            "mutation.copy"
           ],
           "uses": [
-            "constraints.lifecycle",
-            "evaluation.basic",
-            "feasibility.views",
-            "evaluation.snapshot",
-            "transformation.guarantees"
+            "mutation.copy",
+            "class.membership"
           ],
           "mentions": []
         }
       ],
-      "deferred": [
-        "adapter.basic",
-        "adapter.strict",
-        "experiment.record"
-      ],
-      "parent_page": null,
-      "notes": "局所導入を備える独立入口。source本文の観察と上記設計契約は別記録。 I1の修正ではactive/removedをこのページで短く定義する。実行例が確認するのは指定したOneHot loweringと手元の候補に限る。一般の変換保証や全feasibility viewの習得・I全体の完了とはみなさない。 ユーザー方針によりcopyは使わず同じInstanceへprepareする。比較用に保存するのは変換前の評価結果だけであるため、基本の候補評価を変換より前に導入する。",
+      "deferred": [],
+      "parent_page": "R_API.instance",
+      "notes": "旧transform_instance_without_solverの完全例をConvert a representation and evaluate the same candidates節へ移管。OneHotから線形等式への変換で保存済み評価と同じ二候補を比較する。固定phase順・各phase一回・target到達時停止・QUBO係数整形・例外report・部分変更の残存も同じAPIが所有する。手元の候補比較から一般の変換保証や全feasibility viewの習得を付与しない。SDK基本操作と所属判定の説明は先にReferenceで読む経路にする。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/how_to/transform_instance_without_solver.md"
+        "python/ommx/src/docstrings/ommx/Instance.prepare.md",
+        "python/ommx/src/preparation.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
@@ -5035,11 +5215,13 @@
       "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "python/ommx/src/instance.rs"
+        "python/ommx/src/docstrings/ommx/Instance.lower_special_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.promote_sos1_big_m.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/sos1_promotion.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/python/ommx/src/instance.rs"
-      ],
+      "source_urls": [],
       "requires": [
         "constraint.basics",
         "variable.basics",
@@ -5059,11 +5241,15 @@
       ],
       "deferred": [],
       "parent_page": "R_API",
-      "notes": "",
+      "notes": "特殊制約の個別loweringが数学的な式・bound/domain・数値条件・原子的変更・provenanceを所有する。lower_special_constraintsはfamilyの選択、promotionは明示したSOS1候補の検証・成功/拒否・batch結果を所有し、native対応するAdapterの利用例とは分ける。Bookの小例から厳密な変換条件の習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "python/ommx/src/instance.rs"
+        "python/ommx/src/docstrings/ommx/Instance.lower_special_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.promote_sos1_big_m.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/sos1_promotion.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
@@ -5462,13 +5648,14 @@
       ]
     },
     {
-      "id": "G7.bounds",
-      "title": "制約から導ける変数の範囲を反映する",
-      "slice": "L",
-      "role": "guide-section",
+      "id": "R_API.instance.bounds",
+      "title": "Instance API Reference：一回のbound更新と数値条件",
+      "slice": "Transformation migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/transformation_guarantees.md"
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -5488,12 +5675,13 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G7",
-      "notes": "「制約から分かる変数の範囲を反映する」が意味・保証への入口。P15はこれを局所的にも説明するためG7全体の事前読了は不要。数式・数値条件は実在するAPIへ送る。数値境界の注意を残し、正確な数値・失敗時契約の参照先をtighten_bounds_simultaneously_once_using_constraintsにする。",
+      "parent_page": "R_API.instance",
+      "notes": "旧G7.boundsの意味と限界をtighten_bounds_simultaneously_onceの二回の伝播例、およびtighten_bounds_simultaneously_once_using_constraintsの選択範囲・数式・数値・失敗時契約へ割り当てる。Bookは任意固定との違いと自動収束を約束しない点だけを扱い、P15は独立した手順入口として残る。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/transformation_guarantees.md"
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
@@ -5854,6 +6042,58 @@
         "docs/ja/user_guide/evaluate_and_interpret.md",
         "docs/en/user_guide/evaluate_and_interpret.md"
       ]
+    },
+    {
+      "id": "R_API.adapter",
+      "title": "Adapter API Reference：入力条件・copy・strict実行",
+      "slice": "Transformation migration",
+      "role": "reference",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/ommx/adapter.py"
+      ],
+      "source_urls": [],
+      "requires": [
+        "instance.model",
+        "class.membership",
+        "preparation.target"
+      ],
+      "sections": [
+        {
+          "id": "adapter-and-input",
+          "introduces": [
+            "adapter.basic"
+          ],
+          "uses": [
+            "adapter.basic",
+            "class.membership"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "automatic-and-strict",
+          "introduces": [
+            "adapter.auto_prepare",
+            "adapter.strict"
+          ],
+          "uses": [
+            "adapter.auto_prepare",
+            "adapter.strict"
+          ],
+          "mentions": [
+            "policy.select",
+            "mutation.copy"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "SolverAdapter/SamplerAdapterがINPUT_CLASSの完全な適用条件、freshな推奨Policy、easy APIのcopyとprepare、constructor/strict APIの準備済み入力要件を所有する。membershipとconverter/backend失敗を分ける。具体的な実行例はPySCIPOpt Referenceで扱い、package一覧だけから実行能力を付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/ommx/adapter.py"
+      ]
     }
   ],
   "routes": [
@@ -5931,7 +6171,7 @@
     },
     {
       "id": "transform",
-      "title": "Instanceの変換と結果確認",
+      "title": "Referenceで問題を準備し変換前後の候補を比較する",
       "initial": [
         "ext.math",
         "ext.python",
@@ -5940,7 +6180,11 @@
       ],
       "steps": [
         "SETUP",
-        "P11"
+        "R_API.instance",
+        "R_API.solution",
+        "R_API.instance_class",
+        "R_API.preparation",
+        "R_API.instance.prepare"
       ]
     },
     {
@@ -5997,7 +6241,7 @@
       "steps": [
         "SETUP",
         "T1",
-        "P1"
+        "R_API.adapter.custom_policy"
       ]
     },
     {
@@ -6255,8 +6499,9 @@
         "SETUP",
         "R_API.instance",
         "R_API.solution",
-        "G9",
-        "G11",
+        "R_API.instance_class",
+        "R_API.preparation",
+        "R_API.adapter",
         "DEV_A"
       ]
     },
@@ -6300,9 +6545,9 @@
         "R_API.instance",
         "R_API.solution",
         "R_API.instance.population",
-        "G7",
-        "G7.conditioning",
-        "G7.penalty"
+        "B_TRANSFORM",
+        "R_API.instance.partial_evaluate",
+        "R_API.preparation.penalty"
       ]
     },
     {
@@ -6513,8 +6758,8 @@
         "SETUP",
         "R_API.instance",
         "R_API.solution",
-        "G7",
-        "G7.bounds",
+        "B_TRANSFORM",
+        "R_API.instance.bounds",
         "P15"
       ]
     },
@@ -6640,6 +6885,51 @@
         "R_API.instance.population",
         "R_API.instance.retained_results",
         "R_API.instance.retained_results.population"
+      ]
+    },
+    {
+      "id": "transform_solve_direct",
+      "title": "問題構造・変換・解法を選ぶ独立入口（日英）",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "B_TRANSFORM"
+      ]
+    },
+    {
+      "id": "transform_then_interpret",
+      "title": "解法を選び候補の結果を判断する（日英）",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "B_TRANSFORM",
+        "B_EVALUATE"
+      ]
+    },
+    {
+      "id": "adapter_catalogue_direct",
+      "title": "Adapter packageとReferenceを探す",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "R_ADAPTERS"
+      ]
+    },
+    {
+      "id": "special_constraints_reference",
+      "title": "特殊制約の意味と候補評価をReferenceで読む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.instance",
+        "R_API.solution",
+        "R_API.special_constraints",
+        "R_API.special_constraints.evaluate"
       ]
     }
   ],

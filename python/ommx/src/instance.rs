@@ -299,6 +299,14 @@ impl OutputObjective {
 /// including removed constraints. Their numbering is separate from variable
 /// IDs. Supply distinct numbers across the regular and special-constraint
 /// mappings passed to {meth}`~ommx.Instance.from_components`.
+/// The Instance allocates new constraint numbers above the maximum across all
+/// active and removed families. Lowering and promotion allocate fresh numbers
+/// for generated constraints while retained originals keep their IDs.
+/// {class}`~ommx.ParametricInstance` follows the same rule, and evaluation
+/// preserves those IDs in {class}`~ommx.Solution` and {class}`~ommx.SampleSet`.
+/// Protobuf input with cross-family duplicate numbers is rejected without
+/// automatic renumbering, including data from earlier v3 beta versions that
+/// used separate number spaces.
 ///
 /// {attr}`~ommx.Instance.constraints` is a live collection of all active
 /// families. A typed ID identifies both the family and the number. Bare
@@ -1422,36 +1430,7 @@ impl Instance {
             .collect()
     }
 
-    /// Lower selected active special constraint kinds into regular constraints.
-    ///
-    /// For every kind in ``kinds_to_lower``, the corresponding bulk conversion
-    /// is invoked
-    /// ({meth}`~ommx.Instance.convert_all_indicators_to_constraints`,
-    /// {meth}`~ommx.Instance.convert_all_one_hots_to_constraints`, or
-    /// {meth}`~ommx.Instance.convert_all_sos1_to_constraints`) when that kind is active. The
-    /// instance is mutated in place. Kinds omitted from ``kinds_to_lower``
-    /// remain active, and an empty set is a no-op. This does not establish
-    /// {class}`~ommx.InstanceClass` membership; check the resulting input separately.
-    ///
-    /// Returns the set of {class}`~ommx.SpecialConstraintKind` values that were
-    /// requested and active, and therefore actually lowered. Empty when no
-    /// requested kind was active.
-    ///
-    /// ``atol`` controls zero-sensitive interval bounds used while lowering
-    /// Indicator constraints. If omitted, :attr:`DEFAULT_ATOL` is used. This
-    /// aligns zero-sensitive Function body evaluation; lowering itself assumes
-    /// exact discrete variable values.
-    ///
-    /// Kinds are processed in ``Indicator``, ``OneHot``, ``Sos1`` order. The
-    /// Indicator and SOS1 bulk conversions validate their complete families
-    /// before mutation, including generated-ID capacity. OneHot checks ID
-    /// capacity for the whole family before converting in ascending original
-    /// ID order; other conversion failures may leave earlier OneHot conversions
-    /// committed. The whole operation is not transactional across
-    /// families: an error does not roll back earlier completed families.
-    ///
-    /// Raises if an underlying conversion fails, including insufficient fresh
-    /// IDs or a required non-finite Big-M bound.
+    #[doc = include_str!("docstrings/ommx/Instance.lower_special_constraints.md")]
     #[pyo3(signature = (kinds_to_lower, *, atol=None))]
     pub fn lower_special_constraints(
         &mut self,
@@ -2083,49 +2062,7 @@ impl Instance {
         Ok(State(state))
     }
 
-    /// Creates a new instance by fixing decision variables from a supplied state.
-    ///
-    /// This method validates supplied values, selects their Instance-owned representations
-    /// under the rules below, and substitutes the specified decision variables. This creates
-    /// a new problem instance where these variables are fixed and is useful for scenarios such as:
-    ///
-    /// - Creating simplified sub-problems with some variables fixed
-    /// - Incrementally solving a problem by fixing some variables and optimizing the rest
-    /// - Testing specific configurations of a problem
-    ///
-    /// **Args:**
-    /// - `state`: Maps decision variable IDs to their fixed values.
-    ///   Can be a {class}`~ommx.State` object or a dictionary mapping variable IDs to values.
-    /// - `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
-    ///
-    /// **Returns:**
-    /// A new instance with the specified decision variables fixed to values selected by the
-    /// canonicalization and ownership rules below.
-    ///
-    /// # Postconditions
-    ///
-    /// After the existing kind and bound validation, accepted supplied coordinates
-    /// use the same Instance-owned canonicalization rules as
-    /// {meth}`~ommx.Instance.populate_state` before propagation and substitution.
-    /// Non-fixed, non-dependent Continuous and SemiContinuous values are not rounded.
-    /// Existing fixed values remain authoritative, dependent inputs remain consistency
-    /// assertions, and values outside the existing partial-evaluation acceptance contract
-    /// remain rejected. The new instance rewrites only active expressions while retaining
-    /// canonical fixed values for output evaluation.
-    ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
-    /// >>> x = DecisionVariable.binary(0)
-    /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
-    /// ... )
-    /// >>> assert instance.convert_active_objective(Sense.Minimize)
-    /// >>> fixed = instance.partial_evaluate({0: 1.0000005}, atol=1e-6)
-    /// >>> assert instance.required_ids() == {0}
-    /// >>> assert fixed.required_ids() == set()
-    /// >>> assert fixed.objective.evaluate({}) == -3.0
-    /// >>> assert fixed.attached_decision_variable(0).substituted_value == 1.0
-    /// >>> solution = fixed.evaluate({})
-    /// >>> assert (solution.sense, solution.objective) == (Sense.Maximize, 3.0)
+    #[doc = include_str!("docstrings/ommx/Instance.partial_evaluate.md")]
     #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate(
         &self,

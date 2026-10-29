@@ -49,7 +49,7 @@ python -m ipykernel install --user --name ommx-book --display-name "OMMX Book"
 python -m pip install "ommx==3.0.0b7"
 ```
 
-[Instanceを変換して結果を確認する](../how_to/transform_instance_without_solver.md)場合は、ここまでで準備が完了です。[InstanceClassの説明](../user_guide/instance_class.md)のmembership例もSDKだけで実行できます。
+{meth}`~ommx.Instance.prepare`で問題を変換する場合は、ここまでで準備が完了です。{class}`~ommx.InstanceClass`のmembership例もSDKだけで実行できます。
 
 [既存の問題と候補解を評価する](../tutorial/evaluate_existing_candidate)場合も、ここまでで準備が完了です。[既存の問題の入手](../how_to/load_existing_instance.md)と候補評価にAdapterは使いません。それぞれのページに記載した公開データの初回取得には、ネットワーク接続が必要です。
 
@@ -62,7 +62,7 @@ python -m pip install "ommx==3.0.0b7"
 python -m pip install "ommx-pyscipopt-adapter==3.0.0b7"
 ```
 
-このAdapterで、最初の二つのTutorialと[独自Policyの操作ガイド](../how_to/customize_preparation.md)を実行できます。
+このAdapterで、最初の二つのTutorialと{class}`明示的なPreparationと求解の例 <ommx_pyscipopt_adapter.OMMXPySCIPOptAdapter>`を実行できます。
 
 1. [PySCIPOpt Adapterで0-1ナップサック問題を解く](../tutorial/solve_with_ommx_adapter)：変換せずに求解し、結果を読む。
 2. [PySCIPOpt Adapterで特殊制約をそのまま解く](../tutorial/solve_special_constraints_with_pyscipopt_adapter.md)：IndicatorとSOS1を使う。

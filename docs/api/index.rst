@@ -32,6 +32,7 @@ Adapters
 .. toctree::
    :maxdepth: 1
 
+   adapters
    ../autoapi/ommx_python_mip_adapter/index
    ../autoapi/ommx_pyscipopt_adapter/index
    ../autoapi/ommx_highs_adapter/index

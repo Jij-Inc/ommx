@@ -27,6 +27,16 @@ API_DOCS_DIR = Path(__file__).resolve().parents[3] / "docs" / "api"
         "Instance.removed_constraints",
         "Instance.relax_constraint",
         "Instance.convert_active_objective",
+        "IndicatorConstraint",
+        "OneHotConstraint",
+        "Sos1Constraint",
+        "Instance.lower_special_constraints",
+        "Instance.promote_sos1_big_m",
+        "InstanceClass",
+        "PreparationPolicy",
+        "Instance.prepare",
+        "FixedPenaltyPreparation.uniform_penalty_method_with_fixed_weight",
+        "Instance.partial_evaluate",
     ],
 )
 def test_runtime_and_reference_share_canonical_documentation(api_name: str) -> None:

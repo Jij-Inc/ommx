@@ -47,7 +47,7 @@ assert path.is_file()
 
 二次項を含む出力では、受け取るツールがMPSの二次拡張に対応していても、係数の解釈が一致するとは限りません。求解前に、取り込まれた目的関数・制約が元の式と一致するか確認してください。現行の出力APIが使う係数規約は、{meth}`~ommx.Instance.save_mps`のAPI Referenceで説明します。
 
-Indicator・OneHot・SOS1などの[特殊制約](../user_guide/special_constraints.md)が現在課されている場合は、出力前に通常制約へ変換（lowering）します。{meth}`~ommx.Instance.lower_special_constraints`はInstance自体を変更するため、元のモデルも残す場合は`instance.copy()`で作ったコピーを変換します。変換にはboundなどの条件があり、loweringだけでMPS出力への適合が保証されるわけではありません。必要な変換は[変換How-to](./transform_instance_without_solver.md)から確認してください。
+{class}`~ommx.IndicatorConstraint`・{class}`~ommx.OneHotConstraint`・{class}`~ommx.Sos1Constraint`が現在課されている場合は、出力前に通常制約へ変換（lowering）します。{meth}`~ommx.Instance.lower_special_constraints`はInstance自体を変更するため、元のモデルも残す場合は`instance.copy()`で作ったコピーを変換します。変換にはboundなどの条件があり、loweringだけでMPS出力への適合が保証されるわけではありません。必要な変換は{meth}`~ommx.Instance.prepare`から確認してください。
 
 対応する式・変数の正確な条件と出力時の扱いは、{meth}`~ommx.Instance.save_mps`のAPI Referenceで確認してください。
 

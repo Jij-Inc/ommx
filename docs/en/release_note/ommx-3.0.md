@@ -51,7 +51,7 @@ shared space. Evaluation preserves the identities in `Solution` and `SampleSet`.
 
 Constructors and protobuf loading reject cross-family collisions without automatic
 renumbering. Data created during the 3.0.0 beta period may therefore no longer load
-if it contains duplicate numbers. See {ref}`constraint numbering <constraint-numbering>`.
+if it contains duplicate numbers. See {class}`~ommx.Instance`.
 
 ### ⚠ Typed constraint IDs and native result queries ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
 
@@ -313,7 +313,7 @@ with each successful conversion. For example, `0 <= y <= 10` and `y <= 3*z`
 with binary `z` allow the upper bound of `y` to become `3`.
 The objective and feasible assignments of the original variables are preserved,
 but violation values and decisions near a numerical tolerance boundary can differ.
-See the {ref}`SOS1 conversion guide <sos1-big-m-formulation>` for requests with
+See {meth}`~ommx.Instance.promote_sos1_big_m` for requests with
 separate selector variables and full migration examples.
 
 ### 🆕 Tighten variable bounds using linear constraints ([#1220](https://github.com/Jij-Inc/ommx/pull/1220))
@@ -505,8 +505,8 @@ does not admit a composed, non-polynomial `Function`.
 
 ### 🆕 Checked SOS1 Big-M promotion ([#1186](https://github.com/Jij-Inc/ommx/pull/1186))
 
-An {ref}`SOS1 constraint <sos1-constraint>` allows at most one member to be
-non-zero. A {ref}`Big-M formulation <sos1-big-m-formulation>` represents this
+An {class}`~ommx.Sos1Constraint` allows at most one member to be
+non-zero. A {class}`~ommx.Sos1BigMFormulation` represents this
 condition with binary selectors, member-selector link constraints, and a
 selector-cardinality constraint.
 
@@ -669,7 +669,7 @@ Adapter implementations must express every accepted-model condition in
 in the solver-input construction path; their failures are conversion or backend
 errors rather than `AdapterNotApplicableError`. In particular, OpenJij signed-ID
 and finite-coefficient validation now occurs when sampler input is built. See
-[Adapter input classes](../user_guide/capability_model.md) and the
+{class}`~ommx.InstanceClass` and the
 [Adapter implementation tutorial](../tutorial/implement_adapter.md) for the
 responsibility boundary.
 
@@ -806,7 +806,7 @@ source_samples = preparation.evaluate_source(prepared_samples)
 Finite penalties and approximate integer slack now require explicit opt-in.
 Every prepared value is a new {class}`~ommx.Instance`, so applicability must be
 checked on `preparation.input`, not inferred from the source. See
-[Adapter input classes](../user_guide/capability_model.md) and the
+{class}`~ommx.InstanceClass` and the
 [OpenJij tutorial](../tutorial/tsp_sampling_with_openjij_adapter) for the
 accepted model classes and preparation details.
 
@@ -904,7 +904,7 @@ indicator = (xs[0] <= 1).with_indicator(xs[1])
 APIs that are intrinsically ID collections or mappings, such as
 {meth}`~ommx.Instance.log_encode`, remain ID-based.
 
-See [Special constraints](../user_guide/special_constraints.md) for the modeling
+See {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint` for the modeling
 workflow.
 
 ### 🆕 Incremental Instance modeling ([#1077](https://github.com/Jij-Inc/ommx/pull/1077))
@@ -1710,7 +1710,7 @@ In addition to regular constraints, the following three special constraint types
 - {class}`~ommx.OneHotConstraint` — replaces the previous `ConstraintHints.OneHot` metadata
 - {class}`~ommx.Sos1Constraint` — replaces the previous `ConstraintHints.Sos1` metadata
 
-For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see [Special Constraints](../user_guide/special_constraints.md).
+For concrete usage, evaluation-result access, and the Indicator relax / restore workflow, see {class}`~ommx.IndicatorConstraint`, {class}`~ommx.OneHotConstraint`, {class}`~ommx.Sos1Constraint`.
 
 Accordingly, the legacy `ConstraintHints` / `OneHot` / `Sos1` classes, the `Instance.constraint_hints` property, and the PySCIPOpt Adapter's `use_sos1` flag are removed.
 
