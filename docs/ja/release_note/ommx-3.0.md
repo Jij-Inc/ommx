@@ -452,7 +452,7 @@ polynomialへ戻り、係数overflowは遅延せず直ちに`ValueError`とし�
 {meth}`~ommx.Function.degree` と {meth}`~ommx.Function.num_terms` は`None`を返します。
 polynomial termのaccessorと {meth}`~ommx.Function.content_factor` は、複合式を空の
 polynomialとして扱わず`TypeError`を送出します。演算順序、evaluation error、
-serializationの詳細は [Function user guide](../user_guide/function.md) を参照してください。
+serializationの詳細は {class}`FunctionのAPI Reference <ommx.Function>` を参照してください。
 
 Instance class APIでは、このpolynomial要件を名前から明示するようにしました。
 Python SDK 3.0.0 Beta 4で公開したAPIから、次の破壊的なrenameが含まれます。

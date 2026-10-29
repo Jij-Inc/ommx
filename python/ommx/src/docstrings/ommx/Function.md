@@ -6,6 +6,26 @@ It can be evaluated independently of a solver. Use
 checked, and {class}`~ommx.InstanceClass` to inspect a solver-input representation.
 Being evaluable as a Function does not imply that an Adapter accepts it.
 
+**Evaluate an expression or a candidate**
+
+An expression can have a value even when the supplied candidate violates a
+constraint. Here the expression is ``2*x + 3``, while the problem also requires
+``x == 0``:
+
+>>> from ommx import Function, Instance
+>>> instance = Instance.minimize()
+>>> x = instance.new_binary("x")
+>>> f = Function(2 * x + 3)
+>>> instance.objective = f
+>>> _ = instance.add_constraint(x == 0)
+>>> candidate = {x.id: 1}
+>>> assert f.evaluate(candidate) == 5.0
+>>> assert not instance.evaluate(candidate).feasible
+
+The {class}`~ommx.Solution` records the problem-level evaluation. To register
+other quantities to report for each candidate, use {class}`~ommx.NamedFunction`;
+those quantities do not become objectives or constraints.
+
 **Construction and polynomial forms**
 
 Construct a Function from numbers, decision variables, parameters, polynomial
@@ -22,6 +42,13 @@ wrapper for these forms and for composed scalar expressions.
 >>> by_coefficients = Function(Linear(terms={0: 1, 1: 2}, constant=3))
 >>> assert f.almost_equal(by_coefficients)
 >>> assert f.evaluate({0: 1, 1: 0}) == 4.0
+>>> assert f.linear_terms == {0: 1.0, 1: 2.0}
+>>> assert f.constant_term == 3.0
+>>> assert f.terms == {(): 3.0, (0,): 1.0, (1,): 2.0}
+>>> quadratic = Function(x * x + x * y + y * y)
+>>> cubic = Function(x * x * x + y * y)
+>>> assert quadratic.degree() == 2
+>>> assert cubic.degree() == 3
 
 Addition, subtraction, multiplication, and negation of stored polynomials are
 normalized into polynomial form. Terms that become exactly zero through
@@ -59,6 +86,12 @@ composed, including nonnegative powers. To construct an expanded polynomial
 square, use ``g * g`` rather than ``g ** 2``. See {meth}`~ommx.Function.powi` for the supported
 exponent types and domain rules.
 
+The current {class}`~ommx.InstanceClassClause` requirements describe polynomial
+objectives and constraint bodies. A composed expression therefore needs an
+appropriate polynomial reformulation before it can be passed to the bundled
+solver adapters; evaluating it successfully does not establish input-class
+membership.
+
 **Evaluation, substitution, and stored order**
 
 {meth}`~ommx.Function.evaluate` supplies the point-evaluation contract, including tolerance-based
@@ -77,3 +110,12 @@ The wire representation uses a flat reverse-Polish-notation (RPN) instruction
 sequence rather than a recursively nested tree. Its encoding belongs to the
 [OMMX Message specification](https://github.com/Jij-Inc/ommx/tree/main/proto);
 constructing a Python Function does not require creating RPN instructions.
+
+**Read expressions using model labels**
+
+The context-free ``str`` and ``repr`` representations use variable IDs. For
+names and subscripts, use {meth}`~ommx.Instance.format_function`, or
+{meth}`~ommx.Instance.display_function` for a bounded Notebook preview. These
+operations resolve IDs using the supplied model's labels; they do not remap
+variables from another model by name. A {class}`~ommx.ParametricInstance` also
+provides these methods and can resolve parameter labels.

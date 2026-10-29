@@ -453,9 +453,27 @@ impl ParametricInstance {
 
     /// Format a function using this parametric instance's decision-variable and parameter labels.
     ///
-    /// The plain {func}`repr` / {func}`str` representation of {class}`Function`
+    /// The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
     /// remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
-    /// Use this method when labels from this parametric instance should be used instead.
+    /// This method resolves both variable and parameter labels before any
+    /// parameter values have been supplied.
+    ///
+    /// >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+    /// >>> x = DecisionVariable.binary(0, name="x")
+    /// >>> p = Parameter(100, name="p", parameters={"scenario": "base"})
+    /// >>> model = ParametricInstance.from_components(
+    /// ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
+    /// ...     parameters=[p], constraints={},
+    /// ... )
+    /// >>> assert model.format_function(model.objective) == "x + p[scenario=base]"
+    ///
+    /// Every referenced ID must belong to exactly one of this instance's
+    /// decision variables or parameters. The lookup uses IDs, not names from
+    /// another model, and validates them before applying output limits.
+    /// ``max_terms`` and ``max_chars`` both default to ``None`` for no limit;
+    /// their meaning is the same as in {meth}`~ommx.Instance.format_function`.
+    /// For a preview with truncation metadata, use
+    /// {meth}`~ommx.ParametricInstance.display_function`.
     #[pyo3(signature = (function, max_terms=None, max_chars=None))]
     pub fn format_function(
         &self,
@@ -477,8 +495,24 @@ impl ParametricInstance {
     /// Build a bounded notebook display object for a function in this parametric instance's context.
     ///
     /// By default this returns a preview capped at 100 complete terms and
-    /// 20,000 characters. Use {meth}`format_function` for an unbounded plain
-    /// text string.
+    /// 20,000 characters. Pass ``None`` to disable either limit. Parameter
+    /// labels are available before materialization, just as in
+    /// {meth}`~ommx.ParametricInstance.format_function`.
+    ///
+    /// The returned {class}`~ommx.display.FunctionDisplay` has the same preview
+    /// text and truncation metadata as {meth}`~ommx.Instance.display_function`.
+    /// Use ``format_function`` without limits for a complete plain text string.
+    ///
+    /// >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+    /// >>> x = DecisionVariable.binary(0, name="x")
+    /// >>> p = Parameter(100, name="p")
+    /// >>> model = ParametricInstance.from_components(
+    /// ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
+    /// ...     parameters=[p], constraints={},
+    /// ... )
+    /// >>> preview = model.display_function(model.objective)
+    /// >>> assert preview.text == "x + p"
+    /// >>> assert not preview.truncated
     #[pyo3(signature = (function, max_terms=Some(100), max_chars=Some(20000)))]
     pub fn display_function(
         &self,

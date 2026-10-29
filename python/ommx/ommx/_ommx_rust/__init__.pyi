@@ -3387,6 +3387,26 @@ class Function:
     checked, and {class}`~ommx.InstanceClass` to inspect a solver-input representation.
     Being evaluable as a Function does not imply that an Adapter accepts it.
 
+    **Evaluate an expression or a candidate**
+
+    An expression can have a value even when the supplied candidate violates a
+    constraint. Here the expression is ``2*x + 3``, while the problem also requires
+    ``x == 0``:
+
+    >>> from ommx import Function, Instance
+    >>> instance = Instance.minimize()
+    >>> x = instance.new_binary("x")
+    >>> f = Function(2 * x + 3)
+    >>> instance.objective = f
+    >>> _ = instance.add_constraint(x == 0)
+    >>> candidate = {x.id: 1}
+    >>> assert f.evaluate(candidate) == 5.0
+    >>> assert not instance.evaluate(candidate).feasible
+
+    The {class}`~ommx.Solution` records the problem-level evaluation. To register
+    other quantities to report for each candidate, use {class}`~ommx.NamedFunction`;
+    those quantities do not become objectives or constraints.
+
     **Construction and polynomial forms**
 
     Construct a Function from numbers, decision variables, parameters, polynomial
@@ -3403,6 +3423,13 @@ class Function:
     >>> by_coefficients = Function(Linear(terms={0: 1, 1: 2}, constant=3))
     >>> assert f.almost_equal(by_coefficients)
     >>> assert f.evaluate({0: 1, 1: 0}) == 4.0
+    >>> assert f.linear_terms == {0: 1.0, 1: 2.0}
+    >>> assert f.constant_term == 3.0
+    >>> assert f.terms == {(): 3.0, (0,): 1.0, (1,): 2.0}
+    >>> quadratic = Function(x * x + x * y + y * y)
+    >>> cubic = Function(x * x * x + y * y)
+    >>> assert quadratic.degree() == 2
+    >>> assert cubic.degree() == 3
 
     Addition, subtraction, multiplication, and negation of stored polynomials are
     normalized into polynomial form. Terms that become exactly zero through
@@ -3440,6 +3467,12 @@ class Function:
     square, use ``g * g`` rather than ``g ** 2``. See {meth}`~ommx.Function.powi` for the supported
     exponent types and domain rules.
 
+    The current {class}`~ommx.InstanceClassClause` requirements describe polynomial
+    objectives and constraint bodies. A composed expression therefore needs an
+    appropriate polynomial reformulation before it can be passed to the bundled
+    solver adapters; evaluating it successfully does not establish input-class
+    membership.
+
     **Evaluation, substitution, and stored order**
 
     {meth}`~ommx.Function.evaluate` supplies the point-evaluation contract, including tolerance-based
@@ -3458,6 +3491,15 @@ class Function:
     sequence rather than a recursively nested tree. Its encoding belongs to the
     [OMMX Message specification](https://github.com/Jij-Inc/ommx/tree/main/proto);
     constructing a Python Function does not require creating RPN instructions.
+
+    **Read expressions using model labels**
+
+    The context-free ``str`` and ``repr`` representations use variable IDs. For
+    names and subscripts, use {meth}`~ommx.Instance.format_function`, or
+    {meth}`~ommx.Instance.display_function` for a bounded Notebook preview. These
+    operations resolve IDs using the supplied model's labels; they do not remap
+    variables from another model by name. A {class}`~ommx.ParametricInstance` also
+    provides these methods and can resolve parameter labels.
     """
     @property
     def terms(self) -> dict:
@@ -3586,6 +3628,7 @@ class Function:
 
         >>> from ommx import DecisionVariable, Function
         >>> x = Function(DecisionVariable.continuous(0))
+        >>> assert ((x + 1) * (x + 1)).almost_equal(x * x + 2 * x + 1)
         >>> assert (x * x).almost_equal(x * x)
         >>> assert not (x ** 2).almost_equal(x * x)
         """
@@ -4755,6 +4798,37 @@ class Instance:
         Input keys that repeat after string or integer normalization also raise
         `ValueError` instead of overwriting earlier values.
         Neither this instance nor the input mapping is modified.
+
+        **Reuse a candidate after rebuilding a model**
+
+        A rebuilt model can assign different IDs to the same labeled variables.
+        Extract labels from the source result, then resolve them against the
+        target. The source candidate is feasible here, but the target tightens
+        the bound of ``y`` from 3 to 1:
+
+        >>> from ommx import Instance
+        >>> source = Instance.maximize()
+        >>> x = [source.new_binary("x", subscripts=[i]) for i in range(2)]
+        >>> y = source.new_integer("y", lower=0, upper=3)
+        >>> source.objective = 3 * x[0] + 5 * x[1] + y
+        >>> _ = source.add_constraint(x[0] + x[1] <= 1)
+        >>> solution = source.evaluate({x[0].id: 1, x[1].id: 0, y.id: 2})
+        >>> assert solution.feasible
+        >>> named_values = solution.extract_all_decision_variables()
+        >>> target = Instance.maximize()
+        >>> target_y = target.new_integer("y", lower=0, upper=1)
+        >>> target_x1 = target.new_binary("x", subscripts=[1])
+        >>> target_x0 = target.new_binary("x", subscripts=[0])
+        >>> target.objective = 3 * target_x0 + 5 * target_x1 + target_y
+        >>> _ = target.add_constraint(target_x0 + target_x1 <= 1)
+        >>> state = target.state_from_named_values(named_values)
+        >>> assert state.entries == {target_x0.id: 1.0, target_x1.id: 0.0, target_y.id: 2.0}
+        >>> assert not target.evaluate(state).feasible
+
+        Matching labels transfers the values; it does not establish feasibility
+        for the new problem. Unnamed variables and other values omitted from the
+        extraction are not transferred. If the state is to be used as a solver's
+        initial candidate, also consult that adapter's ``initial_state`` contract.
         """
     def add_decision_variable(
         self, variable: DecisionVariable
@@ -5106,9 +5180,30 @@ class Instance:
         r"""
         Format a function using this instance's decision-variable labels.
 
-        The plain {func}`repr` / {func}`str` representation of {class}`Function`
+        The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
         remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
-        Use this method when labels from this instance should be used instead.
+        This method resolves names and subscripts from this instance without
+        changing the expression or its value.
+
+        >>> from ommx import Instance
+        >>> instance = Instance.minimize()
+        >>> x0 = instance.new_binary("x", subscripts=[0])
+        >>> x1 = instance.new_binary("x", subscripts=[1])
+        >>> instance.objective = x0 + 2 * x1
+        >>> assert instance.format_function(instance.objective) == "x[0] + 2*x[1]"
+
+        Every ID referenced by ``function`` must exist in this instance. IDs are
+        checked before truncation, even if an unknown ID would be outside the
+        preview. An expression does not remember the model its variables came
+        from: using another instance resolves the same numeric IDs in that
+        instance, not matching names across models.
+
+        ``max_terms`` limits complete stored terms and ``max_chars`` limits
+        Unicode characters; both default to ``None`` for no limit. Explicit
+        limits can produce incomplete text. Use
+        {meth}`~ommx.Instance.display_function` when truncation metadata or a
+        Notebook presentation is needed. The corresponding
+        {meth}`~ommx.ParametricInstance.format_function` also resolves parameters.
         """
     def display_function(
         self,
@@ -5120,8 +5215,25 @@ class Instance:
         Build a bounded notebook display object for a function in this instance's context.
 
         By default this returns a preview capped at 100 complete terms and
-        20,000 characters. Use {meth}`format_function` for an unbounded plain
-        text string.
+        20,000 characters. Pass ``None`` to disable either limit. Use
+        {meth}`~ommx.Instance.format_function` for an unbounded plain text string.
+        ID resolution and validation are the same as for that method.
+
+        The returned {class}`~ommx.display.FunctionDisplay` renders itself in a
+        Notebook. Its ``text`` is the formatted preview; ``truncated``,
+        ``omitted_terms``, and ``truncated_by_chars`` distinguish a preview from
+        the complete expression. A character limit can cut through a term, so
+        ``written_terms`` counts only terms written completely.
+
+        >>> from ommx import Instance
+        >>> instance = Instance.minimize()
+        >>> x = [instance.new_binary("x", subscripts=[i]) for i in range(3)]
+        >>> preview = instance.display_function(sum(x), max_terms=2)
+        >>> assert preview.text == "x[0] + x[1]"
+        >>> assert preview.truncated
+        >>> assert (preview.total_terms, preview.written_terms, preview.omitted_terms) == (3, 2, 1)
+        >>> complete = instance.display_function(sum(x), max_terms=None, max_chars=None)
+        >>> assert not complete.truncated
         """
     def required_ids(self) -> builtins.set[builtins.int]:
         r"""
@@ -7379,6 +7491,7 @@ class Linear:
 
     Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
 
+    >>> from ommx import DecisionVariable, Linear
     >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
 
     Or create via DecisionVariable arithmetic:
@@ -7523,16 +7636,130 @@ class LogEncodingError(builtins.RuntimeError):
 @typing.final
 class NamedFunction:
     r"""
-    NamedFunction wrapper for Python.
+    A labeled expression for reporting a candidate's additional metrics.
 
-    Holds the Rust `NamedFunction` plus an owned snapshot of its label
-    (`name` / `subscripts` / `parameters` / `description`). The label
-    store lives at the host (`Instance` / `Solution` / `SampleSet`) level;
-    when a wrapper is created via a host accessor, the host snapshots its
-    store into the third tuple slot. Mutations on a wrapper do NOT
-    propagate back to the host — re-insert via `Instance.from_components`
-    (or equivalent) to apply changes. Same shape as `Constraint` /
-    `DecisionVariable` after PR #843.
+    For example, minimize cost while also recording distance or workload. Register
+    the expression in an {class}`~ommx.Instance`, evaluate a candidate, and retrieve
+    its value from the {class}`~ommx.Solution`. Registering a NamedFunction does not
+    make it an objective or a constraint.
+
+    **Register, evaluate, and read a metric**
+
+    Choose exactly one of two alternatives. The objective is cost; ``distance`` is
+    an additional measurement of the same candidate.
+
+    ```pycon
+    >>> from ommx import DecisionVariable, Instance, NamedFunction, Sense
+    >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
+    >>> distance = NamedFunction(id=0, function=10 * x[0] + 3 * x[1], name="distance")
+    >>> instance = Instance.from_components(
+    ...     sense=Sense.Minimize,
+    ...     objective=x[0] + 2 * x[1],
+    ...     decision_variables=x,
+    ...     constraints={0: sum(x) == 1},
+    ...     named_functions=[distance],
+    ... )
+    >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0})
+    >>> assert solution.feasible
+    >>> assert solution.objective == 1.0
+    >>> assert solution.extract_named_functions("distance") == {(): 10.0}
+    >>> metrics = solution.named_functions_df()
+    >>> assert metrics.loc[distance.id, "name"] == "distance"
+    >>> assert metrics.loc[distance.id, "value"] == 10.0
+
+    ```
+
+    This candidate costs 1 and has distance 10. The distance did not contribute to
+    the objective or the feasibility conditions. All variables referenced by the
+    metric must still be declared in the Instance. Named-function IDs form their own
+    namespace, separate from variable and constraint IDs; they must be unique within
+    the Instance. An {class}`~ommx.ParametricInstance` can also hold named functions
+    whose expressions contain its declared parameters.
+
+    Use {meth}`~ommx.Solution.extract_named_functions` for a dictionary keyed by
+    subscript tuples, or {meth}`~ommx.Solution.named_functions_df` for a table indexed
+    by named-function ID. A scalar metric has no subscripts and uses ``()`` as its
+    dictionary key. To label a metric for each facility, for example, reuse a name
+    with distinct ``subscripts``. Names and subscripts are modeling labels;
+    ``parameters`` and ``description`` do not disambiguate duplicate extraction keys.
+    The extraction methods specify missing-name and duplicate-key errors.
+
+    **Compare metrics across candidates**
+
+    {meth}`~ommx.Instance.evaluate_samples` evaluates the registered metrics for each
+    candidate. Select one using its sample ID when querying a
+    {class}`~ommx.SampleSet`.
+
+    ```pycon
+    >>> results = instance.evaluate_samples(
+    ...     {
+    ...         7: {x[0].id: 1, x[1].id: 0},
+    ...         9: {x[0].id: 0, x[1].id: 1},
+    ...     }
+    ... )
+    >>> assert results.extract_named_functions("distance", 7) == {(): 10.0}
+    >>> assert results.extract_named_functions("distance", 9) == {(): 3.0}
+    >>> assert results.best_feasible.objective == 1.0
+    >>> assert results.best_feasible.extract_named_functions("distance") == {(): 10.0}
+
+    ```
+
+    The cheapest candidate is not the one with the shortest distance. Registering
+    metrics does not change the objective-based ordering or the selection made by
+    {attr}`~ommx.SampleSet.best_feasible`.
+
+    **Supply values for variables used only in reporting**
+
+    Appearing only in a named function does not make a variable used by the current
+    objective or active constraints. If it also has no fixed value or dependency,
+    the variable is irrelevant to that current problem. When its value is omitted,
+    {meth}`~ommx.Instance.populate_state` supplies a default before the named
+    function is evaluated. That default is not a recovered value of the candidate.
+
+    ```pycon
+    >>> recorded = DecisionVariable.integer(0, lower=2, upper=5, name="recorded")
+    >>> reporting = Instance.from_components(
+    ...     sense=Sense.Minimize,
+    ...     objective=0,
+    ...     decision_variables=[recorded],
+    ...     constraints={},
+    ...     named_functions=[NamedFunction(id=0, function=recorded, name="recorded")],
+    ... )
+    >>> omitted = reporting.evaluate({})
+    >>> explicit = reporting.evaluate({recorded.id: 4})
+    >>> assert omitted.extract_named_functions("recorded") == {(): 2.0}
+    >>> assert explicit.extract_named_functions("recorded") == {(): 4.0}
+    >>> assert not reporting.evaluate({recorded.id: 6}).feasible
+
+    ```
+
+    Pass the candidate's actual value when it matters to reporting. Variable kinds
+    and bounds are still checked by {meth}`~ommx.Instance.evaluate`, including for
+    variables that appear only in a metric. Calling {meth}`~ommx.NamedFunction.evaluate`
+    directly evaluates just this expression; it does not check an Instance's variable
+    domains or constraints or reconstruct its omitted values.
+
+    **Ownership**
+
+    An Instance stores the registered expression and its labels. Objects returned by
+    {attr}`~ommx.Instance.named_functions` or
+    {meth}`~ommx.Instance.get_named_function_by_id` are independent snapshots.
+    Partially evaluating a retrieved object does not replace the registered metric.
+
+    ```pycon
+    >>> snapshot = instance.get_named_function_by_id(distance.id)
+    >>> _ = snapshot.partial_evaluate({x[0].id: 1, x[1].id: 0})
+    >>> assert snapshot.function.evaluate({}) == 10.0
+    >>> assert instance.evaluate({x[0].id: 0, x[1].id: 1}).extract_named_functions(
+    ...     "distance"
+    ... ) == {(): 3.0}
+
+    ```
+
+    Arithmetic on a NamedFunction produces a {class}`~ommx.Function`; comparisons
+    such as ``metric <= limit`` construct a {class}`~ommx.Constraint`. These new
+    expressions or constraints take effect in a model only when assigned or added
+    through that model's APIs.
     """
     @property
     def id(self) -> builtins.int: ...
@@ -8419,9 +8646,27 @@ class ParametricInstance:
         r"""
         Format a function using this parametric instance's decision-variable and parameter labels.
 
-        The plain {func}`repr` / {func}`str` representation of {class}`Function`
+        The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
         remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
-        Use this method when labels from this parametric instance should be used instead.
+        This method resolves both variable and parameter labels before any
+        parameter values have been supplied.
+
+        >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+        >>> x = DecisionVariable.binary(0, name="x")
+        >>> p = Parameter(100, name="p", parameters={"scenario": "base"})
+        >>> model = ParametricInstance.from_components(
+        ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
+        ...     parameters=[p], constraints={},
+        ... )
+        >>> assert model.format_function(model.objective) == "x + p[scenario=base]"
+
+        Every referenced ID must belong to exactly one of this instance's
+        decision variables or parameters. The lookup uses IDs, not names from
+        another model, and validates them before applying output limits.
+        ``max_terms`` and ``max_chars`` both default to ``None`` for no limit;
+        their meaning is the same as in {meth}`~ommx.Instance.format_function`.
+        For a preview with truncation metadata, use
+        {meth}`~ommx.ParametricInstance.display_function`.
         """
     def display_function(
         self,
@@ -8433,8 +8678,24 @@ class ParametricInstance:
         Build a bounded notebook display object for a function in this parametric instance's context.
 
         By default this returns a preview capped at 100 complete terms and
-        20,000 characters. Use {meth}`format_function` for an unbounded plain
-        text string.
+        20,000 characters. Pass ``None`` to disable either limit. Parameter
+        labels are available before materialization, just as in
+        {meth}`~ommx.ParametricInstance.format_function`.
+
+        The returned {class}`~ommx.display.FunctionDisplay` has the same preview
+        text and truncation metadata as {meth}`~ommx.Instance.display_function`.
+        Use ``format_function`` without limits for a complete plain text string.
+
+        >>> from ommx import DecisionVariable, Parameter, ParametricInstance, Sense
+        >>> x = DecisionVariable.binary(0, name="x")
+        >>> p = Parameter(100, name="p")
+        >>> model = ParametricInstance.from_components(
+        ...     sense=Sense.Minimize, objective=x + p, decision_variables=[x],
+        ...     parameters=[p], constraints={},
+        ... )
+        >>> preview = model.display_function(model.objective)
+        >>> assert preview.text == "x + p"
+        >>> assert not preview.truncated
         """
     def substitute(self, assignments: typing.Mapping[builtins.int, ToFunction]) -> None:
         r"""
@@ -8664,6 +8925,7 @@ class Polynomial:
 
     Create via DecisionVariable operations:
 
+    >>> from ommx import DecisionVariable
     >>> x = DecisionVariable.integer(1)
     >>> y = DecisionVariable.integer(2)
     >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
@@ -9057,6 +9319,7 @@ class Quadratic:
 
     Create via DecisionVariable multiplication:
 
+    >>> from ommx import DecisionVariable
     >>> x = DecisionVariable.integer(1)
     >>> y = DecisionVariable.integer(2)
     >>> q = x * y + 2*x + 3*y + 1
@@ -10135,6 +10398,8 @@ class SampleSet:
         Returns a dictionary keyed by subscript tuples. A scalar variable uses
         ``()``. This is equivalent to extracting the name from ``get(sample_id)``;
         names and subscripts identify matches, not parameters or descriptions.
+        See {meth}`~ommx.Solution.extract_decision_variables` for the relationship
+        between named dictionaries, variable IDs, and DataFrames.
 
         Raises KeyError if the name or sample ID does not exist, and ValueError
         if the same subscript is found more than once.
@@ -10154,6 +10419,10 @@ class SampleSet:
         Returns a mapping from variable name to a mapping from subscripts to values.
         This is useful for extracting all variables at once in a structured format.
         Variables without names are not included in the result.
+        Inner keys are subscript tuples, with ``()`` for a scalar variable.
+        Parameters and descriptions do not distinguish matching labels.
+        Use {meth}`~ommx.Instance.state_from_named_values` on a receiving Instance
+        to resolve its IDs from this dictionary before evaluating it there.
 
         Raises KeyError if the sample ID does not exist, and ValueError if the
         same name and subscript combination is found multiple times.
@@ -10196,7 +10465,9 @@ class SampleSet:
         Returns a dictionary keyed by subscript tuples, with ``()`` for a scalar
         metric. Named functions report candidate metrics without changing the
         objective or feasibility conditions. See {meth}`~ommx.Solution.extract_named_functions`
-        for the corresponding single-candidate query.
+        for the corresponding single-candidate query, or {class}`~ommx.NamedFunction`
+        for the complete registration and evaluation workflow. Parameters and
+        descriptions do not distinguish matching labels.
 
         Raises KeyError if the name or sample ID does not exist, and ValueError
         if the same subscript is found more than once.
@@ -10215,6 +10486,10 @@ class SampleSet:
     def extract_all_named_functions(self, sample_id: builtins.int) -> dict:
         r"""
         Extract all named function values grouped by name for a given sample ID.
+
+        The outer keys are names; inner keys are subscript tuples, with ``()`` for
+        a scalar metric. Entries without names are excluded. Parameters and
+        descriptions are ignored when grouping.
 
         Raises KeyError if the sample ID does not exist, and ValueError if the
         same name and subscript combination is found multiple times.
@@ -11457,24 +11732,43 @@ class Solution:
     def to_v2_bytes(self) -> bytes: ...
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""
-        Extract the values of decision variables based on the `name` with `subscripts` key.
+        Extract evaluated variable values using their model name and subscript tuples.
+
+        Use labels such as product, facility, or time indices to return results
+        to application code. The result is a dictionary: ``(i,)`` identifies a
+        one-dimensional subscript, ``(i, j)`` a pair, and ``()`` a scalar variable
+        without subscripts. Names and subscripts are labels, not variable IDs;
+        ``parameters`` and ``description`` do not distinguish extraction keys.
 
         Raises KeyError if no decision variable has the requested name, and
         ValueError if the same subscript is found more than once.
 
-        # Examples
+        >>> from ommx import Instance
+        >>> instance = Instance.maximize()
+        >>> x = [instance.new_binary("x", subscripts=[i]) for i in range(2)]
+        >>> y = instance.new_integer("y", lower=0, upper=3)
+        >>> instance.objective = 3 * x[0] + 5 * x[1] + y
+        >>> _ = instance.add_constraint(x[0] + x[1] <= 1)
+        >>> solution = instance.evaluate({x[0].id: 1, x[1].id: 0, y.id: 2})
+        >>> assert solution.feasible
+        >>> assert solution.extract_decision_variables("x") == {(0,): 1.0, (1,): 0.0}
+        >>> assert solution.extract_decision_variables("y") == {(): 2.0}
+        >>> named_values = solution.extract_all_decision_variables()
+        >>> assert named_values == {"x": {(0,): 1.0, (1,): 0.0}, "y": {(): 2.0}}
+        >>> table = solution.decision_variables_df()
+        >>> x_rows = table.loc[table["name"] == "x", ["subscripts", "value"]]
+        >>> assert x_rows["value"].to_dict() == {x[0].id: 1.0, x[1].id: 0.0}
 
-        >>> from ommx import DecisionVariable, Instance, Sense
-        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints={0: sum(x) == 1},
-        ...     sense=Sense.Maximize,
-        ... )
-        >>> solution = instance.evaluate({i: 1 for i in range(3)})
-        >>> solution.extract_decision_variables("x")
-        {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+        {meth}`~ommx.Solution.extract_all_decision_variables` groups all named
+        variables. {meth}`~ommx.Solution.decision_variables_df` also includes
+        unnamed variables and keeps variable IDs as its index; its ``subscripts``
+        column contains lists, while the dictionaries above use tuple keys.
+        {meth}`~ommx.SampleSet.extract_decision_variables` provides the same query
+        for a selected sample ID.
+
+        To reuse values in a rebuilt model, use
+        {meth}`~ommx.Instance.state_from_named_values` on the receiving Instance.
+        It resolves that model's IDs by labels; it does not establish feasibility.
         """
     def extract_all_decision_variables(self) -> dict:
         r"""
@@ -11483,9 +11777,17 @@ class Solution:
         Returns a mapping from variable name to a mapping from subscripts to values.
         This is useful for extracting all variables at once in a structured format.
         Variables without names are not included in the result.
+        Scalar variables use the empty tuple ``()`` as their inner key.
+        Names and subscripts select matches; parameters and descriptions are ignored.
 
         Raises ValueError if the same name and subscript combination is found
-        multiple times.
+        multiple times. Distinct IDs do not disambiguate duplicate labels in this
+        format. Use {attr}`~ommx.Solution.state` or
+        {meth}`~ommx.Solution.decision_variables_df` for values keyed by ID.
+        See {meth}`~ommx.Solution.extract_decision_variables` for the complete
+        single-name, grouped, and table workflow, and
+        {meth}`~ommx.Instance.state_from_named_values` to map these values into
+        another Instance.
 
         # Examples
 
@@ -11574,6 +11876,9 @@ class Solution:
         Discover names with {attr}`~ommx.Solution.named_function_names`, or use
         {meth}`~ommx.Solution.named_functions_df` for a table including labels.
         A scalar metric uses the empty tuple ``()`` as its key.
+        Names and subscripts select matches; parameters and descriptions are ignored.
+        The {class}`~ommx.NamedFunction` class example covers registration,
+        single-candidate and multi-candidate evaluation, and reporting-only variables.
 
         Raises KeyError if no named function has the requested name, and
         ValueError if the same subscript is found more than once.
@@ -11593,6 +11898,12 @@ class Solution:
     def extract_all_named_functions(self) -> dict:
         r"""
         Extract all named functions grouped by name (returns a Python dict).
+
+        The outer keys are names; each inner dictionary maps subscript tuples to
+        evaluated values, with ``()`` for a scalar metric. Entries without names
+        are excluded. Parameters and descriptions are ignored when grouping.
+        Use {meth}`~ommx.Solution.named_functions_df` to include unnamed entries
+        and retain their IDs.
 
         Raises ValueError if the same name and subscript combination is found
         multiple times.
@@ -11643,7 +11954,10 @@ class Solution:
         have no ``substituted_value`` field, so that compatibility column is NA;
         read the populated value from ``value``. ``include`` selects optional
         label/sidecar columns as on {meth}`~ommx.Instance.decision_variables_df`.
-        Editing this table does not update the Solution.
+        The table includes variables without names. ``subscripts`` holds lists
+        such as ``[0]``; {meth}`~ommx.Solution.extract_decision_variables` uses
+        tuples as dictionary keys instead. Editing this table does not update
+        the Solution.
 
         >>> from ommx import Instance
         >>> instance = Instance.maximize()
@@ -11703,9 +12017,12 @@ class Solution:
         self, include: typing.Optional[typing.Sequence[builtins.str]] = None
     ) -> pandas.DataFrame:
         r"""
-        DataFrame of evaluated named functions
+        DataFrame of evaluated named functions, including entries without names.
 
         Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
+
+        The index is the named-function ID, and ``value`` is its evaluated metric.
+        See {class}`~ommx.NamedFunction` for a complete registration-to-table example.
         """
     def constraint_context_df(
         self, *, kind: typing.Literal["regular", "indicator", "one_hot", "sos1"]

@@ -946,6 +946,37 @@ impl Instance {
     /// Input keys that repeat after string or integer normalization also raise
     /// `ValueError` instead of overwriting earlier values.
     /// Neither this instance nor the input mapping is modified.
+    ///
+    /// **Reuse a candidate after rebuilding a model**
+    ///
+    /// A rebuilt model can assign different IDs to the same labeled variables.
+    /// Extract labels from the source result, then resolve them against the
+    /// target. The source candidate is feasible here, but the target tightens
+    /// the bound of ``y`` from 3 to 1:
+    ///
+    /// >>> from ommx import Instance
+    /// >>> source = Instance.maximize()
+    /// >>> x = [source.new_binary("x", subscripts=[i]) for i in range(2)]
+    /// >>> y = source.new_integer("y", lower=0, upper=3)
+    /// >>> source.objective = 3 * x[0] + 5 * x[1] + y
+    /// >>> _ = source.add_constraint(x[0] + x[1] <= 1)
+    /// >>> solution = source.evaluate({x[0].id: 1, x[1].id: 0, y.id: 2})
+    /// >>> assert solution.feasible
+    /// >>> named_values = solution.extract_all_decision_variables()
+    /// >>> target = Instance.maximize()
+    /// >>> target_y = target.new_integer("y", lower=0, upper=1)
+    /// >>> target_x1 = target.new_binary("x", subscripts=[1])
+    /// >>> target_x0 = target.new_binary("x", subscripts=[0])
+    /// >>> target.objective = 3 * target_x0 + 5 * target_x1 + target_y
+    /// >>> _ = target.add_constraint(target_x0 + target_x1 <= 1)
+    /// >>> state = target.state_from_named_values(named_values)
+    /// >>> assert state.entries == {target_x0.id: 1.0, target_x1.id: 0.0, target_y.id: 2.0}
+    /// >>> assert not target.evaluate(state).feasible
+    ///
+    /// Matching labels transfers the values; it does not establish feasibility
+    /// for the new problem. Unnamed variables and other values omitted from the
+    /// extraction are not transferred. If the state is to be used as a solver's
+    /// initial candidate, also consult that adapter's ``initial_state`` contract.
     fn state_from_named_values(&self, values: NamedStateInput) -> OmmxPyResult<State> {
         Ok(State(self.inner.state_from_named_values(&values.0)?))
     }
@@ -1541,9 +1572,30 @@ impl Instance {
 
     /// Format a function using this instance's decision-variable labels.
     ///
-    /// The plain {func}`repr` / {func}`str` representation of {class}`Function`
+    /// The plain {func}`repr` / {func}`str` representation of {class}`~ommx.Function`
     /// remains context-free and renders raw ``x<id>`` symbols such as ``x1``.
-    /// Use this method when labels from this instance should be used instead.
+    /// This method resolves names and subscripts from this instance without
+    /// changing the expression or its value.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.minimize()
+    /// >>> x0 = instance.new_binary("x", subscripts=[0])
+    /// >>> x1 = instance.new_binary("x", subscripts=[1])
+    /// >>> instance.objective = x0 + 2 * x1
+    /// >>> assert instance.format_function(instance.objective) == "x[0] + 2*x[1]"
+    ///
+    /// Every ID referenced by ``function`` must exist in this instance. IDs are
+    /// checked before truncation, even if an unknown ID would be outside the
+    /// preview. An expression does not remember the model its variables came
+    /// from: using another instance resolves the same numeric IDs in that
+    /// instance, not matching names across models.
+    ///
+    /// ``max_terms`` limits complete stored terms and ``max_chars`` limits
+    /// Unicode characters; both default to ``None`` for no limit. Explicit
+    /// limits can produce incomplete text. Use
+    /// {meth}`~ommx.Instance.display_function` when truncation metadata or a
+    /// Notebook presentation is needed. The corresponding
+    /// {meth}`~ommx.ParametricInstance.format_function` also resolves parameters.
     #[pyo3(signature = (function, max_terms=None, max_chars=None))]
     pub fn format_function(
         &self,
@@ -1565,8 +1617,25 @@ impl Instance {
     /// Build a bounded notebook display object for a function in this instance's context.
     ///
     /// By default this returns a preview capped at 100 complete terms and
-    /// 20,000 characters. Use {meth}`format_function` for an unbounded plain
-    /// text string.
+    /// 20,000 characters. Pass ``None`` to disable either limit. Use
+    /// {meth}`~ommx.Instance.format_function` for an unbounded plain text string.
+    /// ID resolution and validation are the same as for that method.
+    ///
+    /// The returned {class}`~ommx.display.FunctionDisplay` renders itself in a
+    /// Notebook. Its ``text`` is the formatted preview; ``truncated``,
+    /// ``omitted_terms``, and ``truncated_by_chars`` distinguish a preview from
+    /// the complete expression. A character limit can cut through a term, so
+    /// ``written_terms`` counts only terms written completely.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.minimize()
+    /// >>> x = [instance.new_binary("x", subscripts=[i]) for i in range(3)]
+    /// >>> preview = instance.display_function(sum(x), max_terms=2)
+    /// >>> assert preview.text == "x[0] + x[1]"
+    /// >>> assert preview.truncated
+    /// >>> assert (preview.total_terms, preview.written_terms, preview.omitted_terms) == (3, 2, 1)
+    /// >>> complete = instance.display_function(sum(x), max_terms=None, max_chars=None)
+    /// >>> assert not complete.truncated
     #[pyo3(signature = (function, max_terms=Some(100), max_chars=Some(20000)))]
     pub fn display_function(
         &self,

@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 ///
 /// Create via DecisionVariable multiplication:
 ///
+/// >>> from ommx import DecisionVariable
 /// >>> x = DecisionVariable.integer(1)
 /// >>> y = DecisionVariable.integer(2)
 /// >>> q = x * y + 2*x + 3*y + 1

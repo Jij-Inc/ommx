@@ -473,6 +473,8 @@ impl SampleSet {
     /// Returns a dictionary keyed by subscript tuples. A scalar variable uses
     /// ``()``. This is equivalent to extracting the name from ``get(sample_id)``;
     /// names and subscripts identify matches, not parameters or descriptions.
+    /// See {meth}`~ommx.Solution.extract_decision_variables` for the relationship
+    /// between named dictionaries, variable IDs, and DataFrames.
     ///
     /// Raises KeyError if the name or sample ID does not exist, and ValueError
     /// if the same subscript is found more than once.
@@ -506,6 +508,10 @@ impl SampleSet {
     /// Returns a mapping from variable name to a mapping from subscripts to values.
     /// This is useful for extracting all variables at once in a structured format.
     /// Variables without names are not included in the result.
+    /// Inner keys are subscript tuples, with ``()`` for a scalar variable.
+    /// Parameters and descriptions do not distinguish matching labels.
+    /// Use {meth}`~ommx.Instance.state_from_named_values` on a receiving Instance
+    /// to resolve its IDs from this dictionary before evaluating it there.
     ///
     /// Raises KeyError if the sample ID does not exist, and ValueError if the
     /// same name and subscript combination is found multiple times.
@@ -567,7 +573,9 @@ impl SampleSet {
     /// Returns a dictionary keyed by subscript tuples, with ``()`` for a scalar
     /// metric. Named functions report candidate metrics without changing the
     /// objective or feasibility conditions. See {meth}`~ommx.Solution.extract_named_functions`
-    /// for the corresponding single-candidate query.
+    /// for the corresponding single-candidate query, or {class}`~ommx.NamedFunction`
+    /// for the complete registration and evaluation workflow. Parameters and
+    /// descriptions do not distinguish matching labels.
     ///
     /// Raises KeyError if the name or sample ID does not exist, and ValueError
     /// if the same subscript is found more than once.
@@ -599,6 +607,10 @@ impl SampleSet {
     }
 
     /// Extract all named function values grouped by name for a given sample ID.
+    ///
+    /// The outer keys are names; inner keys are subscript tuples, with ``()`` for
+    /// a scalar metric. Entries without names are excluded. Parameters and
+    /// descriptions are ignored when grouping.
     ///
     /// Raises KeyError if the sample ID does not exist, and ValueError if the
     /// same name and subscript combination is found multiple times.

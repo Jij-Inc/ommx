@@ -60,16 +60,17 @@ assert solution.objective == 1
 |---|---|---|
 | ソルバーで問題を解く | [Adapterで解くTutorial](./tutorial/solve_with_ommx_adapter) | Instanceを作り、求解して結果を読む |
 | 手元の問題と候補解を評価する | [既存の問題と候補解を評価するTutorial](./tutorial/evaluate_existing_candidate) | ファイルを読み、目的値・実行可能性・満たさない条件を調べる |
-| 目的関数以外の指標を評価する | [名前付き評価式のHow-to](./how_to/evaluate_named_functions.md) | 費用とは別の距離などを候補ごとに計算する |
-| 結果を名前と添字で取り出す | [結果抽出のHow-to](./how_to/extract_named_values.md) | 変数値を後処理用の辞書や表にする |
+| 目的関数以外の指標を評価する | {class}`~ommx.NamedFunction` | 費用とは別の距離などを候補ごとに計算する |
+| 結果を名前と添字で取り出す | {meth}`名前付きの変数値の抽出 <ommx.Solution.extract_decision_variables>` | 変数値を後処理用の辞書や表にする |
 | OpenJijでサンプリングする | [小さな問題をサンプリングするHow-to](./how_to/sample_with_openjij_adapter) | 重みを設定して問題を準備し、候補を目的値と実行可能性で読む |
 | 独自のAdapterを実装する | [Adapter Developer Guide](./developer_guide/adapter.md) | 入力・変換・評価の契約と参照実装 |
 | 問題や候補解の意味を理解する | {class}`~ommx.Instance` → {class}`~ommx.Solution` | 変数の役割、実行可能性、目的値、最適性の違い |
+| 式を構築・評価する | {class}`~ommx.Function` | 式を作り、式の値と候補の実行可能性を区別する |
 | 固定した構造の数値条件を変える | {class}`~ommx.ParametricInstance` | 構造と変数・制約のIDを再利用し、パラメータの値を変えたInstanceを作る |
 | 特殊制約を使う | [特殊制約の意味と評価](./user_guide/special_constraints.md) | Indicator・OneHot・SOS1の成立条件 |
 | 問題を変換し、結果を確認する | [Instanceを変換するHow-to](./how_to/transform_instance_without_solver.md) | target classとPolicyを指定し、変換結果と手元の候補を検査する |
 | 制約から変数の上下限を絞る | [bound更新のHow-to](./how_to/tighten_bounds.md) | 一回の更新と、変更された変数を確認する |
-| 式を変数名で確認する | {ref}`ラベルを使った式の表示 <function-labels>` | Instanceの名前・添字を使って式を読む |
+| 式を変数名で確認する | {meth}`ラベルを使った式の表示 <ommx.Instance.format_function>` | Instanceの名前・添字を使って式を読む |
 | 変換後の結果を解釈する | [変換後の問題とRemoved constraints](./user_guide/removed_constraints.md) | activeな問題と、元の条件を使った評価の違い |
 | 複数の候補を比較する | {class}`~ommx.SampleSet` | サンプルごとの評価と、得られた候補の中からの選択 |
 | 既存の問題を入手する | [既存の問題をInstanceとして読み込む](./how_to/load_existing_instance.md) | MIPLIB/QPLIBや手元のファイルから問題を読み込む |
@@ -156,8 +157,6 @@ how_to/compare_adapters
 how_to/transform_instance_without_solver
 how_to/sample_with_openjij_adapter
 how_to/load_existing_instance
-how_to/evaluate_named_functions
-how_to/extract_named_values
 how_to/tighten_bounds
 how_to/export_mps
 how_to/continue_experiment
@@ -171,7 +170,6 @@ how_to/share_artifact_registry
 :hidden:
 
 user_guide/variable_roles
-user_guide/function
 user_guide/special_constraints
 user_guide/removed_constraints
 ```
