@@ -6,16 +6,9 @@ Python SDK 3.0.0 contains breaking API changes. A migration guide is available i
 
 ## Unreleased
 
-### Unique constraint numbers across families ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
+## 3.0.0 Beta 8
 
-Constraint numbers are now unique across regular, Indicator, OneHot, and SOS1
-constraints, including removed constraints, within each `Instance` or
-`ParametricInstance`. Automatic additions and transformations allocate from this
-shared space. Evaluation preserves the identities in `Solution` and `SampleSet`.
-
-Constructors and protobuf loading reject cross-family collisions without automatic
-renumbering. Data created during the 3.0.0 beta period may therefore no longer load
-if it contains duplicate numbers. See {ref}`constraint numbering <constraint-numbering>`.
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b8-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b8)
 
 ### 🛠 Map HiGHS dual values to constraint IDs ([#1300](https://github.com/Jij-Inc/ommx/pull/1300))
 
@@ -48,6 +41,17 @@ resolves assignment dependencies and visits each polynomial's terms once.
 Constraints removed by the penalty phase now store their encoded expressions.
 Their evaluated values and the original output objective are preserved through
 decision-variable reconstruction. See {meth}`~ommx.Instance.prepare`.
+
+### ⚠ Unique constraint numbers across families ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
+
+Constraint numbers are now unique across regular, Indicator, OneHot, and SOS1
+constraints, including removed constraints, within each `Instance` or
+`ParametricInstance`. Automatic additions and transformations allocate from this
+shared space. Evaluation preserves the identities in `Solution` and `SampleSet`.
+
+Constructors and protobuf loading reject cross-family collisions without automatic
+renumbering. Data created during the 3.0.0 beta period may therefore no longer load
+if it contains duplicate numbers. See {ref}`constraint numbering <constraint-numbering>`.
 
 ### ⚠ Typed constraint IDs and native result queries ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
 
@@ -96,7 +100,6 @@ Heterogeneous queries use the extensible `ConstraintIDBase` and `ConstraintView`
 types, so adding a special-constraint family does not change their public
 return types. Concrete-ID indexing keeps precise overloads. Solver consumers
 explicitly reject unsupported families instead of silently omitting constraints.
-This extension principle is also recorded in the development and review guidance.
 
 Attached rows compare by owner identity and typed ID; removed and result rows
 compare their snapshot data and metadata. Collections and their views use that

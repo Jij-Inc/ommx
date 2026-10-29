@@ -6,15 +6,9 @@ Python SDK 3.0.0にはAPIの破壊的な変更が含まれます。マイグレ�
 
 ## Unreleased
 
-### 全種類の制約でIDの番号を一意にする ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
+## 3.0.0 Beta 8
 
-`Instance`・`ParametricInstance`内では、removedを含む通常制約・Indicator・OneHot・SOS1の
-全種類を通じてIDの番号が一意になります。自動追加や変換もこの共通空間から採番し、
-評価後の`Solution`・`SampleSet`でもIDを維持します。
-
-構築時とprotobuf読み込み時には種類間の番号重複をエラーとし、自動再採番はしません。
-3.0.0 beta期間中に作成したデータも、番号が重複している場合は読み込めなくなります。
-詳細は[特殊制約のID](../user_guide/special_constraints.md)を参照してください。
+[![Static Badge](https://img.shields.io/badge/GitHub_Release-Python_SDK_3.0.0b8-orange?logo=github)](https://github.com/Jij-Inc/ommx/releases/tag/python-3.0.0b8)
 
 ### 🛠 HiGHSの双対値を制約IDへ正しく対応付ける ([#1300](https://github.com/Jij-Inc/ommx/pull/1300))
 
@@ -45,6 +39,16 @@ SCIP の目的関数用補助変数にも、指定した初期値から計算し
 penaltyによって除去される制約には、エンコード後の式が保存されます。
 制約の評価値と元の出力目的値は、決定変数の復元を通じて保持されます。
 詳しくは {meth}`~ommx.Instance.prepare` を参照してください。
+
+### ⚠ 全種類の制約でIDの番号を一意にする ([#1309](https://github.com/Jij-Inc/ommx/pull/1309))
+
+`Instance`・`ParametricInstance`内では、removedを含む通常制約・Indicator・OneHot・SOS1の
+全種類を通じてIDの番号が一意になります。自動追加や変換もこの共通空間から採番し、
+評価後の`Solution`・`SampleSet`でもIDを維持します。
+
+構築時とprotobuf読み込み時には種類間の番号重複をエラーとし、自動再採番はしません。
+3.0.0 beta期間中に作成したデータも、番号が重複している場合は読み込めなくなります。
+詳細は[特殊制約のID](../user_guide/special_constraints.md)を参照してください。
 
 ### ⚠ 型付き制約IDとnativeな結果取得 ([#1289](https://github.com/Jij-Inc/ommx/pull/1289))
 
@@ -88,7 +92,6 @@ IDの型は `ConstraintID`、`IndicatorConstraintID`、`OneHotConstraintID`、
 種類を横断する取得には、拡張可能な `ConstraintIDBase` と `ConstraintView` を使います。
 特殊制約の種類が追加されても公開返り値型を変えず、具体的なIDによる添字アクセスでは
 具体型を返します。ソルバー側は未対応種類を黙って除外せず、明示的に拒否します。
-この拡張原則は開発・レビュー指針にも記載しています。
 
 Attachedの行は所有元の同一性と型付きIDで比較し、Removedと結果の行は
 スナップショットのデータとメタデータで比較します。コレクションとそのビューも
