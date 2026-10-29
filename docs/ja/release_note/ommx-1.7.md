@@ -28,7 +28,7 @@ Summary
 - [英語のJupyter Book](https://jij-inc.github.io/ommx/en/introduction.html)
 - QPLIBフォーマットのパーサー
 - `ommx.v1.SampleSet` と `ommx.v1.ParametricInstance` にいくつかAPIが追加されました。またOMMX Artifactとの連携機能が追加されました。
-  - `ommx.v1.SampleSet` については[新しい解説ページを参照してください](https://jij-inc.github.io/ommx/ja/ommx_message/sample_set.html)
+  - 現行APIの説明は{class}`~ommx.SampleSet`を参照してください。
   - OMMX ArtifactのサポートについてはAPI reference [ommx.artifact.Artifact](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact)及び[ommx.artifact.ArtifactBuilder](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder)を参照してください。
 - `{Solution, SampleSet}.feasible` の挙動の変更
 

@@ -14,14 +14,20 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
+/// Multiple candidates evaluated against the same optimization problem.
 ///
-/// - Similar to `Solution` rather than the raw `State` message.
-///   This class contains the sampled values of decision variables with the objective value, constraint violations,
-///   feasibility, and modeling labels/context of constraints and decision variables.
-/// - This class is usually created via `Instance.evaluate_samples`.
+/// {class}`~ommx.Samples` contains candidate assignments identified by sample
+/// IDs; a SampleSet adds their objective values, feasibility, evaluated variables
+/// and constraints, and modeling labels. Samples corresponds to
+/// {class}`~ommx.State`, while SampleSet corresponds to {class}`~ommx.Solution`.
+/// Candidates may come from a sampler or be supplied manually.
 ///
-/// # Examples
+/// Use {meth}`~ommx.Instance.evaluate_samples` with Samples, a dictionary of
+/// sample IDs to assignments, or an iterable of assignments. Explicit IDs are
+/// preserved; iterables receive IDs from 0. See {class}`~ommx.Samples` for
+/// construction and repeated-assignment semantics.
+///
+/// **Evaluate several candidates**
 ///
 /// Let's consider a simple optimization problem:
 ///
@@ -46,8 +52,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// ...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
 /// ... } # ^ sample ID
 ///
-/// Note that this will be done by sampling-based solvers, but we do it manually here.
-/// We can evaluate the samples via `Instance.evaluate_samples`:
+/// Evaluate all candidates using the same Instance:
 ///
 /// >>> sample_set = instance.evaluate_samples(samples)
 /// >>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE
@@ -57,21 +62,71 @@ use std::collections::{BTreeMap, BTreeSet};
 /// 0                1.0      True
 /// 2                3.0     False
 ///
-/// The `summary` attribute shows the objective value, feasibility of each sample.
-/// Note that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.
-/// You can get each sample by `get` as a `Solution` format:
+/// {attr}`~ommx.SampleSet.summary` shows each sample's objective and feasibility.
+/// Feasible candidates appear first, ordered by the objective according to
+/// {attr}`~ommx.SampleSet.sense`. Feasibility checks variable kinds and bounds
+/// and all retained constraints, including removed constraints.
+/// Retrieve an individual sample as a Solution using its ID:
 ///
 /// >>> solution = sample_set.get(sample_id=0)
 /// >>> solution.objective
 /// 1.0
 ///
-/// `best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
+/// {attr}`~ommx.SampleSet.best_feasible` selects the largest objective value
+/// among feasible samples for this maximization problem:
 ///
 /// >>> solution = sample_set.best_feasible
 /// >>> solution.objective
 /// 3.0
 ///
-/// Of course, the sample of smallest objective value is returned for minimization problems.
+/// Minimization selects the smallest objective instead. This is the best among
+/// the supplied candidates, not a proof of global optimality. Selection raises
+/// ValueError when no candidate is feasible, including for an empty SampleSet.
+///
+/// **Inspect a candidate's values and diagnostics**
+///
+/// The Solution returned by {meth}`~ommx.SampleSet.get` retains variable labels,
+/// evaluated constraints, named metrics, and the evaluation tolerance. Use its
+/// extraction methods or query {meth}`~ommx.SampleSet.extract_decision_variables`,
+/// {meth}`~ommx.SampleSet.extract_constraints`, and
+/// {meth}`~ommx.SampleSet.extract_named_functions` with a sample ID directly.
+/// {class}`~ommx.NamedFunction` records additional metrics without changing the
+/// objective or adding feasibility conditions.
+///
+/// {attr}`~ommx.SampleSet.constraints` exposes per-constraint results across
+/// samples through {class}`~ommx.SampledConstraintCollection`.
+/// {meth}`~ommx.SampleSet.constraints_df` selects one family for a table;
+/// {attr}`~ommx.SampleSet.summary` is the per-sample overview.
+///
+/// **Evaluate transformed problems**
+///
+/// Evaluate candidates with the transformed Instance supplied to the sampler.
+/// It retains the fixed values and dependencies needed to restore variables,
+/// removed constraints to inspect, and any preserved output objective.
+/// Evaluation reports that output objective and sense, which may differ from
+/// the active solver-facing objective.
+///
+/// >>> from ommx import Instance, Optimality, Sense
+/// >>> original = Instance.maximize()
+/// >>> x = original.new_binary("x")
+/// >>> y = original.new_binary("y")
+/// >>> original.objective = 3 * x + y
+/// >>> prepared = original.partial_evaluate({x.id: 1})
+/// >>> assert prepared.convert_active_objective(Sense.Minimize)
+/// >>> results = prepared.evaluate_samples({7: {y.id: 0}, 9: {y.id: 1}})
+/// >>> assert results.sense == Sense.Maximize
+/// >>> assert results.objectives == {7: 3.0, 9: 4.0}
+/// >>> assert results.get(7).state.entries == {x.id: 1.0, y.id: 0.0}
+/// >>> assert results.best_feasible_id == 9
+/// >>> assert results.best_feasible.optimality == Optimality.Unspecified
+///
+/// Successful value reconstruction, feasibility, and optimality remain separate
+/// questions. {attr}`~ommx.SampleSet.feasible` includes retained removed
+/// constraints; {attr}`~ommx.SampleSet.feasible_relaxed` excludes them while
+/// still checking all variable domains. See {class}`~ommx.Solution` for output
+/// interpretation and {meth}`~ommx.Instance.populate_state` for reconstruction,
+/// defaults, and normalization. Choosing the best supplied candidate never
+/// establishes optimality of the original or transformed problem.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
@@ -124,7 +179,23 @@ impl SampleSet {
 
     /// Return one sample as a Solution.
     ///
+    /// ``sample_id`` is the candidate's ID, not its row position in
+    /// {attr}`~ommx.SampleSet.summary`. The independent result contains evaluated
+    /// values, variable and constraint labels, retained removed constraints,
+    /// named functions, reported objective and sense, and the stored tolerance.
+    /// Changing the extracted Solution does not update the SampleSet.
     /// Raises KeyError if the sample ID does not exist.
+    ///
+    /// >>> from ommx import Instance, Solution
+    /// >>> instance = Instance.maximize()
+    /// >>> x = instance.new_binary("selected", subscripts=[0])
+    /// >>> instance.objective = x
+    /// >>> results = instance.evaluate_samples({10: {x.id: 0}, 20: {x.id: 1}})
+    /// >>> assert list(results.summary.index) == [20, 10]
+    /// >>> solution = results.get(sample_id=10)
+    /// >>> assert isinstance(solution, Solution)
+    /// >>> assert solution.objective == 0.0
+    /// >>> assert solution.extract_decision_variables("selected") == {(0,): 0.0}
     pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
         let sample_id = ommx::SampleID::from(sample_id);
         let solution = self.inner.get(sample_id).ok_or_else(|| {
@@ -143,10 +214,12 @@ impl SampleSet {
         self.get(sample_id)
     }
 
+    /// Number of candidate IDs, including repeated assignments with different IDs.
     pub fn num_samples(&self) -> usize {
         self.inner.sample_ids().len()
     }
 
+    /// All candidate IDs as an independent set of integers.
     pub fn sample_ids(&self) -> BTreeSet<u64> {
         self.inner
             .sample_ids()
@@ -177,19 +250,51 @@ impl SampleSet {
     }
 
     #[getter]
-    /// Raises ValueError if there is no feasible sample.
+    /// ID of the best feasible candidate, using the same selection as
+    /// {attr}`~ommx.SampleSet.best_feasible`.
+    ///
+    /// Raises ValueError if there is no feasible sample, including when empty.
     pub fn best_feasible_id(&self) -> OmmxPyResult<u64> {
         Ok(self.inner.best_feasible_id()?.into_inner())
     }
 
     #[getter]
-    /// Raises ValueError if there is no feasible sample in the relaxed problem.
+    /// ID of the best candidate satisfying {attr}`~ommx.SampleSet.feasible_relaxed`.
+    ///
+    /// Uses the reported objective and {attr}`~ommx.SampleSet.sense`, like
+    /// {attr}`~ommx.SampleSet.best_feasible_relaxed`.
+    /// Raises ValueError if there is no such candidate, including when empty.
     pub fn best_feasible_relaxed_id(&self) -> OmmxPyResult<u64> {
         Ok(self.inner.best_feasible_relaxed_id()?.into_inner())
     }
 
     #[getter]
-    /// Raises ValueError if there is no feasible sample.
+    /// The best feasible candidate as an independent Solution.
+    ///
+    /// Selects only candidates satisfying {attr}`~ommx.SampleSet.feasible`,
+    /// including variable domains and retained removed constraints. Minimization
+    /// selects the smallest reported objective; maximization selects the largest.
+    /// Selection does not prove global optimality or change the extracted
+    /// Solution's optimality status.
+    ///
+    /// Raises ValueError if there is no feasible candidate, including when the
+    /// SampleSet is empty. There is no universal ordering of infeasible candidates:
+    /// choose your own criteria from the constraint and variable diagnostics.
+    /// The objective ordering in ``summary`` is not such a feasibility criterion.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.maximize()
+    /// >>> x = instance.new_binary("x")
+    /// >>> instance.objective = x
+    /// >>> _ = instance.add_constraint(x == 1, "required")
+    /// >>> results = instance.evaluate_samples({10: {x.id: 0}, 20: {x.id: 1}})
+    /// >>> assert results.best_feasible_id == 20
+    /// >>> assert results.best_feasible.state.entries == {x.id: 1.0}
+    /// >>> infeasible = instance.evaluate_samples([{x.id: 0}])
+    /// >>> infeasible.best_feasible
+    /// Traceback (most recent call last):
+    /// ...
+    /// ValueError: No feasible solution found
     pub fn best_feasible(&self) -> OmmxPyResult<Solution> {
         Ok(Solution {
             inner: self.inner.best_feasible()?,
@@ -197,7 +302,14 @@ impl SampleSet {
     }
 
     #[getter]
-    /// Raises ValueError if there is no feasible sample in the relaxed problem.
+    /// The best candidate satisfying relaxed feasibility as an independent Solution.
+    ///
+    /// Uses {attr}`~ommx.SampleSet.feasible_relaxed`: removed constraints are
+    /// excluded, while all variable kinds and bounds still apply. The selected
+    /// candidate can therefore fail {attr}`~ommx.Solution.feasible`.
+    /// Comparison still uses the reported objective and sense; it does not switch
+    /// to an active solver-facing objective. Raises ValueError if there is no
+    /// qualifying candidate, including when empty.
     pub fn best_feasible_relaxed(&self) -> OmmxPyResult<Solution> {
         Ok(Solution {
             inner: self.inner.best_feasible_relaxed()?,
@@ -205,13 +317,18 @@ impl SampleSet {
     }
 
     #[getter]
+    /// Alias for {attr}`~ommx.SampleSet.best_feasible`, including removed constraints.
     /// Raises ValueError if there is no feasible sample.
     pub fn best_feasible_unrelaxed(&self) -> OmmxPyResult<Solution> {
         // Exactly the same as best_feasible
         self.best_feasible()
     }
 
-    /// Get objectives for all samples
+    /// Reported objective values keyed by sample ID.
+    ///
+    /// Evaluation uses the Instance's preserved output objective when present,
+    /// otherwise its active objective. An infeasible candidate can still have
+    /// an objective value; read this together with {attr}`~ommx.SampleSet.feasible`.
     #[getter]
     pub fn objectives(&self) -> BTreeMap<u64, f64> {
         self.inner
@@ -223,7 +340,9 @@ impl SampleSet {
 
     /// Get feasibility status for all samples, including variable bounds and kinds.
     ///
-    /// Each value matches the feasibility of the corresponding extracted Solution.
+    /// Includes all retained regular and special constraints, even removed ones.
+    /// Each value matches {attr}`~ommx.Solution.feasible` on the corresponding
+    /// extracted Solution and uses {attr}`~ommx.SampleSet.feasibility_atol`.
     #[getter]
     pub fn feasible(&self) -> BTreeMap<u64, bool> {
         self.inner
@@ -245,7 +364,7 @@ impl SampleSet {
             .collect()
     }
 
-    /// Get unrelaxed feasibility status for all samples
+    /// Alias for {attr}`~ommx.SampleSet.feasible`, keyed by sample ID.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> BTreeMap<u64, bool> {
         self.feasible()
@@ -260,7 +379,11 @@ impl SampleSet {
         self.inner.feasibility_atol().into_inner()
     }
 
-    /// Get the optimization sense (minimize or maximize)
+    /// The sense associated with the reported objective values.
+    ///
+    /// This is the preserved output sense when recorded by the evaluated
+    /// Instance, otherwise its active sense. ``summary`` and the ``best_feasible``
+    /// selectors use it even if a transformation changed the solver-facing sense.
     #[getter]
     pub fn sense(&self) -> crate::Sense {
         match self.inner.sense() {
@@ -347,8 +470,20 @@ impl SampleSet {
 
     /// Extract decision variable values for a given name and sample ID.
     ///
+    /// Returns a dictionary keyed by subscript tuples. A scalar variable uses
+    /// ``()``. This is equivalent to extracting the name from ``get(sample_id)``;
+    /// names and subscripts identify matches, not parameters or descriptions.
+    ///
     /// Raises KeyError if the name or sample ID does not exist, and ValueError
     /// if the same subscript is found more than once.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.maximize()
+    /// >>> x = instance.new_binary("selected", subscripts=[0])
+    /// >>> instance.objective = x
+    /// >>> results = instance.evaluate_samples({7: {x.id: 1}})
+    /// >>> assert results.extract_decision_variables("selected", 7) == {(0,): 1.0}
+    /// >>> assert results.get(7).extract_decision_variables("selected") == {(0,): 1.0}
     pub fn extract_decision_variables<'py>(
         &self,
         py: Python<'py>,
@@ -429,8 +564,24 @@ impl SampleSet {
 
     /// Extract named function values for a given name and sample ID.
     ///
+    /// Returns a dictionary keyed by subscript tuples, with ``()`` for a scalar
+    /// metric. Named functions report candidate metrics without changing the
+    /// objective or feasibility conditions. See {meth}`~ommx.Solution.extract_named_functions`
+    /// for the corresponding single-candidate query.
+    ///
     /// Raises KeyError if the name or sample ID does not exist, and ValueError
     /// if the same subscript is found more than once.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, NamedFunction, Sense
+    /// >>> x = DecisionVariable.binary(0, name="selected")
+    /// >>> cost = NamedFunction(id=10, function=4 * x, name="cost")
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={},
+    /// ...     sense=Sense.Maximize, named_functions=[cost],
+    /// ... )
+    /// >>> results = instance.evaluate_samples({7: {x.id: 0}, 9: {x.id: 1}})
+    /// >>> assert results.extract_named_functions("cost", 9) == {(): 4.0}
+    /// >>> assert results.get(9).extract_named_functions("cost") == {(): 4.0}
     pub fn extract_named_functions<'py>(
         &self,
         py: Python<'py>,
@@ -527,8 +678,19 @@ impl SampleSet {
         self.clone()
     }
 
-    /// Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.
-    /// Index is sample_id.
+    /// A materialized overview with one row per sample ID.
+    ///
+    /// The index is ``sample_id`` and the columns are ``objective`` and
+    /// ``feasible``. Feasibility matches {attr}`~ommx.SampleSet.feasible`, including
+    /// variable kinds and bounds and all retained constraints, even removed ones.
+    /// Feasible candidates appear first; within each feasibility group, objective
+    /// values are ascending for minimization and descending for maximization,
+    /// according to {attr}`~ommx.SampleSet.sense`.
+    ///
+    /// The index keeps the candidate's ID rather than its displayed row position;
+    /// use that ID with {meth}`~ommx.SampleSet.get`. Identical assignments under
+    /// different IDs remain separate rows. Editing the DataFrame does not update
+    /// the SampleSet. See the {class}`~ommx.SampleSet` example for the table layout.
     #[getter]
     pub fn summary<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let feasible_map = self.inner.feasible();

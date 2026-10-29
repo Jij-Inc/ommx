@@ -93,7 +93,7 @@ never compare equal, and IDs have no `int()` or integer-index conversion.
 `constraint_violation(id)` selects the family from the typed ID and rejects bare
 integers. Variable and sample IDs remain integers; wire formats are unchanged.
 
-See [native result queries](../user_guide/solution.md)
+See {class}`native result queries <ommx.EvaluatedConstraintCollection>`
 and the [migration guide](../migration/python_sdk_v2_to_v3.md).
 
 Heterogeneous queries use the extensible `ConstraintIDBase` and `ConstraintView`

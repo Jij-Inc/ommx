@@ -21,7 +21,7 @@ kernelspec:
 小さなInstanceと候補をこのページだけで作ります。AdapterやTSPの実行結果は使いません。
 既にSolutionを持っている場合も、抽出方法は同じです。
 
-{class}`~ommx.Instance`と、候補を評価して[Solution](../user_guide/solution.md)を得る操作を知っている読者向けです。名前・添字による抽出は、このページで説明します。
+{class}`~ommx.Instance`と、候補を評価して{class}`~ommx.Solution`を得る操作を知っている読者向けです。名前・添字による抽出は、このページで説明します。
 
 ## 一つの名前に対応する値を取り出す
 
@@ -86,7 +86,7 @@ DataFrameの行のindexは変数IDです。`subscripts`列は`[0]`のような�
 `value`列は評価済みの値です。辞書形式では添字をtupleのキーとして使うため、
 この列をそのまま辞書のキーにする必要はありません。
 
-複数候補を扱う場合は、[SampleSet](../user_guide/sample_set.md)で対象候補を選びます。
+複数候補を扱う場合は、{class}`~ommx.SampleSet`で対象候補を選びます。
 {meth}`~ommx.SampleSet.extract_decision_variables`と
 {meth}`~ommx.SampleSet.extract_all_decision_variables`では、それぞれ
 `(name, sample_id)`、`(sample_id)`を指定します。

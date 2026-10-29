@@ -13,10 +13,117 @@ use pyo3::{
 };
 use std::collections::BTreeSet;
 
-/// Python SDK domain type for evaluated optimization results.
+/// A candidate evaluated against a particular optimization problem.
 ///
-/// This class contains annotations persisted in protobuf payloads and mirrored
-/// to OMMX Artifact descriptors.
+/// A {class}`~ommx.State` maps variable IDs to values; it does not say whether
+/// those values satisfy a problem. A Solution adds the objective value,
+/// feasibility results, evaluated variables and constraints, and their modeling
+/// labels. Use {meth}`~ommx.Instance.evaluate` with a State or an ID-to-value
+/// dictionary to obtain one, whether the candidate came from a solver or was
+/// supplied manually.
+///
+/// **Evaluate a candidate**
+///
+/// This problem maximizes ``x + y`` while forbidding both binary variables
+/// from being 1. Evaluation checks one assignment; it does not search for a
+/// better assignment or prove optimality.
+///
+/// >>> from ommx import Instance, Optimality, State
+/// >>> instance = Instance.maximize()
+/// >>> x = instance.new_binary("x")
+/// >>> y = instance.new_binary("y")
+/// >>> instance.objective = x + y
+/// >>> exclusive = instance.add_constraint(x * y == 0, "exclusive")
+/// >>> state = State({x.id: 1, y.id: 0})
+/// >>> solution = instance.evaluate(state)
+/// >>> assert solution.state.entries == {x.id: 1.0, y.id: 0.0}
+/// >>> assert solution.feasible
+/// >>> assert solution.objective == 1.0
+/// >>> assert solution.optimality == Optimality.Unspecified
+///
+/// **Read feasibility, objective, and optimality separately**
+///
+/// | Property | Meaning | Does not establish |
+/// | --- | --- | --- |
+/// | {attr}`~ommx.Solution.feasible` | Variable domains and all retained constraints are satisfied | No better candidate exists |
+/// | {attr}`~ommx.Solution.objective` | The candidate's reported objective value | Feasibility or optimality |
+/// | {attr}`~ommx.Solution.optimality` | Recorded optimality status, for example supplied by an adapter | A proof performed by ``evaluate`` |
+///
+/// An infeasible candidate can still have an objective value when its
+/// expressions can be evaluated. It cannot be selected as a better feasible
+/// solution merely because that value looks preferable.
+///
+/// >>> infeasible = instance.evaluate({x.id: 1, y.id: 1})
+/// >>> assert infeasible.objective == 2.0
+/// >>> assert not infeasible.feasible
+///
+/// Feasibility includes variable ``kind`` and bounds, not only constraints.
+/// Floating-point checks use the tolerance supplied to ``evaluate(..., atol=...)``;
+/// {attr}`~ommx.Solution.feasibility_atol` records it. The exact rules for
+/// discrete-value normalization, reconstruction, and omitted values belong to
+/// {meth}`~ommx.Instance.populate_state`.
+///
+/// **Inspect evaluated values**
+///
+/// {meth}`~ommx.Solution.decision_variables_df` combines variable definitions
+/// and labels with evaluated values. {meth}`~ommx.Solution.constraints_df`
+/// selects one constraint family and includes its evaluation diagnostics.
+/// For a regular constraint ``f(x) <= 0``, the signed value ``f(x)`` and the
+/// nonnegative violation ``max(0, f(x))`` are different quantities.
+///
+/// For queries without pandas, {attr}`~ommx.Solution.constraints` is a live
+/// {class}`~ommx.EvaluatedConstraintCollection` indexed by typed constraint IDs.
+/// It includes active constraints and constraints retained after removal.
+/// Each fetched row is an independent snapshot; editing it does not update
+/// the Solution. Use an owner method such as
+/// {meth}`~ommx.Solution.set_dual_variable` when changing result data.
+/// {class}`~ommx.ConstraintFamilyView` documents family-filtered queries, and
+/// {class}`~ommx.ConstraintIDBase` documents the extensible ID interface.
+///
+/// {meth}`~ommx.Solution.extract_decision_variables` and
+/// {meth}`~ommx.Solution.extract_constraints` use names and subscript tuples to
+/// retrieve variable values and constraint violations for application-level
+/// analysis. {class}`~ommx.NamedFunction` expressions registered on the Instance
+/// provide additional reported metrics through
+/// {meth}`~ommx.Solution.extract_named_functions` or
+/// {meth}`~ommx.Solution.named_functions_df`. These metrics do not add an
+/// objective or a feasibility condition.
+///
+/// **Evaluate a transformed problem**
+///
+/// Evaluate a solver's returned State with the transformed Instance that was
+/// supplied to it. That Instance retains the fixed values, dependencies,
+/// removed constraints, and output objective needed to interpret the result.
+/// Passing the State directly to the original Instance may lose that context
+/// or leave required original variables unspecified.
+///
+/// >>> from ommx import Instance, Optimality, Sense
+/// >>> original = Instance.maximize()
+/// >>> x = original.new_binary("x")
+/// >>> y = original.new_binary("y")
+/// >>> original.objective = 3 * x + y
+/// >>> prepared = original.partial_evaluate({x.id: 1})
+/// >>> assert prepared.convert_active_objective(Sense.Minimize)
+/// >>> restored = prepared.evaluate({y.id: 0})
+/// >>> assert restored.state.entries == {x.id: 1.0, y.id: 0.0}
+/// >>> assert prepared.objective.evaluate({y.id: 0}) == -3.0
+/// >>> assert (restored.sense, restored.objective) == (Sense.Maximize, 3.0)
+/// >>> assert restored.optimality == Optimality.Unspecified
+///
+/// Fixed and dependent values are reconstructed. Otherwise irrelevant variables
+/// omitted from the candidate receive defaults; a default is not a value found
+/// by the solver. Supply such a value when it matters to reported metrics.
+/// Distinguish successful reconstruction, feasibility including removed
+/// constraints, and transport of objective or optimality information.
+/// {attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints but
+/// still checks variable domains. Output objective and optimality transport
+/// follow {attr}`~ommx.Instance.output_objective` and
+/// {meth}`~ommx.Instance.map_active_optimality`, respectively.
+///
+/// Use {class}`~ommx.SampleSet` to evaluate multiple candidates with the same
+/// rules. Being best among the candidates obtained does not establish global
+/// optimality. Solution annotations can also be persisted in protobuf payloads
+/// and mirrored to OMMX Artifact descriptors.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
@@ -88,21 +195,34 @@ impl Solution {
         crate::Relaxation::LpRelaxed
     }
 
-    /// Get the objective function value
+    /// The reported objective value of this candidate.
+    ///
+    /// Evaluation uses the Instance's preserved output objective when one is
+    /// present; otherwise it uses the active objective. Read the value together
+    /// with {attr}`~ommx.Solution.sense` and {attr}`~ommx.Solution.feasible`.
+    /// An infeasible candidate can have an objective value, and the value alone
+    /// establishes neither feasibility nor optimality.
     #[getter]
     pub fn objective(&self) -> f64 {
         *self.inner.objective()
     }
 
-    /// Get the solution state containing variable values
+    /// An independent State containing the evaluated variable values.
+    ///
+    /// Includes retained fixed and dependent values restored by evaluation and
+    /// defaults supplied for omitted irrelevant variables. See
+    /// {meth}`~ommx.Instance.populate_state` for the reconstruction rules.
     #[getter]
     pub fn state(&self) -> crate::State {
         crate::State(self.inner.state())
     }
 
-    /// Feasibility of the solution in terms of all constraints, including removed constraints.
+    /// Whether all retained constraints and variable domains are satisfied.
     ///
-    /// This is an alias for `feasible_unrelaxed`.
+    /// Checks all regular and special constraints, including removed constraints,
+    /// together with the kind and bounds of every retained variable, using
+    /// {attr}`~ommx.Solution.feasibility_atol`. This is an alias for
+    /// {attr}`~ommx.Solution.feasible_unrelaxed`; it does not establish optimality.
     ///
     /// Compatibility: The meaning of this property has changed from Python SDK 1.7.0.
     /// Previously, this property represents the feasibility of the remaining constraints only,
@@ -115,13 +235,31 @@ impl Solution {
         self.inner.feasible()
     }
 
-    /// Feasibility of the solution in terms of remaining constraints, not including relaxed (removed) constraints.
+    /// Whether active constraints and all retained variable domains are satisfied.
+    ///
+    /// Excludes constraints retained after removal, across all constraint families.
+    /// Variable kind and bound checks are still applied with
+    /// {attr}`~ommx.Solution.feasibility_atol`. A result can satisfy this property
+    /// while failing {attr}`~ommx.Solution.feasible` because a removed constraint
+    /// is violated.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.minimize()
+    /// >>> x = instance.new_binary("x")
+    /// >>> instance.objective = x
+    /// >>> required = instance.add_constraint(x == 1, "required")
+    /// >>> instance.relax_constraint(required.constraint_id, "manual relaxation")
+    /// >>> solution = instance.evaluate({x.id: 0})
+    /// >>> assert solution.feasible_relaxed
+    /// >>> assert not solution.feasible
+    /// >>> assert solution.constraints[required.constraint_id].violation() == 1.0
     #[getter]
     pub fn feasible_relaxed(&self) -> bool {
         self.inner.feasible_relaxed()
     }
 
-    /// Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
+    /// Alias for {attr}`~ommx.Solution.feasible`, including removed constraints
+    /// and every retained variable's kind and bounds.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
         self.inner.feasible()
@@ -136,7 +274,12 @@ impl Solution {
         self.inner.feasibility_atol().into_inner()
     }
 
-    /// Get the optimization sense (minimize or maximize)
+    /// The optimization sense associated with the reported objective value.
+    ///
+    /// This is the preserved output sense when an output objective is recorded
+    /// on the evaluated Instance, and otherwise its active sense. It can differ
+    /// from the solver-facing sense after a transformation. Raises RuntimeError
+    /// for older serialized results that do not record a sense.
     #[getter]
     pub fn sense(&self) -> PyResult<crate::Sense> {
         let sense = (*self.inner.sense()).ok_or_else(|| {
@@ -147,7 +290,13 @@ impl Solution {
         Ok(sense.into())
     }
 
-    /// Get the optimality status
+    /// The recorded optimality status, not a result of candidate evaluation.
+    ///
+    /// {meth}`~ommx.Instance.evaluate` produces ``Optimality.Unspecified``.
+    /// An adapter may attach a solver's status, or a caller may set this property;
+    /// setting it does not prove the claim. For a transformed formulation, use
+    /// {meth}`~ommx.Instance.map_active_optimality` to determine which status
+    /// transports to the reported output problem.
     #[getter]
     pub fn optimality(&self) -> crate::Optimality {
         self.inner.optimality.into()
@@ -190,7 +339,34 @@ impl Solution {
     }
 
     /// Live mapping of all constraint families, including removed results.
-    /// Typed IDs select the family. Rows are fetched only when indexed.
+    ///
+    /// Typed IDs select the family. Rows are fetched only when indexed, as
+    /// independent snapshots with labels, provenance, removal reasons, and
+    /// evaluation diagnostics. Changing a snapshot does not update this
+    /// Solution; subsequent lookups read the owner's current result.
+    /// Use {meth}`~ommx.Solution.set_dual_variable` to update a stored regular
+    /// constraint's dual value.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.minimize()
+    /// >>> x = instance.new_binary("x")
+    /// >>> capacity = instance.add_constraint(x <= 2, "capacity")
+    /// >>> solution = instance.evaluate({x.id: 0})
+    /// >>> rows = solution.constraints
+    /// >>> row = rows[capacity.constraint_id]
+    /// >>> assert row.evaluated_value == -2.0
+    /// >>> assert row.violation() == 0.0
+    /// >>> assert row.is_feasible(atol=solution.feasibility_atol)
+    /// >>> row.dual_variable = 9.0
+    /// >>> assert rows[capacity.constraint_id].dual_variable is None
+    /// >>> solution.set_dual_variable(capacity.constraint_id, 2.0)
+    /// >>> assert rows[capacity.constraint_id].dual_variable == 2.0
+    /// >>> assert row.dual_variable == 9.0
+    ///
+    /// {class}`~ommx.EvaluatedConstraintCollection` specifies membership,
+    /// lookup, iteration, and equality. Its ``of_kind`` method returns a
+    /// {class}`~ommx.ConstraintFamilyView` for one family without collecting
+    /// rows. Use {meth}`~ommx.Solution.constraints_df` for a materialized table.
     #[getter]
     pub fn constraints(
         slf: Bound<'_, Self>,
@@ -333,10 +509,28 @@ impl Solution {
 
     /// Extract nonnegative violations of all constraint families by name, keyed by subscript tuples.
     ///
+    /// Discover available names with {attr}`~ommx.Solution.constraint_names`.
+    /// Matching uses the name and subscripts only; a scalar constraint has the
+    /// key ``()``. The returned dictionary captures values at extraction time.
+    ///
     /// Raises KeyError if no constraint has the requested name. Raises
     /// ValueError if matching constraints share subscripts, including across families.
     /// Parameters and descriptions are ignored. Retained removed constraints are
     /// included. Regular constraints return violations, not signed function values.
+    /// Indicator violations account for activation, while OneHot and SOS1 use
+    /// their respective metrics; see {meth}`~ommx.Solution.total_violation`.
+    /// Use {meth}`~ommx.Solution.get_constraint_value` or the regular row's
+    /// ``evaluated_value`` when the signed value is needed.
+    ///
+    /// A transformation may copy a source constraint's labels onto generated
+    /// constraints. If both survive in the result with the same name and
+    /// subscripts, distinguish them through typed-ID lookup in
+    /// {attr}`~ommx.Solution.constraints` instead of name extraction.
+    ///
+    /// Related methods on {meth}`~ommx.Instance.extract_constraints` and
+    /// {meth}`~ommx.ParametricInstance.extract_constraints` return attached
+    /// handles for active constraints; {meth}`~ommx.SampleSet.extract_constraints`
+    /// returns violations for a selected sample, including removed constraints.
     ///
     /// # Examples
     ///
@@ -353,6 +547,21 @@ impl Solution {
     /// >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
     /// >>> solution.extract_constraints("c")
     /// {(0,): 0.0, (1,): 0.0}
+    ///
+    /// A feasible inequality can have a negative signed value and zero violation:
+    ///
+    /// >>> from ommx import Instance
+    /// >>> named = Instance.minimize()
+    /// >>> x = named.new_binary("x")
+    /// >>> capacity = named.add_constraint(x <= 2, "capacity", subscripts=[0])
+    /// >>> assert named.constraint_names == {"capacity"}
+    /// >>> assert named.extract_constraints("capacity")[(0,)] == capacity
+    /// >>> assert named.as_parametric_instance().extract_constraints("capacity")[(0,)].name == "capacity"
+    /// >>> solution = named.evaluate({x.id: 0})
+    /// >>> assert solution.extract_constraints("capacity") == {(0,): 0.0}
+    /// >>> assert solution.get_constraint_value(capacity.constraint_id) == -2.0
+    /// >>> samples = named.evaluate_samples({7: {x.id: 0}})
+    /// >>> assert samples.extract_constraints("capacity", 7) == {(0,): 0.0}
     fn extract_constraints(
         &self,
         name: &str,
@@ -364,8 +573,26 @@ impl Solution {
 
     /// Extract named functions by name with subscripts as key (returns a Python dict).
     ///
+    /// Named functions report additional metrics for the evaluated candidate;
+    /// registering one does not change the objective or add a constraint.
+    /// Discover names with {attr}`~ommx.Solution.named_function_names`, or use
+    /// {meth}`~ommx.Solution.named_functions_df` for a table including labels.
+    /// A scalar metric uses the empty tuple ``()`` as its key.
+    ///
     /// Raises KeyError if no named function has the requested name, and
     /// ValueError if the same subscript is found more than once.
+    ///
+    /// >>> from ommx import DecisionVariable, Instance, NamedFunction, Sense
+    /// >>> x = DecisionVariable.binary(0, name="selected")
+    /// >>> cost = NamedFunction(id=10, function=4 * x, name="cost")
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=[x], objective=x, constraints={},
+    /// ...     sense=Sense.Maximize, named_functions=[cost],
+    /// ... )
+    /// >>> solution = instance.evaluate({x.id: 1})
+    /// >>> assert solution.objective == 1.0
+    /// >>> assert solution.extract_named_functions("cost") == {(): 4.0}
+    /// >>> assert solution.named_functions_df().loc[cost.id, "value"] == 4.0
     pub fn extract_named_functions<'py>(
         &self,
         py: Python<'py>,
@@ -480,9 +707,26 @@ impl Solution {
             })
     }
 
-    /// DataFrame of evaluated decision variables
+    /// A materialized DataFrame of variable definitions, labels, and evaluated values.
     ///
-    /// Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
+    /// The integer ``id`` index identifies variables. Columns include ``kind``,
+    /// ``lower``, ``upper``, and ``value``, plus modeling labels such as ``name``,
+    /// ``subscripts``, ``description``, and ``parameters.{key}``. Evaluated rows
+    /// have no ``substituted_value`` field, so that compatibility column is NA;
+    /// read the populated value from ``value``. ``include`` selects optional
+    /// label/sidecar columns as on {meth}`~ommx.Instance.decision_variables_df`.
+    /// Editing this table does not update the Solution.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.maximize()
+    /// >>> x = instance.new_binary("selected", subscripts=[0])
+    /// >>> instance.objective = x
+    /// >>> solution = instance.evaluate({x.id: 1})
+    /// >>> table = solution.decision_variables_df()
+    /// >>> assert table.loc[x.id, "name"] == "selected"
+    /// >>> assert table.loc[x.id, "value"] == 1.0
+    /// >>> table.loc[x.id, "value"] = 0.0
+    /// >>> assert solution.state.entries[x.id] == 1.0
     #[pyo3(signature = (include = None))]
     pub fn decision_variables_df<'py>(
         &self,
@@ -512,7 +756,17 @@ impl Solution {
 
     /// DataFrame of evaluated constraints, including `feasible` and `violation` for every kind.
     ///
-    /// The `violation` column uses {meth}`constraint_violation`. Dispatched on `kind=`. See
+    /// ``kind`` is required: ``"regular"``, ``"indicator"``, ``"one_hot"``, or
+    /// ``"sos1"``. The index contains typed IDs of the selected family. Rows
+    /// retain their labels and evaluation diagnostics; editing this materialized
+    /// table does not update the Solution.
+    ///
+    /// For regular constraints, ``value`` is the signed left-hand-side value:
+    /// equality requires zero and inequality requires a nonpositive value,
+    /// within {attr}`~ommx.Solution.feasibility_atol`. The nonnegative
+    /// ``violation`` column and per-row ``feasible`` are therefore distinct
+    /// from ``value``. Per-constraint feasibility does not check variable domains.
+    /// The `violation` column uses {meth}`constraint_violation`. See
     /// {meth}`ommx.Instance.constraints_df` for column / `kind=` /
     /// `include=` semantics.
     ///
@@ -521,6 +775,20 @@ impl Solution {
     /// `"removed_reason"` in `include=`. When the flag is on, rows for
     /// constraints removed before evaluation get `removed_reason` /
     /// `removed_reason.{key}` columns populated; other rows have NA.
+    /// The related metadata queries {meth}`~ommx.Solution.constraint_context_df`,
+    /// {meth}`~ommx.Solution.constraint_parameters_df`,
+    /// {meth}`~ommx.Solution.constraint_provenance_df`, and
+    /// {meth}`~ommx.Solution.constraint_removed_reasons_df` also require ``kind``.
+    ///
+    /// >>> from ommx import Instance
+    /// >>> instance = Instance.minimize()
+    /// >>> x = instance.new_binary("x")
+    /// >>> capacity = instance.add_constraint(x <= 2, "capacity")
+    /// >>> solution = instance.evaluate({x.id: 0})
+    /// >>> table = solution.constraints_df(kind="regular")
+    /// >>> assert table.loc[capacity.constraint_id, "value"] == -2.0
+    /// >>> assert table.loc[capacity.constraint_id, "violation"] == 0.0
+    /// >>> assert table.loc[capacity.constraint_id, "feasible"]
     #[pyo3(signature = (*, kind, include = None))]
     pub fn constraints_df<'py>(
         &self,

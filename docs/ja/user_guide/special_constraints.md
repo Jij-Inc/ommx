@@ -21,7 +21,7 @@ OMMXは、通常の等式・不等式に加えて、Indicator・OneHot・SOS1を
 | {class}`~ommx.OneHotConstraint` | バイナリ変数のうち、ちょうど1個が1 |
 | {class}`~ommx.Sos1Constraint` | 変数のうち、高々1個が非ゼロ |
 
-このページでは[InstanceとStateの評価](./solution.md)を使って、それぞれが何を意味するかを確認します。求解の手順は[Adapterで最適化問題を解くTutorial](../tutorial/solve_with_ommx_adapter)を参照してください。
+このページでは{meth}`InstanceとStateの評価 <ommx.Instance.evaluate>`を使って、それぞれが何を意味するかを確認します。求解の手順は[Adapterで最適化問題を解くTutorial](../tutorial/solve_with_ommx_adapter)を参照してください。
 
 ## Indicator：条件付きの制約
 

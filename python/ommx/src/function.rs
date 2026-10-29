@@ -13,7 +13,7 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-#[doc = include_str!("function.md")]
+#[doc = include_str!("docstrings/ommx/Function.md")]
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);
@@ -23,7 +23,7 @@ pyo3_stub_gen::inventory::submit! {
     pyo3_stub_gen::type_info::PyClassInfo {
         pyclass_name: "Function",
         struct_id: || std::any::TypeId::of::<Function>(),
-        doc: include_str!("function.md"),
+        doc: include_str!("docstrings/ommx/Function.md"),
         module: Some("ommx._ommx_rust"),
         bases: &[],
         getters: &[],

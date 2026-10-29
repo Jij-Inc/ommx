@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstanceの編集契約。英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstanceの編集契約。英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -48,6 +48,42 @@
         "docs/en/user_guide/solution.md"
       ],
       "note": "更新された2次案の最初の移管。日英Instance Guideを削除し、基本概念と実行例を共有APIへ統合する。旧G1の概念IDは保持し所有先・代表経路を改訂。英語Solutionは前節への暗黙依存を除去しevaluateのAPIへリンクする限定変更で、同章全体の契約監査は対象外。歴史的baselineを変更せず本文照合記録はチャットに残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "e208f7466f69016b138ef2e1c6a53f43af7fdfd9",
+      "target_revision": "codex/solution-api-reference",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "R_API.solution",
+        "R_API.solution.model",
+        "R_API.evaluation.numeric",
+        "R_API.solution.extract",
+        "T4",
+        "G2",
+        "G3",
+        "R_API.sampleset",
+        "G6",
+        "G7",
+        "G8",
+        "G12",
+        "P14",
+        "MIG3",
+        "RELEASE",
+        "R_API.samples",
+        "R_API.parametric",
+        "P13",
+        "P13.samples",
+        "P12",
+        "T8"
+      ],
+      "untracked_source_paths": [
+        "docs/en/migration/python_sdk_v2_to_v3.md",
+        "docs/en/release_note/ommx-3.0.md",
+        "docs/en/release_note/ommx-1.7.md"
+      ],
+      "note": "日英Solution・SampleSet・ParametricInstance Guideを削除し、各クラスの意味と実行例を共有Referenceへ移管。入力のState・Samplesと共通のCollection/FamilyView/ID契約もReferenceに置く。意味的な概念IDを保持し旧G4S/G4M/G5系の所有先と代表経路を更新。samples.countsは現行公開APIのsample IDと候補数の意味に合わせ、内部圧縮や存在しないnum_occurrences属性を要求しない。共有collectionの詳細は本文照合で確認し、APIごとの前提ノードを増やさない。日英homeに固定構造の数値条件を変える入口を加える。未台帳化の英語移行ガイド・release noteはリンクの限定変更で各章全体の監査は対象外。歴史的baselineを変更せずレビュー記録はチャットに残す。"
     }
   ],
   "interpretation": {
@@ -274,7 +310,7 @@
     {
       "id": "state.values",
       "label": "Stateを変数IDから値への割当てとして読む",
-      "owner": "G4S",
+      "owner": "R_API.solution",
       "requires": [
         "variable.basics"
       ],
@@ -288,7 +324,7 @@
     {
       "id": "evaluation.basic",
       "label": "与えた候補をInstanceで評価する",
-      "owner": "G4S",
+      "owner": "R_API.solution",
       "requires": [
         "instance.model",
         "state.values"
@@ -303,7 +339,7 @@
     {
       "id": "solution.read",
       "label": "Solutionの変数値と目的値を読む",
-      "owner": "G4S",
+      "owner": "R_API.solution",
       "requires": [
         "instance.model"
       ],
@@ -332,7 +368,7 @@
     {
       "id": "feasibility.basic",
       "label": "候補の実行可能性と違反を読む",
-      "owner": "G4S",
+      "owner": "R_API.solution",
       "requires": [
         "constraint.basics"
       ],
@@ -347,7 +383,7 @@
     {
       "id": "optimality.limit",
       "label": "候補評価と最適性保証を区別する",
-      "owner": "G4S",
+      "owner": "R_API.solution",
       "requires": [
         "sense",
         "feasibility.basic"
@@ -362,24 +398,24 @@
     },
     {
       "id": "samples.counts",
-      "label": "Samplesの複数候補と出現回数を読む",
-      "owner": "G4M",
+      "label": "Samplesの候補IDと出現回数を読む",
+      "owner": "R_API.samples",
       "requires": [
         "state.values"
       ],
       "external": false,
       "aliases": [
         "Samples",
-        "num_occurrences",
+        "num_samples",
         "sample_ids",
         "shots"
       ],
-      "scope": ""
+      "scope": "変数IDとsample IDを区別し、同じ値の候補にも別sample IDがあり得ることと、num_samplesが異なるassignment数ではなくsample ID数を数えることを理解する。num_occurrencesという公開属性や内部の圧縮形式の習得は含めない。"
     },
     {
       "id": "sampleset.read",
       "label": "SampleSetから実行可能な候補を選ぶ",
-      "owner": "G4M",
+      "owner": "R_API.sampleset",
       "requires": [
         "instance.model",
         "solution.read",
@@ -413,7 +449,7 @@
     {
       "id": "numeric.tolerance",
       "label": "許容誤差を含む評価規則を判断する",
-      "owner": "G4S.numeric",
+      "owner": "R_API.evaluation.numeric",
       "requires": [
         "evaluation.basic",
         "feasibility.basic"
@@ -893,7 +929,7 @@
     {
       "id": "parametric.materialize",
       "label": "固定構造にparameterを与えてInstanceにする",
-      "owner": "G5",
+      "owner": "R_API.parametric",
       "requires": [
         "instance.model",
         "expression.basics"
@@ -904,7 +940,7 @@
         "Parameter",
         "with_parameters"
       ],
-      "scope": "固定した変数・制約構造へパラメータを指定し、具体的なInstanceを作って再利用する。必要なID集合・余分なキー・値の検査条件はwith_parametersのAPI Referenceが所有し、Guide訪問だけからそれらの契約の習得を付与しない。"
+      "scope": "固定した変数・制約構造へパラメータを指定し、具体的なInstanceを作って再利用する。基本例はParametricInstanceクラス、必要なID集合・余分なキー・値の検査条件はwith_parametersが所有する。クラス本文からすべての検査契約の習得を付与しない。"
     },
     {
       "id": "adapter.diagnostics",
@@ -1618,7 +1654,8 @@
             "artifact.roundtrip",
             "experiment.record",
             "class.qubo",
-            "bigm.contract"
+            "bigm.contract",
+            "parametric.materialize"
           ]
         }
       ],
@@ -1714,7 +1751,8 @@
             "artifact.roundtrip",
             "experiment.record",
             "class.qubo",
-            "bigm.contract"
+            "bigm.contract",
+            "parametric.materialize"
           ]
         }
       ],
@@ -2694,23 +2732,23 @@
       ]
     },
     {
-      "id": "G4S",
-      "title": "Solutionと候補評価",
-      "slice": "B",
-      "role": "guide",
+      "id": "R_API.solution",
+      "title": "Solution API Reference：候補評価と結果の解釈",
+      "slice": "Solution Reference migration",
+      "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/solution.md"
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/solution.md"
-      ],
+      "source_urls": [],
       "requires": [
         "ext.math",
         "instance.model",
         "variable.basics",
         "constraint.basics",
-        "sense"
+        "sense",
+        "ext.python"
       ],
       "sections": [
         {
@@ -2741,7 +2779,20 @@
           ]
         },
         {
-          "id": "transformed-preview",
+          "id": "inspect-evaluated-values",
+          "introduces": [],
+          "uses": [
+            "solution.read",
+            "feasibility.basic"
+          ],
+          "mentions": [
+            "variables.metadata",
+            "solution.extract",
+            "named.outputs"
+          ]
+        },
+        {
+          "id": "evaluate-transformed-problem",
           "introduces": [],
           "uses": [],
           "mentions": [
@@ -2754,26 +2805,85 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "基本の候補評価・結果読解を先に完結させ、PR #1280の読者レビュー修正で復元/補完と変換済み問題への参照を後段へ置く。短い局所説明はG6/G8の全能力の習得を意味しない。 後処理節のP13/P14へのリンクだけから名前付き指標や抽出操作の知識を付与しない。",
+      "parent_page": "R_API",
+      "notes": "日英Solution Guideを共有Referenceへ統合。Stateと評価結果の違いから、完全な候補評価例、実行可能性・目的値・最適性の区別、評価値と違反量、変換後のInstanceでの評価へ進む。共通collection契約はConstraintCollection・EvaluatedConstraintCollection・ConstraintFamilyView・ConstraintIDBaseに置き、各メソッドに完全な実行例を用意する。クラス本文の短い導入やリンクだけから表操作・名前抽出・復元・変換保証の詳細全体の習得は付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/solution.md"
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
       ]
     },
     {
-      "id": "G4S.numeric",
-      "title": "評価の許容誤差",
-      "slice": "B/I",
-      "role": "guide-section",
+      "id": "R_API.solution.model",
+      "title": "Solution APIの候補評価と結果の意味（説明のみ）",
+      "slice": "Solution Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/solution.md"
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/solution.md"
+      "source_urls": [],
+      "requires": [
+        "ext.math",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics",
+        "sense"
       ],
+      "sections": [
+        {
+          "id": "candidate-and-evaluated-result",
+          "introduces": [
+            "state.values",
+            "evaluation.basic",
+            "solution.read"
+          ],
+          "uses": [
+            "evaluation.basic",
+            "solution.read"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "feasibility-objective-optimality",
+          "introduces": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "uses": [
+            "feasibility.basic",
+            "optimality.limit"
+          ],
+          "mentions": [
+            "numeric.tolerance"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API.solution",
+      "notes": "Python以外の利用者が、クラス冒頭と「Read feasibility, objective, and optimality separately」の説明・表を参照する部分経路。evaluation.basicは候補を対応する問題で検査する入力・結果の意味として扱い、Pythonのコード構築・実行能力や操作別の契約は付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
+      ]
+    },
+    {
+      "id": "R_API.evaluation.numeric",
+      "title": "候補評価APIの許容誤差と値の正規化",
+      "slice": "Solution Reference migration",
+      "role": "reference-section",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst",
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
+      ],
+      "source_urls": [],
       "requires": [
         "evaluation.basic",
         "feasibility.basic"
@@ -2791,22 +2901,26 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G4S",
-      "notes": "",
+      "parent_page": "R_API.solution",
+      "notes": "Solutionクラスの許容誤差の段落からInstance.populate_stateの実際の説明まで読む契約。保存された許容誤差はSolution.feasibility_atolで確認する。クラス本文でatolが言及されるだけでは習得扱いにしない。正規化、固定・依存値の整合性検査、無関係な変数の既定値と許容誤差の規則はpopulate_stateが所有する。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/solution.md"
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst",
+        "python/ommx/src/instance.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
-      "id": "G4S.extract",
-      "title": "名前と添字による結果の抽出",
-      "slice": "B/J",
-      "role": "guide-section",
+      "id": "R_API.solution.extract",
+      "title": "Solutionから後処理のReferenceを選ぶ",
+      "slice": "Solution Reference migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/solution.md"
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -2825,26 +2939,67 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G4S",
-      "notes": "「結果を後処理に使う」はP13/P14への案内だけであり、抽出操作を教えた扱いにしない。実際の自己完結した説明はP14が所有する。",
+      "parent_page": "R_API.solution",
+      "notes": "クラスの「Inspect evaluated values」からextract_decision_variables・extract_constraints・extract_named_functions・DataFrameの操作別Referenceへ案内する部分経路。リンクだけでは各操作を習得扱いにしない。P14の既存How-to本文の統合は後続の移管対象。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/solution.md"
+        "python/ommx/src/solution.rs",
+        "docs/api/_items/ommx.Solution.rst"
       ]
     },
     {
-      "id": "G4M",
-      "title": "SampleSetと複数候補の評価",
-      "slice": "B",
-      "role": "guide",
+      "id": "R_API.samples",
+      "title": "Samples API Reference：ID付き候補の入力",
+      "slice": "Result and problem-family Reference migration",
+      "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/sample_set.md"
+        "python/ommx/src/samples.rs",
+        "python/ommx/src/docstrings/ommx/Samples.md",
+        "docs/api/_items/ommx.Samples.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/sample_set.md"
+      "source_urls": [],
+      "requires": [
+        "ext.python",
+        "state.values"
       ],
+      "sections": [
+        {
+          "id": "candidate-ids-and-multiplicity",
+          "introduces": [
+            "samples.counts"
+          ],
+          "uses": [
+            "samples.counts"
+          ],
+          "mentions": [
+            "sampleset.read"
+          ]
+        }
+      ],
+      "deferred": [],
+      "parent_page": "R_API",
+      "notes": "明示sample IDと自動付番、同じassignmentを持つ複数ID、num_samplesの意味をSamplesの実際の説明と例で読む。sample IDと変数IDを区別し、非公開の圧縮形式やnum_occurrencesという属性の存在を前提にしない。評価結果の比較はSampleSetが所有する。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "python/ommx/src/samples.rs",
+        "python/ommx/src/docstrings/ommx/Samples.md",
+        "docs/api/_items/ommx.Samples.rst"
+      ]
+    },
+    {
+      "id": "R_API.sampleset",
+      "title": "SampleSet API Reference：複数候補の評価と選択",
+      "slice": "Result and problem-family Reference migration",
+      "role": "reference",
+      "status": "existing",
+      "source_paths": [
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.SampleSet.rst"
+      ],
+      "source_urls": [],
       "requires": [
         "instance.model",
         "sense",
@@ -2852,19 +3007,21 @@
         "evaluation.basic",
         "solution.read",
         "feasibility.basic",
-        "optimality.limit"
+        "optimality.limit",
+        "ext.python"
       ],
       "sections": [
         {
-          "id": "samples",
+          "id": "evaluate-and-select-candidates",
           "introduces": [
-            "samples.counts",
             "sampleset.read"
           ],
           "uses": [
             "sampleset.read"
           ],
-          "mentions": []
+          "mentions": [
+            "samples.counts"
+          ]
         },
         {
           "id": "transformed-preview",
@@ -2881,29 +3038,30 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "PR #1280の読者レビュー修正で、通常の複数候補評価と候補選択の後に、変換済み問題だけに必要な局所説明とG8への参照を置く。G8全体の習得は付与しない。",
+      "parent_page": "R_API",
+      "notes": "日英SampleSet Guideを共有Referenceへ統合。候補を評価し、summary、get、best_feasibleで結果を比較する完全例を置く。候補中の最良と大域最適を区別し、変換後Instanceでの評価と報告目的値・removed制約を説明する。入力のSamplesとsample ID・重複候補の個数はR_API.samplesの契約として別に追跡し、結果を読むだけの読者に入力作成を要求しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/sample_set.md"
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.SampleSet.rst"
       ]
     },
     {
-      "id": "G5",
-      "title": "ParametricInstanceと固定構造の問題族",
-      "slice": "I",
-      "role": "guide",
+      "id": "R_API.parametric",
+      "title": "ParametricInstance API Reference：固定構造の問題の具体化",
+      "slice": "Result and problem-family Reference migration",
+      "role": "reference",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/parametric_instance.md"
+        "python/ommx/src/parametric_instance.rs",
+        "docs/api/_items/ommx.ParametricInstance.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/parametric_instance.md"
-      ],
+      "source_urls": [],
       "requires": [
         "instance.model",
-        "expression.basics"
+        "expression.basics",
+        "ext.python"
       ],
       "sections": [
         {
@@ -2918,12 +3076,13 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "固定構造の問題族から二つのInstanceを作り、同じ候補の評価差を読む最小例。ID空間やモデラーとの役割の違いは局所説明し、必要なパラメータ・値の検査の詳細は実在するwith_parametersのAPI Referenceへ送る。",
+      "parent_page": "R_API",
+      "notes": "日英ParametricInstance Guideを共有Referenceへ統合。Parameterと決定変数の違い、共通ID空間、係数や定数を具体化してInstanceを再利用する例をクラスで説明し、ID集合と値の検査はwith_parameters、表はparameters_dfへ置く。構造の生成はモデラー側の責務であり、Experimentを必須にしない。候補の評価例は数値条件による結果の違いを示し、Solution全体の操作習得を付与するものではない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/parametric_instance.md"
+        "python/ommx/src/parametric_instance.rs",
+        "docs/api/_items/ommx.ParametricInstance.rst"
       ]
     },
     {
@@ -4790,7 +4949,7 @@
       "status": "existing",
       "source_paths": [
         "python/ommx/src/function.rs",
-        "python/ommx/src/function.md"
+        "python/ommx/src/docstrings/ommx/Function.md"
       ],
       "source_urls": [],
       "requires": [
@@ -4812,12 +4971,12 @@
       ],
       "deferred": [],
       "parent_page": "R_API",
-      "notes": "Functionの生成API Referenceに掲載するbinding docstringと隣接Markdownが、構築・演算・多項式と複合式・数値評価の契約を所有する。G2のリンクやAPI一覧の訪問だけではこの節を既習としない。RPNの符号化そのものは別のR_WIRE.functionが所有し、本節の外部仕様リンクだけからwire契約の習得を付与しない。",
+      "notes": "Functionの生成API Referenceに掲載するbinding docstringと共有Markdown原稿が、構築・演算・多項式と複合式・数値評価の契約を所有する。G2のリンクやAPI一覧の訪問だけではこの節を既習としない。RPNの符号化そのものは別のR_WIRE.functionが所有し、本節の外部仕様リンクだけからwire契約の習得を付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
         "python/ommx/src/function.rs",
-        "python/ommx/src/function.md"
+        "python/ommx/src/docstrings/ommx/Function.md"
       ]
     },
     {
@@ -5945,7 +6104,7 @@
       "steps": [
         "SETUP",
         "R_API.instance",
-        "G4S",
+        "R_API.solution",
         "G9",
         "G11",
         "DEV_A"
@@ -5961,7 +6120,7 @@
       "steps": [
         "SETUP.common",
         "R_API.instance.model",
-        "G4S",
+        "R_API.solution.model",
         "R_RUST"
       ]
     },
@@ -5974,7 +6133,7 @@
       "steps": [
         "SETUP.common",
         "R_API.instance.model",
-        "G4S",
+        "R_API.solution.model",
         "R_WIRE",
         "DEV_X"
       ]
@@ -5989,7 +6148,7 @@
       "steps": [
         "SETUP",
         "R_API.instance",
-        "G4S",
+        "R_API.solution",
         "G6",
         "G7",
         "G7.conditioning",
@@ -6007,7 +6166,7 @@
         "SETUP",
         "R_API.instance",
         "G2",
-        "G5"
+        "R_API.parametric"
       ]
     },
     {
@@ -6111,7 +6270,7 @@
       "steps": [
         "SETUP",
         "R_API.instance",
-        "G4S",
+        "R_API.solution",
         "P13",
         "P13.samples",
         "P13.values"
@@ -6127,8 +6286,8 @@
       "steps": [
         "SETUP",
         "R_API.instance",
-        "G4S",
-        "G4S.extract",
+        "R_API.solution",
+        "R_API.solution.extract",
         "P14"
       ]
     },
@@ -6206,7 +6365,7 @@
       "steps": [
         "SETUP",
         "R_API.instance",
-        "G4S",
+        "R_API.solution",
         "G7",
         "G7.bounds",
         "P15"
@@ -6223,7 +6382,7 @@
       ],
       "steps": [
         "R_API.instance",
-        "G4S",
+        "R_API.solution",
         "P14",
         "P14.reuse"
       ]
@@ -6237,6 +6396,64 @@
       ],
       "steps": [
         "R_API.instance"
+      ]
+    },
+    {
+      "id": "solution_api_direct",
+      "title": "日英の候補評価入口からSolution Referenceで結果を読む",
+      "initial": [
+        "ext.math",
+        "ext.python",
+        "instance.model",
+        "variable.basics",
+        "constraint.basics",
+        "sense"
+      ],
+      "steps": [
+        "R_API.solution"
+      ]
+    },
+    {
+      "id": "sampleset_api_direct",
+      "title": "候補評価の意味を知る読者がSampleSetから候補を選ぶ",
+      "initial": [
+        "instance.model",
+        "sense",
+        "state.values",
+        "evaluation.basic",
+        "solution.read",
+        "feasibility.basic",
+        "optimality.limit",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.sampleset"
+      ]
+    },
+    {
+      "id": "samples_input_evaluation",
+      "title": "ID付き候補を作り複数候補を評価する",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.instance",
+        "R_API.solution",
+        "R_API.samples",
+        "R_API.sampleset"
+      ]
+    },
+    {
+      "id": "parametric_api_direct",
+      "title": "問題と式を知る読者が固定構造の問題を具体化する",
+      "initial": [
+        "instance.model",
+        "expression.basics",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.parametric"
       ]
     }
   ],

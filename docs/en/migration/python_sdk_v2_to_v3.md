@@ -1101,7 +1101,7 @@ collection views observe owner mutations. Use `dict(owner.constraints)` when
 an independent mapping is needed. Use `constraints.of_kind("sos1")` when
 inspecting one family. `constraints_df(*, kind=...)` requires `kind` on every root.
 Models select active rows by default and support `removed=True`; results include
-retained removed rows. See [collection semantics](../user_guide/solution.md).
+retained removed rows. See {class}`collection semantics <ommx.ConstraintCollection>`.
 
 For heterogeneous enumeration, use `ConstraintIDBase` and `ConstraintView`
 instead of a union of the currently known families. Adding a special family
@@ -1123,4 +1123,4 @@ typed ID and has no `kind` argument. Variable and sample IDs remain integers.
 now return violations instead of signed function values.** Parameters are ignored,
 as in variable extraction; duplicate subscripts across families raise `ValueError`.
 
-For signed regular values, use `solution.get_constraint_value(id)` or `row.evaluated_value`. See {ref}`name-based extraction <extract-constraints-by-name>`.
+For signed regular values, use `solution.get_constraint_value(id)` or `row.evaluated_value`. See {meth}`name-based extraction <ommx.Solution.extract_constraints>`.

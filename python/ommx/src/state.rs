@@ -13,7 +13,7 @@ fn normalize_zero(value: f64) -> f64 {
     }
 }
 
-/// State wrapper for Python
+#[doc = include_str!("docstrings/ommx/State.md")]
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct State(pub ommx::v1::State);
@@ -23,7 +23,7 @@ pyo3_stub_gen::inventory::submit! {
     pyo3_stub_gen::type_info::PyClassInfo {
         pyclass_name: "State",
         struct_id: || std::any::TypeId::of::<State>(),
-        doc: "State wrapper for Python",
+        doc: include_str!("docstrings/ommx/State.md"),
         module: Some("ommx._ommx_rust"),
         bases: &[],
         getters: &[],

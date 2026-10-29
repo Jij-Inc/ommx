@@ -16,7 +16,7 @@ kernelspec:
 
 Instanceを変換すると、ソルバーが解く問題の形が変わります。一方でユーザーは、元の変数の値や目的値、元の制約を満たすかを知りたいことがあります。OMMXは、**現在解く問題と、結果を解釈するために保持する情報を分けて**扱います。
 
-このページでは{ref}`Instanceの変数の役割 <instance-variable-roles>`と[StateからSolutionへの評価](./solution.md)を前提に、変換後の実行可能性と目的値の読み方を説明します。変換ごとの数式や適用条件はAPI Referenceに委ねます。
+このページでは{ref}`Instanceの変数の役割 <instance-variable-roles>`と{class}`~ommx.Solution`の基本的な読み方を前提に、変換後の実行可能性と目的値の読み方を説明します。変換ごとの数式や適用条件はAPI Referenceに委ねます。
 
 ## Activeから外した制約も評価できる
 

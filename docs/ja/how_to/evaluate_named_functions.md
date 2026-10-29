@@ -73,7 +73,7 @@ assert sample_set.extract_named_functions("distance", 0) == {(): 10.0}
 assert sample_set.extract_named_functions("distance", 1) == {(): 3.0}
 ```
 
-費用を最小にする候補と距離を最小にする候補は、この例では異なります。指標を登録しても、候補の並べ替えや{attr}`~ommx.SampleSet.best_feasible`の選択基準は変わりません。複数候補の読み方は[SampleSet](../user_guide/sample_set.md)を参照してください。
+費用を最小にする候補と距離を最小にする候補は、この例では異なります。指標を登録しても、候補の並べ替えや{attr}`~ommx.SampleSet.best_feasible`の選択基準は変わりません。複数候補の読み方は{class}`~ommx.SampleSet`を参照してください。
 
 ## 評価式だけに現れる変数の値は明示する
 

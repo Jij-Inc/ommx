@@ -91,11 +91,7 @@ enum Owner {
     Sampled(Py<SampledConstraintCollection>),
 }
 
-/// Live, read-only mapping of one constraint family. Created by `of_kind`.
-///
-/// Integers are promoted to the selected ID type; other ID families raise
-/// TypeError. Iteration and dictionary keys retain typed IDs. Model rows are
-/// attached handles; removed and result rows are individual snapshots.
+#[doc = include_str!("../docstrings/ommx/ConstraintFamilyView.md")]
 #[pyclass(frozen)]
 pub struct ConstraintFamilyView {
     owner: Owner,
@@ -112,7 +108,7 @@ pyo3_stub_gen::inventory::submit! {
         pyclass_name: "ConstraintFamilyView",
         struct_id: std::any::TypeId::of::<ConstraintFamilyView>,
         getters: &[], setters: &[], module: Some("ommx._ommx_rust"),
-        doc: "Live, read-only mapping of one constraint family, created by of_kind. Integers are promoted to the selected ID type; other families raise TypeError. Iteration retains typed IDs. Model rows are attached handles; removed and result rows are snapshots.",
+        doc: include_str!("../docstrings/ommx/ConstraintFamilyView.md"),
         bases: &[|| <std::collections::BTreeMap<FamilyKey, FamilyRow> as PyStubType>::type_input()],
         has_eq: false, has_ord: false, has_hash: false, has_str: false, subclass: false,
     }
