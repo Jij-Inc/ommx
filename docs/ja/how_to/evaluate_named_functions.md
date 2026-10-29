@@ -17,7 +17,7 @@ kernelspec:
 
 ## 実行環境と前提
 
-{ref}`Python SDKのインストール <install-python-sdk>`までを済ませてください。このページは[Instance](../user_guide/instance.md)と、候補を`evaluate()`で評価するとSolutionを得ることを知っている読者向けです。コードはこのページだけで実行できます。
+{ref}`Python SDKのインストール <install-python-sdk>`までを済ませてください。このページは{class}`~ommx.Instance`と、候補を`evaluate()`で評価するとSolutionを得ることを知っている読者向けです。コードはこのページだけで実行できます。
 
 ## 1. 評価用の式を登録し、候補を評価する
 

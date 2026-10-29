@@ -81,15 +81,30 @@ then sample generated artifacts to confirm the behavior is reflected correctly.
 Use the narrowest commands that match the diff. Python commands must run through
 the project environment.
 
-Notebook execution correctness belongs to the repository's separate tests.
-Keep these publication checks focused on generated references and rendered
-output; do not add Notebook reruns or enable execution for a Book review.
-An HTML build is not evidence that Notebook code executed successfully.
+Book code is explanatory pseudocode: review its meaning, without requiring or
+claiming execution. Working API examples belong in Reference docstrings checked
+by `python/ommx-tests/tests/test_doctests.py`; runnable end-to-end workflows belong
+in standalone Examples and their existing tests. This separation does not
+authorize disabling, weakening, or adding skips to existing Notebook tests.
+Do not add Notebook reruns or enable execution for a Book review. An HTML build
+verifies publication, not code execution.
 
 - After PyO3 public API or docstring changes:
   ```
   task python:stubgen
   ```
+- When API examples are added, changed, or moved from the Book, rebuild the
+  current SDK before checking the affected Reference doctests. Stub generation
+  alone does not refresh the imported extension's runtime docstrings. From the
+  repository root, select the affected docstring owners with `-k`; for example,
+  for changes to `Instance`:
+  ```
+  task python:sync
+  uv run --no-sync pytest -vv python/ommx-tests/tests/test_doctests.py -k 'ommx.Instance'
+  ```
+  Use `task python:ommx:pytest-doctest` when the full doctest suite is appropriate.
+  Report the selected doctests separately from publication checks; neither a
+  generated example nor a successful HTML build establishes execution.
 - Build docs as warnings-as-errors:
   ```
   uv run sphinx-build -b html -W --keep-going docs/en docs/en/_build/html

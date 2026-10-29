@@ -64,7 +64,7 @@ assert solution.objective == 1
 | 結果を名前と添字で取り出す | [結果抽出のHow-to](./how_to/extract_named_values.md) | 変数値を後処理用の辞書や表にする |
 | OpenJijでサンプリングする | [小さな問題をサンプリングするHow-to](./how_to/sample_with_openjij_adapter) | 重みを設定して問題を準備し、候補を目的値と実行可能性で読む |
 | 独自のAdapterを実装する | [Adapter Developer Guide](./developer_guide/adapter.md) | 入力・変換・評価の契約と参照実装 |
-| 問題や候補解の意味を理解する | [Instance](./user_guide/instance.md) → [StateからSolutionへの評価](./user_guide/solution.md) | 変数の役割、実行可能性、目的値、最適性の違い |
+| 問題や候補解の意味を理解する | {class}`~ommx.Instance` → [StateからSolutionへの評価](./user_guide/solution.md) | 変数の役割、実行可能性、目的値、最適性の違い |
 | 特殊制約を使う | [特殊制約の意味と評価](./user_guide/special_constraints.md) | Indicator・OneHot・SOS1の成立条件 |
 | 問題を変換し、結果を確認する | [Instanceを変換するHow-to](./how_to/transform_instance_without_solver.md) | target classとPolicyを指定し、変換結果と手元の候補を検査する |
 | 制約から変数の上下限を絞る | [bound更新のHow-to](./how_to/tighten_bounds.md) | 一回の更新と、変更された変数を確認する |
@@ -169,7 +169,6 @@ how_to/share_artifact_registry
 :maxdepth: 1
 :hidden:
 
-user_guide/instance
 user_guide/variable_roles
 user_guide/solution
 user_guide/sample_set
