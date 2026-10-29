@@ -88,6 +88,9 @@ as `ommx/Instance.evaluate.md`. Resolve names from public exports, not Rust type
 names or the internal `ommx._ommx_rust` module.
 
 Use Markdown for long explanations and keep short descriptions inline in `///`.
+In Markdown sources, wrap Python REPL examples in `pycon` code fences so Markdown
+and clippy do not interpret `>>>` as block quotes. Leave a blank line before the
+closing fence so Python doctest does not treat it as expected output.
 Each documented API has one entry source, normally one complete Markdown file.
 Prefer linking to the API that owns a shared explanation. If splitting an entry
 becomes useful, prefix its fragments with the owning API name; choose separators
