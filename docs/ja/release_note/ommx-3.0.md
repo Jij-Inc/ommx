@@ -653,7 +653,7 @@ Function、polynomial、constraint、named function、`Instance` のevaluation A
 RustからPythonへの共通error boundaryを直接使います。呼び出し側が渡したstateの不足・
 未知のID・不正な値と、回復可能なdependent-variable assertionは`ValueError`になります。
 Functionとpolynomialを直接partial evaluationする場合は`CoefficientError`を保持し、
-`Instance`が所有するdependencyの正規化と[removed constraint](../user_guide/removed_constraints.md)の復元で発生した
+`Instance`が所有するdependencyの正規化と{attr}`removed constraint <ommx.Instance.removed_constraints>`の復元で発生した
 coefficient failureは`RuntimeError`にfallbackします。
 
 Decision variableの追加とsubstitution、`Function.content_factor`、OneHot/SOS1の
@@ -1642,7 +1642,7 @@ Instance.from_components(..., constraints={5: c}, ...)
 - {class}`~ommx.OneHotConstraint` — 従来 `ConstraintHints.OneHot` として扱われていた one-hot 制約
 - {class}`~ommx.Sos1Constraint` — 従来 `ConstraintHints.Sos1` として扱われていた SOS1 制約
 
-具体的な使い方と評価結果の参照については [特殊制約の意味と評価](../user_guide/special_constraints.md)、Indicator 制約を含む active / removed の扱いについては [変換後の問題とRemoved constraints](../user_guide/removed_constraints.md) を参照してください。
+具体的な使い方と評価結果の参照については [特殊制約の意味と評価](../user_guide/special_constraints.md)、Indicator 制約を含む active / removed の扱いについては [候補を評価して結果を判断する](../user_guide/evaluate_and_interpret.md) を参照してください。
 
 これに伴い旧 API である `ConstraintHints` / `OneHot` / `Sos1` クラス、`Instance.constraint_hints` プロパティ、PySCIPOpt Adapter の `use_sos1` フラグは削除されています。
 

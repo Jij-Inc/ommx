@@ -113,4 +113,4 @@ OMMXの固定weightのpenalty操作も、通常制約の本体を二乗します
 
 元のInstance自体を後で評価・再利用する必要がある場合は、そのInstanceを保持します。変換前後の評価結果を比較するだけなら、事前の評価結果を保存すれば足ります。`prepare()`の例では、後者のためだけにInstanceをcopyしません。
 
-値の出所は[変数の役割と値の復元・補完](./variable_roles.md)、保持した制約・目的値と最適性の表示範囲は[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。activeな問題に対する最適性を出力目的関数へ移せることも、removedな制約を含む元の問題全体への最適性保証とは同じではありません。
+値の出所は{meth}`値の復元・補完 <ommx.Instance.populate_state>`、保持した制約・目的値と最適性の表示範囲は[候補を評価して結果を判断する](./evaluate_and_interpret.md)を参照してください。activeな問題に対する最適性を出力目的関数へ移せることも、removedな制約を含む元の問題全体への最適性保証とは同じではありません。

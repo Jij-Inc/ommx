@@ -886,6 +886,13 @@ impl Instance {
     /// Read-only output objective used by {meth}`~ommx.Instance.evaluate` and
     /// {meth}`~ommx.Instance.evaluate_samples`, if one has been captured.
     ///
+    /// A newly constructed Instance has no output objective; evaluation uses
+    /// its active {attr}`~ommx.Instance.objective` and {attr}`~ommx.Instance.sense`.
+    /// Transformations can capture a separate objective and sense for reporting.
+    /// See {meth}`~ommx.Instance.convert_active_objective` for a complete example
+    /// contrasting solver-facing and reported values. Capturing an output
+    /// objective does not itself prove feasibility or optimality.
+    ///
     /// # Postconditions
     ///
     /// Absence and an explicit output objective equal to the active pair remain distinct.
@@ -1465,8 +1472,7 @@ impl Instance {
         Ok(lowered.into_iter().map(|kind| kind.into()).collect())
     }
 
-    /// Live mapping of all removed constraint families, keyed by typed IDs.
-    /// The view retains this owner and fetches each constraint on demand.
+    #[doc = include_str!("docstrings/ommx/Instance.removed_constraints.md")]
     #[getter]
     pub fn removed_constraints(
         slf: Bound<'_, Self>,
@@ -1504,6 +1510,8 @@ impl Instance {
     /// excluded; {meth}`~ommx.Instance.evaluate` and
     /// {meth}`~ommx.Instance.evaluate_samples` populate their output values from
     /// stored values, dependencies, or defaults respectively.
+    /// See {meth}`~ommx.Instance.populate_state` for the complete reconstruction
+    /// and default rules and examples of retained versus used variables.
     #[getter]
     pub fn used_decision_variables(&self) -> Vec<DecisionVariable> {
         let labels = self.inner.variable_labels();
@@ -2058,59 +2066,7 @@ impl Instance {
         Ok(Solution { inner: solution })
     }
 
-    /// Canonicalize a solver state and populate fixed, irrelevant, and dependent
-    /// decision variables.
-    ///
-    /// The input state must contain all decision variables that are actually used
-    /// by this instance's objective and active constraints. The returned
-    /// {class}`~ommx.State` contains every decision variable in the instance.
-    /// For finite supplied coordinates that are neither fixed nor dependent,
-    /// Binary values at most ``atol`` away from zero or one and Integer or
-    /// SemiInteger values at most ``atol`` away from an integer are represented
-    /// exactly. Derived dependent values use the same target-kind rule. Continuous
-    /// and SemiContinuous values are not rounded. Other finite solver values remain
-    /// available for feasibility checks. A caller-provided fixed or dependent value
-    /// is a consistency assertion; after validation, the returned state uses
-    /// the stored fixed value unchanged or the canonicalized derived dependent
-    /// value. Dependencies consume canonicalized non-fixed, non-dependent inputs.
-    /// A supplied dependent assertion is compared with the value derived from those
-    /// inputs before target-kind canonicalization, so an assertion computed from the
-    /// uncanonicalized solver vector can be rejected as inconsistent.
-    ///
-    /// Irrelevant variables are not determined by optimization or reconstruction.
-    /// Supplied values follow the same canonicalization rules above. When omitted,
-    /// Binary, Integer, and Continuous variables receive the value in their bound
-    /// nearest to zero; SemiInteger and SemiContinuous variables receive zero.
-    /// Supply an irrelevant value explicitly when its choice matters for an output
-    /// objective, named function, or removed constraint.
-    ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
-    /// >>> variables = [
-    /// ...     DecisionVariable.binary(0),
-    /// ...     DecisionVariable.integer(1, lower=2, upper=5),
-    /// ...     DecisionVariable.continuous(2, lower=-5, upper=-2),
-    /// ...     DecisionVariable.semi_integer(3, lower=2, upper=5),
-    /// ...     DecisionVariable.semi_continuous(4, lower=2, upper=5),
-    /// ... ]
-    /// >>> reporting = Instance.from_components(
-    /// ...     decision_variables=variables, objective=0, constraints={}, sense=Sense.Minimize
-    /// ... )
-    /// >>> assert reporting.populate_state({}).entries == {0: 0.0, 1: 2.0, 2: -2.0, 3: 0.0, 4: 0.0}
-    /// >>> assert reporting.populate_state({1: 4}).entries[1] == 4.0
-    ///
-    /// # Postconditions
-    ///
-    /// The returned state restores fixed variables needed only by preserved output semantics.
-    ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
-    /// >>> x = DecisionVariable.binary(0)
-    /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
-    /// ... )
-    /// >>> assert instance.convert_active_objective(Sense.Minimize)
-    /// >>> fixed = instance.partial_evaluate({0: 1})
-    /// >>> assert fixed.populate_state({}).entries == {0: 1.0}
-    /// >>> assert fixed.evaluate({}).objective == 3.0
+    #[doc = include_str!("docstrings/ommx/Instance.populate_state.md")]
     #[pyo3(signature = (state, *, atol=None))]
     pub fn populate_state(
         &self,
@@ -2340,37 +2296,7 @@ impl Instance {
         Ok(crate::Samples(samples))
     }
 
-    /// Remove a constraint from the instance.
-    ///
-    /// The removed constraint is stored in {attr}`~ommx.Instance.removed_constraints`, and can be restored by {meth}`~ommx.Instance.restore_constraint`.
-    ///
-    /// **Args:**
-    /// - `constraint_id`: The ID of the constraint to remove.
-    /// - `reason`: The reason why the constraint is removed.
-    /// - `parameters`: Additional parameters to describe the reason.
-    ///
-    /// # Examples
-    ///
-    /// Relax constraint, and restore it.
-    ///
-    /// >>> from ommx import ConstraintID
-    /// >>> from ommx import DecisionVariable, Instance, Sense
-    /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
-    /// >>> instance = Instance.from_components(
-    /// ...     decision_variables=x,
-    /// ...     objective=sum(x),
-    /// ...     constraints={1: sum(x) == 3},
-    /// ...     sense=Sense.Maximize,
-    /// ... )
-    /// >>> assert set(instance.constraints) == {ConstraintID(1)}
-    ///
-    /// >>> instance.relax_constraint(1, "manual relaxation")
-    /// >>> assert not instance.constraints
-    /// >>> assert set(instance.removed_constraints) == {ConstraintID(1)}
-    ///
-    /// >>> instance.restore_constraint(1)
-    /// >>> assert set(instance.constraints) == {ConstraintID(1)}
-    /// >>> assert not instance.removed_constraints
+    #[doc = include_str!("docstrings/ommx/Instance.relax_constraint.md")]
     #[pyo3(signature = (constraint_id, reason, **parameters))]
     pub(crate) fn relax_constraint(
         &mut self,
@@ -2386,6 +2312,19 @@ impl Instance {
         Ok(())
     }
 
+    /// Make a retained removed regular constraint active again.
+    ///
+    /// Applies the Instance's current variable dependencies and fixed values
+    /// before restoring the row, and removes its removal reason. The ID,
+    /// labels, and provenance are retained. The argument accepts a
+    /// {class}`~ommx.ConstraintID` or its integer value.
+    ///
+    /// This restores one condition, not the state before a transformation:
+    /// generated variables or constraints and objective changes remain.
+    /// See {meth}`~ommx.Instance.relax_constraint` for a complete round trip.
+    /// Raises RuntimeError if the ID is not a removed regular constraint or
+    /// its expression cannot be normalized for the current Instance. Failure
+    /// leaves the row removed.
     pub(crate) fn restore_constraint(
         &mut self,
         constraint_id: ConstraintIDInput,
@@ -2395,6 +2334,16 @@ impl Instance {
     }
 
     /// Relax an indicator constraint by moving it from active to removed.
+    ///
+    /// Accepts an {class}`~ommx.IndicatorConstraintID` or its integer value.
+    /// Records the supplied reason and string-valued keyword parameters,
+    /// preserving the constraint's ID, labels, and provenance. Raises
+    /// RuntimeError if the ID does not identify an active Indicator constraint.
+    /// Evaluation still checks the retained condition; see
+    /// {attr}`~ommx.Instance.removed_constraints` for feasibility semantics and
+    /// {meth}`~ommx.Instance.relax_constraint` for the equivalent regular-
+    /// constraint workflow. Restore with
+    /// {meth}`~ommx.Instance.restore_indicator_constraint`.
     #[pyo3(signature = (constraint_id, reason, **parameters))]
     pub(crate) fn relax_indicator_constraint(
         &mut self,
@@ -2411,6 +2360,16 @@ impl Instance {
     }
 
     /// Restore a removed indicator constraint back to active.
+    ///
+    /// Accepts an {class}`~ommx.IndicatorConstraintID` or its integer value.
+    /// Applies current fixed values and dependencies to the constraint body,
+    /// preserving its ID, labels, and provenance and clearing the removal
+    /// reason. This does not undo generated constraints, auxiliary variables,
+    /// or objective changes from other transformations.
+    ///
+    /// Raises RuntimeError if the ID is not a removed Indicator constraint,
+    /// its controlling variable has been fixed or substituted, or its body
+    /// cannot be normalized. Failure leaves the row removed.
     pub(crate) fn restore_indicator_constraint(
         &mut self,
         constraint_id: IndicatorConstraintIDInput,
@@ -3104,8 +3063,10 @@ impl Instance {
 
     /// Return the state role of a decision variable.
     ///
-    /// The role is one of ``used``, ``fixed``, ``dependent``, or
-    /// ``irrelevant``. Unknown IDs return ``None``.
+    /// See {class}`~ommx.DecisionVariableRole` for the four roles, which depend
+    /// on this Instance's current structure rather than the variable's kind.
+    /// Unknown IDs return ``None``. For a complete reconstruction example,
+    /// see {meth}`~ommx.Instance.populate_state`.
     pub fn decision_variable_role(&self, id: u64) -> Option<DecisionVariableRole> {
         self.inner
             .decision_variable_role(VariableID::from(id))
@@ -3113,6 +3074,10 @@ impl Instance {
     }
 
     /// Return the state role of every decision variable, keyed by ID.
+    ///
+    /// Each value is a {class}`~ommx.DecisionVariableRole` derived from this
+    /// Instance. See {meth}`~ommx.Instance.populate_state` for an example that
+    /// queries roles after substitution and reconstructs the candidate values.
     pub fn decision_variable_roles(&self) -> BTreeMap<u64, DecisionVariableRole> {
         self.inner
             .decision_variable_roles()
@@ -3122,6 +3087,10 @@ impl Instance {
     }
 
     /// Return fixed decision variables as ``{id: fixed_value}``.
+    ///
+    /// These values are retained by the Instance and restored by
+    /// {meth}`~ommx.Instance.populate_state`; a caller's fixed-value entry is
+    /// checked for consistency rather than used to overwrite the recorded value.
     pub fn fixed_decision_variables(&self) -> BTreeMap<u64, f64> {
         self.inner
             .fixed_decision_variables()
@@ -3131,6 +3100,9 @@ impl Instance {
     }
 
     /// Return IDs of decision variables defined by ``decision_variable_dependency``.
+    ///
+    /// {meth}`~ommx.Instance.populate_state` computes their values from the
+    /// recorded expressions. See that method for an example and consistency rules.
     pub fn dependent_decision_variable_ids(&self) -> BTreeSet<u64> {
         self.inner
             .dependent_decision_variable_ids()
@@ -3140,6 +3112,10 @@ impl Instance {
     }
 
     /// Return IDs of decision variables not used, fixed, or dependent.
+    ///
+    /// Values omitted from a candidate receive defaults under
+    /// {meth}`~ommx.Instance.populate_state`. Supply a value explicitly when
+    /// it matters for reporting or checking a particular candidate.
     pub fn irrelevant_decision_variable_ids(&self) -> BTreeSet<u64> {
         self.inner
             .irrelevant_decision_variable_ids()
@@ -3579,37 +3555,7 @@ impl Instance {
         self.inner.as_maximization_problem()
     }
 
-    /// Convert only the active objective used by a solver-facing formulation.
-    ///
-    /// This changes {attr}`~ommx.Instance.sense` and
-    /// {attr}`~ommx.Instance.objective` to ``target`` while preserving the
-    /// objective semantics returned by {meth}`~ommx.Instance.evaluate` and
-    /// {meth}`~ommx.Instance.evaluate_samples`. Use
-    /// {meth}`~ommx.Instance.as_minimization_problem` or
-    /// {meth}`~ommx.Instance.as_maximization_problem` when the output objective
-    /// should be converted as part of the mathematical problem itself.
-    ///
-    /// **Returns:**
-    /// ``True`` if the active objective is converted, ``False`` if it already
-    /// has ``target``.
-    ///
-    /// # Postconditions
-    ///
-    /// Conversion negates only the active objective and preserves evaluation semantics in either direction. Once captured, the output objective remains explicit even if a later conversion makes it structurally equal to the active objective.
-    ///
-    /// >>> from ommx import DecisionVariable, Instance, Sense
-    /// >>> x = DecisionVariable.binary(0)
-    /// >>> for source, target in ((Sense.Maximize, Sense.Minimize), (Sense.Minimize, Sense.Maximize)):
-    /// ...     instance = Instance.from_components(
-    /// ...         decision_variables=[x], objective=3 * x, constraints={}, sense=source
-    /// ...     )
-    /// ...     before = instance.evaluate({0: 1})
-    /// ...     assert instance.convert_active_objective(target)
-    /// ...     after = instance.evaluate({0: 1})
-    /// ...     assert instance.sense == target
-    /// ...     assert instance.objective.evaluate({0: 1}) == -3.0
-    /// ...     assert (after.sense, after.objective) == (before.sense, before.objective)
-    /// ...     assert not instance.convert_active_objective(target)
+    #[doc = include_str!("docstrings/ommx/Instance.convert_active_objective.md")]
     pub fn convert_active_objective(&mut self, target: Sense) -> bool {
         self.inner.convert_active_objective(target.into())
     }
@@ -3620,6 +3566,12 @@ impl Instance {
     /// When the instance records that active-formulation optimality does not
     /// transport to its output objective, this returns
     /// {attr}`~ommx.Optimality.Unspecified`.
+    /// Otherwise the supplied status is returned unchanged. This reads the
+    /// recorded transformation guarantee; it does not solve the problem,
+    /// verify a backend's claim, or test a candidate's feasibility. Merely
+    /// retaining an output objective or reconstructing variable values does
+    /// not establish optimality. See {attr}`~ommx.Solution.optimality` for the
+    /// status stored on a result.
     ///
     /// # Postconditions
     ///

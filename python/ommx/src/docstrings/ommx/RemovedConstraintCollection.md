@@ -6,6 +6,13 @@ independent snapshot, including labels, provenance, and removal reasons.
 Changing that snapshot does not update its owner; a later lookup reads the
 owner's current state.
 
+Removed constraints are excluded from the active formulation but still checked
+when candidates are evaluated. Removal can follow relaxation, an equivalent
+lowering, or another transformation; the collection's presence does not identify
+which guarantee holds. See {attr}`~ommx.Instance.removed_constraints` for their
+evaluation semantics and {meth}`~ommx.Instance.relax_constraint` for a complete
+relax, inspect, evaluate, and restore example.
+
 The collection keeps its owner alive. The typed-key, ``get``, live-view,
 iteration, and snapshot equality rules are documented in
 {class}`~ommx.ConstraintCollection`. Use ``of_kind`` and

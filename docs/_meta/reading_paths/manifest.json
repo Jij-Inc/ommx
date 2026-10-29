@@ -3,7 +3,7 @@
   "title": "OMMX Book 概念とページの依存台帳",
   "created_at": "2026-10-26",
   "language": "ja",
-  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
+  "scope": "README、日本語Bookの主要概念とページ/節、日英Book入口、および日英から共有API Referenceへ移管したInstance・Solution・SampleSet・ParametricInstance・Function・NamedFunctionと名前付き操作の編集契約。日英の候補評価章と変数復元・保持情報のReference移管を含む。その他の英語Book各章の網羅的な契約とQamomileは対象外。API全項目の網羅ではない。",
   "baseline": {
     "repository": "Jij-Inc/ommx",
     "source_revision": "0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2",
@@ -106,6 +106,31 @@
         "docs/en/release_note/ommx-3.0.md"
       ],
       "note": "日英Function Guideと日本語の指標評価・名前付き抽出How-toを共有Referenceへ統合。既存のFunction説明と各所有APIを補い、基本操作の旧ページは残さない。意味的な概念IDを再利用しG2・P13・P14系の所有先を更新する。表現の契約と式評価、ラベル表示、報告用指標、結果抽出、別Instanceへの値の照合は実際の説明先を分け、リンクだけから習得を付与しない。日英の目的別入口を揃える。歴史的baselineと過去の編集記録は保持し、本文レビューの記録はチャットへ残す。"
+    },
+    {
+      "design_source": "https://github.com/Jij-Inc/ommx/issues/1283#issuecomment-6466440948",
+      "base_revision": "4f04acc81eb4f49b761d1b8ad559a5fa25fc6a8a",
+      "target_revision": "codex/result-interpretation-book",
+      "affected_pages": [
+        "HOME",
+        "HOME_EN",
+        "B_EVALUATE",
+        "R_API.instance.population",
+        "R_API.instance.retained_results",
+        "R_API.instance.retained_results.population",
+        "G7",
+        "G9",
+        "G10",
+        "G12",
+        "P11",
+        "DEV_A",
+        "RELEASE",
+        "P1",
+        "P2",
+        "G3",
+        "P12"
+      ],
+      "note": "2次案の候補評価章を日英で追加し、日本語variable_roles/removed_constraintsのAPI手順を共有Referenceへ統合する。概念IDを保持してG6/G8の所有先を変更し、新しいBook章はAPI操作と区別した判断能力を契約にする。関連ページの変更は移管先への導線に限定し、各ページ全体の再編集ではない。歴史的baselineを更新せず、本文照合の証拠はチャットに残す。"
     }
   ],
   "interpretation": {
@@ -455,7 +480,7 @@
     {
       "id": "sampling.reported_results",
       "label": "サンプラーのenergyとOMMXの報告目的値・実行可能性を区別する",
-      "owner": "G8",
+      "owner": "R_API.instance.retained_results",
       "requires": [
         "instance.model",
         "constraint.basics",
@@ -502,7 +527,7 @@
     {
       "id": "variables.roles",
       "label": "retainedとusedの変数を区別する",
-      "owner": "G6",
+      "owner": "R_API.instance.population",
       "requires": [
         "instance.model",
         "variable.basics"
@@ -519,7 +544,7 @@
     {
       "id": "variables.recovery",
       "label": "固定値と依存変数の復元を読む",
-      "owner": "G6",
+      "owner": "R_API.instance.population",
       "requires": [
         "variables.roles",
         "state.values"
@@ -536,7 +561,7 @@
     {
       "id": "variables.defaults",
       "label": "不要な変数へのdefault補完を区別する",
-      "owner": "G6",
+      "owner": "R_API.instance.population",
       "requires": [
         "variables.roles",
         "state.values"
@@ -598,7 +623,7 @@
     {
       "id": "constraints.lifecycle",
       "label": "activeとremovedの制約を区別する",
-      "owner": "G8",
+      "owner": "R_API.instance.retained_results",
       "requires": [
         "instance.model",
         "constraint.basics"
@@ -614,7 +639,7 @@
     {
       "id": "objective.views",
       "label": "active objectiveとoutput objectiveを区別する",
-      "owner": "G8",
+      "owner": "R_API.instance.retained_results",
       "requires": [
         "evaluation.basic",
         "expression.basics",
@@ -631,7 +656,7 @@
     {
       "id": "feasibility.views",
       "label": "activeのみとremovedを含む実行可能性を区別する",
-      "owner": "G8",
+      "owner": "R_API.instance.retained_results",
       "requires": [
         "constraints.lifecycle",
         "feasibility.basic"
@@ -646,7 +671,7 @@
     {
       "id": "evaluation.snapshot",
       "label": "候補を対応するInstanceで評価する",
-      "owner": "G8",
+      "owner": "R_API.instance.retained_results",
       "requires": [
         "evaluation.basic"
       ],
@@ -1531,6 +1556,40 @@
         "開発版環境"
       ],
       "scope": "Bookの公開SDKインストールとは別に読者が用意した環境。このBook内のリンクや公開環境の導入だけから、その準備能力や実行環境があるとはみなさない。"
+    },
+    {
+      "id": "results.evaluation_scope",
+      "label": "共通の問題で候補を評価し、判定の対象を選ぶ",
+      "requires": [
+        "ext.math"
+      ],
+      "scope": "手元の候補も共通に評価できる価値と、探索に課した条件・保持して検査する条件の違いを理解する。APIクラスの構築や個別プロパティの契約全体の習得ではない。",
+      "owner": "B_EVALUATE",
+      "external": false,
+      "aliases": []
+    },
+    {
+      "id": "results.reconstruction",
+      "label": "復元・補完と実行可能性・最適性の違いを判断する",
+      "requires": [
+        "results.evaluation_scope"
+      ],
+      "scope": "記録された関係から戻る値と省略値の補完を区別し、補完値を元候補の値とみなさない。変数の四役割の全仕様や数値規則はReferenceが所有する。",
+      "owner": "B_EVALUATE",
+      "external": false,
+      "aliases": []
+    },
+    {
+      "id": "results.comparison",
+      "label": "候補を比較する問題・目的・条件と保証を揃える",
+      "requires": [
+        "results.evaluation_scope",
+        "results.reconstruction"
+      ],
+      "scope": "backendの探索値・終了理由・bound・gapと、保持した目的や条件による候補評価を区別する。報告指標と名前付き抽出の用途を知り、具体的な操作はReferenceへ進む。",
+      "owner": "B_EVALUATE",
+      "external": false,
+      "aliases": []
     }
   ],
   "pages": [
@@ -1681,13 +1740,14 @@
             "expression.basics",
             "named.outputs",
             "solution.extract",
-            "expression.labels"
+            "expression.labels",
+            "results.evaluation_scope"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。",
+      "notes": "READMEを読まずに直接入れる。冒頭で共通処理の目的、用途の表で利用者の判断を導入し、候補評価とOneHotの等式化で具体化する。コードは意味を読む小例で、Instance全体やState・evaluateの一般的な操作能力を付与しない。名称への言及・ナビゲーションからは習得を推定しない。既存の操作例・各章へ進む際の前提は、それぞれの入口で改めて説明する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -1782,13 +1842,14 @@
             "expression.basics",
             "named.outputs",
             "solution.extract",
-            "expression.labels"
+            "expression.labels",
+            "results.evaluation_scope"
           ]
         }
       ],
       "deferred": [],
       "parent_page": null,
-      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。",
+      "notes": "READMEや日本語Bookを読まずに直接入れる。共通処理の目的と現在の用途・利用者の判断を導入し、候補評価と特殊制約の例、現在の操作と将来の自動選択・反復の区別を日英で揃える。小例から一般的なAPI操作能力は付与しない。目的別の案内は実在する英語ページへ接続し、導入案内の日本語リンクは言語を明示する。wire形式とArtifact内部構造の詳細は形式仕様が所有する。 Instanceの詳しい説明はR_API.instanceへ直接接続する。日英で同じAPI本文を参照し、ホームのリンクだけでは構築・編集能力を付与しない。 候補の結果を判断する入口は日英のB_EVALUATEへ接続し、具体的な評価操作は共有Referenceへ進む。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
@@ -2981,13 +3042,16 @@
       ]
     },
     {
-      "id": "G6",
-      "title": "変数の役割と値の復元・補完",
-      "slice": "I",
-      "role": "guide",
+      "id": "R_API.instance.population",
+      "title": "Instance.populate_state API Reference：役割による復元と補完",
+      "slice": "Result interpretation migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/variable_roles.md"
+        "python/ommx/src/docstrings/ommx/Instance.populate_state.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/enums.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
       "source_urls": [],
       "requires": [
@@ -3021,12 +3085,15 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "Instanceと候補評価を前提に、固定した小さな問題から保持変数・used変数を区別し、四役割、依存式による復元、irrelevantの補完、復元・補完後の評価対象へ進む。Integerの最小例で補完は元候補の復元でないことを教えるが、全kindの既定値規則はpopulate_stateのAPI Referenceに委ねる。復元できることと問題の等価性は分け、後者はG7へ送る。",
+      "parent_page": "R_API.instance",
+      "notes": "旧variable_rolesの操作・四役割・固定値と依存式・irrelevantの補完と明示値をpopulate_stateの完全な実行例へ統合する。数値契約と復元規則の整合性もこのAPIが所有する。復元できることと問題の等価性を区別し、Bookは判断に必要な意味だけを扱う。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/variable_roles.md"
+        "python/ommx/src/docstrings/ommx/Instance.populate_state.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/enums.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
@@ -3181,17 +3248,21 @@
       ]
     },
     {
-      "id": "G8",
-      "title": "変換後の制約と目的関数",
-      "slice": "B/K",
-      "role": "guide",
+      "id": "R_API.instance.retained_results",
+      "title": "InstanceとSolution API Reference：保持した制約・目的と評価結果",
+      "slice": "Result interpretation migration",
+      "role": "reference-section",
       "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/removed_constraints.md"
+        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/docstrings/ommx/Instance.convert_active_objective.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/solution.rs",
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/removed_constraints.md"
-      ],
+      "source_urls": [],
       "requires": [
         "instance.model",
         "constraint.basics",
@@ -3203,26 +3274,34 @@
       ],
       "sections": [
         {
-          "id": "retained",
+          "id": "retained-conditions",
           "introduces": [
             "constraints.lifecycle",
-            "objective.views",
             "feasibility.views",
             "evaluation.snapshot"
           ],
           "uses": [
             "constraints.lifecycle",
-            "objective.views",
-            "feasibility.views",
-            "evaluation.snapshot"
+            "feasibility.views"
           ],
           "mentions": []
         },
         {
-          "id": "limits",
+          "id": "active-and-output-objective",
+          "introduces": [
+            "objective.views",
+            "sampling.reported_results"
+          ],
+          "uses": [
+            "objective.views",
+            "sampling.reported_results"
+          ],
+          "mentions": []
+        },
+        {
+          "id": "limits-and-optimality",
           "introduces": [],
           "uses": [
-            "feasibility.basic",
             "optimality.limit"
           ],
           "mentions": [
@@ -3232,26 +3311,36 @@
         }
       ],
       "deferred": [],
-      "parent_page": null,
-      "notes": "",
+      "parent_page": "R_API.instance",
+      "notes": "旧removed_constraintsのデータモデルと操作を共有Referenceへ移管。removed_constraintsの概説からrelax_constraintの緩和→候補評価→理由の表→復帰を一連で読む。output_objectiveとconvert_active_objectiveは符号反転の完全例、map_active_optimalityは保証の範囲を所有する。SolutionとSampleSetの実行可能性プロパティはactive/removedとdomainの正確な判定を所有する。保持情報を参照するだけで元問題の保証は付与しない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/removed_constraints.md"
+        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/docstrings/ommx/Instance.convert_active_objective.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/solution.rs",
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.Instance.rst"
       ]
     },
     {
-      "id": "G8.population",
-      "title": "変換後評価での復元とdefault補完",
+      "id": "R_API.instance.retained_results.population",
+      "title": "保持した結果の評価と補完値の関係",
       "slice": "B/I",
-      "role": "guide-section",
-      "status": "revise",
+      "role": "reference-section",
+      "status": "existing",
       "source_paths": [
-        "docs/ja/user_guide/removed_constraints.md"
+        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/solution.rs",
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.Instance.rst",
+        "python/ommx/src/docstrings/ommx/Instance.populate_state.md"
       ],
-      "source_urls": [
-        "https://github.com/Jij-Inc/ommx/blob/0e6c25fb78fa6ea2b78bc3084ef6ab674f52c0d2/docs/ja/user_guide/removed_constraints.md"
-      ],
+      "source_urls": [],
       "requires": [
         "variables.roles",
         "variables.recovery",
@@ -3274,12 +3363,18 @@
         }
       ],
       "deferred": [],
-      "parent_page": "G8",
-      "notes": "",
+      "parent_page": "R_API.instance.retained_results",
+      "notes": "removed_constraintsの注意とpopulate_stateのreporting-only変数の説明を対応づける部分経路。旧Bookページへの依存は残さない。",
       "contract_status": "proposed",
       "implementation_verified": false,
       "source_paths_existing": [
-        "docs/ja/user_guide/removed_constraints.md"
+        "python/ommx/src/docstrings/ommx/Instance.removed_constraints.md",
+        "python/ommx/src/docstrings/ommx/Instance.relax_constraint.md",
+        "python/ommx/src/instance.rs",
+        "python/ommx/src/solution.rs",
+        "python/ommx/src/sample_set.rs",
+        "docs/api/_items/ommx.Instance.rst",
+        "python/ommx/src/docstrings/ommx/Instance.populate_state.md"
       ]
     },
     {
@@ -5691,6 +5786,74 @@
       "source_paths_existing": [
         "docs/ja/how_to/tighten_bounds.md"
       ]
+    },
+    {
+      "id": "B_EVALUATE",
+      "title": "候補を評価して結果を判断する / Evaluate candidates and interpret results",
+      "slice": "Result interpretation migration",
+      "role": "book-chapter",
+      "status": "existing",
+      "source_paths": [
+        "docs/ja/user_guide/evaluate_and_interpret.md",
+        "docs/en/user_guide/evaluate_and_interpret.md"
+      ],
+      "source_urls": [],
+      "requires": [
+        "ext.math"
+      ],
+      "sections": [
+        {
+          "id": "common-evaluation",
+          "introduces": [
+            "results.evaluation_scope"
+          ],
+          "uses": [],
+          "mentions": [
+            "evaluation.basic",
+            "solution.read"
+          ]
+        },
+        {
+          "id": "reconstructed-and-completed-values",
+          "introduces": [
+            "results.reconstruction"
+          ],
+          "uses": [
+            "results.evaluation_scope"
+          ],
+          "mentions": [
+            "variables.recovery",
+            "variables.defaults"
+          ]
+        },
+        {
+          "id": "objectives-optimality-and-comparison",
+          "introduces": [
+            "results.comparison"
+          ],
+          "uses": [
+            "results.evaluation_scope",
+            "results.reconstruction"
+          ],
+          "mentions": [
+            "objective.views",
+            "optimality.limit",
+            "named.outputs",
+            "solution.extract"
+          ]
+        }
+      ],
+      "deferred": [
+        "variables.roles"
+      ],
+      "parent_page": null,
+      "notes": "日英で構造を揃え、数理最適化の基礎から直接入れる第3章。クラスやAPIの操作を順番に教えず、短い数学例と説明から評価対象・値の出所・比較基準の判断へ進む。リンクだけからAPI操作能力を付与しない。",
+      "contract_status": "proposed",
+      "implementation_verified": false,
+      "source_paths_existing": [
+        "docs/ja/user_guide/evaluate_and_interpret.md",
+        "docs/en/user_guide/evaluate_and_interpret.md"
+      ]
     }
   ],
   "routes": [
@@ -6136,7 +6299,7 @@
         "SETUP",
         "R_API.instance",
         "R_API.solution",
-        "G6",
+        "R_API.instance.population",
         "G7",
         "G7.conditioning",
         "G7.penalty"
@@ -6452,6 +6615,31 @@
       ],
       "steps": [
         "R_API.function"
+      ]
+    },
+    {
+      "id": "evaluate_interpret_direct",
+      "title": "日英の候補評価章へ直接入り、判断基準を得る",
+      "initial": [
+        "ext.math"
+      ],
+      "steps": [
+        "B_EVALUATE"
+      ]
+    },
+    {
+      "id": "retained_results_reference",
+      "title": "APIから保持制約・目的と候補復元の実行例へ進む",
+      "initial": [
+        "ext.math",
+        "ext.python"
+      ],
+      "steps": [
+        "R_API.instance",
+        "R_API.solution",
+        "R_API.instance.population",
+        "R_API.instance.retained_results",
+        "R_API.instance.retained_results.population"
       ]
     }
   ],

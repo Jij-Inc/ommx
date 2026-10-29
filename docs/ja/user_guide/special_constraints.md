@@ -102,7 +102,7 @@ OneHotと違って、「どれも選ばない」「一つだけ正の量を割�
 - SOS1のBig-M lowering：{meth}`~ommx.Instance.convert_sos1_to_constraints`
 - 通常制約からSOS1へのpromotion：{meth}`~ommx.Instance.promote_sos1_big_m`
 
-loweringでは、元の特殊制約をremovedとして保持し、生成した通常制約から変換元を参照できます。結果を元の制約として検査する仕組みは[変換後の問題とRemoved constraints](./removed_constraints.md)で説明します。
+loweringでは、元の特殊制約をremovedとして保持し、生成した通常制約から変換元を参照できます。結果を元の制約として検査する仕組みは[候補を評価して結果を判断する](./evaluate_and_interpret.md)で説明します。
 
 ## 制約IDと評価結果の参照
 

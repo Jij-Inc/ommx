@@ -33,7 +33,7 @@ RunやSolve、Samplingの`status`は、その記録スコープが正常終了�
 - Run内で子の呼び出しの例外を処理した場合、Runは`finished`でも、失敗したSolveやSamplingを含みえます。
 - 実行可能性と目的値はSolutionやSampleSetから読みます。終了理由、bound、gapなどを取得できるかはAdapter・バックエンドと診断設定によります。
 
-結果の基本的な解釈は{class}`~ommx.Solution`と{class}`~ommx.SampleSet`、変換後の解釈は[変換後の問題とRemoved constraints](./removed_constraints.md)に分けています。Experimentは、それらに新しい数学的保証を加えるものではありません。
+結果の基本的な解釈は{class}`~ommx.Solution`と{class}`~ommx.SampleSet`、変換後の解釈は[候補を評価して結果を判断する](./evaluate_and_interpret.md)に分けています。Experimentは、それらに新しい数学的保証を加えるものではありません。
 
 ## 編集中、確定、再開
 

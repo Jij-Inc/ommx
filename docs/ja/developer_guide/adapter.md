@@ -4,7 +4,7 @@
 
 1. [InstanceClassとAdapterの入力条件](../user_guide/instance_class.md)
 2. [Instance PreparationとPreparationPolicy](../user_guide/preparation_policy.md)
-3. [Removed constraintsと実行可能性](../user_guide/removed_constraints.md)
+3. [候補を評価して結果を判断する](../user_guide/evaluate_and_interpret.md)
 
 ## 実装時に参照するAPI
 
@@ -25,7 +25,7 @@ Instanceが保持する変数の一覧は、そのままBackend変数の一覧�
 - OMMX由来の独立変数としてBackendへencodeするのは、{attr}`~ommx.Instance.used_decision_variables`に限定する。Backend独自の補助変数を追加することはできます。OMMX IDとBackend変数の対応を保持し、すべてのused IDをdecodeしてください。fixed、dependent、irrelevant、removed-constraint-only、named-function-only、`output_objective`-onlyの変数は独立したBackend入力ではありません。
 - decodeしたstateまたはsamplesは、Backend入力の作成に使った同じInstanceで評価する。encodeからBackend実行、decode完了まで、そのInstanceを変更しない契約を設けてください。そのInstanceがdependent variableの復元とremoved constraintの評価を所有します。呼び出し側が元のInstanceを変更しながら使う必要がある場合に限り、Adapter内部でcopyを保持する方法を検討します。
 
-Backendが報告した最適性をSolutionへ付与するときは、評価に使ったInstanceの{meth}`~ommx.Instance.map_active_optimality`を通してください。変換後の問題の最適性と、返す目的値に対する最適性の区別は[Removed constraintsと実行可能性](../user_guide/removed_constraints.md)を参照してください。
+Backendが報告した最適性をSolutionへ付与するときは、評価に使ったInstanceの{meth}`~ommx.Instance.map_active_optimality`を通してください。変換後の問題の最適性と、返す目的値に対する最適性の区別は[候補を評価して結果を判断する](../user_guide/evaluate_and_interpret.md)を参照してください。
 
 ## 参照実装
 

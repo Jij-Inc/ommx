@@ -47,7 +47,7 @@ assert target.contains(instance)
 
 候補・実行可能性・目的値・最適性について何を確認するかは、[変換が何を保存するか](./transformation_guarantees.md)で説明します。
 
-変換後の候補は、そのInstanceが保持する変数・制約・目的の情報を使って解釈します。{ref}`Instanceの変数の役割 <instance-variable-roles>`と[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。
+変換後の候補は、そのInstanceが保持する変数・制約・目的の情報を使って解釈します。{meth}`Instanceの変数の復元・補完 <ommx.Instance.populate_state>`と[候補を評価して結果を判断する](./evaluate_and_interpret.md)を参照してください。
 
 ## 使用を許可する変換を選ぶ
 
@@ -111,7 +111,7 @@ result = Adapter.solve_without_preparation(instance)
 
 Adapterでは`INPUT_CLASS` membershipがapplicabilityです。converterやBackendは、その後のsolver input構築や実行で別のerrorを返すことがあります。それらは追加のapplicability条件ではありません。
 
-Solverの出力を{class}`~ommx.Solution`や{class}`~ommx.SampleSet`に戻すときも、Adapterへ渡した同じ変換済みInstanceで評価します。そのInstanceが保持する変数間のdependencyとremoved constraintにより、encoding前の変数値や変換前の制約も評価できます。値の復元は[変数の役割と値の復元・補完](./variable_roles.md)、制約の評価規則は[Removed constraintsと実行可能性](./removed_constraints.md)を参照してください。
+Solverの出力を{class}`~ommx.Solution`や{class}`~ommx.SampleSet`に戻すときも、Adapterへ渡した同じ変換済みInstanceで評価します。そのInstanceが保持する変数間のdependencyとremoved constraintにより、encoding前の変数値や変換前の制約も評価できます。値の復元は{meth}`値の復元・補完 <ommx.Instance.populate_state>`、制約の評価規則は{attr}`~ommx.Solution.feasible`と{attr}`~ommx.Solution.feasible_relaxed`を参照してください。
 
 ## 失敗時のInstanceを再利用する場合
 
