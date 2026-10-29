@@ -44,7 +44,7 @@ assert solution.objective == 1
 
 どの構造をそのまま扱えるかは解法ごとに異なります。例えばIndicatorやSOS1は、対応するモデルなら[PySCIPOpt Adapterでそのまま解く](./tutorial/solve_special_constraints_with_pyscipopt_adapter.md)ことも、変数の範囲などの適用条件を満たせば[通常制約へ変換してHiGHSに渡す](./tutorial/prepare_instance_for_adapter.md)こともできます。利用者が選んだ変換方針に従って、必要な段階で表現を変えます。
 
-ただし、変換が何を保存するかは操作ごとに異なります。同じ条件を別の式で表す場合もあれば、課す条件や比較する目的値を変える場合もあります。変換前後の実行可能性・目的値・最適性を、すべて同じ保証として扱うことはできません。具体的な条件の例は[特殊制約](./user_guide/special_constraints.md)、変換した問題の結果の読み方は[変換後の問題とRemoved constraints](./user_guide/removed_constraints.md)で説明します。
+ただし、変換が何を保存するかは操作ごとに異なります。同じ条件を別の式で表す場合もあれば、課す条件や比較する目的値を変える場合もあります。変換前後の実行可能性・目的値・最適性を、すべて同じ保証として扱うことはできません。具体的な条件の例は[特殊制約](./user_guide/special_constraints.md)、変換した問題の結果の読み方は[候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md)で説明します。
 
 ## 共通の表現の上に、変換の技術を蓄積する
 
@@ -59,7 +59,7 @@ assert solution.objective == 1
 | やりたいこと | 最初に読むページ | この段階で学ぶこと |
 |---|---|---|
 | ソルバーで問題を解く | [Adapterで解くTutorial](./tutorial/solve_with_ommx_adapter) | Instanceを作り、求解して結果を読む |
-| 手元の問題と候補解を評価する | [既存の問題と候補解を評価するTutorial](./tutorial/evaluate_existing_candidate) | ファイルを読み、目的値・実行可能性・満たさない条件を調べる |
+| 手元の問題と候補解を評価する | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) | 評価する問題・目的・条件を揃え、実行可能性と最適性を区別する |
 | 目的関数以外の指標を評価する | {class}`~ommx.NamedFunction` | 費用とは別の距離などを候補ごとに計算する |
 | 結果を名前と添字で取り出す | {meth}`名前付きの変数値の抽出 <ommx.Solution.extract_decision_variables>` | 変数値を後処理用の辞書や表にする |
 | OpenJijでサンプリングする | [小さな問題をサンプリングするHow-to](./how_to/sample_with_openjij_adapter) | 重みを設定して問題を準備し、候補を目的値と実行可能性で読む |
@@ -71,7 +71,7 @@ assert solution.objective == 1
 | 問題を変換し、結果を確認する | [Instanceを変換するHow-to](./how_to/transform_instance_without_solver.md) | target classとPolicyを指定し、変換結果と手元の候補を検査する |
 | 制約から変数の上下限を絞る | [bound更新のHow-to](./how_to/tighten_bounds.md) | 一回の更新と、変更された変数を確認する |
 | 式を変数名で確認する | {meth}`ラベルを使った式の表示 <ommx.Instance.format_function>` | Instanceの名前・添字を使って式を読む |
-| 変換後の結果を解釈する | [変換後の問題とRemoved constraints](./user_guide/removed_constraints.md) | activeな問題と、元の条件を使った評価の違い |
+| 変換後の結果を解釈する | [候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md) | activeな問題と、元の条件を使った評価の違い |
 | 複数の候補を比較する | {class}`~ommx.SampleSet` | サンプルごとの評価と、得られた候補の中からの選択 |
 | 既存の問題を入手する | [既存の問題をInstanceとして読み込む](./how_to/load_existing_instance.md) | MIPLIB/QPLIBや手元のファイルから問題を読み込む |
 | 外部ツールへモデルを渡す | [InstanceをMPSファイルで出力する](./how_to/export_mps.md) | 出力できるモデルと、OMMXとして保存する場合との違い |
@@ -80,7 +80,7 @@ assert solution.objective == 1
 
 このBookでは、何ができるか、なぜ・いつ使うか、何を選び、結果をどう読むかを説明します。小さな例で意味をつかみ、実装に必要な詳しい呼び出し方や引数・前提条件・保証は{doc}`API Reference <api/index>`で確認してください。全ページを順に読む必要はありません。
 
-問題と候補の値がすでにある人は、[候補評価のTutorial](./tutorial/evaluate_existing_candidate)から始められます。問題の構築や、以下のAdapter Tutorialの実行は前提ではありません。
+問題と候補の値がすでにある人は、[候補を評価して結果を判断する](./user_guide/evaluate_and_interpret.md)から始められます。具体的な評価の呼び出し方は{class}`~ommx.Solution`、ファイルから読み込む例は[候補評価のTutorial](./tutorial/evaluate_existing_candidate)にあります。Adapter Tutorialの実行は前提ではありません。
 
 ## Adapterを使う・作る
 
@@ -165,13 +165,11 @@ how_to/share_artifact_registry
 ```
 
 ```{toctree}
-:caption: User Guide：問題と評価
+:caption: 候補を評価して結果を判断する
 :maxdepth: 1
 :hidden:
 
-user_guide/variable_roles
-user_guide/special_constraints
-user_guide/removed_constraints
+user_guide/evaluate_and_interpret
 ```
 
 ```{toctree}
@@ -179,6 +177,7 @@ user_guide/removed_constraints
 :maxdepth: 1
 :hidden:
 
+user_guide/special_constraints
 user_guide/instance_class
 user_guide/preparation_policy
 user_guide/transformation_guarantees

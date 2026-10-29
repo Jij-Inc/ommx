@@ -114,9 +114,9 @@ Membership は、目的関数と active な4種類の制約族（通常制約、
 - named function だけが参照する変数
 - `output_objective` だけが参照する変数
 
-Instanceが保持する変数と、現在の問題で使う変数の区別は[変数の役割と値の復元・補完](./variable_roles.md)を参照してください。
+Instanceが保持する変数と、現在の問題で使う変数の区別は{attr}`~ommx.Instance.used_decision_variables`を参照してください。
 
-同様に、removed constraintはrelation、次数、特殊制約の有無の判定対象ではありません。特殊制約を通常制約へloweringしたInstanceは、変換元をremovedとして保持したまま、特殊制約を許さないclassに入れます。activeとremovedの意味は[変換後の問題とRemoved constraints](./removed_constraints.md)を参照してください。
+同様に、removed constraintはrelation、次数、特殊制約の有無の判定対象ではありません。特殊制約を通常制約へloweringしたInstanceは、変換元をremovedとして保持したまま、特殊制約を許さないclassに入れます。activeとremovedの意味は[候補を評価して結果を判断する](./evaluate_and_interpret.md)を参照してください。
 
 ## Adapterへの適用：INPUT_CLASSとapplicability
 

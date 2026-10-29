@@ -44,7 +44,7 @@ For example, the requirement to select exactly one of three binary variables can
 
 Which structures can remain explicit depends on the solving method. For supported models, the [PySCIPOpt Adapter passes Indicator and SOS1 constraints to SCIP](./user_guide/special_constraints.md). When their conversion conditions, including variable-domain and bound requirements, are met, they can instead be [lowered to regular constraints](./user_guide/capability_model.md) for a backend such as HiGHS, provided the resulting problem meets that adapter's input requirements. Your transformation policy determines which conversions are permitted.
 
-What a transformation preserves depends on the operation. Some express the same condition in another form; others change the conditions imposed or the objective being compared. Feasibility, objective values, and optimality before and after a transformation are distinct guarantees. The [constraint-lowering guide](./user_guide/capability_model.md) explains supported conversions and their retained history; individual operations' conditions and guarantees belong to the {doc}`API Reference <api/index>`.
+What a transformation preserves depends on the operation. Some express the same condition in another form; others change the conditions imposed or the objective being compared. Feasibility, objective values, and optimality before and after a transformation are distinct guarantees. [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) explains how to read transformed results. The [constraint-lowering guide](./user_guide/capability_model.md) covers supported conversions; individual operations' conditions and guarantees belong to the {doc}`API Reference <api/index>`.
 
 ## Accumulate transformation techniques on a common representation
 
@@ -59,7 +59,7 @@ The development direction is to combine these techniques and select or repeat th
 | Your task | Start here | What you will learn |
 |---|---|---|
 | Solve a problem with a solver | [Solve with an OMMX Adapter](./tutorial/solve_with_ommx_adapter.md) | Create an Instance, solve it, and read the result |
-| Evaluate a candidate you already have | {class}`~ommx.Solution` | Evaluate variable values against a problem and read objective and feasibility results |
+| Evaluate a candidate you already have | [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md) | Align the problem, objective, and conditions being evaluated; distinguish feasibility from optimality |
 | Evaluate metrics beyond the objective | {class}`~ommx.NamedFunction` | Compute distance or other reporting metrics for each candidate separately from the objective |
 | Extract results by name and subscript | {meth}`Named variable values <ommx.Solution.extract_decision_variables>` | Obtain evaluated variable values as dictionaries or tables for further processing |
 | Understand the problem representation | {class}`~ommx.Instance` | Describe variables, objectives, and constraints |
@@ -78,7 +78,7 @@ The development direction is to combine these techniques and select or repeat th
 
 This Book explains what OMMX can do, why and when to use it, what to choose, and how to interpret results. Use small examples to understand the meaning, then consult the {doc}`API Reference <api/index>` for detailed calls, arguments, preconditions, and guarantees. You do not need to read every page in order.
 
-If you already have a problem and candidate values, you can begin with {class}`candidate evaluation <ommx.Solution>`. Running an adapter tutorial is not a prerequisite.
+If you already have a problem and candidate values, begin with [Evaluate candidates and interpret results](./user_guide/evaluate_and_interpret.md). Use {class}`~ommx.Solution` for executable evaluation examples. Running an adapter tutorial is not a prerequisite.
 
 ## Use or implement an Adapter
 
@@ -123,6 +123,14 @@ tutorial/share_in_ommx_artifact
 tutorial/download_miplib_instance
 tutorial/download_qplib_instance
 tutorial/implement_adapter
+```
+
+```{toctree}
+:caption: Evaluate candidates and interpret results
+:maxdepth: 1
+:hidden:
+
+user_guide/evaluate_and_interpret
 ```
 
 ```{toctree}

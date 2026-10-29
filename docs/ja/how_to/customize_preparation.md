@@ -55,7 +55,7 @@ assert OMMXPySCIPOptAdapter.INPUT_CLASS.contains(instance)
 assert instance.active_special_constraint_kinds == {SpecialConstraintKind.Sos1}
 ```
 
-`prepare()`はこのInstanceを直接変更します。OneHotは通常の線形等式に変わり、SOS1はそのまま残っています。変換元のOneHotは[removed constraint](../user_guide/removed_constraints.md)として保持されます。
+`prepare()`はこのInstanceを直接変更します。OneHotは通常の線形等式に変わり、SOS1はそのまま残っています。変換元のOneHotは{attr}`removed constraint <ommx.Instance.removed_constraints>`として保持されます。
 
 Policyは「必ず実行する操作の一覧」ではありません。targetの`INPUT_CLASS`へ入るとPreparationは停止します。このモデルにはOneHotがあるためloweringが必要ですが、最初からtargetに入るモデルでは、設定した変換も実行されません。
 

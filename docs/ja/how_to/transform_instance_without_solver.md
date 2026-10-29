@@ -97,7 +97,7 @@ assert set(instance.removed_constraints) == {OneHotConstraintID(0)}
 instance.constraints_df(kind="regular")
 ```
 
-removedは「もう評価しない」という意味ではありません。現在課す通常制約とは別に、元のOneHotとしても候補を検査できます。詳しくは[変換後の問題とRemoved constraints](../user_guide/removed_constraints.md)を参照してください。
+removedは「もう評価しない」という意味ではありません。現在課す通常制約とは別に、元のOneHotとしても候補を検査できます。詳しくは[候補を評価して結果を判断する](../user_guide/evaluate_and_interpret.md)を参照してください。
 
 ## 5. 手元の候補を評価する
 

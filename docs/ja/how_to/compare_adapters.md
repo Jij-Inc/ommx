@@ -106,7 +106,7 @@ comparison
 別の変換済みInstanceを明示的に解く場合は、必要に応じて候補を元のInstanceでも評価します。
 値の復元や変換後のclass membershipだけでは、元の問題の実行可能性や大域的最適性は
 保証されません。[変換の保証](../user_guide/transformation_guarantees.md)と
-[変換後の結果](../user_guide/removed_constraints.md)で評価対象を確認してください。
+[変換後の結果](../user_guide/evaluate_and_interpret.md)で評価対象を確認してください。
 
 boundやgapを調べる場合は[diagnosticsのHow-to](inspect_adapter_diagnostics.md)へ進みます。
 特にペナルティや目的値の符号変更を含む定式化では、backendのboundをそのまま

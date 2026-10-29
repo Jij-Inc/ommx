@@ -4456,6 +4456,13 @@ class Instance:
         Read-only output objective used by {meth}`~ommx.Instance.evaluate` and
         {meth}`~ommx.Instance.evaluate_samples`, if one has been captured.
 
+        A newly constructed Instance has no output objective; evaluation uses
+        its active {attr}`~ommx.Instance.objective` and {attr}`~ommx.Instance.sense`.
+        Transformations can capture a separate objective and sense for reporting.
+        See {meth}`~ommx.Instance.convert_active_objective` for a complete example
+        contrasting solver-facing and reported values. Capturing an output
+        objective does not itself prove feasibility or optimality.
+
         # Postconditions
 
         Absence and an explicit output objective equal to the active pair remain distinct.
@@ -4520,8 +4527,58 @@ class Instance:
     @property
     def removed_constraints(self) -> RemovedConstraintCollection:
         r"""
-        Live mapping of all removed constraint families, keyed by typed IDs.
-        The view retains this owner and fetches each constraint on demand.
+        Live mapping of retained constraints that are no longer active.
+
+        Active constraints in {attr}`~ommx.Instance.constraints` define the current
+        solver-facing formulation. Removed constraints remain available for evaluation
+        and inspection, but are not imposed as active conditions. Both collections
+        include regular constraints and supported special-constraint families, currently
+        Indicator, OneHot, and SOS1, keyed by their typed IDs.
+
+        The returned {class}`~ommx.RemovedConstraintCollection` keeps this Instance alive
+        and observes subsequent owner changes. Each lookup returns an independent
+        snapshot with labels, provenance, and the removal reason; editing a snapshot
+        does not change the Instance. See that class for lookup and iteration semantics.
+
+        **Removal records a change, not its mathematical guarantee**
+
+        Different operations retain removed constraints for different reasons:
+
+        | Operation | Active formulation | Retained information |
+        | --- | --- | --- |
+        | {meth}`~ommx.Instance.relax_constraint` or {meth}`~ommx.Instance.relax_indicator_constraint` | Omits the selected condition | The condition and caller-supplied removal reason |
+        | Special-constraint lowering, such as {meth}`~ommx.Instance.convert_one_hot_to_constraint` | Represents the condition using regular constraints | The original special constraint; generated constraints carry provenance |
+        | {meth}`~ommx.Instance.penalty_method` | Replaces regular constraints with weighted objective terms | The constraints to check independently of the penalized objective |
+        | Removal of trivial constraints during preprocessing | Omits conditions found unnecessary by that operation | The removed conditions and their reasons |
+
+        The presence of removed constraints alone therefore does not establish
+        equivalence, relaxation, or preservation of optimal solutions. Read the owning
+        transformation's applicability and guarantee; in particular, a finite penalty
+        weight does not by itself guarantee that the selected candidate satisfies the
+        removed constraints.
+
+        **Evaluation and inspection**
+
+        {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples`
+        evaluate both active and removed constraints after restoring and completing
+        variable values through {meth}`~ommx.Instance.populate_state`.
+        {attr}`~ommx.Solution.feasible` includes all retained constraints;
+        {attr}`~ommx.Solution.feasible_relaxed` excludes removed constraints. Both also
+        check every retained variable's kind and bounds. The corresponding
+        {attr}`~ommx.SampleSet.feasible` and {attr}`~ommx.SampleSet.feasible_relaxed`
+        properties return these judgments by sample ID.
+
+        A variable used only in removed constraints may be irrelevant to the active
+        formulation. If omitted, its default is used for evaluation. Supply its actual
+        value when checking a particular candidate; the default is not a recovered
+        solver choice.
+
+        For a table of active and removed rows, use
+        {meth}`~ommx.Instance.constraints_df` with `removed=True` and an explicit
+        `kind`. On a Solution, use {meth}`~ommx.Solution.constraints_df` with
+        `include=("removed_reason",)` to inspect removal reasons alongside evaluated
+        values and violations. The complete relax, evaluate, inspect, and restore
+        example is in {meth}`~ommx.Instance.relax_constraint`.
         """
     @property
     def named_functions(self) -> builtins.list[NamedFunction]:
@@ -4543,6 +4600,8 @@ class Instance:
         excluded; {meth}`~ommx.Instance.evaluate` and
         {meth}`~ommx.Instance.evaluate_samples` populate their output values from
         stored values, dependencies, or defaults respectively.
+        See {meth}`~ommx.Instance.populate_state` for the complete reconstruction
+        and default rules and examples of retained versus used variables.
         """
     def replace_annotations(
         self, annotations: typing.Mapping[builtins.str, builtins.str]
@@ -5595,33 +5654,87 @@ class Instance:
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> State:
         r"""
-        Canonicalize a solver state and populate fixed, irrelevant, and dependent
-        decision variables.
+        Restore fixed and dependent values and fill omitted irrelevant values in a candidate.
 
-        The input state must contain all decision variables that are actually used
-        by this instance's objective and active constraints. The returned
-        {class}`~ommx.State` contains every decision variable in the instance.
-        For finite supplied coordinates that are neither fixed nor dependent,
-        Binary values at most ``atol`` away from zero or one and Integer or
-        SemiInteger values at most ``atol`` away from an integer are represented
-        exactly. Derived dependent values use the same target-kind rule. Continuous
-        and SemiContinuous values are not rounded. Other finite solver values remain
-        available for feasibility checks. A caller-provided fixed or dependent value
-        is a consistency assertion; after validation, the returned state uses
-        the stored fixed value unchanged or the canonicalized derived dependent
-        value. Dependencies consume canonicalized non-fixed, non-dependent inputs.
-        A supplied dependent assertion is compared with the value derived from those
-        inputs before target-kind canonicalization, so an assertion computed from the
-        uncanonicalized solver vector can be rejected as inconsistent.
+        Accepts a {class}`~ommx.State`, an ID-to-value mapping, or an iterable of ID/value
+        pairs. The returned State contains exactly the decision-variable IDs retained by
+        this Instance. Supply every variable used by its current objective and active
+        constraints; missing used values are errors, not opportunities to choose defaults.
 
-        Irrelevant variables are not determined by optimization or reconstruction.
-        Supplied values follow the same canonicalization rules above. When omitted,
-        Binary, Integer, and Continuous variables receive the value in their bound
-        nearest to zero; SemiInteger and SemiContinuous variables receive zero.
-        Supply an irrelevant value explicitly when its choice matters for an output
-        objective, named function, or removed constraint.
+        Use {meth}`~ommx.Instance.evaluate` to populate a candidate and then evaluate its
+        objective, variable domains, and constraints, or
+        {meth}`~ommx.Instance.evaluate_samples` for multiple candidates. Population alone
+        does not establish feasibility or optimality.
 
-        >>> from ommx import DecisionVariable, Instance, Sense
+        **Fixed values and retained variables**
+
+        Fixing a variable removes it from the values a solver must choose, while retaining
+        its definition and fixed value for results. Here `partial_evaluate` returns a new
+        Instance; the original remains unchanged.
+
+        ```pycon
+        >>> from ommx import DecisionVariableRole, Instance
+        >>> original = Instance.maximize()
+        >>> x = original.new_binary("x")
+        >>> y = original.new_binary("y")
+        >>> original.objective = x + y
+        >>> _ = original.add_constraint(x * y == 0)
+        >>> fixed = original.partial_evaluate({x.id: 1})
+        >>> assert {v.id for v in fixed.decision_variables} == {x.id, y.id}
+        >>> assert {v.id for v in fixed.used_decision_variables} == {y.id}
+        >>> assert fixed.decision_variable_role(x.id) == DecisionVariableRole.Fixed
+        >>> assert fixed.fixed_decision_variables() == {x.id: 1.0}
+        >>> assert fixed.populate_state({y.id: 0}).entries == {x.id: 1.0, y.id: 0.0}
+        >>> assert fixed.evaluate({y.id: 0}).objective == 1.0
+        >>> assert original.decision_variable_role(x.id) == DecisionVariableRole.Used
+
+        ```
+
+        {attr}`~ommx.Instance.decision_variables` contains all retained variables.
+        {attr}`~ommx.Instance.used_decision_variables` selects solver-input variables,
+        including variables in active special constraints and an Indicator's controlling
+        Binary variable. Roles belong to an Instance and can change after transformation;
+        they are independent of the variable's Binary, Integer, or other kind. See
+        {class}`~ommx.DecisionVariableRole` for the four roles and the corresponding queries.
+
+        **Dependent values**
+
+        A substituted variable is restored from its recorded expression. In this example,
+        `count` is represented as twice the Binary variable `flag`.
+
+        ```pycon
+        >>> from ommx import DecisionVariableRole, Instance
+        >>> encoded = Instance.minimize()
+        >>> count = encoded.new_integer("count", lower=0, upper=2)
+        >>> flag = encoded.new_binary("flag")
+        >>> encoded.objective = count + flag
+        >>> encoded.substitute({count.id: 2 * flag})
+        >>> assert encoded.decision_variable_roles() == {
+        ...     count.id: DecisionVariableRole.Dependent,
+        ...     flag.id: DecisionVariableRole.Used,
+        ... }
+        >>> assert encoded.dependent_decision_variable_ids() == {count.id}
+        >>> assert encoded.populate_state({flag.id: 1}).entries == {count.id: 2.0, flag.id: 1.0}
+        >>> assert encoded.evaluate({flag.id: 1}).objective == 3.0
+
+        ```
+
+        The restored `count=2` is in its domain, but `count=1` cannot be represented by
+        `2 * flag`. Reconstruction therefore does not prove that the original and
+        transformed problems are equivalent. {meth}`~ommx.Instance.substitute` does not
+        automatically turn the substituted variable's domain into new constraints; check
+        its transformation contract when choosing an expression.
+
+        **Irrelevant values and defaults**
+
+        An irrelevant variable is neither used, fixed, nor dependent. Its value is not
+        determined by optimization or reconstruction. When omitted, Binary, Integer, and
+        Continuous variables receive the value in their bound nearest to zero;
+        SemiInteger and SemiContinuous variables receive zero. The latter kinds allow
+        zero as well as values in their nonzero interval.
+
+        ```pycon
+        >>> from ommx import DecisionVariable, DecisionVariableRole, Instance, Sense
         >>> variables = [
         ...     DecisionVariable.binary(0),
         ...     DecisionVariable.integer(1, lower=2, upper=5),
@@ -5632,22 +5745,77 @@ class Instance:
         >>> reporting = Instance.from_components(
         ...     decision_variables=variables, objective=0, constraints={}, sense=Sense.Minimize
         ... )
+        >>> assert reporting.irrelevant_decision_variable_ids() == {0, 1, 2, 3, 4}
+        >>> assert reporting.decision_variable_role(1) == DecisionVariableRole.Irrelevant
         >>> assert reporting.populate_state({}).entries == {0: 0.0, 1: 2.0, 2: -2.0, 3: 0.0, 4: 0.0}
         >>> assert reporting.populate_state({1: 4}).entries[1] == 4.0
 
-        # Postconditions
+        ```
 
-        The returned state restores fixed variables needed only by preserved output semantics.
+        A reference only from a named function, removed constraint, output objective, or
+        dependency right-hand side does not make a variable used. If such a variable is
+        irrelevant, omitting its value means these expressions use its default. Supply the
+        value explicitly when checking a particular candidate; the default is neither a
+        solver-selected value nor a reconstruction of that candidate.
 
+        **Canonicalization and consistency assertions**
+
+        For finite supplied coordinates that are neither fixed nor dependent, Binary
+        values at most `atol` away from zero or one and Integer or SemiInteger values at
+        most `atol` away from an integer are represented exactly. Derived dependent values
+        use the same target-kind rule. Continuous and SemiContinuous values are not
+        rounded. Other finite values remain available for feasibility checks.
+
+        A caller-provided fixed or dependent value is a consistency assertion, not an
+        override. After validation, the returned state uses the stored fixed value
+        unchanged or the canonicalized derived dependent value. Dependencies consume
+        canonicalized non-fixed, non-dependent inputs. A supplied dependent assertion is
+        compared with the value derived from those inputs before target-kind
+        canonicalization, so an assertion computed from the uncanonicalized solver vector
+        can be rejected as inconsistent.
+
+        ```pycon
+        >>> assert fixed.populate_state({x.id: 1 - 2e-7, y.id: 0}, atol=1e-6).entries[x.id] == 1.0
+        >>> assert encoded.populate_state({flag.id: 1 - 2e-7, count.id: 2}, atol=1e-6).entries == {
+        ...     count.id: 2.0,
+        ...     flag.id: 1.0,
+        ... }
+        >>> try:
+        ...     encoded.populate_state({flag.id: 1, count.id: 1})
+        ... except ValueError:
+        ...     pass
+        ... else:
+        ...     raise AssertionError("a dependent assertion overwrote the recorded expression")
+        >>> assert encoded.populate_state({flag.id: 0.25}).entries[flag.id] == 0.25
+        >>> assert not encoded.evaluate({flag.id: 0.25}).feasible
+
+        ```
+
+        `atol` defaults to {attr}`~ommx.DEFAULT_ATOL`. Missing used IDs, unknown IDs,
+        non-finite supplied values, and inconsistent fixed or dependent assertions raise
+        `ValueError`. Invalid finite values can remain in the populated state: use
+        {meth}`~ommx.Instance.evaluate` to inspect kind, bound, and constraint feasibility.
+
+        **Preserved output evaluation**
+
+        Fixed values are restored even when needed only by preserved output semantics.
+        Changing the solver-facing objective does not change which fixed value is restored:
+
+        ```pycon
         >>> from ommx import DecisionVariable, Instance, Sense
-        >>> x = DecisionVariable.binary(0)
+        >>> reward = DecisionVariable.binary(0)
         >>> instance = Instance.from_components(
-        ...     decision_variables=[x], objective=3 * x, constraints={}, sense=Sense.Maximize
+        ...     decision_variables=[reward],
+        ...     objective=3 * reward,
+        ...     constraints={},
+        ...     sense=Sense.Maximize,
         ... )
         >>> assert instance.convert_active_objective(Sense.Minimize)
-        >>> fixed = instance.partial_evaluate({0: 1})
-        >>> assert fixed.populate_state({}).entries == {0: 1.0}
-        >>> assert fixed.evaluate({}).objective == 3.0
+        >>> fixed_reward = instance.partial_evaluate({0: 1})
+        >>> assert fixed_reward.populate_state({}).entries == {0: 1.0}
+        >>> assert fixed_reward.evaluate({}).objective == 3.0
+
+        ```
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -5825,41 +5993,80 @@ class Instance:
         **parameters: str,
     ) -> None:
         r"""
-        Remove a constraint from the instance.
+        Move an active regular constraint to the retained removed collection.
 
-        The removed constraint is stored in {attr}`~ommx.Instance.removed_constraints`, and can be restored by {meth}`~ommx.Instance.restore_constraint`.
+        The Instance is changed in place. `constraint_id` accepts a {class}`~ommx.ConstraintID`
+        or its integer value. `reason` records why the condition was removed, and
+        additional keyword arguments record string-valued reason parameters. The
+        constraint keeps its ID, labels, and provenance.
 
-        **Args:**
-        - `constraint_id`: The ID of the constraint to remove.
-        - `reason`: The reason why the constraint is removed.
-        - `parameters`: Additional parameters to describe the reason.
+        Removed constraints no longer restrict the active formulation, but
+        {meth}`~ommx.Instance.evaluate` still checks them. Here the relaxed formulation
+        allows `x=1`, while the retained `x <= 0` condition rejects it:
 
-        # Examples
+        ```pycon
+        >>> from ommx import Instance
+        >>> instance = Instance.maximize()
+        >>> x = instance.new_binary("x")
+        >>> instance.objective = x
+        >>> limit = instance.add_constraint(x <= 0, "limit")
+        >>> limit_id = limit.constraint_id
+        >>> instance.relax_constraint(limit_id, "example.relax_limit", purpose="inspection")
+        >>> assert limit_id not in instance.constraints
+        >>> removed = instance.removed_constraints[limit_id]
+        >>> assert removed.removed_reason == "example.relax_limit"
+        >>> assert removed.removed_reason_parameters == {"purpose": "inspection"}
+        >>> solution = instance.evaluate({x.id: 1})
+        >>> assert solution.feasible_relaxed
+        >>> assert not solution.feasible
 
-        Relax constraint, and restore it.
+        ```
 
-        >>> from ommx import ConstraintID
-        >>> from ommx import DecisionVariable, Instance, Sense
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints={1: sum(x) == 3},
-        ...     sense=Sense.Maximize,
-        ... )
-        >>> assert set(instance.constraints) == {ConstraintID(1)}
+        Inspect the removal reason on the model and the evaluated violation on the
+        result. `kind="regular"` selects the regular-constraint family; the same table
+        APIs also accept `"indicator"`, `"one_hot"`, and `"sos1"` for those families.
 
-        >>> instance.relax_constraint(1, "manual relaxation")
-        >>> assert not instance.constraints
-        >>> assert set(instance.removed_constraints) == {ConstraintID(1)}
+        ```pycon
+        >>> model_rows = instance.constraints_df(kind="regular", removed=True)
+        >>> assert model_rows.loc[limit_id, "removed_reason"] == "example.relax_limit"
+        >>> result_rows = solution.constraints_df(kind="regular", include=("removed_reason",))
+        >>> assert result_rows.loc[limit_id, "removed_reason"] == "example.relax_limit"
+        >>> assert result_rows.loc[limit_id, "removed_reason.purpose"] == "inspection"
+        >>> assert result_rows.loc[limit_id, "violation"] == 1.0
+        >>> instance.restore_constraint(limit_id)
+        >>> assert limit_id in instance.constraints
+        >>> assert limit_id not in instance.removed_constraints
+        >>> assert not instance.evaluate({x.id: 1}).feasible_relaxed
 
-        >>> instance.restore_constraint(1)
-        >>> assert set(instance.constraints) == {ConstraintID(1)}
-        >>> assert not instance.removed_constraints
+        ```
+
+        {meth}`~ommx.Instance.restore_constraint` makes the retained constraint active
+        again, using the Instance's current fixed values and variable dependencies.
+        It does not undo other transformations, remove generated variables or
+        constraints, or revert objective changes. The already-created Solution above
+        continues to describe its earlier evaluation.
+
+        Raises `RuntimeError` if the ID does not identify an active regular constraint.
+        Use {meth}`~ommx.Instance.relax_indicator_constraint` for an Indicator constraint.
+        See {attr}`~ommx.Instance.removed_constraints` for other operations that retain
+        removed constraints and for the distinction between removal and relaxation.
         """
-    def restore_constraint(
-        self, constraint_id: ConstraintID | builtins.int
-    ) -> None: ...
+    def restore_constraint(self, constraint_id: ConstraintID | builtins.int) -> None:
+        r"""
+        Make a retained removed regular constraint active again.
+
+        Applies the Instance's current variable dependencies and fixed values
+        before restoring the row, and removes its removal reason. The ID,
+        labels, and provenance are retained. The argument accepts a
+        {class}`~ommx.ConstraintID` or its integer value.
+
+        This restores one condition, not the state before a transformation:
+        generated variables or constraints and objective changes remain.
+        See {meth}`~ommx.Instance.relax_constraint` for a complete round trip.
+        Raises RuntimeError if the ID is not a removed regular constraint or
+        its expression cannot be normalized for the current Instance. Failure
+        leaves the row removed.
+        """
     def relax_indicator_constraint(
         self,
         constraint_id: IndicatorConstraintID | builtins.int,
@@ -5868,12 +6075,32 @@ class Instance:
     ) -> None:
         r"""
         Relax an indicator constraint by moving it from active to removed.
+
+        Accepts an {class}`~ommx.IndicatorConstraintID` or its integer value.
+        Records the supplied reason and string-valued keyword parameters,
+        preserving the constraint's ID, labels, and provenance. Raises
+        RuntimeError if the ID does not identify an active Indicator constraint.
+        Evaluation still checks the retained condition; see
+        {attr}`~ommx.Instance.removed_constraints` for feasibility semantics and
+        {meth}`~ommx.Instance.relax_constraint` for the equivalent regular-
+        constraint workflow. Restore with
+        {meth}`~ommx.Instance.restore_indicator_constraint`.
         """
     def restore_indicator_constraint(
         self, constraint_id: IndicatorConstraintID | builtins.int
     ) -> None:
         r"""
         Restore a removed indicator constraint back to active.
+
+        Accepts an {class}`~ommx.IndicatorConstraintID` or its integer value.
+        Applies current fixed values and dependencies to the constraint body,
+        preserving its ID, labels, and provenance and clearing the removal
+        reason. This does not undo generated constraints, auxiliary variables,
+        or objective changes from other transformations.
+
+        Raises RuntimeError if the ID is not a removed Indicator constraint,
+        its controlling variable has been fixed or substituted, or its body
+        cannot be normalized. Failure leaves the row removed.
         """
     def convert_one_hot_to_constraint(
         self, one_hot_id: OneHotConstraintID | builtins.int
@@ -6448,26 +6675,43 @@ class Instance:
         r"""
         Return the state role of a decision variable.
 
-        The role is one of ``used``, ``fixed``, ``dependent``, or
-        ``irrelevant``. Unknown IDs return ``None``.
+        See {class}`~ommx.DecisionVariableRole` for the four roles, which depend
+        on this Instance's current structure rather than the variable's kind.
+        Unknown IDs return ``None``. For a complete reconstruction example,
+        see {meth}`~ommx.Instance.populate_state`.
         """
     def decision_variable_roles(
         self,
     ) -> builtins.dict[builtins.int, DecisionVariableRole]:
         r"""
         Return the state role of every decision variable, keyed by ID.
+
+        Each value is a {class}`~ommx.DecisionVariableRole` derived from this
+        Instance. See {meth}`~ommx.Instance.populate_state` for an example that
+        queries roles after substitution and reconstructs the candidate values.
         """
     def fixed_decision_variables(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
         Return fixed decision variables as ``{id: fixed_value}``.
+
+        These values are retained by the Instance and restored by
+        {meth}`~ommx.Instance.populate_state`; a caller's fixed-value entry is
+        checked for consistency rather than used to overwrite the recorded value.
         """
     def dependent_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
         Return IDs of decision variables defined by ``decision_variable_dependency``.
+
+        {meth}`~ommx.Instance.populate_state` computes their values from the
+        recorded expressions. See that method for an example and consistency rules.
         """
     def irrelevant_decision_variable_ids(self) -> builtins.set[builtins.int]:
         r"""
         Return IDs of decision variables not used, fixed, or dependent.
+
+        Values omitted from a candidate receive defaults under
+        {meth}`~ommx.Instance.populate_state`. Supply a value explicitly when
+        it matters for reporting or checking a particular candidate.
         """
     def stats(self) -> dict:
         r"""
@@ -6668,37 +6912,65 @@ class Instance:
         """
     def convert_active_objective(self, target: Sense) -> builtins.bool:
         r"""
-        Convert only the active objective used by a solver-facing formulation.
+        Convert only the active, solver-facing objective to `target`.
 
-        This changes {attr}`~ommx.Instance.sense` and
-        {attr}`~ommx.Instance.objective` to ``target`` while preserving the
-        objective semantics returned by {meth}`~ommx.Instance.evaluate` and
-        {meth}`~ommx.Instance.evaluate_samples`. Use
-        {meth}`~ommx.Instance.as_minimization_problem` or
-        {meth}`~ommx.Instance.as_maximization_problem` when the output objective
-        should be converted as part of the mathematical problem itself.
+        For example, a solver may accept only minimization while the problem maximizes
+        a reward. This method negates the active objective and changes
+        {attr}`~ommx.Instance.sense`, preserving the objective and sense returned by
+        {meth}`~ommx.Instance.evaluate` and {meth}`~ommx.Instance.evaluate_samples`:
 
-        **Returns:**
-        ``True`` if the active objective is converted, ``False`` if it already
-        has ``target``.
+        ```pycon
+        >>> from ommx import Instance, Sense
+        >>> instance = Instance.maximize()
+        >>> reward = instance.new_binary("reward")
+        >>> instance.objective = 3 * reward
+        >>> assert instance.output_objective is None
+        >>> assert instance.convert_active_objective(Sense.Minimize)
+        >>> assert instance.sense == Sense.Minimize
+        >>> assert instance.objective.evaluate({reward.id: 1}) == -3.0
+        >>> reported = instance.evaluate({reward.id: 1})
+        >>> assert (reported.sense, reported.objective) == (Sense.Maximize, 3.0)
+        >>> assert not instance.convert_active_objective(Sense.Minimize)
 
-        # Postconditions
+        ```
 
-        Conversion negates only the active objective and preserves evaluation semantics in either direction. Once captured, the output objective remains explicit even if a later conversion makes it structurally equal to the active objective.
+        Returns `True` if the active objective was converted and `False` if its sense
+        already equals `target`. On the first conversion without an output objective,
+        the previous active objective and sense are captured in
+        {attr}`~ommx.Instance.output_objective`. An existing output objective is kept.
+        Once captured, it remains explicit even if a later conversion makes it equal
+        to the active objective. Conversion works in either direction:
 
-        >>> from ommx import DecisionVariable, Instance, Sense
-        >>> x = DecisionVariable.binary(0)
-        >>> for source, target in ((Sense.Maximize, Sense.Minimize), (Sense.Minimize, Sense.Maximize)):
-        ...     instance = Instance.from_components(
-        ...         decision_variables=[x], objective=3 * x, constraints={}, sense=source
-        ...     )
-        ...     before = instance.evaluate({0: 1})
-        ...     assert instance.convert_active_objective(target)
-        ...     after = instance.evaluate({0: 1})
-        ...     assert instance.sense == target
-        ...     assert instance.objective.evaluate({0: 1}) == -3.0
+        ```pycon
+        >>> for source, target in (
+        ...     (Sense.Maximize, Sense.Minimize),
+        ...     (Sense.Minimize, Sense.Maximize),
+        ... ):
+        ...     model = Instance.minimize() if source == Sense.Minimize else Instance.maximize()
+        ...     x = model.new_binary("x")
+        ...     model.objective = 3 * x
+        ...     before = model.evaluate({x.id: 1})
+        ...     assert model.convert_active_objective(target)
+        ...     after = model.evaluate({x.id: 1})
+        ...     assert model.sense == target
+        ...     assert model.objective.evaluate({x.id: 1}) == -3.0
         ...     assert (after.sense, after.objective) == (before.sense, before.objective)
-        ...     assert not instance.convert_active_objective(target)
+        ...     assert not model.convert_active_objective(target)
+
+        ```
+
+        Use {meth}`~ommx.Instance.as_minimization_problem` or
+        {meth}`~ommx.Instance.as_maximization_problem` when both the active and output
+        objective semantics should change. Assigning a new {attr}`~ommx.Instance.objective`
+        also rebases output evaluation onto that objective.
+
+        The reported objective is separate from feasibility and optimality. In
+        particular, after penalty conversion a small {attr}`~ommx.Solution.objective`
+        does not measure the penalty or establish that retained constraints are
+        satisfied. Check {attr}`~ommx.Solution.feasible` independently. Equivalent
+        objective sign conversion preserves optimality, but other transformations can
+        invalidate its transport; use {meth}`~ommx.Instance.map_active_optimality` for
+        the recorded mapping of a backend's optimality status.
         """
     def map_active_optimality(self, active: Optimality) -> Optimality:
         r"""
@@ -6708,6 +6980,12 @@ class Instance:
         When the instance records that active-formulation optimality does not
         transport to its output objective, this returns
         {attr}`~ommx.Optimality.Unspecified`.
+        Otherwise the supplied status is returned unchanged. This reads the
+        recorded transformation guarantee; it does not solve the problem,
+        verify a backend's claim, or test a candidate's feasibility. Merely
+        retaining an output objective or reconstructing variable values does
+        not establish optimality. See {attr}`~ommx.Solution.optimality` for the
+        status stored on a result.
 
         # Postconditions
 
@@ -9540,6 +9818,13 @@ class RemovedConstraintCollection(typing.Mapping[ConstraintIDBase, ConstraintVie
     independent snapshot, including labels, provenance, and removal reasons.
     Changing that snapshot does not update its owner; a later lookup reads the
     owner's current state.
+
+    Removed constraints are excluded from the active formulation but still checked
+    when candidates are evaluated. Removal can follow relaxation, an equivalent
+    lowering, or another transformation; the collection's presence does not identify
+    which guarantee holds. See {attr}`~ommx.Instance.removed_constraints` for their
+    evaluation semantics and {meth}`~ommx.Instance.relax_constraint` for a complete
+    relax, inspect, evaluate, and restore example.
 
     The collection keeps its owner alive. The typed-key, ``get``, live-view,
     iteration, and snapshot equality rules are documented in
@@ -12481,7 +12766,28 @@ class State:
 @typing.final
 class DecisionVariableRole(enum.Enum):
     r"""
-    Decision variable role in an instance.
+    How a decision variable obtains its value in an {class}`~ommx.Instance`.
+
+    Roles are derived from the Instance's current structure and can change after
+    transformation. They are separate from Binary, Integer, or other variable kinds.
+    Query one role with {meth}`~ommx.Instance.decision_variable_role`, or all roles
+    with {meth}`~ommx.Instance.decision_variable_roles`.
+
+    | Role | Meaning | Value for candidate evaluation |
+    | --- | --- | --- |
+    | `Used` | Referenced by the current objective or active constraints | Supplied by the caller |
+    | `Fixed` | A retained, non-used variable with a recorded fixed value | Restored from that value |
+    | `Dependent` | Neither used nor fixed; represented by an expression in other variables | Computed from that expression |
+    | `Irrelevant` | Neither used, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
+
+    Active constraints include regular and special constraints, including an
+    Indicator's controlling Binary variable. References only from named functions,
+    removed constraints, output objectives, or dependency right-hand sides do not
+    make a variable used. Being irrelevant to solver input does not mean its value
+    cannot affect reporting.
+
+    {meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,
+    canonicalization, and consistency assertions with executable examples.
     """
 
     Used = ...

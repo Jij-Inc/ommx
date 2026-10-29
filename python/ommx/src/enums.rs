@@ -27,7 +27,28 @@ impl SpecialConstraintKind {
     }
 }
 
-/// Decision variable role in an instance.
+/// How a decision variable obtains its value in an {class}`~ommx.Instance`.
+///
+/// Roles are derived from the Instance's current structure and can change after
+/// transformation. They are separate from Binary, Integer, or other variable kinds.
+/// Query one role with {meth}`~ommx.Instance.decision_variable_role`, or all roles
+/// with {meth}`~ommx.Instance.decision_variable_roles`.
+///
+/// | Role | Meaning | Value for candidate evaluation |
+/// | --- | --- | --- |
+/// | `Used` | Referenced by the current objective or active constraints | Supplied by the caller |
+/// | `Fixed` | A retained, non-used variable with a recorded fixed value | Restored from that value |
+/// | `Dependent` | Neither used nor fixed; represented by an expression in other variables | Computed from that expression |
+/// | `Irrelevant` | Neither used, fixed, nor dependent | Supplied by the caller, or filled with a default when omitted |
+///
+/// Active constraints include regular and special constraints, including an
+/// Indicator's controlling Binary variable. References only from named functions,
+/// removed constraints, output objectives, or dependency right-hand sides do not
+/// make a variable used. Being irrelevant to solver input does not mean its value
+/// cannot affect reporting.
+///
+/// {meth}`~ommx.Instance.populate_state` explains reconstruction, defaults,
+/// canonicalization, and consistency assertions with executable examples.
 #[pyo3_stub_gen::derive::gen_stub_pyclass_enum]
 #[pyclass(eq, eq_int, frozen)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

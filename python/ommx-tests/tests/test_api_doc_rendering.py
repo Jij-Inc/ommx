@@ -12,7 +12,7 @@ API_DOCS_DIR = Path(__file__).resolve().parents[3] / "docs" / "api"
 
 
 @pytest.mark.parametrize(
-    "class_name",
+    "api_name",
     [
         "Function",
         "NamedFunction",
@@ -23,28 +23,42 @@ API_DOCS_DIR = Path(__file__).resolve().parents[3] / "docs" / "api"
         "EvaluatedConstraintCollection",
         "SampledConstraintCollection",
         "ConstraintFamilyView",
+        "Instance.populate_state",
+        "Instance.removed_constraints",
+        "Instance.relax_constraint",
+        "Instance.convert_active_objective",
     ],
 )
-def test_runtime_and_reference_share_canonical_documentation(class_name: str) -> None:
+def test_runtime_and_reference_share_canonical_documentation(api_name: str) -> None:
     import ommx
 
     project_root = API_DOCS_DIR.parents[1]
     source = (
-        (project_root / f"python/ommx/src/docstrings/ommx/{class_name}.md")
+        (project_root / f"python/ommx/src/docstrings/ommx/{api_name}.md")
         .read_text()
         .strip()
     )
     reference = json.loads((API_DOCS_DIR / "api_reference.json").read_text())
+    class_name, _, member_name = api_name.partition(".")
     api_class = next(
         item
         for item in reference["modules"]["ommx"]["items"]
         if item["name"] == class_name
     )
 
-    runtime_doc = getattr(ommx, class_name).__doc__
+    runtime_owner = getattr(ommx, class_name)
+    reference_owner = api_class
+    if member_name:
+        runtime_owner = getattr(runtime_owner, member_name)
+        reference_owner = next(
+            item
+            for item in api_class["methods"] + api_class["attributes"]
+            if item["name"] == member_name
+        )
+    runtime_doc = runtime_owner.__doc__
     assert runtime_doc is not None
     assert runtime_doc.strip() == source
-    assert api_class["doc"].strip() == source
+    assert reference_owner["doc"].strip() == source
 
     stub = ast.parse(
         (project_root / "python/ommx/ommx/_ommx_rust/__init__.pyi").read_text()
@@ -54,7 +68,14 @@ def test_runtime_and_reference_share_canonical_documentation(class_name: str) ->
         for node in stub.body
         if isinstance(node, ast.ClassDef) and node.name == class_name
     )
-    assert ast.get_docstring(stub_class) == source
+    stub_owner: ast.ClassDef | ast.FunctionDef = stub_class
+    if member_name:
+        stub_owner = next(
+            node
+            for node in stub_class.body
+            if isinstance(node, ast.FunctionDef) and node.name == member_name
+        )
+    assert ast.get_docstring(stub_owner) == source
 
 
 def test_bare_doctest_is_fenced_without_rewriting_existing_myst(
